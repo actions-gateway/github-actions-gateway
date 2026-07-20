@@ -169,6 +169,9 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		Provision: func(ctx context.Context, job scalesetlistener.Job) error {
 			return r.Provisioner.ProvisionScaleSetWorker(ctx, target, job.JobID, job.JITConfig)
 		},
+		Cleanup: func(ctx context.Context, jobID string) error {
+			return r.Provisioner.CleanupScaleSetJob(ctx, target, jobID)
+		},
 		Capacity: r.scaleSetCapacityFunc(target),
 		// Per-RunnerSet Prometheus recorder over the scale-set tier's counters
 		// (Q264 P4 observability). Nil ScaleSetMetrics yields a nil recorder, which

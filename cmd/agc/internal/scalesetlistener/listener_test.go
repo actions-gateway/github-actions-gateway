@@ -2,6 +2,7 @@ package scalesetlistener_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -159,11 +160,12 @@ func (s stubTokenProvider) Token(context.Context) (string, error) { return strin
 // startListenerFunc registers a scale set on the fake, then starts a listener with the
 // given capacity and provision functions, returning the listener and the scale-set id.
 // A cleanup stops it and waits for the loop to exit.
-func startListenerFunc(t *testing.T, srv *scalesettest.Server, capacity scalesetlistener.CapacityFunc, provision scalesetlistener.ProvisionFunc, m scalesetlistener.MetricsRecorder) (*scalesetlistener.Listener, int) {
+// Optional opts mutate the Config before it is built (e.g. to wire a Cleanup hook).
+func startListenerFunc(t *testing.T, srv *scalesettest.Server, capacity scalesetlistener.CapacityFunc, provision scalesetlistener.ProvisionFunc, m scalesetlistener.MetricsRecorder, opts ...func(*scalesetlistener.Config)) (*scalesetlistener.Listener, int) {
 	t.Helper()
 	client := newClient(t, srv)
 
-	l, err := scalesetlistener.New(scalesetlistener.Config{
+	cfg := scalesetlistener.Config{
 		Client:       client,
 		ScaleSetName: "linux",
 		OwnerName:    "acme/linux",
@@ -171,7 +173,11 @@ func startListenerFunc(t *testing.T, srv *scalesettest.Server, capacity scaleset
 		Capacity:     capacity,
 		Metrics:      m,
 		PollBackoff:  20 * time.Millisecond,
-	})
+	}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	l, err := scalesetlistener.New(cfg)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -193,9 +199,9 @@ func startListenerFunc(t *testing.T, srv *scalesettest.Server, capacity scaleset
 
 // startListener starts a listener driving the given recordingProvisioner, wiring the
 // scale-set id the listener created on Start back into it.
-func startListener(t *testing.T, srv *scalesettest.Server, capacity scalesetlistener.CapacityFunc, prov *recordingProvisioner, m scalesetlistener.MetricsRecorder) (*scalesetlistener.Listener, int) {
+func startListener(t *testing.T, srv *scalesettest.Server, capacity scalesetlistener.CapacityFunc, prov *recordingProvisioner, m scalesetlistener.MetricsRecorder, opts ...func(*scalesetlistener.Config)) (*scalesetlistener.Listener, int) {
 	t.Helper()
-	l, ssID := startListenerFunc(t, srv, capacity, prov.provision, m)
+	l, ssID := startListenerFunc(t, srv, capacity, prov.provision, m, opts...)
 	prov.scaleSetID = ssID
 	return l, ssID
 }
@@ -533,3 +539,76 @@ type atomicInt struct {
 
 func (a *atomicInt) set(v int) { a.mu.Lock(); a.v = v; a.mu.Unlock() }
 func (a *atomicInt) get() int  { a.mu.Lock(); defer a.mu.Unlock(); return a.v }
+
+// recordingCleanup captures the jobIDs the listener asks to reclaim, and can be made
+// to fail to prove a reclaim error does not wedge the poll loop.
+type recordingCleanup struct {
+	mu     sync.Mutex
+	jobIDs []string
+	err    error
+}
+
+func (r *recordingCleanup) cleanup(_ context.Context, jobID string) error {
+	r.mu.Lock()
+	r.jobIDs = append(r.jobIDs, jobID)
+	err := r.err
+	r.mu.Unlock()
+	return err
+}
+
+func (r *recordingCleanup) seen() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.jobIDs...)
+}
+
+// TestListener_ReclaimsCompletedJobResources is the Q361 contract at the listener seam:
+// the per-job JIT-config Secret the provisioner staged cannot be deleted when the pod is
+// created (the pod mounts it), so the terminal JobCompleted is its reclaim point. Every
+// completed job must be handed to Cleanup — otherwise a credential-bearing Secret
+// accumulates per job for the RunnerSet's whole lifetime.
+func TestListener_ReclaimsCompletedJobResources(t *testing.T) {
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	prov := &recordingProvisioner{srv: srv} // auto-completes each job it provisions
+	cl := &recordingCleanup{}
+	_, ssID := startListener(t, srv, fixedCapacity(3), prov, nil,
+		func(c *scalesetlistener.Config) { c.Cleanup = cl.cleanup })
+
+	const n = 3
+	queued := make(map[string]bool, n)
+	for i := 0; i < n; i++ {
+		_, jobID := srv.EnqueueJob(ssID)
+		queued[jobID] = true
+	}
+
+	require.Eventually(t, func() bool { return len(cl.seen()) >= n }, 5*time.Second, 10*time.Millisecond,
+		"every completed job must have its staged worker resources reclaimed")
+
+	for _, id := range cl.seen() {
+		assert.True(t, queued[id], "reclaim was asked for a job that was never queued: %s", id)
+	}
+}
+
+// TestListener_ReclaimFailureDoesNotWedgeTheLoop pins that a failed reclaim is a logged
+// best-effort miss — the Secret falls back to the RunnerSet's cascade-GC — and never
+// holds the queue cursor, which would redeliver the batch and stall later assignments.
+func TestListener_ReclaimFailureDoesNotWedgeTheLoop(t *testing.T) {
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	prov := &recordingProvisioner{srv: srv}
+	cl := &recordingCleanup{err: errors.New("secrets forbidden")}
+	_, ssID := startListener(t, srv, fixedCapacity(3), prov, nil,
+		func(c *scalesetlistener.Config) { c.Cleanup = cl.cleanup })
+
+	srv.EnqueueJob(ssID)
+	require.Eventually(t, func() bool { return len(cl.seen()) >= 1 }, 5*time.Second, 10*time.Millisecond,
+		"the first job must complete and attempt a reclaim")
+
+	// A later job still provisions: the failing reclaim did not stall the loop.
+	srv.EnqueueJob(ssID)
+	require.Eventually(t, func() bool { return prov.count() >= 2 }, 5*time.Second, 10*time.Millisecond,
+		"a reclaim failure must not stop the listener provisioning later jobs")
+}
