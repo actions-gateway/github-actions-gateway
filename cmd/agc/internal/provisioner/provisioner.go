@@ -540,11 +540,13 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 // X-ScaleSetMaxCapacity, so a concurrency-ceiling hit here is a narrow race the
 // listener retries on its next poll.
 //
-// Cleanup: the Secret and pod are owned by the RunnerSet (Target.OwnerRef), so they
-// cascade-GC when the set is deleted; the reconciler's reaper deletes the terminal pod
-// per spec.completedPodTTL. Per-job Secret cleanup in steady state is the caller's
-// responsibility (the reconciler wiring that drives this method) — this method only
-// creates.
+// Cleanup: every exit that fails BEFORE the worker pod exists deletes the Secret this
+// call staged, so a credential-bearing Secret never outlives a job that never ran
+// (Q373). In steady state the Secret must outlive this method — the pod mounts it — so
+// it is reclaimed by CleanupScaleSetJob, which the scale-set listener calls on the
+// terminal JobCompleted for the job. The Secret and pod also carry the RunnerSet
+// OwnerRef, so both cascade-GC when the set is deleted; the reconciler's reaper deletes
+// the terminal pod per spec.completedPodTTL.
 func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target, jobID, jitConfig string) error {
 	if jitConfig == "" {
 		return fmt.Errorf("provisioner: scale-set worker for job %q has no JIT config", jobID)
@@ -559,7 +561,7 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	}
 
 	safeJob := safeName(jobID)
-	secretName := "job-ss-" + safeJob
+	secretName := scaleSetSecretName(jobID)
 	podName := fmt.Sprintf("runner-%s-%s", safeName(key.Name), safeJob)
 	if len(podName) > 63 { // Kubernetes DNS label limit
 		podName = podName[:63]
@@ -570,18 +572,47 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 
 	// 1. Stage the JIT-config Secret. There is no acquired payload — the runner pulls
 	//    its own job — so payload is nil and only the jitconfig blob is staged.
+	//
+	// staged records whether THIS call created the Secret. Only then may a failure exit
+	// below delete it: an AlreadyExists means an earlier delivery of the same job staged
+	// it, and that delivery may already have a live worker pod mounting it (or be about
+	// to create one). Deleting another delivery's Secret would strand its pod in
+	// ContainerCreating, so a replay cleans up nothing it does not own (Q373).
+	staged := false
 	secret := p.buildSecret(target, secretName, jobID, workerVersion, nil, jitConfig)
-	if err := p.Client.Create(ctx, secret); err != nil && !apierrors.IsAlreadyExists(err) {
-		return fmt.Errorf("provisioner: create scale-set Secret %s: %w", secretName, err)
+	if err := p.Client.Create(ctx, secret); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("provisioner: create scale-set Secret %s: %w", secretName, err)
+		}
+	} else {
+		staged = true
+	}
+	// unstage deletes the Secret on a failure exit that leaves no pod behind to mount it.
+	// One of those exits is a ctx cancellation (AGC shutdown mid-throttle), on which a
+	// delete issued under the same ctx would fail and leak the Secret — so a cancelled
+	// ctx falls back to a short detached one.
+	unstage := func() {
+		if !staged {
+			return
+		}
+		dctx := ctx
+		if ctx.Err() != nil {
+			var cancel context.CancelFunc
+			dctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), secretCleanupTimeout)
+			defer cancel()
+		}
+		_ = p.deleteSecret(dctx, key.Namespace, secretName)
 	}
 
 	// 2. Priority-tier selection (capacity is gated upstream; a held result is a race).
 	count, err := p.activePodCount(ctx, key.Namespace, target.PodOwnerLabels())
 	if err != nil {
+		unstage()
 		return fmt.Errorf("provisioner: count active pods: %w", err)
 	}
 	priorityClass, held := ceilingCheck(spec, count)
 	if held {
+		unstage()
 		return fmt.Errorf("provisioner: concurrency ceiling reached (%d active pods); listener will retry", count)
 	}
 
@@ -594,6 +625,7 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 		p.Metrics.ScaleUpThrottled.WithLabelValues(key.Namespace, key.Name).Inc()
 	}
 	if wErr != nil {
+		unstage()
 		return wErr
 	}
 
@@ -603,11 +635,49 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 
 	if err := p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log); err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			return nil // idempotent: a replayed job already has its worker pod
+			// Idempotent: a replayed job already has its worker pod — and that pod mounts
+			// this Secret, so the Secret must survive. It is reclaimed with every other
+			// steady-state Secret by CleanupScaleSetJob on the job's completion.
+			return nil
 		}
+		unstage()
 		return fmt.Errorf("provisioner: create scale-set Pod %s: %w", podName, err)
 	}
 	log.Debug("scale-set worker pod created", "priorityClass", priorityClass)
+	return nil
+}
+
+// secretCleanupTimeout bounds a Secret delete issued on a detached context — the
+// cleanup paths that run after the caller's context is already cancelled.
+const secretCleanupTimeout = 10 * time.Second
+
+// scaleSetSecretName is the deterministic per-job Secret name for the scale-set worker
+// path. Both the staging site (ProvisionScaleSetWorker) and the reclaim site
+// (CleanupScaleSetJob) derive the name here so they can never drift apart.
+func scaleSetSecretName(jobID string) string { return "job-ss-" + safeName(jobID) }
+
+// CleanupScaleSetJob deletes the per-job JIT-config Secret staged for jobID by
+// ProvisionScaleSetWorker. It is the steady-state reclaim point for the scale-set path
+// (Q373): the Secret cannot be deleted when the worker pod is created (the pod mounts
+// it), so the scale-set listener calls this on the terminal JobCompleted for the job,
+// at which point the runner has consumed its JIT config and exited.
+//
+// It is safe to call for a job whose pod is still terminating: the kubelet has long
+// since materialized the mounted volume and does not tear a running pod down when its
+// Secret disappears. It is also safe — and deliberate — for a job completed before its
+// pod ever started (a cancellation): that pod can no longer mount the Secret, so it
+// stalls Pending and the reconciler's pending-deadline reaper collects it, which is the
+// right outcome for a job that will never run.
+//
+// It is idempotent (a NotFound is success), so a replayed completion message, or a
+// completion for a job whose Secret a failure path already unstaged, is a no-op.
+func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, jobID string) error {
+	key := target.Key()
+	name := scaleSetSecretName(jobID)
+	if err := p.deleteSecret(ctx, key.Namespace, name); err != nil {
+		return fmt.Errorf("provisioner: delete scale-set Secret %s: %w", name, err)
+	}
+	p.logForKey(key).Debug("scale-set job Secret reclaimed", "secret", name, "jobID", jobID)
 	return nil
 }
 

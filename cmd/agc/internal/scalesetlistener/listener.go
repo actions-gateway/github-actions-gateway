@@ -118,6 +118,15 @@ type Job struct {
 // leaves the job un-provisioned so the Listener retries it on a later poll.
 type ProvisionFunc func(ctx context.Context, job Job) error
 
+// CleanupFunc releases the per-job resources ProvisionFunc staged — the worker's
+// JIT-config Secret — once the job is terminally complete (Q373). It is called with
+// the jobID of every terminal JobCompleted the queue delivers, and must be idempotent:
+// a re-created session replays completions from cursor 0, so the same job may be
+// cleaned up more than once, and a job may complete having never been provisioned by
+// this process. The worker pod itself is NOT this hook's concern — the owning
+// reconciler's reaper collects terminal pods on spec.completedPodTTL.
+type CleanupFunc func(ctx context.Context, jobID string) error
+
 // CapacityFunc returns the number of free worker slots right now — the value
 // advertised as X-ScaleSetMaxCapacity, so GitHub assigns at most that many jobs. It
 // is the scale-set expression of the Q59 admission gate (maxWorkers/priorityTiers
@@ -179,6 +188,10 @@ type Config struct {
 	Provision ProvisionFunc
 	// Capacity returns the free worker slots to advertise each poll. Required.
 	Capacity CapacityFunc
+	// Cleanup releases a completed job's staged worker resources (its JIT-config
+	// Secret). Nil disables reclaim, which leaks one Secret per job until the owning
+	// RunnerSet is deleted — so the reconciler always wires it (Q373).
+	Cleanup CleanupFunc
 	// Metrics records job accounting. Nil is safe.
 	Metrics MetricsRecorder
 	// Conditions publishes the Listener's session-failure conditions onto the owning
@@ -626,7 +639,7 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 		}
 	}
 	for _, cj := range completedJobs(jobs) {
-		l.completeJob(cj)
+		l.completeJob(ctx, cj)
 	}
 
 	// Ack (advance the cursor) unless a job needs a redelivery retry. A provisioned or
@@ -753,14 +766,31 @@ func (l *Listener) generateJITConfig(ctx context.Context, ssID int, jobID string
 }
 
 // completeJob records a terminal JobCompleted, counting the completion metric at most
-// once per job even if the message replays to a re-created session.
-func (l *Listener) completeJob(cj scaleset.JobMessage) {
+// once per job even if the message replays to a re-created session, and reclaiming the
+// job's staged worker Secret (Q373).
+//
+// The metric is deduped; the cleanup deliberately is NOT. Re-running an idempotent
+// delete costs one tolerated NotFound, and running it on every delivery makes replay a
+// free backstop: a completion the previous process handled just before it crashed —
+// after the queue message was written but before the Secret was deleted — is reclaimed
+// when a re-created session replays that completion from cursor 0.
+func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) {
 	l.mu.Lock()
 	first := !l.completed[cj.JobID]
 	l.completed[cj.JobID] = true
 	l.mu.Unlock()
 	if first && l.cfg.Metrics != nil {
 		l.cfg.Metrics.IncJobCompleted(cj.Result)
+	}
+	if l.cfg.Cleanup == nil {
+		return
+	}
+	// Best-effort: a failed reclaim leaves the Secret to the RunnerSet's cascade-GC
+	// (the pre-Q373 behaviour) rather than holding the cursor, which would redeliver
+	// the whole batch and re-provision nothing useful.
+	if err := l.cfg.Cleanup(ctx, cj.JobID); err != nil {
+		l.log.Warn("scaleset: reclaim completed job's worker Secret",
+			"scaleSet", l.cfg.ScaleSetName, "jobID", cj.JobID, "err", err)
 	}
 }
 
