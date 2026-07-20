@@ -1,10 +1,10 @@
 {
   "slow": {
     "commands": {
-      "make (-C [^ ]+ )?test-race\\b": 600000,
       "go test .*-race": 600000,
-      "make (-C [^ ]+ )?test-integration\\b": 600000,
       "go test .*-tags[= ]integration": 600000,
+      "make (-C [^ ]+ )?test-integration\\b": 600000,
+      "make (-C [^ ]+ )?test-race\\b": 600000,
       "make .*\\be2e": 1800000
     }
   },
