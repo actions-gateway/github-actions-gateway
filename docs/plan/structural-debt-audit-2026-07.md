@@ -9,7 +9,9 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
 > **Status: ❌ Open — filed 2026-07-20.** No remediation started. Queue rows
-> [Q361](../STATUS.md#Q361)–[Q370](../STATUS.md#Q370) track the individual items.
+> [Q361](../STATUS.md#Q361)–[Q370](../STATUS.md#Q370) track the individual items,
+> [Q371](../STATUS.md#Q371) adds the prevention gates, and
+> [Q372](../STATUS.md#Q372) (Deferred) carries the re-run trigger.
 
 ## Headline
 
@@ -232,6 +234,86 @@ protocols must type-switch on two unrelated types with the same name.
 - `scripts/sync-chart-{crds,rbac,webhook}.sh` triplicate an identical
   trap/`render`/`sync`/`check`/`main` skeleton — even the header comments are
   verbatim copies. Extract to `scripts/lib/chart-sync.sh`.
+
+## Prevention: what a linter could and could not have caught
+
+Scored after the fact, to decide whether more gates or more audits are the better
+investment. The answer is **both, because they catch disjoint classes** — and the
+audit class is the larger one here.
+
+| Finding | Catchable by a gate? |
+|---|---|
+| F3 sync gate covers 13% | **Yes** — already a script; generalize its file list ([Q363](../STATUS.md#Q363)) |
+| F8 god `main`/`run` functions | **Yes** — `funlen` / `gocyclo` ([Q371](../STATUS.md#Q371)) |
+| F10 script sprawl | Partly — a line-count check on `scripts/` would flag `setup.sh` |
+| F1 Secret leak | No — semantic resource-lifecycle bug |
+| F2 probe reimplements `scaleset` | No |
+| F4 CIDR rule open-coded twice | No — see below |
+| F5 four stub servers | No — cross-module |
+| F6 foundation in v1-named files | No — architectural |
+| F7 29 `apply*` wrappers | No — see below |
+| F9 error taxonomy duplicated | No — cross-module |
+
+**The decisive evidence: `dupl` is already enabled** (threshold 150, see
+`.golangci.yml`) and the codebase passes it — so by construction it did not catch
+any of the four duplication findings (F4, F5, F7, F9). Those clones are each below
+the token threshold, or span files and modules it does not compare. Lowering the
+threshold to reach them would drown the signal in table-test and struct-literal
+boilerplate, which is exactly why 150 was chosen.
+
+**F4 is the archetype of the irreducible class.** `githubCIDREgressRule` existed,
+was documented as the shared helper, and the new code open-coded it anyway. No
+linter detects "you reimplemented an abstraction that already exists two files
+away" — that requires knowing intent. Roughly 7 of the 10 findings are this shape.
+
+### Suppression discipline is a strength
+
+79 `nolint` directives across 41k first-party lines, and **71 of them are `gosec`**
+— whose noisy rule families are already excluded wholesale with written
+justification in `.golangci.yml`. That leaves **8 non-`gosec` suppressions in the
+entire codebase**. This is unusually disciplined and makes a suppression gate cheap
+to adopt rather than a cleanup project.
+
+One concrete payoff waiting: there is exactly one `nolint:gocyclo` in the repo
+(`cmd/gmc/cmd/main.go:72`) and **`gocyclo` is not enabled**. The suppression is
+inert — someone knew the function was over the line and pre-silenced a gate that
+does not exist. `nolintlint` with `allow-unused: false` converts that from
+invisible to a build failure.
+
+### The `funlen` threshold curve
+
+Measured 2026-07-20 over non-test, non-generated Go:
+
+| Threshold | Functions over it |
+|---|---|
+| >200 lines | 5 |
+| >150 lines | 11 |
+| >120 lines | 15 |
+| >100 lines | 21 |
+| >80 lines | 31 |
+
+[technical-debt.md](../development/technical-debt.md) currently records
+*"Cyclomatic complexity | Skip for now — most long functions are legitimate wiring;
+high noise-to-signal."* The curve says that call was too pessimistic: at a high
+threshold the gate fires on a handful, not a flood. Sequence the gate **after**
+[Q367](../STATUS.md#Q367) clears the two god `main`s, then set the threshold just
+above the worst legitimate survivor and ratchet down — the same "gates by not
+getting worse" pattern the coverage ratchet already uses, with no allowlist of
+shame. **Q371 should update that metrics-table row** when the gate lands; it is
+left unchanged until then so the doc keeps describing what is actually enforced.
+
+### Audit cadence
+
+Recurrence is tracked as [Q372](../STATUS.md#Q372) in Deferred, triggered by the
+next minor release **or** ≥20% growth over the 41,011-line baseline — whichever
+first. Growth is the honest proxy: this audit surfaced ~10 items across 41k lines,
+so drift scales with code added rather than calendar time. A time-based schedule
+would run the sweep when nothing had changed and miss a burst of growth between
+ticks.
+
+The sweep is cheap — this one was three parallel read-only agents plus verification,
+with no code touched — which argues for triggering it more readily than a
+heavyweight process would justify.
 
 ## Deliberate non-findings
 
