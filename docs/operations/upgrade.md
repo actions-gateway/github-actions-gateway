@@ -305,12 +305,12 @@ The invariant `lease-duration > renew-deadline > retry-period × 1.2` is validat
 
 The shipped install artifact is the **`actions-gateway` Helm chart**, published and cosign-signed to the GHCR OCI registry (`oci://ghcr.io/actions-gateway/charts/actions-gateway`); the [`charts/actions-gateway/`](../../charts/actions-gateway/README.md) source path is the dev/CI copy of the same chart. The chart is the **sole** install/upgrade vehicle — there is no kustomize path. For dev/CI iteration `make deploy` wraps `helm install` of the local chart with floating image tags.
 
-> **General availability — `v1.0.0`** (chart version = release tag without the leading `v`). Pin `--version 1.0.0`; copy the image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.0.0) and verify the chart/image signatures before installing (see [release.md § Verify the publish](release.md#3-verify-the-publish)).
+> **Current release — `v1.2.0`** (chart version = release tag without the leading `v`). Pin `--version 1.2.0`; copy the image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.2.0) and verify the chart/image signatures before installing (see [release.md § Verify the publish](release.md#3-verify-the-publish)).
 
 ```sh
 # First install (from the published, signed OCI chart)
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.0.0 \
+  --version 1.2.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
