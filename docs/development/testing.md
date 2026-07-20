@@ -142,6 +142,8 @@ The Bash tool's default timeout is short (two minutes) and it **kills** anything
 
 Never fire one of these as a default-timeout foreground run and hope it finishes — it will be killed partway and you learn nothing. Pick the timeout from the tier's real cost (see [Cost & cadence](#cost--cadence-rough-ephemeral-ci-2026-ballparks) below); when in doubt, background it.
 
+Both rules in this section are enforced mechanically by the foreground-guard hook: it prompts on foreground watch/`sleep`-poll forms, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts — keep that registry in sync when a tier's runtime or target name changes.
+
 ## Picking the right test tier
 
 Prefer the narrowest tier that can actually *observe* the bug class — but no narrower:

@@ -1,0 +1,12 @@
+{
+  "slow": {
+    "commands": {
+      "go test .*-race": 600000,
+      "go test .*-tags[= ]integration": 600000,
+      "make (-C [^ ]+ )?test-integration\\b": 600000,
+      "make (-C [^ ]+ )?test-race\\b": 600000,
+      "make .*\\be2e": 1800000
+    }
+  },
+  "hint": "pr-sentinel watches PRs in this repo — take one non-blocking snapshot (e.g. `gh pr checks <n>` without --watch), never sleep/poll gh yourself."
+}
