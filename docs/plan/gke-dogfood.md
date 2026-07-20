@@ -858,12 +858,25 @@ arrival, back to 0 ~10 min after drain).
 
 A single `e2-standard-2` system node no longer leaves ~500m free for the
 on-demand AGC (DaemonSet/kube-dns growth), so it stays `Pending` and the start
-script's Ready wait times out (Q335). `e2e-start.sh` therefore scales the system
-pool up to 2 nodes for the e2e window (`E2E_SYSTEM_NODES`, default `2`), and
-`e2e-stop.sh` restores it to the at-rest 1 node (`SYSTEM_POOL_AT_REST_NODES`,
-default `1`) that `dogfood/start.sh` leaves it in; `dogfood/stop.sh` later takes
-the pool to 0 for the zero-cost-at-rest state. Both resizes pin `--project` and
-`--zone` and are idempotent, so re-running either script is safe.
+script's Ready wait times out (Q335).
+
+The same ceiling applies to the **always-on** tenants, not just the on-demand
+e2e one: measured on a live node, `e2-standard-2` offers **1930m allocatable**
+against a **~1080m kube-system baseline**, leaving room for exactly *one* of the
+two 500m tenant AGCs (`dogfood-agc`, `dogfoodss-agc`). At 1 node the two race
+for the node and the loser stays `Pending` indefinitely — and because
+`dogfood/start.sh` waits on `instance=dogfood` specifically, a `dogfoodss` win
+times the wait out and fails the caller (this is what blocked
+`validate-release.sh` before it ever reached the e2e leg). `dogfood/start.sh`
+therefore sizes the system pool to **2 nodes** (`SYSTEM_NODES`, default `2`).
+
+`e2e-start.sh` scales the system pool up for the e2e window (`E2E_SYSTEM_NODES`,
+default `2`), and `e2e-stop.sh` restores the running size
+(`SYSTEM_POOL_AT_REST_NODES`, default `2`) that `dogfood/start.sh` leaves it in;
+`dogfood/stop.sh` later takes the pool to 0 for the zero-cost-at-rest state.
+Keep `SYSTEM_POOL_AT_REST_NODES` in sync with `SYSTEM_NODES` — restoring fewer
+nodes than the running size re-evicts a tenant AGC. All resizes pin `--project`
+and `--zone` and are idempotent, so re-running any of these scripts is safe.
 
 ```bash
 export PROJECT CLUSTER ZONE REPO   # from the Variables section

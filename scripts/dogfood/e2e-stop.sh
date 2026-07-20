@@ -25,10 +25,12 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
 
-# System pool sizing (Q335). At rest the system pool sits at 1 node (what
-# dogfood/start.sh leaves it in); e2e-stop.sh restores that after the e2e window.
+# System pool sizing (Q335). While dogfood is running the system pool sits at 2
+# nodes (what dogfood/start.sh leaves it in — one e2-standard-2 fits only one of
+# the two tenant AGCs); e2e-stop.sh restores that after the e2e window. Keep
+# this default in sync with SYSTEM_NODES in dogfood/start.sh.
 SYSTEM_POOL="${SYSTEM_POOL:-default-pool}"
-SYSTEM_POOL_AT_REST_NODES="${SYSTEM_POOL_AT_REST_NODES:-1}"
+SYSTEM_POOL_AT_REST_NODES="${SYSTEM_POOL_AT_REST_NODES:-2}"
 
 main() {
 	: "${PROJECT:?PROJECT must be set}"

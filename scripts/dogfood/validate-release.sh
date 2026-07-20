@@ -103,14 +103,18 @@ scale_system_pool() {
 		--node-pool=default-pool --num-nodes="${nodes}" --zone="${ZONE}" --quiet
 }
 
-# deploy_leg — bring one system node up, deploy the RC + tenant, route CI to GAG.
+# deploy_leg — bring the system pool up, deploy the RC + tenant, route CI to GAG.
 deploy_leg() {
-	# Pre-scale to 1 BEFORE setup: the cluster is at 0 nodes at rest and setup.sh's
+	# Pre-scale BEFORE setup: the cluster is at 0 nodes at rest and setup.sh's
 	# GMC-rollout wait (kubectl rollout status, no `|| true`) hard-fails with nothing
-	# schedulable — aborting setup before it provisions the tenant (apply_cr). One
-	# node up first lets the whole of setup's Part B complete in a single idempotent
-	# pass. start.sh reasserts the same 1-node size, so this does not fight it.
-	scale_system_pool 1
+	# schedulable — aborting setup before it provisions the tenant (apply_cr). Nodes
+	# up first let the whole of setup's Part B complete in a single idempotent pass.
+	# Size to 2 to match start.sh's SYSTEM_NODES: one e2-standard-2 (1930m
+	# allocatable, ~1080m kube-system baseline) fits only one of the two 500m tenant
+	# AGCs, so at 1 node dogfood-agc and dogfoodss-agc race and start.sh's Ready wait
+	# on instance=dogfood times out. Scaling here (not 1-then-2) avoids a second
+	# resize cycle mid-run.
+	scale_system_pool 2
 
 	echo "Deploying RC ${GAG_IMAGE_TAG} to dogfood (setup.sh)..."
 	bash "${SCRIPT_DIR}/setup.sh"
