@@ -14,8 +14,8 @@
 #   * DOGFOOD_RUNNER_IMAGE left untouched so setup.sh (Q295) preserves the live
 #     RunnerTemplate runner image and a re-run can't regress the toolchain.
 #   * The cluster is at 0 nodes at rest — the system pool is scaled up before
-#     setup so setup's GMC-rollout wait has something to schedule on, then a
-#     temporary +1 node is added for the on-demand e2e AGC's contention window.
+#     setup so setup's GMC-rollout wait has something to schedule on; start.sh
+#     and e2e-start.sh then derive the pool size from the deployed tenant AGCs.
 #   * The e2e leg is triggered by `gh run rerun` (+ GAG_E2E_RUNNER, set by
 #     e2e-start.sh), not by e2e-start.sh itself.
 #
@@ -112,8 +112,8 @@ resolve_installation_id() {
 }
 
 # scale_system_pool N — resize the always-on system pool to N nodes. Mirrors
-# start.sh/stop.sh's resize so the wrapper controls the node count around the
-# 0-nodes-at-rest deploy and the e2e AGC contention window.
+# start.sh/stop.sh's resize so the wrapper can bootstrap the 0-nodes-at-rest
+# cluster before setup.sh (the e2e window sizing lives in e2e-start.sh).
 scale_system_pool() {
 	local nodes="$1"
 	echo "Scaling system pool (default-pool) to ${nodes} node(s)..."
@@ -128,11 +128,9 @@ deploy_leg() {
 	# GMC-rollout wait (kubectl rollout status, no `|| true`) hard-fails with nothing
 	# schedulable — aborting setup before it provisions the tenant (apply_cr). Nodes
 	# up first let the whole of setup's Part B complete in a single idempotent pass.
-	# Size to 2 to match start.sh's SYSTEM_NODES: one e2-standard-2 (1930m
-	# allocatable, ~1080m kube-system baseline) fits only one of the two 500m tenant
-	# AGCs, so at 1 node dogfood-agc and dogfoodss-agc race and start.sh's Ready wait
-	# on instance=dogfood times out. Scaling here (not 1-then-2) avoids a second
-	# resize cycle mid-run.
+	# Size to 2 — the pool floor (scripts/dogfood/lib/pool.sh), enough for setup's
+	# GMC wait. start.sh then derives the running size from the deployed tenant
+	# AGCs (Q357) and resizes again only if a third tenant needs more.
 	scale_system_pool 2
 
 	echo "Deploying RC ${GAG_IMAGE_TAG} to dogfood (setup.sh)..."
@@ -194,15 +192,13 @@ resolve_e2e_run_id() {
 	echo "Will re-run ${workflow} run ${run_id} once the e2e tenant is routed."
 }
 
-# e2e_leg — add the temporary +1 node, spin the on-demand e2e AGC + routing, then
-# re-run the pre-resolved e2e matrix on the RC's GAG runners and require it green.
+# e2e_leg — spin the on-demand e2e AGC + routing, then re-run the pre-resolved
+# e2e matrix on the RC's GAG runners and require it green. The e2e-window pool
+# sizing belongs to e2e-start.sh (it resizes to at least the derived running
+# size, Q357) — a fixed pre-resize here could briefly shrink a larger pool and
+# evict a tenant AGC.
 e2e_leg() {
 	local run_id="${E2E_RESOLVED_RUN_ID}"
-
-	# The on-demand e2e AGC (~500m CPU) does not fit on the single e2-standard-2
-	# system node beside the always-on CI AGCs. Add one node for the e2e window;
-	# teardown's stop.sh scales the pool back to 0.
-	scale_system_pool 2
 
 	echo "Spinning up the on-demand e2e tenant + routing (e2e-start.sh)..."
 	bash "${SCRIPT_DIR}/e2e-start.sh"

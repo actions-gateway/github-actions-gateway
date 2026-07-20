@@ -13,8 +13,9 @@
 # Capacity (Q335): a single e2-standard-2 system node no longer has ~500m free
 # for the on-demand AGC (DaemonSet/kube-dns growth), so it stays Pending and the
 # Ready wait below times out. This script scales the system pool up for the e2e
-# window; e2e-stop.sh scales it back to the at-rest size (1 node, what
-# dogfood/start.sh leaves it in — dogfood/stop.sh later takes it to 0).
+# window; e2e-stop.sh scales it back to the running size dogfood/start.sh
+# leaves it in (derived from the deployed always-on tenants — lib/pool.sh;
+# dogfood/stop.sh later takes it to 0).
 #
 # Required env vars (export before running):
 #   PROJECT      GCP project ID (e.g. actions-gateway-dogfood)
@@ -35,12 +36,16 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
+# shellcheck source=scripts/dogfood/lib/pool.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/pool.sh"
 
 E2E_VARIANT="${E2E_VARIANT:-kata}"
 
-# System pool sizing for the e2e window (Q335). The at-rest size (1 node) does
-# not fit the on-demand AGC; 2 nodes was live-validated green (see
+# System pool sizing for the e2e window (Q335). 2 nodes was live-validated
+# green with both always-on AGCs plus the on-demand e2e AGC (see
 # docs/plan/archive/kata-on-gke.md#what-the-live-session-found-2026-07-16).
+# The effective size never drops below the derived running size (Q357), so
+# with a third always-on tenant this resize cannot evict a tenant AGC.
 SYSTEM_POOL="${SYSTEM_POOL:-default-pool}"
 E2E_SYSTEM_NODES="${E2E_SYSTEM_NODES:-2}"
 
@@ -64,18 +69,27 @@ main() {
 	require_cmd gke-gcloud-auth-plugin \
 		"https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#install_plugin"
 
+	# Pin the target cluster and fail closed if it is not the active context, so
+	# the sizing read and the on-demand tenant apply never land on another
+	# cluster.
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
+
 	# Scale the system pool up for the e2e window so the on-demand AGC has room
-	# to schedule (Q335). --project/--zone are pinned per call so the resize
-	# never relies on the active gcloud config; a resize to the current node
-	# count is a no-op, so this is safe to re-run.
-	echo "Scaling system pool (${SYSTEM_POOL}) to ${E2E_SYSTEM_NODES} nodes for the e2e window..."
+	# to schedule (Q335), but never below the derived running size — with 3+
+	# always-on tenants a resize to the bare e2e default would evict a tenant
+	# AGC (Q357). The e2e AGC itself packs into the non-first nodes' headroom
+	# (live-validated), so the derived size needs no extra node on top.
+	# --project/--zone are pinned per call so the resize never relies on the
+	# active gcloud config; a resize to the current node count is a no-op, so
+	# this is safe to re-run.
+	local nodes needed
+	nodes="${E2E_SYSTEM_NODES}"
+	needed="$(required_system_nodes)"
+	((nodes >= needed)) || nodes="${needed}"
+	echo "Scaling system pool (${SYSTEM_POOL}) to ${nodes} nodes for the e2e window..."
 	gcloud container clusters resize "${CLUSTER}" \
 		--project="${PROJECT}" \
-		--node-pool="${SYSTEM_POOL}" --num-nodes="${E2E_SYSTEM_NODES}" --zone="${ZONE}" --quiet
-
-	# Pin the target cluster and fail closed if it is not the active context, so
-	# the on-demand tenant apply never lands on another cluster.
-	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
+		--node-pool="${SYSTEM_POOL}" --num-nodes="${nodes}" --zone="${ZONE}" --quiet
 
 	# Spin up the on-demand e2e tenant. Idempotent server-side apply of the
 	# selected isolation overlay (namespace + quota + ClusterRunnerTemplate +
