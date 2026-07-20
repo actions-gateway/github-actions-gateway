@@ -131,13 +131,14 @@ conditions-sync-check: ## Fail if api/v2alpha1 and api/v2beta1 conditions.go div
 	scripts/check-conditions-sync.sh
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
-# express — the tags-only release signing-identity regexp (Q124) and the
+# express — the tags-only release signing-identity regexp (Q124), the
 # validate-cluster preflight decision helpers (CNI classification + K8s version
-# parsing, Q184), and the dogfood gate's e2e run resolution (an in-flight run must
-# not abort the gate after the billable scale-up). Lightweight pure-bash checks;
-# part of `check` and the CI shellcheck job.
+# parsing, Q184), the dogfood gate's e2e run resolution (an in-flight run must
+# not abort the gate after the billable scale-up), and the go-lint change-scoping
+# decision (which modules a diff makes golangci-lint cover). Lightweight
+# pure-bash checks; part of `check` and the CI shellcheck job.
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping)
 	scripts/verify-release-test.sh
 	scripts/validate-cluster-test.sh
 	scripts/lint-backlog-test.sh
@@ -145,6 +146,7 @@ scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, v
 	scripts/claude-go-throttle-hook-test.sh
 	scripts/dogfood/validate-release-test.sh
 	scripts/dogfood/pool-test.sh
+	scripts/go-lint-scope-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in
@@ -278,7 +280,7 @@ mem-profile: ## Isolate AGC-only per-session memory (Q181): 1,000 parked session
 	$(MAKE) -C cmd/agc mem-profile
 
 .PHONY: lint
-lint: $(GOLANGCI_LINT) ## Run gofmt and golangci-lint across all workspace modules (golangci-lint includes govet)
+lint: $(GOLANGCI_LINT) ## Run gofmt (all modules) + golangci-lint, change-scoped locally to modules affected vs origin/main (LINT_ALL=1 or CI = full sweep; includes govet)
 	GOLANGCI_LINT=$(GOLANGCI_LINT) scripts/go-lint.sh
 
 .PHONY: lint-backlog
