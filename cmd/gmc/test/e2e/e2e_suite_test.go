@@ -114,6 +114,11 @@ var _ = SynchronizedBeforeSuite(
 		wrapperImage = wrapperImg
 		curlImage = curlImg
 
+		// Baseline runner-host GitHub reachability for the log (Q352). Non-fatal —
+		// see logRunnerHostGitHubBaseline; the failure-time AfterEach in
+		// github_egress_preflight_test.go does the authoritative attribution.
+		logRunnerHostGitHubBaseline()
+
 		configureKubectlKubeRC()
 		setupCertManager()
 		setupMetricsServer()
