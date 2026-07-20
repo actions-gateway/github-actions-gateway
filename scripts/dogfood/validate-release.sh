@@ -55,6 +55,8 @@
 #                    in flight, before any billable work (default 1800; 0 = fail
 #                    immediately instead of waiting).
 #   COSIGN           Path to the cosign binary (default .build/cosign; `make cosign`).
+#                    Checked up front, like every other local tool — the CRD smoke
+#                    that consumes it runs last, after the billable legs.
 #   ASSUME_YES=1     Skip the wrapper's one interactive confirmation (automation).
 #
 # One-time prerequisite (NOT run here): scripts/dogfood/e2e-setup.sh must have
@@ -83,6 +85,10 @@ WORKDIR=""
 # E2E_RESOLVED_RUN_ID is the run id the e2e leg re-runs. resolve_e2e_run_id sets
 # it BEFORE any billable work; e2e_leg only consumes it.
 E2E_RESOLVED_RUN_ID=""
+
+# COSIGN_BIN is the cosign binary the CRD smoke verifies with. preflight_cosign
+# sets it BEFORE any billable work; crd_smoke only consumes it.
+COSIGN_BIN=""
 
 # Poll interval for the in-flight waits (run settle + rerun transition).
 E2E_POLL_INTERVAL=15
@@ -219,16 +225,26 @@ e2e_leg() {
 	echo "  e2e matrix GREEN"
 }
 
-# crd_smoke — download the RC's signed v2 CRD manifest, verify its blob signature
-# against the publish identity, apply it server-side, and assert all five v2 CRDs
-# register — the helm-free install path operators actually use.
-crd_smoke() {
+# preflight_cosign — resolve the cosign binary the CRD smoke needs and set
+# COSIGN_BIN. Called BEFORE any billable work: the smoke is the LAST leg, so a
+# missing binary discovered there aborts the gate ~25 minutes in, after a full
+# node scale-up + deploy + e2e cycle. Failing here is free.
+preflight_cosign() {
 	local cosign="${COSIGN:-${REPO_ROOT}/.build/cosign}"
 	[[ -x "${cosign}" ]] || {
 		echo "cosign not found at ${cosign} — download it with: make cosign" >&2
+		echo "  (checked up front: the CRD smoke that needs it runs last, after" >&2
+		echo "  the billable legs)" >&2
 		return 1
 	}
+	COSIGN_BIN="${cosign}"
+}
 
+# crd_smoke — download the RC's signed v2 CRD manifest, verify its blob signature
+# against the publish identity, apply it server-side, and assert all five v2 CRDs
+# register — the helm-free install path operators actually use. Consumes the
+# COSIGN_BIN that preflight_cosign resolved before anything billable ran.
+crd_smoke() {
 	# Re-pin the cluster context (fail-closed) before the apply, independent of
 	# which child last fetched credentials.
 	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
@@ -244,7 +260,7 @@ crd_smoke() {
 	local bundle="${manifest}.cosign.bundle"
 
 	echo "Verifying the manifest's blob signature against the publish identity..."
-	"${cosign}" verify-blob --bundle "${bundle}" \
+	"${COSIGN_BIN}" verify-blob --bundle "${bundle}" \
 		--certificate-identity-regexp "$(release_identity_regexp)" \
 		--certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
 		"${manifest}" >/dev/null
@@ -338,6 +354,8 @@ main() {
 		"https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#install_plugin"
 	require_cmd helm "https://helm.sh/docs/intro/install/"
 	require_cmd gh "https://cli.github.com/"
+	# Not require_cmd: cosign is a repo-local pinned download, not a PATH tool.
+	preflight_cosign
 
 	# The positional RC tag is the GAG image/CRD ref for the child scripts.
 	GAG_IMAGE_TAG="${rc_tag}"
