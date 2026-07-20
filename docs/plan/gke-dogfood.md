@@ -834,27 +834,37 @@ install, every tenant namespace and CR, the cert-manager CA and all certs
 minted from it, the per-tenant metrics PKI, the in-cluster GitHub App secret,
 and every node pool. Recreate rebuilds these; it does not restore them.
 
-### Recreate is not yet proven end-to-end (Q362)
+### Recreate is not yet proven end-to-end (Q380)
 
-`setup.sh` is written to be a from-zero bootstrap and is guarded to be
-idempotent, but **the from-zero path has never actually been executed against
-an empty project.** The live cluster predates both `delete.sh` and the
-`workers-od` addition, so every `setup.sh` run to date has taken the
-"already exists — skipping create" branch on the cluster and pool steps. Treat
-recreate as unverified until someone runs a real delete → `setup.sh` →
-`e2e-setup.sh` cycle and fixes whatever breaks.
+> **State as of 2026-07-20: there is no dogfood cluster.** It was deleted with
+> `delete.sh` on that date. So the next dogfood session does not start from
+> `start.sh` — it starts from a full `setup.sh` bootstrap, and that path has
+> never run.
 
-Two known things that cycle would settle:
+`delete.sh` **is** proven: the 2026-07-20 deletion was its first live run and it
+worked end-to-end — occupancy probes read the cluster correctly (0 nodes, 0
+worker pods), the runner labels were reset to `ubuntu-latest` *before* the
+delete, the kubeconfig context was pruned, and the orphan sweep confirmed no
+disks or reserved addresses survived.
 
-- **Live `workers` has drifted from the script.** The live pool is
-  `pd-balanced` with `max-nodes=4` — the pre-Q248 shape — while `setup.sh`
-  creates `pd-standard` with `max-nodes=8`. The existence guard means the
-  rightsizing change never reached the running cluster. A recreate converges
-  it; that is a real argument for doing the cycle deliberately rather than
-  waiting until a delete is forced.
+`setup.sh` is **not**. It is written to be a from-zero bootstrap and is guarded
+to be idempotent, but **the from-zero path has never actually been executed.**
+Every run to date happened against a live cluster and so took the "already
+exists — skipping create" branch on the cluster and pool steps. Treat recreate
+as unverified until someone runs `setup.sh` → `e2e-setup.sh` against the empty
+project and fixes whatever breaks.
+
+Two known things that first run will settle:
+
+- **`workers-od` has never been script-created.** It was added to `setup.sh`
+  (Part A4b) from a hand-made pool that no longer exists, so its `gcloud`
+  invocation has not been executed even once. Most likely thing to break.
 - **The App secret round-trip.** `create_secret` reads the App private key from
-  the local Keychain. That path is exercised on every setup run, but not the
-  case where the in-cluster secret is *absent* rather than being upserted.
+  the local Keychain. That path ran on every past setup, but never in the case
+  that now applies — the in-cluster secret *absent* rather than upserted.
+
+Validate this before you need it. The failure mode this guards against is
+discovering a broken bootstrap at the moment dogfood is wanted for a release.
 
 To go further and remove the project itself (irreversible, and it takes the
 GCP-side App wiring with it):
