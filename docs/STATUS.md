@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q361
+**Next ID:** Q362
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -74,7 +74,7 @@ Each trigger is tagged by source: **Demand:** an outside operator/user ask · **
 | <a id="Q169"></a>Q169 | [AGC horizontal scaling / multi-replica HA](design/appendix-e-capacity-planning.md) | `infra` | L | **Event:** a single per-tenant AGC becomes a measured bottleneck or a SPOF concern (near the ~1000-session ceiling). Single-replica with an in-memory session registry by design; real HA needs distributed session state. |
 | <a id="Q15"></a>Q15 | [gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` `security` | S | **Demand:** an operator wants lightweight (non-VM) syscall-filtering for compute-only, non-DinD CI jobs — likeliest on GKE, where gVisor is first-party. Kata (Q224) already covers the DinD case, the primary sandboxing motivation here. |
 | <a id="Q11"></a>Q11 | [Ed25519 live probe — M-11b](plan/security.md) | `security` `tests` | S | **Decision:** the broker swaps RSA-OAEP session-key delivery for X25519 ECDH ([Q351](#Q351)), making Ed25519 the *secure* default. Until then it's a less-secure opt-in (loses the AES session-key layer); RSA-3072 stays the default. |
-| <a id="Q17"></a>Q17 | [Unit/integration test speed improvements](plan/unit-tests-speed.md) | `speed` `tests` | M | **Decision:** CI latency becomes the bottleneck (our self-set threshold). |
+| <a id="Q361"></a>Q361 | [CI latency round 2: lint + coverage module loops](plan/archive/unit-tests-speed.md#2026-07-20-re-baseline-q17-revival) | `speed` `infra` | M | **Decision:** CI latency is again the bottleneck (self-set threshold). Critical path is lint (~230 s per-module golangci-lint loop); coverage ~140 s. Levers in the linked re-baseline. |
 | <a id="Q18"></a>Q18 | [alerting.md](plan/docs.md) | `docs` | M | **Decision:** A real Prometheus/Alertmanager setup exists to document against (infra we'd stand up). |
 | <a id="Q19"></a>Q19 | [Proxy features: rate-limit, audit log, AGC↔proxy TLS, per-RG pool](design/appendix-g-future-enhancements.md) | `security` | L | **Decision:** A named trigger fires — these are explicit non-commitments (see [Appendix G](design/appendix-g-future-enhancements.md)). Allowlist (G.1) shipped as Q242; X25519 (G.6) split to [Q351](#Q351). |
 | <a id="Q351"></a>Q351 | [X25519 ECDH session-key exchange](design/appendix-g-future-enhancements.md#g6-x25519-ecdh-session-key-exchange) | `security` | M | **Decision:** we swap RSA-OAEP session-key delivery for X25519 ECDH (Appendix G.6) — makes Ed25519 the *secure* default and unblocks [Q11](#Q11). Until then RSA-3072/RSA-OAEP stays the secure default. |
