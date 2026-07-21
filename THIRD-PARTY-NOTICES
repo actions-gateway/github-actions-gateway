@@ -549,7 +549,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-Module: github.com/go-logr/logr (v1.4.3)
+Module: github.com/go-logr/logr (v1.4.4)
 License file: github.com/go-logr/logr/LICENSE
 ================================================================================
 
@@ -3607,7 +3607,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: github.com/prometheus/client_golang (v1.23.2)
+Module: github.com/prometheus/client_golang (v1.24.0)
 License file: github.com/prometheus/client_golang/LICENSE
 ================================================================================
 
@@ -3814,7 +3814,7 @@ License file: github.com/prometheus/client_golang/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/prometheus/client_golang (v1.23.2)
+Module: github.com/prometheus/client_golang (v1.24.0)
 License file: github.com/prometheus/client_golang/NOTICE
 ================================================================================
 
@@ -3838,7 +3838,7 @@ Copyright 2010 The Go Authors
 See source code for license details.
 
 ================================================================================
-Module: github.com/prometheus/client_golang (v1.23.2)
+Module: github.com/prometheus/client_golang (v1.24.0)
 License file: github.com/prometheus/client_golang/internal/github.com/golang/gddo/LICENSE
 ================================================================================
 
@@ -4089,7 +4089,7 @@ This product includes software developed at
 SoundCloud Ltd. (http://soundcloud.com/).
 
 ================================================================================
-Module: github.com/prometheus/common (v0.67.5)
+Module: github.com/prometheus/common (v0.70.0)
 License file: github.com/prometheus/common/LICENSE
 ================================================================================
 
@@ -4296,7 +4296,7 @@ License file: github.com/prometheus/common/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/prometheus/common (v0.67.5)
+Module: github.com/prometheus/common (v0.70.0)
 License file: github.com/prometheus/common/NOTICE
 ================================================================================
 
@@ -4307,7 +4307,7 @@ This product includes software developed at
 SoundCloud Ltd. (http://soundcloud.com/).
 
 ================================================================================
-Module: github.com/prometheus/procfs (v0.19.2)
+Module: github.com/prometheus/procfs (v0.21.1)
 License file: github.com/prometheus/procfs/LICENSE
 ================================================================================
 
@@ -4514,7 +4514,7 @@ License file: github.com/prometheus/procfs/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/prometheus/procfs (v0.19.2)
+Module: github.com/prometheus/procfs (v0.21.1)
 License file: github.com/prometheus/procfs/NOTICE
 ================================================================================
 
@@ -6966,7 +6966,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ================================================================================
-Module: go.yaml.in/yaml/v2 (v2.4.3)
+Module: go.yaml.in/yaml/v2 (v2.4.4)
 License file: go.yaml.in/yaml/v2/LICENSE
 ================================================================================
 
@@ -7173,7 +7173,7 @@ License file: go.yaml.in/yaml/v2/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: go.yaml.in/yaml/v2 (v2.4.3)
+Module: go.yaml.in/yaml/v2 (v2.4.4)
 License file: go.yaml.in/yaml/v2/LICENSE.libyaml
 ================================================================================
 
@@ -7210,7 +7210,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ================================================================================
-Module: go.yaml.in/yaml/v2 (v2.4.3)
+Module: go.yaml.in/yaml/v2 (v2.4.4)
 License file: go.yaml.in/yaml/v2/NOTICE
 ================================================================================
 
@@ -7469,7 +7469,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/sys (v0.46.0)
+Module: golang.org/x/sys (v0.47.0)
 License file: golang.org/x/sys/LICENSE
 ================================================================================
 
