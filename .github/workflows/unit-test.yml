@@ -45,15 +45,21 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      code: ${{ steps.filter.outputs.code }}
-      status: ${{ steps.filter.outputs.status }}
-      scripts: ${{ steps.filter.outputs.scripts }}
-      vendor: ${{ steps.filter.outputs.vendor }}
-      modules: ${{ steps.filter.outputs.modules }}
+      code: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.code || 'true' }}
+      status: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.status || 'true' }}
+      scripts: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.scripts || 'true' }}
+      vendor: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.vendor || 'true' }}
+      modules: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.modules || 'true' }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
+        # paths-filter resolves the changed-file list through ONE un-retried
+        # GitHub API call (@actions/github Octokit carries no retry plugin), so a
+        # single transient 5xx fails this job and, with it, the gate. Survive it:
+        # the job outputs below fail OPEN, running the gated jobs rather than
+        # skipping them when the diff could not be classified (Q363).
+        continue-on-error: true
         with:
           filters: |
             code:
@@ -110,6 +116,12 @@ jobs:
               - 'scripts/go-work-tidy.sh'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
+      # A JS action reports failure only as an ::error:: annotation, so a rerun
+      # that replaces the check run erases it — leaving a log that simply stops
+      # after `Invoking listFiles` with no error anywhere (Q363). Say it plainly.
+      - name: warn when change detection failed
+        if: steps.filter.outcome == 'failure'
+        run: echo "::warning::paths-filter could not classify the diff; assuming every filter matched so the gated jobs run"
 
   lint:
     needs: [changes]
