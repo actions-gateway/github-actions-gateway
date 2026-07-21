@@ -13,6 +13,11 @@
 // resourcequotas read-only: the RunnerGroup reconciler reads the namespace
 // ResourceQuota to compute the WorkerQuota{Pressure,Exceeded} conditions (Q82).
 // +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch
+// pods.metrics.k8s.io read-only: the worker usage sampler lists PodMetrics to
+// aggregate per-RunnerSet CPU/memory peaks for right-sizing (Q359). PodMetrics
+// are namespaced, so the per-tenant RoleBinding scopes this to the tenant
+// namespace; the sampler degrades gracefully when metrics-server is absent.
+// +kubebuilder:rbac:groups=metrics.k8s.io,resources=pods,verbs=get;list
 //
 // v2 (actions-gateway.com): the RunnerSet reconciler reconciles RunnerSets and
 // reads their references (gatewayRef → ActionsGateway, proxyRef/defaultProxyRef →

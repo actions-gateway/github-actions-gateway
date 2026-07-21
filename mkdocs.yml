@@ -160,6 +160,7 @@ nav:
           - "Grafana dashboards": operations/observability-dashboards.md
           - "Logging & tracing": operations/observability-logging.md
       - "Cost attribution": operations/cost-attribution.md
+      - "Worker right-sizing": operations/worker-rightsizing.md
       - Runbook: operations/runbook.md
       - Backup & restore: operations/backup-restore.md
       - Velero backup & restore: operations/velero-backup-restore.md

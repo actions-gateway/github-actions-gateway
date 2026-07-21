@@ -124,6 +124,7 @@ Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-co
     - Grafana dashboards + alerts, as code
     - Job counts in `kubectl get`
     - K8s Events on job transitions
+    - Per-job usage peaks for [right-sizing](operations/worker-rightsizing.md)
 
 -   :material-file-document-multiple:{ .lg .middle } __Shared runner templates__ <span class="gag-v2-badge">v2</span>
 
