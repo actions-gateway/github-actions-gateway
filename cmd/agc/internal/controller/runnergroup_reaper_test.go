@@ -21,6 +21,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+// reaperTestBaselineRecheck pins the baseline re-check cadence out of the way of
+// the reaper requeue these tests assert. Reconcile takes the *minimum* of the
+// reaper's next-due time and the baseline re-check whenever the multiplexer is
+// below MaxListeners — and unit-test listeners have no broker to reach, so they
+// exit on their own schedule and ActiveCount() can hit 0 at any point. Left at
+// the 15s default, that turns the asserted requeue into a coin flip on a loaded
+// -race runner (Q378). An hour is far beyond every reaper interval these tests
+// exercise, so the reaper always wins the min and the assertion stays about the
+// reaper.
+const reaperTestBaselineRecheck = time.Hour
+
 // reaperMetrics builds a Metrics with only the reaper counter, unregistered
 // (not added to the global Prometheus registry) for per-test isolation.
 func reaperMetrics() *listener.Metrics {
@@ -92,6 +103,7 @@ func TestReconcile_ReapsExpiredWorkerPods(t *testing.T) {
 
 	r := newTestReconciler(fb)
 	r.Now = func() time.Time { return now }
+	r.BaselineRecheckInterval = reaperTestBaselineRecheck
 	r.Metrics = reaperMetrics()
 	rec := events.NewFakeRecorder(16)
 	r.Recorder = rec
@@ -163,6 +175,7 @@ func TestReconcile_ReaperDefaults(t *testing.T) {
 
 	r := newTestReconciler(fb)
 	r.Now = func() time.Time { return now }
+	r.BaselineRecheckInterval = reaperTestBaselineRecheck
 
 	key := types.NamespacedName{Namespace: "default", Name: "dflt-rg"}
 	reconcile(t, r, key) // adds finalizer
