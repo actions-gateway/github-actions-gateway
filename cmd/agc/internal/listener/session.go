@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/broker"
@@ -77,6 +78,67 @@ func refreshBrokerTokenAfterRecycle(ctx context.Context, cfg Config, log *slog.L
 	}
 }
 
+// Bounds on a detached session DELETE (Q222). sessionDeleteTimeout is the total
+// budget across all attempts; it caps how long one goroutine can hold a shutdown
+// open, and the manager's drain runs goroutines concurrently so the whole AGC's
+// teardown is bounded by it too — comfortably inside controller-runtime's 30s
+// GracefulShutdownTimeout. sessionDeleteAttemptTimeout bounds each individual
+// round trip so a black-holed connection cannot consume the whole budget.
+const (
+	sessionDeleteTimeout        = 10 * time.Second
+	sessionDeleteAttemptTimeout = 3 * time.Second
+	sessionDeleteAttempts       = 3
+	sessionDeleteRetryBackoff   = 250 * time.Millisecond
+)
+
+// deleteSessionDetached issues a best-effort DELETE for sessionID on a context
+// DETACHED from the caller's — never cancelled by the caller's, and bounded by
+// sessionDeleteTimeout. It retries a failed DELETE within that budget and reports
+// whether the session was actually deleted.
+//
+// Both properties are load-bearing, not defensive.
+//
+// Detachment: the heal and recycle paths delete the old session as the first step
+// of an ownership handoff, having already cleared the goroutine's own sessionID so
+// the exit defer will not double-DELETE (in the v2 flow DELETE is keyed by bearer
+// token, so a re-delete could tear down the session the heal just created). Riding
+// the caller's context meant a SIGTERM landing in that window cancelled this call
+// instantly — and with sessionID already surrendered, nothing downstream ever
+// deleted the session. It leaked permanently, for the lifetime of the broker-side
+// session, on every rollout that caught a listener in its post-job recycle.
+//
+// Retry: this is the only DELETE a session will ever get. A single transient
+// failure — a connection reset by the broker as the fleet tears down, a pool
+// exhausted by sibling goroutines' long-polls unwinding at once — used to be
+// swallowed as "best-effort" and leak the session just as permanently as no
+// attempt at all.
+func deleteSessionDetached(cfg *Config, sessionID string, log *slog.Logger) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), sessionDeleteTimeout)
+	defer cancel()
+
+	var lastErr error
+	for attempt := 1; attempt <= sessionDeleteAttempts; attempt++ {
+		aCtx, cancelAttempt := context.WithTimeout(ctx, sessionDeleteAttemptTimeout)
+		lastErr = cfg.Broker.DeleteSession(aCtx, sessionID)
+		cancelAttempt()
+		if lastErr == nil {
+			return true
+		}
+		if ctx.Err() != nil {
+			break // out of budget
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(sessionDeleteRetryBackoff):
+		}
+	}
+	if log != nil {
+		log.Warn("DeleteSession failed; the broker session is leaked until it expires server-side",
+			"sessionId", sessionID, "attempts", sessionDeleteAttempts, "error", lastErr)
+	}
+	return false
+}
+
 // sessionState bundles the session ID and its derived AES message-decryption key.
 // aesKey is nil when the server did not return an encryption key.
 type sessionState struct {
@@ -144,7 +206,7 @@ func createSession(ctx context.Context, cfg Config, log *slog.Logger) (sessionSt
 // may point at a fresh agent.
 func healSession(ctx context.Context, cfg *Config, log *slog.Logger, oldSessionID string) (sessionState, error) {
 	if oldSessionID != "" {
-		_ = cfg.Broker.DeleteSession(ctx, oldSessionID) // best-effort; usually already dead
+		deleteSessionDetached(cfg, oldSessionID, log)
 	}
 	err := refreshBrokerToken(ctx, *cfg)
 	if err == nil {
@@ -176,7 +238,7 @@ func healSession(ctx context.Context, cfg *Config, log *slog.Logger, oldSessionI
 // stale_session). Callers must ensure cfg.RecycleAgent is non-nil.
 func recycleAndRestart(ctx context.Context, cfg *Config, log *slog.Logger, oldSessionID, trigger string) (sessionState, error) {
 	if oldSessionID != "" {
-		_ = cfg.Broker.DeleteSession(ctx, oldSessionID) // best-effort; usually already dead
+		deleteSessionDetached(cfg, oldSessionID, log)
 	}
 	fresh, err := cfg.RecycleAgent(ctx)
 	if err != nil {

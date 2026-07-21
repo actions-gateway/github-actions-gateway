@@ -108,28 +108,30 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	<-mgrDone
 
 	// Assert all registered sessions are deleted via DELETE /session.
-	// WaitForSessionDelete is a channel-based wait (it returns the instant the
-	// broker processes the DELETE, not on a poll tick), so the timeout is only a
-	// safety ceiling, not the expected latency. DELETE happens asynchronously after
-	// mgr.Start returns — mgr.Start does not wait for the listener goroutines, so
-	// when <-mgrDone unblocks each goroutine may still be unwinding its poll loop
-	// and running its exit-defer DELETE (which uses a fresh context.Background with
-	// a 10s timeout, so a cancelled reconcile ctx cannot strand it). Under a
-	// CPU-starved 2-vCPU CI runner that round-trip can lag many seconds: the old
-	// 10s ceiling flaked at Q120 (→30s), and 30s itself flaked once on PR #415's
-	// integration gate. 60s gives ample headroom while staying well inside the
-	// package's 5m test timeout; a session genuinely failing to delete still fails
-	// fast on the assert once the ceiling elapses. If this recurs, escalate to a
-	// real teardown-race investigation rather than bumping again.
+	//
+	// This is now a settled assertion, not a race (Q222). The reconciler registers
+	// a manager Runnable that drains its multiplexers on context cancellation, so
+	// mgr.Start does not return until every listener goroutine has exited — which
+	// is after each has run its exit-defer DELETE and received the broker's
+	// response. By the time <-mgrDone unblocks above, the DELETEs have already
+	// been processed; the wait below only absorbs the broker stub's own
+	// signal-delivery hop.
+	//
+	// That is why the ceiling is back down to 10s and no longer scales with runner
+	// load. The two earlier bumps (Q120 10s→30s, Q222 30s→60s) were treating CPU
+	// starvation as the cause; the real defect was a teardown ordering bug —
+	// nothing waited for the goroutines, and one exit path skipped the DELETE
+	// outright (a cancelled context stranded the recycle handoff's best-effort
+	// delete while the goroutine had already surrendered its sessionID). Both are
+	// fixed; a recurrence here means a real teardown regression, so it must be
+	// investigated rather than bumped.
 	for _, sid := range sessionIDs {
-		deleted := brokerStub.WaitForSessionDelete(sid, 60*time.Second)
+		deleted := brokerStub.WaitForSessionDelete(sid, 10*time.Second)
 		if !assert.Truef(t, deleted, "session %q should be deleted on SIGTERM", sid) {
-			// Failure dump (mirrors the Q176/Q221 deflakes): on a starved runner a
-			// listener goroutine may not be scheduled to run its exit-defer DELETE
-			// within the ceiling. Capture which sessions are still active and the
-			// global active-session counter so a recurrence is diagnosable from the
-			// CI log rather than only "Should be true".
-			t.Logf("SIGTERM teardown timeout: session %q not deleted after 60s; "+
+			// Failure dump (mirrors the Q176/Q221 deflakes): capture which sessions
+			// are still active and the global active-session counter so a recurrence
+			// is diagnosable from the CI log rather than only "Should be true".
+			t.Logf("SIGTERM teardown: session %q not deleted after the drain completed; "+
 				"still-active for owner %q=%v; global ActiveSessionCount=%d; all registered=%v",
 				sid, rgName, brokerStub.ActiveSessionsForOwner(rgName),
 				brokerStub.ActiveSessionCount(), brokerStub.RegisteredSessions())

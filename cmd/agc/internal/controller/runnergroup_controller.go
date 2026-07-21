@@ -193,6 +193,12 @@ func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	registerWorkerQuotaMetrics(mgr.GetClient())
 	registerWorkersUnschedulableMetrics(mgr.GetClient())
 
+	// Drain listener goroutines inside the manager's graceful shutdown so SIGTERM
+	// cannot kill the process mid-DELETE and leak GitHub-side sessions (Q222).
+	if err := mgr.Add(&listenerShutdown{stop: r.stopListeners, log: r.Log, owner: "RunnerGroup"}); err != nil {
+		return fmt.Errorf("add listener shutdown runnable: %w", err)
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.RunnerGroup{}).
 		// Reconcile when an admin changes a namespace ResourceQuota's .spec.hard so

@@ -391,10 +391,18 @@ Upgrade each tenant's AGC one at a time. If tenants are independent, you may par
 
 **Step 1: Drain the AGC before upgrading (optional, reduces blackout window)**
 
-The AGC's SIGTERM handler calls `DELETE /sessions` for all open sessions before exiting, causing GitHub to immediately re-queue unacquired jobs rather than waiting for session TTL. To rely on this:
+The AGC's SIGTERM handler calls `DELETE /sessions` for all open sessions before exiting, causing GitHub to immediately re-queue unacquired jobs rather than waiting for session TTL. The shutdown **blocks until every listener goroutine has issued its session DELETE** — the process does not exit while sessions are still open. To rely on this:
 
-- Ensure `terminationGracePeriodSeconds` on the AGC Deployment is ≥ 30 seconds (the GMC stamps the AGC Deployment with 60s by default).
+- Ensure `terminationGracePeriodSeconds` on the AGC Deployment is ≥ 30 seconds (the GMC stamps the AGC Deployment with 60s by default). The session drain is bounded at 10 seconds and runs concurrently across RunnerGroups, so it does not scale with listener count.
 - Do not use `kubectl delete pod` directly — it sends SIGKILL without a grace period. Use `kubectl rollout restart` or `kubectl set image` instead.
+
+If a session cannot be deleted (the broker is unreachable during the drain), the AGC retries within its budget and then logs a Warn naming the session before exiting:
+
+```
+DeleteSession failed; the broker session is leaked until it expires server-side sessionId=... attempts=3 error=...
+```
+
+That session's runner stays online on GitHub until the server-side session TTL expires. It is harmless but wastes a runner slot for the TTL; a burst of these lines during a rollout points at broker or egress-path reachability, not at the AGC.
 
 **Step 2: Update the AGC image**
 
@@ -571,7 +579,7 @@ The GMC and worker image upgrades are non-disruptive. The AGC upgrade is the onl
 
 - **Time upgrades outside peak hours** to reduce the number of in-flight jobs at risk.
 - **Rely on SIGTERM drain** — `kubectl rollout restart` (not `delete pod`) gives the AGC time to call `DELETE /sessions` before the pod exits, reducing the redelivery window from session TTL (minutes) to pod startup time (seconds).
-- **Use a generous `terminationGracePeriodSeconds`** (≥ 30s). The AGC's SIGTERM handler is fast (a few hundred milliseconds for most tenants), but give it headroom for high-listener-count namespaces.
+- **Use a generous `terminationGracePeriodSeconds`** (≥ 30s). The AGC's SIGTERM handler is fast (a few hundred milliseconds for most tenants) and its session drain is bounded at 10s even when the broker is unreachable, but give it headroom.
 - **Accept the blackout as a known cost** rather than attempting zero-downtime tricks. GitHub's 2-minute redelivery window means most jobs survive an AGC restart transparently; the risk window is only jobs whose `renewjob` lock happens to expire during the restart (unlikely in practice for a < 5-second restart).
 
 ---
