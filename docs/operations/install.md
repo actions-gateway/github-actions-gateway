@@ -80,7 +80,7 @@ remediation hint for each:
 | **CNI NetworkPolicy enforcement** | **FAIL** (blocking) | Detects the cluster CNI. An enforcing CNI (Calico, Cilium, Antrea, Weave Net, kube-router, Canal) passes; `kindnet` **fails loudly** — it does not enforce egress, so tenant isolation would be silently void. An unrecognised CNI warns (cannot confirm enforcement). |
 | **Kubernetes >= 1.30** | **FAIL** (blocking) | The GMC's `namespace-psa-guard` / `gmc-tenant-resource-guard` policies need the GA `ValidatingAdmissionPolicy` API. |
 | **cert-manager present** | WARN | Required only for the default cert path (`certManager.enabled=true`). An install with `--set certManager.enabled=false` uses the chart's self-signed fallback and does not need it. |
-| **metrics-server present** | WARN | The resource metrics the GMC/AGC HorizontalPodAutoscalers consume. Install succeeds without it; autoscaling stays degraded until it is present. |
+| **metrics-server present** | WARN | The resource metrics the GMC/AGC HorizontalPodAutoscalers consume, and the source for the AGC's [worker usage sampling](worker-rightsizing.md). Install succeeds without it; autoscaling and usage sampling stay degraded until it is present. |
 
 `make validate-cluster` exits non-zero on any blocking **FAIL** (or if the
 cluster is unreachable). Warnings do not block the install; set

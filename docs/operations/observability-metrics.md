@@ -96,6 +96,27 @@ These counters are emitted **only** by a `RunnerSet` with `spec.acquisitionProto
 | `actions_gateway_scaleset_provision_errors_total` | Counter | `namespace`, `runner_set` | Failed provision attempts (JIT-config mint or worker pod create). A transient failure leaves the job un-provisioned to retry on a later poll. A `generate-jitconfig` **runner-name conflict** (HTTP 409) instead retries under a fresh runner name; if it still conflicts after a bounded number of tries the job is **skipped** (counted here once) so it cannot wedge the queue cursor behind it — it is re-assigned or timed out server-side (Q270). A sustained rate warrants checking the run service's `generate-jitconfig` responses and namespace quota headroom. |
 | `actions_gateway_scaleset_jobs_completed_total` | Counter | `namespace`, `runner_set`, `result` | Terminal `JobCompleted` messages the queue delivered, by GitHub-reported `result` (e.g. `succeeded`, `failed`, `canceled`). This is the completion signal the classic many-acquirers protocol never delivered, so it is unique to the scale-set tier. Counted at most once per job even if a re-created session replays the message. |
 
+### Worker usage / right-sizing metrics (Q359)
+
+The AGC samples worker pod CPU/memory usage from the `metrics.k8s.io` API
+(metrics-server) every 15s (`WORKER_USAGE_SAMPLE_INTERVAL` on the AGC
+Deployment; `0`/`off` disables) and folds each finished pod's peak into these
+series. One worker pod runs exactly one job, so a per-pod peak is a **per-job
+peak**. Emitted for v2 `RunnerSet` workers only, labelled per RunnerSet and
+container (bounded cardinality: one series per RunnerSet × container name).
+These are the input to the [worker right-sizing recipe](worker-rightsizing.md);
+without metrics-server they stay empty and `…_poll_errors_total` counts instead.
+
+| Metric | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `actions_gateway_worker_usage_job_cpu_peak_cores` | Histogram | `namespace`, `runner_set`, `container` | Per-job CPU peak (cores), one observation per sampled job. `histogram_quantile` over a chosen window gives the p50/p95 the right-sizing derivation needs. |
+| `actions_gateway_worker_usage_job_memory_peak_bytes` | Histogram | `namespace`, `runner_set`, `container` | Per-job memory peak (bytes), one observation per sampled job. |
+| `actions_gateway_worker_usage_cpu_peak_cores` | Gauge | `namespace`, `runner_set`, `container` | Highest per-job CPU peak seen since AGC start — the absolute-max cross-check for the interpolated histogram quantiles. Resets on AGC restart (bridge with `max_over_time`). |
+| `actions_gateway_worker_usage_memory_peak_bytes` | Gauge | `namespace`, `runner_set`, `container` | Highest per-job memory peak seen since AGC start. |
+| `actions_gateway_worker_usage_jobs_sampled_total` | Counter | `namespace`, `runner_set` | Jobs that finished with at least one usage sample in the histograms. |
+| `actions_gateway_worker_usage_jobs_unsampled_total` | Counter | `namespace`, `runner_set` | Jobs that finished before any sample landed (shorter than ~one sampling interval). A high ratio vs `…_jobs_sampled_total` means the histograms under-represent the workload. |
+| `actions_gateway_worker_usage_poll_errors_total` | Counter | `namespace` | Failed `PodMetrics` list calls. A constant rate means usage is not being sampled at all — metrics-server missing or the RBAC grant absent; see [troubleshooting](worker-rightsizing.md#troubleshooting). |
+
 ### Proxy metrics
 
 The per-tenant egress proxy exposes its own metrics on `:8443` over **mutual

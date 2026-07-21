@@ -45,6 +45,12 @@ operations docs.
 - **Observability, per tenant and fleet-wide.** Prometheus metrics scoped per
   tenant and runner group, plus ready-to-apply Grafana dashboards and alerts as
   code, and a cross-tenant rollup for platform admins.
+- **Measured worker right-sizing.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> The gateway samples every
+  worker pod's CPU/memory and publishes per-runner-set, per-job usage peaks,
+  with a [derivation recipe](operations/worker-rightsizing.md) that turns them
+  into measured `requests`/`limits` — ARC has no sizing feedback loop.
+  Recommendations surfaced in `RunnerSet` status and opt-in auto-applied sizing
+  profiles are the follow-on work (below).
 - **Secure by default.** Pod Security Admission, default-deny network policies,
   credentials kept out of environment variables, and signed images with a
   Software Bill of Materials (SBOM) and SLSA provenance — reconciled, not opt-in.
@@ -86,6 +92,10 @@ last gaps an outside operator hits.
   flow from GitHub to worker pod and back.
 - **Onboarding polish.** A first-time GitHub App setup walkthrough and a
   `ResourceQuota` sizing helper so the first install lands cleanly.
+- **Worker right-sizing recommendations & profiles.** Building on the shipped
+  usage metrics: recommended `requests`/`limits` surfaced in `RunnerSet` status
+  with a drift condition, then opt-in sizing profiles (bin-pack, throughput,
+  node-share) applied at pod-build time with clamps and confidence minimums.
 - **Install pre-flight check.** Validate the cluster (network-policy-enforcing
   CNI, Kubernetes version, cert-manager, metrics-server) before install, so a
   misconfigured cluster fails loudly instead of silently voiding tenant

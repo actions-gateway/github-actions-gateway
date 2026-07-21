@@ -4,6 +4,15 @@
 - apiGroups: [""]
   resources: ["pods/status"]
   verbs: ["get"]
+# pods.metrics.k8s.io (read-only): the worker usage sampler lists PodMetrics
+# (metrics-server) to aggregate per-RunnerSet × container CPU/memory peaks into
+# the right-sizing metrics (Q359). PodMetrics are namespaced, so the per-tenant
+# RoleBinding scopes this to the tenant namespace. The AGC degrades gracefully
+# when metrics-server is absent — the grant is still shipped by default so
+# usage sampling works out of the box wherever metrics-server exists.
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods"]
+  verbs: ["get", "list"]
 # resourcequotas (read-only): the RunnerGroup reconciler reads the namespace
 # ResourceQuota to compute the WorkerQuota{Pressure,Exceeded} conditions (Q82) —
 # correlating the worker pool's footprint against the quota's hard/used. The

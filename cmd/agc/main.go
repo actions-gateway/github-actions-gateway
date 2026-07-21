@@ -43,6 +43,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/transport"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/usage"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
@@ -55,6 +56,7 @@ import (
 	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -474,6 +476,32 @@ func run() error {
 		return fmt.Errorf("add eviction-counter sweeper: %w", err)
 	}
 
+	// Sample worker pod CPU/memory usage per RunnerSet × container from the
+	// metrics.k8s.io API and export right-sizing series (Q359 Phase 1 — see
+	// docs/operations/worker-rightsizing.md). Degrades gracefully at runtime when
+	// metrics-server is absent (a counted, throttled poll error per tick);
+	// WORKER_USAGE_SAMPLE_INTERVAL=0/off disables it entirely.
+	usageInterval, usageEnabled, err := workerUsageSampleInterval(os.Getenv("WORKER_USAGE_SAMPLE_INTERVAL"))
+	if err != nil {
+		return fmt.Errorf("parse WORKER_USAGE_SAMPLE_INTERVAL: %w", err)
+	}
+	if usageEnabled {
+		mc, err := metricsclient.NewForConfig(mgr.GetConfig())
+		if err != nil {
+			return fmt.Errorf("build metrics.k8s.io client: %w", err)
+		}
+		if err := mgr.Add(&usage.Sampler{
+			Client:    mgr.GetClient(),
+			Lister:    usage.NewClientsetLister(mc),
+			Namespace: namespace,
+			Interval:  usageInterval,
+			Metrics:   usage.NewMetrics(ctrlmetrics.Registry),
+			Log:       slog.New(logr.ToSlogHandler(ctrl.Log.WithName("usage"))),
+		}); err != nil {
+			return fmt.Errorf("add worker usage sampler: %w", err)
+		}
+	}
+
 	// Choose registrar:
 	//   STUB_AUTH_URL + STUB_BROKER_URL set → StubRegistrar with those URLs (testing)
 	//   GITHUB_ORG_URL set                  → GithubRegistrar (production)
@@ -621,4 +649,27 @@ func useImageVolume(cfg *rest.Config, override string) bool {
 	useIV := major > 1 || (major == 1 && minor >= 33)
 	slog.Info("wrapper delivery resolved", "imageVolume", useIV, "serverVersion", v.GitVersion)
 	return useIV
+}
+
+// workerUsageSampleInterval parses the WORKER_USAGE_SAMPLE_INTERVAL env value
+// into the worker usage sampler's polling period (Q359). Unset/empty selects
+// the default (usage.DefaultSampleInterval); "0", "off", "false", or
+// "disabled" turns the sampler off; anything else must be a Go duration ≥ 1s
+// (sub-second polling only re-reads the same metrics-server sample and loads
+// the API server for nothing).
+func workerUsageSampleInterval(v string) (interval time.Duration, enabled bool, err error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "":
+		return usage.DefaultSampleInterval, true, nil
+	case "0", "off", "false", "disabled":
+		return 0, false, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, false, err
+	}
+	if d < time.Second {
+		return 0, false, fmt.Errorf("interval %s below 1s minimum", d)
+	}
+	return d, true, nil
 }
