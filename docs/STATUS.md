@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q384
+**Next ID:** Q386
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -49,6 +49,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q384"></a>Q384 | [Proxy shutdown cuts in-flight CONNECT tunnels](../cmd/proxy/proxy.go) | `bug` `infra` | 🔲 | M | `http.Server.Shutdown` never waits for hijacked conns; CONNECT tunnels are hijacked (proxy.go:452), so the process exits mid-tunnel, cutting live CI egress on every rollout. Track tunnels and wait. |
+| <a id="Q385"></a>Q385 | [Worker wrapper never forwards SIGTERM to Runner.Worker](../cmd/worker/main.go) | `bug` | 🔲 | S | The wrapper installs no handler, so the child (not PID 1) is never signalled and runs to the cgroup SIGKILL — no chance to report cancellation, leaving GitHub to wait out the job lock. |
 | <a id="Q222"></a>Q222 | [AGC SIGTERM teardown race](plan/q222-agc-sigterm-teardown-race.md) | `tests` `flake` | 🔲 | M | **[Flakes-first](development/maintaining-backlog.md#flake-fixes-go-first)**, escalated — recurs after the 30→60s ceiling bump. Both owner sessions time out in full, so a third bump is ruled out; investigate the exit-defer race per the plan. |
 | <a id="Q383"></a>Q383 | [Verify CI checks exist, not just that none failed](development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran) | `docs` `retro` | 🔲 | S | A push produced no workflow runs for ~10 min (fixed by close/reopen). Absence of checks reads like nothing-failing — verify check-runs exist on the head SHA. Also ad-hoc shell is zsh: no word-splitting. |
 | <a id="Q380"></a>Q380 | [Recreate dogfood from zero — `setup.sh` unproven](plan/gke-dogfood.md#recreate-is-not-yet-proven-end-to-end-q380) | `infra` | 🔲 | S | Cluster deleted 07-20 (`delete.sh` validated live), so the next dogfood session must bootstrap from nothing. The from-zero `setup.sh` path has never run — incl. the new `workers-od` pool. Validate before you need it; gaps in the plan. |
