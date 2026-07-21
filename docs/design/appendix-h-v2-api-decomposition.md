@@ -514,6 +514,27 @@ healthy while one tenant's set is impaired. The GMC watches bound `RunnerSet`s (
 on a change to a set's impaired signature, dropping high-frequency `activeSessions`/
 `pendingJobs` churn) so a child's health change refreshes the parent promptly.
 
+**Measured sizing recommendation on the `RunnerSet` (Q359 Phase 2).** The AGC's usage
+sampler aggregates per-job CPU/memory peaks per worker container (Phase 1's
+metrics), and the `RunnerSet` reconciler surfaces the derived per-container
+recommendation in `status.sizingRecommendation`: recommended `requests` (p95 of
+per-job peaks), a recommended memory `limit` (observed max × headroom, never a CPU
+limit), the observed p95/max, a `sampleCount` confidence signal, and the window
+start. The field is **advisory and doubly load-bearing as the aggregate store**:
+the sampler re-seeds its in-memory histograms from it on AGC restart (95% of the
+persisted mass at the p95, the rest at the max — exactly preserving the two
+statistics the recommendation uses), so the observation window survives
+control-plane rollouts with no separate backing store. The reconciler never
+overwrites the field with an empty snapshot (a warming-up sampler must not wipe
+the store). Alongside it, the advisory abnormal-is-True `SizingDrift` condition
+fires when the resolved template's effective ask (declared resources, or the
+provisioner's 500m/1Gi gap-fill defaults when it declares none) deviates
+materially: a request ≥2× the recommendation (waste) or a memory limit below the
+observed per-job peak (OOM risk). It is judged only at ≥20 sampled jobs, never
+gates `Ready`, and is excluded from the impaired rollup above — a sizing hint,
+not a health signal. Nothing is ever applied to pods in this phase; opt-in
+actuation is Phase 3 ([plan](../plan/runner-sizing-profiles.md)).
+
 ## H.8. Ownership, GC, and deletion
 
 Shared objects must not be owner-referenced by their referrers:

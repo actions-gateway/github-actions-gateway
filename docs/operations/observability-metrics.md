@@ -107,6 +107,14 @@ container (bounded cardinality: one series per RunnerSet × container name).
 These are the input to the [worker right-sizing recipe](worker-rightsizing.md);
 without metrics-server they stay empty and `…_poll_errors_total` counts instead.
 
+The same sampled history also drives two status surfaces on the v2 `RunnerSet`
+(Q359 Phase 2): `status.sizingRecommendation` (per-container recommended
+`requests`/`limits` with observed p95/max, sample count, and window) and the
+advisory `SizingDrift` condition — `True` when, after ≥20 sampled jobs, the
+template's ask is ≥2× the recommendation (waste) or a memory limit is below the
+observed per-job peak (OOM risk). Advisory only; never gates `Ready`. See the
+[right-sizing recipe](worker-rightsizing.md#step-0--read-the-built-in-recommendation-first).
+
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |
 | `actions_gateway_worker_usage_job_cpu_peak_cores` | Histogram | `namespace`, `runner_set`, `container` | Per-job CPU peak (cores), one observation per sampled job. `histogram_quantile` over a chosen window gives the p50/p95 the right-sizing derivation needs. |

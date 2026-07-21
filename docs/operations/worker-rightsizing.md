@@ -45,6 +45,38 @@ Two caveats to hold in mind when reading the numbers:
 - A Prometheus scraping the AGC (see
   [metrics access](observability-metrics-access.md)).
 
+## Step 0 — read the built-in recommendation first
+
+Since Q359 Phase 2 the gateway derives the recommendation for you and publishes
+it on the `RunnerSet` itself — check there before reaching for PromQL:
+
+```bash
+kubectl get runnerset <name> -n <ns> -o jsonpath='{.status.sizingRecommendation}' | jq
+```
+
+Each entry carries, per container: recommended `requests` (p95 of per-job
+peaks), a recommended memory `limit` (observed max × 1.4 headroom; no CPU limit
+is ever recommended), the raw `observedPeak`/`observedP95`, and — the
+confidence signal — `sampleCount` plus `windowStart`. Treat a recommendation
+with a low `sampleCount` as a hint, not a target; it appears from 5 sampled
+jobs and survives AGC restarts (the status field is also the store the sampler
+re-seeds from).
+
+The gateway also judges your current ask: the advisory **`SizingDrift`
+condition** turns `True` (with the offending containers named in the message)
+when, after at least 20 sampled jobs, a template request is ≥2× the
+recommendation (waste) or a memory limit sits below the highest observed
+per-job peak (OOM risk):
+
+```bash
+kubectl get runnerset <name> -n <ns> -o jsonpath='{.status.conditions[?(@.type=="SizingDrift")]}' | jq
+```
+
+It never gates `Ready` and nothing is auto-applied — apply the values to the
+`RunnerTemplate` yourself (Step 2's validation still applies). Use the PromQL
+below when you want the full distribution behind the recommendation or a
+different window/percentile.
+
 ## Step 1 — read the distribution
 
 Let jobs run until `actions_gateway_worker_usage_jobs_sampled_total` for the

@@ -330,3 +330,29 @@ func ImpairingConditionTypes() []string {
 		ConditionWorkersUnschedulable,
 	}
 }
+
+// Worker sizing-drift condition (Q359 Phase 2). The AGC's RunnerSet reconciler
+// compares the resolved worker template's per-container resource ask against the
+// measured status.sizingRecommendation and surfaces a material mismatch. Advisory
+// (abnormal-is-True): it never gates Ready and nothing is applied automatically —
+// the operator (or a future opt-in sizing profile) acts on it. Kept in its own
+// const block so it stays additive alongside sibling condition-vocabulary work.
+const (
+	// ConditionSizingDrift is True when at least one container's template ask
+	// deviates materially from the measured recommendation in either direction:
+	// waste (a request at least twice the recommendation, holding node capacity
+	// jobs never use) or OOM risk (a memory limit below the highest observed
+	// per-job peak). The condition message names each offending container and
+	// mismatch. Only evaluated once enough jobs have been sampled.
+	ConditionSizingDrift = "SizingDrift"
+
+	// ReasonSizingDriftDetected is the SizingDrift=True reason; the message names
+	// the drifting containers and directions.
+	ReasonSizingDriftDetected = "SizingDriftDetected"
+	// ReasonSizingWithinRange is the SizingDrift=False reason once enough jobs
+	// have been sampled and every container's ask is within the drift thresholds.
+	ReasonSizingWithinRange = "SizingWithinRange"
+	// ReasonInsufficientSamples is the SizingDrift=False reason while too few
+	// jobs have been sampled to judge drift with confidence.
+	ReasonInsufficientSamples = "InsufficientSamples"
+)

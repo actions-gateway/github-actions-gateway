@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -231,5 +232,59 @@ func TestSamplerDisabledWithoutLister(t *testing.T) {
 	s := &Sampler{Log: slog.Default()}
 	if err := s.Start(context.Background()); err != nil {
 		t.Fatalf("Start with nil lister: %v", err)
+	}
+}
+
+// TestSamplerSizingStatusAndRestartSeed exercises the Phase 2 loop end to end
+// at the sampler level: finished jobs accumulate into a status-shaped
+// recommendation, and a fresh sampler (an AGC restart) re-seeds its aggregates
+// from the persisted RunnerSet status so the history is not zeroed.
+func TestSamplerSizingStatusAndRestartSeed(t *testing.T) {
+	rs := runnerSet("rs1")
+	pods := make([]client.Object, 0, 6)
+	pods = append(pods, rs)
+	items := make([]metricsv1beta1.PodMetrics, 0, 5)
+	for i := range 5 {
+		name := fmt.Sprintf("w%d", i)
+		pods = append(pods, workerPod(name, "rs1", corev1.PodRunning))
+		items = append(items, podMetrics(name, "1", "1Gi"))
+	}
+	lister := &fakeLister{list: &metricsv1beta1.PodMetricsList{Items: items}}
+	s, cl := newTestSampler(t, lister, pods...)
+	ctx := context.Background()
+	key := types.NamespacedName{Namespace: testNS, Name: "rs1"}
+
+	s.tick(ctx) // capture peaks
+	if got := s.SizingStatus(key); got != nil {
+		t.Fatalf("SizingStatus before any job finished = %+v, want nil", got)
+	}
+	for i := range 5 {
+		pod := workerPod(fmt.Sprintf("w%d", i), "rs1", corev1.PodSucceeded)
+		if err := cl.Status().Update(ctx, pod); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.tick(ctx) // finalize all five
+
+	recs := s.SizingStatus(key)
+	if len(recs) != 1 || recs[0].SampleCount != 5 {
+		t.Fatalf("SizingStatus = %+v, want one container with 5 samples", recs)
+	}
+
+	// "Restart": a fresh sampler over a cluster where the pods are long gone but
+	// the RunnerSet's status carries the persisted recommendation.
+	rs2 := runnerSet("rs1")
+	rs2.Status.SizingRecommendation = recs
+	s2, _ := newTestSampler(t, &fakeLister{}, rs2)
+	s2.tick(ctx)
+	seeded := s2.SizingStatus(key)
+	if len(seeded) != 1 || seeded[0].SampleCount != 5 {
+		t.Fatalf("SizingStatus after restart seed = %+v, want the persisted 5-sample history", seeded)
+	}
+
+	// A nil sampler (usage sampling disabled) is a safe no-op source.
+	var disabled *Sampler
+	if got := disabled.SizingStatus(key); got != nil {
+		t.Fatalf("nil sampler SizingStatus = %+v, want nil", got)
 	}
 }
