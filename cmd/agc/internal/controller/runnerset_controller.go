@@ -150,6 +150,12 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	r.ensureMaps()
 
+	// Drain listener goroutines inside the manager's graceful shutdown so SIGTERM
+	// cannot kill the process mid-DELETE and leak GitHub-side sessions (Q222).
+	if err := mgr.Add(&listenerShutdown{stop: r.stopListeners, log: r.Log, owner: "RunnerSet"}); err != nil {
+		return fmt.Errorf("add listener shutdown runnable: %w", err)
+	}
+
 	b := ctrl.NewControllerManagedBy(mgr).
 		For(&v2alpha1.RunnerSet{}).
 		// Worker pods carry LabelRunnerSet; re-reconcile on their lifecycle events

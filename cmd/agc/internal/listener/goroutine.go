@@ -58,16 +58,15 @@ func Run(ctx context.Context, cfg Config) error {
 	log := baseLog.With("sessionId", sessionID)
 
 	defer func() {
-		// Best-effort session cleanup on exit. sessionID is empty while a heal
-		// owns the session handoff (it has already deleted the old session);
-		// re-deleting would double-DELETE — and in the v2 flow, where DELETE is
-		// keyed by bearer token, could tear down another goroutine's session.
+		// Session cleanup on exit, on a context detached from the (by now usually
+		// cancelled) reconcile context. sessionID is empty while a heal owns the
+		// session handoff; re-deleting would double-DELETE — and in the v2 flow,
+		// where DELETE is keyed by bearer token, could tear down another
+		// goroutine's session. The handoff runs the same detached, retrying delete
+		// (deleteSessionDetached), so the session is deleted exactly once on every
+		// exit path, cancellation included (Q222).
 		if sessionID != "" {
-			dCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if delErr := cfg.Broker.DeleteSession(dCtx, sessionID); delErr != nil {
-				log.Warn("DeleteSession failed on goroutine exit", "error", delErr)
-			}
+			deleteSessionDetached(&cfg, sessionID, log)
 		}
 		if cfg.Metrics != nil {
 			cfg.Metrics.ActiveSessions.WithLabelValues(cfg.Namespace, cfg.Group).Dec()
