@@ -24,6 +24,13 @@
 #   7. No `Last touched:` line — that fact lives in
 #      `git log -1 --format=%as -- <file>` and the manual line only causes
 #      conflicts and staleness. Flagged as old format.
+#   8. A `flake`-labelled Queue row may not simply vanish: once its mitigation
+#      ships the row moves to Deferred § Flake watch, so a recurrence reads as
+#      a recurrence rather than a fresh find (maintaining-backlog.md § Flake
+#      fixes go first). Checked against a git baseline, since a deletion is
+#      invisible from the file alone. Retiring a Flake watch row is a separate,
+#      grooming-time decision — set BACKLOG_ALLOW_FLAKE_DELETE="Q1 Q2" to allow
+#      specific IDs through.
 #
 # Usage:
 #   lint-backlog.sh [--staged] [path/to/STATUS.md]
@@ -74,6 +81,73 @@ if [[ ! -f "$FILE" ]]; then
     printf 'lint-backlog: file not found: %s\n' "$FILE" >&2
     exit 2
 fi
+
+# Rule 8. A deletion is invisible from the file alone, so compare against a git
+# baseline: the pre-commit state in --staged mode, otherwise origin/main (the
+# branch point for any PR). Silently skipped when no baseline resolves — a
+# fresh clone with no origin, or the backlog file not yet in git.
+flake_queue_ids() {
+    awk -F'|' '
+        /^## Queue/    { in_queue = 1; next }
+        /^## /         { in_queue = 0 }
+        in_queue && /^\|/ && $4 ~ /`flake`/ {
+            cell = $2
+            gsub(/<[^>]*>/, "", cell)
+            gsub(/[[:space:]]/, "", cell)
+            if (cell ~ /^Q[0-9]+$/) print cell
+        }
+    '
+}
+
+check_flake_rows_preserved() {
+    local baseline_ref="" baseline="" rel repo_root
+    repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+    [[ -n "$repo_root" ]] || return 0
+    rel="${FILE#"$repo_root"/}"
+
+    if (( STAGED )); then
+        baseline_ref="HEAD"
+    elif git rev-parse --verify --quiet origin/main >/dev/null; then
+        baseline_ref="origin/main"
+    else
+        return 0
+    fi
+
+    baseline="$(git show "$baseline_ref:$rel" 2>/dev/null || true)"
+    [[ -n "$baseline" ]] || return 0
+
+    local -a allowed=()
+    read -r -a allowed <<<"${BACKLOG_ALLOW_FLAKE_DELETE:-}"
+
+    local id missing=0
+    while read -r id; do
+        [[ -n "$id" ]] || continue
+        # Still present anywhere in the file (Queue or Deferred) -> fine.
+        grep -q "<a id=\"$id\"></a>" "$FILE" && continue
+        local ok=0 a
+        for a in ${allowed+"${allowed[@]}"}; do
+            [[ "$a" == "$id" ]] && ok=1 && break
+        done
+        (( ok )) && continue
+        if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+            printf '::error file=%s::%s was a flake-labelled Queue row in %s and is now gone; a shipped flake mitigation moves the row to Deferred, Flake watch (trigger: Event: recurs on main after the fix) — it is not deleted. See docs/development/maintaining-backlog.md#flake-fixes-go-first\n' \
+                "$FILE" "$id" "$baseline_ref"
+        else
+            printf 'lint-backlog: %s: %s was a flake-labelled Queue row in %s and is now gone.\n' "$FILE" "$id" "$baseline_ref" >&2
+            printf '  A shipped flake mitigation moves the row to Deferred, Flake watch, with an\n' >&2
+            printf '  "Event: recurs on main after the fix" trigger — kept, not closed, so a second\n' >&2
+            printf '  occurrence reads as a recurrence rather than a fresh find. See\n' >&2
+            printf '  docs/development/maintaining-backlog.md#flake-fixes-go-first.\n' >&2
+            printf '  Retiring the row instead? BACKLOG_ALLOW_FLAKE_DELETE=%s\n' "$id" >&2
+        fi
+        missing=1
+    done < <(flake_queue_ids <<<"$baseline")
+
+    return "$missing"
+}
+
+flake_check_rc=0
+check_flake_rows_preserved || flake_check_rc=1
 
 # Single awk pass. Rows split on `|`:
 #   Queue:    | <a id="Q4"></a>Q4 | Item | `labels` | St | Sz | Notes |  -> 8 fields
@@ -196,4 +270,10 @@ END {
     }
     exit bad
 }
-' "$FILE" && printf 'lint-backlog: ok (%s)\n' "$FILE"
+' "$FILE" || awk_rc=1
+
+if (( ${awk_rc:-0} || flake_check_rc )); then
+    exit 1
+fi
+
+printf 'lint-backlog: ok (%s)\n' "$FILE"
