@@ -155,6 +155,8 @@ A namespace-scoped operator deployed and managed by the GMC, one instance per te
 
 **Graceful shutdown.** The AGC's SIGTERM handler iterates the session registry and issues `DELETE /sessions/{id}` for each open session before exiting, so GitHub can re-queue any unacquired work immediately rather than waiting for session TTL. Hard crashes (SIGKILL, OOM, node failure) fall back to GitHub's natural session expiry.
 
+The drain is a manager `Runnable`, so it is inside controller-runtime's graceful shutdown: `mgr.Start` does not return — and the process does not exit — until every listener goroutine has run its exit-defer DELETE. Each delete runs on a context *detached* from the cancelled manager context, retried within a 10-second budget, because that context cancellation is precisely what is happening when the delete is needed. RunnerGroups drain concurrently, so shutdown is bounded by that budget rather than by listener count. Without the barrier the process exited out from under goroutines mid-DELETE and leaked a GitHub-side session per in-flight listener on every rollout (Q222).
+
 ---
 
 ## 2.3. Tier 3 — Egress Proxy Pool
