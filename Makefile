@@ -91,7 +91,7 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-backlog plan-index-check no-plan-refs-check go-version-check license-header-check conditions-sync-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + v2 conditions.go sync + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: lint lint-backlog plan-index-check no-plan-refs-check go-version-check license-header-check conflict-markers-check conditions-sync-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 conditions.go sync + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
 	@# Advisory, not a gate: the fast check deliberately omits the dependency-drift
 	@# gates (vendor-check/tidy-check/license-notices run in CI). This reminds you to
 	@# run `make vendor-sync` when a change touches dep files. Never fails the build.
@@ -121,6 +121,10 @@ go-version-check: ## Assert a single `go` directive across go.work / go.mod / go
 license-header-check: ## Fail if any first-party .go file carries a per-file Apache license header
 	scripts/check-no-license-headers.sh
 
+.PHONY: conflict-markers-check
+conflict-markers-check: ## Fail if any tracked, non-vendored file contains a leftover merge-conflict marker line (Q379)
+	scripts/check-conflict-markers.sh
+
 # Assert the two v2 conditions.go files stay byte-identical except their package
 # line (Q345). The v2 condition/reason set is uniform across all five v2 kinds and
 # declared identically in the v2alpha1 and v2beta1 API packages; a one-sided add
@@ -138,7 +142,7 @@ conditions-sync-check: ## Fail if api/v2alpha1 and api/v2beta1 conditions.go div
 # decision (which modules a diff makes golangci-lint cover). Lightweight
 # pure-bash checks; part of `check` and the CI shellcheck job.
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate)
 	scripts/verify-release-test.sh
 	scripts/validate-cluster-test.sh
 	scripts/lint-backlog-test.sh
@@ -147,6 +151,7 @@ scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, v
 	scripts/dogfood/validate-release-test.sh
 	scripts/dogfood/pool-test.sh
 	scripts/go-lint-scope-test.sh
+	scripts/check-conflict-markers-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in

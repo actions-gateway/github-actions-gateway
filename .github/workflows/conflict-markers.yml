@@ -1,0 +1,31 @@
+# Leftover merge-conflict-marker gate (Q379). A stray marker from a rebase
+# resolution once merged to main via PR #724: format-aware linters skip lines
+# they don't parse, and no gate grepped for the marker forms. Kept as its own
+# lightweight workflow (like doc-links.yml) but with NO path filter — a marker
+# can be left in any file type, so every PR runs it; the job is a checkout plus
+# one grep sweep and finishes in seconds. `make conflict-markers-check`
+# (scripts/check-conflict-markers.sh) is the single source of truth, so local
+# and CI verdicts match.
+name: conflict-markers
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same PR; pushes to main are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  conflict-markers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: leftover merge markers (make conflict-markers-check)
+        run: make conflict-markers-check
