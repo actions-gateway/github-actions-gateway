@@ -1,8 +1,10 @@
 # Kubernetes API conventions
 
 Project-specific conventions for the Kubernetes surface we author: label and
-annotation keys/values, and the gotchas that have bitten us. Read this before
-adding a new label, annotation, or CRD field that an operator sets by hand.
+annotation keys/values, status conditions, Events, pod shutdown behaviour — and
+the gotchas that have bitten us. Read this before adding a new label,
+annotation, or CRD field that an operator sets by hand, or before writing the
+shutdown path of any binary that runs in a pod.
 
 ## Label & annotation value conventions
 
@@ -235,3 +237,123 @@ that keep them consistent and non-spammy:
   (`JobAcquisitionFailed`, `RunnerVersionTooOld`, `SessionUnauthorized`,
   `QuotaRetriesExhausted`, `EvictionRetriesExhausted`). The operator-facing catalogue
   lives in [troubleshooting.md](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset).
+
+## Graceful shutdown (SIGTERM)
+
+Every binary we ship runs in a pod, so every one of them gets SIGTERM on each
+rollout, node drain, eviction, and scale-down. Getting this wrong is quiet: the
+process exits cleanly, the rollout looks green, and the damage shows up
+elsewhere — as leaked GitHub-side sessions, as CI jobs whose network was cut
+mid-request, as jobs GitHub waits out rather than being told about.
+
+Read this before writing or changing any shutdown path.
+
+### The lifecycle facts the rules below follow from
+
+- **Endpoint removal is concurrent with SIGTERM, not ordered before it.** Marking
+  the pod terminating, removing it from EndpointSlices, and the kubelet starting
+  its shutdown are independent control loops; none waits for the others. A pod
+  can therefore receive SIGTERM while kube-proxy, an ingress, or a mesh sidecar
+  is still routing new connections to it.
+- **`preStop` runs before SIGTERM**, and the time it takes is **deducted from**
+  `terminationGracePeriodSeconds` — it is not extra budget.
+- **SIGTERM goes to PID 1 of each container only.** Child processes are not
+  signalled. At grace expiry SIGKILL goes to every process in the cgroup.
+- **The grace period is a deadline, not an allowance.** Anything still running
+  when it expires is killed outright, mid-write.
+
+### Rules
+
+**1. A process must not exit while work it owns is unfinished.**
+
+"Work it owns" is anything the outside world is still counting on: an open
+upstream session, an in-flight request, an unreported job result, a held lease.
+Enumerate it explicitly for each binary — the failure mode is always something
+nobody thought to enumerate.
+
+**2. With controller-runtime, `mgr.Start` only waits for what the manager
+knows about.** Goroutines you spawn yourself from `Reconcile` are invisible to
+it: `mgr.Start` returns, `main` returns, and the process exits out from under
+them. Register the drain as a `manager.Runnable` that blocks on the manager
+context and then waits for your goroutines, so it runs inside the manager's
+graceful shutdown:
+
+```go
+func (s *listenerShutdown) Start(ctx context.Context) error {
+    <-ctx.Done()
+    <-s.stop() // returns a done channel; blocks until every goroutine has exited
+    return nil
+}
+
+// Run on every replica, not just the leader: a replica that has lost leadership
+// still owns the goroutines it spawned.
+func (s *listenerShutdown) NeedLeaderElection() bool { return false }
+```
+
+This is what Q222 got wrong — the AGC leaked a GitHub-side session per in-flight
+listener on every rollout.
+
+**3. Cleanup that runs *because* of cancellation must not run *on* the cancelled
+context.** A teardown `DELETE`/`PATCH`/report issued on the context that was just
+cancelled fails instantly, and "best-effort, error discarded" then means "never
+happened". Use a context detached from the cancelled one, with its own bound:
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), cleanupBudget)
+defer cancel()
+```
+
+Bound it, retry inside the bound (a teardown call is usually the *only* one that
+work will ever get), and log loudly with the resource's identity when you give
+up — a silent leak is unactionable. Q222 shipped both halves of this.
+
+**4. `http.Server.Shutdown` does not wait for hijacked connections.** From the
+stdlib: *"Shutdown does not attempt to close nor wait for hijacked connections
+such as WebSockets. The caller of Shutdown should separately notify such
+long-lived connections of shutdown and wait for them to close."* Any CONNECT
+tunnel, WebSocket, or upgraded stream needs its own tracking (a `WaitGroup` or a
+connection set, plus `Server.RegisterOnShutdown`) — `Shutdown` returning is not
+evidence they finished. Our egress proxy has this bug today
+([Q384](../STATUS.md#Q384)): its CONNECT tunnels are hijacked, so every rollout
+cuts live CI egress mid-stream.
+
+**5. If your PID 1 supervises a child, forward the signal.** The child never gets
+SIGTERM on its own. A wrapper that `exec.Command`s a real workload must catch
+SIGTERM, forward it, and wait — otherwise the child runs on until the cgroup
+SIGKILL with no chance to report its outcome. Our worker wrapper has this gap
+today ([Q385](../STATUS.md#Q385)).
+
+**6. Anything serving traffic through a Service needs a `preStop` sleep.**
+Because of the concurrency in the first bullet above, SIGTERM is not a signal
+that traffic has stopped arriving. A short `preStop` sleep (a few seconds, no
+process cooperation required) lets endpoint removal propagate before the process
+starts refusing work. Size `terminationGracePeriodSeconds` as
+`preStop + drain budget + headroom`.
+
+**7. State the budget in the manifest comment, and keep the code inside it.**
+`terminationGracePeriodSeconds` is a claim about how long shutdown takes; if the
+code's drain is unbounded, or the comment describes a drain the code doesn't
+perform, the two silently diverge. Prefer a bounded drain whose worst case you
+can name over `context.Background()` with no deadline.
+
+### Review checklist
+
+For any binary that runs in a pod:
+
+- [ ] What does this process own that the outside world is waiting on? Is each
+      item drained before exit?
+- [ ] Does anything wait for the goroutines this process spawns, or does `main`
+      just return?
+- [ ] Does teardown run on a context detached from the cancelled one, bounded,
+      and retried?
+- [ ] Are hijacked/upgraded connections tracked separately from
+      `http.Server.Shutdown`?
+- [ ] If there is a child process, is SIGTERM forwarded to it?
+- [ ] Does the pod serve traffic through a Service (⇒ needs `preStop`)?
+- [ ] Is `terminationGracePeriodSeconds` ≥ `preStop` + the worst-case drain, and
+      does its comment match what the code actually does?
+- [ ] Is there a test that cancels the context and asserts the cleanup happened
+      — not merely that the process exited?
+
+That last one is the one that catches regressions. A shutdown test asserting
+only "it exited" passes against every bug on this page.
