@@ -154,6 +154,8 @@ The Bash tool's default timeout is short (two minutes) and it **kills** anything
 
 Never fire one of these as a default-timeout foreground run and hope it finishes — it will be killed partway and you learn nothing. Pick the timeout from the tier's real cost (see [Cost & cadence](#cost--cadence-rough-ephemeral-ci-2026-ballparks) below); when in doubt, background it.
 
+**Read a background run's output, not its reported exit status.** The status you get back is the *pipeline's* — so a run piped through `tail`, `head`, or `grep` reports the filter's exit code, not the test's. `go test … | tail -30` is reported as exit 0 even when the suite failed, which silently inverts the one signal the run existed to produce. Either drop the pipe (the output file is readable in full anyway) or add `set -o pipefail` so the pipeline carries the test's status through. Confirm a pass by reading the `ok` / `FAIL` line, never from the exit code alone.
+
 Both rules in this section are enforced mechanically by the foreground-guard hook: it prompts on foreground watch/`sleep`-poll forms, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts — keep that registry in sync when a tier's runtime or target name changes.
 
 ## Picking the right test tier
@@ -173,6 +175,14 @@ A root-cause claim needs evidence measured from *this* failure, not a resemblanc
 
 - **Symptom-matching a prior issue.** When a failure looks like a known issue — a flake row on the [backlog](../STATUS.md), a previously fixed bug, a memory of "this is always X" — that match is a **hypothesis, not a diagnosis**. The same surface symptom (a scheduling timeout, an egress blip, a wedged run) can have a different cause each time. Before acting on the remembered cause — and above all before spending a billable re-run, a fix PR, or a state-changing command on it — take a direct measurement from the failing system: read the actual events, describe the actual pod, pull the actual log line. If the environment tears down evidence on failure, capturing diagnostics *before* teardown is part of the fix, not optional (filed from the v1.2.0 release retro, where gate failures had to be re-run just to observe them).
 - **Trusting source inspection.** Reading code — or a plan doc's ✅ investigation findings, which usually derive from source-reading — tells you what *should* happen, not what does. Treat such findings as unverified until confirmed end-to-end: actually exec the thing. Source-reading alone has produced wrong conclusions before (PR #59).
+
+### Proving a flake fix: invert it
+
+Repeated passes do not validate a flake fix. A green `-count=20` is equally consistent with *"the race is closed"* and *"the race didn't fire this time"* — and on an unloaded dev machine the second is the more likely of the two, because the timing that produces the flake on a loaded CI runner often can't be reproduced locally at all. Passing-after is necessary evidence, not sufficient evidence.
+
+Run the **negative control** before concluding: invert the fix — restore the old value, remove the pin, revert the ordering — and confirm the suite *fails*. A fix you cannot make fail on demand has not been shown to be load-bearing, and shipping it closes the backlog row while leaving the flake live. When the inverted form refuses to fail either, that is itself the finding: the diagnosis is wrong, or the mechanism isn't the one you think it is.
+
+Q378 is the worked example. Pinning `BaselineRecheckInterval` in the reaper tests passed 10× under `-race`, which on its own proved nothing; setting the pin to 1s instead — and watching the suite fail — is what established that the pin was the thing closing the race.
 
 The [structural-ceiling triage](technical-debt.md#distinguish-a-fixable-defect-from-an-external-structural-ceiling) is the same principle at a larger scale: when fixes stop converging, isolate and *measure* the external actor instead of asserting the next on-our-side cause.
 
