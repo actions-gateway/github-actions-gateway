@@ -103,7 +103,7 @@ this choice; today it is a per-`RunnerTemplate` decision.
 
 **`actions_gateway_worker_usage_poll_errors_total` rising steadily** — the AGC
 cannot list `PodMetrics`. Either metrics-server is not installed (the
-[install pre-flight](install.md#pre-flight-checks) warns about this) or the
+[install pre-flight](install.md#preflight-the-cluster-required-first-step) warns about this) or the
 AGC's RoleBinding predates the `pods.metrics.k8s.io` grant (re-render from the
 current chart: the `agc-tenant-role` ClusterRole must contain a
 `metrics.k8s.io` rule). The AGC log line `list PodMetrics (is metrics-server
