@@ -140,6 +140,118 @@ type RunnerSetSpec struct {
 	//
 	// +optional
 	ScaleUp *ScaleUpRateLimit `json:"scaleUp,omitempty"`
+
+	// Sizing opts this runner set into measured worker sizing at pod-build time
+	// (Q359 Phase 3): the AGC derives the worker containers' CPU/memory
+	// requests/limits from the observed per-job usage history
+	// (status.sizingRecommendation) — or, for the NodeShare profile, from a
+	// declared per-node share — instead of the template's static values. Omitted
+	// (or profile Static) keeps today's behavior: the template is authoritative.
+	// Extended resources (GPUs) are never modified by any profile: they are
+	// job-selected shape identity, and only the cpu/memory keys are ever derived.
+	//
+	// +optional
+	Sizing *WorkerSizing `json:"sizing,omitempty"`
+}
+
+// Worker sizing profiles selectable via WorkerSizing.Profile (Q359 Phase 3). The
+// history-based profiles (Binpack, Throughput) apply per-container values derived
+// from status.sizingRecommendation and fall back to Static — whole-pod, so QoS
+// stays predictable — until EVERY template container has a confident
+// recommendation (>= the drift-confidence sample minimum); the effective state is
+// reported in status.sizingProfileState. NodeShare needs no history.
+const (
+	// SizingProfileStatic applies exactly what the template says — the default,
+	// and today's behavior.
+	SizingProfileStatic = "Static"
+	// SizingProfileBinpack sets requests == limits from the observed history
+	// (CPU: p95 of per-job peaks; memory: observed max + OOM headroom) →
+	// Guaranteed QoS, predictable packing, maximum workers per expensive node.
+	// The CPU limit this implies deliberately trades burst headroom for
+	// predictability — that is the bin-packing contract.
+	SizingProfileBinpack = "Binpack"
+	// SizingProfileThroughput sets requests from the observed history (p95 of
+	// per-job peaks), removes any CPU limit so jobs burst into idle node
+	// capacity, and sets the memory limit to the observed max scaled by
+	// LimitHeadroomPercent — jobs finish faster at the cost of looser packing.
+	SizingProfileThroughput = "Throughput"
+	// SizingProfileNodeShare sets the runner container's requests to a declared
+	// per-node allocatable envelope divided by WorkersPerNode — the GPU
+	// bin-packing case (allocatable ÷ GPUs per node) — with no usage history
+	// required. Limits keep the template's values.
+	SizingProfileNodeShare = "NodeShare"
+)
+
+// Sizing-profile actuation states reported in status.sizingProfileState.
+const (
+	// SizingProfileStateActive means the selected profile is applying derived
+	// values at pod build.
+	SizingProfileStateActive = "Active"
+	// SizingProfileStateAwaitingSamples means a history-based profile is
+	// selected but not every template container has a confident recommendation
+	// yet; pods provision with the template's static values until it does.
+	SizingProfileStateAwaitingSamples = "AwaitingSamples"
+)
+
+// WorkerSizing configures the opt-in measured worker sizing profile (Q359
+// Phase 3). Applied by the AGC at pod-build time on every acquired job, so a
+// spec edit takes effect on the next job without a restart (Q117).
+//
+// +kubebuilder:validation:XValidation:rule="self.profile != 'NodeShare' || has(self.nodeShare)",message="the NodeShare profile requires sizing.nodeShare"
+// +kubebuilder:validation:XValidation:rule="!has(self.nodeShare) || self.profile == 'NodeShare'",message="sizing.nodeShare is only meaningful with profile NodeShare"
+// +kubebuilder:validation:XValidation:rule="!has(self.limitHeadroomPercent) || self.profile == 'Throughput'",message="sizing.limitHeadroomPercent is only meaningful with profile Throughput"
+type WorkerSizing struct {
+	// Profile selects the sizing behavior; see the SizingProfile* constants.
+	//
+	// +kubebuilder:default=Static
+	// +kubebuilder:validation:Enum=Static;Binpack;Throughput;NodeShare
+	// +optional
+	Profile string `json:"profile,omitempty"`
+
+	// LimitHeadroomPercent (Throughput only) scales the observed per-job memory
+	// peak into the derived memory limit: limit = peak × percent / 100. Defaults
+	// to 150 (the dogfood-validated OOM-headroom band, rounded up for the
+	// burst-friendly profile). Memory only — no CPU limit is ever derived.
+	//
+	// +optional
+	// +kubebuilder:validation:Minimum=100
+	// +kubebuilder:validation:Maximum=1000
+	LimitHeadroomPercent *int32 `json:"limitHeadroomPercent,omitempty"`
+
+	// NodeShare declares the per-node envelope the NodeShare profile divides.
+	// Required when (and only meaningful when) profile is NodeShare.
+	//
+	// +optional
+	NodeShare *NodeShareSizing `json:"nodeShare,omitempty"`
+
+	// MinRequests / MaxRequests clamp every derived cpu/memory request (and the
+	// limits that track them) within an operator-set floor/ceiling, bounding how
+	// far a skewed usage history can push the derived values. Keys other than
+	// cpu and memory are ignored.
+	//
+	// +optional
+	MinRequests corev1.ResourceList `json:"minRequests,omitempty"`
+	// +optional
+	MaxRequests corev1.ResourceList `json:"maxRequests,omitempty"`
+}
+
+// NodeShareSizing declares the per-node allocatable envelope the NodeShare
+// profile divides among workers. The operator declares the envelope rather than
+// the AGC reading Node objects: the AGC is deliberately namespace-scoped (no
+// cluster-scoped RBAC), and the operator knows which node shape the set's
+// scheduling constraints target.
+type NodeShareSizing struct {
+	// Allocatable is the node's allocatable cpu/memory to divide (from
+	// `kubectl describe node`, minus any system/sidecar overhead the operator
+	// reserves). Keys other than cpu and memory are ignored.
+	Allocatable corev1.ResourceList `json:"allocatable"`
+
+	// WorkersPerNode is the divisor: the number of worker pods that should pack
+	// onto one node (for GPU nodes, typically the GPU count).
+	//
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=1000
+	WorkersPerNode int32 `json:"workersPerNode"`
 }
 
 // ScaleUpRateLimit configures the opt-in per-RunnerSet worker-pod creation-rate
@@ -227,6 +339,20 @@ type RunnerSetStatus struct {
 	// +optional
 	// +kubebuilder:validation:Enum=TemplateRef;GatewayDefault;ClusterDefault
 	TemplateSource string `json:"templateSource,omitempty"`
+
+	// SizingProfileState reports whether the opt-in sizing profile
+	// (spec.sizing.profile) is actuating: "Active" — derived values are applied
+	// at pod build; "AwaitingSamples" — a history-based profile (Binpack /
+	// Throughput) is selected but not every template container has a confident
+	// recommendation yet, so pods provision with the template's static values
+	// until the history accumulates (whole-pod fallback, keeping QoS
+	// predictable). Empty when no profile (or Static) is selected. Explicit so
+	// "is the profile live yet" is auditable status, not something to infer from
+	// pod specs (the proxyMode precedent).
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=Active;AwaitingSamples
+	SizingProfileState string `json:"sizingProfileState,omitempty"`
 
 	// SizingRecommendation is the per-container worker resource recommendation
 	// derived from measured per-job usage peaks (Q359 Phase 2), refreshed by the

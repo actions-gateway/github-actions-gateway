@@ -72,10 +72,11 @@ per-job peak (OOM risk):
 kubectl get runnerset <name> -n <ns> -o jsonpath='{.status.conditions[?(@.type=="SizingDrift")]}' | jq
 ```
 
-It never gates `Ready` and nothing is auto-applied — apply the values to the
-`RunnerTemplate` yourself (Step 2's validation still applies). Use the PromQL
-below when you want the full distribution behind the recommendation or a
-different window/percentile.
+It never gates `Ready`, and by default nothing is auto-applied: apply the
+values to the `RunnerTemplate` yourself (Step 2's validation still applies), or
+opt into a [sizing profile](#sizing-profiles-opt-in-auto-apply) to have the
+gateway apply them at pod-build time. Use the PromQL below when you want the
+full distribution behind the recommendation or a different window/percentile.
 
 ## Step 1 — read the distribution
 
@@ -130,6 +131,50 @@ worker count per node is the cost driver. Sizing up (requests ≈ max) buys
 burst headroom so jobs finish faster. The
 [sizing-profiles plan](../plan/runner-sizing-profiles.md) tracks automating
 this choice; today it is a per-`RunnerTemplate` decision.
+
+## Sizing profiles (opt-in auto-apply)
+
+Instead of copying the recommendation into the `RunnerTemplate` by hand, a
+`RunnerSet` can opt into a **sizing profile** (Q359 Phase 3): the AGC derives
+the worker containers' CPU/memory at pod-build time, per acquired job, so a
+spec edit or newly confident history takes effect on the next job with no
+restart. The template stays authoritative unless you opt in.
+
+```yaml
+spec:
+  sizing:
+    profile: Binpack          # Static (default) | Binpack | Throughput | NodeShare
+    # minRequests / maxRequests clamp every derived value (optional):
+    minRequests: { cpu: 250m, memory: 512Mi }
+    maxRequests: { cpu: "8", memory: 16Gi }
+```
+
+| Profile | Derivation | Use when |
+|---|---|---|
+| `Static` (default) | Exactly what the template says — today's behavior. | You apply measured values by hand. |
+| `Binpack` | `requests` = `limits`: CPU from the p95 of per-job peaks, memory from the recommended limit (observed max + headroom) → **Guaranteed QoS**. The implied CPU limit deliberately trades burst for predictable packing. | Expensive nodes (GPUs, large VMs) where workers-per-node is the cost driver. |
+| `Throughput` | `requests` from the p95 of per-job peaks; **no CPU limit** (jobs burst into idle node capacity); memory limit = observed peak × `limitHeadroomPercent` (default 150). | Job latency matters more than packing density. |
+| `NodeShare` | Runner-container `requests` = a declared per-node envelope ÷ `workersPerNode` — no usage history needed. Declare the envelope yourself (`sizing.nodeShare.allocatable` + `workersPerNode`); the AGC is namespace-scoped and never reads Node objects. Limits keep the template's values (a template limit below the derived request is lifted to it). | GPU bin-packing: `allocatable ÷ GPUs per node` keeps the GPU count, not an inflated CPU ask, the binding constraint. |
+
+Safety rails, in all profiles:
+
+- **Extended resources (GPUs) are never modified** — only the cpu/memory keys
+  are ever derived; the shape's job-selected identity passes through
+  byte-identical.
+- **History-based profiles fall back to `Static` until confident** — `Binpack`
+  and `Throughput` apply only once *every* template container has a
+  recommendation with ≥20 sampled jobs (whole-pod, so QoS stays predictable).
+  `status.sizingProfileState` reports which side you're on: `Active` (derived
+  values applied) or `AwaitingSamples` (template values, history accumulating).
+- **Clamps** — `minRequests`/`maxRequests` bound every derived request, so a
+  skewed history (one pathological job) cannot push pods beyond an
+  operator-set envelope. Size the ceiling against the namespace
+  `ResourceQuota` and any `LimitRange`: derived values are still subject to
+  both at admission, and the existing `WorkerQuota*` conditions and quota
+  retries surface a conflict at runtime.
+- **Drift reporting steps aside** — while a profile is `Active`, the
+  `SizingDrift` condition reports `False/SizingProfileActive` (pods no longer
+  run the template ask, so judging it would mislead).
 
 ## Troubleshooting
 

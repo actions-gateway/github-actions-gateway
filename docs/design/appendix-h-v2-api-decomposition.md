@@ -532,8 +532,29 @@ provisioner's 500m/1Gi gap-fill defaults when it declares none) deviates
 materially: a request ≥2× the recommendation (waste) or a memory limit below the
 observed per-job peak (OOM risk). It is judged only at ≥20 sampled jobs, never
 gates `Ready`, and is excluded from the impaired rollup above — a sizing hint,
-not a health signal. Nothing is ever applied to pods in this phase; opt-in
-actuation is Phase 3 ([plan](../plan/runner-sizing-profiles.md)).
+not a health signal.
+
+**Opt-in actuation: `spec.sizing` profiles (Q359 Phase 3).** A `RunnerSet` may opt
+into having the AGC apply the measured values at pod-build time:
+`sizing.profile` selects `Static` (default — template authoritative, today's
+behavior), `Binpack` (requests == limits from the history → Guaranteed QoS,
+maximum workers per expensive node), `Throughput` (requests from the history, no
+CPU limit, memory limit = observed peak × `limitHeadroomPercent`), or
+`NodeShare` (runner-container requests = a *declared* per-node allocatable ÷
+`workersPerNode` — declared, because the AGC is deliberately namespace-scoped
+and never reads Node objects; needs no usage history). The transform runs in
+`runnerSetTarget.Resolve` per acquired job — the Q117 no-restart property — and
+reads its input from the persisted `status.sizingRecommendation`, the same store
+the sampler re-seeds from, so actuation and status can never disagree. Rails:
+only cpu/memory keys are ever written (extended resources byte-identical);
+`Binpack`/`Throughput` are whole-pod and fall back to `Static` until every
+template container is drift-confident (`status.sizingProfileState`:
+`Active`/`AwaitingSamples`); optional `minRequests`/`maxRequests` clamp every
+derived value. Quota/LimitRange conflicts are deliberately a **runtime** signal
+(the existing `WorkerQuota*` conditions and quota retries), not an admission
+gate — cross-object admission validation is exactly what this appendix's §H.7
+philosophy avoids. While a profile is `Active`, `SizingDrift` reports
+`False/SizingProfileActive` (the template ask is not what pods run with).
 
 ## H.8. Ownership, GC, and deletion
 

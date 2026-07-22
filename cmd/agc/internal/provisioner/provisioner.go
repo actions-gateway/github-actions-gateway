@@ -138,7 +138,7 @@ const (
 	// values are tolerated by the wrapper for backwards compatibility with
 	// stub-registrar agents.
 	jitConfigKey    = "jitconfig"
-	runnerContainer = "runner"
+	runnerContainer = WorkerContainerName
 
 	// workerModeEnvVar / workerModeScaleSetValue switch the worker wrapper into the
 	// Q264 scale-set path: instead of the classic pipes handoff to Runner.Worker, the

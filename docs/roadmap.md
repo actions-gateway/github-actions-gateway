@@ -50,9 +50,13 @@ operations docs.
   derives the recommendation for you: recommended `requests`/`limits` surfaced
   in `RunnerSet` status (with sample count and observed p95/max for confidence)
   plus an advisory `SizingDrift` condition when your template's ask is far off
-  the measurement — see the [right-sizing guide](operations/worker-rightsizing.md).
-  ARC has no sizing feedback loop. Opt-in auto-applied sizing profiles are the
-  follow-on work (below).
+  the measurement. Opt-in **sizing profiles** then apply the measurement at
+  pod-build time: `Binpack` (Guaranteed QoS, max workers per expensive node),
+  `Throughput` (burst-friendly, no CPU limit), or `NodeShare` (a declared
+  per-node share — the GPU bin-packing case, no history needed), with clamps,
+  a confidence fallback, and GPUs never touched — see the
+  [right-sizing guide](operations/worker-rightsizing.md). ARC has no sizing
+  feedback loop.
 - **Secure by default.** Pod Security Admission, default-deny network policies,
   credentials kept out of environment variables, and signed images with a
   Software Bill of Materials (SBOM) and SLSA provenance — reconciled, not opt-in.
@@ -94,10 +98,6 @@ last gaps an outside operator hits.
   flow from GitHub to worker pod and back.
 - **Onboarding polish.** A first-time GitHub App setup walkthrough and a
   `ResourceQuota` sizing helper so the first install lands cleanly.
-- **Worker right-sizing profiles.** Building on the shipped usage metrics and
-  status recommendations: opt-in sizing profiles (bin-pack, throughput,
-  node-share) applied at pod-build time with clamps and confidence minimums —
-  the actuation phase of the right-sizing loop.
 - **Install pre-flight check.** Validate the cluster (network-policy-enforcing
   CNI, Kubernetes version, cert-manager, metrics-server) before install, so a
   misconfigured cluster fails loudly instead of silently voiding tenant

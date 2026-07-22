@@ -350,6 +350,98 @@ spec:
                 required:
                 - maxPerSecond
                 type: object
+              sizing:
+                description: |-
+                  Sizing opts this runner set into measured worker sizing at pod-build time
+                  (Q359 Phase 3): the AGC derives the worker containers' CPU/memory
+                  requests/limits from the observed per-job usage history
+                  (status.sizingRecommendation) — or, for the NodeShare profile, from a
+                  declared per-node share — instead of the template's static values. Omitted
+                  (or profile Static) keeps today's behavior: the template is authoritative.
+                  Extended resources (GPUs) are never modified by any profile: they are
+                  job-selected shape identity, and only the cpu/memory keys are ever derived.
+                properties:
+                  limitHeadroomPercent:
+                    description: |-
+                      LimitHeadroomPercent (Throughput only) scales the observed per-job memory
+                      peak into the derived memory limit: limit = peak × percent / 100. Defaults
+                      to 150 (the dogfood-validated OOM-headroom band, rounded up for the
+                      burst-friendly profile). Memory only — no CPU limit is ever derived.
+                    format: int32
+                    maximum: 1000
+                    minimum: 100
+                    type: integer
+                  maxRequests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: ResourceList is a set of (resource name, quantity)
+                      pairs.
+                    type: object
+                  minRequests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      MinRequests / MaxRequests clamp every derived cpu/memory request (and the
+                      limits that track them) within an operator-set floor/ceiling, bounding how
+                      far a skewed usage history can push the derived values. Keys other than
+                      cpu and memory are ignored.
+                    type: object
+                  nodeShare:
+                    description: |-
+                      NodeShare declares the per-node envelope the NodeShare profile divides.
+                      Required when (and only meaningful when) profile is NodeShare.
+                    properties:
+                      allocatable:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Allocatable is the node's allocatable cpu/memory to divide (from
+                          `kubectl describe node`, minus any system/sidecar overhead the operator
+                          reserves). Keys other than cpu and memory are ignored.
+                        type: object
+                      workersPerNode:
+                        description: |-
+                          WorkersPerNode is the divisor: the number of worker pods that should pack
+                          onto one node (for GPU nodes, typically the GPU count).
+                        format: int32
+                        maximum: 1000
+                        minimum: 1
+                        type: integer
+                    required:
+                    - allocatable
+                    - workersPerNode
+                    type: object
+                  profile:
+                    default: Static
+                    description: Profile selects the sizing behavior; see the SizingProfile*
+                      constants.
+                    enum:
+                    - Static
+                    - Binpack
+                    - Throughput
+                    - NodeShare
+                    type: string
+                type: object
+                x-kubernetes-validations:
+                - message: the NodeShare profile requires sizing.nodeShare
+                  rule: self.profile != 'NodeShare' || has(self.nodeShare)
+                - message: sizing.nodeShare is only meaningful with profile NodeShare
+                  rule: '!has(self.nodeShare) || self.profile == ''NodeShare'''
+                - message: sizing.limitHeadroomPercent is only meaningful with profile
+                    Throughput
+                  rule: '!has(self.limitHeadroomPercent) || self.profile == ''Throughput'''
               templateRef:
                 description: |-
                   TemplateRef optionally names the RunnerTemplate (default) or ClusterRunnerTemplate
@@ -521,6 +613,21 @@ spec:
                 enum:
                 - Proxied
                 - Direct
+                type: string
+              sizingProfileState:
+                description: |-
+                  SizingProfileState reports whether the opt-in sizing profile
+                  (spec.sizing.profile) is actuating: "Active" — derived values are applied
+                  at pod build; "AwaitingSamples" — a history-based profile (Binpack /
+                  Throughput) is selected but not every template container has a confident
+                  recommendation yet, so pods provision with the template's static values
+                  until the history accumulates (whole-pod fallback, keeping QoS
+                  predictable). Empty when no profile (or Static) is selected. Explicit so
+                  "is the profile live yet" is auditable status, not something to infer from
+                  pod specs (the proxyMode precedent).
+                enum:
+                - Active
+                - AwaitingSamples
                 type: string
               sizingRecommendation:
                 description: |-
@@ -913,6 +1020,98 @@ spec:
                 required:
                 - maxPerSecond
                 type: object
+              sizing:
+                description: |-
+                  Sizing opts this runner set into measured worker sizing at pod-build time
+                  (Q359 Phase 3): the AGC derives the worker containers' CPU/memory
+                  requests/limits from the observed per-job usage history
+                  (status.sizingRecommendation) — or, for the NodeShare profile, from a
+                  declared per-node share — instead of the template's static values. Omitted
+                  (or profile Static) keeps today's behavior: the template is authoritative.
+                  Extended resources (GPUs) are never modified by any profile: they are
+                  job-selected shape identity, and only the cpu/memory keys are ever derived.
+                properties:
+                  limitHeadroomPercent:
+                    description: |-
+                      LimitHeadroomPercent (Throughput only) scales the observed per-job memory
+                      peak into the derived memory limit: limit = peak × percent / 100. Defaults
+                      to 150 (the dogfood-validated OOM-headroom band, rounded up for the
+                      burst-friendly profile). Memory only — no CPU limit is ever derived.
+                    format: int32
+                    maximum: 1000
+                    minimum: 100
+                    type: integer
+                  maxRequests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: ResourceList is a set of (resource name, quantity)
+                      pairs.
+                    type: object
+                  minRequests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      MinRequests / MaxRequests clamp every derived cpu/memory request (and the
+                      limits that track them) within an operator-set floor/ceiling, bounding how
+                      far a skewed usage history can push the derived values. Keys other than
+                      cpu and memory are ignored.
+                    type: object
+                  nodeShare:
+                    description: |-
+                      NodeShare declares the per-node envelope the NodeShare profile divides.
+                      Required when (and only meaningful when) profile is NodeShare.
+                    properties:
+                      allocatable:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Allocatable is the node's allocatable cpu/memory to divide (from
+                          `kubectl describe node`, minus any system/sidecar overhead the operator
+                          reserves). Keys other than cpu and memory are ignored.
+                        type: object
+                      workersPerNode:
+                        description: |-
+                          WorkersPerNode is the divisor: the number of worker pods that should pack
+                          onto one node (for GPU nodes, typically the GPU count).
+                        format: int32
+                        maximum: 1000
+                        minimum: 1
+                        type: integer
+                    required:
+                    - allocatable
+                    - workersPerNode
+                    type: object
+                  profile:
+                    default: Static
+                    description: Profile selects the sizing behavior; see the SizingProfile*
+                      constants.
+                    enum:
+                    - Static
+                    - Binpack
+                    - Throughput
+                    - NodeShare
+                    type: string
+                type: object
+                x-kubernetes-validations:
+                - message: the NodeShare profile requires sizing.nodeShare
+                  rule: self.profile != 'NodeShare' || has(self.nodeShare)
+                - message: sizing.nodeShare is only meaningful with profile NodeShare
+                  rule: '!has(self.nodeShare) || self.profile == ''NodeShare'''
+                - message: sizing.limitHeadroomPercent is only meaningful with profile
+                    Throughput
+                  rule: '!has(self.limitHeadroomPercent) || self.profile == ''Throughput'''
               templateRef:
                 description: |-
                   TemplateRef optionally names the RunnerTemplate (default) or ClusterRunnerTemplate
@@ -1084,6 +1283,21 @@ spec:
                 enum:
                 - Proxied
                 - Direct
+                type: string
+              sizingProfileState:
+                description: |-
+                  SizingProfileState reports whether the opt-in sizing profile
+                  (spec.sizing.profile) is actuating: "Active" — derived values are applied
+                  at pod build; "AwaitingSamples" — a history-based profile (Binpack /
+                  Throughput) is selected but not every template container has a confident
+                  recommendation yet, so pods provision with the template's static values
+                  until the history accumulates (whole-pod fallback, keeping QoS
+                  predictable). Empty when no profile (or Static) is selected. Explicit so
+                  "is the profile live yet" is auditable status, not something to infer from
+                  pod specs (the proxyMode precedent).
+                enum:
+                - Active
+                - AwaitingSamples
                 type: string
               sizingRecommendation:
                 description: |-

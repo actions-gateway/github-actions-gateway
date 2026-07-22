@@ -45,6 +45,34 @@ func (r *RunnerSetReconciler) applySizingStatus(rs *v2alpha1.RunnerSet, template
 		}
 	}
 	recs := rs.Status.SizingRecommendation
+
+	// Report whether the opt-in sizing profile is actuating (Q359 Phase 3),
+	// using the same predicate the pod-build transform runs — the status can
+	// never disagree with what Resolve actually does.
+	rs.Status.SizingProfileState = ""
+	profileSelected := rs.Spec.Sizing != nil && rs.Spec.Sizing.Profile != "" &&
+		rs.Spec.Sizing.Profile != v2alpha1.SizingProfileStatic
+	if profileSelected && template != nil {
+		if sizingProfileApplies(rs.Spec.Sizing, template, recs) {
+			rs.Status.SizingProfileState = v2alpha1.SizingProfileStateActive
+		} else {
+			rs.Status.SizingProfileState = v2alpha1.SizingProfileStateAwaitingSamples
+		}
+	}
+	// An actively-applied profile supersedes the drift judgment: pods run the
+	// derived values, so comparing the template ask against the recommendation
+	// would mislead.
+	if rs.Status.SizingProfileState == v2alpha1.SizingProfileStateActive {
+		meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+			Type:               v2alpha1.ConditionSizingDrift,
+			Status:             metav1.ConditionFalse,
+			Reason:             v2alpha1.ReasonSizingProfileActive,
+			Message:            fmt.Sprintf("the %s sizing profile applies the measured recommendation at pod build; the template's static ask is not what worker pods run with", rs.Spec.Sizing.Profile),
+			ObservedGeneration: rs.Generation,
+		})
+		return
+	}
+
 	// No data and no template: nothing to say — set no condition rather than a
 	// noisy InsufficientSamples on every set in a cluster without metrics-server.
 	if len(recs) == 0 || template == nil {
