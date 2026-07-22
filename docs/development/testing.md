@@ -158,29 +158,32 @@ Never fire one of these as a default-timeout foreground run and hope it finishes
 
 Both rules in this section are enforced mechanically by the foreground-guard hook: it prompts on foreground watch/`sleep`-poll forms, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts — keep that registry in sync when a tier's runtime or target name changes.
 
-### Ad-hoc shell is zsh, not bash: no word-splitting
+### Ad-hoc shell varies: don't rely on word-splitting
 
-Committed scripts under `scripts/` are `#!/usr/bin/env bash` and follow [bash-style.md](bash-style.md). **Ad-hoc commands typed at a shell in this repo run under zsh** (the platform default), and zsh does **not** word-split unquoted parameter expansions. The same one-liner therefore means different things in the two shells:
+Committed scripts under `scripts/` are `#!/usr/bin/env bash` and follow [bash-style.md](bash-style.md), so their behaviour is pinned by the shebang. **Ad-hoc commands are not pinned** — they run in whatever login shell the contributor has: zsh on macOS (the default since Catalina), bash on most Linux distributions and CI images. Check yours with `echo $0` rather than assuming.
+
+That matters because the two shells disagree on **word-splitting of unquoted parameter expansions** — bash splits, zsh does not:
 
 ```sh
 FLAGS='-run TestFoo -count 1'
 go test $FLAGS ./...   # bash: four arguments.  zsh: ONE argument, the whole string.
 ```
 
-Under zsh that `go test` receives a single literal argument `-run TestFoo -count 1` and fails to parse it — a confusing "unknown flag" or "no such file" from a snippet that a bash reader would call correct. The same trap hits any variable holding a list: test flags, `-tags`, `KUBECTL_ARGS`, an accumulated set of paths.
+Under zsh that `go test` receives a single literal argument `-run TestFoo -count 1` and fails to parse it — a confusing "unknown flag" or "no such file" from a snippet a bash reader would call correct. The same trap hits any variable holding a list: test flags, `-tags`, `KUBECTL_ARGS`, an accumulated set of paths. Because the shell differs per contributor, an unquoted expansion is **not portable in either direction**: a recipe that works on a bash box can break for the next person on macOS, and vice versa.
 
-Write it so it means the same thing in both shells:
+Write it so it means the same thing everywhere — use an array and quote the expansion:
 
 ```sh
-# Preferred: an array, quoted-expanded. Correct in bash and zsh alike.
 flags=(-run TestFoo -count 1)
 go test "${flags[@]}" ./...
-
-# Only when splitting is genuinely what you want, and you know you are in zsh:
-go test ${=FLAGS} ./...
 ```
 
-Do not "fix" a snippet by dropping quotes and relying on splitting — that is the bash-only reading. When a sequence is worth keeping, put it in a script under `scripts/` with a bash shebang, where the [shellcheck gate](#the-shellcheck-gate) checks it.
+That form is correct in bash and zsh alike, and is the one to put in a doc, an issue, or a paste to a colleague. Two things to avoid:
+
+- **Don't "fix" a snippet by dropping quotes** and relying on splitting — that is the bash-only reading, and it silently does the wrong thing under zsh.
+- **Don't reach for zsh's `${=VAR}`** (its explicit split-this operator) in anything shared. It is zsh-only: bash rejects it outright with `${=FLAGS}: bad substitution`, so it converts a portable command into one that fails for half the team.
+
+When a sequence is worth keeping, put it in a script under `scripts/` with a bash shebang, where the shell is pinned and the [shellcheck gate](#the-shellcheck-gate) checks it.
 
 ## Picking the right test tier
 
