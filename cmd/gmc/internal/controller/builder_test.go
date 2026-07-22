@@ -1083,7 +1083,53 @@ func TestBuildProxyDeployment_TerminationGracePeriod(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	dep := buildProxyDeployment(ag, "proxy:latest")
 	require.NotNil(t, dep.Spec.Template.Spec.TerminationGracePeriodSeconds)
-	assert.Equal(t, int64(60), *dep.Spec.Template.Spec.TerminationGracePeriodSeconds)
+	assert.Equal(t, int64(75), *dep.Spec.Template.Spec.TerminationGracePeriodSeconds)
+}
+
+// The grace period is a claim about how long shutdown takes; this asserts the
+// claim still covers every wait the sequence actually performs (Q386). A change
+// to any term that is not matched here fails rather than silently letting
+// SIGKILL land mid-drain and undoing Q384.
+func TestProxyShutdownBudget_GracePeriodCoversSequence(t *testing.T) {
+	// preStop is deducted from the grace period, so it is part of the sum, not
+	// extra budget on top of it.
+	worstCase := proxyPreStopSleepSeconds + proxyDrainBudgetSeconds + proxyDrainTailSeconds
+	assert.Less(t, worstCase, proxyTerminationGracePeriodSeconds,
+		"grace period must exceed preStop + drain deadline + drain tail, with headroom to spare")
+	assert.Equal(t, proxyTerminationGracePeriodSeconds-worstCase, proxyExitHeadroomSeconds,
+		"headroom must be exactly what the grace period has left over")
+
+	// Guards the cross-module mirror: cmd/proxy's defaultShutdownDrainTimeout is
+	// 45s and cannot be imported here (separate Go module).
+	assert.Equal(t, 45, proxyDrainBudgetSeconds,
+		"must match defaultShutdownDrainTimeout in cmd/proxy/proxy.go")
+}
+
+// Both proxy builders must carry the preStop hook, and it must be the native
+// sleep handler: the proxy image is distroless, so an exec hook would fail at
+// runtime and leave the endpoint-removal race wide open (Q386).
+func TestProxyDeployments_PreStopSleep(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	ep := newEP("pool", "team-a", nil)
+
+	for name, spec := range map[string]corev1.PodSpec{
+		"v1": buildProxyDeployment(ag, "proxy:latest").Spec.Template.Spec,
+		"v2": buildEgressProxyDeployment(ep, "proxy:latest").Spec.Template.Spec,
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := spec.Containers[0]
+			require.NotNil(t, c.Lifecycle, "proxy container needs a preStop hook")
+			require.NotNil(t, c.Lifecycle.PreStop)
+			require.NotNil(t, c.Lifecycle.PreStop.Sleep,
+				"must be the native sleep handler — distroless has no shell for exec")
+			assert.Nil(t, c.Lifecycle.PreStop.Exec)
+			assert.Equal(t, int64(proxyPreStopSleepSeconds), c.Lifecycle.PreStop.Sleep.Seconds)
+
+			require.NotNil(t, spec.TerminationGracePeriodSeconds)
+			assert.Equal(t, int64(proxyTerminationGracePeriodSeconds),
+				*spec.TerminationGracePeriodSeconds)
+		})
+	}
 }
 
 func TestBuildAGCDeployment_TerminationGracePeriod(t *testing.T) {

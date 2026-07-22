@@ -224,6 +224,74 @@ func nonrootPodSecurityContext() *corev1.PodSecurityContext {
 	return &corev1.PodSecurityContext{FSGroup: ptr(int64(65532))}
 }
 
+// The proxy pod's shutdown budget. Endpoint removal is concurrent with SIGTERM,
+// not ordered before it (see docs/development/kubernetes-conventions.md
+// § Graceful shutdown), so a proxy that starts draining the moment it is
+// signalled still has new CONNECTs steered to it by kube-proxy. Q384 drains the
+// tunnels that are already open; these constants buy the time for endpoint
+// removal to propagate first, and size the grace period so the whole sequence
+// finishes before SIGKILL (Q386).
+//
+// The arithmetic — every term is a real wait the kubelet must accommodate, and
+// preStop is DEDUCTED from the grace period rather than added to it:
+//
+//	preStop sleep                                    10s
+//	+ tunnel drain deadline  (cmd/proxy)             45s
+//	+ force-close unwind + health listener shutdown   7s
+//	+ headroom for process exit and kubelet jitter   13s
+//	= terminationGracePeriodSeconds                  75s
+//
+// Raising PROXY_SHUTDOWN_DRAIN_TIMEOUT on a pool without raising the grace
+// period here re-breaks Q384: the drain would still be running when SIGKILL
+// lands. The two are documented together in docs/operations/troubleshooting.md.
+const (
+	// proxyPreStopSleepSeconds is how long the proxy container sleeps before
+	// SIGTERM so EndpointSlice removal can propagate to every kube-proxy /
+	// mesh dataplane. Sized for a large cluster's propagation tail rather than
+	// the median: overshooting costs a slower rollout, undershooting severs
+	// live CI egress, which is the failure Q386 exists to close.
+	proxyPreStopSleepSeconds = 10
+
+	// proxyDrainBudgetSeconds mirrors defaultShutdownDrainTimeout in
+	// cmd/proxy/proxy.go. cmd/proxy is a separate Go module, so this cannot be
+	// an import — change both together.
+	proxyDrainBudgetSeconds = 45
+
+	// proxyDrainTailSeconds covers what cmd/proxy does after the drain deadline
+	// expires: tunnelCloseGrace (2s) waiting for force-closed relays to unwind,
+	// then healthShutdownTimeout (5s) for the health/metrics listener.
+	proxyDrainTailSeconds = 7
+
+	// proxyExitHeadroomSeconds absorbs process exit and kubelet scheduling
+	// jitter so the budget above is a bound, not a coincidence.
+	proxyExitHeadroomSeconds = 13
+
+	// proxyTerminationGracePeriodSeconds is the sum of the terms above. Stated
+	// as the arithmetic rather than a literal so the claim the manifest makes
+	// stays checkable against the code that has to fit inside it.
+	proxyTerminationGracePeriodSeconds = proxyPreStopSleepSeconds +
+		proxyDrainBudgetSeconds + proxyDrainTailSeconds + proxyExitHeadroomSeconds
+)
+
+// proxyPreStopLifecycle returns the proxy container's preStop hook: the native
+// `sleep` handler, not the `exec: ["sleep", …]` idiom. The proxy image is
+// distroless and has no shell or sleep binary, so an exec hook would fail at
+// runtime and the pod would proceed straight to SIGTERM — the bug this closes,
+// but silently.
+//
+// The native handler (KEP-3960, PodLifecycleSleepAction) is beta and enabled by
+// default from Kubernetes 1.30, which is the project's blocking install floor
+// (docs/operations/install.md), so every supported cluster honours it. On a
+// cluster that has explicitly disabled the gate the field is dropped and the pod
+// behaves as it did before Q386 — degraded, not broken.
+func proxyPreStopLifecycle() *corev1.Lifecycle {
+	return &corev1.Lifecycle{
+		PreStop: &corev1.LifecycleHandler{
+			Sleep: &corev1.SleepAction{Seconds: proxyPreStopSleepSeconds},
+		},
+	}
+}
+
 // componentLabels returns the metadata labels stamped on a GMC-created object of
 // the given component: the recommended app.kubernetes.io/* set (managed-by the GMC,
 // instance scoped to the gateway, no version — control-plane objects carry no
@@ -636,11 +704,11 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 				ObjectMeta: metav1.ObjectMeta{Labels: apilabels.Merge(map[string]string{"app": proxyAppName}, proxyAppName, ag.Name, componentProxyLabel, "", labelManagerValue)},
 				Spec: corev1.PodSpec{
 					SecurityContext: nonrootPodSecurityContext(),
-					// 60s lets in-flight CONNECT tunnels drain on rollout/eviction;
-					// the proxy's SIGTERM handler closes the listener and shuts the
-					// servers down (cmd/proxy/proxy.go) within this window rather than
-					// being SIGKILLed mid-tunnel.
-					TerminationGracePeriodSeconds: ptr(int64(60)),
+					// Covers the preStop sleep that lets endpoint removal propagate
+					// (Q386) plus the tunnel drain the proxy's SIGTERM handler then
+					// performs (cmd/proxy/proxy.go, Q384), so neither is cut short by
+					// SIGKILL. See the arithmetic above proxyPreStopSleepSeconds.
+					TerminationGracePeriodSeconds: ptr(int64(proxyTerminationGracePeriodSeconds)),
 					// Required (not preferred) anti-affinity: proxy replicas must
 					// land on distinct nodes so a single node failure or drain never
 					// takes the whole tenant's egress pool down at once. Preferred
@@ -685,6 +753,9 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 						Name:      "proxy",
 						Image:     proxyImage,
 						Resources: res,
+						// Delays SIGTERM so EndpointSlice removal propagates before
+						// the proxy stops accepting CONNECTs (Q386).
+						Lifecycle: proxyPreStopLifecycle(),
 						Ports: []corev1.ContainerPort{
 							{Name: "proxy", ContainerPort: proxyPort, Protocol: corev1.ProtocolTCP},
 							{Name: "health", ContainerPort: healthMetricsPort, Protocol: corev1.ProtocolTCP},

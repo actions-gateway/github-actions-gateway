@@ -294,8 +294,13 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: podLabels},
 				Spec: corev1.PodSpec{
-					SecurityContext:               nonrootPodSecurityContext(),
-					TerminationGracePeriodSeconds: ptr(int64(60)),
+					SecurityContext: nonrootPodSecurityContext(),
+					// Covers the preStop sleep that lets endpoint removal propagate
+					// (Q386) plus the tunnel drain the proxy's SIGTERM handler then
+					// performs (cmd/proxy/proxy.go, Q384). Shared with v1's
+					// buildProxyDeployment — same image, same shutdown sequence; see
+					// the arithmetic above proxyPreStopSleepSeconds in builder.go.
+					TerminationGracePeriodSeconds: ptr(int64(proxyTerminationGracePeriodSeconds)),
 					// Placement pass-through (Q282): spec.scheduling pins the pool to a
 					// tenant's node pool — and thus to that pool's egress IP (Q243).
 					// egressProxyAffinity composes any supplied affinity with the
@@ -333,6 +338,9 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 						Name:      proxyContainerName,
 						Image:     proxyImage,
 						Resources: egressProxyResources(ep),
+						// Delays SIGTERM so EndpointSlice removal propagates before
+						// the proxy stops accepting CONNECTs (Q386).
+						Lifecycle: proxyPreStopLifecycle(),
 						Ports: []corev1.ContainerPort{
 							{Name: "proxy", ContainerPort: proxyPort, Protocol: corev1.ProtocolTCP},
 							{Name: "health", ContainerPort: healthMetricsPort, Protocol: corev1.ProtocolTCP},

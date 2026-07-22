@@ -983,14 +983,37 @@ logs:
 WARN drain deadline expired; cutting in-flight CONNECT tunnels tunnels=3 drainTimeout=45s
 ```
 
-**Cause.** On SIGTERM the proxy stops accepting new CONNECT requests, fails
-`/readyz` so the endpoint controller stops steering traffic to it, and then
-waits for in-flight tunnels to finish. That wait is bounded by
-`PROXY_SHUTDOWN_DRAIN_TIMEOUT` (default 45s), sized to fit inside the pod's
-`terminationGracePeriodSeconds: 60` with headroom. **Tunnels still open when the
+**Cause.** The proxy pod's shutdown runs in two stages.
+
+First, a **10s `preStop` sleep** delays SIGTERM. Endpoint removal is concurrent
+with SIGTERM rather than ordered before it, so without this delay kube-proxy is
+still steering *new* CONNECTs to a pod that has already begun shutting down. The
+sleep uses the native `sleep` lifecycle handler (the proxy image is distroless
+and has no shell for the `exec: sleep` idiom), which requires Kubernetes >= 1.30
+— the same floor the install already enforces.
+
+Then, on SIGTERM, the proxy stops accepting new CONNECT requests, fails
+`/readyz`, and waits for in-flight tunnels to finish. That wait is bounded by
+`PROXY_SHUTDOWN_DRAIN_TIMEOUT` (default 45s). **Tunnels still open when the
 deadline expires are force-closed** — the alternative is holding the pod until
 the kubelet SIGKILLs it, which cuts them anyway and with no log line to show for
 it.
+
+The pod's `terminationGracePeriodSeconds: 75` covers the whole sequence. `preStop`
+is **deducted from** the grace period, not added to it, so the budget is:
+
+| Stage | Budget |
+|---|---|
+| `preStop` sleep (endpoint removal propagates) | 10s |
+| Tunnel drain deadline (`PROXY_SHUTDOWN_DRAIN_TIMEOUT`) | 45s |
+| Force-close unwind + health listener shutdown | 7s |
+| Headroom for process exit and kubelet jitter | 13s |
+| **`terminationGracePeriodSeconds`** | **75s** |
+
+> **Raising `PROXY_SHUTDOWN_DRAIN_TIMEOUT` requires raising the grace period too.**
+> The grace period is a deadline, not an allowance: a drain budget that no longer
+> fits inside 75s is simply SIGKILLed part-way through, which is the exact
+> mid-tunnel cut the drain exists to prevent.
 
 A tunnel carrying a long artifact upload or a GitHub long-poll can legitimately
 outlive 45s, so a small number of these warnings during a rollout is expected.

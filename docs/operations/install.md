@@ -27,7 +27,11 @@ see the [chart README](../../charts/actions-gateway/README.md).
 ## Prerequisites
 
 - **Kubernetes >= 1.30** — the GMC's `namespace-psa-guard` and
-  `gmc-tenant-resource-guard` policies need the GA `ValidatingAdmissionPolicy` API.
+  `gmc-tenant-resource-guard` policies need the GA `ValidatingAdmissionPolicy` API,
+  and the proxy pod's `preStop` hook uses the native `sleep` handler (beta and on
+  by default from 1.30). On a cluster with the `PodLifecycleSleepAction` gate
+  explicitly disabled the hook is dropped and proxy rollouts can cut new
+  connections — see [Proxy Tunnel Cut During a Rollout](troubleshooting.md#proxy-tunnel-cut-during-a-rollout).
 - **Node architecture: `linux/amd64` or `linux/arm64`.** Published images are
   multi-arch — one pinned digest (the OCI index digest) serves both, so mixed
   amd64/arm64 (e.g. Graviton) node pools need no per-arch configuration. Other

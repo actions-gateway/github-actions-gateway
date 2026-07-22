@@ -55,8 +55,9 @@ type Server struct {
 	// ShutdownDrainTimeout bounds the whole graceful drain on context
 	// cancellation (SIGTERM): stopping the listener plus waiting for in-flight
 	// CONNECT tunnels to finish. Default 45s, sized to fit inside the pod's
-	// 60s terminationGracePeriodSeconds with headroom. Tunnels still open when
-	// it expires are force-closed so the process can exit before SIGKILL.
+	// 75s terminationGracePeriodSeconds alongside the 10s preStop sleep that
+	// precedes SIGTERM, with headroom. Tunnels still open when it expires are
+	// force-closed so the process can exit before SIGKILL.
 	ShutdownDrainTimeout time.Duration
 	Log                  *slog.Logger
 	// TLSCertFile and TLSKeyFile enable TLS on the CONNECT listener when both are set.
@@ -119,8 +120,15 @@ const (
 	defaultMaxTunnelLifetime = 6 * time.Hour
 	defaultTunnelIdleTimeout = 5 * time.Minute
 	// defaultShutdownDrainTimeout bounds the graceful drain. The proxy
-	// Deployment sets terminationGracePeriodSeconds: 60, so 45s leaves headroom
-	// for the force-close and process exit before the kubelet sends SIGKILL.
+	// Deployment sets terminationGracePeriodSeconds: 75 and a 10s preStop sleep
+	// (which is deducted from the grace period, not added to it), so 45s leaves
+	// headroom for the force-close, the health-listener shutdown, and process
+	// exit before the kubelet sends SIGKILL.
+	//
+	// Mirrored as proxyDrainBudgetSeconds in the GMC's pod builder
+	// (cmd/gmc/internal/controller/builder.go) — a separate Go module, so the
+	// two cannot share a constant. Raising this without raising the grace period
+	// there puts the drain back outside the budget.
 	defaultShutdownDrainTimeout = 45 * time.Second
 	// tunnelCloseGrace is how long shutdown waits for force-closed relays to
 	// unwind after the drain deadline expires. They are already unblocked by

@@ -449,6 +449,8 @@ Then confirm sessions are re-established and job acquisition resumes.
 
 The proxy pool is HPA-managed and stateless. Rolling updates are non-disruptive as long as the `PodDisruptionBudget` (`minAvailable: 1`) is respected during the rollout.
 
+**Expect each pod to take up to ~55s to terminate**, and the rollout wall-clock to scale with the replica count. That is the graceful-shutdown sequence working, not a stuck pod: a **10s `preStop` sleep** so endpoint removal propagates before the pod stops accepting new `CONNECT`s, then a tunnel drain bounded at 45s (`PROXY_SHUTDOWN_DRAIN_TIMEOUT`) for the tunnels already open. A pod that finishes draining early exits early — the budget is a ceiling, not a fixed wait. The pod's `terminationGracePeriodSeconds` is 75s; see [Proxy Tunnel Cut During a Rollout](troubleshooting.md#proxy-tunnel-cut-during-a-rollout) for the full budget breakdown and what to do if you need a longer drain.
+
 ### Step 1: Pre-Upgrade Checks
 
 ```sh

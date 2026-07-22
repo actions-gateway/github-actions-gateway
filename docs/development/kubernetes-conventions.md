@@ -341,6 +341,30 @@ process cooperation required) lets endpoint removal propagate before the process
 starts refusing work. Size `terminationGracePeriodSeconds` as
 `preStop + drain budget + headroom`.
 
+**Use the native `sleep` handler, not `exec: ["sleep", …]`.** Our images are
+distroless: there is no shell and no `sleep` binary, so an exec hook fails at
+runtime and the pod proceeds straight to SIGTERM — reintroducing the race, but
+silently. The native handler (KEP-3960) is beta and on by default from
+Kubernetes 1.30, which is the project's blocking install floor, so every
+supported cluster honours it.
+
+The egress proxy is the worked example (Q386). Both proxy builders share one set
+of constants in [cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go),
+stated as arithmetic rather than a literal so the manifest's claim stays checkable
+against the code that has to fit inside it:
+
+```go
+proxyTerminationGracePeriodSeconds = proxyPreStopSleepSeconds + // 10s: endpoint removal propagates
+    proxyDrainBudgetSeconds +                                   // 45s: Q384 tunnel drain deadline
+    proxyDrainTailSeconds +                                     //  7s: force-close unwind + health shutdown
+    proxyExitHeadroomSeconds                                    // 13s: process exit, kubelet jitter
+```
+
+Note the drain budget is **mirrored**, not imported — `cmd/proxy` is a separate
+Go module in the workspace. A unit test asserts the mirror and the arithmetic, so
+raising one side without the other fails rather than letting SIGKILL land
+mid-drain and quietly undo Q384.
+
 **7. State the budget in the manifest comment, and keep the code inside it.**
 `terminationGracePeriodSeconds` is a claim about how long shutdown takes; if the
 code's drain is unbounded, or the comment describes a drain the code doesn't
