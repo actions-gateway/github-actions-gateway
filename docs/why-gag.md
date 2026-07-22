@@ -126,6 +126,20 @@ footprint.
 
 Every capability above is available today.
 
+!!! info "Why measured right-sizing can't be bolted onto ARC"
+
+    The right-sizing row is structural, not a feature race. Ephemeral runner
+    pods — ARC's and GAG's alike — run one job, live minutes, and have no
+    `/scale`-style controller to group them, so stock Vertical Pod Autoscaler
+    (and the dashboards built on it) cannot size them: its grouping, its
+    evict-and-resize actuation, and its long-running-service statistics all
+    miss this workload shape. The only place the loop can close is *inside the
+    controller that creates the pods*, at pod-build time — which is where GAG
+    runs it: sample per-job peaks, publish the recommendation on the
+    `RunnerSet`, and (opt-in) apply it to the next job's pod, with GPUs never
+    touched. The full alternatives analysis is in
+    [Appendix D §D.7](design/appendix-d-alternatives-considered.md#d7-worker-right-sizing-why-built-in-not-bolted-on).
+
 !!! note "Onboarding: start on v2"
 
     New tenants should onboard on the **recommended v2 API**

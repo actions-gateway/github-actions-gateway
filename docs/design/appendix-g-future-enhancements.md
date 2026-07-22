@@ -719,4 +719,64 @@ posture as a supported configuration.
 
 ---
 
+## G.15. Extract the Batch Right-Sizer into a Standalone / Reusable Tool
+
+**Current behavior.** The worker right-sizing loop (Q359) ships **inside** the
+AGC: `cmd/agc/internal/usage/` samples per-job CPU/memory peaks from
+`metrics.k8s.io`, aggregates fixed-bucket peak histograms per RunnerSet ×
+container, and the RunnerSet reconciler surfaces derived recommendations in
+`status.sizingRecommendation` and applies them at pod-build time under the
+opt-in `spec.sizing` profiles. The full analysis of why the native design won
+over external tooling is
+[Appendix D §D.7](appendix-d-alternatives-considered.md#d7-worker-right-sizing-why-built-in-not-bolted-on);
+the short version is that actuation must happen at pod creation and the AGC's
+provisioner already is the pod creator, so native actuation avoids the mutating
+admission webhook — and its fail-open/fail-closed availability dilemma — that
+any external tool would need.
+
+**The deferred generality.** Almost none of the measurement/derivation core is
+GAG-specific. Peak-per-pod-lifetime sampling, the per-job-peak histograms and
+quantile interpolation, the p95-requests / max-plus-headroom-limit derivation,
+and the confidence gating all apply to any one-pod-one-unit-of-work workload:
+Kubernetes Jobs, Tekton TaskRuns, Argo Workflows, and ARC's ephemeral runners
+share the shape, and no good open-source batch right-sizer exists (stock VPA is
+structurally unfit for run-to-completion pods — §D.7). The implementation
+deliberately keeps the extraction seams narrow: the `usage` package touches GAG
+at exactly two points — the worker-pod owner label
+(`provisioner.LabelRunnerSet`) it selects on, and the `v2alpha1`
+recommendation status types it emits.
+
+**What extraction would look like.** Two increments, either stoppable:
+
+1. **Library extraction** — lift sampler + histogram + derivation into a
+   neutral module (selector-and-types parameterized). GAG consumes it
+   unchanged, keeping its in-process actuation advantage; other controllers
+   embed it the same way.
+2. **Standalone tool** — a `PodSizingPolicy`-style CRD (label selector for
+   grouping, profile + clamps mirroring `spec.sizing`), recommendations in the
+   policy status, and a mutating admission webhook as the generic pod-creation
+   actuator for workloads whose controller does not embed the library. This is
+   the piece with real new cost: webhook TLS/cert lifecycle, the
+   `failurePolicy` availability trade, its own chart/release/signing pipeline,
+   and a Tier-0 security posture (a cluster-wide pod-mutating webhook).
+
+**Why deferred.** Three reasons, in order: (1) the sizing *model* (p95 of
+per-job peaks, 1.4× memory headroom, whole-pod confidence gating) is not yet
+validated against a live workload — freezing an unproven model into a
+general-purpose tool's public contract would be premature (the Q359 residual
+tracks live dogfood validation); (2) a standalone tool is a second product with
+its own maintenance and security budget, which would have delayed and diluted
+the GAG-native feature it was carved from; (3) GAG's adoption story wants the
+capability built in — "install one thing" — even though, as a pure-adoption OSS
+project, a general tool could plausibly reach a wider audience later.
+
+**Triggers to revisit.** Both of: the model is live-validated on dogfood (the
+Q359 residual closes with the derivation confirmed or corrected), **and**
+concrete external demand appears (an issue asking to size non-GAG batch
+workloads, or another controller wanting to embed the recommender). Start with
+increment 1; only build increment 2's webhook if a consumer exists that cannot
+embed the library.
+
+---
+
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)
