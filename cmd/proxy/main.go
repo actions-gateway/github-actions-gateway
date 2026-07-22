@@ -6,6 +6,7 @@
 //	PROXY_HEALTH_PORT            - Health (/healthz, /readyz) port (default 8081)
 //	PROXY_METRICS_PORT           - mTLS /metrics port (default 8443)
 //	PROXY_DIAL_TIMEOUT           - Upstream TCP dial timeout (default 10s)
+//	PROXY_SHUTDOWN_DRAIN_TIMEOUT - Graceful drain budget on SIGTERM; in-flight CONNECT tunnels still open when it expires are cut (default 45s)
 //	PROXY_TLS_CERT_FILE          - Path to CONNECT TLS certificate; enables TLS when paired with PROXY_TLS_KEY_FILE
 //	PROXY_TLS_KEY_FILE           - Path to CONNECT TLS private key;  enables TLS when paired with PROXY_TLS_CERT_FILE
 //	PROXY_METRICS_TLS_CERT_FILE  - Path to metrics server cert; enables mTLS metrics with the key + client CA below
@@ -21,7 +22,9 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -60,6 +63,15 @@ func run(log *slog.Logger) error {
 		dialTimeout = d
 	}
 
+	var drainTimeout time.Duration
+	if v := os.Getenv("PROXY_SHUTDOWN_DRAIN_TIMEOUT"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("parse PROXY_SHUTDOWN_DRAIN_TIMEOUT: %w", err)
+		}
+		drainTimeout = d
+	}
+
 	srv := NewServer(
 		":"+proxyPort,
 		":"+healthPort,
@@ -83,13 +95,19 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("parse PROXY_ALLOWED_CIDRS: %w", err)
 	}
 	srv.AllowedCIDRs = cidrs
+	srv.ShutdownDrainTimeout = drainTimeout
 
 	tlsEnabled := srv.TLSCertFile != "" && srv.TLSKeyFile != ""
 	metricsMTLS := srv.MetricsTLSCertFile != "" && srv.MetricsTLSKeyFile != "" && srv.MetricsClientCAFile != ""
 	log.Info("proxy starting", "proxyPort", proxyPort, "healthPort", healthPort,
 		"metricsPort", metricsPort, "tls", tlsEnabled, "metricsMTLS", metricsMTLS)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// Every rollout, node drain, eviction, and scale-down delivers SIGTERM here.
+	// Without a handler the default action terminates the process outright and
+	// every in-flight CONNECT tunnel dies with it, cutting live CI egress
+	// mid-request (Q384); NotifyContext turns it into the cancellation that
+	// ListenAndServe drains on.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 	return srv.ListenAndServe(ctx)
 }
 

@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q386
+**Next ID:** Q387
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -49,8 +49,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q384"></a>Q384 | [Proxy shutdown cuts in-flight CONNECT tunnels](../cmd/proxy/proxy.go) | `bug` `infra` | 🔲 | M | `http.Server.Shutdown` never waits for hijacked conns; CONNECT tunnels are hijacked (proxy.go:452), so the process exits mid-tunnel, cutting live CI egress on every rollout. Track tunnels and wait. |
 | <a id="Q385"></a>Q385 | [Worker wrapper never forwards SIGTERM to Runner.Worker](../cmd/worker/main.go) | `bug` | 🔲 | S | The wrapper installs no handler, so the child (not PID 1) is never signalled and runs to the cgroup SIGKILL — no chance to report cancellation, leaving GitHub to wait out the job lock. |
+| <a id="Q386"></a>Q386 | [Proxy pod has no `preStop` sleep](development/kubernetes-conventions.md#graceful-shutdown-sigterm) | `bug` `infra` | 🔲 | S | Endpoint removal races SIGTERM, so new CONNECTs land after it; Q384's drain covers in-flight tunnels only. Needs the native `preStop.sleep` handler (distroless has no shell; needs K8s >= 1.30) and grace re-sizing. |
 | <a id="Q380"></a>Q380 | [Recreate dogfood from zero — `setup.sh` unproven](plan/gke-dogfood.md#recreate-is-not-yet-proven-end-to-end-q380) | `infra` | 🔲 | S | Cluster deleted 07-20 (`delete.sh` validated live), so the next dogfood session must bootstrap from nothing. The from-zero `setup.sh` path has never run — incl. the new `workers-od` pool. Validate before you need it; gaps in the plan. |
 | <a id="Q359"></a>Q359 | [Worker right-sizing profiles (recommendations first)](plan/runner-sizing-profiles.md) | `infra` | 🔲 | S | All 3 phases shipped (usage metrics + recipe; status recommendations + SizingDrift; opt-in Binpack/Throughput/NodeShare profiles). Remaining: live dogfood validation of the whole loop — pairs with [Q380](#Q380); see the plan. |
 | <a id="Q173"></a>Q173 | [v2 bring-your-own proxy autoscaler (managedAutoscaling opt-out)](plan/v2-api.md#deferred-out-of-the-critical-path) | `infra` | 🔲 | M | Add managedAutoscaling (default true) on EgressProxy: false ⇒ GMC creates only the proxy Deployment; the operator attaches KEDA / VPA / the OSS MPA / a custom HPA. Additive; distinct from connection-metric scaling ([Q19](#Q19)). |

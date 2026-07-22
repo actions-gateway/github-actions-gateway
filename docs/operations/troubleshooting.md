@@ -965,6 +965,72 @@ For lifetime-cap hits: split very long-running uploads or streams across multipl
 
 To change the defaults during an incident, patch the proxy Deployment with environment overrides — note that there is no env-var knob today; defaults are baked into the Server struct and require a code change to adjust. File a Queue item if a tenant repeatedly hits either cap on a legitimate workload.
 
+If the resets cluster around a proxy rollout rather than being spread across the
+pool's uptime, the cause is the shutdown drain, not these caps — see
+[Proxy Tunnel Cut During a Rollout](#proxy-tunnel-cut-during-a-rollout).
+
+---
+
+## Proxy Tunnel Cut During a Rollout
+
+**Symptoms.** Worker jobs fail with a connection reset or `EOF` mid-request, and
+the failures line up with a proxy `Deployment` rollout, node drain, eviction, or
+scale-down rather than being spread evenly over time. The terminating proxy pod
+logs:
+
+```
+WARN drain deadline expired; cutting in-flight CONNECT tunnels tunnels=3 drainTimeout=45s
+```
+
+**Cause.** On SIGTERM the proxy stops accepting new CONNECT requests, fails
+`/readyz` so the endpoint controller stops steering traffic to it, and then
+waits for in-flight tunnels to finish. That wait is bounded by
+`PROXY_SHUTDOWN_DRAIN_TIMEOUT` (default 45s), sized to fit inside the pod's
+`terminationGracePeriodSeconds: 60` with headroom. **Tunnels still open when the
+deadline expires are force-closed** — the alternative is holding the pod until
+the kubelet SIGKILLs it, which cuts them anyway and with no log line to show for
+it.
+
+A tunnel carrying a long artifact upload or a GitHub long-poll can legitimately
+outlive 45s, so a small number of these warnings during a rollout is expected.
+A large `tunnels=` count on every terminating pod is the signal to act.
+
+> Proxy images built before this drain landed have **no** SIGTERM handler at
+> all: the process is terminated outright and *every* live tunnel is cut, with
+> no warning logged. Absence of the log line above on a terminating pod means
+> the image predates the fix — upgrade it.
+
+**Diagnostics.**
+
+```sh
+ns=<namespace>
+
+# Count cut tunnels across the pool's recent terminations. Use --previous to
+# read the log of the container instance that was replaced.
+for p in $(kubectl get pods -n "$ns" -l actions-gateway/component=proxy \
+    -o jsonpath='{.items[*].metadata.name}'); do
+  kubectl logs -n "$ns" "$p" --previous 2>/dev/null |
+    grep -F 'cutting in-flight CONNECT tunnels'
+done
+
+# Confirm the pod's grace period still exceeds the drain budget.
+kubectl get deploy -n "$ns" actions-gateway-proxy \
+  -o jsonpath='{.spec.template.spec.terminationGracePeriodSeconds}{"\n"}'
+```
+
+**Resolution.**
+
+- **Prefer draining less often.** Roll the proxy pool during a quiet CI window;
+  the drain bounds the damage, it does not eliminate it.
+- **Raise the budget** if a tenant's legitimate traffic needs longer. Set
+  `PROXY_SHUTDOWN_DRAIN_TIMEOUT` on the proxy container **and** raise
+  `terminationGracePeriodSeconds` to at least the new budget plus headroom —
+  raising the drain alone changes nothing, because the kubelet SIGKILLs the pod
+  at the grace period regardless of what the process is still waiting for.
+- **Do not raise it past the grace period.** The drain would then never complete
+  on its own and every rollout would end in SIGKILL, which is strictly worse:
+  the tunnels are cut either way and the warning log never gets written.
+
 ---
 
 ## Metrics scrape returns a TLS / connection error
