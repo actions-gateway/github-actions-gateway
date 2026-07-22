@@ -1,8 +1,8 @@
 # Worker Right-Sizing Profiles (Recommendations First)
 
-> **Status: 🔄 Phases 1–2 shipped 2026-07-21; Phase 3 open — tracked as [Q359](../STATUS.md#Q359).**
-> This doc is the design sketch and phase plan; each phase revises it with
-> findings before the next begins.
+> **Status: 🔄 Phases 1–3 shipped 2026-07-21/22 — tracked as [Q359](../STATUS.md#Q359).**
+> Remaining: live dogfood validation of all three phases (rides the next
+> dogfood session). This doc is the design sketch and phase record.
 
 ## Goal
 
@@ -127,7 +127,7 @@ Decisions taken at pickup (implementation: `cmd/agc/internal/usage/aggregate.go`
   `status.sizingRecommendation` with an empty snapshot, so a freshly restarted
   (or disabled) sampler cannot wipe the persisted store it would re-seed from.
 
-### Phase 3 — opt-in sizing profiles (M)
+### Phase 3 — opt-in sizing profiles (M) — ✅ shipped 2026-07-22
 
 `RunnerSet.spec.sizing.profile`, applied by the provisioner at pod-build time:
 
@@ -145,7 +145,40 @@ minimum; admission-reject profile configs that would exceed the namespace
 
 **Acceptance:** a `Binpack` RunnerSet provisions pods with derived resources; a
 fresh RunnerSet (no history) provisions `Static` until confident; GPU counts
-byte-identical to the template in all profiles.
+byte-identical to the template in all profiles. (All three asserted by the
+envtest test `TestV2_RunnerSet_BinpackProfileProvisionsDerivedResources`.)
+
+Decisions taken at pickup (implementation:
+`cmd/agc/internal/controller/runnerset_sizing_profile.go`, applied in
+`runnerSetTarget.Resolve`; design summary in
+[appendix H §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission)):
+
+- **Actuation input is `status.sizingRecommendation`**, not the sampler's
+  in-memory state: `Resolve` re-reads the RunnerSet per job anyway, the status
+  IS the persisted store, and it makes actuation and the reported
+  recommendation impossible to disagree — no new plumbing between sampler and
+  provisioner.
+- **Whole-pod confidence fallback.** `Binpack`/`Throughput` apply only when
+  every template container has a ≥`MinSamplesForDrift` recommendation;
+  otherwise the whole pod provisions `Static` (partial actuation would make
+  QoS unpredictable — Guaranteed requires every container to carry
+  requests==limits). Reported as `status.sizingProfileState`
+  (`Active`/`AwaitingSamples`); while `Active`, `SizingDrift` reports
+  `False/SizingProfileActive` instead of judging the now-bypassed template ask.
+- **`NodeShare` declares the envelope** (`nodeShare.allocatable` +
+  `workersPerNode`) rather than the AGC reading Node objects — the AGC is
+  deliberately namespace-scoped (no cluster RBAC), and the operator knows
+  which node shape the set's scheduling constraints target. Applied to the
+  runner container only; sidecars are the operator's accounting.
+- **Quota/LimitRange conflicts stay a runtime signal** — the planned
+  admission-reject rail is deliberately NOT implemented: cross-object
+  admission validation is what §H.7's "runtime conditions, not admission"
+  philosophy avoids (apply-order coupling, GitOps hostility), and the existing
+  `WorkerQuota*` conditions + quota retries already surface the conflict. The
+  `maxRequests` clamp is the preventive knob.
+- Open question 3 (ship `NodeShare` first) became moot — it shipped with the
+  phase. Question 4 confirmed: profile parameters live on the `RunnerSet`
+  (differently-tuned sets can share one template).
 
 ## Non-goals
 

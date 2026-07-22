@@ -355,4 +355,9 @@ const (
 	// ReasonInsufficientSamples is the SizingDrift=False reason while too few
 	// jobs have been sampled to judge drift with confidence.
 	ReasonInsufficientSamples = "InsufficientSamples"
+	// ReasonSizingProfileActive is the SizingDrift=False reason while an opt-in
+	// sizing profile (Q359 Phase 3) is actively applying the measured
+	// recommendation at pod build: the template ask is no longer what worker
+	// pods run with, so judging drift against it would mislead.
+	ReasonSizingProfileActive = "SizingProfileActive"
 )

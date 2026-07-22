@@ -112,7 +112,10 @@ The same sampled history also drives two status surfaces on the v2 `RunnerSet`
 `requests`/`limits` with observed p95/max, sample count, and window) and the
 advisory `SizingDrift` condition — `True` when, after ≥20 sampled jobs, the
 template's ask is ≥2× the recommendation (waste) or a memory limit is below the
-observed per-job peak (OOM risk). Advisory only; never gates `Ready`. See the
+observed per-job peak (OOM risk). Advisory only; never gates `Ready`. A set
+that opts into a sizing profile (`spec.sizing.profile`) additionally reports
+`status.sizingProfileState` (`Active`/`AwaitingSamples`), and `SizingDrift`
+reads `False/SizingProfileActive` while the profile actuates. See the
 [right-sizing recipe](worker-rightsizing.md#step-0--read-the-built-in-recommendation-first).
 
 | Metric | Type | Labels | Description |

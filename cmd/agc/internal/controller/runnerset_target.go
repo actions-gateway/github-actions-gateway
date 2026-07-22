@@ -124,7 +124,12 @@ func (t *runnerSetTarget) Resolve(ctx context.Context) (*provisioner.ResolvedSpe
 	}
 
 	spec := &provisioner.ResolvedSpec{
-		PodTemplate:        refs.template.PodTemplate,
+		// The opt-in sizing profile (Q359 Phase 3) derives worker cpu/memory from
+		// the persisted usage history (status.sizingRecommendation) at pod-build
+		// time; Static/no profile passes the template through untouched. Re-read
+		// per job like every other input, so a spec edit or newly-confident
+		// history takes effect on the next job without a restart.
+		PodTemplate:        applySizingProfile(refs.template.PodTemplate, rs.Spec.Sizing, refs.template, rs.Status.SizingRecommendation),
 		WorkerImage:        refs.template.WorkerImage,
 		MaxWorkers:         rs.Spec.MaxWorkers,
 		PriorityTiers:      runnerSetTierThresholds(rs.Spec.PriorityTiers),

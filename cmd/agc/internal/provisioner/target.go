@@ -17,6 +17,11 @@ import (
 // watches and reapers never cross-wire during v1/v2 coexistence.
 const LabelRunnerSet = "actions-gateway.com/runner-set"
 
+// WorkerContainerName is the name of the runner container in every worker pod
+// template — the container the runner engine executes in, and the one the
+// NodeShare sizing profile targets (Q359 Phase 3).
+const WorkerContainerName = "runner"
+
 // Target is the controller object a Provisioner provisions worker pods and job
 // Secrets for. The v1 RunnerGroup and the v2 RunnerSet each have an adapter that
 // satisfies it (runnerGroupTarget here, runnerSetTarget in the AGC controller
