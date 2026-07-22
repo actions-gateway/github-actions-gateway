@@ -162,28 +162,35 @@ Both rules in this section are enforced mechanically by the foreground-guard hoo
 
 Committed scripts under `scripts/` are `#!/usr/bin/env bash` and follow [bash-style.md](bash-style.md), so their behaviour is pinned by the shebang. **Ad-hoc commands are not pinned** — they run in whatever login shell the contributor has: zsh on macOS (the default since Catalina), bash on most Linux distributions and CI images. Check yours with `echo $0` rather than assuming.
 
-That matters because the two shells disagree on **word-splitting of unquoted parameter expansions** — bash splits, zsh does not:
+That matters because the shells disagree on **word-splitting of unquoted parameter expansions** — bash and `sh` split, zsh does not:
 
 ```sh
 FLAGS='-run TestFoo -count 1'
-go test $FLAGS ./...   # bash: four arguments.  zsh: ONE argument, the whole string.
+go test $FLAGS ./...   # bash/sh: four arguments.  zsh: ONE argument, the whole string.
 ```
 
-Under zsh that `go test` receives a single literal argument `-run TestFoo -count 1` and fails to parse it — a confusing "unknown flag" or "no such file" from a snippet a bash reader would call correct. The same trap hits any variable holding a list: test flags, `-tags`, `KUBECTL_ARGS`, an accumulated set of paths. Because the shell differs per contributor, an unquoted expansion is **not portable in either direction**: a recipe that works on a bash box can break for the next person on macOS, and vice versa.
+Under zsh that `go test` receives a single literal argument `-run TestFoo -count 1` and fails to parse it — a confusing "unknown flag" or "no such file" from a snippet a bash reader would call correct. Because the shell differs per contributor, an unquoted expansion is **not portable in either direction**: a recipe that works on a bash box breaks for the next person on macOS, and vice versa.
 
-Write it so it means the same thing everywhere — use an array and quote the expansion:
+**The fix is almost always to drop the variable.** Ad-hoc commands are one-shots — write the arguments literally and there is nothing to split:
 
 ```sh
-flags=(-run TestFoo -count 1)
-go test "${flags[@]}" ./...
+go test -run TestFoo -count 1 ./...
 ```
 
-That form is correct in bash and zsh alike, and is the one to put in a doc, an issue, or a paste to a colleague. Two things to avoid:
+Reach for a variable only when something genuinely reuses the list — a loop, or a flag set applied to several commands in one session. Then pick by where it has to run:
 
-- **Don't "fix" a snippet by dropping quotes** and relying on splitting — that is the bash-only reading, and it silently does the wrong thing under zsh.
-- **Don't reach for zsh's `${=VAR}`** (its explicit split-this operator) in anything shared. It is zsh-only: bash rejects it outright with `${=FLAGS}: bad substitution`, so it converts a portable command into one that fails for half the team.
+| Context | Form | Portability |
+|---|---|---|
+| bash or zsh (any interactive shell you'll actually meet) | `flags=(-run TestFoo -count 1)` → `go test "${flags[@]}" ./...` | bash + zsh. **Not POSIX** — `dash` rejects the `(` outright, so don't carry it into an `sh` context |
+| must also run under `sh` | `set -- -run TestFoo -count 1` → `go test "$@" ./...` | every shell, including `dash`; costs you the positional parameters |
+| worth keeping at all | a script under `scripts/` with a bash shebang | pinned by the shebang, and [shellcheck](#the-shellcheck-gate)-gated |
 
-When a sequence is worth keeping, put it in a script under `scripts/` with a bash shebang, where the shell is pinned and the [shellcheck gate](#the-shellcheck-gate) checks it.
+Note that "write POSIX" is **not** a fix on its own: zsh's not-splitting *is* its deviation from POSIX, so POSIX-style `$FLAGS` still breaks there. Portability comes from the quoted form you choose, not from avoiding extensions.
+
+Two things to avoid:
+
+- **Don't "fix" a snippet by dropping quotes** and relying on splitting — that is the bash reading, and it silently does the wrong thing under zsh.
+- **Don't reach for zsh's `${=VAR}`** (its explicit split-this operator) in anything shared. It is zsh-only: bash rejects it with `${=FLAGS}: bad substitution`, converting a portable command into one that fails for half the team.
 
 ## Picking the right test tier
 
