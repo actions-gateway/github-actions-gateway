@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q387
+**Next ID:** Q388
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -60,6 +60,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q366"></a>Q366 | [Collapse the 29 GMC CreateOrPatch wrappers](plan/structural-debt-audit-2026-07.md) | `infra` | 🔲 | M | 33 calls / 29 `apply*` funcs differing only by type. Collapsing surfaces a latent issue: only 4 of 11 v1 helpers set an ownerRef, policy undocumented — a force-removed finalizer leaks SAs/RoleBindings/NPs/HPAs. F7. |
 | <a id="Q367"></a>Q367 | [Split the two god wiring functions](plan/structural-debt-audit-2026-07.md) | `infra` `tests` | 🔲 | M | `gmc/cmd/main.go` main() is 669 lines under `nolint:gocyclo` (~12 concerns, none test-reachable); `agc/main.go` run() is 431 with 23 scattered `os.Getenv`. Both already have extracted helpers proving the pattern. F8. |
 | <a id="Q371"></a>Q371 | [Add nolintlint + a ratcheted funlen gate](plan/structural-debt-audit-2026-07.md) | `infra` | 🔲 | S | Config-only. `nolintlint` (allow-unused:false) flags the inert `nolint:gocyclo` on gmc `main()` — `gocyclo` isn't even enabled. Start `funlen` above the worst survivor, ratchet down. Land after [Q367](#Q367). §Prevention. |
+| <a id="Q387"></a>Q387 | [Versioned website docs (site tracks main, releases lag)](development/website.md) | `docs` `infra` | 🔲 | M | pages.yml deploys every docs push to main, so merged features show "Available now" before a tagged chart ships them (right-sizing, 07-21). Roadmap header now discloses it; fix = mike-style versioned docs or tag-triggered deploy with latest+stable. |
 | <a id="Q368"></a>Q368 | [Consolidate the broker-protocol test doubles](plan/structural-debt-audit-2026-07.md) | `tests` | 🔲 | M | 3 stub servers reimplement one wire protocol (~1,200 of 2,240 lines recoverable). `fakegithub` is a published, Trivy-scanned image. Also gate that no `package main` reaches `httptest` — `compat.go` asserts this by convention only. F5. |
 | <a id="Q369"></a>Q369 | [Unify the broker/scaleset error taxonomy](plan/structural-debt-audit-2026-07.md) | `infra` | 🔲 | S | `RateLimitError` and `UnauthorizedError` are declared in both packages, and `parseRateLimitError` twice with identical bodies. Callers spanning both protocols type-switch on two same-named types. `githubapp/httpx` is the home. F9. |
 | <a id="Q370"></a>Q370 | [Reduce script-layer sprawl](plan/structural-debt-audit-2026-07.md) | `infra` | 🔲 | M | `dogfood/setup.sh` is 688 lines / 15 concerns behind one main(); `lib/common.sh` is sourced by 26 of 69 scripts while the biggest non-adopters re-roll its helpers; the 3 `sync-chart-*.sh` triplicate one skeleton. F10. |
