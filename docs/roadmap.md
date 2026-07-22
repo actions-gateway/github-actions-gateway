@@ -18,8 +18,11 @@ describing your setup.
 
 ## Available now (1.0)
 
-Everything here ships in the released chart and is covered by the design and
-operations docs.
+Everything here is merged and covered by the design and operations docs. This
+site deploys from the `main` branch, so the newest items may be a step ahead of
+the latest [tagged release](https://github.com/actions-gateway/github-actions-gateway/releases)
+until the next release is cut — check the release notes when pinning a chart
+version.
 
 - **One resource per tenant.** A single `ActionsGateway` custom resource
   provisions an isolated gateway — controller, egress proxy pool, role-based
