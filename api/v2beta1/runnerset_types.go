@@ -1,6 +1,7 @@
 package v2beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -174,7 +175,8 @@ type ScaleUpRateLimit struct {
 type RunnerSetStatus struct {
 	// Conditions are the observed conditions of the runner set. Known types: Ready,
 	// Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure,
-	// WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld.
+	// WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld,
+	// SizingDrift.
 	//
 	// +optional
 	// +listType=map
@@ -226,10 +228,72 @@ type RunnerSetStatus struct {
 	// +kubebuilder:validation:Enum=TemplateRef;GatewayDefault;ClusterDefault
 	TemplateSource string `json:"templateSource,omitempty"`
 
+	// SizingRecommendation is the per-container worker resource recommendation
+	// derived from measured per-job usage peaks (Q359 Phase 2), refreshed by the
+	// AGC as jobs complete. Advisory only: nothing is applied to worker pods —
+	// the operator (or a future opt-in sizing profile) acts on it. It doubles as
+	// the persistence for the usage aggregates: the AGC re-seeds its in-memory
+	// history from this field on restart, so the observation window survives
+	// control-plane rollouts (status is the store; no separate backing store).
+	//
+	// +optional
+	// +listType=map
+	// +listMapKey=container
+	SizingRecommendation []ContainerSizingRecommendation `json:"sizingRecommendation,omitempty"`
+
 	// ObservedGeneration is the .metadata.generation the most recent reconcile acted on.
 	//
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+}
+
+// ContainerSizingRecommendation is the measured-usage-derived resource
+// recommendation for one container of a runner set's worker pods (Q359 Phase 2).
+// Derivation follows the worker right-sizing model
+// (docs/operations/worker-rightsizing.md): requests from the p95 of per-job
+// usage peaks, a memory limit with OOM headroom above the observed maximum, and
+// deliberately no CPU limit (CPU is compressible — a limit only throttles bursty
+// jobs for no packing benefit).
+type ContainerSizingRecommendation struct {
+	// Container is the container name in the worker pod template this
+	// recommendation applies to.
+	Container string `json:"container"`
+
+	// Requests are the recommended resource requests (cpu, memory), derived from
+	// the p95 of observed per-job usage peaks and rounded up to coarse increments
+	// (sizing is bucket-granular, not exact).
+	//
+	// +optional
+	Requests corev1.ResourceList `json:"requests,omitempty"`
+
+	// Limits are the recommended resource limits. Memory only, at the observed
+	// maximum peak plus OOM headroom; no CPU limit is ever recommended.
+	//
+	// +optional
+	Limits corev1.ResourceList `json:"limits,omitempty"`
+
+	// ObservedPeak is the highest per-job usage peak (cpu, memory) observed in
+	// the window — the input to the recommended memory limit.
+	//
+	// +optional
+	ObservedPeak corev1.ResourceList `json:"observedPeak,omitempty"`
+
+	// ObservedP95 is the 95th percentile of per-job usage peaks (cpu, memory),
+	// bucket-interpolated — the input to the recommended requests.
+	//
+	// +optional
+	ObservedP95 corev1.ResourceList `json:"observedP95,omitempty"`
+
+	// SampleCount is the number of finished jobs whose usage peaks fed this
+	// recommendation — the operator's confidence signal. Jobs shorter than one
+	// sampling interval are not counted (see the worker usage metrics).
+	SampleCount int64 `json:"sampleCount"`
+
+	// WindowStart is when this container's observation window began (first
+	// sampled job, surviving AGC restarts via the re-seed).
+	//
+	// +optional
+	WindowStart metav1.Time `json:"windowStart,omitempty"`
 }
 
 // RunnerSet is a namespace-scoped CRD reconciled by the AGC. It binds a worker pod

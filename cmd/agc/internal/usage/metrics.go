@@ -65,18 +65,17 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		JobCPUPeak: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name: "actions_gateway_worker_usage_job_cpu_peak_cores",
 			Help: "Per-job CPU peak (cores) of the RunnerSet's worker pods, per container — one observation per sampled job. Use histogram_quantile for p50/p95 over a chosen window (Q359).",
-			// 0.05 → 16 cores: spans near-idle sidecars through a full large
-			// CI node; per-job peaks above 16 cores land in +Inf, which still
-			// ranks correctly for sizing decisions.
-			Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 4, 8, 16},
+			// Shared with the in-memory aggregates (aggregate.go): per-job
+			// peaks above the top edge land in +Inf, which still ranks
+			// correctly for sizing decisions.
+			Buckets: cpuBucketEdges,
 		}, setContainer),
 
 		JobMemoryPeak: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name: "actions_gateway_worker_usage_job_memory_peak_bytes",
 			Help: "Per-job memory peak (bytes) of the RunnerSet's worker pods, per container — one observation per sampled job. Use histogram_quantile for p50/p95 over a chosen window (Q359).",
-			// 128Mi → 64Gi, doubling: spans a trivial lint job through a large
-			// build/test worker.
-			Buckets: prometheus.ExponentialBuckets(128*1024*1024, 2, 10),
+			// Shared with the in-memory aggregates (aggregate.go).
+			Buckets: memBucketEdges,
 		}, setContainer),
 
 		JobsSampled: prometheus.NewCounterVec(prometheus.CounterOpts{

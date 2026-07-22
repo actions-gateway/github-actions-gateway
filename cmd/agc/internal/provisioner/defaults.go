@@ -18,6 +18,17 @@ var (
 	defaultWorkerMemory = resource.MustParse("1Gi")
 )
 
+// DefaultWorkerResources returns (a copy of) the gap-fill requests/limits
+// stamped on a worker container that declares neither — the effective ask the
+// sizing-drift judgment compares against when a template omits resources
+// entirely (Q359 Phase 2).
+func DefaultWorkerResources() corev1.ResourceList {
+	return corev1.ResourceList{
+		corev1.ResourceCPU:    defaultWorkerCPU,
+		corev1.ResourceMemory: defaultWorkerMemory,
+	}
+}
+
 // disruptionSafetyDefaults is the gap-fill set of node-disruption-safety
 // annotations stamped on every worker pod. Each value is the marker the
 // respective component honors to skip evicting a running pod.

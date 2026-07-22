@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -92,12 +93,25 @@ type Sampler struct {
 	Metrics *Metrics
 	// Log receives sampler lifecycle and throttled error lines.
 	Log *slog.Logger
+	// Now returns the current time; nil means time.Now. A test seam for the
+	// aggregate window timestamps.
+	Now func() time.Time
 
+	// mu guards the mutable state below: tick mutates it from the sampler
+	// goroutine and SizingStatus reads it from reconcile goroutines (Q359
+	// Phase 2). The Kubernetes/metrics API reads in tick happen outside the
+	// lock so a slow list can never block a reconcile.
+	mu sync.Mutex
 	// tracked maps worker pod UID → running usage state.
 	tracked map[types.UID]*podUsage
 	// seenPeak is the max per-job peak per RunnerSet × container, backing the
 	// CPUPeak/MemoryPeak gauges (a gauge alone cannot do a read-modify-max).
 	seenPeak map[[3]string]containerPeak
+	// aggs accumulates per-RunnerSet per-container peak histograms — the source
+	// for status.sizingRecommendation (Q359 Phase 2). Entries are seeded from a
+	// RunnerSet's persisted status on first sight (restart merge-back) and
+	// dropped when the RunnerSet disappears.
+	aggs map[types.NamespacedName]*setAgg
 	// consecutivePollErrors throttles the repeated-failure log line.
 	consecutivePollErrors int
 }
@@ -131,16 +145,21 @@ func (s *Sampler) Start(ctx context.Context) error {
 func (s *Sampler) NeedLeaderElection() bool { return false }
 
 // tick performs one sampling pass: refresh running peaks for live worker pods
-// and finalize pods that reached a terminal phase or disappeared.
+// and finalize pods that reached a terminal phase or disappeared. The API reads
+// happen before the state lock is taken (see the mu comment).
 func (s *Sampler) tick(ctx context.Context) {
-	if s.tracked == nil {
-		s.tracked = make(map[types.UID]*podUsage)
-		s.seenPeak = make(map[[3]string]containerPeak)
-	}
-	owned, ok := s.ownedRunnerSets(ctx)
-	if !ok {
+	var sets agcv2alpha1.RunnerSetList
+	if err := s.Client.List(ctx, &sets, client.InNamespace(s.Namespace)); err != nil {
+		s.Log.Error("list RunnerSets", "error", err)
 		return
 	}
+	// The RunnerSets this AGC reconciles — the cache scoping (namespace +
+	// gateway field selector) makes the list authoritative.
+	owned := make(map[types.NamespacedName]bool, len(sets.Items))
+	for i := range sets.Items {
+		owned[types.NamespacedName{Namespace: sets.Items[i].Namespace, Name: sets.Items[i].Name}] = true
+	}
+
 	var pods corev1.PodList
 	if err := s.Client.List(ctx, &pods, client.InNamespace(s.Namespace), client.HasLabels{provisioner.LabelRunnerSet}); err != nil {
 		s.Log.Error("list worker pods", "error", err)
@@ -150,15 +169,46 @@ func (s *Sampler) tick(ctx context.Context) {
 	// One PodMetrics list serves every running pod this tick. Only pay for it
 	// when at least one candidate pod is running.
 	var usageByPod map[string][]metricsv1beta1.ContainerMetrics
-	if s.anyRunning(pods.Items, owned) {
+	if anyRunning(pods.Items, owned) {
 		usageByPod = s.listUsage(ctx)
+	}
+
+	now := time.Now
+	if s.Now != nil {
+		now = s.Now
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.tracked == nil {
+		s.tracked = make(map[types.UID]*podUsage)
+		s.seenPeak = make(map[[3]string]containerPeak)
+		s.aggs = make(map[types.NamespacedName]*setAgg)
+	}
+
+	// Reconcile the aggregate store against the owned RunnerSets: create-and-seed
+	// entries for newly seen sets (the restart merge-back — status is the store),
+	// drop entries whose RunnerSet is gone.
+	for i := range sets.Items {
+		rs := &sets.Items[i]
+		key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
+		if s.aggs[key] == nil {
+			a := &setAgg{containers: make(map[string]*containerAgg)}
+			a.seedFromStatus(rs.Status.SizingRecommendation, now())
+			s.aggs[key] = a
+		}
+	}
+	for key := range s.aggs {
+		if !owned[key] {
+			delete(s.aggs, key)
+		}
 	}
 
 	present := make(map[types.UID]bool, len(pods.Items))
 	for i := range pods.Items {
 		pod := &pods.Items[i]
 		set := pod.Labels[provisioner.LabelRunnerSet]
-		if !owned[set] {
+		if !owned[types.NamespacedName{Namespace: pod.Namespace, Name: set}] {
 			continue
 		}
 		present[pod.UID] = true
@@ -169,7 +219,7 @@ func (s *Sampler) tick(ctx context.Context) {
 		}
 		switch pod.Status.Phase {
 		case corev1.PodSucceeded, corev1.PodFailed:
-			s.finalize(track)
+			s.finalize(track, now())
 		default:
 			for _, c := range usageByPod[pod.Namespace+"/"+pod.Name] {
 				peak := track.containers[c.Name]
@@ -188,31 +238,36 @@ func (s *Sampler) tick(ctx context.Context) {
 	// races): finalize with whatever peaks were captured, then forget them.
 	for uid, track := range s.tracked {
 		if !present[uid] {
-			s.finalize(track)
+			s.finalize(track, now())
 			delete(s.tracked, uid)
 		}
 	}
 }
 
-// ownedRunnerSets returns the names of the RunnerSets this AGC reconciles (the
-// cache scoping makes the list authoritative). ok is false on a list error.
-func (s *Sampler) ownedRunnerSets(ctx context.Context) (map[string]bool, bool) {
-	var sets agcv2alpha1.RunnerSetList
-	if err := s.Client.List(ctx, &sets, client.InNamespace(s.Namespace)); err != nil {
-		s.Log.Error("list RunnerSets", "error", err)
-		return nil, false
+// SizingStatus returns the current status-shaped sizing recommendation for a
+// RunnerSet, or nil when no container has enough sampled jobs yet (or the
+// sampler is disabled — a nil *Sampler is safe, mirroring the nil-receiver
+// convention of scalesetlistener.Metrics.RecorderFor). The RunnerSet reconciler
+// assigns the result to status.sizingRecommendation, which doubles as the
+// aggregate persistence the sampler re-seeds from after a restart.
+func (s *Sampler) SizingStatus(key types.NamespacedName) []agcv2alpha1.ContainerSizingRecommendation {
+	if s == nil {
+		return nil
 	}
-	owned := make(map[string]bool, len(sets.Items))
-	for i := range sets.Items {
-		owned[sets.Items[i].Name] = true
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a := s.aggs[key]
+	if a == nil {
+		return nil
 	}
-	return owned, true
+	return a.recommendations()
 }
 
 // anyRunning reports whether any owned worker pod is in a non-terminal phase.
-func (s *Sampler) anyRunning(pods []corev1.Pod, owned map[string]bool) bool {
+func anyRunning(pods []corev1.Pod, owned map[types.NamespacedName]bool) bool {
 	for i := range pods {
-		if !owned[pods[i].Labels[provisioner.LabelRunnerSet]] {
+		key := types.NamespacedName{Namespace: pods[i].Namespace, Name: pods[i].Labels[provisioner.LabelRunnerSet]}
+		if !owned[key] {
 			continue
 		}
 		switch pods[i].Status.Phase {
@@ -252,10 +307,10 @@ func (s *Sampler) listUsage(ctx context.Context) map[string][]metricsv1beta1.Con
 }
 
 // finalize folds a finished pod's per-container peaks into the Prometheus
-// series, exactly once per pod (idempotent via track.finalized — the entry
-// outlives the terminal pod object, which the reaper retains for
-// completedPodTTL).
-func (s *Sampler) finalize(track *podUsage) {
+// series and the in-memory aggregates, exactly once per pod (idempotent via
+// track.finalized — the entry outlives the terminal pod object, which the
+// reaper retains for completedPodTTL).
+func (s *Sampler) finalize(track *podUsage, now time.Time) {
 	if track.finalized {
 		return
 	}
@@ -263,6 +318,9 @@ func (s *Sampler) finalize(track *podUsage) {
 	if len(track.containers) == 0 {
 		s.Metrics.JobsUnsampled.WithLabelValues(track.namespace, track.runnerSet).Inc()
 		return
+	}
+	if a := s.aggs[types.NamespacedName{Namespace: track.namespace, Name: track.runnerSet}]; a != nil {
+		a.observePeaks(track.containers, now)
 	}
 	for name, peak := range track.containers {
 		s.Metrics.JobCPUPeak.WithLabelValues(track.namespace, track.runnerSet, name).Observe(peak.cpuCores)

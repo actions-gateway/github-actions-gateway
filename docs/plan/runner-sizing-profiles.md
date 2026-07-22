@@ -1,6 +1,6 @@
 # Worker Right-Sizing Profiles (Recommendations First)
 
-> **Status: 🔄 Phase 1 shipped 2026-07-21; Phases 2–3 open — tracked as [Q359](../STATUS.md#Q359).**
+> **Status: 🔄 Phases 1–2 shipped 2026-07-21; Phase 3 open — tracked as [Q359](../STATUS.md#Q359).**
 > This doc is the design sketch and phase plan; each phase revises it with
 > findings before the next begins.
 
@@ -85,7 +85,7 @@ Unit-tested (peak-max across ticks, single finalize, unsampled short jobs,
 disappeared pods, unowned pods, poll errors); live-cluster validation rides the
 next dogfood benchmark session.
 
-### Phase 2 — recommendations in `RunnerSet.status` (M)
+### Phase 2 — recommendations in `RunnerSet.status` (M) — ✅ shipped 2026-07-21
 
 - `status.sizingRecommendation`: per-container recommended `requests`/`limits`
   (derived from Phase 1 aggregates), plus sample count and window so operators
@@ -98,6 +98,34 @@ next dogfood benchmark session.
 
 **Acceptance:** a deliberately oversized RunnerSet shows a lower recommendation
 and the drift condition within N jobs; restart does not zero the history.
+
+Decisions taken at pickup (implementation: `cmd/agc/internal/usage/aggregate.go`
++ `cmd/agc/internal/controller/runnerset_sizing.go`; design summary in
+[appendix H §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission)):
+
+- **Aggregation window (open question 2): unbounded-since-window-start, no
+  decay.** The sampler keeps fixed-bucket per-job-peak histograms (the Phase 1
+  Prometheus bucket edges, shared so the two views can't disagree) per
+  RunnerSet × container. No rolling window: sizing wants the whole observed
+  envelope, the operator judges staleness via `windowStart`/`sampleCount`, and
+  a decay policy can arrive with Phase 3's confidence machinery if live use
+  shows drift-over-time matters. Memory stays bounded by container-name
+  cardinality regardless.
+- **Persistence is approximate by design.** Status stores per container:
+  observed p95 + max + count (+ window start), not the full histogram. On
+  restart the sampler re-seeds 95% of the count at the p95 and the rest at the
+  max — exactly preserving the two statistics the recommendation derives from
+  (requests ≈ p95, memory limit ≈ max × 1.4) while keeping the API surface
+  operator-meaningful instead of bucket arrays.
+- **Derivation:** requests = p95 rounded up to 50m / 64Mi steps; memory limit =
+  max × 1.4 (top of the dogfood-validated 1.3–1.4 band); never a CPU limit.
+  Recommendation appears at ≥5 samples; `SizingDrift` judged at ≥20. Drift =
+  ask ≥2× recommendation (waste) or memory limit < observed peak (OOM risk),
+  compared against the template's declared resources or the provisioner's
+  500m/1Gi gap-fill defaults when it declares none.
+- **Warm-up safety:** the reconciler never overwrites
+  `status.sizingRecommendation` with an empty snapshot, so a freshly restarted
+  (or disabled) sampler cannot wipe the persisted store it would re-seed from.
 
 ### Phase 3 — opt-in sizing profiles (M)
 
@@ -135,9 +163,10 @@ byte-identical to the template in all profiles.
 
 1. ~~Metrics source~~ — settled in Phase 1: `metrics.k8s.io` (see the Phase 1
    decisions above).
-2. Aggregation window and decay — rolling N jobs vs time-windowed. Phase 1
-   sidestepped this by exporting histograms (the operator picks a PromQL
-   window); Phase 2's status-persisted aggregates must actually pick one.
+2. ~~Aggregation window and decay~~ — settled in Phase 2:
+   unbounded-since-window-start with no decay (see the Phase 2 decisions);
+   revisit only if live use shows drift-over-time matters (Phase 3 clamps and
+   confidence minimums are the safety net).
 3. Whether `NodeShare` ships first as its own slice (it needs none of the
    observability machinery).
 4. Where profile parameters live when the same `RunnerTemplate` backs
