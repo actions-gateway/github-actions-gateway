@@ -16,8 +16,30 @@ The format and process come from the globally-installed **backlog skill** (agent
 - **The `**Next ID:**` counter is the allocator.** Take it for a new row, bump it in the same edit. IDs are stable, never reused or renumbered, and never get sub-IDs (`5a`) — a trackable child gets its own top-level ID. The `Q` prefix keeps `Q44` from auto-linking to PR/issue #44; use the bare ID in commits and PRs.
 - **Notes are present tense, ≤ 250 chars (hard cap); past 200 chars the row must link a doc** from its Item or Notes cell — a `#QN` sibling anchor doesn't count, since sibling rows are capped too. No merged-PR lists or "SHIPPED" narration — history lives in `git log` and the plan doc. The same caps apply to Deferred trigger cells. Write for a skimmer: cut detail and link a doc rather than compressing into fragments.
 - **Deferred rows carry a concrete revive trigger**, tagged by source: `**Demand:**` (an outside ask) · `**Event:**` (an observable outside-our-control condition) · `**Decision:**` (our own call — grep `**Decision:**` for what we could move on unilaterally). When the trigger fires, move the row back into the Queue at the position it then deserves. A non-commitment belongs in [appendix-g](../design/appendix-g-future-enhancements.md), not Deferred.
-- **`docs/STATUS.md` edits are isolated commits** — never mixed with code or plan-doc changes, even when completing an item mid-feature (the pre-commit hook enforces this). Use `docs(status):` subjects, and name the removal reason with a fixed verb — `complete QN`, `prune QN`, `merge QN into QM`, `defer QN` — so metrics can tell throughput from garbage collection. Batch bulk additions (one audit's discoveries) into one commit; keep reshuffles separate from additions.
+- **`docs/STATUS.md` edits are isolated commits** — never mixed with code or plan-doc changes, even when completing an item mid-feature (the pre-commit hook enforces this). Use `docs(status):` subjects, and name the removal reason with a fixed verb — `complete QN`, `prune QN`, `merge QN into QM`, `defer QN` — so metrics can tell throughput from garbage collection. Batch bulk additions (one audit's discoveries) into one commit; keep reshuffles separate from additions. When a rebase or merge conflicts on this file, resolve it via the [fast path](#resolving-a-statusmd-only-conflict-verify-cheap-push-now) below.
 - **M/L items get a plan doc** under `docs/plan/`, linked from the Item cell.
+
+## Resolving a `STATUS.md`-only conflict: verify cheap, push now
+
+Because every session edits `docs/STATUS.md`, rebase and merge conflicts on it are routine. When the conflict is **confined to `docs/STATUS.md`**, re-running the full `make check` before pushing is not just unnecessary — it is what causes the *next* conflict.
+
+The full gate takes ~6 minutes. Every one of those minutes is a window in which a sibling session merges its own `STATUS.md` edit and puts your branch behind again, so you resolve, wait ~6 minutes, and lose the race a second time. It is a feedback loop, not bad luck: [PR #724](https://github.com/actions-gateway/github-actions-gateway/pull/724) went around it four times. Shrinking the verify step from ~6 minutes to a few seconds is what breaks the loop.
+
+**The fast path** — only when `git status` shows `docs/STATUS.md` as the sole conflicted path:
+
+1. Resolve the conflict in `docs/STATUS.md`.
+2. Check for leftover markers before staging: `git diff --check`. An `Edit`-based resolution can silently leave one behind, and `git diff --check` catches it in the working tree — before it becomes a commit the gate has to reject.
+3. Run only the three gates that can actually observe a `STATUS.md` change:
+
+   ```bash
+   make lint-backlog conflict-markers-check doc-links
+   ```
+
+4. Commit and push **immediately**. Do not wait on `make check`.
+
+`make check` adds nothing here: its remaining targets (unit tests, coverage, `golangci-lint`, `shellcheck`, chart drift, Go version) read no Markdown, and CI runs the full gate on the pushed branch regardless. The three targets above are the complete set that a `STATUS.md`-only diff can fail — `lint-backlog` for the format rules, `conflict-markers-check` for a marker that survived the resolution, `doc-links` for a link or anchor broken while merging rows.
+
+**When it does not apply:** if the conflict touches *any* other file — code, a plan doc, another page under `docs/` — this is a normal conflict. Resolve it and run the full `make check` (plus whatever heavier tier the change warrants) before pushing. The fast path is licensed by the narrowness of the diff, not by the presence of `STATUS.md` in it.
 
 ## When the context doesn't fit, write the doc — whatever the item's size
 
