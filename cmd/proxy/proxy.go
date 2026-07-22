@@ -52,7 +52,13 @@ type Server struct {
 	// TunnelIdleTimeout is the per-direction idle deadline applied to the
 	// hijacked CONNECT relay. Reset on every successful read. Default 5m.
 	TunnelIdleTimeout time.Duration
-	Log               *slog.Logger
+	// ShutdownDrainTimeout bounds the whole graceful drain on context
+	// cancellation (SIGTERM): stopping the listener plus waiting for in-flight
+	// CONNECT tunnels to finish. Default 45s, sized to fit inside the pod's
+	// 60s terminationGracePeriodSeconds with headroom. Tunnels still open when
+	// it expires are force-closed so the process can exit before SIGKILL.
+	ShutdownDrainTimeout time.Duration
+	Log                  *slog.Logger
 	// TLSCertFile and TLSKeyFile enable TLS on the CONNECT listener when both are set.
 	// The health port always remains plaintext.
 	TLSCertFile string
@@ -89,6 +95,16 @@ type Server struct {
 	// actually reach the CONNECT port. Mirrors the §11.D GMC webhook
 	// readiness fix.
 	ready chan struct{}
+
+	// draining is closed when graceful shutdown begins. /readyz fails from that
+	// moment so the endpoint controller stops steering new CONNECT traffic here
+	// while already-established tunnels drain.
+	draining chan struct{}
+
+	// tunnels tracks in-flight hijacked CONNECT relays. http.Server.Shutdown
+	// does not wait for hijacked connections, so shutdown waits on this
+	// instead (Q384).
+	tunnels tunnelTracker
 }
 
 // ipResolver is the subset of *net.Resolver the CONNECT CIDR allowlist check
@@ -102,6 +118,17 @@ const (
 	defaultHTTPIdleTimeout   = 60 * time.Second
 	defaultMaxTunnelLifetime = 6 * time.Hour
 	defaultTunnelIdleTimeout = 5 * time.Minute
+	// defaultShutdownDrainTimeout bounds the graceful drain. The proxy
+	// Deployment sets terminationGracePeriodSeconds: 60, so 45s leaves headroom
+	// for the force-close and process exit before the kubelet sends SIGKILL.
+	defaultShutdownDrainTimeout = 45 * time.Second
+	// tunnelCloseGrace is how long shutdown waits for force-closed relays to
+	// unwind after the drain deadline expires. They are already unblocked by
+	// the close, so this only guards against exiting mid-write.
+	tunnelCloseGrace = 2 * time.Second
+	// healthShutdownTimeout bounds the health/metrics listener shutdown, which
+	// runs after the tunnel drain and serves only short probe/scrape requests.
+	healthShutdownTimeout = 5 * time.Second
 )
 
 // NewServer returns a Server with metrics registered on reg.
@@ -156,6 +183,7 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 		connectDenied:     denied,
 		metricsGatherer:   gatherer,
 		ready:             make(chan struct{}),
+		draining:          make(chan struct{}),
 	}
 }
 
@@ -285,14 +313,69 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		_ = proxySrv.Shutdown(context.Background())
-		_ = healthSrv.Shutdown(context.Background())
-		if metricsSrv != nil {
-			_ = metricsSrv.Shutdown(context.Background())
-		}
+		s.shutdown(proxySrv, healthSrv, metricsSrv)
 		return nil
 	case err := <-errCh:
 		return err
+	}
+}
+
+// shutdown performs the graceful drain triggered by context cancellation
+// (SIGTERM on a rollout, node drain, eviction, or scale-down).
+//
+// It runs on a context detached from the cancelled one and bounded by
+// ShutdownDrainTimeout: teardown issued on the context that was just cancelled
+// would fail instantly, and an unbounded drain would silently outgrow
+// terminationGracePeriodSeconds and be SIGKILLed mid-write anyway.
+//
+// Order matters. /readyz fails first so no new CONNECT traffic is steered here.
+// The CONNECT listener is stopped next. Only then are tunnels awaited — and the
+// health listener is stopped last, so probes get a 503 for the whole drain
+// rather than a refused connection.
+func (s *Server) shutdown(proxySrv, healthSrv, metricsSrv *http.Server) {
+	log := s.Log
+	if log == nil {
+		log = slog.Default()
+	}
+	drainTimeout := s.ShutdownDrainTimeout
+	if drainTimeout == 0 {
+		drainTimeout = defaultShutdownDrainTimeout
+	}
+
+	close(s.draining)
+
+	ctx, cancel := context.WithTimeout(context.Background(), drainTimeout)
+	defer cancel()
+
+	// Closes the listener and finishes non-hijacked requests. It explicitly does
+	// NOT close or wait for hijacked connections, so every CONNECT tunnel is
+	// still relaying when this returns — that is what the tracker below is for.
+	// Once it has returned, no new tunnel can be registered, which makes the
+	// drained() snapshot complete (Q384).
+	_ = proxySrv.Shutdown(ctx)
+
+	select {
+	case <-s.tunnels.drained():
+		log.Info("in-flight CONNECT tunnels drained")
+	case <-ctx.Done():
+		cut := s.tunnels.closeAll()
+		// Loud and countable: this is CI egress being severed mid-request, and
+		// it is the signal that the drain budget is too small for this tenant's
+		// traffic (or that a tunnel is wedged).
+		log.Warn("drain deadline expired; cutting in-flight CONNECT tunnels",
+			"tunnels", cut, "drainTimeout", drainTimeout)
+		select {
+		case <-s.tunnels.drained():
+		case <-time.After(tunnelCloseGrace):
+			log.Warn("force-closed CONNECT tunnels did not unwind", "grace", tunnelCloseGrace)
+		}
+	}
+
+	healthCtx, cancelHealth := context.WithTimeout(context.Background(), healthShutdownTimeout)
+	defer cancelHealth()
+	_ = healthSrv.Shutdown(healthCtx)
+	if metricsSrv != nil {
+		_ = metricsSrv.Shutdown(healthCtx)
 	}
 }
 
@@ -328,6 +411,16 @@ func (s *Server) metricsTLSConfig() (*tls.Config, error) {
 // pod to the Service EndpointSlice as soon as the health port is up,
 // and concurrent worker traffic races the proxy serve goroutine.
 func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
+	// Draining takes precedence over ready: once shutdown has begun this pod
+	// must stop attracting new CONNECT traffic, even though its listener stays
+	// up for a moment while in-flight tunnels finish.
+	select {
+	case <-s.draining:
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	default:
+	}
+
 	select {
 	case <-s.ready:
 		w.WriteHeader(http.StatusOK)
@@ -442,7 +535,18 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 		return
 	}
+	// Register with the tracker BEFORE hijacking. Up to the hijack, net/http
+	// counts this connection as active and Shutdown waits for it; registering
+	// first means shutdown can never observe an empty tracker in the window
+	// between a hijack and its registration (Q384).
+	//
+	// The release is deferred ahead of the two Close defers so it runs after
+	// them: a tunnel is reported drained only once both of its connections are
+	// actually closed, never while a relay is still unwinding.
+	tn := s.tunnels.add()
+	defer s.tunnels.release(tn)
 	defer func() { _ = upstream.Close() }()
+	tn.track(upstream)
 
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
@@ -454,6 +558,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = conn.Close() }()
+	tn.track(conn)
 
 	if _, err := io.WriteString(conn, "HTTP/1.1 200 Connection established\r\n\r\n"); err != nil {
 		// The client is already gone or the conn is broken: counting and

@@ -313,9 +313,15 @@ such as WebSockets. The caller of Shutdown should separately notify such
 long-lived connections of shutdown and wait for them to close."* Any CONNECT
 tunnel, WebSocket, or upgraded stream needs its own tracking (a `WaitGroup` or a
 connection set, plus `Server.RegisterOnShutdown`) — `Shutdown` returning is not
-evidence they finished. Our egress proxy has this bug today
-([Q384](../STATUS.md#Q384)): its CONNECT tunnels are hijacked, so every rollout
-cuts live CI egress mid-stream.
+evidence they finished.
+
+The egress proxy is the worked example (Q384). `cmd/proxy` registers each tunnel
+with a tracker **before** hijacking the client connection — up to the hijack
+net/http still counts the connection as active and `Shutdown` waits for it, so
+registering first is what closes the window in which `Shutdown` could return
+between a hijack and its registration and see an empty tracker. Shutdown then
+waits on the tracker *after* `Shutdown` returns, by which point the listener is
+closed and the tracked set can only shrink.
 
 **5. If your PID 1 supervises a child, forward the signal.** The child never gets
 SIGTERM on its own. A wrapper that `exec.Command`s a real workload must catch
