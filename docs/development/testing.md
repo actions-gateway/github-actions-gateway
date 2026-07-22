@@ -158,6 +158,30 @@ Never fire one of these as a default-timeout foreground run and hope it finishes
 
 Both rules in this section are enforced mechanically by the foreground-guard hook: it prompts on foreground watch/`sleep`-poll forms, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts — keep that registry in sync when a tier's runtime or target name changes.
 
+### Ad-hoc shell is zsh, not bash: no word-splitting
+
+Committed scripts under `scripts/` are `#!/usr/bin/env bash` and follow [bash-style.md](bash-style.md). **Ad-hoc commands typed at a shell in this repo run under zsh** (the platform default), and zsh does **not** word-split unquoted parameter expansions. The same one-liner therefore means different things in the two shells:
+
+```sh
+FLAGS='-run TestFoo -count 1'
+go test $FLAGS ./...   # bash: four arguments.  zsh: ONE argument, the whole string.
+```
+
+Under zsh that `go test` receives a single literal argument `-run TestFoo -count 1` and fails to parse it — a confusing "unknown flag" or "no such file" from a snippet that a bash reader would call correct. The same trap hits any variable holding a list: test flags, `-tags`, `KUBECTL_ARGS`, an accumulated set of paths.
+
+Write it so it means the same thing in both shells:
+
+```sh
+# Preferred: an array, quoted-expanded. Correct in bash and zsh alike.
+flags=(-run TestFoo -count 1)
+go test "${flags[@]}" ./...
+
+# Only when splitting is genuinely what you want, and you know you are in zsh:
+go test ${=FLAGS} ./...
+```
+
+Do not "fix" a snippet by dropping quotes and relying on splitting — that is the bash-only reading. When a sequence is worth keeping, put it in a script under `scripts/` with a bash shebang, where the [shellcheck gate](#the-shellcheck-gate) checks it.
+
 ## Picking the right test tier
 
 Prefer the narrowest tier that can actually *observe* the bug class — but no narrower:
@@ -312,14 +336,22 @@ Most code-exercising workflows keep unrelated PRs cheap by **skipping their expe
 
 **The `changes` job fails open (Q363).** `dorny/paths-filter` resolves the changed-file list through a **single un-retried GitHub API call** — `@actions/github`'s Octokit carries no retry plugin — so one transient 5xx or reset used to fail the `changes` job and, through `needs:`, the whole gate. Worse, a JavaScript action reports failure *only* as an `::error::` annotation, and a rerun replaces the check run and destroys that annotation: the surviving log simply stopped after `Invoking listFiles` with no error recorded anywhere, which is why the original occurrence looked like a silent failure. Each `changes` job now carries `continue-on-error: true` on the paths-filter step and derives its outputs as `steps.filter.outcome == 'success' && steps.filter.outputs.<name> || 'true'`, so an unclassifiable diff **runs every gated job** instead of skipping it — fail-open on *detection*, still fail-closed on *validation*. A step that trips it also emits a `::warning::` so the degradation is visible in the run log rather than inferred. Note this is deliberately not a retry: re-running the classifier could still return a wrong answer, whereas running the gated jobs is always safe.
 
-**Verify before declaring a PR review-ready and before merging it:** confirm the gates that exercise the change actually executed on the PR head — green is not enough if a gate was skipped. For any Go / CRD / chart change you should see runs for `build`, `lint`, `integration-test`, `e2e`, `security-scan` (trivy + govulncheck), and `manifest-validate`:
+**Verify before declaring a PR review-ready and before merging it:** confirm the gates that exercise the change actually executed **on the PR's head commit** — green is not enough if a gate was skipped, and *no red checks* is not the same as *the checks ran*. For any Go / CRD / chart change you should see runs for `build`, `lint`, `integration-test`, `e2e`, `security-scan` (trivy + govulncheck), and `manifest-validate`:
 
 ```bash
-gh pr checks <n>                         # are the heavy gates present and passing — or absent?
-gh run list --branch <branch> --limit 30 # cross-check which workflows actually ran on the head commit
+gh pr view <n> --json headRefOid --jq .headRefOid   # the SHA every check must be attached to
+gh pr checks <n>                                    # are the expected gates PRESENT — not merely un-red?
+gh run list --branch <branch> --limit 30            # cross-check which workflows actually ran, and on which SHA
 ```
 
-**Fix it if they were skipped:** `gh pr close <n> && gh pr reopen <n>`. The `reopened` event re-evaluates the path filters against the full PR diff and triggers the skipped workflows. Re-watch them to completion before treating the PR as tested.
+Read the output as a **checklist against the expected set above**, not as a pass/fail summary. A PR with zero rows, or with only the lightweight docs workflows listed, has not been tested — it just has nothing to fail.
+
+**Absence of checks is not green (Q383).** There are two distinct ways a PR ends up under-tested, and they need different fixes:
+
+- **Gates skipped by the diff classifier** — the workflow ran, its `changes` job classified the diff as irrelevant, and the real jobs were skipped. `gh pr checks` shows the `gate` contexts as green. Confirm against the expected-gate list above; if a gate that should cover the change is missing, the classifier's path filters are wrong.
+- **No workflow runs attached at all** — the push registered, but GitHub never dispatched any workflow for the head SHA. Observed on this repo for **~10 minutes** after a push: `gh run list --branch <branch>` returned nothing for that commit while the PR page showed no checks section whatsoever. Nothing is red, so the PR reads as clean at a glance; in fact nothing has run.
+
+**Fix for both:** `gh pr close <n> && gh pr reopen <n>`. The `reopened` event re-dispatches the workflows and re-evaluates the path filters against the full PR diff. Then re-verify with the commands above (asynchronously — see [Never foreground-poll CI, logs, or files](#never-foreground-poll-ci-logs-or-files)) and confirm the expected gates are now present and concluded before treating the PR as tested.
 
 ### The e2e workflows: kindnet and Calico
 
