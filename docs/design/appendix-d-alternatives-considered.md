@@ -137,4 +137,97 @@ The full argument — why admission is gated before `acquirejob` rather than del
 
 ---
 
+## D.7. Worker Right-Sizing: Why Built In, Not Bolted On
+
+The worker right-sizing loop (Q359: per-job usage sampling → measured
+recommendations in `RunnerSet` status → opt-in sizing profiles applied at
+pod-build time; see [§2.2](02-architecture.md#22-tier-2--actions-gateway-controller-agc)
+and [Appendix H §H.7](appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission))
+is implemented inside the AGC rather than delegated to external sizing tooling.
+That was a deliberate choice among four alternatives, and the deciding argument
+is structural, not preference — it is worth recording because "why didn't you
+just use VPA?" is the obvious question, and because the same structural facts
+explain why this capability is hard for other runner controllers to retrofit.
+
+**The workload shape that breaks generic tooling.** A worker pod runs exactly
+one CI job and lives minutes. Three consequences follow: pods can only be sized
+*at creation* (there is no steady state to converge on later); the sizing
+statistic that matters is the **per-job peak envelope** (p95/max of per-job
+peaks), not a time-weighted usage distribution; and there is no long-lived
+controller object with `/scale` semantics to group pods under (`replicas` is
+meaningless in a scale-to-zero design).
+
+**Alternative 1 — stock Vertical Pod Autoscaler (VPA).** Fails on all three
+facts. Its `targetRef` requires a `/scale` subresource `RunnerSet` cannot
+meaningfully offer; its actuation is evict-and-resize, which on a one-job pod
+means killing the CI job to resize it; and its recommender models long-running
+services (usage distributions with half-life decay, OOM-event feedback), the
+wrong statistic for run-to-completion work. Recommendation dashboards layered on
+VPA (Goldilocks, Kubecost's request right-sizing) inherit the same foundation.
+**Verdict:** structurally unfit, not merely inconvenient.
+
+**Alternative 2 — VPA with a custom recommender.** VPA's recommender is
+pluggable, so a batch-aware recommender could in principle replace the stock
+model. But the actuation and grouping problems remain (a webhook applying
+"Initial"-style values still needs a pod-grouping convention VPA does not have
+for `/scale`-less owners), so this path amounts to writing the hard parts from
+scratch *inside someone else's framing* — more total machinery than the native
+implementation, spread across more failure domains.
+
+**Alternative 3 — an external recommender closing the loop through GitOps.** A
+cron or pipeline queries the Phase 1 Prometheus series, derives values, and
+opens pull requests against the tenant's `RunnerTemplate`. This is a legitimate
+design — auditable in git, zero new API surface — and nothing in GAG prevents an
+operator from running exactly this today on top of the exported metrics. It was
+rejected as *the* design because it requires a Prometheus (the Phase 1 decision
+deliberately avoided a hard external dependency), closes the loop on a
+days-scale cadence, cannot express per-container confidence gating at pod-build
+time, and pushes per-tenant automation onto every adopter — the opposite of the
+batteries-included posture that motivates the feature.
+
+**Alternative 4 — a from-scratch, general-purpose batch right-sizer.** The
+serious contender. Designed fresh for run-to-completion pods it would be: a
+`PodSizingPolicy`-style CRD with a **label selector** (solving the grouping
+problem correctly), the same peak-per-pod-lifetime sampler and
+p95-of-peaks-plus-headroom recommender, and a **mutating admission webhook** as
+the only generic pod-creation actuation hook. This tool would genuinely
+generalize — Kubernetes Jobs, Tekton TaskRuns, Argo Workflows, and ARC's
+ephemeral runners all share the one-pod-one-unit-of-work shape — and no good
+open-source implementation of it exists. It was not chosen because the webhook
+is an entire failure domain the native design simply does not have:
+`failurePolicy: Fail` makes a sick *optimization* component block every matching
+pod (the CI fleet stops launching), `Ignore` makes sizing silently stop; either
+way the tool needs its own certs, chart, Tier-0 security review, and install
+step — and GAG's headline feature would begin "first install this other thing."
+The AGC's provisioner already *is* the pod creator, so native actuation is an
+in-process function call with direct access to confidence state: strictly less
+machinery, no availability coupling, and the recommendation surfaces on the
+tenant's own `RunnerSet` under their existing RBAC.
+
+**What the coupling costs, honestly.** The sizing API (`spec.sizing`,
+`status.sizingRecommendation`) is permanent GAG surface carried into the v2beta1
+graduation, and a built-in feature cannot serve other batch systems the way
+Alternative 4 could. That deferred generality is deliberately kept cheap to
+revisit: the sampler/histogram/derivation core touches GAG at exactly two narrow
+seams (the worker-pod owner label and the v2 status types), and
+[Appendix G §G.15](appendix-g-future-enhancements.md#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool)
+records the extraction path and its triggers.
+
+**The competitive corollary.** The same three structural facts apply to ARC:
+its ephemeral runner pods are `/scale`-less, one-job, minutes-lived — so stock
+VPA cannot size them either, and only ARC's own controller (or an
+Alternative-4-style webhook tool that does not exist) could actuate at pod
+creation. A measured sizing loop is therefore a capability that effectively
+must live *inside* a runner controller, which is why "measure → recommend →
+apply, built in" is a durable differentiator rather than a feature gap ARC
+closes by adding a sidecar tool.
+
+**Verdict:** For this workload shape, the sizing loop belongs in the controller
+that builds the pods. Generic tooling fails structurally (D.7 alternatives 1–2),
+the GitOps loop remains available to operators who prefer it (alternative 3),
+and the general-purpose tool (alternative 4) is a valid *future extraction* of
+the shipped core, not a better first implementation.
+
+---
+
 ← [Appendix C](appendix-c-ai-implementation.md) | [Back to index](README.md)

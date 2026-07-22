@@ -32,6 +32,12 @@ The payoff concentrates where nodes are expensive:
 
 ## Constraints (why this is GAG-native, not a VPA bolt-on)
 
+> The durable, post-ship version of this argument — including the alternatives
+> considered (stock VPA, custom recommender, GitOps loop, standalone
+> webhook-actuated tool) and the extraction path — lives in
+> [appendix D §D.7](../design/appendix-d-alternatives-considered.md#d7-worker-right-sizing-why-built-in-not-bolted-on)
+> and [appendix G §G.15](../design/appendix-g-future-enhancements.md#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool).
+
 - **Stock VPA cannot target worker pods.** VPA's `targetRef` requires a
   controller with a `/scale` subresource to group pods; worker pods are owned by
   the `RunnerSet` CRD (`cmd/agc/internal/controller/runnerset_target.go`), which
