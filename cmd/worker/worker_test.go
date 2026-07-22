@@ -8,10 +8,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -937,4 +941,236 @@ func TestTranslateWorkerExitCode(t *testing.T) {
 			}
 		})
 	}
+}
+
+// --- Termination-signal relay (Q385) ---------------------------------------
+//
+// The wrapper is PID 1 of the worker container, so Kubernetes delivers SIGTERM
+// only to it; the child must be signalled explicitly or it runs to the cgroup
+// SIGKILL without reporting its job result. These tests assert the child
+// actually receives the signal (not merely that the relay runs) and that the
+// resulting exit code still reaches the wrapper's caller.
+
+// startIdleChild starts a POSIX shell child in dir that installs trapBody as its
+// TERM handler, creates ready.txt to announce the trap is armed, and then idles.
+// It returns once the child has confirmed readiness, so a signal sent afterwards
+// cannot race the trap installation.
+func startIdleChild(t *testing.T, dir, trapBody string) *exec.Cmd {
+	t.Helper()
+	script := fmt.Sprintf("trap '%s' TERM\n: > ready.txt\nwhile true; do sleep 0.1; done\n", trapBody)
+	cmd := exec.Command("/bin/sh", "-c", script) //nolint:gosec // G204: script is a test-local literal, not user input
+	cmd.Dir = dir
+	require.NoError(t, cmd.Start())
+	t.Cleanup(func() {
+		if cmd.ProcessState == nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	})
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(filepath.Join(dir, "ready.txt"))
+		return err == nil
+	}, 10*time.Second, 10*time.Millisecond, "child never armed its TERM trap")
+	return cmd
+}
+
+// TestRelayTerminationSignals_ForwardsToChild is the core Q385 assertion: a
+// SIGTERM delivered to the wrapper reaches the child, which gets to run its
+// shutdown work before exiting with a code of its own choosing.
+func TestRelayTerminationSignals_ForwardsToChild(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("worker wrapper targets Linux; shell-stub strategy is POSIX-only")
+	}
+	dir := t.TempDir()
+	// The trap stands in for Runner.Worker reporting job cancellation to GitHub:
+	// observable side effect first, then a deliberate exit code.
+	cmd := startIdleChild(t, dir, "printf reported > cancelled.txt; exit 7")
+
+	stop, done := relayTerminationSignals(cmd.Process, 30*time.Second)
+	// Retire the relay even if an assertion below fails: a live relay left
+	// registered would swallow the next test's signal.
+	t.Cleanup(stop)
+	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGTERM),
+		"the wrapper process must receive the signal Kubernetes would send it")
+
+	err := cmd.Wait()
+	stop()
+	<-done
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, err, &exitErr)
+	assert.Equal(t, 7, childExitCode(exitErr.ProcessState),
+		"the child's own exit code must survive the relay")
+
+	got, readErr := os.ReadFile(filepath.Join(dir, "cancelled.txt"))
+	require.NoError(t, readErr, "the child must have run its TERM handler")
+	assert.Equal(t, "reported", string(got))
+}
+
+// TestRelayTerminationSignals_KillsChildOutlivingGrace pins the bounded-drain
+// decision (kubernetes-conventions.md rule 7): a child that ignores SIGTERM is
+// killed at the wrapper's own deadline, inside the pod grace period, rather than
+// the whole cgroup being SIGKILLed with no record of why.
+func TestRelayTerminationSignals_KillsChildOutlivingGrace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("worker wrapper targets Linux; shell-stub strategy is POSIX-only")
+	}
+	dir := t.TempDir()
+	cmd := startIdleChild(t, dir, "") // empty trap body: SIGTERM is ignored
+
+	stop, done := relayTerminationSignals(cmd.Process, 200*time.Millisecond)
+	t.Cleanup(stop)
+	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGTERM))
+
+	err := cmd.Wait()
+	stop()
+	<-done
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, err, &exitErr)
+	assert.Equal(t, exitSignalOffset+int(syscall.SIGKILL), childExitCode(exitErr.ProcessState),
+		"a child that outlives the grace period is SIGKILLed and reported as 137")
+}
+
+// recordingProc is a terminable that records what the relay did to it.
+type recordingProc struct {
+	mu      sync.Mutex
+	signals []os.Signal
+	killed  bool
+}
+
+func (p *recordingProc) Signal(s os.Signal) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.signals = append(p.signals, s)
+	return nil
+}
+
+func (p *recordingProc) Kill() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.killed = true
+	return nil
+}
+
+func (p *recordingProc) snapshot() ([]os.Signal, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]os.Signal(nil), p.signals...), p.killed
+}
+
+// TestRelayTerminationSignals_QuietExitLeavesChildAlone verifies the normal case
+// — the overwhelming majority of worker pods — is untouched: a job that finishes
+// on its own is never signalled, and the relay goroutine exits on stop().
+func TestRelayTerminationSignals_QuietExitLeavesChildAlone(t *testing.T) {
+	proc := &recordingProc{}
+	stop, done := relayTerminationSignals(proc, time.Millisecond)
+	stop()
+	stop() // idempotent
+	<-done
+
+	signals, killed := proc.snapshot()
+	assert.Empty(t, signals, "an unsignalled wrapper must not disturb its child")
+	assert.False(t, killed, "the grace timer must not be armed until a signal arrives")
+}
+
+// TestRelayTerminationSignals_ForwardsSIGINT covers the interactive/local path:
+// SIGINT is relayed as SIGINT, not silently converted to SIGTERM.
+func TestRelayTerminationSignals_ForwardsSIGINT(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signal delivery to self is POSIX-only in this test")
+	}
+	proc := &recordingProc{}
+	stop, done := relayTerminationSignals(proc, 30*time.Second)
+	t.Cleanup(stop)
+	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGINT))
+	require.Eventually(t, func() bool {
+		signals, _ := proc.snapshot()
+		return len(signals) == 1
+	}, 10*time.Second, 5*time.Millisecond, "SIGINT was never forwarded")
+	stop()
+	<-done
+
+	signals, killed := proc.snapshot()
+	require.Equal(t, []os.Signal{syscall.SIGINT}, signals)
+	assert.False(t, killed, "the child exited within the grace period")
+}
+
+// TestRunScaleSet_ForwardsSIGTERMToRunSh exercises the scale-set path end to end:
+// run.sh is what reports the job in that mode, so the signal must reach it too.
+func TestRunScaleSet_ForwardsSIGTERMToRunSh(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("run.sh exec test is POSIX-only")
+	}
+	runnerHome := t.TempDir()
+	payloadDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, jitConfigFile), []byte("blob=="), 0o600))
+	t.Setenv("PROXY_CA_CERT_PATH", "")
+
+	// A run.sh that reports on SIGTERM and exits 0, so runScaleSet returns
+	// normally instead of calling os.Exit and taking the test binary with it.
+	script := "#!/bin/sh\ntrap 'printf stopped > stopped.txt; exit 0' TERM\n: > ready.txt\nwhile true; do sleep 0.1; done\n"
+	require.NoError(t, os.WriteFile(filepath.Join(runnerHome, runnerRunScript), []byte(script), 0o700)) //nolint:gosec // test fixture must be executable
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- runScaleSet(payloadDir, runnerHome) }()
+
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(filepath.Join(runnerHome, "ready.txt"))
+		return err == nil
+	}, 10*time.Second, 10*time.Millisecond, "run.sh never started")
+	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGTERM))
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err)
+	case <-time.After(15 * time.Second):
+		t.Fatal("runScaleSet did not return after SIGTERM")
+	}
+
+	got, err := os.ReadFile(filepath.Join(runnerHome, "stopped.txt"))
+	require.NoError(t, err, "run.sh must have received the forwarded SIGTERM")
+	assert.Equal(t, "stopped", string(got))
+}
+
+func TestChildExitCode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signal exit codes are POSIX-only")
+	}
+	t.Run("nil state", func(t *testing.T) {
+		assert.Equal(t, 1, childExitCode(nil))
+	})
+	t.Run("normal exit code passes through", func(t *testing.T) {
+		cmd := exec.Command("/bin/sh", "-c", "exit 3")
+		err := cmd.Run()
+		require.Error(t, err)
+		assert.Equal(t, 3, childExitCode(cmd.ProcessState))
+	})
+	t.Run("signalled child reports 128+signal", func(t *testing.T) {
+		cmd := exec.Command("/bin/sh", "-c", "trap '' TERM; while true; do sleep 0.1; done")
+		require.NoError(t, cmd.Start())
+		require.NoError(t, cmd.Process.Kill())
+		_ = cmd.Wait()
+		assert.Equal(t, exitSignalOffset+int(syscall.SIGKILL), childExitCode(cmd.ProcessState),
+			"os.ProcessState reports -1 for a signalled child; os.Exit(-1) would become a meaningless 255")
+	})
+}
+
+func TestShutdownGrace(t *testing.T) {
+	t.Run("unset falls back to the default", func(t *testing.T) {
+		t.Setenv(shutdownGraceEnv, "")
+		assert.Equal(t, defaultShutdownGrace, shutdownGrace())
+	})
+	t.Run("valid duration is honored", func(t *testing.T) {
+		t.Setenv(shutdownGraceEnv, "45s")
+		assert.Equal(t, 45*time.Second, shutdownGrace())
+	})
+	t.Run("unparseable value falls back rather than disabling the drain", func(t *testing.T) {
+		t.Setenv(shutdownGraceEnv, "soon")
+		assert.Equal(t, defaultShutdownGrace, shutdownGrace())
+	})
+	t.Run("non-positive value falls back", func(t *testing.T) {
+		t.Setenv(shutdownGraceEnv, "0s")
+		assert.Equal(t, defaultShutdownGrace, shutdownGrace())
+	})
 }

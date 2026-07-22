@@ -44,6 +44,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)](#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)
 - [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
 - [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
+- [Terminated Worker Pod Never Reports Its Job (Job Hangs on GitHub Until the Lock Lapses)](#terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses)
 - [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion)
 - [Jobs Not Being Acquired Despite Queued Work (Capacity Gate Saturated)](#jobs-not-being-acquired-despite-queued-work-capacity-gate-saturated)
 - [Worker Pod Fails to Start After Secure-by-Default SecurityContext](#worker-pod-fails-to-start-after-secure-by-default-securitycontext)
@@ -1516,6 +1517,41 @@ kubectl describe runnergroup -n <namespace> <name> | grep -A1 EvictionRetriesExh
 - If evictions are from preemption by higher-priority pods: reduce the priority of competing workloads or adjust `priorityTiers` to give this RunnerGroup a higher floor.
 - If the retry budget is too low for a workload that occasionally gets preempted: increase `maxEvictionRetries` on the RunnerGroup spec (default 2, max 10).
 - If the workload is consistently failing (OOM crash, not preemption): the auto-retry is not appropriate. Set `maxEvictionRetries: 0` and investigate the underlying workload issue.
+
+---
+
+## Terminated Worker Pod Never Reports Its Job (Job Hangs on GitHub Until the Lock Lapses)
+
+**Symptoms.** A worker pod is terminated before its job finishes — evicted, drained off a node, deleted, or its run cancelled in the GitHub UI — and the job keeps showing as in-progress on GitHub for minutes afterwards, until the job lock lapses and GitHub gives up on it. The worker container logs stop abruptly with no cancellation or completion line, and the pod's last state shows an exit code of `137` (SIGKILL). Re-running the workflow is the only way to move it along.
+
+**Cause.** Kubernetes delivers SIGTERM to **PID 1 of each container only**; child processes are not signalled. Gateway versions before the Q385 fix ran the entrypoint wrapper as PID 1 with no signal handling, so `Runner.Worker` (classic protocol) or `run.sh` (ScaleSet protocol) — the process that actually reports the job to GitHub — never saw the signal. It kept running until the kubelet SIGKILLed the whole cgroup at grace expiry, which is unblockable: no cancellation is reported, and GitHub has to wait the job lock out.
+
+Fixed versions forward SIGTERM (and SIGINT) from the wrapper to its child and wait for it to exit, so the runner gets its grace period to abort the job and report the result. Two related behaviours come with it:
+
+- A child that is still alive when the wrapper's own budget expires is killed by the wrapper, which logs `child outlived the shutdown grace period; killing it` — an actionable line where there was previously silence.
+- The child's exit code is propagated, and a child that died from a signal is reported as `128 + signal` (SIGTERM → `143`, SIGKILL → `137`) rather than the meaningless `255` that the raw `-1` used to become.
+
+**Diagnostics.**
+
+```sh
+# Confirm the child was signalled: the wrapper logs the forward on the way down.
+kubectl logs -n <namespace> <worker-pod> --previous \
+  | grep -E 'forwarding termination signal|outlived the shutdown grace period'
+
+# Exit code of the runner container on the last termination.
+kubectl get pod -n <namespace> <worker-pod> \
+  -o jsonpath='{.status.containerStatuses[?(@.name=="runner")].lastState.terminated}'
+# 143 = terminated after the forwarded SIGTERM; 137 = SIGKILLed (grace exhausted).
+
+# The pod's grace budget — the wrapper's drain must fit inside it.
+kubectl get pod -n <namespace> <worker-pod> \
+  -o jsonpath='{.spec.terminationGracePeriodSeconds}{"\n"}'
+```
+
+**Resolution.**
+- Upgrade to a gateway version that includes the Q385 fix; there is no configuration workaround on affected versions.
+- If jobs need longer than the default to wind down and report (large cleanup steps, slow log flushes), raise **both** budgets together, in this order: `terminationGracePeriodSeconds` in the runner group's `podTemplate`, then `WORKER_SHUTDOWN_GRACE` (a Go duration, e.g. `40s`) as an env var on the runner container. The wrapper's grace must stay comfortably **below** the pod's, or the kubelet's SIGKILL lands first and you are back to the unreported case.
+- If you see `child outlived the shutdown grace period; killing it` routinely, the runner is not finishing its cancellation inside the budget — raise the pair above rather than accepting the kill, and check whether a job step is ignoring cancellation.
 
 ---
 
