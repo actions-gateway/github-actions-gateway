@@ -19,7 +19,12 @@
 //  5. Write the job payload as a NewJobRequest message to pipe-in
 //     concurrently (the write blocks until Runner.Worker reads).
 //  6. Drain pipe-out to prevent the worker from blocking on writes.
-//  7. Relay Runner.Worker stdout/stderr to our own stdout/stderr.
+//  7. Relay Runner.Worker stdout/stderr to our own stdout/stderr, and relay
+//     termination signals the other way: the wrapper is PID 1 of the worker
+//     container, so a pod SIGTERM (eviction, node drain, `gh run cancel`)
+//     reaches only the wrapper — the child must be signalled explicitly or it
+//     runs to the cgroup SIGKILL with no chance to report its outcome. See
+//     relayTerminationSignals.
 //  8. Translate Runner.Worker's exit code: a successful job exits 100 (not 0),
 //     because Runner.Worker returns TaskResultUtil.TranslateToReturnCode(result)
 //     == 100 + (int)TaskResult and TaskResult.Succeeded == 0. We map the success
@@ -49,9 +54,13 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 	"unicode/utf16"
 )
 
@@ -105,6 +114,27 @@ const (
 	// jitConfigFlag is the run.sh flag that consumes the base64 JIT config blob a
 	// scale-set worker registers with (the same blob generatejitconfig returns).
 	jitConfigFlag = "--jitconfig"
+
+	// shutdownGraceEnv overrides how long the wrapper waits for its child to exit
+	// after forwarding a termination signal, as a Go duration (e.g. "20s").
+	shutdownGraceEnv = "WORKER_SHUTDOWN_GRACE"
+
+	// defaultShutdownGrace is the wrapper's own drain budget: how long the child
+	// gets, after being signalled, to abort its job and report the result to
+	// GitHub before the wrapper kills it.
+	//
+	// It is deliberately shorter than the pod's terminationGracePeriodSeconds
+	// (Kubernetes' 30s default; the AGC provisioner does not override it, and a
+	// tenant PodTemplate may). Staying inside the pod budget means the wrapper
+	// gets to log *why* the job ended and exit with a meaningful code, instead of
+	// the whole cgroup being SIGKILLed with no record. Operators who raise
+	// terminationGracePeriodSeconds should raise WORKER_SHUTDOWN_GRACE with it.
+	defaultShutdownGrace = 25 * time.Second
+
+	// exitSignalOffset is the shell convention for reporting a process killed by
+	// a signal: 128 + signal number (so SIGTERM → 143, SIGKILL → 137). os.Process
+	// reports such an exit as -1, which os.Exit would turn into a meaningless 255.
+	exitSignalOffset = 128
 )
 
 // systemCABundleCandidates lists the canonical OS trust-bundle paths we know
@@ -301,6 +331,10 @@ func run() error {
 	_ = r1.Close()
 	_ = w2.Close()
 
+	// Relay pod termination to Runner.Worker: it is not PID 1, so it never sees
+	// the pod's SIGTERM on its own (Q385).
+	stopRelay, relayDone := relayTerminationSignals(cmd.Process, shutdownGrace())
+
 	// 5. Write payload to worker-input pipe concurrently.
 	// The write blocks until Runner.Worker opens the read end.
 	writeErr := make(chan error, 1)
@@ -317,8 +351,10 @@ func run() error {
 		_, _ = io.Copy(io.Discard, r2)
 	}()
 
-	// 7. Wait for Runner.Worker.
+	// 7. Wait for Runner.Worker, then retire the signal relay it was driving.
 	waitErr := cmd.Wait()
+	stopRelay()
+	<-relayDone
 
 	// After the process exits its fds close, so drainDone fires promptly.
 	<-drainDone
@@ -330,7 +366,7 @@ func run() error {
 	// 8. Translate and propagate Runner.Worker's exit code.
 	if waitErr != nil {
 		if exitErr, ok := waitErr.(*exec.ExitError); ok {
-			os.Exit(translateWorkerExitCode(exitErr.ExitCode()))
+			os.Exit(translateWorkerExitCode(childExitCode(exitErr.ProcessState)))
 		}
 		return fmt.Errorf("Runner.Worker: %w", waitErr)
 	}
@@ -373,12 +409,24 @@ func runScaleSet(payloadDir, runnerHome string) error {
 	}
 
 	slog.Info("starting scale-set runner", "script", runScript)
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start run.sh: %w", err)
+	}
+
+	// Same PID 1 problem as the classic path: run.sh has its own SIGTERM handling
+	// (it tells its runner to stop after the current job and report it), but it
+	// only ever gets the chance if the wrapper forwards the signal (Q385).
+	stopRelay, relayDone := relayTerminationSignals(cmd.Process, shutdownGrace())
+	err = cmd.Wait()
+	stopRelay()
+	<-relayDone
+
+	if err != nil {
 		// run.sh is the full runner, which already uses the conventional 0-is-success
 		// exit convention (it translates Runner.Worker's 100-offset itself), so the
 		// exit code passes through unmodified — no translateWorkerExitCode.
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitErr.ExitCode())
+			os.Exit(childExitCode(exitErr.ProcessState))
 		}
 		return fmt.Errorf("run.sh: %w", err)
 	}
@@ -400,6 +448,127 @@ func readJITBlob(payloadDir string) (string, error) {
 		return "", fmt.Errorf("empty jitconfig blob at %s/%s: a scale-set worker cannot register without a JIT config", payloadDir, jitConfigFile)
 	}
 	return blob, nil
+}
+
+// terminable is the subset of *os.Process that relayTerminationSignals needs.
+// Narrowing it keeps the relay unit-testable against a recording fake without
+// spawning a process.
+type terminable interface {
+	Signal(os.Signal) error
+	Kill() error
+}
+
+// shutdownGrace returns the wrapper's drain budget from WORKER_SHUTDOWN_GRACE,
+// falling back to defaultShutdownGrace when unset, unparseable, or non-positive
+// (a misconfigured value must not silently disable the child's chance to report
+// its job result).
+func shutdownGrace() time.Duration {
+	raw := os.Getenv(shutdownGraceEnv)
+	if raw == "" {
+		return defaultShutdownGrace
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		slog.Warn("ignoring invalid "+shutdownGraceEnv,
+			"value", raw, "using", defaultShutdownGrace)
+		return defaultShutdownGrace
+	}
+	return d
+}
+
+// relayTerminationSignals forwards SIGTERM and SIGINT to proc until stop is
+// called. It exists because the wrapper is PID 1 of the worker container:
+// Kubernetes delivers SIGTERM to PID 1 only, so without this relay the child
+// (Runner.Worker in classic mode, run.sh in scale-set mode) is never told the
+// pod is going away and runs until the cgroup SIGKILL at grace expiry — with no
+// chance to abort its job and report the cancellation, leaving GitHub to wait
+// out the job lock instead (Q385). See
+// docs/development/kubernetes-conventions.md § Graceful shutdown, rule 5.
+//
+// grace bounds the wait, per rule 7 — a drain whose worst case we can name. It
+// starts at the first forwarded signal; if the child is still alive when it
+// expires, the relay SIGKILLs it and logs the overrun, so the wrapper exits
+// deliberately with a reported reason rather than being killed mid-write by the
+// kubelet. Signals arriving after the first are forwarded too (a second SIGTERM
+// does not shorten the deadline) so an operator's repeated Ctrl-C reaches the
+// child.
+//
+// It returns immediately. stop is idempotent and ends the relay; done is closed
+// once the relay goroutine has exited, so the caller controls whether and how to
+// wait (repo convention: async work hands back a done channel rather than hiding
+// it in a closure). Call stop only after waiting on the child — stopping earlier
+// would restore the default disposition and let a late SIGTERM kill the wrapper
+// out from under a child that is still reporting.
+func relayTerminationSignals(proc terminable, grace time.Duration) (stop func(), done <-chan struct{}) {
+	// Buffered: signal.Notify never blocks, so an unbuffered channel would drop
+	// the very signal we exist to forward if the goroutine is mid-iteration.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
+	var once sync.Once
+
+	go func() {
+		defer close(doneCh)
+		defer signal.Stop(sigCh)
+
+		var deadline <-chan time.Time
+		timer := time.NewTimer(grace)
+		// Not started yet: drain the timer so it only fires once armed below.
+		if !timer.Stop() {
+			<-timer.C
+		}
+		defer timer.Stop()
+
+		for {
+			select {
+			case <-stopCh:
+				return
+			case sig := <-sigCh:
+				slog.Info("forwarding termination signal to child",
+					"signal", sig.String(), "grace", grace)
+				if err := proc.Signal(sig); err != nil {
+					slog.Warn("could not forward signal to child",
+						"signal", sig.String(), "error", err)
+				}
+				if deadline == nil {
+					timer.Reset(grace)
+					deadline = timer.C
+				}
+			case <-deadline:
+				slog.Error("child outlived the shutdown grace period; killing it",
+					"grace", grace, "hint", "raise "+shutdownGraceEnv+" (and the pod's terminationGracePeriodSeconds) if jobs need longer to report cancellation")
+				if err := proc.Kill(); err != nil {
+					slog.Warn("could not kill child", "error", err)
+				}
+				// A nil channel blocks forever: the deadline is one-shot, and the
+				// relay now just waits for the caller's stop after cmd.Wait returns.
+				deadline = nil
+			}
+		}
+	}()
+
+	return func() { once.Do(func() { close(stopCh) }) }, doneCh
+}
+
+// childExitCode maps a finished child's ProcessState onto the exit code the
+// wrapper should return. A child killed by a signal has no exit status —
+// ProcessState.ExitCode reports -1, which os.Exit would truncate to 255 — so it
+// is reported using the shell's 128+signal convention (SIGTERM → 143). That
+// keeps a cancelled or killed job distinguishable from a job that exited 255 on
+// its own.
+func childExitCode(state *os.ProcessState) int {
+	if state == nil {
+		return 1
+	}
+	if code := state.ExitCode(); code >= 0 {
+		return code
+	}
+	if ws, ok := state.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+		return exitSignalOffset + int(ws.Signal())
+	}
+	return 1
 }
 
 // translateWorkerExitCode maps a Runner.Worker process exit code onto the exit

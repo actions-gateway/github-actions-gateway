@@ -326,8 +326,13 @@ closed and the tracked set can only shrink.
 **5. If your PID 1 supervises a child, forward the signal.** The child never gets
 SIGTERM on its own. A wrapper that `exec.Command`s a real workload must catch
 SIGTERM, forward it, and wait — otherwise the child runs on until the cgroup
-SIGKILL with no chance to report its outcome. Our worker wrapper has this gap
-today ([Q385](../STATUS.md#Q385)).
+SIGKILL with no chance to report its outcome. Our worker wrapper does this in
+`relayTerminationSignals` ([cmd/worker/main.go](../../cmd/worker/main.go)): it
+forwards SIGTERM/SIGINT to `Runner.Worker` (or `run.sh`), waits for it inside a
+bounded grace (`WORKER_SHUTDOWN_GRACE`, default 25s), and kills it with a logged
+reason if it overruns. Propagate the child's exit code, including the
+128+signal encoding for a signalled child — `os.ProcessState.ExitCode` reports
+-1 there, and `os.Exit(-1)` silently becomes 255.
 
 **6. Anything serving traffic through a Service needs a `preStop` sleep.**
 Because of the concurrency in the first bullet above, SIGTERM is not a signal
