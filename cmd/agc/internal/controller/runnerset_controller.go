@@ -82,6 +82,12 @@ type RunnerSetReconciler struct {
 	// Now is the clock used by the worker-pod reaper. Nil means time.Now.
 	Now func() time.Time
 
+	// Sizing supplies the measured worker sizing recommendation surfaced in
+	// status.sizingRecommendation and judged by the SizingDrift condition (Q359
+	// Phase 2). Production wires the usage.Sampler; nil (e.g. sampling disabled,
+	// unit tests) leaves any persisted recommendation untouched.
+	Sizing SizingSource
+
 	// BaselineRecheckInterval is the cadence at which a RunnerSet is requeued while
 	// its multiplexer is below the desired listener count. Zero selects
 	// defaultBaselineRecheckInterval.
@@ -340,6 +346,11 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// condition and the reap-blocking-sidecar gauge, gated by the self-exiting-sidecars
 	// opt-out. Advisory only — it never gates Ready.
 	r.setReapBlockingSidecarStatus(&rs, refs.template, refs.templateAnnotations)
+
+	// Surface the measured worker sizing recommendation and judge the template's
+	// ask against it (Q359 Phase 2). Advisory only — set before the protocol
+	// routing so both acquisition tiers persist it with their status writes.
+	r.applySizingStatus(&rs, refs.template)
 
 	// 2. Reap expired worker pods (terminal past completedPodTTL, Pending past
 	// pendingPodDeadline). Runs before the token fetch so cleanup keeps working

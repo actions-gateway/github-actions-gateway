@@ -158,6 +158,40 @@ Never fire one of these as a default-timeout foreground run and hope it finishes
 
 Both rules in this section are enforced mechanically by the foreground-guard hook: it prompts on foreground watch/`sleep`-poll forms, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts — keep that registry in sync when a tier's runtime or target name changes.
 
+### Ad-hoc shell varies: don't rely on word-splitting
+
+Committed scripts under `scripts/` are `#!/usr/bin/env bash` and follow [bash-style.md](bash-style.md), so their behaviour is pinned by the shebang. **Ad-hoc commands are not pinned** — they run in whatever login shell the contributor has: zsh on macOS (the default since Catalina), bash on most Linux distributions and CI images. Check yours with `echo $0` rather than assuming.
+
+That matters because the shells disagree on **word-splitting of unquoted parameter expansions** — bash and `sh` split, zsh does not:
+
+```sh
+FLAGS='-run TestFoo -count 1'
+go test $FLAGS ./...   # bash/sh: four arguments.  zsh: ONE argument, the whole string.
+```
+
+Under zsh that `go test` receives a single literal argument `-run TestFoo -count 1` and fails to parse it — a confusing "unknown flag" or "no such file" from a snippet a bash reader would call correct. Because the shell differs per contributor, an unquoted expansion is **not portable in either direction**: a recipe that works on a bash box breaks for the next person on macOS, and vice versa.
+
+**The fix is almost always to drop the variable.** Ad-hoc commands are one-shots — write the arguments literally and there is nothing to split:
+
+```sh
+go test -run TestFoo -count 1 ./...
+```
+
+Reach for a variable only when something genuinely reuses the list — a loop, or a flag set applied to several commands in one session. Then pick by where it has to run:
+
+| Context | Form | Portability |
+|---|---|---|
+| bash or zsh (any interactive shell you'll actually meet) | `flags=(-run TestFoo -count 1)` → `go test "${flags[@]}" ./...` | bash + zsh. **Not POSIX** — `dash` rejects the `(` outright, so don't carry it into an `sh` context |
+| must also run under `sh` | `set -- -run TestFoo -count 1` → `go test "$@" ./...` | every shell, including `dash`; costs you the positional parameters |
+| worth keeping at all | a script under `scripts/` with a bash shebang | pinned by the shebang, and [shellcheck](#the-shellcheck-gate)-gated |
+
+Note that "write POSIX" is **not** a fix on its own: zsh's not-splitting *is* its deviation from POSIX, so POSIX-style `$FLAGS` still breaks there. Portability comes from the quoted form you choose, not from avoiding extensions.
+
+Two things to avoid:
+
+- **Don't "fix" a snippet by dropping quotes** and relying on splitting — that is the bash reading, and it silently does the wrong thing under zsh.
+- **Don't reach for zsh's `${=VAR}`** (its explicit split-this operator) in anything shared. It is zsh-only: bash rejects it with `${=FLAGS}: bad substitution`, converting a portable command into one that fails for half the team.
+
 ## Picking the right test tier
 
 Prefer the narrowest tier that can actually *observe* the bug class — but no narrower:
@@ -312,14 +346,22 @@ Most code-exercising workflows keep unrelated PRs cheap by **skipping their expe
 
 **The `changes` job fails open (Q363).** `dorny/paths-filter` resolves the changed-file list through a **single un-retried GitHub API call** — `@actions/github`'s Octokit carries no retry plugin — so one transient 5xx or reset used to fail the `changes` job and, through `needs:`, the whole gate. Worse, a JavaScript action reports failure *only* as an `::error::` annotation, and a rerun replaces the check run and destroys that annotation: the surviving log simply stopped after `Invoking listFiles` with no error recorded anywhere, which is why the original occurrence looked like a silent failure. Each `changes` job now carries `continue-on-error: true` on the paths-filter step and derives its outputs as `steps.filter.outcome == 'success' && steps.filter.outputs.<name> || 'true'`, so an unclassifiable diff **runs every gated job** instead of skipping it — fail-open on *detection*, still fail-closed on *validation*. A step that trips it also emits a `::warning::` so the degradation is visible in the run log rather than inferred. Note this is deliberately not a retry: re-running the classifier could still return a wrong answer, whereas running the gated jobs is always safe.
 
-**Verify before declaring a PR review-ready and before merging it:** confirm the gates that exercise the change actually executed on the PR head — green is not enough if a gate was skipped. For any Go / CRD / chart change you should see runs for `build`, `lint`, `integration-test`, `e2e`, `security-scan` (trivy + govulncheck), and `manifest-validate`:
+**Verify before declaring a PR review-ready and before merging it:** confirm the gates that exercise the change actually executed **on the PR's head commit** — green is not enough if a gate was skipped, and *no red checks* is not the same as *the checks ran*. For any Go / CRD / chart change you should see runs for `build`, `lint`, `integration-test`, `e2e`, `security-scan` (trivy + govulncheck), and `manifest-validate`:
 
 ```bash
-gh pr checks <n>                         # are the heavy gates present and passing — or absent?
-gh run list --branch <branch> --limit 30 # cross-check which workflows actually ran on the head commit
+gh pr view <n> --json headRefOid --jq .headRefOid   # the SHA every check must be attached to
+gh pr checks <n>                                    # are the expected gates PRESENT — not merely un-red?
+gh run list --branch <branch> --limit 30            # cross-check which workflows actually ran, and on which SHA
 ```
 
-**Fix it if they were skipped:** `gh pr close <n> && gh pr reopen <n>`. The `reopened` event re-evaluates the path filters against the full PR diff and triggers the skipped workflows. Re-watch them to completion before treating the PR as tested.
+Read the output as a **checklist against the expected set above**, not as a pass/fail summary. A PR with zero rows, or with only the lightweight docs workflows listed, has not been tested — it just has nothing to fail.
+
+**Absence of checks is not green (Q383).** There are two distinct ways a PR ends up under-tested, and they need different fixes:
+
+- **Gates skipped by the diff classifier** — the workflow ran, its `changes` job classified the diff as irrelevant, and the real jobs were skipped. `gh pr checks` shows the `gate` contexts as green. Confirm against the expected-gate list above; if a gate that should cover the change is missing, the classifier's path filters are wrong.
+- **No workflow runs attached at all** — the push registered, but GitHub never dispatched any workflow for the head SHA. Observed on this repo for **~10 minutes** after a push: `gh run list --branch <branch>` returned nothing for that commit while the PR page showed no checks section whatsoever. Nothing is red, so the PR reads as clean at a glance; in fact nothing has run.
+
+**Fix for both:** `gh pr close <n> && gh pr reopen <n>`. The `reopened` event re-dispatches the workflows and re-evaluates the path filters against the full PR diff. Then re-verify with the commands above (asynchronously — see [Never foreground-poll CI, logs, or files](#never-foreground-poll-ci-logs-or-files)) and confirm the expected gates are now present and concluded before treating the PR as tested.
 
 ### The e2e workflows: kindnet and Calico
 

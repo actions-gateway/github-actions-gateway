@@ -85,6 +85,10 @@ func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Reg
 		Registrar:    reg,
 		AgentKeyType: agentpool.KeyTypeEd25519,
 		Provisioner:  p,
+		// A mutable stub sizing source (Q359 Phase 2): empty by default (no
+		// sizing status is written), populated per-test via sizingStub.Set —
+		// concurrency-safe, so tests may seed it while the manager runs.
+		Sizing: &sizingStub{},
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:        brokerStub.URL,
 			RunnerVersion:    "2.335.1",

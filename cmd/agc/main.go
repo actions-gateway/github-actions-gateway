@@ -485,19 +485,23 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("parse WORKER_USAGE_SAMPLE_INTERVAL: %w", err)
 	}
+	// Declared outside the guard so the RunnerSet reconciler below can consume it
+	// as its SizingSource (Q359 Phase 2); a nil *Sampler is a safe no-op source.
+	var usageSampler *usage.Sampler
 	if usageEnabled {
 		mc, err := metricsclient.NewForConfig(mgr.GetConfig())
 		if err != nil {
 			return fmt.Errorf("build metrics.k8s.io client: %w", err)
 		}
-		if err := mgr.Add(&usage.Sampler{
+		usageSampler = &usage.Sampler{
 			Client:    mgr.GetClient(),
 			Lister:    usage.NewClientsetLister(mc),
 			Namespace: namespace,
 			Interval:  usageInterval,
 			Metrics:   usage.NewMetrics(ctrlmetrics.Registry),
 			Log:       slog.New(logr.ToSlogHandler(ctrl.Log.WithName("usage"))),
-		}); err != nil {
+		}
+		if err := mgr.Add(usageSampler); err != nil {
 			return fmt.Errorf("add worker usage sampler: %w", err)
 		}
 	}
@@ -608,6 +612,7 @@ func run() error {
 			GatewayName:     gatewayName,
 			Recorder:        mgr.GetEventRecorder("runnerset-controller"),
 			BrokerConfig:    r.BrokerConfig,
+			Sizing:          usageSampler,
 		}
 		if err := rsr.SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("setup runnerset reconciler: %w", err)

@@ -411,7 +411,8 @@ spec:
                 description: |-
                   Conditions are the observed conditions of the runner set. Known types: Ready,
                   Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure,
-                  WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld.
+                  WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld,
+                  SizingDrift.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -497,6 +498,96 @@ spec:
                 - Proxied
                 - Direct
                 type: string
+              sizingRecommendation:
+                description: |-
+                  SizingRecommendation is the per-container worker resource recommendation
+                  derived from measured per-job usage peaks (Q359 Phase 2), refreshed by the
+                  AGC as jobs complete. Advisory only: nothing is applied to worker pods —
+                  the operator (or a future opt-in sizing profile) acts on it. It doubles as
+                  the persistence for the usage aggregates: the AGC re-seeds its in-memory
+                  history from this field on restart, so the observation window survives
+                  control-plane rollouts (status is the store; no separate backing store).
+                items:
+                  description: |-
+                    ContainerSizingRecommendation is the measured-usage-derived resource
+                    recommendation for one container of a runner set's worker pods (Q359 Phase 2).
+                    Derivation follows the worker right-sizing model
+                    (docs/operations/worker-rightsizing.md): requests from the p95 of per-job
+                    usage peaks, a memory limit with OOM headroom above the observed maximum, and
+                    deliberately no CPU limit (CPU is compressible — a limit only throttles bursty
+                    jobs for no packing benefit).
+                  properties:
+                    container:
+                      description: |-
+                        Container is the container name in the worker pod template this
+                        recommendation applies to.
+                      type: string
+                    limits:
+                      additionalProperties:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      description: |-
+                        Limits are the recommended resource limits. Memory only, at the observed
+                        maximum peak plus OOM headroom; no CPU limit is ever recommended.
+                      type: object
+                    observedP95:
+                      additionalProperties:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      description: |-
+                        ObservedP95 is the 95th percentile of per-job usage peaks (cpu, memory),
+                        bucket-interpolated — the input to the recommended requests.
+                      type: object
+                    observedPeak:
+                      additionalProperties:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      description: |-
+                        ObservedPeak is the highest per-job usage peak (cpu, memory) observed in
+                        the window — the input to the recommended memory limit.
+                      type: object
+                    requests:
+                      additionalProperties:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      description: |-
+                        Requests are the recommended resource requests (cpu, memory), derived from
+                        the p95 of observed per-job usage peaks and rounded up to coarse increments
+                        (sizing is bucket-granular, not exact).
+                      type: object
+                    sampleCount:
+                      description: |-
+                        SampleCount is the number of finished jobs whose usage peaks fed this
+                        recommendation — the operator's confidence signal. Jobs shorter than one
+                        sampling interval are not counted (see the worker usage metrics).
+                      format: int64
+                      type: integer
+                    windowStart:
+                      description: |-
+                        WindowStart is when this container's observation window began (first
+                        sampled job, surviving AGC restarts via the re-seed).
+                      format: date-time
+                      type: string
+                  required:
+                  - container
+                  - sampleCount
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - container
+                x-kubernetes-list-type: map
               templateSource:
                 description: |-
                   TemplateSource records which rung of the template-resolution chain supplied this
@@ -883,7 +974,8 @@ spec:
                 description: |-
                   Conditions are the observed conditions of the runner set. Known types: Ready,
                   Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure,
-                  WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld.
+                  WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld,
+                  SizingDrift.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -969,6 +1061,96 @@ spec:
                 - Proxied
                 - Direct
                 type: string
+              sizingRecommendation:
+                description: |-
+                  SizingRecommendation is the per-container worker resource recommendation
+                  derived from measured per-job usage peaks (Q359 Phase 2), refreshed by the
+                  AGC as jobs complete. Advisory only: nothing is applied to worker pods —
+                  the operator (or a future opt-in sizing profile) acts on it. It doubles as
+                  the persistence for the usage aggregates: the AGC re-seeds its in-memory
+                  history from this field on restart, so the observation window survives
+                  control-plane rollouts (status is the store; no separate backing store).
+                items:
+                  description: |-
+                    ContainerSizingRecommendation is the measured-usage-derived resource
+                    recommendation for one container of a runner set's worker pods (Q359 Phase 2).
+                    Derivation follows the worker right-sizing model
+                    (docs/operations/worker-rightsizing.md): requests from the p95 of per-job
+                    usage peaks, a memory limit with OOM headroom above the observed maximum, and
+                    deliberately no CPU limit (CPU is compressible — a limit only throttles bursty
+                    jobs for no packing benefit).
+                  properties:
+                    container:
+                      description: |-
+                        Container is the container name in the worker pod template this
+                        recommendation applies to.
+                      type: string
+                    limits:
+                      additionalProperties:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      description: |-
+                        Limits are the recommended resource limits. Memory only, at the observed
+                        maximum peak plus OOM headroom; no CPU limit is ever recommended.
+                      type: object
+                    observedP95:
+                      additionalProperties:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      description: |-
+                        ObservedP95 is the 95th percentile of per-job usage peaks (cpu, memory),
+                        bucket-interpolated — the input to the recommended requests.
+                      type: object
+                    observedPeak:
+                      additionalProperties:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      description: |-
+                        ObservedPeak is the highest per-job usage peak (cpu, memory) observed in
+                        the window — the input to the recommended memory limit.
+                      type: object
+                    requests:
+                      additionalProperties:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                        x-kubernetes-int-or-string: true
+                      description: |-
+                        Requests are the recommended resource requests (cpu, memory), derived from
+                        the p95 of observed per-job usage peaks and rounded up to coarse increments
+                        (sizing is bucket-granular, not exact).
+                      type: object
+                    sampleCount:
+                      description: |-
+                        SampleCount is the number of finished jobs whose usage peaks fed this
+                        recommendation — the operator's confidence signal. Jobs shorter than one
+                        sampling interval are not counted (see the worker usage metrics).
+                      format: int64
+                      type: integer
+                    windowStart:
+                      description: |-
+                        WindowStart is when this container's observation window began (first
+                        sampled job, surviving AGC restarts via the re-seed).
+                      format: date-time
+                      type: string
+                  required:
+                  - container
+                  - sampleCount
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - container
+                x-kubernetes-list-type: map
               templateSource:
                 description: |-
                   TemplateSource records which rung of the template-resolution chain supplied this
