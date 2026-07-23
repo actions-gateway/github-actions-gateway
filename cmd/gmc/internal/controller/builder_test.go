@@ -1086,6 +1086,51 @@ func TestBuildProxyDeployment_TerminationGracePeriod(t *testing.T) {
 	assert.Equal(t, int64(60), *dep.Spec.Template.Spec.TerminationGracePeriodSeconds)
 }
 
+// The grace period is a claim about how long shutdown takes; this asserts the
+// claim still covers every wait the sequence actually performs. Getting it wrong
+// means SIGKILL lands mid-drain and silently undoes Q384.
+func TestProxyShutdownBudget_GracePeriodCoversSequence(t *testing.T) {
+	worstCase := proxyDrainBudgetSeconds + proxyDrainTailSeconds
+	assert.Less(t, worstCase, proxyTerminationGracePeriodSeconds,
+		"grace period must exceed the drain budget plus its force-close tail, with headroom to spare")
+	assert.Equal(t, proxyTerminationGracePeriodSeconds-worstCase, proxyExitHeadroomSeconds,
+		"headroom must be exactly what the grace period has left over")
+
+	// Guards the cross-module mirror: cmd/proxy's defaultShutdownDrainTimeout is
+	// 45s and cannot be imported here (separate Go module).
+	assert.Equal(t, 45, proxyDrainBudgetSeconds,
+		"must match defaultShutdownDrainTimeout in cmd/proxy/proxy.go")
+}
+
+// Both proxy builders must share one grace period — same image, same shutdown
+// sequence — and neither may carry a preStop hook.
+//
+// The preStop absence is deliberate and load-bearing, not an omission (Q386). A
+// preStop sleep is serial with the drain and unconditional, and the kubelet
+// grants min(grace period, remaining node-shutdown window): on a truncated
+// window (spot preemption, graceful node shutdown) it would spend scarce budget
+// idling and leave the drain with less than it has today. cmd/proxy absorbs the
+// endpoint-removal race in-process instead, inside the drain budget.
+func TestProxyDeployments_NoPreStopSharedGracePeriod(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	ep := newEP("pool", "team-a", nil)
+
+	for name, spec := range map[string]corev1.PodSpec{
+		"v1": buildProxyDeployment(ag, "proxy:latest").Spec.Template.Spec,
+		"v2": buildEgressProxyDeployment(ep, "proxy:latest").Spec.Template.Spec,
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := spec.Containers[0]
+			assert.Nil(t, c.Lifecycle,
+				"the endpoint-removal wait belongs in cmd/proxy's drain, not a preStop hook")
+
+			require.NotNil(t, spec.TerminationGracePeriodSeconds)
+			assert.Equal(t, int64(proxyTerminationGracePeriodSeconds),
+				*spec.TerminationGracePeriodSeconds)
+		})
+	}
+}
+
 func TestBuildAGCDeployment_TerminationGracePeriod(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)

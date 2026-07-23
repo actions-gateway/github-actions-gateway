@@ -341,6 +341,49 @@ process cooperation required) lets endpoint removal propagate before the process
 starts refusing work. Size `terminationGracePeriodSeconds` as
 `preStop + drain budget + headroom`.
 
+**But prefer an in-process linger when the process already has a drain.** A
+`preStop` sleep has two costs that are easy to miss:
+
+- **It is serial with the drain**, so the grace period has to cover both. Yet the
+  two waits are for *different* things and overlap freely — work in flight keeps
+  finishing while you wait for endpoint removal.
+- **Its cost is unconditional, and the budget is not always what the manifest
+  says.** The kubelet grants a terminating pod
+  `min(terminationGracePeriodSeconds, remaining node-shutdown window)`. On a
+  truncated window — spot/preemptible reclamation, graceful node shutdown — a
+  fixed sleep spends scarce budget idling and leaves the drain *less* time than
+  it would have had with no `preStop` at all. That is a regression precisely
+  where disruption is most frequent.
+
+If the process handles SIGTERM already, keep the listener **open** for a bounded
+linger at the top of the drain instead, and spend it inside the existing drain
+budget. Failing readiness first is a bonus a `preStop` sleep cannot match: the
+process does not know it is terminating until SIGTERM, so a sleep cannot start
+the endpoint-removal clock, only wait out someone else's.
+
+Better still, **measure instead of sleeping**. There is no Kubernetes signal for
+"endpoint removal has propagated" — no API, no readback across the N kube-proxies
+applying it — which is why the fixed sleep is the folk remedy. But a server can
+observe *new connection arrivals* directly, and arrivals stopping is the property
+the sleep is approximating. Wait until none has arrived for a short quiescence
+interval, measured from `max(shutdown start, last arrival)`: one rule that yields
+both a floor (an idle pod cannot exit instantly into the race) and an extending
+wait (each arrival is fresh evidence some dataplane has not converged). Cap it,
+because a quiet interval is evidence and not proof.
+
+The egress proxy is the worked example (Q386): `lingerForEndpointRemoval` in
+[cmd/proxy/proxy.go](../../cmd/proxy/proxy.go), ceiling `PROXY_SHUTDOWN_LINGER`
+(negative disables, for exactly the truncated-window case above), spent inside
+`PROXY_SHUTDOWN_DRAIN_TIMEOUT`. Worst case is `max(linger, drain)` rather than
+their sum, so `terminationGracePeriodSeconds` did not have to grow to accommodate
+it.
+
+**Use the native `sleep` handler if you do need `preStop`.** Our images are
+distroless: there is no shell and no `sleep` binary, so `exec: ["sleep", …]`
+fails at runtime and the pod proceeds straight to SIGTERM — reintroducing the
+race, but silently. The native handler (KEP-3960) is beta and on by default from
+Kubernetes 1.30, the project's blocking install floor.
+
 **7. State the budget in the manifest comment, and keep the code inside it.**
 `terminationGracePeriodSeconds` is a claim about how long shutdown takes; if the
 code's drain is unbounded, or the comment describes a drain the code doesn't
@@ -360,9 +403,14 @@ For any binary that runs in a pod:
 - [ ] Are hijacked/upgraded connections tracked separately from
       `http.Server.Shutdown`?
 - [ ] If there is a child process, is SIGTERM forwarded to it?
-- [ ] Does the pod serve traffic through a Service (⇒ needs `preStop`)?
-- [ ] Is `terminationGracePeriodSeconds` ≥ `preStop` + the worst-case drain, and
-      does its comment match what the code actually does?
+- [ ] Does the pod serve traffic through a Service (⇒ needs a `preStop` sleep, or
+      better, an in-process linger inside the existing drain budget)?
+- [ ] Is `terminationGracePeriodSeconds` ≥ the worst-case shutdown (`preStop` +
+      drain if serial; `max(linger, drain)` + tail if overlapped), and does its
+      comment match what the code actually does?
+- [ ] Would this still drain usefully on a node that grants only a few seconds
+      (spot reclamation, graceful node shutdown), where the kubelet truncates the
+      grace period?
 - [ ] Is there a test that cancels the context and asserts the cleanup happened
       — not merely that the process exited?
 
