@@ -261,6 +261,11 @@ Read this before writing or changing any shutdown path.
   signalled. At grace expiry SIGKILL goes to every process in the cgroup.
 - **The grace period is a deadline, not an allowance.** Anything still running
   when it expires is killed outright, mid-write.
+- **And it is a *request*, not a guarantee.** The kubelet grants
+  `min(terminationGracePeriodSeconds, what the node shutdown path allows)`.
+  Voluntary drains honour it; involuntary ones truncate it hard — GKE gives
+  ordinary pods **15s** on a Spot node however large the pod's ask. Per-platform
+  defaults: [operations/node-shutdown-budgets.md](../operations/node-shutdown-budgets.md).
 
 ### Rules
 

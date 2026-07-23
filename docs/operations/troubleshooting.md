@@ -1046,11 +1046,20 @@ kubectl get deploy -n "$ns" actions-gateway-proxy \
 
 The kubelet grants a terminating pod `min(terminationGracePeriodSeconds,
 remaining node-shutdown window)`, so on a node with a short reclamation notice
-the 60s grace period is truncated to whatever the node actually has. A GCE Spot
-VM gives 30 seconds' notice; EC2 Spot gives two minutes; a cluster with graceful
-node shutdown configured gives whatever the kubelet was configured for. Cluster
-autoscaler drains (`--max-graceful-termination-sec`, default 600s) and
-`kubectl drain` are not affected.
+the 60s grace period is truncated to whatever the node actually has:
+
+| Where the proxy runs | Budget it actually gets |
+|---|---|
+| On-demand nodes, any voluntary drain | Full 60s |
+| AWS EC2 Spot (2-minute notice) | 60s honoured if a handler drains in time |
+| Azure Spot (30s notice) | Degraded; nothing drains without a handler |
+| **GKE Spot** | **15s** — GKE's 30s node budget is split 15s ordinary / 15s critical |
+
+Cluster autoscaler drains (`--max-graceful-termination-sec`, default 600s),
+`kubectl drain` (no timeout), and node pool upgrades are not affected — the
+voluntary paths honour the full grace period. Full per-platform defaults, and
+the reason a delay is needed at all, are in
+[Node shutdown budgets](node-shutdown-budgets.md).
 
 Within a truncated window the shutdown sequence still runs in the right order —
 it simply gets cut short — so the linger, which is deliberately spent inside the
@@ -1073,8 +1082,13 @@ for a durable change.
 
 > **Prefer keeping proxy pools off spot capacity.** The egress proxy is shared
 > infrastructure for every worker in the tenant, and its IP is the tenant's
-> egress identity — a reclamation is far more disruptive than losing one worker.
-> `spec.scheduling` exists to pin the pool; use it to select on-demand nodes.
+> egress identity: a reclaimed *worker* costs one CI job, which re-runs, while a
+> reclaimed *proxy* cuts live egress for every job routed through it — and on a
+> 15s budget the drain cannot get out of the way cleanly. `spec.scheduling`
+> exists to pin the pool; use it to select on-demand nodes, and spend the spot
+> savings on workers instead. This is a recommendation, not an enforced
+> constraint — see [Node shutdown budgets](node-shutdown-budgets.md#recommendation-keep-proxy-pools-off-spot-capacity)
+> for the full trade-off.
 
 ---
 
