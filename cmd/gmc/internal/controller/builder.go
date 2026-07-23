@@ -224,6 +224,54 @@ func nonrootPodSecurityContext() *corev1.PodSecurityContext {
 	return &corev1.PodSecurityContext{FSGroup: ptr(int64(65532))}
 }
 
+// The proxy pod's shutdown budget (Q384 + Q386).
+//
+// There is deliberately no `preStop` hook here, even though endpoint removal
+// races SIGTERM and something must absorb that race. A preStop sleep is the
+// canonical remedy, but it is *serial* with the drain and its cost is
+// unconditional: the kubelet grants a terminating pod min(grace period,
+// remaining node-shutdown window), so on a truncated window — spot preemption,
+// graceful node shutdown — a preStop sleep spends scarce budget idling and
+// leaves less for draining than if it were absent, partially undoing Q384
+// exactly where disruption is most frequent.
+//
+// cmd/proxy absorbs the race in-process instead, by holding the CONNECT listener
+// open after SIGTERM until arrivals go quiet (lingerForEndpointRemoval). That
+// linger is spent INSIDE the drain budget rather than ahead of it, so it costs
+// nothing here: the two waits overlap, and the worst case stays what Q384 sized.
+//
+// The arithmetic — every term is a real wait the kubelet must accommodate:
+//
+//	drain budget (linger + tunnel drain, cmd/proxy)  45s
+//	+ force-close unwind + health listener shutdown   7s
+//	+ headroom for process exit and kubelet jitter    8s
+//	= terminationGracePeriodSeconds                  60s
+//
+// Raising PROXY_SHUTDOWN_DRAIN_TIMEOUT on a pool without raising the grace
+// period here re-breaks Q384: the drain would still be running when SIGKILL
+// lands. The two are documented together in docs/operations/troubleshooting.md.
+const (
+	// proxyDrainBudgetSeconds mirrors defaultShutdownDrainTimeout in
+	// cmd/proxy/proxy.go. cmd/proxy is a separate Go module, so this cannot be
+	// an import — change both together.
+	proxyDrainBudgetSeconds = 45
+
+	// proxyDrainTailSeconds covers what cmd/proxy does after the drain deadline
+	// expires: tunnelCloseGrace (2s) waiting for force-closed relays to unwind,
+	// then healthShutdownTimeout (5s) for the health/metrics listener.
+	proxyDrainTailSeconds = 7
+
+	// proxyExitHeadroomSeconds absorbs process exit and kubelet scheduling
+	// jitter so the budget above is a bound, not a coincidence.
+	proxyExitHeadroomSeconds = 8
+
+	// proxyTerminationGracePeriodSeconds is the sum of the terms above. Stated
+	// as the arithmetic rather than a literal so the claim the manifest makes
+	// stays checkable against the code that has to fit inside it.
+	proxyTerminationGracePeriodSeconds = proxyDrainBudgetSeconds +
+		proxyDrainTailSeconds + proxyExitHeadroomSeconds
+)
+
 // componentLabels returns the metadata labels stamped on a GMC-created object of
 // the given component: the recommended app.kubernetes.io/* set (managed-by the GMC,
 // instance scoped to the gateway, no version — control-plane objects carry no
@@ -636,11 +684,12 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 				ObjectMeta: metav1.ObjectMeta{Labels: apilabels.Merge(map[string]string{"app": proxyAppName}, proxyAppName, ag.Name, componentProxyLabel, "", labelManagerValue)},
 				Spec: corev1.PodSpec{
 					SecurityContext: nonrootPodSecurityContext(),
-					// 60s lets in-flight CONNECT tunnels drain on rollout/eviction;
-					// the proxy's SIGTERM handler closes the listener and shuts the
-					// servers down (cmd/proxy/proxy.go) within this window rather than
-					// being SIGKILLed mid-tunnel.
-					TerminationGracePeriodSeconds: ptr(int64(60)),
+					// Covers the proxy's whole SIGTERM sequence — endpoint-removal
+					// linger, then the in-flight CONNECT tunnel drain, then the
+					// force-close tail (cmd/proxy/proxy.go) — rather than being
+					// SIGKILLed mid-tunnel. See the arithmetic above
+					// proxyDrainBudgetSeconds.
+					TerminationGracePeriodSeconds: ptr(int64(proxyTerminationGracePeriodSeconds)),
 					// Required (not preferred) anti-affinity: proxy replicas must
 					// land on distinct nodes so a single node failure or drain never
 					// takes the whole tenant's egress pool down at once. Preferred

@@ -6,7 +6,8 @@
 //	PROXY_HEALTH_PORT            - Health (/healthz, /readyz) port (default 8081)
 //	PROXY_METRICS_PORT           - mTLS /metrics port (default 8443)
 //	PROXY_DIAL_TIMEOUT           - Upstream TCP dial timeout (default 10s)
-//	PROXY_SHUTDOWN_DRAIN_TIMEOUT - Graceful drain budget on SIGTERM; in-flight CONNECT tunnels still open when it expires are cut (default 45s)
+//	PROXY_SHUTDOWN_DRAIN_TIMEOUT - Total graceful drain budget on SIGTERM, linger included; in-flight CONNECT tunnels still open when it expires are cut (default 45s)
+//	PROXY_SHUTDOWN_LINGER        - Ceiling on holding the CONNECT listener open after SIGTERM so endpoint removal can propagate; exits early once arrivals go quiet. Spent inside the drain budget. Negative disables (default 10s)
 //	PROXY_TLS_CERT_FILE          - Path to CONNECT TLS certificate; enables TLS when paired with PROXY_TLS_KEY_FILE
 //	PROXY_TLS_KEY_FILE           - Path to CONNECT TLS private key;  enables TLS when paired with PROXY_TLS_CERT_FILE
 //	PROXY_METRICS_TLS_CERT_FILE  - Path to metrics server cert; enables mTLS metrics with the key + client CA below
@@ -72,6 +73,21 @@ func run(log *slog.Logger) error {
 		drainTimeout = d
 	}
 
+	// Zero means "unset ⇒ default", so an operator disabling the linger (a
+	// truncated node-shutdown window is the motivating case — see
+	// docs/operations/troubleshooting.md) passes a negative duration.
+	var shutdownLinger time.Duration
+	if v := os.Getenv("PROXY_SHUTDOWN_LINGER"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("parse PROXY_SHUTDOWN_LINGER: %w", err)
+		}
+		if d == 0 {
+			d = -1
+		}
+		shutdownLinger = d
+	}
+
 	srv := NewServer(
 		":"+proxyPort,
 		":"+healthPort,
@@ -96,6 +112,7 @@ func run(log *slog.Logger) error {
 	}
 	srv.AllowedCIDRs = cidrs
 	srv.ShutdownDrainTimeout = drainTimeout
+	srv.ShutdownLinger = shutdownLinger
 
 	tlsEnabled := srv.TLSCertFile != "" && srv.TLSKeyFile != ""
 	metricsMTLS := srv.MetricsTLSCertFile != "" && srv.MetricsTLSKeyFile != "" && srv.MetricsClientCAFile != ""

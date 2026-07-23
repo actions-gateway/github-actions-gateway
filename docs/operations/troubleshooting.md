@@ -983,10 +983,20 @@ logs:
 WARN drain deadline expired; cutting in-flight CONNECT tunnels tunnels=3 drainTimeout=45s
 ```
 
-**Cause.** On SIGTERM the proxy stops accepting new CONNECT requests, fails
-`/readyz` so the endpoint controller stops steering traffic to it, and then
-waits for in-flight tunnels to finish. That wait is bounded by
-`PROXY_SHUTDOWN_DRAIN_TIMEOUT` (default 45s), sized to fit inside the pod's
+**Cause.** On SIGTERM the proxy fails `/readyz` so the endpoint controller stops
+steering traffic to it, then runs a two-stage shutdown inside a single budget:
+
+1. **Linger** — the CONNECT listener is deliberately held *open* for a short
+   period. Endpoint removal is a control loop concurrent with SIGTERM, not a
+   predecessor, so a kube-proxy that has not yet applied the removal is still
+   sending new connections here; refusing them is the failure this stage
+   prevents. It ends as soon as new connections stop arriving (a short quiescence
+   interval), capped by `PROXY_SHUTDOWN_LINGER` (default 10s). A typical
+   termination pays a couple of seconds, not the full ceiling.
+2. **Drain** — the listener closes and the proxy waits for in-flight tunnels.
+
+Both stages share `PROXY_SHUTDOWN_DRAIN_TIMEOUT` (default 45s) — the linger is
+spent *inside* that budget, not added to it — which fits inside the pod's
 `terminationGracePeriodSeconds: 60` with headroom. **Tunnels still open when the
 deadline expires are force-closed** — the alternative is holding the pod until
 the kubelet SIGKILLs it, which cuts them anyway and with no log line to show for
@@ -1031,6 +1041,40 @@ kubectl get deploy -n "$ns" actions-gateway-proxy \
 - **Do not raise it past the grace period.** The drain would then never complete
   on its own and every rollout would end in SIGKILL, which is strictly worse:
   the tunnels are cut either way and the warning log never gets written.
+
+### Proxy pods on spot / preemptible nodes
+
+The kubelet grants a terminating pod `min(terminationGracePeriodSeconds,
+remaining node-shutdown window)`, so on a node with a short reclamation notice
+the 60s grace period is truncated to whatever the node actually has. A GCE Spot
+VM gives 30 seconds' notice; EC2 Spot gives two minutes; a cluster with graceful
+node shutdown configured gives whatever the kubelet was configured for. Cluster
+autoscaler drains (`--max-graceful-termination-sec`, default 600s) and
+`kubectl drain` are not affected.
+
+Within a truncated window the shutdown sequence still runs in the right order —
+it simply gets cut short — so the linger, which is deliberately spent inside the
+drain budget rather than ahead of it, does not starve the drain the way a fixed
+`preStop` sleep would. If you are running proxy pools on aggressively reclaimed
+nodes and want every available second spent draining tunnels rather than waiting
+for endpoint convergence, shorten or disable the linger:
+
+```sh
+# Disable the endpoint-removal linger (negative duration). Accepts the race in
+# exchange for spending the whole window on the tunnel drain.
+kubectl set env deploy/actions-gateway-proxy -n <namespace> \
+  PROXY_SHUTDOWN_LINGER=-1s
+```
+
+Setting it to a short positive value (`2s`) rather than disabling it keeps most
+of the benefit at a fraction of the cost. Note the GMC owns this Deployment and
+will reconcile the env away; set it on the `EgressProxy`/`ActionsGateway` spec
+for a durable change.
+
+> **Prefer keeping proxy pools off spot capacity.** The egress proxy is shared
+> infrastructure for every worker in the tenant, and its IP is the tenant's
+> egress identity — a reclamation is far more disruptive than losing one worker.
+> `spec.scheduling` exists to pin the pool; use it to select on-demand nodes.
 
 ---
 

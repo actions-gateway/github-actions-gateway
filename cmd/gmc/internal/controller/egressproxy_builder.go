@@ -294,8 +294,11 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: podLabels},
 				Spec: corev1.PodSpec{
-					SecurityContext:               nonrootPodSecurityContext(),
-					TerminationGracePeriodSeconds: ptr(int64(60)),
+					SecurityContext: nonrootPodSecurityContext(),
+					// Covers the proxy's whole SIGTERM sequence — see the arithmetic
+					// above proxyDrainBudgetSeconds in builder.go. Shared with v1's
+					// buildProxyDeployment: same image, same shutdown sequence.
+					TerminationGracePeriodSeconds: ptr(int64(proxyTerminationGracePeriodSeconds)),
 					// Placement pass-through (Q282): spec.scheduling pins the pool to a
 					// tenant's node pool — and thus to that pool's egress IP (Q243).
 					// egressProxyAffinity composes any supplied affinity with the
