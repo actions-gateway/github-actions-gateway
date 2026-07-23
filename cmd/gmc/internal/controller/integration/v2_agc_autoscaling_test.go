@@ -144,10 +144,18 @@ func TestV2_ActionsGateway_AGCAutoscalingRemovalPrunesVPA(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Off", mode, "a bare agcAutoscaling block must default to recommendation-only")
 
-	var got v2alpha1.ActionsGateway
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got))
-	got.Spec.AGCAutoscaling = nil
-	require.NoError(t, k8sClient.Update(ctx, &got))
+	// Clear the opt-in. The reconciler is live and writes the CR itself (the finalizer
+	// add, then status), so a bare Get→mutate→Update races it and can lose on a
+	// resourceVersion conflict that says nothing about the behavior under test. Retry
+	// until the write lands on a current version.
+	require.Eventually(t, func() bool {
+		var g v2alpha1.ActionsGateway
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &g); err != nil {
+			return false
+		}
+		g.Spec.AGCAutoscaling = nil
+		return k8sClient.Update(ctx, &g) == nil
+	}, 15*time.Second, 100*time.Millisecond, "clearing spec.agcAutoscaling should land against the live object")
 
 	require.Eventually(t, func() bool {
 		_, err := getVPA(t, ns, "gw-agc")
