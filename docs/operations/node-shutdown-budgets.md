@@ -151,14 +151,19 @@ are the right place to spend spot savings; the proxy is not. This is exactly the
 split the dogfood cluster uses: a spot `workers` pool tainted
 `dedicated=workers:NoSchedule` so control-plane and proxy pods cannot land on it.
 
-If you accept the risk and run proxies on spot anyway, shorten or disable the
+If you accept the risk and run proxies on spot anyway, **disable** the
 endpoint-removal linger so the whole truncated window goes to draining tunnels:
 
 ```sh
-# Spend the entire (short) window on the tunnel drain. Accepts the endpoint
-# race in exchange. A short positive value like 2s keeps most of the benefit.
+# Spend the entire (short) window on the tunnel drain.
 PROXY_SHUTDOWN_LINGER=-1s
 ```
+
+Disable rather than shorten. On this path the linger provably cannot do its job
+(see [the measurement below](#measured-on-graceful-node-shutdown-nothing-removes-the-endpoint-q388)):
+the endpoint stays in rotation until the pod is dead, so arrivals never stop and
+the linger runs to its ceiling no matter how the ceiling is set. Any time given
+to it is time taken from the drain.
 
 Set it on the `EgressProxy` / `ActionsGateway` spec rather than with
 `kubectl set env` — the GMC owns the Deployment and reconciles direct edits away.
@@ -195,21 +200,59 @@ cluster, and deletion cannot be un-started once begun. Synchronising state back
 from every kube-proxy on every endpoint change is explicitly considered
 infeasible at scale.
 
-!!! warning "116965 may make the spot case worse than the budget arithmetic implies"
+### Measured: on graceful node shutdown, nothing removes the endpoint (Q388)
 
-    If endpoint removal really is deferred until the pod is fully stopped during
-    graceful node shutdown, then on that path new connections keep arriving for
-    the entire window. A wait that watches for traffic to stop — including the
-    proxy's own linger — would never observe quiescence and would run to its
-    ceiling, consuming budget that a 15s GKE Spot window cannot spare.
+Both issues above were reproduced on kind, Kubernetes **1.35.0**, with the
+kubelet configured GKE-style (`shutdownGracePeriod: 30s`,
+`shutdownGracePeriodCriticalPods: 15s`) and a two-replica Service whose pods
+fail readiness the instant they get SIGTERM.
 
-    **We have not verified this against our own stack**, so treat it as a reason
-    to prefer `PROXY_SHUTDOWN_LINGER=-1s` on spot capacity rather than as a
-    measured result. The proxy fails `/readyz` at the start of shutdown, and
-    readiness-driven endpoint removal is a different path from the
-    termination-driven one 116965 describes, so it may not apply to us at all.
-    Confirming it needs a real graceful-node-shutdown reproduction, not source
-    reading.
+**124648, ordinary `kubectl delete`.** The readiness probe (1s period, failure
+threshold 1) began failing at SIGTERM and kept failing. The pod's `Ready`
+condition stayed `True` for the entire 48-second termination and never flipped.
+The endpoint *was* withdrawn immediately, but by the `deletionTimestamp`, not by
+readiness. **A readiness probe that starts failing on SIGTERM is never
+observed.**
+
+**116965, graceful node shutdown.** With the node powering off:
+
+| Time | Node | Pods | Endpoints |
+|---|---|---|---|
+| t+0 to t+14 | `NotReady` | `Running`, **no deletionTimestamp** | **both still `ready=true`** |
+| t+16 | `NotReady` | `Failed` | gone |
+
+The pods never entered `Terminating` and never received a `deletionTimestamp`.
+The endpoints stayed `Ready` for the full ~15s ordinary-pod budget and were
+withdrawn only once the pods reached a terminal phase, which is to say *after
+they were already dead*.
+
+**Together these mean the endpoint stays in rotation for the whole
+graceful-node-shutdown window.** New connections keep arriving, so the proxy's
+linger never observes quiescence and burns its entire ceiling. On a 15s GKE Spot
+budget that leaves roughly 5s for the tunnel drain.
+
+!!! warning "On spot capacity, disable the linger"
+
+    Set `PROXY_SHUTDOWN_LINGER=-1s` so the whole truncated window goes to
+    draining tunnels. The linger cannot do its job on that path, and this is a
+    measured result rather than an inference.
+
+Worth noting the upstream design intent is exactly what the proxy does. A SIG
+Node maintainer on 116965: *"the Kubernetes-portable behavior is to use the
+readiness endpoint to control being in rotation during graceful shutdown."*
+Failing `/readyz` is correct and stays. It simply does not work yet, because of
+124648.
+
+!!! note "Reproducing this yourself: kind needs dbus first"
+
+    Stock kind **cannot** run graceful node shutdown. The kubelet logs
+    `Failed to start node shutdown manager: dial unix
+    /var/run/dbus/system_bus_socket: no such file or directory`, because the node
+    image ships no dbus at all. `apt-get install dbus`, start `dbus` and
+    `systemd-logind`, restart the kubelet, and confirm with `systemd-inhibit
+    --list` that the kubelet holds a `shutdown` lock before trusting any result.
+    This is the same missing-`systemd-logind` mechanism that disables the feature
+    on Bottlerocket.
 
 ### What the newer traffic-engineering features do and don't fix
 
