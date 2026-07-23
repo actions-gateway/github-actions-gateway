@@ -387,10 +387,18 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 //	SIGTERM does not mean traffic has stopped arriving. Marking the pod
 //	terminating, removing it from EndpointSlices, and each kube-proxy applying
 //	that removal are independent control loops, so NEW connections can still be
-//	steered here (Q386). /readyz fails immediately — which starts the removal
-//	clock, something a preStop sleep cannot do, since the process does not know
-//	it is terminating until SIGTERM — and then the listener is deliberately held
-//	OPEN for a bounded linger so those stragglers are served rather than refused.
+//	steered here (Q386). /readyz fails immediately and the listener is then held
+//	OPEN for a bounded linger, so those stragglers are served rather than refused.
+//
+//	Do NOT read the /readyz failure as what drives endpoint removal. Measured on
+//	kind (Kubernetes 1.35, Q388): a readiness probe that starts failing on
+//	SIGTERM is never observed. The pod's Ready condition stayed True for a full
+//	48s termination while its 1s-period probe failed throughout, which is
+//	kubernetes#124648. Endpoint removal on the ordinary delete path is driven by
+//	the deletionTimestamp instead, and that happens whether or not /readyz fails.
+//	Failing it stays worthwhile (it is what the upstream design intends, and it
+//	is correct for any consumer that does watch readiness) but it earns no part
+//	of the drain budget, and the linger cannot be justified by it.
 //
 //	http.Server.Shutdown does not wait for hijacked connections, and every
 //	CONNECT tunnel is hijacked, so tunnels are tracked separately (Q384).
