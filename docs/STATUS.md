@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q391
+**Next ID:** Q392
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -49,6 +49,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q391"></a>Q391 | [e2e: GMC webhook unreachable in vault-WI `BeforeAll`](../cmd/gmc/test/e2e/vault_workload_identity_test.go) | `flake` `tests` | 🔲 | S | Kindnet leg, PR 761: apiserver→GMC webhook POST hit `context deadline exceeded` while GMC sat `1/1 Running`, 0 restarts; rerun green, no code change. Neither of [Q300](#Q300)'s classes (dataplane, external egress). |
 | <a id="Q380"></a>Q380 | [Recreate dogfood from zero — `setup.sh` unproven](plan/gke-dogfood.md#recreate-is-not-yet-proven-end-to-end-q380) | `infra` | 🔲 | S | Cluster deleted 07-20 (`delete.sh` validated live), so the next dogfood session must bootstrap from nothing. The from-zero `setup.sh` path has never run — incl. the new `workers-od` pool. Validate before you need it; gaps in the plan. |
 | <a id="Q359"></a>Q359 | [Worker right-sizing profiles (recommendations first)](plan/runner-sizing-profiles.md) | `infra` | 🔲 | S | All 3 phases shipped (usage metrics + recipe; status recommendations + SizingDrift; opt-in Binpack/Throughput/NodeShare profiles). Remaining: live dogfood validation of the whole loop — pairs with [Q380](#Q380); see the plan. |
 | <a id="Q390"></a>Q390 | [`AGCAutoscalingUnavailable` has no metric twin](design/appendix-e-capacity-planning.md#e11-managed-vertical-right-sizing-of-the-control-planes) | `infra` | 🔲 | S | Every other v2 gateway condition exports a gauge (Q321). The Q360 condition does not, so an unsatisfiable `agcAutoscaling` opt-in is invisible to alerting — only `kubectl describe` shows it. |
