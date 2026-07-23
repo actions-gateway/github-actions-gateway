@@ -63,6 +63,11 @@ jobs:
         with:
           filters: |
             code:
+              # api/** was missing here until Q374: the neutral v2 API module is in
+              # go.work and both `make lint` and `make test` cover it, so an
+              # api-only change skipped its own gofmt, golangci-lint, and unit
+              # tests. It also gates the v2 API sync check below.
+              - 'api/**'
               - 'broker/**'
               - 'cmd/**'
               - 'githubapp/**'
@@ -156,6 +161,11 @@ jobs:
       # (Q68). The go.work.gen files feed `make manifests` and have drifted before.
       - name: single Go version (make go-version-check)
         run: make go-version-check
+      # Assert the two served v2 API packages hold their shared files identically
+      # (Q345, widened in Q374). Ran only under a local `make check` before, so the
+      # drift it guards could reach main unnoticed.
+      - name: v2 API package sync (make v2-api-sync-check)
+        run: make v2-api-sync-check
   # Shellcheck the standalone helper scripts under scripts/. actionlint already
   # covers inline workflow `run:` blocks, but the tracked scripts/*.sh files ship
   # unlinted otherwise. Isolated from the `lint` job so a scripts-only change does
