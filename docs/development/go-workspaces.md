@@ -10,7 +10,7 @@ This repo uses a `go.work` workspace with no root-level Go module. The workspace
 | `githubapp/` | `github.com/actions-gateway/github-actions-gateway/githubapp` | — |
 | `broker/` | `github.com/actions-gateway/github-actions-gateway/broker` | `githubapp` |
 | `scaleset/` | `github.com/actions-gateway/github-actions-gateway/scaleset` | `githubapp` |
-| `cmd/probe/` | `github.com/actions-gateway/github-actions-gateway/probe` | `broker`, `githubapp` |
+| `cmd/probe/` | `github.com/actions-gateway/github-actions-gateway/probe` | `broker`, `githubapp`, `scaleset` |
 | `cmd/agc/` | `github.com/actions-gateway/github-actions-gateway/agc` | `api`, `broker`, `githubapp` |
 | `cmd/gmc/` | `github.com/actions-gateway/github-actions-gateway/gmc` | `api`, `broker`, `githubapp`, `agc` |
 | `cmd/proxy/` | `github.com/actions-gateway/github-actions-gateway/proxy` | — |

@@ -8,12 +8,12 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ⚠️ Partial — filed 2026-07-20; F1 and F3 shipped.** The F1 Secret leak
-> was fixed and merged the same day (Q373, #727); F3's share-and-gate split shipped
-> as Q374. The remaining findings are tracked
-> by Queue rows [Q362](../STATUS.md#Q362), [Q364](../STATUS.md#Q364)–[Q370](../STATUS.md#Q370);
-> [Q371](../STATUS.md#Q371) adds the prevention
-> gates; [Q372](../STATUS.md#Q372) (Deferred) carries the re-run trigger.
+> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, and F3 shipped.** The F1 Secret
+> leak was fixed and merged the same day (Q373, #727); F2 (the probe rewrite)
+> shipped as Q362 and F3's share-and-gate split as Q374. The remaining findings are
+> tracked by Queue rows [Q364](../STATUS.md#Q364)–[Q370](../STATUS.md#Q370);
+> [Q371](../STATUS.md#Q371) adds the prevention gates; [Q372](../STATUS.md#Q372)
+> (Deferred) carries the re-run trigger.
 >
 > The ID range is not contiguous because concurrent branches allocated IDs while
 > this audit was in flight: Q361 went to a CI-latency item (#722) and Q363 to a
@@ -78,7 +78,7 @@ test.
 
 ### High
 
-**F2 — `cmd/probe` reimplements the `scaleset` package it exists to validate.** → [Q362](../STATUS.md#Q362)
+**F2 — `cmd/probe` reimplements the `scaleset` package it exists to validate.** ✅ **Shipped** (Q362)
 
 `cmd/probe` never imports `scaleset` (verified: no import in any non-test file).
 [scaleset.go:187-208](../../cmd/probe/scaleset.go) declares lowercase shadow copies
@@ -96,6 +96,27 @@ Remedy: rewrite against `scaleset.Client`; where the probe needs raw-wire
 visibility the client hides, add a response hook to the client rather than keeping
 a parallel implementation. Highest-leverage deletion available — most of the 1,048
 lines go away.
+
+**Shipped (Q362).** The probe now drives `scaleset.Client` end to end; all five
+shadow types and every hand-built modelled request are gone. The remedy's response
+hook is `scaleset.ResponseObserver` (`Config.Observer`), which reports status,
+headers, and latency for every response — including the 202 polls `GetMessage`
+returns as `(nil, nil)`, which is where the probe's rate-limit evidence lives.
+Three checks stayed outside the library on purpose, because delegating them would
+have made the probe agree with itself: the raw-wire reporting above, the acquire
+route/token matrix (the client's construction measured against alternatives it
+does not implement, reached through the new `Client.RawServiceCall` escape hatch so
+even those comparisons use the client's own auth), and the delivered
+`acquireJobUrl` fallback — which now tries the client's static route *first* and
+logs a `DIVERGENCE` when the delivered URL succeeds where it failed.
+
+The "most of the 1,048 lines" estimate above was optimistic: the file lands at 847.
+The reimplementation itself did go — the five shadow types plus `mintAdminConnection`
+/ `registrationToken` / `adminConnection` / `svcCall` are 165 lines deleted outright,
+and every remaining modelled call is a one-line client method where it used to build
+a request — but three parts of the file were never protocol code and stay: the ~110-line
+`PROBE_SCALESET_*` environment contract, the diagnostic matrix above, and a doc comment
+that grew to record what the probe still asserts on its own.
 
 **F3 — The v2 conditions sync gate covers 13% of the duplication it appears to.** ✅ **Shipped** (Q374)
 

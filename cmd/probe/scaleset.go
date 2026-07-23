@@ -17,6 +17,32 @@
 //	  → POST {svc}/_apis/runtime/runnerscalesets/{id}/generatejitconfig
 //	  → cleanup: DELETE session, DELETE scale set
 //
+// # What drives the wire, and what the probe still asserts on its own
+//
+// Every call above is issued by the shipping scaleset package (Q362). The probe
+// used to hand-build these requests against its own copies of the wire types,
+// which meant a divergence between the library and the wire — the single bug
+// class this scenario exists to catch — was invisible: the probe validated its
+// own dialect. It now drives scaleset.Client, so a live run is evidence about
+// the code GAG actually ships.
+//
+// Three things stay deliberately outside the library, because delegating them
+// would make the probe agree with itself instead of with GitHub:
+//
+//  1. Raw-wire reporting. wireLog observes every response through the client's
+//     ResponseObserver hook and logs the status, the rate-limit/X-* headers, and
+//     the long-poll latency the typed API collapses (a 202 becomes (nil, nil), a
+//     404 becomes a typed error). The finding is what the wire did, not what the
+//     client made of it.
+//  2. The acquire route/token matrix (probeAcquireJobs). The library speaks one
+//     construction; the probe measures it against the alternatives — the same
+//     route under the admin JWT, ARC's acquirablejobs, and the queue-host route
+//     family — so "the shipped route 404s but another one answers" is visible.
+//  3. The delivered acquireJobUrl fallback (jobTest). The client always targets
+//     the static _apis/runtime acquire route; a JobAvailable may carry its own
+//     acquireJobUrl. The probe tries the client's construction first and, when it
+//     fails where the delivered URL succeeds, logs that divergence explicitly.
+//
 // Required environment variables:
 //
 //	GITHUB_APP_ID              - GitHub App numeric ID
@@ -52,6 +78,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
+	"github.com/actions-gateway/github-actions-gateway/scaleset"
 )
 
 // scalesetConfig holds the parsed environment for the scale-set scenario.
@@ -154,268 +181,297 @@ func parseScalesetConfig(getenv func(string) string) (scalesetConfig, error) {
 	return cfg, nil
 }
 
-// scalesetProbe carries the dependencies of the scale-set scenario. APIBase and
-// the HTTP clients are injectable so the whole flow is unit-testable against an
-// httptest stub, mirroring runProbe's structure.
-type scalesetProbe struct {
-	log      *slog.Logger
-	cfg      scalesetConfig
-	provider tokenProvider
+// wireLog is the probe's scaleset.ResponseObserver. It turns every response the
+// client receives into one log line carrying the status, latency, body size, and
+// the diagnostic response headers.
+//
+// This is the probe's own evidence, and the reason driving the shipping client
+// costs the scenario nothing: the typed API answers "what did the client make of
+// the response", while these lines answer "what did GitHub actually send" —
+// including the 202s GetMessage reports as (nil, nil) and the rate-limit headers
+// (U4) no typed return carries.
+type wireLog struct{ log *slog.Logger }
 
-	// apiBase is the REST API root (https://api.github.com in production;
-	// an httptest URL under test).
-	apiBase string
-	// hc serves the short one-shot calls; pollClient serves the ~50s
-	// message-queue long-poll and needs the longer timeout.
-	hc         *http.Client
-	pollClient *http.Client
+// ObserveResponse implements scaleset.ResponseObserver.
+func (w wireLog) ObserveResponse(info scaleset.ResponseInfo) {
+	w.log.Info("INVESTIGATION-E: wire",
+		"op", info.Op,
+		"method", info.Method,
+		"host", info.Host,
+		"path", info.Path,
+		"status", info.Status,
+		"elapsed", info.Elapsed.Round(time.Millisecond).String(),
+		"bodyLen", info.BodyLen,
+		"headers", fmt.Sprintf("%v", diagnosticHeaders(info.Header)))
+}
+
+// diagnosticHeaders selects the response headers a protocol investigation cares
+// about — every X-* extension header, the rate-limit family, and Retry-After —
+// which together are the U4 rate-limit evidence.
+func diagnosticHeaders(h http.Header) map[string]string {
+	out := map[string]string{}
+	for k, v := range h {
+		lk := strings.ToLower(k)
+		if strings.HasPrefix(lk, "x-") || strings.Contains(lk, "ratelimit") || lk == "retry-after" {
+			out[k] = strings.Join(v, ",")
+		}
+	}
+	return out
+}
+
+// scalesetProbe carries the dependencies of the scale-set scenario. The client
+// and its HTTP clients are injectable so the whole flow is unit-testable against
+// an httptest stub, mirroring runProbe's structure.
+type scalesetProbe struct {
+	log *slog.Logger
+	cfg scalesetConfig
+
+	// client is the shipping protocol client — the thing under investigation.
+	client *scaleset.Client
+	// hc serves the handful of raw requests aimed at routes the client
+	// deliberately does not speak (the queue-host acquire family, a delivered
+	// acquireJobUrl). Every modelled call goes through client instead.
+	hc *http.Client
 	// jobTestTimeout bounds the optional live-job test's wait for a
 	// JobAvailable (default 3 minutes; injectable for tests).
 	jobTestTimeout time.Duration
 }
 
-// scale-set wire types, local to the probe: this is investigation tooling for
-// a protocol GAG does not (yet) speak in production, so the shapes live here,
-// not in the production broker package. Field sets follow the official
-// actions/scaleset client and the ARC gha-runner-scale-set client.
+// sessionOwnerName identifies the probe's message-queue session server-side.
+const sessionOwnerName = "gag-probe"
 
-type adminConnection struct {
-	URL   string `json:"url"`
-	Token string `json:"token"`
-}
-
-type runnerScaleSet struct {
-	ID            int    `json:"id"`
-	Name          string `json:"name"`
-	RunnerGroupID int    `json:"runnerGroupId"`
-}
-
-type runnerScaleSetSession struct {
-	SessionID               string          `json:"sessionId"`
-	OwnerName               string          `json:"ownerName"`
-	MessageQueueURL         string          `json:"messageQueueUrl"`
-	MessageQueueAccessToken string          `json:"messageQueueAccessToken"`
-	Statistics              json.RawMessage `json:"statistics"`
-}
-
-type runnerScaleSetMessage struct {
-	MessageID   int64           `json:"messageId"`
-	MessageType string          `json:"messageType"`
-	Body        string          `json:"body"`
-	Statistics  json.RawMessage `json:"statistics"`
-}
-
-type jitRunnerConfig struct {
-	Runner struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	} `json:"runner"`
-	EncodedJITConfig string `json:"encodedJITConfig"`
+// newScalesetProbe builds the scenario around a scaleset.Client wired to the
+// probe's wire logger. apiBase is the REST API root (https://api.github.com in
+// production; an httptest URL under test); hc and pollClient are the client's
+// short-call and long-poll HTTP clients, and may be nil to take the library's
+// egress-proxy-aware defaults.
+func newScalesetProbe(logger *slog.Logger, cfg scalesetConfig, provider githubapp.TokenProvider,
+	apiBase string, hc, pollClient *http.Client) (*scalesetProbe, error) {
+	client, err := scaleset.New(scaleset.Config{
+		TokenProvider: provider,
+		ConfigURL:     cfg.ConfigURL,
+		APIBase:       apiBase,
+		HTTPClient:    hc,
+		PollClient:    pollClient,
+		Observer:      wireLog{log: logger},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if hc == nil {
+		hc = httpx.NewClient()
+	}
+	return &scalesetProbe{log: logger, cfg: cfg, client: client, hc: hc}, nil
 }
 
 // runScalesetProbe is the Investigation E entry point wired from run().
-func runScalesetProbe(ctx context.Context, logger *slog.Logger, cfg scalesetConfig, provider tokenProvider, apiBase string) error {
-	p := &scalesetProbe{
-		log:      logger,
-		cfg:      cfg,
-		provider: provider,
-		apiBase:  apiBase,
-		hc:       httpx.NewClient(),
-		// The queue long-poll holds ~50s before returning 202; bound the
-		// whole call just past that.
-		pollClient: &http.Client{Timeout: 75 * time.Second},
+func runScalesetProbe(ctx context.Context, logger *slog.Logger, cfg scalesetConfig, provider githubapp.TokenProvider, apiBase string) error {
+	p, err := newScalesetProbe(logger, cfg, provider, apiBase, nil, nil)
+	if err != nil {
+		return err
 	}
 	return p.run(ctx)
 }
 
-// mintAdminConnection runs the two bootstrap hops (installation token →
-// registration token → RemoteAuth runner-registration) and returns a fresh
-// admin connection. Called at start and again before cleanup after a long
-// hold — the admin JWT was observed live to expire within ~17 minutes, so a
-// connection minted at start 401s the deferred deletes.
-func (p *scalesetProbe) mintAdminConnection(ctx context.Context) (*adminConnection, error) {
-	installToken, err := p.provider.Token(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get installation token: %w", err)
-	}
-	regToken, err := p.registrationToken(ctx, installToken)
-	if err != nil {
-		return nil, fmt.Errorf("registration token: %w", err)
-	}
-	conn, err := p.adminConnection(ctx, regToken)
-	if err != nil {
-		return nil, fmt.Errorf("runner-registration hop: %w", err)
-	}
-	return conn, nil
-}
-
 // cleanupOnly looks the scale set up by name and deletes it — recovery for a
 // leaked scale set from an interrupted or 401-ed run.
-func (p *scalesetProbe) cleanupOnly(ctx context.Context, conn *adminConnection) error {
-	var out struct {
-		Count int `json:"count"`
-		Value []struct {
-			ID   int    `json:"id"`
-			Name string `json:"name"`
-		} `json:"value"`
-	}
-	status, err := p.svcCall(ctx, conn, http.MethodGet,
-		"/_apis/runtime/runnerscalesets?name="+url.QueryEscape(p.cfg.ScaleSetName), nil, &out)
+func (p *scalesetProbe) cleanupOnly(ctx context.Context) error {
+	ss, err := p.client.GetRunnerScaleSetByName(ctx, p.cfg.ScaleSetName)
 	if err != nil {
 		return fmt.Errorf("lookup scale set %q: %w", p.cfg.ScaleSetName, err)
 	}
-	if out.Count == 0 {
-		p.log.Info("INVESTIGATION-E: cleanup — no scale set with that name", "name", p.cfg.ScaleSetName, "status", status)
+	if ss == nil {
+		p.log.Info("INVESTIGATION-E: cleanup — no scale set with that name", "name", p.cfg.ScaleSetName)
 		return nil
 	}
-	for _, ss := range out.Value {
-		dStatus, dErr := p.svcCall(ctx, conn, http.MethodDelete,
-			fmt.Sprintf("/_apis/runtime/runnerscalesets/%d", ss.ID), nil, nil)
-		if dErr != nil {
-			return fmt.Errorf("delete scale set %d: %w", ss.ID, dErr)
-		}
-		p.log.Info("INVESTIGATION-E: cleanup — scale set deleted", "id", ss.ID, "name", ss.Name, "status", dStatus)
+	if err := p.client.DeleteRunnerScaleSet(ctx, ss.ID); err != nil {
+		return fmt.Errorf("delete scale set %d: %w", ss.ID, err)
 	}
+	p.log.Info("INVESTIGATION-E: cleanup — scale set deleted", "id", ss.ID, "name", ss.Name)
 	return nil
 }
 
 func (p *scalesetProbe) run(ctx context.Context) error {
 	// ── 1–3. Bootstrap: installation token → registration token → admin JWT ──
-	conn, err := p.mintAdminConnection(ctx)
-	if err != nil {
+	// The client owns the two-hop chain and the admin JWT's lifecycle; Connect
+	// forces it now so an auth failure surfaces here rather than mid-scenario.
+	// The admin JWT is re-minted lazily before expiry, so the deferred cleanup
+	// below survives a long hold without the probe re-minting anything itself
+	// (the failure the standalone implementation had to work around).
+	if err := p.client.Connect(ctx); err != nil {
 		return err
 	}
-	p.log.Info("INVESTIGATION-E: admin connection established",
-		"actionsServiceURL", conn.URL, "adminTokenLen", len(conn.Token))
+	p.log.Info("INVESTIGATION-E: admin connection established")
 
 	if p.cfg.Cleanup {
-		return p.cleanupOnly(ctx, conn)
+		return p.cleanupOnly(ctx)
 	}
 
 	// ── 4. Resolve runner group (fall back to the default group id 1) ────────
-	groupID := p.resolveRunnerGroup(ctx, conn)
+	groupID := p.resolveRunnerGroup(ctx)
 
 	// ── 5. Create the throwaway scale set ────────────────────────────────────
-	ss, err := p.createScaleSet(ctx, conn, groupID)
+	ss, err := p.client.CreateRunnerScaleSet(ctx, scaleset.RunnerScaleSet{
+		Name:          p.cfg.ScaleSetName,
+		RunnerGroupID: groupID,
+		Labels:        []scaleset.Label{{Name: p.cfg.ScaleSetName, Type: "System"}},
+		RunnerSetting: &scaleset.RunnerSetting{Ephemeral: true},
+	})
 	if err != nil {
 		return fmt.Errorf("create scale set: %w", err)
 	}
+	p.log.Info("INVESTIGATION-E: scale set created",
+		"id", ss.ID, "name", ss.Name, "runnerGroupId", ss.RunnerGroupID)
 	defer func() {
 		dCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		status, delErr := p.svcCall(dCtx, conn, http.MethodDelete,
-			fmt.Sprintf("/_apis/runtime/runnerscalesets/%d", ss.ID), nil, nil)
-		if delErr != nil {
+		if delErr := p.client.DeleteRunnerScaleSet(dCtx, ss.ID); delErr != nil {
 			p.log.Error("INVESTIGATION-E: delete scale set failed", "error", delErr)
 		} else {
-			p.log.Info("INVESTIGATION-E: scale set deleted", "id", ss.ID, "status", status)
+			p.log.Info("INVESTIGATION-E: scale set deleted", "id", ss.ID)
 		}
 	}()
 
 	// ── 6. Create the message session ────────────────────────────────────────
-	sess, err := p.createSession(ctx, conn, ss.ID)
+	sess, err := p.createSession(ctx, ss.ID)
 	if err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}
 	defer func() {
 		dCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		status, delErr := p.svcCall(dCtx, conn, http.MethodDelete,
-			fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/sessions/%s", ss.ID, sess.SessionID), nil, nil)
-		if delErr != nil {
+		if delErr := p.client.DeleteSession(dCtx, ss.ID, sess.SessionID); delErr != nil {
 			p.log.Error("INVESTIGATION-E: delete session failed", "error", delErr)
 		} else {
-			p.log.Info("INVESTIGATION-E: session deleted", "sessionId", sess.SessionID, "status", status)
+			p.log.Info("INVESTIGATION-E: session deleted", "sessionId", sess.SessionID)
 		}
 	}()
 
 	if p.cfg.CapacityTest {
 		// ── Investigation E2: capacity gating / refresh / replay ────────────
-		p.capacityTest(ctx, conn, ss.ID, sess)
+		p.capacityTest(ctx, ss.ID, sess)
 	} else {
 		// ── 7. One queue long-poll (U2: 202 semantics; U4: headers) ─────────
-		if err := p.pollQueueOnce(ctx, sess); err != nil {
-			// Non-fatal: the poll's status/headers are the finding either way.
-			p.log.Warn("INVESTIGATION-E: queue poll returned error", "error", err)
-		}
+		p.pollQueueOnce(ctx, sess)
 
-		// ── 8. acquirejobs shape probes (U2: empty batch + unknown id) ──────
-		p.probeAcquireJobs(ctx, conn, ss.ID, sess)
+		// ── 8. acquirejobs shape probes (U2: partial-batch semantics) ───────
+		p.probeAcquireJobs(ctx, ss.ID, sess)
 
 		// ── 9. generatejitconfig ────────────────────────────────────────────
-		if err := p.probeJITConfig(ctx, conn, ss.ID); err != nil {
+		if err := p.probeJITConfig(ctx, ss.ID); err != nil {
 			p.log.Warn("INVESTIGATION-E: generatejitconfig failed", "error", err)
 		}
 	}
 
 	// ── 10. Mint JIT configs for externally run runners ──────────────────────
 	for i, path := range p.cfg.JITConfigFiles {
-		if err := p.mintJITConfigToFile(ctx, conn, ss.ID, i+1, path); err != nil {
+		if err := p.mintJITConfigToFile(ctx, ss.ID, i+1, path); err != nil {
 			p.log.Warn("INVESTIGATION-E: mint JIT config failed", "index", i+1, "error", err)
 		}
 	}
 
 	// ── 11. Optional live-job test ───────────────────────────────────────────
 	if p.cfg.JobTest {
-		p.jobTest(ctx, conn, ss.ID, sess)
+		p.jobTest(ctx, ss.ID, sess)
 	}
 
 	// ── 12. Optional hold: keep the scale set alive for external runners, ────
 	//        observing the lifecycle messages they generate.
 	if p.cfg.HoldSeconds > 0 {
 		p.holdAndObserve(ctx, sess)
-		// The admin JWT expires within ~17 minutes (observed live); re-mint
-		// the connection so the deferred deletes below don't 401.
-		if fresh, mErr := p.mintAdminConnection(ctx); mErr != nil {
-			p.log.Warn("INVESTIGATION-E: re-mint admin connection for cleanup failed", "error", mErr)
-		} else {
-			*conn = *fresh
-		}
 	}
 
 	p.log.Info("INVESTIGATION-E: scenario complete; cleaning up")
 	return nil
 }
 
-// pollOnce issues one message-queue long-poll with the given advertised
-// capacity and cursor, returning the HTTP status and any decoded message.
-func (p *scalesetProbe) pollOnce(ctx context.Context, sess *runnerScaleSetSession, capacity int, lastMessageID int64) (int, *runnerScaleSetMessage, error) {
-	u := sess.MessageQueueURL
-	sep := "?"
-	if strings.Contains(u, "?") {
-		sep = "&"
-	}
-	u += sep + fmt.Sprintf("lastMessageId=%d", lastMessageID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+// resolveRunnerGroup looks up the configured runner group id, falling back to
+// 1 (GitHub's default-group id) when the lookup errors or matches nothing — the
+// fallback keeps the probe productive while wireLog still records the endpoint's
+// real behaviour.
+func (p *scalesetProbe) resolveRunnerGroup(ctx context.Context) int {
+	id, ok, err := p.client.ResolveRunnerGroup(ctx, p.cfg.GroupName)
 	if err != nil {
-		return 0, nil, err
+		p.log.Warn("INVESTIGATION-E: runnergroups lookup failed; falling back to group id 1", "error", err)
+		return 1
 	}
-	req.Header.Set("Authorization", "Bearer "+sess.MessageQueueAccessToken)
-	req.Header.Set("X-ScaleSetMaxCapacity", fmt.Sprintf("%d", capacity))
-	resp, err := p.pollClient.Do(req)
+	if !ok {
+		p.log.Info("INVESTIGATION-E: no runner group matched; falling back to group id 1",
+			"name", p.cfg.GroupName)
+		return 1
+	}
+	p.log.Info("INVESTIGATION-E: resolved runner group", "id", id, "name", p.cfg.GroupName)
+	return id
+}
+
+// createSession opens the message-queue session and logs the shape of the queue
+// URL it hands back — host, path, and query PARAMETER NAMES only, because the
+// query values carry a signature and the response body carries the queue token.
+func (p *scalesetProbe) createSession(ctx context.Context, scaleSetID int) (*scaleset.RunnerScaleSetSession, error) {
+	sess, err := p.client.CreateSession(ctx, scaleSetID, sessionOwnerName)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK || len(body) == 0 {
-		return resp.StatusCode, nil, nil
+	queueHost := sess.MessageQueueURL
+	queuePath := ""
+	queueParams := ""
+	if qu, qerr := url.Parse(sess.MessageQueueURL); qerr == nil {
+		queueHost = qu.Host
+		queuePath = qu.Path
+		var keys []string
+		for k := range qu.Query() {
+			keys = append(keys, k)
+		}
+		queueParams = strings.Join(keys, ",")
 	}
-	var msg runnerScaleSetMessage
-	if err := json.Unmarshal(body, &msg); err != nil {
-		return resp.StatusCode, nil, fmt.Errorf("decode message: %w", err)
+	p.log.Info("INVESTIGATION-E: session created",
+		"sessionId", sess.SessionID,
+		"ownerName", sess.OwnerName,
+		"queueHost", queueHost,
+		"queuePath", queuePath,
+		"queueParamNames", queueParams,
+		"queueTokenLen", len(sess.MessageQueueAccessToken),
+		"statistics", statsString(sess.Statistics))
+	return sess, nil
+}
+
+// statsString renders a statistics snapshot for a log line, tolerating nil (the
+// backend omits statistics on some responses).
+func statsString(s *scaleset.RunnerScaleSetStatistic) string {
+	if s == nil {
+		return "<none>"
 	}
-	return resp.StatusCode, &msg, nil
+	return fmt.Sprintf("%+v", *s)
 }
 
 // logQueueMessage emits one summarising log line for a queue message.
-func (p *scalesetProbe) logQueueMessage(tag string, capacity int, msg *runnerScaleSetMessage) {
+func (p *scalesetProbe) logQueueMessage(tag string, capacity int, msg *scaleset.RunnerScaleSetMessage) {
 	p.log.Info("INVESTIGATION-E2: "+tag,
 		"capacity", capacity,
 		"messageId", msg.MessageID,
 		"messageType", msg.MessageType,
-		"statistics", string(msg.Statistics),
+		"statistics", statsString(msg.Statistics),
 		"body", githubapp.SanitizeBody([]byte(msg.Body), 1024))
+}
+
+// pollQueueOnce issues a single message-queue long-poll. wireLog records the
+// status, latency, and rate-limit headers (the U2/U4 evidence); this logs the
+// decoded message when one arrives. A poll error is non-fatal — the wire line is
+// the finding either way.
+func (p *scalesetProbe) pollQueueOnce(ctx context.Context, sess *scaleset.RunnerScaleSetSession) {
+	msg, err := p.client.GetMessage(ctx, sess, 1, 0)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-E: queue poll returned error", "error", err)
+		return
+	}
+	if msg == nil {
+		p.log.Info("INVESTIGATION-E: queue long-poll returned no message")
+		return
+	}
+	p.log.Info("INVESTIGATION-E: queue message",
+		"messageId", msg.MessageID, "messageType", msg.MessageType,
+		"statistics", statsString(msg.Statistics),
+		"body", githubapp.SanitizeBody([]byte(msg.Body), 512))
 }
 
 // capacityTest is Investigation E2: with jobs pre-queued on the scale set's
@@ -425,81 +481,59 @@ func (p *scalesetProbe) logQueueMessage(tag string, capacity int, msg *runnerSca
 // (PATCH) and the delete/recreate replay behaviour. sess is updated in place
 // when the session is refreshed or recreated so the caller's deferred cleanup
 // deletes the live session.
-func (p *scalesetProbe) capacityTest(ctx context.Context, conn *adminConnection, scaleSetID int, sess *runnerScaleSetSession) {
+func (p *scalesetProbe) capacityTest(ctx context.Context, scaleSetID int, sess *scaleset.RunnerScaleSetSession) {
 	var cursor int64
 
-	// Phase 1 — capacity 0, jobs queued: does anything arrive?
-	status, msg, err := p.pollOnce(ctx, sess, 0, cursor)
-	if err != nil {
-		p.log.Warn("INVESTIGATION-E2: capacity-0 poll error", "error", err)
-	} else if msg == nil {
-		p.log.Info("INVESTIGATION-E2: capacity-0 poll returned no message (jobs held)", "status", status)
-	} else {
-		cursor = msg.MessageID
-		p.logQueueMessage("capacity-0 poll delivered", 0, msg)
+	// Phases 1–3 — capacity 0, then 1, then 2 against the same queue: is
+	// assignment strictly gated by the advertised capacity, and does the held
+	// job follow once the gate widens? The cursor is not advanced past phase 3
+	// — the replay test below polls from 0.
+	for _, capacity := range []int{0, 1, 2} {
+		msg, err := p.client.GetMessage(ctx, sess, capacity, cursor)
+		switch {
+		case err != nil:
+			p.log.Warn("INVESTIGATION-E2: poll error", "capacity", capacity, "error", err)
+		case msg == nil:
+			p.log.Info("INVESTIGATION-E2: poll returned no message", "capacity", capacity)
+		default:
+			if capacity < 2 {
+				cursor = msg.MessageID
+			}
+			p.logQueueMessage("poll delivered", capacity, msg)
+		}
 	}
 
-	// Phase 2 — capacity 1: exactly one assignment expected if gated.
-	status, msg, err = p.pollOnce(ctx, sess, 1, cursor)
-	if err != nil {
-		p.log.Warn("INVESTIGATION-E2: capacity-1 poll error", "error", err)
-	} else if msg == nil {
-		p.log.Info("INVESTIGATION-E2: capacity-1 poll returned no message", "status", status)
-	} else {
-		cursor = msg.MessageID
-		p.logQueueMessage("capacity-1 poll delivered", 1, msg)
-	}
-
-	// Phase 3 — capacity 2: the held job should follow if gating is dynamic.
-	// (cursor is not advanced further — the replay test below polls from 0.)
-	status, msg, err = p.pollOnce(ctx, sess, 2, cursor)
-	if err != nil {
-		p.log.Warn("INVESTIGATION-E2: capacity-2 poll error", "error", err)
-	} else if msg == nil {
-		p.log.Info("INVESTIGATION-E2: capacity-2 poll returned no message", "status", status)
-	} else {
-		p.logQueueMessage("capacity-2 poll delivered", 2, msg)
-	}
-
-	// Phase 4 — session token refresh (PATCH).
-	var refreshed runnerScaleSetSession
-	rStatus, rErr := p.svcCall(ctx, conn, http.MethodPatch,
-		fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/sessions/%s", scaleSetID, sess.SessionID), nil, &refreshed)
-	if rErr != nil {
-		p.log.Warn("INVESTIGATION-E2: session refresh (PATCH) failed", "status", rStatus, "error", rErr)
+	// Phase 4 — session token refresh (PATCH). RefreshSession mutates sess in
+	// place, so capture what it replaced to report whether the token rotated.
+	priorToken := sess.MessageQueueAccessToken
+	priorSessionID := sess.SessionID
+	if err := p.client.RefreshSession(ctx, scaleSetID, sess); err != nil {
+		p.log.Warn("INVESTIGATION-E2: session refresh (PATCH) failed", "error", err)
 	} else {
 		p.log.Info("INVESTIGATION-E2: session refresh (PATCH)",
-			"status", rStatus,
-			"sameSessionId", refreshed.SessionID == sess.SessionID,
-			"tokenChanged", refreshed.MessageQueueAccessToken != sess.MessageQueueAccessToken,
-			"newTokenLen", len(refreshed.MessageQueueAccessToken))
-		if refreshed.MessageQueueAccessToken != "" {
-			sess.MessageQueueAccessToken = refreshed.MessageQueueAccessToken
-		}
-		if refreshed.MessageQueueURL != "" {
-			sess.MessageQueueURL = refreshed.MessageQueueURL
-		}
+			"sameSessionId", sess.SessionID == priorSessionID,
+			"tokenChanged", sess.MessageQueueAccessToken != priorToken,
+			"newTokenLen", len(sess.MessageQueueAccessToken))
 	}
 
 	// Phase 5 — delete + recreate the session; does the message state replay?
-	dStatus, dErr := p.svcCall(ctx, conn, http.MethodDelete,
-		fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/sessions/%s", scaleSetID, sess.SessionID), nil, nil)
-	if dErr != nil {
-		p.log.Warn("INVESTIGATION-E2: session delete for replay test failed", "status", dStatus, "error", dErr)
+	if err := p.client.DeleteSession(ctx, scaleSetID, sess.SessionID); err != nil {
+		p.log.Warn("INVESTIGATION-E2: session delete for replay test failed", "error", err)
 		return
 	}
-	newSess, cErr := p.createSession(ctx, conn, scaleSetID)
-	if cErr != nil {
-		p.log.Warn("INVESTIGATION-E2: session recreate for replay test failed", "error", cErr)
+	newSess, err := p.createSession(ctx, scaleSetID)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-E2: session recreate for replay test failed", "error", err)
 		return
 	}
 	*sess = *newSess // the caller's deferred cleanup must delete the live session
-	status, msg, err = p.pollOnce(ctx, sess, 2, 0)
-	if err != nil {
+	msg, err := p.client.GetMessage(ctx, sess, 2, 0)
+	switch {
+	case err != nil:
 		p.log.Warn("INVESTIGATION-E2: replay poll error", "error", err)
-	} else if msg == nil {
-		p.log.Info("INVESTIGATION-E2: replay poll returned no message (no replay)", "status", status)
-	} else {
+	case msg == nil:
+		p.log.Info("INVESTIGATION-E2: replay poll returned no message (no replay)")
+	default:
 		p.logQueueMessage("replay poll delivered (state replayed to fresh session)", 2, msg)
 	}
 }
@@ -507,14 +541,9 @@ func (p *scalesetProbe) capacityTest(ctx context.Context, conn *adminConnection,
 // mintJITConfigToFile mints one JIT runner config and writes the encoded blob
 // to path (0600) so an external runner can register with it. The blob is
 // runner credentials — it is written to the file and never logged.
-func (p *scalesetProbe) mintJITConfigToFile(ctx context.Context, conn *adminConnection, scaleSetID, index int, path string) error {
-	var out jitRunnerConfig
-	status, err := p.svcCall(ctx, conn, http.MethodPost,
-		fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/generatejitconfig", scaleSetID),
-		map[string]string{
-			"name":       fmt.Sprintf("%s-runner-%d", p.cfg.ScaleSetName, index),
-			"workFolder": "_work",
-		}, &out)
+func (p *scalesetProbe) mintJITConfigToFile(ctx context.Context, scaleSetID, index int, path string) error {
+	out, err := p.client.GenerateJITConfig(ctx, scaleSetID,
+		fmt.Sprintf("%s-runner-%d", p.cfg.ScaleSetName, index), "_work")
 	if err != nil {
 		return err
 	}
@@ -522,14 +551,14 @@ func (p *scalesetProbe) mintJITConfigToFile(ctx context.Context, conn *adminConn
 		return fmt.Errorf("write JIT config: %w", err)
 	}
 	p.log.Info("INVESTIGATION-E2: JIT config minted to file",
-		"status", status, "runnerId", out.Runner.ID, "runnerName", out.Runner.Name, "path", path)
+		"runnerId", out.Runner.ID, "runnerName", out.Runner.Name, "path", path)
 	return nil
 }
 
 // holdAndObserve keeps the scale set alive for HoldSeconds, polling the queue
 // (capacity 2) and logging every message — the JobStarted/JobCompleted
 // lifecycle generated by externally run runners.
-func (p *scalesetProbe) holdAndObserve(ctx context.Context, sess *runnerScaleSetSession) {
+func (p *scalesetProbe) holdAndObserve(ctx context.Context, sess *scaleset.RunnerScaleSetSession) {
 	p.log.Info("INVESTIGATION-E2: holding scale set alive for external runners",
 		"holdSeconds", p.cfg.HoldSeconds)
 	deadline, cancel := context.WithTimeout(ctx, time.Duration(p.cfg.HoldSeconds)*time.Second)
@@ -540,7 +569,7 @@ func (p *scalesetProbe) holdAndObserve(ctx context.Context, sess *runnerScaleSet
 			p.log.Info("INVESTIGATION-E2: hold window over")
 			return
 		}
-		status, msg, err := p.pollOnce(deadline, sess, 2, cursor)
+		msg, err := p.client.GetMessage(deadline, sess, 2, cursor)
 		if err != nil {
 			if deadline.Err() != nil {
 				p.log.Info("INVESTIGATION-E2: hold window over")
@@ -550,7 +579,7 @@ func (p *scalesetProbe) holdAndObserve(ctx context.Context, sess *runnerScaleSet
 			return
 		}
 		if msg == nil {
-			p.log.Debug("INVESTIGATION-E2: hold poll empty", "status", status)
+			p.log.Debug("INVESTIGATION-E2: hold poll empty")
 			continue
 		}
 		cursor = msg.MessageID
@@ -558,326 +587,110 @@ func (p *scalesetProbe) holdAndObserve(ctx context.Context, sess *runnerScaleSet
 	}
 }
 
-// registrationToken exchanges the installation token for a short-lived runner
-// registration token at org scope (or repo scope when GITHUB_ORG_URL has an
-// owner/repo path).
-func (p *scalesetProbe) registrationToken(ctx context.Context, installToken string) (string, error) {
-	u, err := url.Parse(p.cfg.ConfigURL)
-	if err != nil {
-		return "", fmt.Errorf("parse GITHUB_ORG_URL: %w", err)
-	}
-	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
-	var path string
-	switch len(segs) {
-	case 1:
-		path = "/orgs/" + segs[0] + "/actions/runners/registration-token"
-	case 2:
-		path = "/repos/" + segs[0] + "/" + segs[1] + "/actions/runners/registration-token"
-	default:
-		return "", fmt.Errorf("GITHUB_ORG_URL must be an org or owner/repo URL, got path %q", u.Path)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.apiBase+path, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+installToken)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := p.hc.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("POST %s: status %d: %s", path, resp.StatusCode, githubapp.SanitizeBody(body, 256))
-	}
-	var out struct {
-		Token string `json:"token"`
-	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return "", fmt.Errorf("decode registration token: %w", err)
-	}
-	return out.Token, nil
-}
-
-// adminConnection performs the RemoteAuth hop that discovers the Actions
-// Service tenant URL and mints the admin JWT.
-func (p *scalesetProbe) adminConnection(ctx context.Context, regToken string) (*adminConnection, error) {
-	payload, err := json.Marshal(map[string]string{
-		"url":          p.cfg.ConfigURL,
-		"runner_event": "register",
-	})
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		p.apiBase+"/actions/runner-registration", bytes.NewReader(payload))
-	if err != nil {
-		return nil, err
-	}
-	// The one place the protocol uses the nonstandard RemoteAuth scheme.
-	req.Header.Set("Authorization", "RemoteAuth "+regToken)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := p.hc.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	p.log.Info("INVESTIGATION-E: runner-registration response", "status", resp.StatusCode)
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("POST /actions/runner-registration: status %d: %s",
-			resp.StatusCode, githubapp.SanitizeBody(body, 256))
-	}
-	var conn adminConnection
-	if err := json.Unmarshal(body, &conn); err != nil {
-		return nil, fmt.Errorf("decode admin connection: %w", err)
-	}
-	if conn.URL == "" || conn.Token == "" {
-		return nil, fmt.Errorf("admin connection missing url or token (urlSet=%t tokenLen=%d)",
-			conn.URL != "", len(conn.Token))
-	}
-	return &conn, nil
-}
-
-// svcCall issues one Actions Service call ({conn.URL}{path}?api-version=6.0-preview)
-// with the admin JWT, decoding the JSON response into out when non-nil.
-// It returns the HTTP status so callers can log shape findings on non-2xx too.
-func (p *scalesetProbe) svcCall(ctx context.Context, conn *adminConnection, method, path string, in, out any) (int, error) {
-	u := strings.TrimSuffix(conn.URL, "/") + path
-	sep := "?"
-	if strings.Contains(path, "?") {
-		sep = "&"
-	}
-	u += sep + "api-version=6.0-preview"
-
-	var bodyReader io.Reader
-	if in != nil {
-		payload, err := json.Marshal(in)
+// probeAcquireJobs measures the acquire construction the shipping client uses
+// against the alternatives it does not implement (U2 partial-batch semantics,
+// and the route/token question the broker-host backend raised in Q264 §2a-3).
+//
+// This is where the probe deliberately does NOT just call the library. Cases 1–2
+// are Client.AcquireJobs — the construction GAG ships, exercised for real. Cases
+// 3–6 are the same operation built differently: the same route under the admin
+// JWT, ARC's GET acquirablejobs, and the queue-host route family the observed
+// messageQueueUrl belongs to. If the shipped route ever stops answering while an
+// alternative does, that divergence shows up here as a status difference rather
+// than as a silent production failure.
+//
+// Neither call can affect a real job: no job has been dispatched to this
+// throwaway scale set.
+func (p *scalesetProbe) probeAcquireJobs(ctx context.Context, scaleSetID int, sess *scaleset.RunnerScaleSetSession) {
+	// The library's own construction, on an empty batch and on an id that was
+	// never offered.
+	for _, tc := range []struct {
+		label string
+		ids   []int64
+	}{
+		{"empty batch, client construction", nil},
+		{"unknown id, client construction", []int64{9999999999}},
+	} {
+		won, err := p.client.AcquireJobs(ctx, scaleSetID, sess, tc.ids)
 		if err != nil {
-			return 0, err
+			p.log.Warn("INVESTIGATION-E: acquirejobs (client) failed", "case", tc.label, "error", err)
+			continue
 		}
-		bodyReader = bytes.NewReader(payload)
+		p.log.Info("INVESTIGATION-E: acquirejobs shape probe",
+			"case", tc.label, "requested", fmt.Sprintf("%v", tc.ids), "won", fmt.Sprintf("%v", won))
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
-	if err != nil {
-		return 0, err
-	}
-	req.Header.Set("Authorization", "Bearer "+conn.Token)
-	if in != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	resp, err := p.hc.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return resp.StatusCode, fmt.Errorf("%s %s: status %d: %s",
-			method, path, resp.StatusCode, githubapp.SanitizeBody(body, 512))
-	}
-	if out != nil && len(body) > 0 {
-		if err := json.Unmarshal(body, out); err != nil {
-			return resp.StatusCode, fmt.Errorf("%s %s: decode response: %w", method, path, err)
-		}
-	}
-	return resp.StatusCode, nil
-}
 
-// resolveRunnerGroup looks up the configured runner group id, falling back to
-// 1 (GitHub's default-group id) if the endpoint rejects the call — the
-// fallback keeps the probe productive while still logging the endpoint's real
-// behaviour.
-func (p *scalesetProbe) resolveRunnerGroup(ctx context.Context, conn *adminConnection) int {
-	var out struct {
-		Count int `json:"count"`
-		Value []struct {
-			ID   int    `json:"id"`
-			Name string `json:"name"`
-		} `json:"value"`
-	}
-	status, err := p.svcCall(ctx, conn, http.MethodGet,
-		"/_apis/runtime/runnergroups/?groupName="+url.QueryEscape(p.cfg.GroupName), nil, &out)
-	if err != nil {
-		p.log.Warn("INVESTIGATION-E: runnergroups lookup failed; falling back to group id 1",
-			"status", status, "error", err)
-		return 1
-	}
-	p.log.Info("INVESTIGATION-E: runnergroups lookup", "status", status, "count", out.Count)
-	if out.Count > 0 {
-		p.log.Info("INVESTIGATION-E: resolved runner group",
-			"id", out.Value[0].ID, "name", out.Value[0].Name)
-		return out.Value[0].ID
-	}
-	return 1
-}
-
-func (p *scalesetProbe) createScaleSet(ctx context.Context, conn *adminConnection, groupID int) (*runnerScaleSet, error) {
-	in := map[string]any{
-		"name":          p.cfg.ScaleSetName,
-		"runnerGroupId": groupID,
-		"labels": []map[string]string{
-			{"name": p.cfg.ScaleSetName, "type": "System"},
-		},
-		"runnerSetting": map[string]any{"ephemeral": true},
-	}
-	var ss runnerScaleSet
-	status, err := p.svcCall(ctx, conn, http.MethodPost, "/_apis/runtime/runnerscalesets", in, &ss)
-	if err != nil {
-		return nil, err
-	}
-	p.log.Info("INVESTIGATION-E: scale set created",
-		"status", status, "id", ss.ID, "name", ss.Name, "runnerGroupId", ss.RunnerGroupID)
-	return &ss, nil
-}
-
-func (p *scalesetProbe) createSession(ctx context.Context, conn *adminConnection, scaleSetID int) (*runnerScaleSetSession, error) {
-	var sess runnerScaleSetSession
-	status, err := p.svcCall(ctx, conn, http.MethodPost,
-		fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/sessions", scaleSetID),
-		map[string]string{"ownerName": "gag-probe"}, &sess)
-	if err != nil {
-		return nil, err
-	}
-	queueHost := sess.MessageQueueURL
-	queuePath := ""
-	queueParams := ""
-	if qu, qerr := url.Parse(sess.MessageQueueURL); qerr == nil {
-		queueHost = qu.Host
-		queuePath = qu.Path
-		// Query VALUES may carry signatures; log the parameter names only.
-		var keys []string
-		for k := range qu.Query() {
-			keys = append(keys, k)
-		}
-		queueParams = strings.Join(keys, ",")
-	}
-	// Log fields selectively: the raw body carries messageQueueAccessToken.
-	p.log.Info("INVESTIGATION-E: session created",
-		"status", status,
-		"sessionId", sess.SessionID,
-		"ownerName", sess.OwnerName,
-		"queueHost", queueHost,
-		"queuePath", queuePath,
-		"queueParamNames", queueParams,
-		"queueTokenLen", len(sess.MessageQueueAccessToken),
-		"statistics", string(sess.Statistics))
-	return &sess, nil
-}
-
-// pollQueueOnce issues a single message-queue long-poll and logs the status,
-// latency, and every X-*/RateLimit/Retry-After header — the U2 (202 semantics)
-// and U4 (rate limits) evidence.
-func (p *scalesetProbe) pollQueueOnce(ctx context.Context, sess *runnerScaleSetSession) error {
-	u := sess.MessageQueueURL
-	sep := "?"
-	if strings.Contains(u, "?") {
-		sep = "&"
-	}
-	u += sep + "lastMessageId=0"
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+sess.MessageQueueAccessToken)
-	req.Header.Set("X-ScaleSetMaxCapacity", "1")
-
-	start := time.Now()
-	resp, err := p.pollClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("queue long-poll: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-
-	headers := map[string]string{}
-	for k, v := range resp.Header {
-		lk := strings.ToLower(k)
-		if strings.HasPrefix(lk, "x-") || strings.Contains(lk, "ratelimit") || lk == "retry-after" {
-			headers[k] = strings.Join(v, ",")
-		}
-	}
-	p.log.Info("INVESTIGATION-E: queue long-poll returned",
-		"status", resp.StatusCode,
-		"elapsed", time.Since(start).Round(time.Second).String(),
-		"bodyLen", len(body),
-		"headers", fmt.Sprintf("%v", headers))
-	if resp.StatusCode == http.StatusOK && len(body) > 0 {
-		var msg runnerScaleSetMessage
-		if jsonErr := json.Unmarshal(body, &msg); jsonErr == nil {
-			p.log.Info("INVESTIGATION-E: queue message",
-				"messageId", msg.MessageID, "messageType", msg.MessageType,
-				"statistics", string(msg.Statistics),
-				"body", githubapp.SanitizeBody([]byte(msg.Body), 512))
-		}
-	}
-	return nil
-}
-
-// probeAcquireJobs observes the acquirejobs response shape for an empty batch
-// and for an id that was never offered (U2 partial-batch semantics). Neither
-// call can affect a real job: no job has been dispatched to this throwaway
-// scale set.
-func (p *scalesetProbe) probeAcquireJobs(ctx context.Context, conn *adminConnection, scaleSetID int, sess *runnerScaleSetSession) {
-	svcBase := strings.TrimSuffix(conn.URL, "/")
 	ssPath := fmt.Sprintf("/_apis/runtime/runnerscalesets/%d", scaleSetID)
-	emptyBatch, _ := json.Marshal([]int64{})
 	unknownBatch, _ := json.Marshal([]int64{9999999999})
 
+	// Alternatives on the Actions Service base, authorized with the admin JWT
+	// rather than the queue token — the token half of the matrix (§2.5).
 	for _, tc := range []struct {
 		label  string
 		method string
-		url    string
-		token  string
+		path   string
 		body   []byte
 	}{
-		// The official actions/scaleset client's construction: POST to the
-		// Actions Service base, QUEUE token, bare []int64 body.
-		{"empty batch, queue token", http.MethodPost,
-			svcBase + ssPath + "/acquirejobs?api-version=6.0-preview", sess.MessageQueueAccessToken, emptyBatch},
-		{"unknown id, queue token", http.MethodPost,
-			svcBase + ssPath + "/acquirejobs?api-version=6.0-preview", sess.MessageQueueAccessToken, unknownBatch},
-		// Diagnostics for a route-level 404 on the official construction:
-		// same call with the admin JWT, and ARC's GET acquirablejobs.
-		{"unknown id, admin token", http.MethodPost,
-			svcBase + ssPath + "/acquirejobs?api-version=6.0-preview", conn.Token, unknownBatch},
-		{"acquirablejobs, admin token", http.MethodGet,
-			svcBase + ssPath + "/acquirablejobs?api-version=6.0-preview", conn.Token, nil},
-		// The observed queue URL is {broker}/scalesets/message — a route
-		// family outside /_apis/runtime. Probe the acquire verb there too.
-		{"unknown id, queue-base route", http.MethodPost,
-			queueBase(sess.MessageQueueURL) + "/acquirejobs", sess.MessageQueueAccessToken, unknownBatch},
-		{"unknown id, queue-base route + api-version", http.MethodPost,
-			queueBase(sess.MessageQueueURL) + "/acquirejobs?api-version=6.0-preview", sess.MessageQueueAccessToken, unknownBatch},
+		{"unknown id, admin token", http.MethodPost, ssPath + "/acquirejobs", unknownBatch},
+		{"acquirablejobs, admin token", http.MethodGet, ssPath + "/acquirablejobs", nil},
 	} {
-		var bodyReader io.Reader
-		if tc.body != nil {
-			bodyReader = bytes.NewReader(tc.body)
-		}
-		req, err := http.NewRequestWithContext(ctx, tc.method, tc.url, bodyReader)
-		if err != nil {
-			p.log.Warn("INVESTIGATION-E: acquirejobs build request failed", "case", tc.label, "error", err)
-			continue
-		}
-		req.Header.Set("Authorization", "Bearer "+tc.token)
-		if tc.body != nil {
-			req.Header.Set("Content-Type", "application/json")
-		}
-		resp, err := p.hc.Do(req)
+		status, body, err := p.client.RawServiceCall(ctx, tc.method, tc.path, tc.body)
 		if err != nil {
 			p.log.Warn("INVESTIGATION-E: acquirejobs request failed", "case", tc.label, "error", err)
 			continue
 		}
-		body, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
 		p.log.Info("INVESTIGATION-E: acquirejobs shape probe",
-			"case", tc.label,
-			"status", resp.StatusCode,
-			"body", githubapp.SanitizeBody(body, 256))
+			"case", tc.label, "status", status, "body", githubapp.SanitizeBody(body, 256))
 	}
+
+	// The observed queue URL is {broker}/scalesets/message — a route family
+	// outside /_apis/runtime. Probe the acquire verb there too, with the queue
+	// token that authorizes the queue.
+	qBase := queueBase(sess.MessageQueueURL)
+	for _, tc := range []struct {
+		label string
+		url   string
+	}{
+		{"unknown id, queue-base route", qBase + "/acquirejobs"},
+		{"unknown id, queue-base route + api-version", qBase + "/acquirejobs?api-version=6.0-preview"},
+	} {
+		status, body, err := p.queueCall(ctx, http.MethodPost, tc.url, sess.MessageQueueAccessToken, unknownBatch)
+		if err != nil {
+			p.log.Warn("INVESTIGATION-E: acquirejobs request failed", "case", tc.label, "error", err)
+			continue
+		}
+		p.log.Info("INVESTIGATION-E: acquirejobs shape probe",
+			"case", tc.label, "status", status, "body", githubapp.SanitizeBody(body, 256))
+	}
+}
+
+// queueCall issues one raw request to a message-queue-family URL with the
+// session's queue token, returning the status and body.
+//
+// These are the only hand-built requests left in the scenario, and they are
+// hand-built by definition: they target routes the client deliberately does not
+// speak, which is the entire reason for comparing them against it.
+func (p *scalesetProbe) queueCall(ctx context.Context, method, u, queueToken string, body []byte) (int, []byte, error) {
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+queueToken)
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := p.hc.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	respBody, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, respBody, nil
 }
 
 // queueBase strips the trailing path segment and query from a message-queue
@@ -898,11 +711,11 @@ func queueBase(queueURL string) string {
 // probeJITConfig mints one JIT runner config and logs its shape — runner
 // id/name and the decoded blob's top-level JSON keys only. The blob bundles
 // runner credentials and is never logged.
-func (p *scalesetProbe) probeJITConfig(ctx context.Context, conn *adminConnection, scaleSetID int) error {
-	var out jitRunnerConfig
-	status, err := p.svcCall(ctx, conn, http.MethodPost,
-		fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/generatejitconfig", scaleSetID),
-		map[string]string{"name": p.cfg.ScaleSetName + "-runner", "workFolder": "_work"}, &out)
+//
+// Decoding the blob is an assertion the library cannot make for the probe: the
+// client returns it opaque, so its internal structure is only ever checked here.
+func (p *scalesetProbe) probeJITConfig(ctx context.Context, scaleSetID int) error {
+	out, err := p.client.GenerateJITConfig(ctx, scaleSetID, p.cfg.ScaleSetName+"-runner", "_work")
 	if err != nil {
 		return err
 	}
@@ -918,7 +731,6 @@ func (p *scalesetProbe) probeJITConfig(ctx context.Context, conn *adminConnectio
 		}
 	}
 	p.log.Info("INVESTIGATION-E: generatejitconfig",
-		"status", status,
 		"runnerId", out.Runner.ID,
 		"runnerName", out.Runner.Name,
 		"encodedLen", len(out.EncodedJITConfig),
@@ -931,7 +743,7 @@ func (p *scalesetProbe) probeJITConfig(ctx context.Context, conn *adminConnectio
 // batch of one, and reports whether a JobAssigned follows — the live half of
 // U2. The acquired job is left to GitHub's unstarted-job timeout (no runner
 // will run it); acceptable on the test org, mirroring the M1 probes.
-func (p *scalesetProbe) jobTest(ctx context.Context, conn *adminConnection, scaleSetID int, sess *runnerScaleSetSession) {
+func (p *scalesetProbe) jobTest(ctx context.Context, scaleSetID int, sess *scaleset.RunnerScaleSetSession) {
 	p.log.Info("INVESTIGATION-E: job test — dispatch a workflow with runs-on: " + p.cfg.ScaleSetName + " NOW")
 	timeout := p.jobTestTimeout
 	if timeout == 0 {
@@ -943,23 +755,10 @@ func (p *scalesetProbe) jobTest(ctx context.Context, conn *adminConnection, scal
 	lastMessageID := int64(0)
 	for {
 		if deadline.Err() != nil {
-			p.log.Warn("INVESTIGATION-E: job test timeout — no JobAvailable within 3 minutes")
+			p.log.Warn("INVESTIGATION-E: job test timeout — no JobAvailable within the test window")
 			return
 		}
-		u := sess.MessageQueueURL
-		sep := "?"
-		if strings.Contains(u, "?") {
-			sep = "&"
-		}
-		u += sep + fmt.Sprintf("lastMessageId=%d", lastMessageID)
-		req, err := http.NewRequestWithContext(deadline, http.MethodGet, u, nil)
-		if err != nil {
-			p.log.Error("INVESTIGATION-E: job test build request failed", "error", err)
-			return
-		}
-		req.Header.Set("Authorization", "Bearer "+sess.MessageQueueAccessToken)
-		req.Header.Set("X-ScaleSetMaxCapacity", "1")
-		resp, err := p.pollClient.Do(req)
+		msg, err := p.client.GetMessage(deadline, sess, 1, lastMessageID)
 		if err != nil {
 			if deadline.Err() != nil {
 				continue
@@ -967,82 +766,88 @@ func (p *scalesetProbe) jobTest(ctx context.Context, conn *adminConnection, scal
 			p.log.Error("INVESTIGATION-E: job test poll failed", "error", err)
 			return
 		}
-		body, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if resp.StatusCode != http.StatusOK || len(body) == 0 {
-			p.log.Debug("INVESTIGATION-E: job test poll empty", "status", resp.StatusCode)
-			continue
-		}
-		var msg runnerScaleSetMessage
-		if err := json.Unmarshal(body, &msg); err != nil {
-			p.log.Warn("INVESTIGATION-E: job test message decode failed", "error", err)
+		if msg == nil {
+			p.log.Debug("INVESTIGATION-E: job test poll empty")
 			continue
 		}
 		lastMessageID = msg.MessageID
 		p.log.Info("INVESTIGATION-E: job test message",
 			"messageId", msg.MessageID, "messageType", msg.MessageType,
-			"statistics", string(msg.Statistics),
+			"statistics", statsString(msg.Statistics),
 			"body", githubapp.SanitizeBody([]byte(msg.Body), 1024))
 
-		// Collect runnerRequestIds from any JobAvailable entries and acquire.
-		// The message may carry an acquireJobUrl per entry — on backends where
-		// the static /_apis/runtime acquire route 404s (observed live on the
-		// broker-host tenant), the delivered URL is the authoritative one.
-		var entries []struct {
-			MessageType     string `json:"messageType"`
-			RunnerRequestID int64  `json:"runnerRequestId"`
-			AcquireJobURL   string `json:"acquireJobUrl"`
-		}
-		if err := json.Unmarshal([]byte(msg.Body), &entries); err != nil {
+		jobs, err := msg.Jobs()
+		if err != nil {
+			p.log.Warn("INVESTIGATION-E: job test message decode failed", "error", err)
 			continue
 		}
-		var ids []int64
-		acquireURL := ""
-		assigned := false
-		for _, e := range entries {
-			switch e.MessageType {
-			case "JobAvailable":
-				ids = append(ids, e.RunnerRequestID)
-				if e.AcquireJobURL != "" {
-					acquireURL = e.AcquireJobURL
-					p.log.Info("INVESTIGATION-E: JobAvailable carries acquireJobUrl",
-						"acquireJobUrl", e.AcquireJobURL)
-				}
-			case "JobAssigned":
-				assigned = true
+		if assigned := scaleset.AssignedJobs(jobs); len(assigned) > 0 {
+			for _, a := range assigned {
 				p.log.Info("INVESTIGATION-E: JobAssigned observed — batch acquire confirmed",
-					"runnerRequestId", e.RunnerRequestID)
+					"runnerRequestId", a.RunnerRequestID, "jobId", a.JobID)
 			}
-		}
-		if assigned {
 			return
 		}
+		ids := scaleset.AvailableJobIDs(jobs)
 		if len(ids) == 0 {
 			continue
 		}
-		payload, _ := json.Marshal(ids)
-		acqURL := acquireURL
-		if acqURL == "" {
-			acqURL = strings.TrimSuffix(conn.URL, "/") +
-				fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/acquirejobs?api-version=6.0-preview", scaleSetID)
+		acquireURL := deliveredAcquireURL(jobs)
+		if au, aerr := url.Parse(acquireURL); acquireURL != "" && aerr == nil {
+			// Host and path only: a delivered URL may carry a signed query.
+			p.log.Info("INVESTIGATION-E: JobAvailable carries acquireJobUrl",
+				"host", au.Host, "path", au.Path)
 		}
-		acqReq, err := http.NewRequestWithContext(deadline, http.MethodPost, acqURL, bytes.NewReader(payload))
-		if err != nil {
-			p.log.Error("INVESTIGATION-E: job test acquire build failed", "error", err)
-			return
-		}
-		acqReq.Header.Set("Authorization", "Bearer "+sess.MessageQueueAccessToken)
-		acqReq.Header.Set("Content-Type", "application/json")
-		acqResp, err := p.hc.Do(acqReq)
-		if err != nil {
-			p.log.Error("INVESTIGATION-E: job test acquire failed", "error", err)
-			return
-		}
-		acqBody, _ := io.ReadAll(acqResp.Body)
-		_ = acqResp.Body.Close()
-		p.log.Info("INVESTIGATION-E: job test acquirejobs",
-			"requested", fmt.Sprintf("%v", ids),
-			"status", acqResp.StatusCode,
-			"body", githubapp.SanitizeBody(acqBody, 512))
+		p.acquireOffered(deadline, scaleSetID, sess, ids, acquireURL)
 	}
+}
+
+// deliveredAcquireURL returns the acquireJobUrl a JobAvailable entry carried, or
+// "" when none did.
+func deliveredAcquireURL(jobs []scaleset.JobMessage) string {
+	for _, j := range jobs {
+		if j.MessageType == scaleset.MessageTypeJobAvailable && j.AcquireJobURL != "" {
+			return j.AcquireJobURL
+		}
+	}
+	return ""
+}
+
+// acquireOffered claims ids through the shipping client and, only if that fails
+// while the message carried its own acquireJobUrl, retries against the delivered
+// URL and reports the difference.
+//
+// The order matters and is the point: Client.AcquireJobs always targets the
+// static _apis/runtime route, but a JobAvailable may name a different one — and
+// on the broker-host tenant the static route was observed to 404 (Q264 §2a-3).
+// Trying the client's construction first means a live run answers "does the route
+// GAG ships still work", and a fallback that succeeds is logged as a
+// library-vs-wire DIVERGENCE rather than quietly papering over it.
+func (p *scalesetProbe) acquireOffered(ctx context.Context, scaleSetID int,
+	sess *scaleset.RunnerScaleSetSession, ids []int64, acquireURL string) {
+	won, err := p.client.AcquireJobs(ctx, scaleSetID, sess, ids)
+	if err == nil {
+		p.log.Info("INVESTIGATION-E: job test acquirejobs (client construction)",
+			"requested", fmt.Sprintf("%v", ids), "won", fmt.Sprintf("%v", won))
+		return
+	}
+	p.log.Warn("INVESTIGATION-E: job test acquirejobs (client construction) failed",
+		"requested", fmt.Sprintf("%v", ids), "error", err)
+	if acquireURL == "" {
+		return
+	}
+	payload, _ := json.Marshal(ids)
+	status, body, fErr := p.queueCall(ctx, http.MethodPost, acquireURL, sess.MessageQueueAccessToken, payload)
+	if fErr != nil {
+		p.log.Error("INVESTIGATION-E: job test acquire via delivered acquireJobUrl failed", "error", fErr)
+		return
+	}
+	if status >= 200 && status <= 299 {
+		p.log.Warn("INVESTIGATION-E: DIVERGENCE — the delivered acquireJobUrl acquired the job "+
+			"where the scaleset client's static _apis/runtime route did not",
+			"status", status, "body", githubapp.SanitizeBody(body, 512))
+		return
+	}
+	p.log.Info("INVESTIGATION-E: job test acquire via delivered acquireJobUrl also failed",
+		"status", status, "body", githubapp.SanitizeBody(body, 512))
 }

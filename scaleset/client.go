@@ -82,6 +82,11 @@ type Config struct {
 	PollClient *http.Client
 	// Metrics records poll-error and token-refresh statistics. Nil is safe.
 	Metrics MetricsRecorder
+	// Observer, when non-nil, receives one ResponseInfo per HTTP response — the
+	// raw status, headers, and latency the typed API hides. Intended for
+	// protocol-investigation tooling (cmd/probe); nil is safe and is what
+	// production callers pass.
+	Observer ResponseObserver
 	// AdminRefreshLead overrides how far before expiry the admin JWT is re-minted.
 	// Non-positive selects defaultAdminRefreshLead.
 	AdminRefreshLead time.Duration
@@ -104,6 +109,7 @@ type Client struct {
 	hc               *http.Client
 	pollClient       *http.Client
 	metrics          MetricsRecorder
+	observer         ResponseObserver
 	adminRefreshLead time.Duration
 
 	mu   sync.Mutex
@@ -126,6 +132,7 @@ func New(cfg Config) (*Client, error) {
 		hc:               cfg.HTTPClient,
 		pollClient:       cfg.PollClient,
 		metrics:          cfg.Metrics,
+		observer:         cfg.Observer,
 		adminRefreshLead: cfg.AdminRefreshLead,
 	}
 	if c.apiBase == "" {
@@ -205,12 +212,14 @@ func (c *Client) registrationToken(ctx context.Context, installToken string) (st
 	req.Header.Set("Authorization", "Bearer "+installToken)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
+	start := time.Now()
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("POST %s: %w", path, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
+	c.observe("RegistrationToken", req, resp, start, len(body))
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("POST %s: status %d: %s", path, resp.StatusCode, githubapp.SanitizeBody(body, 256))
 	}
@@ -274,12 +283,14 @@ func (c *Client) runnerRegistration(ctx context.Context, regToken string) (*Admi
 	req.Header.Set("Authorization", "RemoteAuth "+regToken)
 	req.Header.Set("Content-Type", "application/json")
 
+	start := time.Now()
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
+	c.observe("RunnerRegistration", req, resp, start, len(body))
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("POST /actions/runner-registration: status %d: %s",
 			resp.StatusCode, githubapp.SanitizeBody(body, 256))
@@ -328,12 +339,14 @@ func (c *Client) svcCall(ctx context.Context, method, path string, in, out any) 
 		req.Header.Set("Content-Type", "application/json")
 	}
 
+	start := time.Now()
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return fmt.Errorf("scaleset: %s %s: %w", method, path, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
+	c.observe("ServiceCall", req, resp, start, len(body))
 
 	if err := statusError(resp.StatusCode, resp.Header, body); err != nil {
 		return fmt.Errorf("scaleset: %s %s: %w", method, path, err)
@@ -344,6 +357,58 @@ func (c *Client) svcCall(ctx context.Context, method, path string, in, out any) 
 		}
 	}
 	return nil
+}
+
+// RawServiceCall issues one Actions Service call the Client does not model, applying
+// the admin JWT, the api-version query parameter, and the JSON framing exactly as the
+// modelled calls do, and returns the raw HTTP status and response body rather than a
+// decoded value or a typed error. body may be nil for a call with no request body.
+//
+// It exists for protocol-investigation tooling — cmd/probe — that must observe how the
+// live backend answers a route this client deliberately does not speak (an alternative
+// acquire route, say). Routing those comparisons through the shipping client keeps them
+// measured against its real auth and framing instead of a parallel reimplementation of
+// them, which is the whole point of the probe (Q362). The admin JWT never leaves the
+// Client.
+//
+// Production code must use the typed methods instead: RawServiceCall applies no
+// status-to-error mapping, so a non-2xx is reported as a status, not an error; err is
+// non-nil only when the request could not be built or sent.
+func (c *Client) RawServiceCall(ctx context.Context, method, path string, body []byte) (int, []byte, error) {
+	conn, err := c.admin(ctx)
+	if err != nil {
+		return 0, nil, err
+	}
+	u := strings.TrimSuffix(conn.URL, "/") + path
+	if strings.Contains(path, "?") {
+		u += "&api-version=" + apiVersion
+	} else {
+		u += "?api-version=" + apiVersion
+	}
+
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+conn.Token)
+	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	start := time.Now()
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return 0, nil, fmt.Errorf("scaleset: %s %s: %w", method, path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	respBody, _ := io.ReadAll(resp.Body)
+	c.observe("ServiceCall", req, resp, start, len(respBody))
+	return resp.StatusCode, respBody, nil
 }
 
 // statusError maps a non-2xx status to the package's typed error, or nil for 2xx.
@@ -508,12 +573,14 @@ func (c *Client) resolveRunnerID(ctx context.Context, installToken, prefix, name
 	req.Header.Set("Authorization", "Bearer "+installToken)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
+	start := time.Now()
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("scaleset: list runners: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
+	c.observe("ListRunners", req, resp, start, len(body))
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("scaleset: list runners: status %d: %s", resp.StatusCode, githubapp.SanitizeBody(body, 256))
 	}
@@ -546,15 +613,18 @@ func (c *Client) deleteRunner(ctx context.Context, installToken, prefix string, 
 	req.Header.Set("Authorization", "Bearer "+installToken)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
+	start := time.Now()
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return fmt.Errorf("scaleset: delete runner: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusOK {
+		c.observe("DeleteRunner", req, resp, start, 0)
 		return nil
 	}
 	body, _ := io.ReadAll(resp.Body)
+	c.observe("DeleteRunner", req, resp, start, len(body))
 	if resp.StatusCode == http.StatusUnprocessableEntity && bytes.Contains(bytes.ToLower(body), []byte("running")) {
 		return &RunnerBusyError{Name: name}
 	}
@@ -629,6 +699,7 @@ func (c *Client) GetMessage(ctx context.Context, sess *RunnerScaleSetSession, ca
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-ScaleSetMaxCapacity", strconv.Itoa(capacity))
 
+	start := time.Now()
 	resp, err := c.pollClient.Do(req)
 	if err != nil {
 		c.recordPollError(pollErrorReason(err))
@@ -636,6 +707,7 @@ func (c *Client) GetMessage(ctx context.Context, sess *RunnerScaleSetSession, ca
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
+	c.observe("GetMessage", req, resp, start, len(body))
 
 	switch {
 	case resp.StatusCode == http.StatusAccepted: // 202 — no message
@@ -699,12 +771,14 @@ func (c *Client) AcquireJobs(ctx context.Context, scaleSetID int, sess *RunnerSc
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 
+	start := time.Now()
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("scaleset: AcquireJobs: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
+	c.observe("AcquireJobs", req, resp, start, len(body))
 	if err := statusError(resp.StatusCode, resp.Header, body); err != nil {
 		return nil, fmt.Errorf("scaleset: AcquireJobs: %w", err)
 	}
@@ -741,12 +815,14 @@ func (c *Client) DeleteMessage(ctx context.Context, sess *RunnerScaleSetSession,
 	}
 	req.Header.Set("Authorization", "Bearer "+sess.MessageQueueAccessToken)
 
+	start := time.Now()
 	resp, err := c.hc.Do(req)
 	if err != nil {
 		return fmt.Errorf("scaleset: DeleteMessage: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
+	c.observe("DeleteMessage", req, resp, start, len(body))
 	// A 404/410 means the message is already gone — a benign no-op for an ack.
 	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
 		return nil
