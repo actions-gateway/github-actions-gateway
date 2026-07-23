@@ -759,6 +759,40 @@ Changing `agcResources` rolls the AGC Deployment (a rolling restart, not a hot r
 
 There is no admission-time floor enforced on the values — the guidance above is operator-owned. When in doubt, leave `agcResources` unset and let the platform default apply.
 
+### Letting an autoscaler size the AGC (`agcAutoscaling`)
+
+If you would rather not guess at `agcResources`, `ActionsGateway.spec.agcAutoscaling` hands the sizing to a [Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) (VPA): the Gateway Manager Controller (GMC) stamps a `VerticalPodAutoscaler` next to this gateway's `<gateway>-agc` Deployment, and the autoscaler right-sizes the AGC container's **requests** from its observed usage.
+
+**Prerequisite.** Your cluster administrator must have installed the Kubernetes vertical-pod-autoscaler (the `autoscaling.k8s.io` CRDs plus the recommender, updater, and admission-controller). Setting the field without it does **not** break the gateway — see [the CRD-missing runbook](troubleshooting.md#agcautoscalingunavailable--the-vpa-crds-are-not-installed).
+
+The block's **presence** is the opt-in — there is no `enabled` flag, and deleting the block deletes the autoscaler:
+
+```yaml
+spec:
+  agcAutoscaling: {}          # recommendation-only (mode defaults to Off)
+```
+
+| `mode` | What it does |
+| --- | --- |
+| `Off` (default) | Publishes a recommendation on the `VerticalPodAutoscaler`'s own status and changes nothing. Start here: run it for a few days and read `kubectl describe vpa <gateway>-agc`. |
+| `Initial` | Applies the recommendation only when a new AGC pod is created. Never evicts a running AGC. |
+| `Recreate` | Lets the autoscaler evict the AGC pod to resize it. Safe — in-flight listener sessions deregister on SIGTERM and re-register within GitHub's redelivery window — but it *is* a control-plane restart. |
+
+Upstream's `Auto` mode is not offered: it is an alias whose actuation mechanism changes between autoscaler releases, so this API names `Recreate` explicitly instead.
+
+**How it interacts with `agcResources` — they compose, neither one silently wins:**
+
+- `agcResources` still decides what is stamped on the Deployment, and is the sizing in effect whenever the autoscaler is not actuating (`mode: Off`, VPA components down, or before the first recommendation).
+- The autoscaler is pinned to `controlledValues: RequestsOnly`, so **your limits are never moved by it**. The memory limit stays the hard OOM ceiling you chose.
+- **A request you explicitly set becomes the autoscaler's floor** (`minAllowed`). If you want the autoscaler free to shrink the AGC — usually the point of enabling it — leave `agcResources.requests` unset.
+- Your effective limits become its ceiling (`maxAllowed`); a request may never exceed its own limit.
+
+So `agcResources: {requests: {memory: 1Gi}, limits: {memory: 6Gi}}` plus `agcAutoscaling: {mode: Recreate}` means "autoscale the memory request, but never below 1Gi and never above 6Gi". Check the resolution any time with `kubectl get vpa <gateway>-agc -o yaml`; the GMC also emits a Normal Event naming the derived bounds when the autoscaler is first created.
+
+**Checking it took effect.** `kubectl describe actionsgateway <gateway>` shows an `AGCAutoscalingUnavailable` condition: `False`/`AGCAutoscalingActive` when the autoscaler is in place, `False`/`AGCAutoscalingDisabled` when you have not opted in, `True`/`VPACRDNotInstalled` when the prerequisite is missing.
+
+The GMC's own control plane has the same opt-in at the chart level — the `vpa.enabled` value in [install.md](install.md#key-values-an-operator-sets).
+
 ### Workload-identity credentials (external signer)
 
 `spec.credentials` is a discriminated union (keyed by `credentials.type`) with two members. The default, `GitHubApp` (every example above), is the **possession model**: the App's RSA private key lives in a namespace `Secret` ([Step 1](#step-1-create-the-github-app-secret)) and the AGC signs the App JWT in-process. `WorkloadIdentity` is the opt-in **delegation model**: **no App private key is ever stored in the cluster** — an external signer signs the App JWT, and the AGC proves its own pod identity to that signer. Use it when policy forbids a long-lived signing key at rest in the cluster and you run a signer (HashiCorp Vault in the MVP) the AGC can reach. See [security §5.7](../design/05-security.md#57-workload-identity-the-no-pem-delegation-model) for the trust model.

@@ -185,7 +185,9 @@ For example, 50 RunnerGroups each with `maxListeners: 10` → 500 concurrent gor
 
 CPU consumption is predominantly I/O-bound — goroutines spend nearly all of their time blocked on `GET /message` long-polls. CPU pressure appears only during reconcile churn (many RunnerGroups being created or deleted simultaneously) or during a token refresh storm. The recommended `2`-core CPU **limit** is sufficient for most deployments; raise the AGC Deployment's `resources.limits.cpu` only if `container_cpu_throttled_seconds_total` shows sustained throttling during peak reconcile activity.
 
-**Optional VPA right-sizing.** A [Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) in `Auto` mode will observe the AGC's actual CPU and memory usage over time and adjust its resource requests automatically. This is useful for operators who want the AGC to self-tune rather than set limits manually, especially in early-production environments where workload shape is still stabilizing. The AGC handles VPA-initiated restarts gracefully: when killed, in-flight listener goroutines deregister their sessions via `DELETE /sessions`, and the AGC re-registers them within GitHub's 2-minute redelivery window on restart (see [§4.2](04-operational-flows.md#42-job-execution-flow-agc) and the `SessionReacquisition` SLO in [Appendix A](appendix-a-capacity-slos.md)).
+**Optional VPA right-sizing.** A [Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) (VPA) observes the AGC's actual CPU and memory usage over time and adjusts its resource requests automatically. This is useful for operators who want the AGC to self-tune rather than set limits manually, especially in early-production environments where workload shape is still stabilizing. The AGC handles VPA-initiated restarts gracefully: when killed, in-flight listener goroutines deregister their sessions via `DELETE /sessions`, and the AGC re-registers them within GitHub's 2-minute redelivery window on restart (see [§4.2](04-operational-flows.md#42-job-execution-flow-agc) and the `SessionReacquisition` SLO in [Appendix A](appendix-a-capacity-slos.md)).
+
+Under v2 this is a first-class opt-in rather than something the operator hand-rolls: see [E.11](#e11-managed-vertical-right-sizing-of-the-control-planes) for the two managed opt-ins the system ships, the precedence rules against `agcResources`, and what happens on a cluster where the VPA CRDs are not installed.
 
 > **v2 promotes AGC sizing to a CR field — `spec.agcResources` (Q171).** This appendix describes the v1 API (`actions-gateway.github.com/v1alpha1`), where AGC sizing is platform-applied on the Deployment as above. The v2 `ActionsGateway` (`actions-gateway.com/v2alpha1`) instead exposes an optional `agcResources` field of the standard `corev1.ResourceRequirements` shape for tenant-controlled per-gateway sizing, and makes the [Appendix A](appendix-a-capacity-slos.md) sizing (requests `cpu: 500m` / `memory: 2Gi`, limits `cpu: 2` / `memory: 4Gi`) the GMC-stamped default: the override is additive per key, so setting one knob keeps the default for the rest and omitting the field reproduces the default unchanged. See [Appendix H](appendix-h-v2-api-decomposition.md) for the v2 decomposition and [tenant-onboarding](../operations/tenant-onboarding.md#tuning-agc-control-plane-resources) for the operator-facing how-to and the recommended floor.
 
@@ -351,6 +353,51 @@ After sharding, each installation has 90 × 72 = 6,480 req/hr at rest — 43% of
 3. Move 90 RunnerGroup definitions from the first CR to the second.
 4. Update workflow files to target the correct label sets.
 5. Confirm `RateLimited` condition clears on both CRs.
+
+---
+
+## E.11. Managed Vertical Right-Sizing of the Control Planes
+
+Both control planes — the cluster-wide Gateway Manager Controller (GMC) and each per-tenant AGC — are single-shape, long-lived workloads whose correct resource footprint is exactly the thing an operator cannot know in advance. Manual sizing is therefore either wasteful (a 2Gi request for a 60 MiB working set) or dangerous (a limit below the working set OOMKills a single-pod control plane). Q360 ships two opt-ins that hand that judgement to a Vertical Pod Autoscaler instead.
+
+Both are **opt-in and off by default**, and both default to recommendation-only, so turning them on is observable before it is disruptive.
+
+| Surface | Opt-in | Target |
+| --- | --- | --- |
+| GMC (cluster-wide) | Helm value `vpa.enabled: true` | the `*-controller-manager` Deployment |
+| AGC (per tenant) | `ActionsGateway.spec.agcAutoscaling` | that gateway's `<gw>-agc` Deployment |
+
+The per-gateway opt-in is the presence of the block; there is no `enabled` flag, so removing `agcAutoscaling` deletes the managed `VerticalPodAutoscaler` again. `spec.agcAutoscaling.mode` is the autoscaler's `updateMode`, restricted to three values:
+
+| `mode` | Behavior |
+| --- | --- |
+| `Off` (default) | The autoscaler publishes a recommendation in its own status and never mutates a pod. |
+| `Initial` | The recommendation is applied at pod creation only. A running AGC is never evicted by the autoscaler. |
+| `Recreate` | The autoscaler may evict the AGC pod to apply a new recommendation — safe per the restart analysis in [E.9](#e9-scaling-the-agc-itself), but still a control-plane restart, so it is opt-in. |
+
+Upstream's fourth value, `Auto`, is deliberately **not** exposed. It is an alias whose actuation mechanism is version-dependent (today it evicts like `Recreate`; in-place pod resize is still alpha), so a gateway pinned to `Auto` would silently change its restart behavior on a VPA upgrade. Naming `Recreate` makes the eviction explicit.
+
+### E.11.1. Precedence against `agcResources`
+
+Both `agcResources` and the autoscaler influence the AGC container's resources, so the division is fixed and explicit rather than last-writer-wins. **They compose; they do not compete.**
+
+- **`agcResources` alone decides what the GMC stamps on the Deployment.** That is unchanged by the opt-in, and it is the sizing actually in effect whenever the autoscaler is not actuating: `mode: Off`, the VPA components absent or down, or before the first recommendation exists.
+- **The managed autoscaler is pinned to `controlledValues: RequestsOnly`.** It moves *requests* only; the limits from `agcResources` (or the platform default) are never raised or lowered by it. On a single-pod control plane, an autoscaler that also drifted the memory *limit* would erode the OOM ceiling that bounds a runaway — the property the limit exists for.
+- **A request the tenant explicitly set becomes the autoscaler's `minAllowed`.** An explicit floor is honored as a floor rather than silently overwritten. Leave `agcResources.requests` unset to let the autoscaler size the AGC all the way down to its own global floor — that is the configuration where right-sizing has the most to win.
+- **The effective limits become `maxAllowed`.** This is a correctness requirement, not a preference: a container whose request exceeds its own limit is rejected by the apiserver, so the autoscaler must never recommend above the stamped limit. It is also the pairing upstream requires — `RequestsOnly` on a container that *has* limits is only safe with a `maxAllowed` at most equal to them — which is why the ceiling is always emitted rather than optional.
+
+**Resolved at reconcile, not at admission.** Setting both fields is a coherent configuration (sizing plus bounds), not a contradiction, so rejecting the combination at admission would remove a useful and idiomatic way to configure a VPA. What admission-time rejection buys — "no silent surprises" — is bought instead by making the resolution visible: the derived bounds are on the stamped `VerticalPodAutoscaler` object, the GMC emits a Normal Event naming them when the autoscaler first appears, and the `AGCAutoscalingUnavailable` condition states which knob owns what. The chart-level opt-in follows the same rules against the chart's `resources` value.
+
+### E.11.2. When the VPA CRDs are absent
+
+The `autoscaling.k8s.io` CRDs are not part of core Kubernetes, so an opt-in can be unsatisfiable through no fault of the CR. The GMC probes its RESTMapper for the `VerticalPodAutoscaler` kind and, when it is missing:
+
+- **provisions the gateway normally** — the AGC is created with its `agcResources` sizing and reaches `Ready=True`. A missing optional right-sizing prerequisite is not a reason to withhold a tenant's runners;
+- **does not fail or retry the write** — nothing is applied against a kind the apiserver does not serve, so there is no error to hot-loop on;
+- **surfaces it** — the advisory `AGCAutoscalingUnavailable=True` condition (reason `VPACRDNotInstalled`, naming the remediation) plus one Warning Event per transition. The condition is advisory: it never gates `Ready`, exactly like `EgressUnattributed`;
+- **converges on its own** — the gateway re-probes every 10 minutes, so installing the vertical-pod-autoscaler later takes effect without an operator edit. Ten minutes is a poll, not a hot loop: one cached-discovery lookup per gateway per interval.
+
+The chart-level opt-in has no equivalent runtime path — Helm renders the object at install time, so `vpa.enabled: true` without the CRDs fails `helm install` loudly, the same prerequisite contract as `metrics.serviceMonitor.enabled`.
 
 ---
 

@@ -56,6 +56,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [`RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)](#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)
 - [`RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)](#runnerset-stuck-readyfalse-with-a-notfound-reason-v2alpha1)
 - [v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)](#v2-actionsgateway-stuck-readyfalse-credentialunavailable--proxynotfound)
+- [`AGCAutoscalingUnavailable` — the VPA CRDs are not installed](#agcautoscalingunavailable--the-vpa-crds-are-not-installed)
 - [Multiple v2 gateways in one namespace: naming, scoping, prerequisites](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites)
 - [v2 Objects Not Reconciling After Installing the CRD Chart](#v2-objects-not-reconciling-after-installing-the-crd-chart)
 - [Privileged securityProfile Rejected: Namespace Not Eligible](#privileged-securityprofile-rejected-namespace-not-eligible)
@@ -2038,6 +2039,38 @@ Unlike a `RunnerSet`'s reference resolution, these are the *gateway's own* preco
 **If GitHub egress fails in direct mode.** Confirm (1) the cluster CNI actually enforces egress NetworkPolicy (kindnet does not — see [tenant-onboarding Pre-Conditions](tenant-onboarding.md#pre-conditions)), and (2) the GMC's GitHub IP-range refresh has run — the direct-egress AGC + workload NetworkPolicies carry the GitHub CIDR allowlist only after the first fetch; `kubectl get networkpolicy <gateway>-workload -o yaml` should show `ipBlock` egress peers on port 443.
 
 **Resolution.** Create the GitHub App Secret (see ["GitHub App Secret Misconfiguration"](#github-app-secret-misconfiguration) for the required keys) and/or the `EgressProxy` named by `defaultProxyRef`, in the gateway's namespace. The gateway self-heals on the next watch event.
+
+---
+
+## `AGCAutoscalingUnavailable` — the VPA CRDs are not installed
+
+> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
+
+**Symptoms.** You set `ActionsGateway.spec.agcAutoscaling`, but `kubectl get vpa -n <ns>` finds nothing named `<gateway>-agc`. `kubectl describe actionsgateway <gateway> -n <ns>` shows:
+
+```
+Conditions:
+  Type:     AGCAutoscalingUnavailable
+  Status:   True
+  Reason:   VPACRDNotInstalled
+  Message:  spec.agcAutoscaling is set but the VerticalPodAutoscaler.autoscaling.k8s.io CRD is not
+            installed in this cluster, so no VerticalPodAutoscaler was created for "<gateway>-agc" ...
+Events:
+  Warning  VPACRDNotInstalled  Reconcile  ...
+```
+
+**Cause.** The `autoscaling.k8s.io` CRDs are **not** part of core Kubernetes. They ship with the [Kubernetes vertical-pod-autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) add-on, which your cluster does not have installed (or has only partly installed).
+
+**This is not an outage.** The gateway is fully provisioned and `Ready=True`; the AGC runs on its `spec.agcResources` sizing (or the platform default). `AGCAutoscalingUnavailable` is advisory and never gates `Ready` — it exists so an unsatisfiable opt-in is visible instead of silently doing nothing. The GMC does not retry the write against a kind the apiserver does not serve, so there is no reconcile churn either.
+
+**Resolution — pick one:**
+
+1. **Install the vertical-pod-autoscaler** (CRDs + recommender + updater + admission-controller), e.g. via your platform's add-on manager or the autoscaler repo's `hack/vpa-up.sh`. Note the CRDs alone are not enough for `mode: Initial`/`Recreate` to actuate — those need the admission-controller and updater running. The gateway **re-probes every 10 minutes**, so it picks the autoscaler up on its own; `kubectl annotate actionsgateway <gateway> -n <ns> kubectl.kubernetes.io/restartedAt="$(date -Is)" --overwrite` forces an immediate reconcile if you don't want to wait.
+2. **Remove the opt-in** — delete `spec.agcAutoscaling` and size the AGC with `spec.agcResources` instead ([tenant-onboarding](tenant-onboarding.md#tuning-agc-control-plane-resources)). The condition returns to `False`/`AGCAutoscalingDisabled`.
+
+**Verify.** Once the CRDs are present the condition flips to `False`/`AGCAutoscalingActive` and `kubectl get vpa <gateway>-agc -n <ns>` returns the managed object. If it exists but the AGC's requests never change, check the autoscaler's own components (`kubectl get pods -n kube-system -l app=vpa-recommender`) and remember `mode: Off` — the default — is recommendation-only by design: read `kubectl describe vpa <gateway>-agc` for the recommendation and switch to `mode: Recreate` when you want it applied.
+
+**Same symptom at the chart level.** The GMC's own `vpa.enabled` value has no runtime degradation path — Helm renders the object at install time, so enabling it without the CRDs fails `helm install`/`helm upgrade` with `no matches for kind "VerticalPodAutoscaler"`. Install the autoscaler first, or set `vpa.enabled=false`.
 
 ---
 

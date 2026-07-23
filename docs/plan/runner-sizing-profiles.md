@@ -188,9 +188,10 @@ Decisions taken at pickup (implementation:
 
 ## Non-goals
 
-- **AGC / GMC / proxy-pool autoscaling** — separate concerns:
-  [Q360](../STATUS.md#Q360) (managed VPA opt-in for the control planes) and
-  the bring-your-own proxy autoscaler (Q173, shipped:
+- **AGC / GMC / proxy-pool autoscaling** — separate concerns, both shipped:
+  the managed VPA opt-in for the control planes (Q360:
+  [`ActionsGateway.spec.agcAutoscaling`](../design/appendix-e-capacity-planning.md#e11-managed-vertical-right-sizing-of-the-control-planes)
+  and the chart's `vpa.enabled`) and the bring-your-own proxy autoscaler (Q173:
   [`EgressProxy.spec.managedAutoscaling`](v2-api.md#bring-your-own-proxy-autoscaler-q173--shipped)).
 - **GPU-count autoscaling** — shapes are selected by jobs, never resized.
 - **Making CI faster than GitHub-hosted** — same scope note as the

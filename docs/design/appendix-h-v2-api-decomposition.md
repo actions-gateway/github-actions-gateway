@@ -177,6 +177,12 @@ type ActionsGatewaySpec struct {
     // unset ⇒ that default unchanged. See §H.4 note below.
     AGCResources *corev1.ResourceRequirements `json:"agcResources,omitempty"`
 
+    // AGCAutoscaling optionally opts this gateway's AGC into managed vertical
+    // right-sizing (Q360): the GMC stamps a VerticalPodAutoscaler next to the AGC
+    // Deployment. Presence is the opt-in; mode is Off (recommend-only, default),
+    // Initial, or Recreate. Composes with agcResources — see §H.4 note below.
+    AGCAutoscaling *AGCVerticalAutoscaling `json:"agcAutoscaling,omitempty"`
+
     // REMOVED vs v1alpha1: Proxy ProxyConfig         → standalone EgressProxy
     // REMOVED vs v1alpha1: RunnerGroups []RunnerGroupSpec → explicit RunnerSet objects
 }
@@ -301,6 +307,8 @@ fails closed (`TemplateNotFound`), exactly like a missing proxy fails closed
 
 **Per-gateway AGC resources — `agcResources` (Q171, shipped).** The AGC control-plane container is sized by an optional `ActionsGateway.spec.agcResources` of the standard `corev1.ResourceRequirements` shape. It is an additive, per-key overlay of the platform default — the [Appendix A](appendix-a-capacity-slos.md) sizing (`requests {cpu: 500m, memory: 2Gi}`, `limits {cpu: 2, memory: 4Gi}`): the GMC stamps the default and replaces only the request/limit keys the tenant sets, so an unset field reproduces the default unchanged (non-breaking) and a value that sets one knob keeps the default for the rest. There is no admission-time floor on the values — sizing guidance and the recommended floor (don't set a memory limit below the working set; don't request more than a node/quota can schedule) are operator-owned in [tenant-onboarding](../operations/tenant-onboarding.md#tuning-agc-control-plane-resources). v1alpha1 has no equivalent field; its AGC carries no GMC-stamped resources (unchanged).
 
+**Per-gateway managed right-sizing — `agcAutoscaling` (Q360, shipped).** An optional `ActionsGateway.spec.agcAutoscaling` block has the GMC stamp a `VerticalPodAutoscaler` (`autoscaling.k8s.io/v1`) next to that gateway's AGC Deployment, owner-referenced like every other child. The block's presence is the opt-in (no `enabled` flag), and `mode` — `Off` (default, recommendation-only), `Initial`, or `Recreate` — is the autoscaler's `updateMode`; upstream's `Auto` is deliberately not exposed because its actuation mechanism is version-dependent. It **composes with** `agcResources` rather than overriding it: the autoscaler is pinned to `controlledValues: RequestsOnly` so the stamped limits are never moved, an explicitly set `agcResources.request` becomes `minAllowed`, and the effective limits become `maxAllowed`. The precedence is resolved at reconcile, not rejected at admission — the combination is coherent (sizing plus bounds), and it is made non-silent by the derived bounds on the stamped object, a Normal Event when the autoscaler first appears, and the `AGCAutoscalingUnavailable` condition. The `autoscaling.k8s.io` CRDs are an optional add-on, so an opt-in on a cluster without them degrades to that condition (`VPACRDNotInstalled`) plus a Warning Event with a bounded 10-minute re-probe — it never gates `Ready` and never hot-loops. Full rules in [Appendix E §E.11](appendix-e-capacity-planning.md#e11-managed-vertical-right-sizing-of-the-control-planes); the GMC's own equivalent is the chart's `vpa.enabled`. v1alpha1 has no equivalent field.
+
 ### Worked example — minimal proxy-less onboarding (three objects)
 
 ```yaml
@@ -421,7 +429,7 @@ Field movement, v1alpha1 → v2alpha1:
 | `RunnerGroup.spec.{runnerLabels,maxListeners,maxWorkers,priorityTiers, lifecycle}` | `RunnerSet.spec` (unchanged) |
 | `ActionsGateway.spec.proxy` | `EgressProxy` (kind) |
 | `ActionsGateway.spec.runnerGroups` | removed (explicit `RunnerSet` objects) |
-| — | `RunnerSet.spec.{gatewayRef,templateRef,proxyRef}`; `ActionsGateway.spec.{defaultProxyRef,defaultTemplateRef,agcResources}` |
+| — | `RunnerSet.spec.{gatewayRef,templateRef,proxyRef}`; `ActionsGateway.spec.{defaultProxyRef,defaultTemplateRef,agcResources,agcAutoscaling}` |
 
 ## H.7. Reference integrity — runtime conditions, not admission
 

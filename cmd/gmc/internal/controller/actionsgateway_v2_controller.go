@@ -16,6 +16,15 @@
 // nor can bind AGC SAs into arbitrary ClusterRoles.
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=bind,resourceNames=agc-clusterrunnertemplate-reader
+//
+// Managed AGC right-sizing (Q360): the per-gateway spec.agcAutoscaling opt-in has the
+// GMC stamp a VerticalPodAutoscaler next to each AGC Deployment. The grant is
+// unconditional because RBAC rules are declarative — a rule naming a group whose CRD is
+// not installed is inert, and the reconciler degrades on the missing CRD rather than on
+// a permission error. It grants nothing over pod resources directly: a VPA only ever
+// resizes the workload it targets, and every object the GMC creates is scoped to a
+// tenant namespace by the tenant-resource-guard admission policy.
+// +kubebuilder:rbac:groups=autoscaling.k8s.io,resources=verticalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
 
 package controller
 
@@ -35,6 +44,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
@@ -208,7 +218,18 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return r.setDegraded(ctx, &ag, err)
 	}
 
-	return r.updateStatus(ctx, &ag, proxy)
+	// Managed AGC right-sizing (Q360). Reconciled after the control-plane children so
+	// the autoscaler's targetRef names an already-created Deployment, and kept out of
+	// reconcileResources' step machinery because its interesting outcome is not an
+	// error: an opt-in the cluster cannot satisfy (no VerticalPodAutoscaler CRD) comes
+	// back as state for updateStatus to surface, never as a Degraded gateway. A real
+	// apply failure (RBAC, apiserver) still degrades like any other child.
+	autoscaler, err := r.applyOrPruneAGCAutoscaler(ctx, &ag)
+	if err != nil {
+		return r.setDegraded(ctx, &ag, &provisioningError{step: "AGC autoscaler", err: err})
+	}
+
+	return r.updateStatus(ctx, &ag, proxy, autoscaler)
 }
 
 // reconcileResources creates or patches every AGC control-plane child, each
@@ -492,8 +513,9 @@ func (r *ActionsGatewayV2Reconciler) applyOwnedSecret(ctx context.Context, ag *g
 // cleared CredentialUnavailable + Degraded (provisioning reached here). It also
 // records the egress mode (proxyMode Proxied/Direct) and the advisory
 // EgressUnattributed condition (True only in direct mode, §H.10). proxy is nil for
-// direct egress.
-func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, proxy *gmcv2alpha1.EgressProxy) (ctrl.Result, error) {
+// direct egress. autoscaler carries the managed-VPA outcome (Q360) for the advisory
+// AGCAutoscalingUnavailable condition.
+func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, proxy *gmcv2alpha1.EgressProxy, autoscaler agcAutoscalerState) (ctrl.Result, error) {
 	var dep appsv1.Deployment
 	agcReady := false
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: agcNameV2(ag)}, &dep); err == nil {
@@ -508,6 +530,7 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	prevReady := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionReady)
 	prevRunnerSets := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionRunnerSetsDegraded)
 	prevDegraded := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionDegraded)
+	prevAutoscaling := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionAGCAutoscalingUnavailable)
 	set := func(condType string, status bool, reason, msg string) {
 		s := metav1.ConditionFalse
 		if status {
@@ -538,6 +561,25 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 		set(gmcv2alpha1.ConditionEgressUnattributed, false, gmcv2alpha1.ReasonProxiedEgress,
 			fmt.Sprintf("AGC control-plane egress is attributed to EgressProxy %q", proxy.Name))
 	}
+
+	// Managed AGC right-sizing (Q360). Advisory like EgressUnattributed: it never gates
+	// Ready, because a gateway whose VerticalPodAutoscaler could not be created is
+	// fully functional — it is running on its agcResources sizing, just not being
+	// right-sized. The unavailable state is what an operator sees instead of a silent
+	// no-op when they opt in on a cluster with no VPA CRDs installed.
+	autoscalingMsg := "spec.agcAutoscaling is not set: the AGC is sized by spec.agcResources"
+	autoscalingReason := gmcv2alpha1.ReasonAGCAutoscalingDisabled
+	switch {
+	case autoscaler.unavailable:
+		autoscalingReason = gmcv2alpha1.ReasonVPACRDNotInstalled
+		autoscalingMsg = fmt.Sprintf("spec.agcAutoscaling is set but the %s CRD is not installed in this cluster, so no VerticalPodAutoscaler was created for %q; the AGC runs on its spec.agcResources sizing. Install the Kubernetes vertical-pod-autoscaler (CRDs + recommender/updater/admission-controller) or remove spec.agcAutoscaling",
+			verticalPodAutoscalerGVK.GroupKind().String(), agcVPAName(ag))
+	case autoscaler.requested:
+		autoscalingReason = gmcv2alpha1.ReasonAGCAutoscalingActive
+		autoscalingMsg = fmt.Sprintf("VerticalPodAutoscaler %q manages the AGC container's resource requests in updateMode %s; limits stay as stamped from spec.agcResources",
+			agcVPAName(ag), agcVPAUpdateMode(ag.Spec.AGCAutoscaling))
+	}
+	set(gmcv2alpha1.ConditionAGCAutoscalingUnavailable, autoscaler.unavailable, autoscalingReason, autoscalingMsg)
 
 	agcReason := gmcv2alpha1.ReasonAGCReady
 	agcMsg := "AGC Deployment has a ready replica"
@@ -598,9 +640,31 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 		r.recordEvent(ag, corev1.EventTypeNormal, gmcv2alpha1.ReasonReconcileSucceeded, "Reconcile",
 			"AGC control-plane provisioning recovered")
 	}
+	// Managed autoscaling became (un)satisfiable (Q360): the operator opted in on a
+	// cluster with no VPA CRD, or installed the autoscaler and the opt-in took effect.
+	// A first-ever reconcile that lands on the (overwhelmingly common) not-opted-in
+	// state is not a transition worth an Event — that would put one line of pure noise
+	// on every gateway ever created — so the absent→False case is skipped and only a
+	// genuine change of a previously recorded status, or the actionable unavailable
+	// state itself, is announced.
+	newAS := boolConditionStatus(autoscaler.unavailable)
+	if firstObservation := prevAutoscaling == ""; prevAutoscaling != newAS && (!firstObservation || autoscaler.unavailable) {
+		etype := corev1.EventTypeNormal
+		if autoscaler.unavailable {
+			etype = corev1.EventTypeWarning
+		}
+		r.recordEvent(ag, etype, autoscalingReason, "Reconcile", "%s", autoscalingMsg)
+	}
 
 	if !agcReady {
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
+	if autoscaler.unavailable {
+		// Re-probe for the CRD on a slow, bounded cadence. The opt-in is satisfiable the
+		// moment an operator installs the vertical-pod-autoscaler, and nothing watchable
+		// exists to signal that (the GMC deliberately does not watch CRDs), so the
+		// gateway converges on its own — at a period that is a poll, not a hot loop.
+		return ctrl.Result{RequeueAfter: agcAutoscalerReprobeInterval}, nil
 	}
 	return ctrl.Result{}, nil
 }
@@ -789,6 +853,18 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 	}
 
 	ns := ag.Namespace
+	// Managed VerticalPodAutoscaler (Q360). Owner-referenced, so GC would remove it too,
+	// but teardown deletes and verifies it like every other child. On a cluster with no
+	// autoscaling.k8s.io CRD there is nothing to tear down, and attempting the delete
+	// would NoMatch-error and retain the cleanup finalizer forever — so the probe skips
+	// it entirely. A probe failure is a real (transient) apiserver error and is collected.
+	if installed, probeErr := r.vpaCRDInstalled(); probeErr != nil {
+		errs = append(errs, fmt.Errorf("VerticalPodAutoscaler %s: %w", agcVPAName(ag), probeErr))
+	} else if installed {
+		vpa := &unstructured.Unstructured{}
+		vpa.SetGroupVersionKind(verticalPodAutoscalerGVK)
+		del(vpa, "VerticalPodAutoscaler", ns, agcVPAName(ag))
+	}
 	del(&rbacv1.ClusterRoleBinding{}, "ClusterRoleBinding", "", clusterRunnerTemplateReaderBindingName(ag))
 	del(&appsv1.Deployment{}, "Deployment", ns, agcNameV2(ag))
 	del(&corev1.Service{}, "Service", ns, agcNameV2(ag))
