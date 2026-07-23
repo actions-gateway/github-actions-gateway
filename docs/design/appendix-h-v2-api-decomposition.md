@@ -185,6 +185,19 @@ type ActionsGatewaySpec struct {
 type EgressProxySpec struct {
     MinReplicas, MaxReplicas       *int32
     TargetCPUUtilizationPercentage *int32
+
+    // ManagedAutoscaling (default true) is the bring-your-own-autoscaler opt-out
+    // (Q173), mirroring managedNetworkPolicy: false ⇒ the GMC provisions no HPA —
+    // only the stable "<name>-proxy" Deployment, whose .spec.replicas the operator's
+    // scaler (KEDA, VPA, a custom HPA) then owns outright, an external scale-to-zero
+    // included. While false: maxReplicas/targetCPUUtilizationPercentage are inert,
+    // minReplicas seeds only the initial replica count, Ready compares ready pods to
+    // the Deployment's own desired count, and ProxyQuotaPressure measures headroom
+    // to that desired count instead of maxReplicas. Ownership shift only — no
+    // security property changes.
+    // +kubebuilder:default=true
+    ManagedAutoscaling *bool `json:"managedAutoscaling,omitempty"`
+
     Resources                      corev1.ResourceRequirements
     NoProxyCIDRs                   []string
     ManagedNetworkPolicy           *bool

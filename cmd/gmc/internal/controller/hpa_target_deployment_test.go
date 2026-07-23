@@ -47,6 +47,30 @@ func TestAssignHPATargetDeploymentSpec_Replicas(t *testing.T) {
 	}
 }
 
+// With managedAutoscaling=false the external autoscaler owns replicas outright
+// (Q173): only a create seeds the count, and zero is deliberately NOT restored —
+// an external scaler may park the pool at zero.
+func TestAssignExternallyScaledDeploymentSpec_Replicas(t *testing.T) {
+	tests := []struct {
+		name string
+		live *int32
+		want int32
+	}{
+		{name: "create seeds the initial count", live: nil, want: 2},
+		{name: "an external scale-to-zero is preserved", live: ptr(int32(0)), want: 0},
+		{name: "an external scale-out is preserved", live: ptr(int32(5)), want: 5},
+		{name: "a count below the CR floor is preserved", live: ptr(int32(1)), want: 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			live := appsv1.DeploymentSpec{Replicas: tc.live}
+			assignExternallyScaledDeploymentSpec(&live, desiredProxySpec(2))
+			require.NotNil(t, live.Replicas)
+			assert.Equal(t, tc.want, *live.Replicas)
+		})
+	}
+}
+
 // Fields the reconciler owns are still reconciled onto a drifted live object, and
 // server-defaulted fields it does not set are left alone.
 func TestAssignHPATargetDeploymentSpec_ManagedAndServerFields(t *testing.T) {

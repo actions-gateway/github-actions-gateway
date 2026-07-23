@@ -511,3 +511,78 @@ func TestV2_EgressProxy_ProvisionsServiceMonitor(t *testing.T) {
 	ca := tlsCfg["ca"].(map[string]interface{})["secret"].(map[string]interface{})
 	assert.Equal(t, "scraped-metrics-client", ca["name"], "scrape must present the per-EgressProxy client bundle")
 }
+
+// TestV2_EgressProxy_UnmanagedAutoscalingLifecycle proves the managedAutoscaling
+// opt-out (Q173) against the real apiserver: the CRD defaults the field to true, a
+// pool created with managedAutoscaling: false gets its Deployment (and the rest of
+// the pool) but no HPA, flipping to true provisions the managed HPA, and flipping
+// back to false deletes it — so an operator's replacement autoscaler never fights a
+// leftover managed HPA.
+func TestV2_EgressProxy_UnmanagedAutoscalingLifecycle(t *testing.T) {
+	const ns = "v2-ep-unmanaged-hpa"
+	createNamespace(t, ns)
+	startEgressProxyReconciler(t, nil)
+
+	unmanaged := false
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "byo", Namespace: ns},
+		Spec:       gmcv2alpha1.EgressProxySpec{ManagedAutoscaling: &unmanaged},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	// The CRD default is managed (true): an empty-spec object must round-trip the
+	// default, and this explicit false must survive it.
+	var defaulted gmcv2alpha1.EgressProxy
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "byo"}, &defaulted))
+	require.NotNil(t, defaulted.Spec.ManagedAutoscaling)
+	assert.False(t, *defaulted.Spec.ManagedAutoscaling)
+
+	name := proxyChildName("byo")
+
+	// Wait for the NetworkPolicy — the last child applied in a reconcile pass — so
+	// the absence of the HPA below is a real skip, not a mid-reconcile read race.
+	var np networkingv1.NetworkPolicy
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np) == nil
+	}, 10*time.Second, 100*time.Millisecond, "proxy NetworkPolicy should be created")
+
+	var dep appsv1.Deployment
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &dep))
+	require.NotNil(t, dep.Spec.Replicas)
+	assert.Equal(t, int32(2), *dep.Spec.Replicas, "minReplicas default seeds the initial count")
+
+	var hpa autoscalingv2.HorizontalPodAutoscaler
+	assert.Error(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &hpa),
+		"no HPA should exist with managedAutoscaling: false")
+
+	// Flip to managed: the HPA appears.
+	require.Eventually(t, func() bool {
+		var fetched gmcv2alpha1.EgressProxy
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "byo"}, &fetched); err != nil {
+			return false
+		}
+		managed := true
+		fetched.Spec.ManagedAutoscaling = &managed
+		return k8sClient.Update(ctx, &fetched) == nil
+	}, 5*time.Second, 100*time.Millisecond, "flip managedAutoscaling to true")
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &hpa) == nil
+	}, 10*time.Second, 100*time.Millisecond, "flipping managedAutoscaling to true should provision the managed HPA")
+	assert.True(t, hasControllerOwnerRef(hpa.OwnerReferences, "byo"))
+
+	// Flip back to unmanaged: the managed HPA is deleted.
+	require.Eventually(t, func() bool {
+		var fetched gmcv2alpha1.EgressProxy
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "byo"}, &fetched); err != nil {
+			return false
+		}
+		off := false
+		fetched.Spec.ManagedAutoscaling = &off
+		return k8sClient.Update(ctx, &fetched) == nil
+	}, 5*time.Second, 100*time.Millisecond, "flip managedAutoscaling back to false")
+	require.Eventually(t, func() bool {
+		var got autoscalingv2.HorizontalPodAutoscaler
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &got) != nil
+	}, 10*time.Second, 100*time.Millisecond, "flipping managedAutoscaling to false should delete the managed HPA")
+}
