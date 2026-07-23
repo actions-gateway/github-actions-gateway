@@ -12,6 +12,12 @@
 // was implemented and live-validated first in cmd/probe/scaleset.go
 // (Investigations E and E2, 2026-07-04); this package promotes those flows.
 //
+// That relationship is now the other way round: cmd/probe drives this package
+// rather than its own copy of it, so a live probe run is evidence about the code
+// GAG ships (Q362). The probe reports the raw wire the typed API hides through
+// ResponseObserver, and compares un-modelled routes against this client's own
+// construction through RawServiceCall — both exist for that caller.
+//
 // # Two-hop auth bootstrap
 //
 // The protocol pivots off the public REST API after two bootstrap hops:
