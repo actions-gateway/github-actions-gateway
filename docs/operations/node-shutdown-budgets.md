@@ -177,6 +177,40 @@ notification, no readback aggregated across the N kube-proxies applying it. This
 is the root reason the ecosystem standardised on a `preStop` sleep: it is not
 elegance, it is the absence of anything better.
 
+### Upstream state of the art
+
+This is a known, accepted, unsolved gap — not an oversight, and not something to
+re-derive. Two upstream issues track it; check them before assuming anything
+here has changed:
+
+| Issue | What it covers | State |
+|---|---|---|
+| [kubernetes#106476](https://github.com/kubernetes/kubernetes/issues/106476) | The race itself: SIGTERM is delivered before load balancers and ingress controllers have processed the endpoint removal. The recurring ask is a **"termination gate"** — readiness gates, but for deletion | Open since 2021, `triage/accepted`, `lifecycle/frozen` |
+| [kubernetes#116965](https://github.com/kubernetes/kubernetes/issues/116965) | Under **graceful node shutdown** the pod reportedly never enters `Terminating` and is not removed from EndpointSlices until it reaches `Completed`/`Failed` | Open since 2023, `triage/accepted`, `priority/important-longterm` |
+
+No KEP exists for the termination gate. The blocking design question, per SIG
+Network maintainers on 106476, is *"who do we wait for?"* — a pod may sit behind
+several ingresses, gateways and service LBs, some unreachable from inside the
+cluster, and deletion cannot be un-started once begun. Synchronising state back
+from every kube-proxy on every endpoint change is explicitly considered
+infeasible at scale.
+
+!!! warning "116965 may make the spot case worse than the budget arithmetic implies"
+
+    If endpoint removal really is deferred until the pod is fully stopped during
+    graceful node shutdown, then on that path new connections keep arriving for
+    the entire window. A wait that watches for traffic to stop — including the
+    proxy's own linger — would never observe quiescence and would run to its
+    ceiling, consuming budget that a 15s GKE Spot window cannot spare.
+
+    **We have not verified this against our own stack**, so treat it as a reason
+    to prefer `PROXY_SHUTDOWN_LINGER=-1s` on spot capacity rather than as a
+    measured result. The proxy fails `/readyz` at the start of shutdown, and
+    readiness-driven endpoint removal is a different path from the
+    termination-driven one 116965 describes, so it may not apply to us at all.
+    Confirming it needs a real graceful-node-shutdown reproduction, not source
+    reading.
+
 ### What the newer traffic-engineering features do and don't fix
 
 `ProxyTerminatingEndpoints` (KEP-1669, stable since **1.28**; EndpointSlice
