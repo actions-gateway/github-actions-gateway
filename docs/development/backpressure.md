@@ -21,7 +21,7 @@ could have told you.
 | Tier | What runs | When | Typical cost | Source of truth |
 |---|---|---|---|---|
 | **Pre-commit hook** | `gofmt` on staged `.go` files; `docs/STATUS.md` format lint when that file is staged | every `git commit` | ~0.5s | [`.githooks/pre-commit`](../../.githooks/pre-commit) |
-| **`make check`** | `gofmt` + `golangci-lint` + `STATUS.md` lint + plan-index/no-plan-refs drift + single-Go-version + `shellcheck` + chart CRD/RBAC/webhook drift + `scripts-test` + doc link/anchor check + unit tests (with the coverage ratchet), all modules | manual, before requesting review | minutes cold / seconds warm | [`Makefile`](../../Makefile) `check` target |
+| **`make check`** | `gofmt` + `golangci-lint` + `STATUS.md` lint + plan-index/no-plan-refs drift + single-Go-version + v2 API package sync + `shellcheck` + chart CRD/RBAC/webhook drift + `scripts-test` + doc link/anchor check + unit tests (with the coverage ratchet), all modules | manual, before requesting review | minutes cold / seconds warm | [`Makefile`](../../Makefile) `check` target |
 | **CI** | the above **plus** integration (envtest), end-to-end (e2e, `kind`), `govulncheck`, and `trivy` image scans | on every pull request and push to `main` | full | [`.github/workflows/`](../../.github/workflows/) |
 
 Installation: `make hooks` (or [`scripts/setup.sh`](../../scripts/setup.sh), which

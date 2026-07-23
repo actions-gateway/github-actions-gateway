@@ -8,10 +8,10 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ⚠️ Partial — filed 2026-07-20; F1 and F2 shipped.** The F1 Secret leak
-> was fixed and merged the same day (Q373, #727); F2 (the probe rewrite) shipped as
-> Q362. The remaining findings are tracked by Queue rows
-> [Q364](../STATUS.md#Q364)–[Q370](../STATUS.md#Q370) and [Q374](../STATUS.md#Q374);
+> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, and F3 shipped.** The F1 Secret
+> leak was fixed and merged the same day (Q373, #727); F2 (the probe rewrite)
+> shipped as Q362 and F3's share-and-gate split as Q374. The remaining findings are
+> tracked by Queue rows [Q364](../STATUS.md#Q364)–[Q370](../STATUS.md#Q370);
 > [Q371](../STATUS.md#Q371) adds the prevention gates; [Q372](../STATUS.md#Q372)
 > (Deferred) carries the re-run trigger.
 >
@@ -78,7 +78,7 @@ test.
 
 ### High
 
-**F2 — `cmd/probe` reimplements the `scaleset` package it exists to validate.** → Q362
+**F2 — `cmd/probe` reimplements the `scaleset` package it exists to validate.** ✅ **Shipped** (Q362)
 
 `cmd/probe` never imports `scaleset` (verified: no import in any non-test file).
 [scaleset.go:187-208](../../cmd/probe/scaleset.go) declares lowercase shadow copies
@@ -118,7 +118,7 @@ a request — but three parts of the file were never protocol code and stay: the
 `PROBE_SCALESET_*` environment contract, the diagnostic matrix above, and a doc comment
 that grew to record what the probe still asserts on its own.
 
-**F3 — The v2 conditions sync gate covers 13% of the duplication it appears to.** → [Q374](../STATUS.md#Q374)
+**F3 — The v2 conditions sync gate covers 13% of the duplication it appears to.** ✅ **Shipped** (Q374)
 
 Modulo the version string, nine files are byte-identical across `api/v2alpha1` and
 `api/v2beta1` — **2,550 lines**:
@@ -135,9 +135,9 @@ Modulo the version string, nine files are byte-identical across `api/v2alpha1` a
 | `runnerset_types.go` | 344 | 101 (genuinely versioned) |
 | `conversion.go` | 213 | 224 (genuinely versioned) |
 
-[check-conditions-sync.sh](../../scripts/check-conditions-sync.sh) hardcodes two
-paths (`alpha=`, `beta=`) and guards `conditions.go` alone — **332 of 2,550 lines**.
-The other ~2,218 drift silently. The sync test concedes the design: *"There is no
+`check-conditions-sync.sh` (since replaced) hardcoded two
+paths (`alpha=`, `beta=`) and guarded `conditions.go` alone — **332 of 2,550 lines**.
+The other ~2,218 drifted silently. The sync test concedes the design: *"There is no
 generator; whoever edits one mirrors the other."*
 
 Note `conditions.go` is **pure constants plus one helper function — zero kubebuilder
@@ -152,6 +152,39 @@ Remedy, cheapest first: (a) generalize the script to a file list covering all ni
 versions type-alias (`type ProxyConfig = apishared.ProxyConfig` — aliases are
 deepcopy- and conversion-transparent), leaving only `runnerset_types.go` and
 `conversion.go` versioned.
+
+**Shipped in Q374.** Both halves, split by whether the file holds versioned types.
+
+*Shared.* The condition/reason vocabulary moved to `api/apiconditions` and the
+worker-pod sidecar contract to `api/apisidecar` — neither holds an API struct or a
+kubebuilder marker, so neither needs per-version duplication at all. The version
+packages keep thin re-export blocks (a one-line alias per name; a
+`RunnerTemplateSpec`-typed wrapper for the heuristic) so all 410 existing
+`v2alpha1.ConditionX` call sites compile unchanged. `conditions.go` fell 363 → 97
+lines and `sidecar.go` 83 → 28, with the values and the rationale now living in one
+place where they cannot diverge. Generated output — the five CRD manifests and both
+`zz_generated.deepcopy.go` — is byte-identical after `make -C api generate`.
+
+*Gated.* `check-conditions-sync.sh` became `check-v2-api-sync.sh` with the default
+inverted: every `.go` file present in both packages must match unless named in an
+`EXEMPT` list with a reason, so a file added to both is covered the day it lands.
+Two differences are normalised away — the `package` clause and
+`+kubebuilder:storageversion` — which is what brings the three near-identical
+`*_types.go` files (804 lines) under the gate. Coverage went 363 → 1,397 lines
+across 8 files; a stale exemption fails the gate so the list cannot rot.
+
+Re-measured at implementation time, the audit's table had already shifted:
+`conditions.go` was 363 lines (not 332), `zz_generated.deepcopy.go` 1,001 (not 879),
+and `actionsgateway_types.go`/`egressproxy_types.go`/`runnertemplate_types.go`
+differed only by a `storageversion` marker (not 7 and 1 lines). `zz_generated.deepcopy.go`
+is exempt rather than gated: it is controller-gen output derived from the *versioned*
+`runnerset_types.go`, so requiring cross-version identity would assert an invariant
+the generator, not a contributor, decides — and `make generate` drift already guards it.
+
+Two things surfaced on the way: the gate had never run in CI at all (`make check`
+only, so the drift it guards could reach `main`), and `api/**` was missing from
+`unit-test.yml`'s `code` paths-filter, so an api-only change skipped its own gofmt,
+golangci-lint, and unit tests. Both fixed in the same change.
 
 **F4 — `githubCIDREgressRule` exists; the egress-proxy builder open-codes it twice.** → [Q364](../STATUS.md#Q364)
 
@@ -279,7 +312,7 @@ audit class is the larger one here.
 
 | Finding | Catchable by a gate? |
 |---|---|
-| F3 sync gate covers 13% | **Yes** — already a script; generalize its file list ([Q374](../STATUS.md#Q374)) |
+| F3 sync gate covers 13% | **Yes** — already a script; generalize its file list (Q374, shipped) |
 | F8 god `main`/`run` functions | **Yes** — `funlen` / `gocyclo` ([Q371](../STATUS.md#Q371)) |
 | F10 script sprawl | Partly — a line-count check on `scripts/` would flag `setup.sh` |
 | F1 Secret leak | No — semantic resource-lifecycle bug |
