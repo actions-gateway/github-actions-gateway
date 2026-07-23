@@ -173,6 +173,103 @@ func TestEgressProxyReconcile_ReadyFQDNModeRequeues(t *testing.T) {
 	assert.Equal(t, metav1.ConditionTrue, ready.Status, "the requeue must come from the Ready path, not the not-ready backoff")
 }
 
+// TestEgressProxyReconcile_UnmanagedAutoscalingSkipsHPA proves managedAutoscaling:
+// false (Q173) provisions the pool without an HPA — the Deployment, Service, PDB,
+// and NetworkPolicy are still created — and seeds the Deployment's initial replica
+// count from minReplicas.
+func TestEgressProxyReconcile_UnmanagedAutoscalingSkipsHPA(t *testing.T) {
+	scheme := egressProxyTestScheme(t)
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.MinReplicas = ptr(int32(2))
+		ep.Spec.ManagedAutoscaling = ptr(false)
+	})
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ep).WithStatusSubresource(ep).Build()
+	r := &EgressProxyReconciler{Client: c, Scheme: scheme, ProxyImage: "proxy:test"}
+	ctx := context.Background()
+	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "team-a", Name: "shared"}})
+	require.NoError(t, err)
+
+	key := types.NamespacedName{Namespace: "team-a", Name: "shared-proxy"}
+	var hpa autoscalingv2.HorizontalPodAutoscaler
+	assert.Error(t, c.Get(ctx, key, &hpa), "no HPA should be provisioned with managedAutoscaling: false")
+
+	var dep appsv1.Deployment
+	require.NoError(t, c.Get(ctx, key, &dep))
+	require.NotNil(t, dep.Spec.Replicas)
+	assert.Equal(t, int32(2), *dep.Spec.Replicas, "minReplicas seeds the initial replica count")
+	var svc corev1.Service
+	require.NoError(t, c.Get(ctx, key, &svc))
+	var pdb policyv1.PodDisruptionBudget
+	require.NoError(t, c.Get(ctx, key, &pdb))
+	var np networkingv1.NetworkPolicy
+	require.NoError(t, c.Get(ctx, key, &np))
+}
+
+// TestEgressProxyReconcile_UnmanagedAutoscalingDeletesManagedHPA proves flipping
+// managedAutoscaling true→false deletes the previously managed HPA, so it cannot
+// fight the operator's replacement autoscaler over `.spec.replicas` (Q173).
+func TestEgressProxyReconcile_UnmanagedAutoscalingDeletesManagedHPA(t *testing.T) {
+	scheme := egressProxyTestScheme(t)
+	ep := newEP("shared", "team-a", nil)
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ep).WithStatusSubresource(ep).Build()
+	r := &EgressProxyReconciler{Client: c, Scheme: scheme, ProxyImage: "proxy:test"}
+	ctx := context.Background()
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "team-a", Name: "shared"}}
+	_, err := r.Reconcile(ctx, req)
+	require.NoError(t, err)
+
+	key := types.NamespacedName{Namespace: "team-a", Name: "shared-proxy"}
+	var hpa autoscalingv2.HorizontalPodAutoscaler
+	require.NoError(t, c.Get(ctx, key, &hpa), "managed by default: the HPA is provisioned")
+
+	var live gmcv2alpha1.EgressProxy
+	require.NoError(t, c.Get(ctx, req.NamespacedName, &live))
+	live.Spec.ManagedAutoscaling = ptr(false)
+	require.NoError(t, c.Update(ctx, &live))
+	_, err = r.Reconcile(ctx, req)
+	require.NoError(t, err)
+
+	assert.Error(t, c.Get(ctx, key, &hpa), "flipping managedAutoscaling to false must delete the managed HPA")
+
+	// And a second unmanaged reconcile is a steady-state no-op (delete tolerates absence).
+	_, err = r.Reconcile(ctx, req)
+	require.NoError(t, err)
+}
+
+// TestEgressProxyReconcile_UnmanagedScaleToZeroIsReady proves that with
+// managedAutoscaling: false an external scale-to-zero is preserved (not restored to
+// the floor) and reported Ready — the pool converged to what the external scaler
+// asked for; it is not wedged (Q173).
+func TestEgressProxyReconcile_UnmanagedScaleToZeroIsReady(t *testing.T) {
+	scheme := egressProxyTestScheme(t)
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.MinReplicas = ptr(int32(2))
+		ep.Spec.ManagedAutoscaling = ptr(false)
+	})
+	// Simulate the external autoscaler having scaled the pool to zero.
+	dep := buildEgressProxyDeployment(ep, "proxy:test")
+	dep.Spec.Replicas = ptr(int32(0))
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ep, dep).WithStatusSubresource(ep).Build()
+	r := &EgressProxyReconciler{Client: c, Scheme: scheme, ProxyImage: "proxy:test"}
+	ctx := context.Background()
+	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "team-a", Name: "shared"}})
+	require.NoError(t, err)
+
+	var got appsv1.Deployment
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared-proxy"}, &got))
+	require.NotNil(t, got.Spec.Replicas)
+	assert.Equal(t, int32(0), *got.Spec.Replicas, "an external scale-to-zero must not be restored to the floor")
+
+	var gotEP gmcv2alpha1.EgressProxy
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared"}, &gotEP))
+	ready := meta.FindStatusCondition(gotEP.Status.Conditions, gmcv2alpha1.ConditionReady)
+	require.NotNil(t, ready)
+	assert.Equal(t, metav1.ConditionTrue, ready.Status, "0/0 ready is Ready: the pool converged to the external scaler's ask")
+}
+
 // TestEgressProxyReconcile_DeletingIsNoOp verifies a delete-in-flight object is not
 // re-provisioned (owner-ref GC handles the children; no finalizer is used).
 func TestEgressProxyReconcile_DeletingIsNoOp(t *testing.T) {

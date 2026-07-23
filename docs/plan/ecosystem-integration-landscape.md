@@ -139,8 +139,8 @@ GAG facts that drive the mapping (from `docs/design/`):
 |--:|---|:--:|:--:|---|
 |78|Cluster Autoscaler|★★★★★|🟠|Worker pods drive node scale-up. Document `cluster-autoscaler.kubernetes.io/safe-to-evict` on long jobs to avoid mid-job eviction.|
 |79|Karpenter|★★★★★|🔴/🟠|Fast-growing node autoscaler. **Consolidation can disrupt running jobs** → must set `karpenter.sh/do-not-disrupt` on worker pods (or document it). High-value compatibility item.|
-|80|KEDA|★★★★★|🟠|Event-driven scaling. **Could scale the proxy pool or signal capacity from GitHub queue depth** (deferred Q173). Natural enhancement; ARC users know KEDA.|
-|81|VPA|★★★|🟡|Vertical scaling of proxy; deferred (Q173).|
+|80|KEDA|★★★★★|🟠|Event-driven scaling. **Can scale the proxy pool** via `EgressProxy.spec.managedAutoscaling: false` (Q173, shipped); a GitHub-queue-depth capacity signal remains open. ARC users know KEDA.|
+|81|VPA|★★★|🟡|Vertical scaling of proxy; unblocked by `managedAutoscaling: false` (Q173, shipped).|
 |82|Kueue|★★★|🔴/🟡|Batch job queueing. GAG queues at the **broker-claim layer (below Kueue)** — overlap/competition; document the boundary (already noted in appendix-d).|
 |83|Volcano|★★|🟡|Batch/gang scheduling; relevant for GPU runner fleets.|
 |84|Descheduler|★★★|🔴|**Will evict running worker pods** by default → strand jobs. Must document exclusion (`descheduler.alpha.kubernetes.io/...` / PDB).|
@@ -181,8 +181,8 @@ GAG facts that drive the mapping (from `docs/design/`):
 > matrix, Q208 CNI FQDN egress, Q209 GitOps+ESO examples, Q210 in-runner build,
 > Q211 P2P image distribution, Q212 Velero, Q213 OpenCost — all Queue. Deferred
 > (trigger-gated, additive): Q214 SPIFFE/SPIRE signer, Q215 worker cache backend,
-> Q216 GPU runner support, Q217 OLM bundle. KEDA proxy scaling is the existing
-> Q173. Only Q218/Q205 touch the v2beta1 cut; everything else is additive and
+> Q216 GPU runner support, Q217 OLM bundle. KEDA proxy scaling shipped as the
+> Q173 `managedAutoscaling` opt-out. Only Q218/Q205 touch the v2beta1 cut; everything else is additive and
 > sorts after it. See [v2beta1.md](v2beta1.md) for why Q218 gates the beta.
 
 Ranked by value × likelihood users hit it. Bare-ID Queue items to file:
@@ -194,7 +194,7 @@ Ranked by value × likelihood users hit it. Bare-ID Queue items to file:
 5. **CNI-native egress policy (Cilium FQDN / Calico DNS policy).** 🟠 Offer an opt-in that replaces GMC's GitHub-CIDR feed with `toFQDNs: api.github.com` — simpler, no 24h CIDR reconcile. Pairs with existing `managedNetworkPolicy: false`.
 6. **External Secrets Operator example for the GitHub App key.** 🟠 Low-risk, high-demand: wire `gitHubAppRef` to an ESO-synced Secret; also Sealed Secrets variant for GitOps.
 7. **GitOps install examples (Argo CD Application + Flux HelmRelease).** 🟠 OCI Helm chart + CRD `resource-policy: keep` has pruning gotchas worth a tested example.
-8. **KEDA-driven scaling (proxy pool and/or capacity signal).** 🟠 Already deferred (Q173); ARC users expect KEDA. Scale proxy on GitHub queue depth.
+8. **KEDA-driven scaling (proxy pool and/or capacity signal).** 🟠 Proxy-pool half shipped (Q173 `managedAutoscaling: false`); a GitHub-queue-depth capacity signal remains open. ARC users expect KEDA.
 9. **In-runner image build guidance (BuildKit/Kaniko/Sysbox + PSA profiles).** 🟠 The most common runner workload; map each build approach to the right `securityProfile`.
 10. **P2P image distribution (Spegel/Dragonfly) recommendation.** ✅ **Done (Q211).** Ephemeral workers cause image-pull storms at scale; recommended-companion guide at [operations/p2p-image-distribution.md](../operations/p2p-image-distribution.md) covers Spegel vs Dragonfly and the `imagePullPolicy`/digest-pin interplay.
 11. **SPIFFE/SPIRE workload-identity signer.** 🟠 Realize the pluggable signer interface beyond Vault; keyless App-JWT signing.

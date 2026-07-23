@@ -79,11 +79,31 @@ type EgressProxySpec struct {
 	MaxReplicas *int32 `json:"maxReplicas,omitempty"`
 
 	// TargetCPUUtilizationPercentage is the proxy HPA's target CPU utilization. This
-	// is the managed-default knob; bring-your-own autoscaler is a deferred opt-out.
+	// is the managed-default knob; set managedAutoscaling: false to bring your own
+	// autoscaler instead.
 	//
 	// +optional
 	// +kubebuilder:default=60
 	TargetCPUUtilizationPercentage *int32 `json:"targetCPUUtilizationPercentage,omitempty"`
+
+	// ManagedAutoscaling controls whether the GMC manages this proxy pool's
+	// HorizontalPodAutoscaler (Q173). Defaults to true: the GMC provisions an HPA
+	// scaling the pool on CPU between minReplicas and maxReplicas. Set to false to
+	// bring your own autoscaler — the GMC then creates only the proxy Deployment
+	// (stable "<name>-proxy" name and labels, replicas left to the external scaler)
+	// and deletes any HPA it previously managed, so KEDA, VPA, or a custom HPA can
+	// target the Deployment without fighting the managed one. While false:
+	// maxReplicas and targetCPUUtilizationPercentage are inert; minReplicas seeds
+	// only the Deployment's initial replica count; the Ready condition compares
+	// ready pods against the Deployment's own desired replicas (an intentional
+	// external scale-to-zero is Ready, not a wedge); and the managed
+	// "<name>-proxy" HPA name stays reserved. Mirrors the managedNetworkPolicy
+	// opt-out pattern; it shifts autoscaling ownership only and relaxes no
+	// security property.
+	//
+	// +optional
+	// +kubebuilder:default=true
+	ManagedAutoscaling *bool `json:"managedAutoscaling,omitempty"`
 
 	// Resources are the proxy container's resource requirements.
 	//

@@ -19,7 +19,19 @@ import (
 // math stays identical across versions. Both conditions are advisory and do NOT gate
 // Ready — the pool keeps serving at its current scale.
 func (r *EgressProxyReconciler) evalEgressProxyQuota(ctx context.Context, ep *gmcv2alpha1.EgressProxy, proxyDep *appsv1.Deployment) proxyQuotaConditions {
-	return evalProxyPoolQuota(ctx, r, ep.Namespace, egressProxyMaxReplicas(ep), egressProxyResources(ep), proxyDep)
+	target := egressProxyMaxReplicas(ep)
+	if !egressProxyManagedAutoscaling(ep) {
+		// Bring-your-own autoscaler (Q173): spec.maxReplicas is inert and the GMC
+		// cannot know the external scaler's ceiling, so predictive headroom is
+		// measured to the Deployment's own desired count — Pressure fires only when
+		// the namespace cannot fit what the external autoscaler currently asks for.
+		// The observed-rejection (Exceeded) tier is scale-source agnostic.
+		target = 0
+		if proxyDep != nil && proxyDep.Spec.Replicas != nil {
+			target = *proxyDep.Spec.Replicas
+		}
+	}
+	return evalProxyPoolQuota(ctx, r, ep.Namespace, target, egressProxyResources(ep), proxyDep)
 }
 
 // egressUsesCIDRMode reports whether the EgressProxy's egress allowlist is expressed

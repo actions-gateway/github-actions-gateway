@@ -41,3 +41,17 @@ func assignHPATargetDeploymentSpec(live *appsv1.DeploymentSpec, desired appsv1.D
 		live.Replicas = desired.Replicas
 	}
 }
+
+// assignExternallyScaledDeploymentSpec is the managedAutoscaling=false variant
+// (Q173): the operator's own autoscaler owns `.spec.replicas` outright. Only a
+// create (live.Replicas == nil) seeds the count from the desired spec. Unlike the
+// HPA-target variant, a live count of zero is left alone — an external scaler
+// (e.g. KEDA) may scale the pool to zero deliberately, and restoring the floor
+// would fight it.
+func assignExternallyScaledDeploymentSpec(live *appsv1.DeploymentSpec, desired appsv1.DeploymentSpec) {
+	live.Selector = desired.Selector
+	live.Template = desired.Template
+	if live.Replicas == nil {
+		live.Replicas = desired.Replicas
+	}
+}

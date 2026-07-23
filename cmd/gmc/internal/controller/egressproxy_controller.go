@@ -132,8 +132,8 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	if err := r.applyService(ctx, ep, buildEgressProxyService(ep)); err != nil {
 		return &provisioningError{step: "apply proxy Service", err: err}
 	}
-	if err := r.applyHPA(ctx, ep, buildEgressProxyHPA(ep)); err != nil {
-		return &provisioningError{step: "apply proxy HPA", err: err}
+	if err := r.reconcileHPA(ctx, ep); err != nil {
+		return &provisioningError{step: "reconcile proxy HPA", err: err}
 	}
 	if err := r.applyPDB(ctx, ep, buildEgressProxyPDB(ep)); err != nil {
 		return &provisioningError{step: "apply proxy PDB", err: err}
@@ -403,13 +403,19 @@ func (r *EgressProxyReconciler) recordEvent(ep *gmcv2alpha1.EgressProxy, eventty
 // owns `.spec.replicas`) — both of which assign fields selectively instead.
 
 // applyDeployment creates or patches the proxy pool Deployment. It is the target
-// of the pool's HPA, so `.spec.replicas` is assigned selectively rather than by a
-// blanket spec overwrite — see assignHPATargetDeploymentSpec (Q283).
+// of the pool's autoscaler — the managed HPA, or the operator's own when
+// managedAutoscaling is false — so `.spec.replicas` is assigned selectively
+// rather than by a blanket spec overwrite: see assignHPATargetDeploymentSpec
+// (Q283) and its externally-scaled variant (Q173).
 func (r *EgressProxyReconciler) applyDeployment(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *appsv1.Deployment) error {
 	obj := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
 	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
 		obj.Labels = desired.Labels
-		assignHPATargetDeploymentSpec(&obj.Spec, desired.Spec)
+		if egressProxyManagedAutoscaling(ep) {
+			assignHPATargetDeploymentSpec(&obj.Spec, desired.Spec)
+		} else {
+			assignExternallyScaledDeploymentSpec(&obj.Spec, desired.Spec)
+		}
 		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
 	})
 	return err
@@ -426,6 +432,23 @@ func (r *EgressProxyReconciler) applyService(ctx context.Context, ep *gmcv2alpha
 		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
 	})
 	return err
+}
+
+// reconcileHPA applies the managed HPA or, when managedAutoscaling is false
+// (Q173), deletes any previously managed one so the pool's scale is left to the
+// operator's own autoscaler (KEDA, VPA, or a custom HPA) without the GMC's HPA
+// fighting it over `.spec.replicas`. The managed "<ep>-proxy" HPA name stays
+// reserved either way; the delete tolerates an absent object, so the
+// bring-your-own path is a steady-state no-op.
+func (r *EgressProxyReconciler) reconcileHPA(ctx context.Context, ep *gmcv2alpha1.EgressProxy) error {
+	if egressProxyManagedAutoscaling(ep) {
+		return r.applyHPA(ctx, ep, buildEgressProxyHPA(ep))
+	}
+	hpa := &autoscalingv2.HorizontalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Namespace: ep.Namespace, Name: proxyResourceName(ep)}}
+	if err := r.Delete(ctx, hpa); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
 
 func (r *EgressProxyReconciler) applyHPA(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *autoscalingv2.HorizontalPodAutoscaler) error {
@@ -480,7 +503,15 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 		readyReplicas = dep.Status.ReadyReplicas
 	}
 
+	// Readiness floor: with managed autoscaling, spec.minReplicas (the HPA floor).
+	// With bring-your-own autoscaling (Q173) the external scaler owns the desired
+	// count, so readiness is measured against the Deployment's own spec.replicas —
+	// 0/0 ready is Ready (an intentional external scale-to-zero, not a wedge) and
+	// a scale below spec.minReplicas never flaps Ready false.
 	minReplicas := egressProxyMinReplicas(ep)
+	if !egressProxyManagedAutoscaling(ep) && dep.Spec.Replicas != nil {
+		minReplicas = *dep.Spec.Replicas
+	}
 	ready := readyReplicas >= minReplicas
 	now := metav1.Now()
 	gen := ep.Generation

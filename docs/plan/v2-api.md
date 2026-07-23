@@ -368,15 +368,21 @@ marked, not a silent pick); `status.templateSource` reports which rung resolved.
 Required → optional is backward-compatible. See
 [§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches).
 
-### Bring-your-own proxy autoscaler (Q173)
+### Bring-your-own proxy autoscaler (Q173) — **shipped**
 
 `targetCPUUtilizationPercentage` is the *managed-default* knob, not the ceiling on
-flexibility. Mirroring `managedNetworkPolicy`, add `managedAutoscaling` (default
-`true`): GMC manages the proxy HPA by default; setting it `false` makes GMC create
-only the proxy Deployment (stable name, labels, `scale` subresource) and **no HPA**,
-so an operator can target it with KEDA, VPA, or a custom HPA. Additive (`*bool`), so
-deferred until an operator needs it — and distinct from improving the *managed*
-metric (CPU → connection-based), which is the Q19 proxy-features work.
+flexibility. Mirroring `managedNetworkPolicy`, `managedAutoscaling` (default
+`true`) is now implemented: GMC manages the proxy HPA by default; setting it
+`false` makes GMC create only the proxy Deployment (stable `<name>-proxy` name,
+labels) and **no HPA** — a previously managed HPA is deleted on the flip — so an
+operator can target the Deployment with KEDA, VPA, or a custom HPA. While `false`
+the external scaler owns `.spec.replicas` outright (scale-to-zero included — the
+reconciler's zero-restore only applies to the managed-HPA mode),
+`maxReplicas`/`targetCPUUtilizationPercentage` are inert, and Ready and
+`ProxyQuotaPressure` are measured against the Deployment's own desired count.
+Distinct from improving the *managed* metric (CPU → connection-based), which is
+the Q19 proxy-features work. See
+[§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches).
 
 ### Bring-your-own proxy TLS certificate (Q174)
 

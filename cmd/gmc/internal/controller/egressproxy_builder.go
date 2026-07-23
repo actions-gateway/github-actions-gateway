@@ -95,6 +95,13 @@ func egressProxyTargetCPU(ep *gmcv2alpha1.EgressProxy) int32 {
 	return 60
 }
 
+// egressProxyManagedAutoscaling reports whether the GMC manages this pool's HPA
+// (spec.managedAutoscaling, default true — Q173). False means the operator brings
+// their own autoscaler and the GMC provisions no HPA.
+func egressProxyManagedAutoscaling(ep *gmcv2alpha1.EgressProxy) bool {
+	return ep.Spec.ManagedAutoscaling == nil || *ep.Spec.ManagedAutoscaling
+}
+
 // egressProxyResources returns the proxy container's resource requirements: the
 // secure defaults overlaid with any spec.resources overrides — the same defaults
 // and merge semantics as v1's proxyResources, decoupled from ActionsGateway.

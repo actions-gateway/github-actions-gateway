@@ -922,6 +922,8 @@ kubectl describe actionsgateway -n <namespace> <name>
 
 Resolve by **either** raising the platform-owned quota (`kubectl edit resourcequota -n <namespace> <quota-name>`) to admit the configured `maxReplicas`, **or** lowering `spec.proxy.maxReplicas` to fit. Editing the quota's `.spec.hard` re-triggers reconciliation immediately; the conditions clear on the next reconcile.
 
+**v2 (`EgressProxy`) note — bring-your-own autoscaler.** If the pool's `EgressProxy` sets `spec.managedAutoscaling: false`, there is **no managed HPA by design** — `kubectl get hpa` finding nothing named `<name>-proxy` is not a fault. Scaling is owned by whatever you attached to the `<name>-proxy` Deployment (KEDA, VPA, a custom HPA), so debug that scaler instead; `spec.maxReplicas` and `spec.targetCPUUtilizationPercentage` are inert. The quota conditions still work, but `ProxyQuotaPressure` measures headroom to the Deployment's *current desired replicas* (what your scaler asked for) rather than `maxReplicas`, and both conditions surface on the `EgressProxy`. An external scale-to-zero is preserved and reported `Ready` (`0/0 proxy pods ready`) — while at zero, the tenant has no egress path, so make sure your scaler's floor matches your availability expectations.
+
 ---
 
 ## Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap

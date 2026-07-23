@@ -338,6 +338,11 @@ func (in *EgressProxySpec) DeepCopyInto(out *EgressProxySpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.ManagedAutoscaling != nil {
+		in, out := &in.ManagedAutoscaling, &out.ManagedAutoscaling
+		*out = new(bool)
+		**out = **in
+	}
 	in.Resources.DeepCopyInto(&out.Resources)
 	if in.NoProxyCIDRs != nil {
 		in, out := &in.NoProxyCIDRs, &out.NoProxyCIDRs
