@@ -108,7 +108,8 @@ func run(logger *slog.Logger) error {
 // dependency of runProbe that reaches real GitHub, so it is injected as an
 // interface to keep the probe session orchestration unit-testable against a
 // broker stub. The provider returned by githubapp.NewInstallationTokenProvider
-// satisfies it.
+// satisfies it, as does githubapp.TokenProvider (the same method set — the
+// scale-set scenario passes one straight through to scaleset.Config).
 type tokenProvider interface {
 	Token(context.Context) (string, error)
 }
