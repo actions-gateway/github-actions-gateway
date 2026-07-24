@@ -1,0 +1,146 @@
+# Kyverno — govern WHERE github-actions-gateway (GAG) pods schedule.
+#
+# WHY THIS EXISTS
+# ---------------
+# On a cluster that gives each tenant its own egress IP by pinning that tenant's
+# node pool to its own cloud NAT gateway, the pod's NODE decides which IP its
+# traffic leaves by. GAG deliberately exposes placement to the CR author:
+#
+#   EgressProxy.spec.scheduling      {nodeSelector, tolerations, affinity}
+#   ActionsGateway.spec.scheduling   {nodeSelector, tolerations, affinity}
+#   RunnerTemplate.spec.podTemplate  (full PodTemplateSpec — always has)
+#
+# Choosing your own egress path is a feature: tenants should not have to share a
+# rate limit or a block radius with each other. But if your cluster ATTRIBUTES
+# traffic by source IP — a downstream firewall allowlist, an audit trail — then
+# you want placement to be yours to decide, not the CR author's. That is a
+# general Kubernetes concern, and this is the layer that expresses it.
+#
+# WHY A MUTATION AND NOT AN ALLOWLIST
+# -----------------------------------
+# A validating "allowed nodeSelector values" policy is NOT sound. Affinity is a
+# small query language: `nodeAffinity` supports NotIn / DoesNotExist, so
+# "any pool except my own" is expressible and no key=value allowlist can reject
+# it in general.
+#
+# Pinning by MUTATION is sound, because Kubernetes ANDs nodeSelector with
+# nodeAffinity — affinity can only ever narrow the candidate nodes, never widen
+# them. Once the admission layer stamps `nodeSelector: {<poolKey>: <pool>}` onto
+# the pod, no affinity the author wrote can move it off that pool. The worst a
+# hostile author achieves is an unschedulable pod (Pending), not another
+# tenant's egress IP.
+#
+# HOW TO USE
+# ----------
+# Label each tenant namespace with the pool it owns:
+#
+#   kubectl label namespace tenant-a actions-gateway.com/node-pool=pool-tenant-a
+#
+# Namespaces WITHOUT that label are left alone (the precondition below), so this
+# policy is safe to apply before you have labelled anything.
+#
+# Adjust POOL_LABEL_KEY for your cloud:
+#   GKE  cloud.google.com/gke-nodepool
+#   EKS  eks.amazonaws.com/nodegroup
+#   AKS  agentpool
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: gag-pin-pods-to-tenant-node-pool
+  annotations:
+    policies.kyverno.io/title: Pin GAG tenant pods to the tenant's node pool
+    policies.kyverno.io/category: github-actions-gateway
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Stamps the tenant namespace's assigned node pool onto every pod in that
+      namespace, so worker, egress-proxy, and AGC pods all egress via that
+      pool's NAT gateway. Because nodeSelector is ANDed with nodeAffinity, this
+      cannot be escaped by a NotIn/DoesNotExist affinity expression.
+spec:
+  background: false # mutation applies at admission
+  rules:
+    # Pin every pod in a labelled tenant namespace onto that namespace's pool.
+    # patchStrategicMerge on spec.nodeSelector is a MAP merge, so this overrides
+    # the pool key if the author set it and leaves any other selector keys alone.
+    - name: pin-node-pool
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaceSelector:
+                matchLabels:
+                  actions-gateway.github.com/tenant: "true"
+      context:
+        - name: tenantPool
+          apiCall:
+            urlPath: "/api/v1/namespaces/{{ request.namespace }}"
+            jmesPath: 'metadata.labels."actions-gateway.com/node-pool" || '''''
+      preconditions:
+        all:
+          # Unlabelled namespace => no assigned pool => do not touch the pod.
+          - key: "{{ tenantPool }}"
+            operator: NotEquals
+            value: ""
+      mutate:
+        patchStrategicMerge:
+          spec:
+            nodeSelector:
+              cloud.google.com/gke-nodepool: "{{ tenantPool }}"
+---
+# A cheap extra — NOT a substitute for the mutating pin above.
+#
+# A toleration with `operator: Exists` and NO key tolerates EVERY taint in the
+# cluster, including the taints that keep other tenants' dedicated pools private.
+# Nothing GAG emits needs one, so denying it costs nothing.
+#
+# Be clear about what this does NOT do: it blocks only the BLANKET case. A pod that
+# names the target pool's taint explicitly —
+#     tolerations: [{key: dedicated, operator: Equal, value: pool-tenant-b}]
+# — passes this rule, and taint keys are conventional and readable from
+# `kubectl get nodes`. Only the mutating pin above actually bounds placement.
+#
+# Ships in Audit. Review `kubectl get policyreport -A`, then flip
+# validationFailureAction to Enforce.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: gag-no-blanket-tolerations
+  annotations:
+    policies.kyverno.io/title: Forbid keyless Exists tolerations in GAG namespaces
+    policies.kyverno.io/category: github-actions-gateway
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      A keyless `operator: Exists` toleration tolerates every taint, defeating
+      the taints that reserve a node pool for one tenant. No GAG-emitted pod
+      needs one.
+spec:
+  validationFailureAction: Audit # flip to Enforce after reviewing reports
+  background: true
+  rules:
+    - name: deny-keyless-exists-toleration
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaceSelector:
+                matchLabels:
+                  actions-gateway.github.com/tenant: "true"
+      validate:
+        message: >-
+          A toleration with `operator: Exists` and no `key` tolerates every taint
+          in the cluster, including the taints reserving other tenants' node
+          pools. Name the specific taint key you need to tolerate.
+        foreach:
+          - list: "request.object.spec.tolerations || `[]`"
+            deny:
+              conditions:
+                all:
+                  - key: "{{ element.operator || '' }}"
+                    operator: Equals
+                    value: Exists
+                  - key: "{{ element.key || '' }}"
+                    operator: Equals
+                    value: ""
