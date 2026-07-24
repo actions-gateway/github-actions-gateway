@@ -36,6 +36,13 @@ const (
 	componentRunnerLabel     = "runner"
 	appNameWorker            = "actions-runner"
 
+	// agcContainerName is the AGC control-plane container's name inside the AGC pod.
+	// It is a distinct, shorter identity from agcAppName (the workload/app name), and
+	// anything that addresses the container by name — notably the managed
+	// VerticalPodAutoscaler's containerPolicy (Q360), which silently applies to
+	// nothing if the name does not match — must use this constant.
+	agcContainerName = "agc"
+
 	agcSAName    = agcnames.ControllerName
 	workerSAName = agcnames.WorkerSAName
 	proxyAppName = gmcnames.ProxyName
@@ -1248,7 +1255,7 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 					TerminationGracePeriodSeconds: ptr(int64(60)),
 					Volumes:                       volumes,
 					Containers: []corev1.Container{{
-						Name:      "agc",
+						Name:      agcContainerName,
 						Image:     agcImage,
 						Env:       env,
 						Resources: resources,

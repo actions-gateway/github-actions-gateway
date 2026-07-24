@@ -1,8 +1,8 @@
 {{- if .Values.admissionPolicy.enabled }}
 # ValidatingAdmissionPolicy that confines the GMC ServiceAccount's cluster-wide
 # write grants for tenant provisioning resources (Deployments, Services,
-# ServiceAccounts, NetworkPolicies, RoleBindings, Roles, HPAs, PodDisruptionBudgets,
-# RunnerGroups, and Secret create/update) to namespaces marked
+# ServiceAccounts, NetworkPolicies, RoleBindings, Roles, HPAs, VPAs,
+# PodDisruptionBudgets, RunnerGroups, and Secret create/update) to namespaces marked
 # actions-gateway.github.com/tenant=true — the gate RBAC cannot express (Q121/Q122).
 # Secret reads are not gated: admission never runs on get/list/watch (see
 # docs/design/05-security.md §5.1). Requires Kubernetes >= 1.30.
@@ -32,6 +32,14 @@ spec:
         apiVersions: ["v2"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["horizontalpodautoscalers"]
+      # The managed AGC VerticalPodAutoscaler (Q360). autoscaling.k8s.io is an
+      # optional add-on group: a resourceRule naming a kind whose CRD is absent is
+      # simply never matched, so listing it costs nothing on clusters without the
+      # vertical-pod-autoscaler and confines the write the moment it is installed.
+      - apiGroups: ["autoscaling.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["verticalpodautoscalers"]
       - apiGroups: ["policy"]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]

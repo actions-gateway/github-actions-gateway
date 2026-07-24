@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q390
+**Next ID:** Q392
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -49,9 +49,10 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q391"></a>Q391 | [e2e: GMC webhook unreachable in vault-WI `BeforeAll`](../cmd/gmc/test/e2e/vault_workload_identity_test.go) | `flake` `tests` | 🔲 | S | Kindnet leg, PR 761: apiserver→GMC webhook POST hit `context deadline exceeded` while GMC sat `1/1 Running`, 0 restarts; rerun green, no code change. Neither of [Q300](#Q300)'s classes (dataplane, external egress). |
 | <a id="Q380"></a>Q380 | [Recreate dogfood from zero — `setup.sh` unproven](plan/gke-dogfood.md#recreate-is-not-yet-proven-end-to-end-q380) | `infra` | 🔲 | S | Cluster deleted 07-20 (`delete.sh` validated live), so the next dogfood session must bootstrap from nothing. The from-zero `setup.sh` path has never run — incl. the new `workers-od` pool. Validate before you need it; gaps in the plan. |
 | <a id="Q359"></a>Q359 | [Worker right-sizing profiles (recommendations first)](plan/runner-sizing-profiles.md) | `infra` | 🔲 | S | All 3 phases shipped (usage metrics + recipe; status recommendations + SizingDrift; opt-in Binpack/Throughput/NodeShare profiles). Remaining: live dogfood validation of the whole loop — pairs with [Q380](#Q380); see the plan. |
-| <a id="Q360"></a>Q360 | [Managed VPA opt-in for the control planes](design/appendix-e-capacity-planning.md) | `infra` | 🔲 | M | Chart `vpa.enabled` emits a VPA for the GMC; a per-gateway opt-in has the GMC stamp one next to each AGC Deployment (appendix-e documents AGC restart safety). Needs the VPA CRDs present (degrade gracefully) + precedence over `agcResources` settled. |
+| <a id="Q390"></a>Q390 | [`AGCAutoscalingUnavailable` has no metric twin](design/appendix-e-capacity-planning.md#e11-managed-vertical-right-sizing-of-the-control-planes) | `infra` | 🔲 | S | Every other v2 gateway condition exports a gauge (Q321). The Q360 condition does not, so an unsatisfiable `agcAutoscaling` opt-in is invisible to alerting — only `kubectl describe` shows it. |
 | <a id="Q364"></a>Q364 | [Egress-proxy NetworkPolicy open-codes the shared CIDR rule](plan/structural-debt-audit-2026-07.md) | `security` `infra` | 🔲 | S | `githubCIDREgressRule` (builder.go:404) is called from 3 sites but not `egressproxy_builder.go`, which open-codes the peer loop twice (:470, :487). Three spellings of one 443 allowlist. F4. |
 | <a id="Q366"></a>Q366 | [Collapse the 29 GMC CreateOrPatch wrappers](plan/structural-debt-audit-2026-07.md) | `infra` | 🔲 | M | 33 calls / 29 `apply*` funcs differing only by type. Collapsing surfaces a latent issue: only 4 of 11 v1 helpers set an ownerRef, policy undocumented — a force-removed finalizer leaks SAs/RoleBindings/NPs/HPAs. F7. |
 | <a id="Q367"></a>Q367 | [Split the two god wiring functions](plan/structural-debt-audit-2026-07.md) | `infra` `tests` | 🔲 | M | `gmc/cmd/main.go` main() is 669 lines under `nolint:gocyclo` (~12 concerns, none test-reachable); `agc/main.go` run() is 431 with 23 scattered `os.Getenv`. Both already have extracted helpers proving the pattern. F8. |

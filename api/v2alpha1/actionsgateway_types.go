@@ -82,6 +82,20 @@ type ActionsGatewaySpec struct {
 	// +optional
 	AGCResources *corev1.ResourceRequirements `json:"agcResources,omitempty"`
 
+	// AGCAutoscaling opts this gateway's AGC control-plane pod into managed vertical
+	// right-sizing (Q360): the GMC stamps a VerticalPodAutoscaler next to the AGC
+	// Deployment so the autoscaler observes actual usage and sizes the container's
+	// resource *requests* for it. Unset (the default) ⇒ no VerticalPodAutoscaler is
+	// created and any one the GMC previously stamped is deleted, so the opt-in is
+	// off by default and fully reversible.
+	//
+	// It composes with — it does not replace — agcResources. See
+	// AGCVerticalAutoscaling for the precedence rules and the behavior when the
+	// VerticalPodAutoscaler CRD is not installed in the cluster.
+	//
+	// +optional
+	AGCAutoscaling *AGCVerticalAutoscaling `json:"agcAutoscaling,omitempty"`
+
 	// LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info
 	// (default), debug. Changing it is a rolling restart of the AGC, not a hot
 	// reload. Use debug only for a bug repro.
@@ -105,6 +119,84 @@ type ActionsGatewaySpec struct {
 	//
 	// +optional
 	Scheduling *PodScheduling `json:"scheduling,omitempty"`
+}
+
+// VPAUpdateMode selects how a managed VerticalPodAutoscaler actuates its
+// recommendation. It is the subset of the upstream autoscaling.k8s.io updateMode
+// values this API exposes.
+//
+// The upstream value Auto is deliberately NOT offered: it is an alias whose actuation
+// mechanism is version-dependent (today it evicts like Recreate; in-place resize is
+// still alpha upstream), so a gateway pinned to Auto would silently change restart
+// behavior on a VPA upgrade. Naming Recreate makes the eviction explicit.
+//
+// +kubebuilder:validation:Enum=Off;Initial;Recreate
+type VPAUpdateMode string
+
+const (
+	// VPAUpdateModeOff is recommendation-only: the VerticalPodAutoscaler observes the
+	// AGC and publishes a recommendation in its own status, but never mutates a pod.
+	// It is the default for agcAutoscaling so that opting in is observable before it
+	// is disruptive — nothing about the running AGC changes.
+	VPAUpdateModeOff VPAUpdateMode = "Off"
+	// VPAUpdateModeInitial applies the recommendation only at pod creation. A running
+	// AGC pod is never evicted by the autoscaler; it picks up a new size the next time
+	// it restarts for another reason (image change, node drain, spec edit).
+	VPAUpdateModeInitial VPAUpdateMode = "Initial"
+	// VPAUpdateModeRecreate lets the autoscaler evict the AGC pod to apply a new
+	// recommendation. The AGC tolerates this: on SIGTERM in-flight listener goroutines
+	// deregister their sessions and the AGC re-registers them within GitHub's 2-minute
+	// redelivery window on restart (docs/design/appendix-e-capacity-planning.md §E.9).
+	// It is still a control-plane restart, so it is opt-in rather than the default.
+	VPAUpdateModeRecreate VPAUpdateMode = "Recreate"
+)
+
+// AGCVerticalAutoscaling configures the managed VerticalPodAutoscaler the GMC stamps
+// next to this gateway's AGC Deployment (Q360). Its presence is the opt-in; there is
+// no enabled flag, so removing the block removes the autoscaler.
+//
+// # Precedence over agcResources
+//
+// Both this block and agcResources influence the AGC container's resources, so the
+// division is fixed and explicit rather than "last writer wins" (resolved at
+// reconcile, not rejected at admission — the combination is coherent, not
+// contradictory):
+//
+//   - agcResources alone decides what the GMC stamps on the Deployment. That is
+//     unchanged by this block, and it is the sizing actually in effect whenever the
+//     autoscaler is not actuating: mode Off, the VPA components absent or down, or
+//     before the first recommendation is produced.
+//   - The managed VerticalPodAutoscaler is pinned to controlledValues:
+//     RequestsOnly, so the autoscaler adjusts *requests* only. The limits from
+//     agcResources (or the platform default) are never raised or lowered by it — the
+//     memory limit stays the hard OOM ceiling the operator chose for a single-pod
+//     control plane.
+//   - A request the tenant explicitly set in agcResources becomes the autoscaler's
+//     minAllowed for that resource: an explicit floor is honored as a floor rather
+//     than silently overwritten. Leave agcResources.requests unset to let the
+//     autoscaler size the AGC all the way down to its own global floor — that is the
+//     configuration where right-sizing has the most to win.
+//   - The effective limits become maxAllowed. This is a correctness requirement, not
+//     a preference: a container whose request exceeds its own limit is rejected by
+//     the apiserver, so the autoscaler must never recommend above the stamped limit.
+//
+// # When the VerticalPodAutoscaler CRD is not installed
+//
+// The autoscaling.k8s.io CRDs are not part of core Kubernetes. If they are absent the
+// GMC does not fail the gateway: the AGC is provisioned normally with its agcResources
+// sizing, Ready is unaffected, and the advisory AGCAutoscalingUnavailable condition
+// goes True (reason VPACRDNotInstalled) with a matching Warning Event. The gateway is
+// re-probed on a slow bounded requeue, so installing the VPA controllers later
+// converges without an operator edit and without a hot reconcile loop.
+type AGCVerticalAutoscaling struct {
+	// Mode is the managed VerticalPodAutoscaler's updateMode. Defaults to Off —
+	// recommendation-only, so opting in never restarts the AGC by itself. Set
+	// Recreate to let the autoscaler actuate by evicting the AGC pod, or Initial to
+	// apply the recommendation only at the next restart.
+	//
+	// +optional
+	// +kubebuilder:default=Off
+	Mode VPAUpdateMode `json:"mode,omitempty"`
 }
 
 // CredentialType is the discriminator of the GitHubCredentials union: it names which

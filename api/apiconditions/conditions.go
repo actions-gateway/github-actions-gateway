@@ -51,6 +51,14 @@ const (
 	// attribution trade-off an operator opted into by not attaching an EgressProxy, so
 	// "no proxy" is an auditable state rather than an inferred one.
 	ConditionEgressUnattributed = "EgressUnattributed"
+	// ConditionAGCAutoscalingUnavailable is an advisory condition (abnormal-is-True) set
+	// True on an ActionsGateway that opted into spec.agcAutoscaling in a cluster where the
+	// autoscaling.k8s.io VerticalPodAutoscaler CRD is not installed (Q360). It does NOT
+	// gate Ready: the AGC is provisioned and fully functional with its agcResources
+	// sizing, it just is not being right-sized. The condition (plus a Warning Event) is
+	// what keeps an unsatisfiable opt-in from failing silently, in place of the
+	// alternatives — wedging the gateway, or hot-looping on an apply that cannot succeed.
+	ConditionAGCAutoscalingUnavailable = "AGCAutoscalingUnavailable"
 	// ConditionPossibleReapBlockingSidecar is an advisory condition (abnormal-is-True)
 	// set True on a RunnerSet whose resolved worker template carries a regular
 	// (non-native) sidecar container that may keep the worker pod alive after the
@@ -193,6 +201,16 @@ const (
 	// ReasonProxiedEgress is the EgressUnattributed=False reason: a proxy resolved, so
 	// egress is attributed to the proxy's stable per-tenant IPs.
 	ReasonProxiedEgress = "ProxiedEgress"
+	// ReasonVPACRDNotInstalled is the AGCAutoscalingUnavailable=True reason: the gateway
+	// opted into spec.agcAutoscaling but the cluster has no autoscaling.k8s.io
+	// VerticalPodAutoscaler CRD, so the managed autoscaler could not be created (Q360).
+	ReasonVPACRDNotInstalled = "VPACRDNotInstalled"
+	// ReasonAGCAutoscalingActive is the AGCAutoscalingUnavailable=False reason when the
+	// gateway opted in and the managed VerticalPodAutoscaler is stamped.
+	ReasonAGCAutoscalingActive = "AGCAutoscalingActive"
+	// ReasonAGCAutoscalingDisabled is the AGCAutoscalingUnavailable=False reason when the
+	// gateway did not opt in: spec.agcResources alone sizes the AGC, which is the default.
+	ReasonAGCAutoscalingDisabled = "AGCAutoscalingDisabled"
 	// ReasonReapBlockingSidecar is the PossibleReapBlockingSidecar=True reason: the
 	// resolved template has one or more regular, unacknowledged sidecar containers.
 	ReasonReapBlockingSidecar = "ReapBlockingSidecar"

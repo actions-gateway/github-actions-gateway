@@ -22,6 +22,7 @@ const (
 	ConditionCredentialUnavailable       = apiconditions.ConditionCredentialUnavailable
 	ConditionDegraded                    = apiconditions.ConditionDegraded
 	ConditionEgressUnattributed          = apiconditions.ConditionEgressUnattributed
+	ConditionAGCAutoscalingUnavailable   = apiconditions.ConditionAGCAutoscalingUnavailable
 	ConditionPossibleReapBlockingSidecar = apiconditions.ConditionPossibleReapBlockingSidecar
 	ConditionWorkerQuotaPressure         = apiconditions.ConditionWorkerQuotaPressure
 	ConditionWorkerQuotaExceeded         = apiconditions.ConditionWorkerQuotaExceeded
@@ -68,6 +69,9 @@ const (
 	ReasonTokenUnavailable        = apiconditions.ReasonTokenUnavailable
 	ReasonDirectEgress            = apiconditions.ReasonDirectEgress
 	ReasonProxiedEgress           = apiconditions.ReasonProxiedEgress
+	ReasonVPACRDNotInstalled      = apiconditions.ReasonVPACRDNotInstalled
+	ReasonAGCAutoscalingActive    = apiconditions.ReasonAGCAutoscalingActive
+	ReasonAGCAutoscalingDisabled  = apiconditions.ReasonAGCAutoscalingDisabled
 	ReasonReapBlockingSidecar     = apiconditions.ReasonReapBlockingSidecar
 	ReasonNoReapBlockingSidecar   = apiconditions.ReasonNoReapBlockingSidecar
 	ReasonPodsUnschedulable       = apiconditions.ReasonPodsUnschedulable

@@ -286,6 +286,34 @@ resources:
     cpu: 10m
     memory: 64Mi
 
+# vpa emits a VerticalPodAutoscaler that right-sizes the GMC controller-manager
+# instead of you tuning `resources` above by hand. Opt-in (off by default): the
+# autoscaling.k8s.io CRDs only exist once the Kubernetes vertical-pod-autoscaler
+# (recommender + updater + admission-controller) is installed, so enabling it
+# without that add-on breaks `helm install` — the same prerequisite contract as
+# metrics.serviceMonitor.
+#
+# It composes with `resources` rather than replacing it. The autoscaler is pinned
+# to controlledValues: RequestsOnly, so it moves requests only and `resources.limits`
+# stays exactly as set — your memory limit remains the hard OOM ceiling.
+#
+#   updateMode  Off (default) publishes a recommendation and changes nothing;
+#               Initial applies it only at the next pod creation; Recreate lets the
+#               autoscaler evict a GMC pod to resize it (survivable — the GMC is a
+#               leader-elected multi-replica Deployment with a PodDisruptionBudget).
+#   minAllowed  floor the autoscaler may not size below. Unset (default) lets it
+#               shrink to the vertical-pod-autoscaler's own global floor.
+#   maxAllowed  ceiling. Defaults to resources.limits; a request may never exceed
+#               its own limit, so set resources.limits when you raise this.
+#
+# The per-tenant equivalent is ActionsGateway.spec.agcAutoscaling — see
+# docs/operations/tenant-onboarding.md.
+vpa:
+  enabled: false
+  updateMode: "Off"
+  minAllowed: {}
+  maxAllowed: {}
+
 # priorityClassName schedules the GMC ahead of ordinary workloads and protects
 # it from preemption — it is cluster-critical control plane. Empty string
 # disables (e.g. on clusters without the built-in system-cluster-critical class).

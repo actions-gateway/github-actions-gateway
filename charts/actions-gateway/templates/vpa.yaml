@@ -1,0 +1,46 @@
+{{- if .Values.vpa.enabled }}
+# VerticalPodAutoscaler for the GMC controller-manager (Q360). Opt-in (off by
+# default): the autoscaling.k8s.io CRDs only exist once the Kubernetes
+# vertical-pod-autoscaler is installed, so enabling this without it breaks
+# `helm install` — the same prerequisite contract as metrics.serviceMonitor.
+#
+# It composes with `resources` above rather than replacing it: controlledValues is
+# pinned to RequestsOnly, so the autoscaler moves the manager container's *requests*
+# and the limits from `resources.limits` stay exactly as rendered — the memory limit
+# remains the hard OOM ceiling an operator chose. maxAllowed defaults to those same
+# limits, which is a correctness requirement and not a preference: a container whose
+# request exceeds its own limit is rejected by the apiserver.
+#
+# The GMC is a leader-elected multi-replica Deployment, so an updateMode that evicts
+# is survivable — a standby takes leadership. updateMode still defaults to Off
+# (recommendation only) so enabling the autoscaler is observable before it is
+# disruptive. See docs/operations/install.md and
+# docs/design/appendix-e-capacity-planning.md §E.9.
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ include "actions-gateway.managerName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "actions-gateway.managerName" . }}
+  updatePolicy:
+    updateMode: {{ .Values.vpa.updateMode | quote }}
+  resourcePolicy:
+    containerPolicies:
+    - containerName: manager
+      controlledValues: RequestsOnly
+      controlledResources: ["cpu", "memory"]
+      {{- with .Values.vpa.minAllowed }}
+      minAllowed:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (.Values.vpa.maxAllowed | default .Values.resources.limits) }}
+      maxAllowed:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -69,7 +69,8 @@ version.
   protocol as the default (the same model ARC uses, no many-acquirers fan-out),
   reusable `RunnerTemplate` and cluster-wide `ClusterRunnerTemplate`, multiple scoped
   gateways per namespace, an optional standalone `EgressProxy`, per-gateway
-  control-plane sizing (`agcResources`), and a `v1 → v2` migration tool. The
+  control-plane sizing (`agcResources`, optionally handed to a Vertical Pod Autoscaler
+  with `agcAutoscaling`), and a `v1 → v2` migration tool. The
   single-CR `v1alpha1` API (and its classic acquisition protocol) is still fully served
   but **[deprecated](operations/v1alpha1-deprecation.md)** — it is removed on a
   schedule tied to v2 reaching beta, not on an adoption count. See the migration

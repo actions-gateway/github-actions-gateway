@@ -47,6 +47,11 @@ supported. Migrate a tenant when one of these is worth that trade-off.
 - **Per-gateway control-plane sizing.** `ActionsGateway.spec.agcResources` tunes the AGC
   container CPU/memory per gateway (an additive overlay of the platform default). v1 has
   no equivalent field ([§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches)).
+- **Per-gateway managed right-sizing.** `ActionsGateway.spec.agcAutoscaling` has the GMC
+  stamp a `VerticalPodAutoscaler` next to the AGC `Deployment` so an autoscaler sizes its
+  requests instead of you tuning `agcResources` by hand. Opt-in, recommendation-only by
+  default, and it composes with `agcResources` rather than overriding it. v1 has no
+  equivalent field ([tenant-onboarding](tenant-onboarding.md#letting-an-autoscaler-size-the-agc-agcautoscaling)).
 - **DNS-aware egress policy.** `EgressProxy.egressPolicyMode` adds an `FQDN` intent
   (default `CIDR`) to allowlist GitHub by hostname; the operator picks the enforcement
   mechanism with the GMC `--fqdn-policy-backend` flag (`none`|`cilium`|`calico`|`gke`).

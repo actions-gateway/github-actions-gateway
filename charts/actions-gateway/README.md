@@ -131,6 +131,9 @@ both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 | `certManager.enabled` | `true` | Issue the webhook cert via cert-manager; `false` uses the self-signed fallback. |
 | `certManager.selfSignedCertDurationDays` | `3650` | Validity of the self-signed cert when cert-manager is disabled. |
 | `resources` | cpu 10m–500m / mem 64–128Mi | GMC container resources. |
+| `vpa.enabled` | `false` | Emit a `VerticalPodAutoscaler` that right-sizes the GMC (needs the `autoscaling.k8s.io` CRDs, i.e. the Kubernetes vertical-pod-autoscaler installed). |
+| `vpa.updateMode` | `"Off"` | `Off` = recommendation only; `Initial` applies at pod creation; `Recreate` lets the autoscaler evict a GMC pod to resize it. |
+| `vpa.minAllowed` / `vpa.maxAllowed` | `{}` / `{}` | Autoscaler floor/ceiling for the GMC's **requests** (it is pinned to `RequestsOnly`, so `resources.limits` is never moved). `maxAllowed` defaults to `resources.limits`. |
 | `priorityClassName` | `system-cluster-critical` | GMC PriorityClass (`""` to disable). |
 | `systemCriticalPriorityQuota.enabled` | `true` | Ship a scoped `ResourceQuota` that **permits** the `system-*-critical` `priorityClassName` under GKE's restricted PriorityClass admission (without it GKE rejects the GMC pods with `insufficient quota to match these scopes`). Permit-only (generous ceiling, scoped to the system-critical classes), inert elsewhere, and rendered only while `priorityClassName` is a system-critical class. Set `false` to manage it out-of-band. |
 | `systemCriticalPriorityQuota.maxPods` | `100` | Pod ceiling for that scoped quota; generous so it only satisfies admission, never caps scheduling. |

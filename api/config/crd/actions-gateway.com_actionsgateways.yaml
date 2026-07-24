@@ -81,6 +81,32 @@ spec:
               and the GMC stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
               docs/operations/security-operations.md.
             properties:
+              agcAutoscaling:
+                description: |-
+                  AGCAutoscaling opts this gateway's AGC control-plane pod into managed vertical
+                  right-sizing (Q360): the GMC stamps a VerticalPodAutoscaler next to the AGC
+                  Deployment so the autoscaler observes actual usage and sizes the container's
+                  resource *requests* for it. Unset (the default) ⇒ no VerticalPodAutoscaler is
+                  created and any one the GMC previously stamped is deleted, so the opt-in is
+                  off by default and fully reversible.
+
+                  It composes with — it does not replace — agcResources. See
+                  AGCVerticalAutoscaling for the precedence rules and the behavior when the
+                  VerticalPodAutoscaler CRD is not installed in the cluster.
+                properties:
+                  mode:
+                    default: "Off"
+                    description: |-
+                      Mode is the managed VerticalPodAutoscaler's updateMode. Defaults to Off —
+                      recommendation-only, so opting in never restarts the AGC by itself. Set
+                      Recreate to let the autoscaler actuate by evicting the AGC pod, or Initial to
+                      apply the recommendation only at the next restart.
+                    enum:
+                    - "Off"
+                    - Initial
+                    - Recreate
+                    type: string
+                type: object
               agcResources:
                 description: |-
                   AGCResources tunes the CPU/memory requests and limits stamped on this
@@ -1946,6 +1972,32 @@ spec:
               and the GMC stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
               docs/operations/security-operations.md.
             properties:
+              agcAutoscaling:
+                description: |-
+                  AGCAutoscaling opts this gateway's AGC control-plane pod into managed vertical
+                  right-sizing (Q360): the GMC stamps a VerticalPodAutoscaler next to the AGC
+                  Deployment so the autoscaler observes actual usage and sizes the container's
+                  resource *requests* for it. Unset (the default) ⇒ no VerticalPodAutoscaler is
+                  created and any one the GMC previously stamped is deleted, so the opt-in is
+                  off by default and fully reversible.
+
+                  It composes with — it does not replace — agcResources. See
+                  AGCVerticalAutoscaling for the precedence rules and the behavior when the
+                  VerticalPodAutoscaler CRD is not installed in the cluster.
+                properties:
+                  mode:
+                    default: "Off"
+                    description: |-
+                      Mode is the managed VerticalPodAutoscaler's updateMode. Defaults to Off —
+                      recommendation-only, so opting in never restarts the AGC by itself. Set
+                      Recreate to let the autoscaler actuate by evicting the AGC pod, or Initial to
+                      apply the recommendation only at the next restart.
+                    enum:
+                    - "Off"
+                    - Initial
+                    - Recreate
+                    type: string
+                type: object
               agcResources:
                 description: |-
                   AGCResources tunes the CPU/memory requests and limits stamped on this

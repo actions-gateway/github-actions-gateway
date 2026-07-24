@@ -122,6 +122,12 @@ func TestMain(m *testing.M) {
 			// ServiceMonitor apply lands against the test apiserver. Real clusters
 			// install the Prometheus Operator's own CRD.
 			"testdata/monitoring-crds",
+			// Stub autoscaling.k8s.io VerticalPodAutoscaler CRD (Q360) so the managed
+			// AGC autoscaler apply lands against the test apiserver. Real clusters
+			// install the Kubernetes vertical-pod-autoscaler's own CRD. The
+			// CRD-ABSENT half of the opt-in is unit-tested (a RESTMapper that matches
+			// no kind) — it cannot be expressed here once the stub is installed.
+			"testdata/autoscaling-crds",
 		},
 		ErrorIfCRDPathMissing: true,
 		Scheme:                testScheme,
