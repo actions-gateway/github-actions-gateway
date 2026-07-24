@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -49,6 +50,51 @@ func ApplyManifestOutput(yaml string) (string, error) {
 	f.Close()
 	cmd := exec.Command("kubectl", "apply", "-f", f.Name())
 	return Run(cmd)
+}
+
+// webhookTransportErrorRe matches the apiserver's error text when it could not
+// COMPLETE a call to an admission webhook — a transport-level failure (the
+// webhook Service had no ready endpoint for the picked pod, its TLS listener was
+// mid-restart, or the POST outran its per-call deadline) — as opposed to the
+// webhook running and DENYING the request. The apiserver emits these phrases
+// only for the unreachable case; a genuine rejection reads
+// `admission webhook "…" denied the request: …` and matches none of them. The
+// signatures mirror manager_np_test.go's admission-reachability probe.
+var webhookTransportErrorRe = regexp.MustCompile(
+	`(?i)failed calling webhook|failed to call webhook|context deadline exceeded|` +
+		`connection refused|no route to host|no endpoints available`)
+
+// ApplyManifestWithWebhookRetry applies a manifest that triggers the GMC
+// admission webhooks, retrying ONLY while the apiserver reports it could not
+// reach the webhook. Under the parallel e2e suite (`--procs 6`) a single
+// webhook POST can transiently hit `context deadline exceeded` even though the
+// GMC pod is `1/1 Running` with programmed endpoints; with `failurePolicy: Fail`
+// and no apiserver-side retry, that one stall hard-fails a plain one-shot apply
+// (Q391). Retrying rides out the blip.
+//
+// It is NOT a blind retry: a clean apply returns nil immediately, and a genuine
+// webhook DENIAL (or any non-transport error) is returned on the FIRST attempt
+// so real failures fail fast instead of burning the budget. kubectl apply is
+// idempotent, so re-applying objects an earlier attempt already created is safe.
+// A persistent webhook outage still surfaces the last transport error once the
+// bounded budget elapses — this waits for the webhook to actually respond, it
+// does not paper a real outage over.
+func ApplyManifestWithWebhookRetry(yaml string) error {
+	const (
+		budget = 90 * time.Second
+		gap    = 3 * time.Second
+	)
+	deadline := time.Now().Add(budget)
+	for {
+		err := ApplyManifest(yaml)
+		if err == nil || !webhookTransportErrorRe.MatchString(err.Error()) {
+			return err
+		}
+		if !time.Now().Before(deadline) {
+			return err
+		}
+		time.Sleep(gap)
+	}
 }
 
 // CreateNamespace creates a namespace and applies the given labels.

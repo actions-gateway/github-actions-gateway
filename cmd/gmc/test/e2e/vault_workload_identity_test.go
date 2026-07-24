@@ -58,7 +58,13 @@ var _ = Describe("E2E_VaultWorkloadIdentity", Ordered, Label("vault-workload-ide
 
 		By("applying the workload-identity ActionsGateway + RunnerTemplate + RunnerSet")
 		vaultAddr := fmt.Sprintf("http://vault.%s.svc.cluster.local:8200", infraNamespace)
-		Expect(utils.ApplyManifest(vaultWorkloadIdentityManifest(
+		// Retry a transient webhook-unreachable apply rather than one-shotting it:
+		// under the parallel suite (--procs 6) the RunnerTemplate/RunnerSet
+		// validating-webhook POSTs can hit `context deadline exceeded` while the
+		// GMC is 1/1 Running with programmed endpoints, and failurePolicy: Fail
+		// then hard-fails a single apply (Q391). ApplyManifestWithWebhookRetry
+		// self-heals that blip; a genuine webhook denial still fails fast.
+		Expect(utils.ApplyManifestWithWebhookRetry(vaultWorkloadIdentityManifest(
 			tenantNS, gwName, runnerSet, vaultAddr, transitKey, vaultRole, agcImage, infraNamespace))).To(Succeed())
 
 		By("granting the AGC egress to fakegithub (Vault egress is GMC-provisioned, Q202)")
