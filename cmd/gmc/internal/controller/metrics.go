@@ -170,16 +170,20 @@ func (c *runnerGroupsDegradedCollector) Collect(ch chan<- prometheus.Metric) {
 // actionsGatewayV2ConditionsCollector exports the v2 ActionsGateway rollup and
 // availability conditions (Q321) as gauges so operators can alert on v2 gateway
 // state without kube-state-metrics — the v2 twin of the v1 ActionsGateway
-// condition gauges above. It reads at scrape time from the cached reader: a deleted
-// ActionsGateway simply stops being listed. Each gauge mirrors the condition the v2
-// reconciler already wrote to .status.conditions (1 when True, 0 otherwise). It is
-// registered only when the v2 CRDs are installed (see [NewMetrics]), so a v1-only
-// cluster never lists the absent v2 ActionsGateway kind.
+// condition gauges above. This includes the advisory AGCAutoscalingUnavailable
+// condition (Q360/Q390), so an agcAutoscaling opt-in that cannot be satisfied is
+// alertable rather than only visible via kubectl describe. It reads at scrape time
+// from the cached reader: a deleted ActionsGateway simply stops being listed. Each
+// gauge mirrors the condition the v2 reconciler already wrote to .status.conditions
+// (1 when True, 0 otherwise). It is registered only when the v2 CRDs are installed
+// (see [NewMetrics]), so a v1-only cluster never lists the absent v2 ActionsGateway
+// kind.
 type actionsGatewayV2ConditionsCollector struct {
-	reader             client.Reader
-	runnerSetsDegraded *prometheus.Desc
-	agcAvailable       *prometheus.Desc
-	egressUnattributed *prometheus.Desc
+	reader                    client.Reader
+	runnerSetsDegraded        *prometheus.Desc
+	agcAvailable              *prometheus.Desc
+	egressUnattributed        *prometheus.Desc
+	agcAutoscalingUnavailable *prometheus.Desc
 }
 
 func newActionsGatewayV2ConditionsCollector(reader client.Reader) *actionsGatewayV2ConditionsCollector {
@@ -200,6 +204,11 @@ func newActionsGatewayV2ConditionsCollector(reader client.Reader) *actionsGatewa
 			"1 when the v2 ActionsGateway EgressUnattributed condition is True (the gateway runs in direct egress mode, so its GitHub traffic is not attributed to a per-tenant egress proxy), else 0.",
 			[]string{"namespace", "name"}, nil,
 		),
+		agcAutoscalingUnavailable: prometheus.NewDesc(
+			"actions_gateway_agc_autoscaling_unavailable",
+			"1 when the v2 ActionsGateway AGCAutoscalingUnavailable condition is True (the agcAutoscaling opt-in cannot be satisfied, e.g. the VerticalPodAutoscaler CRDs are not installed), else 0. The AGC still runs on its stamped agcResources sizing; this is advisory.",
+			[]string{"namespace", "name"}, nil,
+		),
 	}
 }
 
@@ -208,6 +217,7 @@ func (c *actionsGatewayV2ConditionsCollector) Describe(ch chan<- *prometheus.Des
 	ch <- c.runnerSetsDegraded
 	ch <- c.agcAvailable
 	ch <- c.egressUnattributed
+	ch <- c.agcAutoscalingUnavailable
 }
 
 // Collect implements prometheus.Collector. On a read failure it emits nothing
@@ -231,6 +241,8 @@ func (c *actionsGatewayV2ConditionsCollector) Collect(ch chan<- prometheus.Metri
 			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionAGCAvailable), ag.Namespace, ag.Name)
 		ch <- prometheus.MustNewConstMetric(c.egressUnattributed, prometheus.GaugeValue,
 			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionEgressUnattributed), ag.Namespace, ag.Name)
+		ch <- prometheus.MustNewConstMetric(c.agcAutoscalingUnavailable, prometheus.GaugeValue,
+			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionAGCAutoscalingUnavailable), ag.Namespace, ag.Name)
 	}
 }
 

@@ -45,6 +45,7 @@ Part of the [Observability](observability.md) guide. To scrape these metrics, se
 | `actions_gateway_runnersets_degraded` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `RunnerSetsDegraded=True` (Q304): one or more of the `RunnerSet`s bound to the gateway (`spec.gatewayRef`) report an impairing condition. The v2 twin of `actions_gateway_runnergroups_degraded`; rolls child health up to the gateway, naming the impaired sets in the condition message. Advisory — does not gate `Ready`. v2 only, emitted only on a v2 install (Q321). |
 | `actions_gateway_agc_available` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `AGCAvailable=True`: the tenant's AGC `Deployment` has a ready replica (the gateway's control plane is up). Drops to `0` while the AGC is rolling out or unavailable — correlate with `Ready`. v2 only, emitted only on a v2 install (Q321). |
 | `actions_gateway_egress_unattributed` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `EgressUnattributed=True` (§H.10): the gateway runs in **direct** egress mode, so its GitHub traffic is not attributed to a per-tenant egress proxy. Advisory — expected and `0` on a proxied deploy; a `1` on a deploy meant to be proxied flags a misconfiguration. v2 only, emitted only on a v2 install (Q321). |
+| `actions_gateway_agc_autoscaling_unavailable` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `AGCAutoscalingUnavailable=True` (Q360, §E.11): the gateway opted into managed AGC right-sizing (`agcAutoscaling`) but it cannot be satisfied — the `VerticalPodAutoscaler` CRDs are not installed (`VPACRDNotInstalled`) or a precedence conflict blocks the managed VPA. Advisory — the AGC still runs on its stamped `agcResources` sizing and `Ready` is unaffected; the opt-in is simply inert until the blocker clears. `0` when satisfied or not opted in. Without this gauge the unsatisfiable opt-in is visible only via `kubectl describe` (Q390). v2 only, emitted only on a v2 install (Q321). |
 | `actions_gateway_build_info` | Gauge | `component`, `version` | Constant `1` per running control-plane binary, following the Prometheus `*_build_info` convention (Q318). Emitted by the GMC, AGC, and proxy — `component` is `gmc`/`agc`/`proxy` and `version` is the build tag stamped into the binary (`dev` for un-stamped local builds). Not load-bearing for alerting; join it into other series to correlate the running version during an incident (worker pods carry `app.kubernetes.io/version`, but the control plane otherwise does not expose its version in metrics). |
 
 > **Proxy conditions on a v2 deploy.** On a v2 install (the opt-in
@@ -79,11 +80,13 @@ Part of the [Observability](observability.md) guide. To scrape these metrics, se
 > tripped signals, giving the operator a single pane without inspecting each child.
 > Advisory — like the v1 rollup it does **not** gate `Ready`, since the gateway's own
 > AGC control plane can be healthy while a tenant's set is impaired. It is exported as the `actions_gateway_runnersets_degraded`
-> gauge (Q321), alongside `actions_gateway_agc_available` and
-> `actions_gateway_egress_unattributed` for the gateway's `AGCAvailable` and
-> `EgressUnattributed` conditions — the v2 twins of the v1 `ActionsGateway`
-> condition gauges. All three are emitted only on a v2 install and labelled per
-> gateway (`namespace`, `name`).
+> gauge (Q321), alongside `actions_gateway_agc_available`,
+> `actions_gateway_egress_unattributed`, and `actions_gateway_agc_autoscaling_unavailable`
+> for the gateway's `AGCAvailable`, `EgressUnattributed`, and `AGCAutoscalingUnavailable`
+> conditions — the v2 twins of the v1 `ActionsGateway` condition gauges. Every v2
+> gateway condition thus has a metric twin, so the advisory `agcAutoscaling` opt-in
+> (Q360/Q390) is alertable rather than only visible via `kubectl describe`. All are
+> emitted only on a v2 install and labelled per gateway (`namespace`, `name`).
 
 ### Scale-set acquisition tier (Q264)
 
