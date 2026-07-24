@@ -2273,6 +2273,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#patch-releases-and-backports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patch releases and backports
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#rollback" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2555,6 +2566,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#patch-releases-and-backports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patch releases and backports
+      
+    </span>
+  </a>
   
 </li>
       
@@ -2980,6 +3002,32 @@ digests pinned via <code>--set</code>, exactly as
 <a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
 </code></pre></div>
+<h2 id="patch-releases-and-backports">Patch releases and backports<a class="headerlink" href="#patch-releases-and-backports" title="Permanent link">&para;</a></h2>
+<p>A patch release (<code>vX.Y.Z+1</code>) is <strong>bugfix-only</strong> by SemVer. That has a release-
+engineering consequence: <strong>do not tag a patch from <code>main</code> once <code>main</code> has merged
+features headed for the next minor</strong> — doing so ships those unreleased features in
+the patch's images <em>and</em> chart, and advertises them in the patch's docs (the site
+builds each version from its tag). Tag a patch from the released line instead:</p>
+<ul>
+<li><strong>Ephemeral branch off the tag (branchless-friendly).</strong> For a one-off patch:
+  <code>git switch --detach vX.Y.Z</code>, <code>git switch -c release-X.Y</code>, cherry-pick the fix,
+  tag <code>vX.Y.(Z+1)</code>, push the tag. Delete the branch afterward if you don't maintain
+  the line.</li>
+<li><strong>Long-lived release branch.</strong> If you support multiple minor lines at once, keep
+  a <code>release-X.Y</code> branch at the minor's tag and land backported fixes on it.</li>
+</ul>
+<p>You only need a branch/backport <strong>when <code>main</code> isn't itself the intended patch</strong> —
+i.e. when it has diverged past the release with content you don't want in the
+patch. If <code>main</code> is clean and ready to ship, that's the next <strong>minor</strong> (<code>vX.(Y+1).0</code>),
+not a patch.</p>
+<p>The <strong>docs site follows automatically</strong>: <code>mike</code> builds each version from its own
+tag, so a patch tagged off the release line publishes docs with only that line's
+content — no unreleased features. And the site's <code>stable</code> alias + default root
+redirect move <strong>only to the highest released version</strong>, so a backport patch
+released <em>after</em> a newer minor updates its own version's docs without demoting the
+site (see
+<a href="../../development/website/#versioned-deploy-mike">website.md § Versioned deploy</a>).
+No docs-specific branch is ever required beyond what the release itself needs.</p>
 <h2 id="rollback">Rollback<a class="headerlink" href="#rollback" title="Permanent link">&para;</a></h2>
 <p>A release is just a tag and a set of immutable, digest-addressed images — nothing
 is destructive. To roll an <em>installed</em> release back, re-pin the previous digests
