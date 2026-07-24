@@ -6,9 +6,17 @@ tree with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/).
 
 - Config: `mkdocs.yml` · theme overrides: `overrides/` · styles + scripts:
   `docs/stylesheets/extra.css`, `docs/javascripts/extra.js`
-- Deployed by `.github/workflows/pages.yml` — pushing docs changes to `main`
-  publishes automatically; `workflow_dispatch` is available for a manual
-  redeploy. Pull requests only build/validate (never publish).
+- Deployed by `.github/workflows/pages.yml` — the site tracks the latest
+  **stable release tag**, not the `main` branch: pushing a `v*` release tag
+  (the same push that runs `publish.yml`) rebuilds and publishes the docs as of
+  that release, so a feature merged to `main` but not yet in a tagged/released
+  chart never reads as shipped on the live site (Q387). Prereleases
+  (`0.x`, `-rc`/`-alpha`/`-beta`) are gated out, matching `publish.yml`'s
+  prerelease test. `workflow_dispatch` is available for a manual redeploy — use
+  it for a docs-only fix that shouldn't wait for the next release. Pull requests
+  only build/validate (never publish). A full per-release *versioned* docs tree
+  (mike/Docusaurus, a version selector) is a larger, distinct change tracked by
+  Q238.
 
 ## Custom domain
 
