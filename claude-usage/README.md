@@ -55,6 +55,9 @@ reproduce identically on any machine, even with no transcripts present.
 Latest snapshot **2026-07-24** (project day 70; first commit 2026-05-16). "Day 7"
 is the [original day-7 Bluesky post][post1]'s published figures; "Day 22" is the
 [day-22 follow-up][post2]; "Day 70" is the current snapshot the charts here back.
+The snapshots are announced as a quote-post chain (each post quotes the previous
+one): [day 7][post1] → [day 22][post2] → [day 35][post3] → [day 48][post4] →
+[day 70][post5].
 
 > **Frozen snapshot.** The committed CSVs, `summary.json`, and charts are the
 > 2026-07-24 snapshot. Re-running `compute_metrics.py` advances the token/message
@@ -98,10 +101,11 @@ The standalone versions follow below.
 
 ### Daily token usage by model
 ![Daily token usage by model](charts/tokens_by_model.png)
-The Pro→Max upgrade (dashed line, 2026-05-23) is visible as the hand-off from
-Sonnet 4.6 (orange) to Opus 4.7 (purple), then Opus 4.8 (blue), with Fable 5
-(green) appearing from June 9. Charts use the Okabe–Ito colourblind-safe palette,
-and each model also carries its own hatch pattern.
+The Pro→Max 5x upgrade (first dashed line, 2026-05-23) is visible as the hand-off
+from Sonnet 4.6 (orange) to Opus 4.7 (purple), then Opus 4.8 (blue), with Fable 5
+(green) appearing from June 9; the second dashed line (2026-07-05) marks the
+Max 5x→20x upgrade. Charts use the Okabe–Ito colourblind-safe palette, and each
+model also carries its own hatch pattern.
 
 ### Tokens spent vs. lines authored (the magnitude)
 ![Cumulative tokens far above cumulative lines authored, log scale](charts/tokens_vs_lines.png)
@@ -196,4 +200,7 @@ full provenance.
   `user_msgs` as the well-defined replacements, not as the same quantity.
 
 [post1]: https://bsky.app/profile/karlkfi.bsky.social/post/3mmpo56ds6c23
-[post2]: https://bsky.app/profile/karlkfi.bsky.social/post/3mnqx3gztwk2e
+[post2]: https://bsky.app/profile/karlkfi.bsky.social/post/3mnqwj3nlhk2x
+[post3]: https://bsky.app/profile/karlkfi.bsky.social/post/3moqxgrpouk23
+[post4]: https://bsky.app/profile/karlkfi.bsky.social/post/3mprnre3zsc2v
+[post5]: https://bsky.app/profile/karlkfi.bsky.social/post/3mrftwskoas2r

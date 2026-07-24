@@ -49,6 +49,10 @@ PROJECTS_GLOB = os.environ.get("CLAUDE_PROJECTS_GLOB", DEFAULT_GLOB)
 # the "Pro-era" window from which the archived-day backfill rate is derived.
 PRO_TO_MAX = "2026-05-23"
 
+# Date the plan upgraded Max 5x -> Max 20x. Annotation-only (no computational
+# role) — recorded in provenance and drawn on the by-model chart.
+MAX_5X_TO_20X = "2026-07-05"
+
 # Token usage is deduped on (message.id, requestId): resumed/compacted sessions
 # replay earlier assistant records verbatim, and counting them twice would inflate
 # every total (cache_read especially). Message records are deduped on their uuid.
@@ -481,6 +485,7 @@ def main():
             "growth_chart_baseline": {"tokens": 10_000_000, "commits": 232, "tests": 269, "go_code": 15500,
                                  "note": "published day-7 Bluesky post values; the growth chart plots growth vs these"},
             "pro_to_max_date": PRO_TO_MAX,
+            "max_5x_to_20x_date": MAX_5X_TO_20X,
         },
         "estimation": {
             "method": "per-commit Pro-era rate x commits authored that day",

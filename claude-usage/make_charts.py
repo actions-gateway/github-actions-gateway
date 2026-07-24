@@ -15,7 +15,7 @@ Run:
     python3 claude-usage/make_charts.py        # needs matplotlib + numpy
 
 Outputs PNGs (1x + @2x) to claude-usage/charts/:
-    tokens_by_model      daily token usage by model, with the Pro->Max marker
+    tokens_by_model      daily token usage by model, with the plan-upgrade markers
     tokens_per_line      cost-per-line ratio + the lines composition (stacked)
     tokens_vs_lines      cumulative tokens vs lines authored (log scale)
     tokens_overview      all three tokens/lines views stacked on one timeline
@@ -41,6 +41,7 @@ DATA = os.path.join(HERE, "data")
 CHARTS = os.path.join(HERE, "charts")
 
 PRO_TO_MAX = date(2026, 5, 23)
+MAX_5X_TO_20X = date(2026, 7, 5)  # Max 5x -> Max 20x plan upgrade
 
 # Okabe–Ito colourblind-safe palette.
 OI = {
@@ -139,11 +140,12 @@ def chart_tokens_by_model():
     handles = [mpatches.Patch(facecolor=MODEL_COLORS[m], hatch=MODEL_HATCH[m] or None,
                               edgecolor="white", label=m) for m in drawn]
     handles.append(mpatches.Patch(facecolor="#cccccc", hatch="////", edgecolor="white", label="estimated"))
-    upg = PRO_TO_MAX.isoformat()
-    if upg in days:
-        xi = days.index(upg)
-        ax.axvline(xi - 0.5, color="#222", ls="--", lw=1.4)
-        ax.text(xi - 0.4, max(bottom) * 0.92, "  Pro → Max", fontsize=10, fontweight="bold", color="#222")
+    for upg_date, label in ((PRO_TO_MAX, "  Pro → Max 5x"), (MAX_5X_TO_20X, "  Max 5x → 20x")):
+        upg = upg_date.isoformat()
+        if upg in days:
+            xi = days.index(upg)
+            ax.axvline(xi - 0.5, color="#222", ls="--", lw=1.4)
+            ax.text(xi - 0.4, max(bottom) * 0.92, label, fontsize=10, fontweight="bold", color="#222")
     ax.set_title("Daily Claude Code token usage by model", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("tokens / day  (millions)", fontsize=11)
     ax.set_xticks(xs)
