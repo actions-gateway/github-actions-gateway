@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q392
+**Next ID:** Q393
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -49,7 +49,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q391"></a>Q391 | [e2e: GMC webhook unreachable in vault-WI `BeforeAll`](../cmd/gmc/test/e2e/vault_workload_identity_test.go) | `flake` `tests` | 🔲 | S | Kindnet leg, PR 761: apiserver→GMC webhook POST hit `context deadline exceeded` while GMC sat `1/1 Running`, 0 restarts; rerun green, no code change. Neither of [Q300](#Q300)'s classes (dataplane, external egress). |
 | <a id="Q380"></a>Q380 | [Recreate dogfood from zero — `setup.sh` unproven](plan/gke-dogfood.md#recreate-is-not-yet-proven-end-to-end-q380) | `infra` | 🔲 | S | Cluster deleted 07-20 (`delete.sh` validated live), so the next dogfood session must bootstrap from nothing. The from-zero `setup.sh` path has never run — incl. the new `workers-od` pool. Validate before you need it; gaps in the plan. |
 | <a id="Q359"></a>Q359 | [Worker right-sizing profiles (recommendations first)](plan/runner-sizing-profiles.md) | `infra` | 🔲 | S | All 3 phases shipped (usage metrics + recipe; status recommendations + SizingDrift; opt-in Binpack/Throughput/NodeShare profiles). Remaining: live dogfood validation of the whole loop — pairs with [Q380](#Q380); see the plan. |
 | <a id="Q390"></a>Q390 | [`AGCAutoscalingUnavailable` has no metric twin](design/appendix-e-capacity-planning.md#e11-managed-vertical-right-sizing-of-the-control-planes) | `infra` | 🔲 | S | Every other v2 gateway condition exports a gauge (Q321). The Q360 condition does not, so an unsatisfiable `agcAutoscaling` opt-in is invisible to alerting — only `kubectl describe` shows it. |
@@ -66,6 +65,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q376"></a>Q376 | [Stagger dispatch-batch gate runs](development/parallel-dispatch.md) | `docs` `speed` `infra` | 🔲 | S | Batch workers all run `make check` at once and queue on the heavy-build lock (observed waits up to 5 h). Stagger the gate across workers, or run it as a background task while docs/PR prep continue. |
 | <a id="Q377"></a>Q377 | [Change-scope `make test`/coverage to affected modules](../scripts/go-test.sh) | `speed` `tests` | 🔲 | M | Tests dominate `make check` runtime; reuse go-lint.sh's affected-module scoping. Needs care: cover-check floors are per-module, so a scoped run gates only the modules it ran. |
 | <a id="Q382"></a>Q382 | [Q-ID allocation under parallel sessions](development/maintaining-backlog.md) | `infra` `retro` | 🔲 | M | 5 ID-allocating merges on 07-20 forced 3 renumberings across one PR's rebases — the global `Next ID` counter is the contention point. Explore provisional session IDs normalized at merge, or reserved blocks. Distinct from [Q376](#Q376). |
+| <a id="Q392"></a>Q392 | [Adopt `ApplyManifestWithWebhookRetry` in remaining webhook-apply specs](../cmd/gmc/test/utils/resources.go) | `tests` | 🔲 | S | Q391 hardened only vault-WI's apply. direct_egress/provisioning/isolation/v2_multigateway `BeforeAll`s still one-shot the same webhook-triggering apply with no retry on transient `context deadline exceeded`. Adopt the helper across them. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
@@ -113,6 +113,7 @@ Flakes whose mitigation has shipped and that have **not recurred since**, plus r
 
 | ID | Item | Labels | Sz | Trigger to revive |
 |---|---|---|---|---|
+| <a id="Q391"></a>Q391 | [e2e: GMC webhook unreachable in vault-WI `BeforeAll`](../cmd/gmc/test/e2e/vault_workload_identity_test.go) | `tests` `flake` | S | **Event:** recurs on `main` after the Q391 fix (vault-WI's webhook apply now retries transient `context deadline exceeded` under `--procs 6` instead of one-shot). → top of Queue, escalated. |
 | <a id="Q378"></a>Q378 | [TestReconcile_ReaperDefaults baseline-recheck race](../cmd/agc/internal/controller/runnergroup_reaper_test.go) | `tests` `flake` | S | **Event:** recurs on `main` after PR #738 (reaper tests pin `BaselineRecheckInterval` to 1h; brokerless test listeners let `ActiveCount()` fall below `MaxListeners`, swapping the asserted requeue for the 15s baseline). → top of Queue, escalated. |
 | <a id="Q350"></a>Q350 | [scalesetlistener name-conflict test setup race](../cmd/agc/internal/scalesetlistener/listener_test.go) | `tests` `flake` | S | **Event:** recurs on `main` after PR #700 (staging conflicts after `EnqueueJob` raced the poll loop; tests now hold capacity 0 until the conflict is staged). → top of Queue, escalated. |
 | <a id="Q300"></a>Q300 | [Systemic kindnet e2e leg flakiness (cross-spec)](plan/q300-gmc-kindnet-e2e-flake.md) | `tests` `flake` `infra` | M | **Event:** kindnet `e2e / e2e` red on `main` again. 07-18 escalation was misattributed (Q349, pre-fix). Dump now captures nfqueue/memory counters + full-window kindnet logs — attribute per the plan's triage table before any code change. |
