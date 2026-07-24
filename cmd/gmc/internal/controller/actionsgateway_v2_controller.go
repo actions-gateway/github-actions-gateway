@@ -405,7 +405,7 @@ func boolConditionStatus(b bool) metav1.ConditionStatus {
 // CreateOrPatch code path. Unlike v1, the v2 reconciler stamps a controller owner
 // reference on every namespaced child; the sole exception is the cluster-scoped
 // applyClusterRunnerTemplateReaderBinding, which cannot be owned by a namespaced
-// ActionsGateway (see the per-child ownerRef policy, Q393).
+// ActionsGateway (see the per-child ownerRef policy, Q394).
 
 func (r *ActionsGatewayV2Reconciler) applyServiceAccount(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *corev1.ServiceAccount) error {
 	return applyManagedChild(ctx, r.Client, r.Scheme, ag, &corev1.ServiceAccount{}, desired, nil)

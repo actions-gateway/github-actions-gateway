@@ -28,7 +28,7 @@ import (
 // (ServiceAccounts, RoleBindings, NetworkPolicies, HPAs, PDBs, Services) leak.
 // These tables pin the exact owner-reference contract per helper so the collapse
 // cannot silently add or drop an owner, and so a later deliberate change to the
-// policy (tracked as Q393) shows up here as an intended edit rather than a
+// policy (tracked as Q394) shows up here as an intended edit rather than a
 // regression that slips through review.
 
 type ownerRefCase struct {
@@ -50,7 +50,7 @@ func assertOwnerRefContract(t *testing.T, c client.Client, cases []ownerRefCase)
 				assert.True(t, *tc.into.GetOwnerReferences()[0].Controller)
 			} else {
 				assert.Empty(t, tc.into.GetOwnerReferences(),
-					"%s must stay un-owned (reclaimed by the reconcileDelete finalizer, Q393)", tc.name)
+					"%s must stay un-owned (reclaimed by the reconcileDelete finalizer, Q394)", tc.name)
 			}
 		})
 	}
@@ -111,7 +111,7 @@ func TestV1ApplyHelpers_OwnerReferenceContract(t *testing.T) {
 		}
 	}
 	require.Len(t, cases, 11, "v1 has 11 CreateOrPatch apply helpers")
-	require.Equal(t, 4, owned, "exactly 4 of the 11 v1 apply helpers are owner-referenced (Q393)")
+	require.Equal(t, 4, owned, "exactly 4 of the 11 v1 apply helpers are owner-referenced (Q394)")
 
 	assertOwnerRefContract(t, c, cases)
 }

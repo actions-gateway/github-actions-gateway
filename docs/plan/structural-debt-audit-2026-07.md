@@ -12,7 +12,7 @@ Classification follows [technical-debt.md](../development/technical-debt.md).
 > Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe
 > rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule
 > consolidation as Q364, F7's CreateOrPatch collapse as Q366 (which spun the
-> owner-reference-policy question out to [Q393](../STATUS.md#Q393)),
+> owner-reference-policy question out to [Q394](../STATUS.md#Q394)),
 > F8's god-function decomposition as Q367, and the
 > §Prevention gates (nolintlint + a ratcheted funlen) as Q371. The remaining
 > findings are tracked by Queue rows
@@ -307,7 +307,7 @@ an owner.
 The ownerRef-policy inconsistency itself was **deliberately not resolved here** — a
 force-removed-finalizer leak is a security-relevant behaviour question that must be
 decided on its own, not smuggled into a cleanup. It is filed as
-[Q393](../STATUS.md#Q393) for a separate, signed-off decision.
+[Q394](../STATUS.md#Q394) for a separate, signed-off decision.
 
 **F8 — Two god wiring functions with the linter switched off.** ✅ **Shipped** (Q367)
 

@@ -59,14 +59,22 @@ the opt-in `dev` version, never as "Available now" on the released site.
 **What deploys when** (`.github/workflows/pages.yml`):
 
 - **push to `main`** → `mike deploy dev` (refreshes the unreleased `dev` docs).
-- **stable `v*` tag push** → `mike deploy --alias-type=copy --update-aliases X.Y.Z stable`
-  then `mike set-default stable` (publishes the release and moves `stable` + the
-  root redirect to it). This is the same tag push that runs `publish.yml`.
+- **stable `v*` tag push** → deploys that release's docs, and **only if it is the
+  highest released version** also moves the `stable` alias + the default root
+  redirect to it (`mike set-default stable`). This is the same tag push that runs
+  `publish.yml`.
 - **prerelease tag** (`0.x`, `-rc`/`-alpha`/`-beta`) → **no deploy** (the same
   prerelease test `publish.yml` uses, Q293).
-- **`workflow_dispatch`** → deploys the `version`/`alias` inputs (or derives from
-  the ref when blank) — used for **seeding** already-released versions and manual
-  redeploys.
+- **`workflow_dispatch`** → deploys the `version`/`alias` inputs verbatim (or
+  derives from the ref when blank) — used for **seeding** already-released versions
+  and manual redeploys.
+
+**Backports don't demote the site.** A patch cut for an older supported line (e.g.
+`v1.2.5` released *after* `v1.3.0`) publishes/updates its own `1.2.5` version but
+leaves `stable` on `1.3.0` — the deploy claims `stable` only when the pushed tag is
+the highest released version. That backport must be tagged off the release line,
+not off feature-ahead `main`; see
+[release.md § Patch releases and backports](../operations/release.md#patch-releases-and-backports).
 
 Pages source stays **"GitHub Actions"**: `mike` maintains the tree on `gh-pages`,
 and the `publish` job serves that whole tree as the Pages artifact.

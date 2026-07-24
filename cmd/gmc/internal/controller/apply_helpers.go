@@ -30,7 +30,7 @@ import (
 // owned child — silently changes garbage-collection semantics and, for the
 // un-owned children, would let a force-removed finalizer leak them. The current
 // per-child policy is intentionally NOT normalised here; it is documented and
-// tracked for a separate, deliberately-reviewed decision (Q393). Preserve each
+// tracked for a separate, deliberately-reviewed decision (Q394). Preserve each
 // call site's owner argument exactly; the apply_helpers ownerRef-contract tests
 // pin it.
 func applyManagedChild[T client.Object](

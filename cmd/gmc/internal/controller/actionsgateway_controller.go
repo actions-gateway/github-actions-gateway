@@ -1196,7 +1196,7 @@ func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // applyServiceMonitor pass a non-nil owner (4 of the 11 v1 CreateOrPatch
 // children). The rest are un-owned and reclaimed solely by the reconcileDelete
 // finalizer. That inconsistency is intentional-but-undocumented and tracked for a
-// separate decision (Q393) — do not add or drop an owner here without it.
+// separate decision (Q394) — do not add or drop an owner here without it.
 // applyNamespacePSA stays on Server-Side Apply (it already detects and reports
 // out-of-band PSA-label edits via field-manager conflicts).
 
@@ -1206,7 +1206,7 @@ func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 var errRoleRefImmutable = errors.New("rolebinding roleRef changed; recreate required")
 
 // applyServiceAccount creates the ServiceAccount or patches its managed labels.
-// Un-owned: reclaimed by the reconcileDelete finalizer (Q393).
+// Un-owned: reclaimed by the reconcileDelete finalizer (Q394).
 func (r *ActionsGatewayReconciler) applyServiceAccount(ctx context.Context, desired *corev1.ServiceAccount) error {
 	return applyManagedChild(ctx, r.Client, r.Scheme, nil, &corev1.ServiceAccount{}, desired, nil)
 }
@@ -1216,7 +1216,7 @@ func (r *ActionsGatewayReconciler) applyServiceAccount(ctx context.Context, desi
 // reference the agc-tenant-role ClusterRole) the binding must be deleted and
 // recreated — a patch would be rejected. A non-empty ResourceVersion means obj
 // already existed (CreateOrPatch populated it from the live object). Un-owned:
-// reclaimed by the reconcileDelete finalizer (Q393).
+// reclaimed by the reconcileDelete finalizer (Q394).
 func (r *ActionsGatewayReconciler) applyRoleBinding(ctx context.Context, desired *rbacv1.RoleBinding) error {
 	obj := &rbacv1.RoleBinding{}
 	err := applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
@@ -1237,7 +1237,7 @@ func (r *ActionsGatewayReconciler) applyRoleBinding(ctx context.Context, desired
 }
 
 // applyNetworkPolicy creates or patches a NetworkPolicy. Un-owned: reclaimed by
-// the reconcileDelete finalizer (Q393).
+// the reconcileDelete finalizer (Q394).
 func (r *ActionsGatewayReconciler) applyNetworkPolicy(ctx context.Context, desired *networkingv1.NetworkPolicy) error {
 	obj := &networkingv1.NetworkPolicy{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
@@ -1274,7 +1274,7 @@ func (r *ActionsGatewayReconciler) applyProxyDeployment(ctx context.Context, ag 
 
 // applyService creates or patches a Service, setting only controller-managed Spec
 // fields: ClusterIP and other server-assigned fields on an existing Service must
-// be preserved. Un-owned: reclaimed by the reconcileDelete finalizer (Q393).
+// be preserved. Un-owned: reclaimed by the reconcileDelete finalizer (Q394).
 func (r *ActionsGatewayReconciler) applyService(ctx context.Context, desired *corev1.Service) error {
 	obj := &corev1.Service{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
@@ -1286,7 +1286,7 @@ func (r *ActionsGatewayReconciler) applyService(ctx context.Context, desired *co
 }
 
 // applyPDB creates or patches a PodDisruptionBudget. Un-owned: reclaimed by the
-// reconcileDelete finalizer (Q393).
+// reconcileDelete finalizer (Q394).
 func (r *ActionsGatewayReconciler) applyPDB(ctx context.Context, desired *policyv1.PodDisruptionBudget) error {
 	obj := &policyv1.PodDisruptionBudget{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
@@ -1296,7 +1296,7 @@ func (r *ActionsGatewayReconciler) applyPDB(ctx context.Context, desired *policy
 }
 
 // applyHPA creates or patches a HorizontalPodAutoscaler. Un-owned: reclaimed by
-// the reconcileDelete finalizer (Q393).
+// the reconcileDelete finalizer (Q394).
 func (r *ActionsGatewayReconciler) applyHPA(ctx context.Context, desired *autoscalingv2.HorizontalPodAutoscaler) error {
 	obj := &autoscalingv2.HorizontalPodAutoscaler{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
@@ -1306,7 +1306,7 @@ func (r *ActionsGatewayReconciler) applyHPA(ctx context.Context, desired *autosc
 }
 
 // applyRunnerGroup creates or patches a RunnerGroup CR. Un-owned: reclaimed by the
-// reconcileDelete finalizer, which deletes RunnerGroups explicitly (Q393).
+// reconcileDelete finalizer, which deletes RunnerGroups explicitly (Q394).
 func (r *ActionsGatewayReconciler) applyRunnerGroup(ctx context.Context, desired *agcv1alpha1.RunnerGroup) error {
 	obj := &agcv1alpha1.RunnerGroup{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
