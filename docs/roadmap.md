@@ -18,11 +18,12 @@ describing your setup.
 
 ## Available now (1.0)
 
-Everything here is merged and covered by the design and operations docs. This
-site deploys from the `main` branch, so the newest items may be a step ahead of
-the latest [tagged release](https://github.com/actions-gateway/github-actions-gateway/releases)
-until the next release is cut — check the release notes when pinning a chart
-version.
+Everything here is merged and covered by the design and operations docs. Use the
+**version selector** at the top of the page to switch between the latest
+**stable [release](https://github.com/actions-gateway/github-actions-gateway/releases)**
+(the default you land on) and **`dev`** (the unreleased `main` branch): an item
+that appears under `dev` but not yet under a numbered release hasn't shipped in a
+tagged chart. Check the release notes for the exact image digests to pin.
 
 - **One resource per tenant.** A single `ActionsGateway` custom resource
   provisions an isolated gateway — controller, egress proxy pool, role-based

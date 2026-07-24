@@ -68,6 +68,16 @@ extra_javascript:
   - javascripts/extra.js
 
 extra:
+  # Versioned docs (Q238) — Material renders a version selector from mike's
+  # versions.json when the provider is `mike`. `default: stable` marks the
+  # `stable` alias (the latest release) as canonical, so a visitor viewing an
+  # older release or `dev` (the unreleased main branch) gets Material's
+  # "you're looking at a different version" banner. The deploy that populates
+  # these versions lives in .github/workflows/pages.yml; see
+  # docs/development/website.md § Versioned deploy.
+  version:
+    provider: mike
+    default: stable
   # Privacy-respecting analytics (Plausible) — opt-in, no cookies, no Google.
   # Wired in overrides/main.html. Leave plausible_domain empty to keep analytics
   # OFF (the default). To enable, a maintainer sets it to the public site domain

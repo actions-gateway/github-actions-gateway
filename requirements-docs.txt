@@ -4,3 +4,8 @@
 # incompatible with Material; Material 9.x caps mkdocs < 2). Add hashes when Q123 lands.
 mkdocs==1.6.1
 mkdocs-material==9.7.6
+# mike drives the versioned docs deploy (Q238): one built copy per release under
+# a version subdir on the gh-pages branch, a `stable` alias for the latest
+# release, and the version selector Material renders from `extra.version.provider:
+# mike`. See docs/development/website.md § Versioned deploy.
+mike==2.1.3
