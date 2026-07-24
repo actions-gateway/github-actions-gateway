@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -242,6 +243,100 @@ func TestBuildEgressProxyNetworkPolicy(t *testing.T) {
 		}
 	}
 	assert.NotEmpty(t, npU.Spec.Egress, "DNS egress is always present")
+}
+
+// TestBuildEgressProxyNetworkPolicy_GitHubRuleMatchesSharedHelper is the Q364
+// drift guard. The egress-proxy policy's GitHub-CIDR 443 rule must be EXACTLY the
+// output of the shared githubCIDREgressRule helper — byte-for-byte via DeepEqual,
+// not merely "contains the CIDR somewhere" like the coarse check above. This pins
+// the single-spelling invariant: the v1 proxy/workload policies and this v2 policy
+// all render the GitHub allowlist through one helper, so a future edit that
+// re-open-codes the rule and diverges (a different port, a namespaceSelector, an
+// except block, reordered peers) fails here instead of shipping a policy split.
+// It also proves the loop-1 consolidation did not change the emitted policy.
+func TestBuildEgressProxyNetworkPolicy_GitHubRuleMatchesSharedHelper(t *testing.T) {
+	_, cidr1, err := net.ParseCIDR("140.82.112.0/20")
+	require.NoError(t, err)
+	_, cidr2, err := net.ParseCIDR("143.55.64.0/20")
+	require.NoError(t, err)
+	cidrs := []net.IPNet{*cidr1, *cidr2}
+
+	want, ok := githubCIDREgressRule(cidrs)
+	require.True(t, ok, "helper must emit a rule for a non-empty CIDR set")
+
+	np := buildEgressProxyNetworkPolicy(newEP("shared", "team-a", nil), cidrs)
+
+	matches := 0
+	for _, rule := range np.Spec.Egress {
+		if reflect.DeepEqual(rule, want) {
+			matches++
+		}
+	}
+	assert.Equal(t, 1, matches,
+		"the rendered GitHub-CIDR egress rule must be exactly githubCIDREgressRule's output (one spelling, Q364)")
+}
+
+// TestBuildEgressProxyNetworkPolicy_DestinationCIDRsStayDistinct locks in that
+// destinationCIDRs — EXTRA, non-GitHub ranges (CRD doc) — render as a SEPARATE
+// egress rule and are deliberately NOT routed through githubCIDREgressRule. The two
+// rules differ in more than data: destinationCIDRs are gated WITHOUT egressUsesCIDR,
+// so in an FQDN egress mode the GitHub rule is omitted while the destinationCIDRs
+// rule survives. This guards against a later "consolidation" that would wrongly fold
+// the two 443 allowlists into one (Q364).
+func TestBuildEgressProxyNetworkPolicy_DestinationCIDRsStayDistinct(t *testing.T) {
+	_, ghCIDR, err := net.ParseCIDR("140.82.112.0/20")
+	require.NoError(t, err)
+	githubCIDRs := []net.IPNet{*ghCIDR}
+	const extraCIDR = "10.0.0.0/8"
+
+	// CIDR mode (default): both rules present, and they are distinct rules — the
+	// destinationCIDRs rule is not equal to the GitHub helper's output.
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.DestinationCIDRs = []string{extraCIDR}
+	})
+	np := buildEgressProxyNetworkPolicy(ep, githubCIDRs)
+
+	ghRule, ok := githubCIDREgressRule(githubCIDRs)
+	require.True(t, ok)
+
+	var foundGitHub, foundExtra bool
+	for _, rule := range np.Spec.Egress {
+		if reflect.DeepEqual(rule, ghRule) {
+			foundGitHub = true
+			continue
+		}
+		for _, peer := range rule.To {
+			if peer.IPBlock != nil && peer.IPBlock.CIDR == extraCIDR {
+				foundExtra = true
+				assert.False(t, reflect.DeepEqual(rule, ghRule),
+					"destinationCIDRs must be a distinct rule, not the GitHub helper's output")
+			}
+		}
+	}
+	assert.True(t, foundGitHub, "GitHub-CIDR rule present in CIDR mode")
+	assert.True(t, foundExtra, "destinationCIDRs rule present in CIDR mode")
+
+	// FQDN mode: the GitHub CIDR rule is gated out (egressUsesCIDR=false), but the
+	// destinationCIDRs rule persists — proof the two are governed by different gates.
+	epFQDN := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+		ep.Spec.DestinationCIDRs = []string{extraCIDR}
+	})
+	npFQDN := buildEgressProxyNetworkPolicy(epFQDN, githubCIDRs)
+
+	var ghInFQDN, extraInFQDN bool
+	for _, rule := range npFQDN.Spec.Egress {
+		if reflect.DeepEqual(rule, ghRule) {
+			ghInFQDN = true
+		}
+		for _, peer := range rule.To {
+			if peer.IPBlock != nil && peer.IPBlock.CIDR == extraCIDR {
+				extraInFQDN = true
+			}
+		}
+	}
+	assert.False(t, ghInFQDN, "GitHub-CIDR rule must be omitted in FQDN mode")
+	assert.True(t, extraInFQDN, "destinationCIDRs rule must survive FQDN mode")
 }
 
 func TestBuildEgressProxyCertSecret(t *testing.T) {
