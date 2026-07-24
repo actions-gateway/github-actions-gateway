@@ -49,7 +49,7 @@ const (
 	ReasonNoActiveSessions = "NoActiveSessions"
 	// ReasonTokenUnavailable is the CredentialUnavailable=True reason;
 	// ReasonCredentialAvailable clears it (CredentialUnavailable=False).
-	ReasonTokenUnavailable    = "TokenUnavailable"    //nolint:gosec // G101: a condition reason name, not a credential
+	ReasonTokenUnavailable    = "TokenUnavailable"
 	ReasonCredentialAvailable = "CredentialAvailable" //nolint:gosec // G101: a condition reason name, not a credential
 	// ReasonPodsUnschedulable is the WorkersUnschedulable=True reason; the stuck
 	// pods and the scheduler's verdict are named in the condition message.

@@ -21,12 +21,48 @@ linters:
     - dupl
     - errcheck
     - forbidigo
+    - funlen
     - gosec
     - govet
     - ineffassign
+    - nolintlint
     - staticcheck
     - unused
   settings:
+    funlen:
+      # Ratcheting anti-regression gate on function length (F8 in the
+      # 2026-07 structural-debt audit; Q371). Lines only — statements is
+      # disabled (-1) so the single dial matches the audit's line-based curve;
+      # funlen substitutes its own default (40) for a literal 0, so a negative
+      # value is how you switch a dimension off.
+      #
+      # 200 is the STARTING CEILING, deliberately set just above the worst
+      # legitimate survivor measured 2026-07-23 (listener.Run at 197 lines,
+      # cmd/agc/internal/listener/goroutine.go) so the repo passes today. This
+      # is a ratchet, not a target: lower it as long functions are decomposed
+      # (Q367 already cleared the two god main()s that stood at 178/191), the
+      # same "gates by not getting worse" pattern the coverage ratchet uses —
+      # no allowlist of shame. Do not raise it to admit a new long function;
+      # split the function instead.
+      lines: 200
+      statements: -1
+      # Count executable lines only — a long doc comment on a wiring function
+      # is documentation, not complexity.
+      ignore-comments: true
+    nolintlint:
+      # Turn an inert or over-broad //nolint directive into a lint failure
+      # (Q371). The audit found the repo's only nolint:gocyclo was dead — it
+      # silenced a gate that was never enabled — and Q367 removed it by hand;
+      # this gate makes the next such directive fail the build instead of
+      # hiding in the tree. The repo's suppressions are already disciplined
+      # (71 of 79 are justified gosec accepts), so this is cheap to adopt.
+      #
+      # allow-unused:false  — a directive that suppresses nothing is an error.
+      # require-specific:true — a bare //nolint disables every linter on the
+      #   line, masking unrelated future failures; require the linter name so
+      #   the suppression stays as narrow as the accept it documents.
+      allow-unused: false
+      require-specific: true
     forbidigo:
       # Bounded-by-default HTTP clients (Q138). http.DefaultClient and the
       # http.Get/Post/... package helpers have no timeout: a slow or black-holed
@@ -114,6 +150,15 @@ linters:
       - path: _test\.go
         linters:
           - forbidigo
+      # funlen: exclude test files. Table-driven tests legitimately grow long
+      # by enumerating cases inline (the ScaleUp/ScaleDown and decrypt/renew
+      # listener tests run 100+ lines), which reads more clearly than hiding
+      # cases behind a helper. The gate targets production function length; the
+      # audit's curve was measured over non-test Go for the same reason. Scoped
+      # to _test.go so funlen stays active on all production code.
+      - path: _test\.go
+        linters:
+          - funlen
       # Kubebuilder-generated GroupVersion scaffolding still uses
       # scheme.Builder; not under our control until kubebuilder updates. Matches
       # every API version dir (v1alpha1, v2alpha1, …).

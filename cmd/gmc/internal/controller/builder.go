@@ -66,7 +66,7 @@ const (
 	// it is never a stored Secret. vaultTokenAudience is the projected token's
 	// audience — operators bind their Vault k8s-auth role to it (the MVP fixes it; a
 	// configurable audience is a documented follow-up).
-	vaultTokenVolumeName = "vault-token"                                  //nolint:gosec // G101: a volume name, not a credential
+	vaultTokenVolumeName = "vault-token"
 	vaultTokenMountDir   = "/var/run/secrets/actions-gateway/vault-token" //nolint:gosec // G101: a mount-path constant, not a credential
 	vaultTokenFile       = "token"
 	vaultTokenAudience   = "vault"

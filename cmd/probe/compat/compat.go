@@ -684,7 +684,6 @@ func encryptCBC(key, plaintext []byte) (string, error) {
 		return "", err
 	}
 	ciphertext := make([]byte, len(padded))
-	//nolint:gosec // G407: the IV is freshly random per call (rand.Read above), not a hardcoded value.
 	cipher.NewCBCEncrypter(block, iv).CryptBlocks(ciphertext, padded)
 	return base64.StdEncoding.EncodeToString(append(iv, ciphertext...)), nil
 }

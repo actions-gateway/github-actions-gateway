@@ -21,8 +21,8 @@ const (
 	// metrics Secret names from the EgressProxy name: "<ep>-metrics-tls" (the server
 	// bundle mounted into the proxy pod) and "<ep>-metrics-client" (the scraper
 	// bundle published for the monitoring stack, never mounted into the proxy).
-	egressProxyMetricsTLSSuffix    = "-metrics-tls"    //nolint:gosec // G101: a name suffix, not a credential
-	egressProxyMetricsClientSuffix = "-metrics-client" //nolint:gosec // G101: a name suffix, not a credential
+	egressProxyMetricsTLSSuffix    = "-metrics-tls"
+	egressProxyMetricsClientSuffix = "-metrics-client"
 
 	// egressProxyMetricsServiceMonitorSuffix names the per-EgressProxy
 	// Prometheus-Operator ServiceMonitor: "<ep>-proxy-metrics".

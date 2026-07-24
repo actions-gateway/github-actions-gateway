@@ -8,13 +8,13 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, and F8 shipped.** The F1
+> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, F8, and the prevention gates shipped.** The F1
 > Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe
-> rewrite) shipped as Q362, F3's share-and-gate split as Q374, and F8's god-function
-> decomposition as Q367. The remaining findings are tracked by Queue rows
+> rewrite) shipped as Q362, F3's share-and-gate split as Q374, F8's god-function
+> decomposition as Q367, and the §Prevention gates (nolintlint + a ratcheted funlen)
+> as Q371. The remaining findings are tracked by Queue rows
 > [Q364](../STATUS.md#Q364)–[Q366](../STATUS.md#Q366),
-> [Q368](../STATUS.md#Q368)–[Q370](../STATUS.md#Q370);
-> [Q371](../STATUS.md#Q371) adds the prevention gates; [Q372](../STATUS.md#Q372)
+> [Q368](../STATUS.md#Q368)–[Q370](../STATUS.md#Q370); [Q372](../STATUS.md#Q372)
 > (Deferred) carries the re-run trigger.
 >
 > The ID range is not contiguous because concurrent branches allocated IDs while
@@ -334,7 +334,7 @@ audit class is the larger one here.
 | Finding | Catchable by a gate? |
 |---|---|
 | F3 sync gate covers 13% | **Yes** — already a script; generalize its file list (Q374, shipped) |
-| F8 god `main`/`run` functions | **Yes** — `funlen` / `gocyclo` ([Q371](../STATUS.md#Q371)) |
+| F8 god `main`/`run` functions | **Yes** — `funlen` / `gocyclo` (Q371, shipped) |
 | F10 script sprawl | Partly — a line-count check on `scripts/` would flag `setup.sh` |
 | F1 Secret leak | No — semantic resource-lifecycle bug |
 | F2 probe reimplements `scaleset` | No |
@@ -383,15 +383,15 @@ Measured 2026-07-20 over non-test, non-generated Go:
 | >100 lines | 21 |
 | >80 lines | 31 |
 
-[technical-debt.md](../development/technical-debt.md) currently records
+[technical-debt.md](../development/technical-debt.md) previously recorded
 *"Cyclomatic complexity | Skip for now — most long functions are legitimate wiring;
-high noise-to-signal."* The curve says that call was too pessimistic: at a high
-threshold the gate fires on a handful, not a flood. Q367 has now cleared the two
-god `main`s, so the gate (Q371) can set the threshold just
-above the worst legitimate survivor and ratchet down — the same "gates by not
-getting worse" pattern the coverage ratchet already uses, with no allowlist of
-shame. **Q371 should update that metrics-table row** when the gate lands; it is
-left unchanged until then so the doc keeps describing what is actually enforced.
+high noise-to-signal."* The curve showed that call was too pessimistic: at a high
+threshold the gate fires on a handful, not a flood. With Q367 clearing the two god
+`main`s, Q371 landed the gate at `lines: 200` — just above the worst legitimate
+survivor (`listener.Run`, 197 lines, measured 2026-07-23 after Q367 shrank the two
+`main`s to 178/191 and below) — set to ratchet down, the same "gates by not getting
+worse" pattern the coverage ratchet already uses, with no allowlist of shame. Q371
+updated that metrics-table row to match.
 
 ### Audit cadence
 

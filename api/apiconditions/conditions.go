@@ -193,7 +193,7 @@ const (
 	ReasonListenerActive = "ListenerActive"
 	// ReasonTokenUnavailable — the AGC could not obtain a GitHub App installation
 	// token, so the RunnerSet cannot register runners (Ready=False).
-	ReasonTokenUnavailable = "TokenUnavailable" //nolint:gosec // G101: a condition reason, not a credential
+	ReasonTokenUnavailable = "TokenUnavailable"
 	// ReasonDirectEgress is the EgressUnattributed=True reason (and the proxyMode=Direct
 	// rationale): no proxyRef/defaultProxyRef resolved, so egress is direct and
 	// unattributed (still NetworkPolicy-restricted to GitHub).

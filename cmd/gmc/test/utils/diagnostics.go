@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	. "github.com/onsi/ginkgo/v2" // nolint:revive,staticcheck
+	. "github.com/onsi/ginkgo/v2" //nolint:revive,staticcheck
 )
 
 // DumpAGCSessionDiagnostics writes best-effort cluster state to the Ginkgo
