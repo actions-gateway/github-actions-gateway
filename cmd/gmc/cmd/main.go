@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -15,31 +14,16 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
-	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
-	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	actionsgatewaygithubcomv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
-	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
-	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
-	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
-	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
-	webhookv2beta1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2beta1"
 	"github.com/go-logr/logr"
 	// +kubebuilder:scaffold:imports
 )
@@ -69,668 +53,90 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
-// nolint:gocyclo
+// main wires the GMC process: it binds flags, resolves and validates the config
+// surface, constructs the controller-runtime manager, and registers the
+// controllers, webhooks, and health checks before starting the manager. The
+// concern-scoped steps live in flags.go (addFlags), config.go (resolveConfig,
+// resolveImages, the option builders), and wiring.go (newManager,
+// registerControllers, registerWebhooks, setupHealthChecks) — extracted from what
+// was one 669-line function so each concern is test-reachable (Q367 / F8). The
+// ordering here is load-bearing: config validation and manager construction
+// precede image resolution and controller/webhook registration exactly as before.
 func main() {
-	var metricsAddr string
-	var metricsCertPath, metricsCertName, metricsCertKey string
-	var webhookCertPath, webhookCertName, webhookCertKey string
-	var enableLeaderElection bool
-	var probeAddr string
-	var secureMetrics bool
-	var enableHTTP2 bool
-	var tlsOpts []func(*tls.Config)
-	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
-		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-	// Leader-election timing knobs. Defaults match controller-runtime/client-go
-	// (15s/10s/2s) so existing deployments behave identically. They are exposed
-	// so operators can tune the failover/false-positive trade-off per cluster:
-	// larger values tolerate slower apiservers (fewer spurious lease losses),
-	// smaller values fail over faster (k8s audit F4). The invariant
-	// LeaseDuration > RenewDeadline > RetryPeriod×1.2 is validated below.
-	var leaderElectLeaseDuration, leaderElectRenewDeadline, leaderElectRetryPeriod time.Duration
-	flag.DurationVar(&leaderElectLeaseDuration, "leader-elect-lease-duration", 15*time.Second,
-		"Duration non-leader candidates wait before force-acquiring leadership.")
-	flag.DurationVar(&leaderElectRenewDeadline, "leader-elect-renew-deadline", 10*time.Second,
-		"Duration the acting leader retries refreshing leadership before giving up.")
-	flag.DurationVar(&leaderElectRetryPeriod, "leader-elect-retry-period", 2*time.Second,
-		"Interval between leader-election action attempts.")
-	// ReleaseOnCancel makes the active manager step down voluntarily on SIGTERM
-	// instead of holding the lease until it expires, so the standby takes over in
-	// ~RetryPeriod rather than ~LeaseDuration. This closes the rollout reconcile
-	// gap that terminationGracePeriodSeconds (10s) < LeaseDuration (15s) would
-	// otherwise leave (k8s audit F3). Safe here: main() exits immediately once
-	// mgr.Start returns, with no post-stop cleanup that could race the release.
-	var leaderElectReleaseOnCancel bool
-	flag.BoolVar(&leaderElectReleaseOnCancel, "leader-elect-release-on-cancel", true,
-		"Release the leader lease on graceful shutdown for faster failover. "+
-			"Only safe when the process exits promptly after the manager stops.")
-	flag.BoolVar(&secureMetrics, "metrics-secure", true,
-		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
-	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate.")
-	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
-	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
-	flag.StringVar(&metricsCertPath, "metrics-cert-path", "",
-		"The directory that contains the metrics server certificate.")
-	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
-	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
-	flag.BoolVar(&enableHTTP2, "enable-http2", false,
-		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	var allowAgcExtraEnv bool
-	flag.BoolVar(&allowAgcExtraEnv, "allow-agc-extra-env", false,
-		"Forward AGC_EXTRA_* environment variables from the GMC pod to AGC Deployments. Intended for testing only.")
-	var allowFloatingImageTags bool
-	flag.BoolVar(&allowFloatingImageTags, "allow-floating-image-tags", false,
-		"Permit non-digest-pinned AGC_IMAGE/PROXY_IMAGE references (floating tags). "+
-			"Intended for dev/test only; production requires the name@sha256:<digest> form.")
-	var enableTenantServiceMonitors bool
-	flag.BoolVar(&enableTenantServiceMonitors, "enable-tenant-service-monitors", false,
-		"Create a per-tenant Prometheus-Operator ServiceMonitor for the proxy and AGC mTLS "+
-			"metrics ports (:8443). Off by default: requires the monitoring.coreos.com CRD "+
-			"(Prometheus Operator) installed. When off, the metrics Services are still created "+
-			"but nothing is wired to scrape them. The chart sets this from metrics.serviceMonitor.enabled.")
-	var allowedPriorityClasses string
-	flag.StringVar(&allowedPriorityClasses, "allowed-priority-classes", "",
-		"Comma-separated allowlist of cluster-scoped PriorityClass names that tenant "+
-			"RunnerGroups may reference in priorityTiers. The platform admin pre-creates "+
-			"these classes and lists them here; the admission webhook rejects any other "+
-			"name so a tenant cannot preempt other tenants' worker pods. Empty (default) "+
-			"forbids all priorityTiers PriorityClass references.")
-	var allowedInfraPriorityClasses string
-	flag.StringVar(&allowedInfraPriorityClasses, "allowed-infra-priority-classes", "",
-		"Comma-separated allowlist of cluster-scoped PriorityClass names a tenant "+
-			"EgressProxy or v2 ActionsGateway may reference in spec.scheduling.priorityClassName "+
-			"for its INFRA pods — the proxy pool and the AGC control plane (Q284). An evicted "+
-			"proxy takes a tenant's whole egress path down, so these pods need a priority ABOVE "+
-			"best-effort workers. MUST be disjoint from --allowed-priority-classes (the worker "+
-			"allowlist): the GMC refuses to start if they intersect, because a class nameable "+
-			"from both surfaces would let a tenant lift its WORKERS to infra priority and preempt "+
-			"other tenants' proxy pods. Empty (default) forbids all "+
-			"spec.scheduling.priorityClassName references.")
-	var priorityClassAllowlistConfigMap string
-	flag.StringVar(&priorityClassAllowlistConfigMap, "priority-class-allowlist-configmap", "",
-		"Name of a ConfigMap in the GMC's own namespace whose entries AUGMENT the "+
-			"--allowed-priority-classes flag allowlist, watched so additions take effect "+
-			"without a GMC restart (Q188). The ConfigMap's data."+
-			controller.PriorityClassAllowlistConfigMapKey+" value lists PriorityClass names "+
-			"(comma/newline-separated). Additive and fail-safe: a missing or malformed "+
-			"ConfigMap leaves the static flag allowlist in force. Empty (default) disables "+
-			"the watch — flag-only behavior, unchanged.")
-	var allowedEgressFQDNs string
-	flag.StringVar(&allowedEgressFQDNs, "allowed-egress-fqdns", "",
-		"Comma-separated allowlist of FQDN host suffixes a tenant EgressProxy may "+
-			"request in spec.destinationFQDNs (Q242 G.1). A request matches if it equals "+
-			"or is a subdomain of an entry (allowing golang.org permits proxy.golang.org). "+
-			"The admission webhook rejects any destinationFQDNs entry not covered here. "+
-			"GitHub is always allowed implicitly; empty (default) forbids all non-GitHub "+
-			"FQDN destinations.")
-	var allowedEgressCIDRs string
-	flag.StringVar(&allowedEgressCIDRs, "allowed-egress-cidrs", "",
-		"Comma-separated allowlist of CIDR ranges a tenant EgressProxy may request in "+
-			"spec.destinationCIDRs (Q242 G.1). A request matches by subnet containment "+
-			"(allowing 10.0.0.0/8 permits a requested 10.1.0.0/16). The admission webhook "+
-			"rejects any destinationCIDRs entry not contained here. Each entry must be a "+
-			"valid CIDR; a malformed value fails startup. Empty (default) forbids all "+
-			"non-GitHub CIDR destinations.")
-	var egressDestinationAllowlistConfigMap string
-	flag.StringVar(&egressDestinationAllowlistConfigMap, "egress-destination-allowlist-configmap", "",
-		"Name of a ConfigMap in the GMC's own namespace whose entries AUGMENT the "+
-			"--allowed-egress-fqdns/--allowed-egress-cidrs flag allowlists, watched so "+
-			"additions take effect without a GMC restart (Q242 G.1). The ConfigMap's "+
-			"data."+controller.EgressDestinationFQDNsConfigMapKey+" and data."+
-			controller.EgressDestinationCIDRsConfigMapKey+" values list FQDN suffixes and "+
-			"CIDRs (comma/newline-separated). Additive and fail-safe: a missing or "+
-			"malformed ConfigMap leaves the static flag allowlists in force. Empty "+
-			"(default) disables the watch — flag-only behavior.")
-	var fqdnPolicyBackend string
-	flag.StringVar(&fqdnPolicyBackend, "fqdn-policy-backend", string(controller.FQDNBackendNone),
-		"CNI/platform mechanism the GMC uses to enforce an FQDN egressPolicyMode intent "+
-			"(Q245): none|cilium|calico|gke. This is the operator's install-wide choice — a "+
-			"tenant expresses intent (egressPolicyMode: FQDN) and this flag picks how it is "+
-			"enforced (cilium=CiliumNetworkPolicy, calico=Calico NetworkPolicy, gke=GKE "+
-			"Dataplane V2 FQDNNetworkPolicy). The secure default 'none' declares no backend, "+
-			"so an EgressProxy requesting FQDN intent is rejected at admission rather than "+
-			"silently degrading. The deprecated CiliumFQDN/CalicoFQDN modes ignore this flag "+
-			"and always emit their namesake policy. An unrecognized value fails startup.")
-	var apiServerCIDRs string
-	flag.StringVar(&apiServerCIDRs, "apiserver-cidrs", "",
-		"Comma-separated CIDR allowlist for the AGC NetworkPolicy's Kubernetes API server "+
-			"(443/6443) egress rule. When set, the rule is scoped to these CIDRs (ipBlock) "+
-			"instead of allowing any destination — an opt-in tightening for platforms whose "+
-			"apiserver endpoint exposes a stable CIDR (Q145). Empty (default) keeps the "+
-			"any-destination rule, required where the post-DNAT apiserver IP is not "+
-			"predictable. Each entry must be a valid CIDR; a malformed value fails startup.")
+	cfg := addFlags(flag.CommandLine)
 	// Default to production logging: structured JSON at info level, which log
 	// aggregators can parse out of the box. Developers pass --zap-devel for
-	// human-readable console logs at debug level when running locally. Keeping
-	// JSON the default (rather than an opt-in flag the deploy must remember to
-	// set) is the same right-by-default stance the AGC uses (cmd/agc/main.go).
-	opts := zap.Options{
-		Development: false,
-	}
+	// human-readable console logs at debug level when running locally. Keeping JSON
+	// the default is the same right-by-default stance the AGC uses.
+	opts := zap.Options{Development: false}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-	// Bridge log/slog onto the same zap logger so the IPRange reconciler (which
-	// logs through log/slog) emits the same structured JSON at the same level
-	// source as the manager. Without this, slog.Default() is the stdlib TEXT
-	// handler and the GMC would emit mixed JSON+text on one stream (k8s audit
-	// F1). The named logger injected into the IPRange reconciler below inherits
-	// this sink; the bridge also catches any unwired slog.Default() call site.
+	// Bridge log/slog onto the same zap logger so the IPRange reconciler (which logs
+	// through log/slog) emits the same structured JSON at the same level as the
+	// manager. Without this, slog.Default() is the stdlib TEXT handler and the GMC
+	// would emit mixed JSON+text on one stream (k8s audit F1). The named logger
+	// injected into the IPRange reconciler inherits this sink; the bridge also
+	// catches any unwired slog.Default() call site.
 	slog.SetDefault(slog.New(logr.ToSlogHandler(ctrl.Log)))
 
-	// if the enable-http2 flag is false (the default), http/2 should be disabled
-	// due to its vulnerabilities. More specifically, disabling http/2 will
-	// prevent from being vulnerable to the HTTP/2 Stream Cancellation and
-	// Rapid Reset CVEs. For more information see:
-	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
-	// - https://github.com/advisories/GHSA-4374-p667-p6c8
-	disableHTTP2 := func(c *tls.Config) {
-		setupLog.Info("Disabling HTTP/2")
-		c.NextProtos = []string{"http/1.1"}
-	}
-
-	if !enableHTTP2 {
-		tlsOpts = append(tlsOpts, disableHTTP2)
-	}
-
-	// Initial webhook TLS options
-	webhookTLSOpts := tlsOpts
-	webhookServerOptions := webhook.Options{
-		TLSOpts: webhookTLSOpts,
-	}
-
-	if len(webhookCertPath) > 0 {
-		setupLog.Info("Initializing webhook certificate watcher using provided certificates",
-			"webhook-cert-path", webhookCertPath, "webhook-cert-name", webhookCertName, "webhook-cert-key", webhookCertKey)
-
-		webhookServerOptions.CertDir = webhookCertPath
-		webhookServerOptions.CertName = webhookCertName
-		webhookServerOptions.KeyName = webhookCertKey
-	}
-
-	webhookServer := webhook.NewServer(webhookServerOptions)
-
-	// Metrics endpoint is enabled by the chart's metrics.enabled value (default
-	// true), which renders the --metrics-bind-address flag. The Metrics options
-	// configure the server. More info:
-	// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.3/pkg/metrics/server
-	// - https://book.kubebuilder.io/reference/metrics.html
-	metricsServerOptions := metricsserver.Options{
-		BindAddress:   metricsAddr,
-		SecureServing: secureMetrics,
-		TLSOpts:       tlsOpts,
-	}
-
-	if secureMetrics {
-		// FilterProvider is used to protect the metrics endpoint with authn/authz.
-		// These configurations ensure that only authorized users and service accounts
-		// can access the metrics endpoint. The metrics-auth RBAC is shipped by the
-		// chart (charts/actions-gateway/templates/rbac.yaml). More info:
-		// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.3/pkg/metrics/filters#WithAuthenticationAndAuthorization
-		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
-	}
-
-	// If the certificate is not specified, controller-runtime will automatically
-	// generate self-signed certificates for the metrics server. While convenient for development and testing,
-	// this setup is not recommended for production.
-	if len(metricsCertPath) > 0 {
-		setupLog.Info("Initializing metrics certificate watcher using provided certificates",
-			"metrics-cert-path", metricsCertPath, "metrics-cert-name", metricsCertName, "metrics-cert-key", metricsCertKey)
-
-		metricsServerOptions.CertDir = metricsCertPath
-		metricsServerOptions.CertName = metricsCertName
-		metricsServerOptions.KeyName = metricsCertKey
-	}
+	tlsOpts := tlsOptions(cfg.enableHTTP2)
+	webhookServer := newWebhookServer(cfg, tlsOpts)
+	metricsServerOptions := newMetricsServerOptions(cfg, tlsOpts)
 
 	// Fail fast with a clear message on misordered leader-election timings rather
 	// than letting controller-runtime surface client-go's terser error deep in
 	// manager construction. Only meaningful when leader election is active.
-	if enableLeaderElection {
+	if cfg.enableLeaderElection {
 		if err := validateLeaderElectionTimings(
-			leaderElectLeaseDuration, leaderElectRenewDeadline, leaderElectRetryPeriod); err != nil {
+			cfg.leaderElectLeaseDuration, cfg.leaderElectRenewDeadline, cfg.leaderElectRetryPeriod); err != nil {
 			setupLog.Error(err, "invalid leader-election timing flags")
 			os.Exit(1)
 		}
 	}
 
-	// The PriorityClass allowlist (Q188): a live, shared set the admission webhook
-	// reads and the ConfigMap watch (below) augments. Seeded from the static
-	// --allowed-priority-classes flag; the dynamic half starts empty until a
-	// ConfigMap is applied. Constructed here so it can be wired into both the
-	// webhook and the reconciler.
-	priorityClassAllowlist := allowlist.New(parseAllowedPriorityClasses(allowedPriorityClasses))
-
-	// The infra PriorityClass allowlist (Q284): gates spec.scheduling.priorityClassName
-	// on the EgressProxy and v2 ActionsGateway INFRA pods, seeded from the static
-	// --allowed-infra-priority-classes flag. It is a SEPARATE instance from the worker
-	// allowlist and MUST be disjoint from it — a class nameable from both a worker pod
-	// and an infra pod would let a tenant lift its workers to infra priority and preempt
-	// other tenants' proxies (§2.1 of the Q284 plan). A boot-time intersection check
-	// converts that silent priority inversion into a hard startup failure.
-	infraPriorityClassAllowlist := allowlist.New(parseAllowedPriorityClasses(allowedInfraPriorityClasses))
-	if shared := allowlist.Intersection(priorityClassAllowlist, infraPriorityClassAllowlist); len(shared) > 0 {
-		setupLog.Error(fmt.Errorf("PriorityClass allowlists intersect: %v", shared),
-			"--allowed-priority-classes (worker) and --allowed-infra-priority-classes must be disjoint: "+
-				"a class on both would let a tenant lift its worker pods to infra priority and preempt "+
-				"other tenants' proxy pods")
-		os.Exit(1)
-	}
-
-	// The platform egress destination allowlist (Q242 G.1): the EgressProxy admission
-	// webhook reads it and the ConfigMap watch (below) augments it. Seeded from the
-	// static --allowed-egress-fqdns/--allowed-egress-cidrs flags; the dynamic half
-	// starts empty until a ConfigMap is applied. A malformed --allowed-egress-cidrs
-	// value fails startup rather than silently dropping a guardrail entry.
-	egressCIDRs, err := parseAllowedEgressCIDRs(allowedEgressCIDRs)
+	// Resolve the cross-flag configuration (allowlists + disjointness check, egress
+	// CIDR/FQDN parsing, POD_NAMESPACE, ConfigMap informer scoping). Any malformed
+	// value fails closed here, before the manager connects to the API server.
+	resolved, err := resolveConfig(cfg, os.Getenv)
 	if err != nil {
-		setupLog.Error(err, "Invalid --allowed-egress-cidrs")
-		os.Exit(1)
-	}
-	egressDestinationAllowlist := allowlist.NewEgressDestination(parseAllowedPriorityClasses(allowedEgressFQDNs), egressCIDRs)
-
-	// The FQDN egress backend (Q245): the operator's install-wide choice of how an FQDN
-	// egressPolicyMode intent is enforced. Both the EgressProxy reconciler (which emits
-	// the resolved CNI-native policy) and its admission webhook (which rejects FQDN intent
-	// when the backend is none) read it. An unrecognized value fails startup.
-	fqdnBackend, err := controller.ParseFQDNBackend(fqdnPolicyBackend)
-	if err != nil {
-		setupLog.Error(err, "Invalid --fqdn-policy-backend")
+		setupLog.Error(err, "invalid startup configuration")
 		os.Exit(1)
 	}
 
-	podNamespace := os.Getenv("POD_NAMESPACE")
-
-	// When either allowlist ConfigMap watch is enabled, scope the ConfigMap informer
-	// to the GMC's own namespace so the GMC needs only namespaced get/list/watch — not
-	// cluster-wide ConfigMap read. With a single watched ConfigMap we further pin the
-	// informer to that one object by name; with two distinct ConfigMaps (the
-	// PriorityClass and egress-destination watches naming different objects) we scope
-	// to the namespace and let each reconciler's predicate narrow to its own object.
-	// Without either feature, no ConfigMap informer is ever started, so this is a no-op.
-	watchedConfigMaps := map[string]bool{}
-	if priorityClassAllowlistConfigMap != "" {
-		watchedConfigMaps[priorityClassAllowlistConfigMap] = true
-	}
-	if egressDestinationAllowlistConfigMap != "" {
-		watchedConfigMaps[egressDestinationAllowlistConfigMap] = true
-	}
-	cacheOptions := cache.Options{}
-	if len(watchedConfigMaps) > 0 {
-		if podNamespace == "" {
-			setupLog.Error(fmt.Errorf("POD_NAMESPACE is not set"),
-				"--priority-class-allowlist-configmap / --egress-destination-allowlist-configmap require POD_NAMESPACE (the GMC install namespace) to locate the ConfigMap")
-			os.Exit(1)
-		}
-		cmConfig := cache.Config{}
-		if len(watchedConfigMaps) == 1 {
-			for name := range watchedConfigMaps {
-				cmConfig.FieldSelector = fields.OneTermEqualSelector("metadata.name", name)
-			}
-		}
-		cacheOptions.ByObject = map[client.Object]cache.ByObject{
-			&corev1.ConfigMap{}: {
-				Namespaces: map[string]cache.Config{podNamespace: cmConfig},
-			},
-		}
-	}
-
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                metricsServerOptions,
-		WebhookServer:          webhookServer,
-		Cache:                  cacheOptions,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "actions-gateway-gmc-leader",
-		LeaseDuration:          &leaderElectLeaseDuration,
-		RenewDeadline:          &leaderElectRenewDeadline,
-		RetryPeriod:            &leaderElectRetryPeriod,
-		// Two-layer Secret isolation:
-		// 1. WatchesMetadata on the controller registers a metadata-only informer
-		//    for Secrets (ObjectMeta only — no .data ever enters the cache), so
-		//    the controller gets event-driven reconciliation on credential Secret
-		//    create/delete without buffering secret material in memory.
-		// 2. DisableFor here ensures r.Get() calls bypass the cache entirely and
-		//    hit the API server directly, so the actual Secret contents are always
-		//    read fresh and never persist in-process after the call returns.
-		Client: client.Options{
-			Cache: &client.CacheOptions{
-				DisableFor: []client.Object{&corev1.Secret{}},
-			},
-		},
-		// LeaderElectionReleaseOnCancel makes the leader step down voluntarily when
-		// the Manager ends, so the standby takes over in ~RetryPeriod instead of
-		// waiting out LeaseDuration. Defaults to true (--leader-elect-release-on-cancel);
-		// safe because main() exits immediately after mgr.Start returns, with no
-		// post-stop cleanup that could race the lease release (k8s audit F3).
-		LeaderElectionReleaseOnCancel: leaderElectReleaseOnCancel,
-	})
+	mgr, err := newManager(cfg, resolved, metricsServerOptions, webhookServer)
 	if err != nil {
 		setupLog.Error(err, "Failed to start manager")
 		os.Exit(1)
 	}
 
-	agcImage, err := mustEnv("AGC_IMAGE")
+	// Resolve the injected image config (AGC_IMAGE/PROXY_IMAGE + digest pinning,
+	// AGC_EXTRA_* forwarding, WRAPPER_IMAGE). Kept after manager construction to
+	// preserve the original startup ordering.
+	images, err := resolveImages(cfg, os.Getenv, os.Environ)
 	if err != nil {
-		setupLog.Error(err, "missing required environment variable")
-		os.Exit(1)
-	}
-	proxyImage, err := mustEnv("PROXY_IMAGE")
-	if err != nil {
-		setupLog.Error(err, "missing required environment variable")
+		setupLog.Error(err, "invalid image configuration")
 		os.Exit(1)
 	}
 
-	// Require AGC_IMAGE/PROXY_IMAGE to be pinned by sha256 digest so a mutated
-	// tag cannot silently swap the AGC or proxy code that runs inside a tenant's
-	// gateway (supply-chain hardening; security plan M-19 follow-up). Dev/test
-	// uses floating tags, so an explicit --allow-floating-image-tags opt-out is
-	// offered — but the secure form stays the default.
-	if allowFloatingImageTags {
-		setupLog.Info("WARNING: --allow-floating-image-tags is set; AGC_IMAGE/PROXY_IMAGE digest pinning is NOT enforced (do not use in production)")
-	} else {
-		for _, img := range []struct{ name, ref string }{
-			{"AGC_IMAGE", agcImage},
-			{"PROXY_IMAGE", proxyImage},
-		} {
-			if err := validateImageDigest(img.name, img.ref); err != nil {
-				setupLog.Error(err, "image reference is not digest-pinned")
-				os.Exit(1)
-			}
-		}
-	}
-
-	// Bounded client for the GitHub meta IP-range fetch (Q138): an overall 60s
-	// deadline plus a transport ResponseHeaderTimeout, so a slow api.github.com
-	// cannot wedge the reconcile.
-	httpClient := httpx.NewClientWithTimeout(60 * time.Second)
-
-	// AGC_EXTRA_<NAME>=<VALUE> env vars on the GMC pod are forwarded verbatim to
-	// each AGC Deployment the controller creates. Gate-flagged to prevent
-	// accidental capability escalation in production deployments.
-	var agcExtraEnv []corev1.EnvVar
-	if allowAgcExtraEnv {
-		for _, kv := range os.Environ() {
-			const prefix = "AGC_EXTRA_"
-			if !strings.HasPrefix(kv, prefix) {
-				continue
-			}
-			parts := strings.SplitN(kv, "=", 2)
-			if len(parts) == 2 {
-				agcExtraEnv = append(agcExtraEnv, corev1.EnvVar{
-					Name:  strings.TrimPrefix(parts[0], prefix),
-					Value: parts[1],
-				})
-			}
-		}
-	}
-
-	// WRAPPER_IMAGE (optional) enables runtime worker-wrapper injection (Q235):
-	// forwarded to every AGC so its provisioner injects the GAG wrapper into each
-	// worker pod, letting the runner image be the unmodified upstream
-	// actions-runner. Empty disables injection (the worker image must then carry
-	// the wrapper as its own entrypoint). Digest-pinned like AGC_IMAGE unless
-	// floating tags are allowed. WRAPPER_DELIVERY (optional: imagevolume|init)
-	// overrides the AGC's version-based auto-detection.
-	if wrapperImage := os.Getenv("WRAPPER_IMAGE"); wrapperImage != "" {
-		if !allowFloatingImageTags {
-			if err := validateImageDigest("WRAPPER_IMAGE", wrapperImage); err != nil {
-				setupLog.Error(err, "image reference is not digest-pinned")
-				os.Exit(1)
-			}
-		}
-		agcExtraEnv = append(agcExtraEnv, corev1.EnvVar{Name: "WRAPPER_IMAGE", Value: wrapperImage})
-		if d := os.Getenv("WRAPPER_DELIVERY"); d != "" {
-			agcExtraEnv = append(agcExtraEnv, corev1.EnvVar{Name: "WRAPPER_DELIVERY", Value: d})
-		}
-	}
-
-	// IPRangeCache is shared between the per-CR reconciler (read path) and
-	// the periodic IPRangeReconciler (write path). This keeps the per-CR
-	// reconcile from doing network I/O — previously every reconcile fetched
-	// api.github.com/meta, serialised behind MaxConcurrentReconciles=1, and
-	// could stall the queue when the API was slow.
-	ipCache := &controller.IPRangeCache{}
-
-	// The v2 controllers and the IPRange reconciler's v2 refresh paths depend on
-	// the actions-gateway.com/v2alpha1 CRDs, which ship in the SEPARATE, opt-in
-	// actions-gateway-crds-v2 chart (split out so the main chart's Helm release
-	// Secret stays under 1 MiB). Detect them once at startup: on a v1-only install
-	// (the main chart alone) the kinds are absent, so registering the v2
-	// controllers unconditionally would spin a source.Kind retry loop and log "no
-	// matches for kind" on every reconcile. When absent, skip the v2 controllers
-	// and disable the v2 IPRange passes so the GMC comes up clean; v1alpha1 tenants
-	// reconcile normally either way. Installing the v2 CRDs later requires a GMC
-	// restart to enable the v2 controllers (Q228). Detected here — before NewMetrics —
-	// so the scrape-time collectors can count v2 gateways and reflect v2 EgressProxy
-	// proxy conditions without spinning a failed informer on a v1-only cluster (Q320).
-	v2Enabled, err := controller.V2alpha1Installed(mgr.GetRESTMapper())
-	if err != nil {
-		setupLog.Error(err, "Failed to detect actions-gateway.com/v2alpha1 CRDs")
-		os.Exit(1)
-	}
-	if v2Enabled {
-		setupLog.Info("actions-gateway.com/v2alpha1 CRDs detected; enabling v2 controllers")
-	} else {
-		setupLog.Info("actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled " +
-			"(install the actions-gateway-crds-v2 chart and restart the GMC to enable them)")
-	}
-
-	// Register the GMC's custom metrics. The scrape-time collectors list the
-	// relevant CRs from the manager cache, so they must be given a cached reader;
-	// v2Enabled gates the v2 ActionsGateway/EgressProxy passes (Q320).
-	gmcMetrics := controller.NewMetrics(mgr.GetClient(), v2Enabled)
-	// Emit actions_gateway_build_info{component="gmc",version=…} 1 so the running
-	// binary version is correlatable straight from metrics during an incident
-	// (Q318). Registered on the same controller-runtime registry NewMetrics uses.
-	registerBuildInfo(ctrlmetrics.Registry, "gmc", version)
-
-	parsedAPIServerCIDRs, err := parseAPIServerCIDRs(apiServerCIDRs)
-	if err != nil {
-		setupLog.Error(err, "Invalid --apiserver-cidrs value")
+	if err := registerControllers(mgr, cfg, resolved, images); err != nil {
+		setupLog.Error(err, "Failed to register controllers")
 		os.Exit(1)
 	}
 
-	// IP-range refresh cadence; EgressRulesStale (Q157) trips when a gateway's
-	// allowlist goes unrefreshed for just over two of these intervals.
-	ipInterval := 24 * time.Hour
-
-	if err := (&controller.ActionsGatewayReconciler{
-		Client:                      mgr.GetClient(),
-		Scheme:                      mgr.GetScheme(),
-		IPCache:                     ipCache,
-		AGCImage:                    agcImage,
-		ProxyImage:                  proxyImage,
-		AGCExtraEnv:                 agcExtraEnv,
-		EnableTenantServiceMonitors: enableTenantServiceMonitors,
-		APIServerCIDRs:              parsedAPIServerCIDRs,
-		EgressStaleThreshold:        2*ipInterval + time.Hour,
-		Recorder:                    mgr.GetEventRecorder("actionsgateway-controller"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway")
-		os.Exit(1)
-	}
-
-	if v2Enabled {
-		// ActionsGateway reconciler (v2 M3a): provisions the per-tenant AGC control
-		// plane (Deployment/SA/RoleBinding/Service, AGC+workload NetworkPolicies,
-		// metrics certs) and wires its egress through the EgressProxy named by
-		// defaultProxyRef. It does not provision the proxy pool (the EgressProxy
-		// reconciler) or stamp PSA labels (the NamespacePSAReconciler). Single-gateway
-		// per namespace at this milestone.
-		if err := (&controller.ActionsGatewayV2Reconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			AGCImage:       agcImage,
-			AGCExtraEnv:    agcExtraEnv,
-			APIServerCIDRs: parsedAPIServerCIDRs,
-			IPCache:        ipCache,
-			Recorder:       mgr.GetEventRecorder("actionsgateway-v2-controller"),
-			Reader:         mgr.GetAPIReader(),
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway-v2")
-			os.Exit(1)
-		}
-
-		// EgressProxy reconciler (v2 M2): reconciles a standalone EgressProxy into a
-		// proxy pool it owns (Deployment/Service/HPA/PDB/NetworkPolicy + self-signed
-		// proxy TLS Secret). Shares the GitHub IP-range cache with the ActionsGateway
-		// reconciler so the proxy NetworkPolicy's GitHub-CIDR egress allowlist stays
-		// current. Same-namespace only at this milestone.
-		if err := (&controller.EgressProxyReconciler{
-			Client:               mgr.GetClient(),
-			Scheme:               mgr.GetScheme(),
-			IPCache:              ipCache,
-			ProxyImage:           proxyImage,
-			FQDNBackend:          fqdnBackend,
-			EnableServiceMonitor: enableTenantServiceMonitors,
-			EgressStaleThreshold: 2*ipInterval + time.Hour,
-			Recorder:             mgr.GetEventRecorder("egressproxy-controller"),
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "egressproxy")
-			os.Exit(1)
-		}
-
-		// NamespacePSA reconciler (v2 Q175): stamps the namespace Pod Security Admission
-		// labels from its actions-gateway.com/security-profile label. v2 relocates the
-		// security profile off the per-gateway ActionsGateway.spec onto the namespace
-		// (appendix-h §H.16 #7); the gmc-namespace-security-profile-guard
-		// ValidatingAdmissionPolicy guards operator edits to that label. v2-only: its
-		// tenant-namespace marker is set by the v2 ActionsGateway reconcile.
-		if err := (&controller.NamespacePSAReconciler{
-			Client:   mgr.GetClient(),
-			Recorder: mgr.GetEventRecorder("namespace-psa-controller"),
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "namespace-psa")
-			os.Exit(1)
-		}
-	}
-
-	if err := mgr.Add(&controller.IPRangeReconciler{
-		Client:         mgr.GetClient(),
-		Fetcher:        &controller.HTTPGitHubIPRangeFetcher{Client: httpClient},
-		Cache:          ipCache,
-		Interval:       ipInterval,
-		Log:            slog.New(logr.ToSlogHandler(ctrl.Log.WithName("ipranges"))),
-		Metrics:        gmcMetrics,
-		APIServerCIDRs: parsedAPIServerCIDRs,
-		// On a v1-only install the actions-gateway.com/v2alpha1 CRDs are absent, so
-		// the v2 EgressProxy / ActionsGateway refresh passes are disabled to avoid a
-		// "no matches for kind" error on every tick (Q228). v1 NetworkPolicies are
-		// refreshed regardless.
-		V2Enabled: v2Enabled,
-	}); err != nil {
-		setupLog.Error(err, "Failed to register IP range reconciler")
-		os.Exit(1)
-	}
-
-	// PriorityClass allowlist ConfigMap watch (Q188): when enabled, reconcile the
-	// designated ConfigMap into the dynamic half of the shared allowlist so a
-	// platform admin can add an allowed PriorityClass without a flag edit + GMC
-	// rollout. Runs in every replica (the reconciler disables leader election)
-	// because every replica serves the admission webhook. Disabled by default
-	// (empty flag) — flag-only behavior, unchanged.
-	if priorityClassAllowlistConfigMap != "" {
-		if err := (&controller.PriorityClassAllowlistReconciler{
-			Client:        mgr.GetClient(),
-			ConfigMapName: priorityClassAllowlistConfigMap,
-			Namespace:     podNamespace,
-			Allowlist:     priorityClassAllowlist,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "priorityclass-allowlist")
-			os.Exit(1)
-		}
-	}
-	// Egress destination allowlist ConfigMap watch (Q242 G.1): same shape as the
-	// PriorityClass watch above — reconcile the designated ConfigMap into the dynamic
-	// half of the shared egress allowlist so a platform admin can add a permitted
-	// destination without a flag edit + GMC rollout. Disabled by default (empty flag).
-	if egressDestinationAllowlistConfigMap != "" {
-		if err := (&controller.EgressDestinationAllowlistReconciler{
-			Client:        mgr.GetClient(),
-			ConfigMapName: egressDestinationAllowlistConfigMap,
-			Namespace:     podNamespace,
-			Allowlist:     egressDestinationAllowlist,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create controller", "controller", "egress-destination-allowlist")
-			os.Exit(1)
-		}
-	}
-	// nolint:goconst
-	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr, priorityClassAllowlist); err != nil {
-			setupLog.Error(err, "Failed to create webhook", "webhook", "ActionsGateway")
-			os.Exit(1)
-		}
-		// v2 M2: reserved-pod-field validating webhooks for the RunnerTemplate data
-		// kinds (the rejection v1 did by silent override at pod-build time). Q289: the
-		// namespaced kind's podTemplate.spec.priorityClassName is gated against the same
-		// platform PriorityClass allowlist as priorityTiers, closing the second route to
-		// cross-tenant preemption.
-		if err := webhookv2alpha1.SetupRunnerTemplateWebhooksWithManager(mgr, priorityClassAllowlist); err != nil {
-			setupLog.Error(err, "Failed to create webhook", "webhook", "RunnerTemplate")
-			os.Exit(1)
-		}
-		// Q242 G.1: gate tenant-authored EgressProxy destinationFQDNs/destinationCIDRs
-		// against the platform egress allowlist (deny-all-non-GitHub by default). Q245:
-		// also reject FQDN intent when the cluster declares no --fqdn-policy-backend.
-		// Q284: gate spec.scheduling.priorityClassName against the infra-only allowlist.
-		if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressDestinationAllowlist, fqdnBackend, infraPriorityClassAllowlist); err != nil {
-			setupLog.Error(err, "Failed to create webhook", "webhook", "EgressProxy")
-			os.Exit(1)
-		}
-		// Q284: the v2 ActionsGateway kind had no validating webhook (the v1alpha1 one is
-		// a different API group and the v1 kind has no spec.scheduling). This new webhook
-		// gates spec.scheduling.priorityClassName on the AGC control-plane pod against the
-		// same infra-only allowlist.
-		if err := webhookv2alpha1.SetupActionsGatewayWebhookWithManager(mgr, infraPriorityClassAllowlist); err != nil {
-			setupLog.Error(err, "Failed to create webhook", "webhook", "ActionsGateway")
-			os.Exit(1)
-		}
-		// Q264 P3: reject two ScaleSet-protocol RunnerSets sharing a runnerLabel under
-		// one gateway (the scale-set name collision a spec-scoped CEL rule cannot see).
-		// Q289: also gate the tenant-authored priorityTiers[].priorityClassName against
-		// the platform PriorityClass allowlist — the AGC stamps the matched tier's class
-		// onto worker pods, so an ungated tier is a route to cross-tenant preemption.
-		if err := webhookv2alpha1.SetupRunnerSetWebhookWithManager(mgr, priorityClassAllowlist); err != nil {
-			setupLog.Error(err, "Failed to create webhook", "webhook", "RunnerSet")
-			os.Exit(1)
-		}
-		// Q74: the GMC-hosted conversion webhook (/convert) for the five v2 hub kinds.
-		// v2beta1 is the storage/hub version; v2alpha1 is the served spoke, so a v2alpha1
-		// read/write is converted through this endpoint. Admission validation is not
-		// duplicated on the hub: matchPolicy=Equivalent runs a v2beta1 request through the
-		// v2alpha1 validators after converting it back.
-		if err := webhookv2beta1.SetupConversionWebhooksWithManager(mgr); err != nil {
-			setupLog.Error(err, "Failed to create webhook", "webhook", "conversion")
+	enableWebhooks := os.Getenv("ENABLE_WEBHOOKS") != "false"
+	if enableWebhooks {
+		if err := registerWebhooks(mgr, resolved); err != nil {
+			setupLog.Error(err, "Failed to register webhooks")
 			os.Exit(1)
 		}
 	}
 	// +kubebuilder:scaffold:builder
 
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "Failed to set up health check")
+	if err := setupHealthChecks(mgr, enableWebhooks); err != nil {
+		setupLog.Error(err, "Failed to set up health checks")
 		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "Failed to set up ready check")
-		os.Exit(1)
-	}
-	// Gate readiness on the webhook server actually listening, not just on the
-	// manager being up. Without this, a fresh GMC pod is briefly added to the
-	// gmc-webhook-service endpoints before the admission webhook port is bound,
-	// so the apiserver routes admission calls to a not-yet-serving pod and
-	// every dependent `kubectl apply` times out for ~1s during each rollout.
-	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
-			setupLog.Error(err, "Failed to set up webhook ready check")
-			os.Exit(1)
-		}
 	}
 
 	setupLog.Info("Starting manager")
@@ -797,8 +203,10 @@ func parseAPIServerCIDRs(raw string) ([]string, error) {
 	return cidrs, nil
 }
 
-func mustEnv(name string) (string, error) {
-	v := os.Getenv(name)
+// mustEnv reads the named environment variable via getenv (os.Getenv in
+// production; a fake in tests) and returns an error if it is unset or empty.
+func mustEnv(getenv func(string) string, name string) (string, error) {
+	v := getenv(name)
 	if v == "" {
 		return "", fmt.Errorf("required environment variable %s is not set", name)
 	}

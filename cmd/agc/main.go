@@ -45,7 +45,6 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/transport"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/usage"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/go-logr/logr"
 	uberzap "go.uber.org/zap"
@@ -175,6 +174,14 @@ func run() error {
 	zapOpts := zap.Options{Development: false}
 	zapOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	// Snapshot the AGC's full environment-variable config surface once, right after
+	// flag parsing, so every downstream read is a struct-field access rather than a
+	// scattered os.Getenv (structural-debt-audit-2026-07 F8 / Q367). loadConfig is a
+	// pure snapshot — see agcConfig — so this does not change startup behavior or
+	// ordering; each erroring/side-effecting parse still happens at its point of use.
+	cfg := loadConfig(os.Getenv)
+
 	// LOG_LEVEL (info|debug, default info) is the per-tenant verbosity knob the
 	// GMC threads from ActionsGateway.spec.logLevel (logging-audit Theme G),
 	// mirroring how spec.securityProfile flows as SECURITY_PROFILE. BindFlags only
@@ -183,7 +190,7 @@ func run() error {
 	// the GMC never stamps logging flags onto the AGC Deployment, so in
 	// production LOG_LEVEL is the sole level source.
 	if zapOpts.Level == nil {
-		if lvl := zapLevelFromEnv(os.Getenv("LOG_LEVEL")); lvl != nil {
+		if lvl := zapLevelFromEnv(cfg.LogLevel); lvl != nil {
 			zapOpts.Level = lvl
 		}
 	}
@@ -229,31 +236,11 @@ func run() error {
 	}
 
 	// ── 0.5. Configure proxy TLS cert pinning ───────────────────────────────
-	// The GMC mounts the proxy's self-signed TLS cert (public part only) at
-	// proxyCACertDir/tls.crt. Adding it to the trust pool — alongside the
-	// system roots — lets the AGC validate the proxy's self-signed cert without
-	// losing the ability to validate upstream endpoints (api.github.com,
-	// pipelinesghubeus*.actions.githubusercontent.com) over the proxy's CONNECT
-	// tunnel. Go's http.Transport uses one TLSClientConfig for both the
-	// AGC↔proxy hop and the AGC↔upstream-over-tunnel hop, so the pool must
-	// satisfy both.
-	//
-	// Effective pinning: the proxy's hostname is *.svc.cluster.local, which no
-	// public CA will issue a certificate for. Trusting both system roots and
-	// the per-tenant proxy CA therefore preserves the property that only this
-	// proxy's cert can validate for the proxy hostname.
-	//
-	// If the file is absent (local dev, no TLS proxy) we fall through and the
-	// standard transport uses HTTP proxy as before.
-	proxyCACert := filepath.Join(proxyCACertDir, "tls.crt")
-	if certPEM, err := os.ReadFile(proxyCACert); err == nil {
-		pool, err := transport.BuildProxyTrustPool(certPEM)
-		if err != nil {
-			return fmt.Errorf("build proxy trust pool from %s: %w", proxyCACert, err)
-		}
-		t := http.DefaultTransport.(*http.Transport).Clone()
-		t.TLSClientConfig = &tls.Config{RootCAs: pool}
-		http.DefaultTransport = t
+	// MUST run before any proxy-traversing client is built (the token provider,
+	// the provisioner's GitHub client), so those clients pick up the proxy CA — an
+	// ordering dependency that is invisible until it breaks.
+	if err := configureProxyTrust(); err != nil {
+		return err
 	}
 
 	// ── 1+2. Build the installation-token provider for the configured credential
@@ -282,18 +269,8 @@ func run() error {
 	registerBuildInfo(ctrlmetrics.Registry, "agc", version)
 
 	// ── 4. Build scheme ──────────────────────────────────────────────────────
-	scheme := runtime.NewScheme()
-	// clientgoscheme already includes corev1; no need to add it separately.
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		return err
-	}
-	if err := v1alpha1.AddToScheme(scheme); err != nil {
-		return err
-	}
-	// Register the v2alpha1 (actions-gateway.com) kinds so they are first-class in
-	// the AGC's client scheme alongside v1alpha1. M1 wires no reconciler for them;
-	// the RunnerSet reconciler that consumes them lands in M3a.
-	if err := agcv2alpha1.AddToScheme(scheme); err != nil {
+	scheme, err := buildScheme()
+	if err != nil {
 		return err
 	}
 
@@ -302,7 +279,7 @@ func run() error {
 	// its own tenant namespace. A cluster-scoped cache would require a
 	// ClusterRole; a namespace-scoped cache works with the Role+RoleBinding
 	// that GMC creates per tenant.
-	namespace := os.Getenv("POD_NAMESPACE")
+	namespace := cfg.PodNamespace
 	cacheOpts := cache.Options{}
 	if namespace != "" {
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{namespace: {}}
@@ -315,7 +292,7 @@ func run() error {
 	// so they never contend over the same objects. ByObject.Namespaces is left nil so
 	// it inherits DefaultNamespaces (the tenant namespace). Empty GATEWAY_NAME leaves
 	// the informer unscoped (a single AGC reconciles every RunnerSet — pre-M3b).
-	gatewayName := os.Getenv("GATEWAY_NAME")
+	gatewayName := cfg.GatewayName
 	if gatewayName != "" {
 		cacheOpts.ByObject = map[client.Object]cache.ByObject{
 			&agcv2alpha1.RunnerSet{}: {
@@ -420,93 +397,19 @@ func run() error {
 	}
 
 	// ── 7. Register reconciler ───────────────────────────────────────────────
-	// Bounded client for the provisioner's GitHub REST calls (Q138): an overall
-	// 60s deadline plus a transport ResponseHeaderTimeout, so a slow GitHub API
-	// cannot wedge a reconcile.
-	httpClient := httpx.NewClientWithTimeout(60 * time.Second)
-	prov := provisioner.NewProvisioner(mgr.GetClient(), m,
-		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("provisioner"))))
-	prov.WorkerSA = os.Getenv("WORKER_SERVICE_ACCOUNT")
-	prov.HTTPProxy = os.Getenv("HTTP_PROXY")
-	prov.HTTPSProxy = os.Getenv("HTTPS_PROXY")
-	prov.NoProxy = os.Getenv("NO_PROXY")
-	// PROXY_TLS_SECRET_NAME names the Secret holding the per-tenant
-	// egress-proxy CA cert. The GMC sets this on the AGC Deployment so the
-	// provisioner can project it (cert only, via Items) into every worker
-	// pod. Empty (the default) disables the mount and is appropriate for
-	// any deployment without a per-tenant egress proxy.
-	prov.ProxyTLSSecretName = os.Getenv("PROXY_TLS_SECRET_NAME")
-	// SECURITY_PROFILE mirrors the tenant's ActionsGateway.spec.securityProfile.
-	// The GMC sets it on the AGC Deployment so the provisioner can scale the
-	// secure-by-default worker SecurityContext to the namespace's PSA level.
-	prov.SecurityProfile = os.Getenv("SECURITY_PROFILE")
-	prov.HTTPClient = httpClient
-	if img := os.Getenv("WORKER_IMAGE"); img != "" {
-		prov.DefaultWorkerImage = img
-	}
-	// WRAPPER_IMAGE enables runtime wrapper injection (Q235): the runner image is
-	// the unmodified upstream actions-runner (or any tenant image) and the GAG
-	// wrapper is delivered into each worker pod. Empty disables injection (the
-	// worker image must then carry the wrapper as its own entrypoint).
-	if img := os.Getenv("WRAPPER_IMAGE"); img != "" {
-		prov.WrapperImage = img
-		prov.UseImageVolume = useImageVolume(mgr.GetConfig(), os.Getenv("WRAPPER_DELIVERY"))
-	}
-	prov.TokenFunc = tokenMgr.Token
-
-	// Detect worker-pod completion off the shared Pod informer rather than
-	// polling per session: one event handler serves every in-flight session, so
-	// detection is near-immediate and no per-session ticker is spawned. Run it
-	// as a manager Runnable so the handler is registered after the cache syncs.
-	podWaiter := provisioner.NewInformerPodWaiter(mgr.GetCache(),
-		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("podwaiter"))))
-	// Observe pod-creation latency (creation → runner container start) off the
-	// same pod events, once per pod, for the headline pod-startup SLO.
-	podWaiter.PodCreationLatency = m.PodCreationLatency
-	if err := mgr.Add(podWaiter); err != nil {
-		return fmt.Errorf("add pod completion watcher: %w", err)
-	}
-	prov.Waiter = podWaiter
-
-	// Periodically reclaim expired per-run eviction-retry counters so the map
-	// does not grow unbounded over the process lifetime (Q141). The TTL is well
-	// beyond a realistic run lifetime, so reclamation never refills a live run's
-	// retry budget (the Q106 hard-cap invariant).
-	if err := mgr.Add(provisioner.NewEvictionSweeper(prov)); err != nil {
-		return fmt.Errorf("add eviction-counter sweeper: %w", err)
-	}
-
-	// Sample worker pod CPU/memory usage per RunnerSet × container from the
-	// metrics.k8s.io API and export right-sizing series (Q359 Phase 1 — see
-	// docs/operations/worker-rightsizing.md). Degrades gracefully at runtime when
-	// metrics-server is absent (a counted, throttled poll error per tick);
-	// WORKER_USAGE_SAMPLE_INTERVAL=0/off disables it entirely.
-	usageInterval, usageEnabled, err := workerUsageSampleInterval(os.Getenv("WORKER_USAGE_SAMPLE_INTERVAL"))
+	prov, err := setupProvisioner(mgr, cfg, m, tokenMgr)
 	if err != nil {
-		return fmt.Errorf("parse WORKER_USAGE_SAMPLE_INTERVAL: %w", err)
-	}
-	// Declared outside the guard so the RunnerSet reconciler below can consume it
-	// as its SizingSource (Q359 Phase 2); a nil *Sampler is a safe no-op source.
-	var usageSampler *usage.Sampler
-	if usageEnabled {
-		mc, err := metricsclient.NewForConfig(mgr.GetConfig())
-		if err != nil {
-			return fmt.Errorf("build metrics.k8s.io client: %w", err)
-		}
-		usageSampler = &usage.Sampler{
-			Client:    mgr.GetClient(),
-			Lister:    usage.NewClientsetLister(mc),
-			Namespace: namespace,
-			Interval:  usageInterval,
-			Metrics:   usage.NewMetrics(ctrlmetrics.Registry),
-			Log:       slog.New(logr.ToSlogHandler(ctrl.Log.WithName("usage"))),
-		}
-		if err := mgr.Add(usageSampler); err != nil {
-			return fmt.Errorf("add worker usage sampler: %w", err)
-		}
+		return err
 	}
 
-	// Choose registrar:
+	// Worker usage sampler (Q359 Phase 2): a nil *Sampler is a safe no-op source,
+	// so the RunnerSet reconciler below can consume it unconditionally.
+	usageSampler, err := setupUsageSampler(mgr, cfg, namespace)
+	if err != nil {
+		return err
+	}
+
+	// Choose registrar (buildRegistrar):
 	//   STUB_AUTH_URL + STUB_BROKER_URL set → StubRegistrar with those URLs (testing)
 	//   GITHUB_ORG_URL set                  → GithubRegistrar (production)
 	//   neither                             → error: GITHUB_ORG_URL is required
@@ -518,25 +421,9 @@ func run() error {
 	// testing-only --allow-agc-extra-env flag, so production AGCs never have them
 	// set and always fall through to the GithubRegistrar. To switch a stub-backed
 	// AGC to real GitHub, unset the stub env (the e2e suite does exactly this).
-	var registrar agentpool.Registrar
-	stubAuthURL := os.Getenv("STUB_AUTH_URL")
-	stubBrokerURL := os.Getenv("STUB_BROKER_URL")
-	switch {
-	case stubAuthURL != "" && stubBrokerURL != "":
-		registrar = agentpool.NewStubRegistrarWithURLs(stubAuthURL, stubBrokerURL)
-	case os.Getenv("GITHUB_ORG_URL") != "":
-		groupID := 1
-		if raw := os.Getenv("GITHUB_RUNNER_GROUP_ID"); raw != "" {
-			if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-				groupID = parsed
-			}
-		}
-		registrar = &agentpool.GithubRegistrar{
-			OrgURL:  os.Getenv("GITHUB_ORG_URL"),
-			GroupID: groupID,
-		}
-	default:
-		return fmt.Errorf("GITHUB_ORG_URL is required (for testing set both STUB_AUTH_URL and STUB_BROKER_URL)")
+	registrar, err := buildRegistrar(cfg)
+	if err != nil {
+		return err
 	}
 
 	r := &controller.RunnerGroupReconciler{
@@ -548,28 +435,7 @@ func run() error {
 		Provisioner:  prov,
 		AgentKeyType: agentKeyType,
 		Recorder:     mgr.GetEventRecorder("runnergroup-controller"),
-		BrokerConfig: controller.BrokerConfig{
-			BrokerURL:     os.Getenv("GITHUB_BROKER_URL"),
-			RunnerVersion: os.Getenv("GITHUB_RUNNER_VERSION"),
-			RunnerOS:      os.Getenv("GITHUB_RUNNER_OS"),
-			RunnerArch:    os.Getenv("GITHUB_RUNNER_ARCH"),
-			UseV2Flow:     os.Getenv("GITHUB_USE_VSTS_FLOW") != "true",
-			// Tuned client bounds the GetMessage long-poll: a black-holed broker
-			// connection is torn down a few seconds past the 50s hold rather than
-			// blocking a listener for the multi-minute OS TCP timeout (Q108).
-			HTTPClient: broker.NewHTTPClient(),
-			// Q260 Option A: when a job is fanned out to sibling sessions, the winner
-			// fans completejob out to every deduped sibling delivery on completion so
-			// GitHub does not cancel the whole job at its ~15-minute unstarted-job
-			// timeout. ON by default — the re-route #5 dogfood experiment (2026-07-04)
-			// confirmed the run service's completion is per-delivery, not planID-scoped:
-			// completejob on a sibling's OWN jobID resolves only that assignment and
-			// returns OK, the winner's own delivery still carries the real workflow
-			// result, and previously-wedged concurrent jobs concluded green. Opt out
-			// with AGC_FANOUT_COMPLETION=false. Operator runbook: the Q260
-			// redelivery-accounting section in docs/operations/troubleshooting.md.
-			FanoutCompletion: os.Getenv("AGC_FANOUT_COMPLETION") != "false",
-		},
+		BrokerConfig: buildBrokerConfig(cfg),
 	}
 	if err := r.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup reconciler: %w", err)
@@ -621,6 +487,167 @@ func run() error {
 
 	ctrl.Log.Info("starting AGC manager")
 	return mgr.Start(ctx)
+}
+
+// configureProxyTrust installs the per-tenant egress proxy's self-signed CA into
+// the process-wide http.DefaultTransport trust pool, when the GMC has mounted it
+// at proxyCACertDir/tls.crt.
+//
+// The GMC mounts the proxy's self-signed TLS cert (public part only) there.
+// Adding it to the trust pool — alongside the system roots — lets the AGC
+// validate the proxy's self-signed cert without losing the ability to validate
+// upstream endpoints (api.github.com, pipelinesghubeus*.actions.githubusercontent.com)
+// over the proxy's CONNECT tunnel. Go's http.Transport uses one TLSClientConfig
+// for both the AGC↔proxy hop and the AGC↔upstream-over-tunnel hop, so the pool
+// must satisfy both.
+//
+// Effective pinning: the proxy's hostname is *.svc.cluster.local, which no public
+// CA will issue a certificate for. Trusting both system roots and the per-tenant
+// proxy CA therefore preserves the property that only this proxy's cert can
+// validate for the proxy hostname.
+//
+// If the file is absent (local dev, no TLS proxy) this is a no-op and the standard
+// transport uses HTTP proxy as before. It mutates the global transport, so it must
+// run before any proxy-traversing client is constructed (AGC proxy-client init
+// order, see the project memory).
+func configureProxyTrust() error {
+	proxyCACert := filepath.Join(proxyCACertDir, "tls.crt")
+	certPEM, err := os.ReadFile(proxyCACert)
+	if err != nil {
+		// Absent file: no TLS proxy configured. Any other read error is also
+		// non-fatal here — the original inline block only acted on a successful
+		// read — so fall through and leave the default transport unchanged.
+		return nil
+	}
+	pool, err := transport.BuildProxyTrustPool(certPEM)
+	if err != nil {
+		return fmt.Errorf("build proxy trust pool from %s: %w", proxyCACert, err)
+	}
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.TLSClientConfig = &tls.Config{RootCAs: pool}
+	http.DefaultTransport = t
+	return nil
+}
+
+// setupProvisioner builds the worker provisioner from config and registers its
+// manager Runnables (the informer-backed pod-completion watcher and the
+// eviction-counter sweeper). It returns the wired provisioner for the reconcilers
+// to consume. The construction and mgr.Add ordering here is preserved verbatim
+// from run(); the wrapper-delivery detection makes a live apiserver-version
+// discovery call, so this must run after the manager is constructed.
+func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *listener.Metrics,
+	tokenMgr *token.Manager) (*provisioner.Provisioner, error) {
+	// Bounded client for the provisioner's GitHub REST calls (Q138): an overall
+	// 60s deadline plus a transport ResponseHeaderTimeout, so a slow GitHub API
+	// cannot wedge a reconcile.
+	httpClient := httpx.NewClientWithTimeout(60 * time.Second)
+	prov := provisioner.NewProvisioner(mgr.GetClient(), m,
+		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("provisioner"))))
+	prov.WorkerSA = cfg.WorkerServiceAccount
+	prov.HTTPProxy = cfg.HTTPProxy
+	prov.HTTPSProxy = cfg.HTTPSProxy
+	prov.NoProxy = cfg.NoProxy
+	// PROXY_TLS_SECRET_NAME names the Secret holding the per-tenant egress-proxy CA
+	// cert. The GMC sets this on the AGC Deployment so the provisioner can project
+	// it (cert only, via Items) into every worker pod. Empty (the default) disables
+	// the mount and is appropriate for any deployment without a per-tenant egress
+	// proxy.
+	prov.ProxyTLSSecretName = cfg.ProxyTLSSecretName
+	// SECURITY_PROFILE mirrors the tenant's ActionsGateway.spec.securityProfile.
+	// The GMC sets it on the AGC Deployment so the provisioner can scale the
+	// secure-by-default worker SecurityContext to the namespace's PSA level.
+	prov.SecurityProfile = cfg.SecurityProfile
+	prov.HTTPClient = httpClient
+	if cfg.WorkerImage != "" {
+		prov.DefaultWorkerImage = cfg.WorkerImage
+	}
+	// WRAPPER_IMAGE enables runtime wrapper injection (Q235): the runner image is
+	// the unmodified upstream actions-runner (or any tenant image) and the GAG
+	// wrapper is delivered into each worker pod. Empty disables injection (the
+	// worker image must then carry the wrapper as its own entrypoint).
+	if cfg.WrapperImage != "" {
+		prov.WrapperImage = cfg.WrapperImage
+		prov.UseImageVolume = useImageVolume(mgr.GetConfig(), cfg.WrapperDelivery)
+	}
+	prov.TokenFunc = tokenMgr.Token
+
+	// Detect worker-pod completion off the shared Pod informer rather than polling
+	// per session: one event handler serves every in-flight session, so detection
+	// is near-immediate and no per-session ticker is spawned. Run it as a manager
+	// Runnable so the handler is registered after the cache syncs.
+	podWaiter := provisioner.NewInformerPodWaiter(mgr.GetCache(),
+		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("podwaiter"))))
+	// Observe pod-creation latency (creation → runner container start) off the same
+	// pod events, once per pod, for the headline pod-startup SLO.
+	podWaiter.PodCreationLatency = m.PodCreationLatency
+	if err := mgr.Add(podWaiter); err != nil {
+		return nil, fmt.Errorf("add pod completion watcher: %w", err)
+	}
+	prov.Waiter = podWaiter
+
+	// Periodically reclaim expired per-run eviction-retry counters so the map does
+	// not grow unbounded over the process lifetime (Q141). The TTL is well beyond a
+	// realistic run lifetime, so reclamation never refills a live run's retry budget
+	// (the Q106 hard-cap invariant).
+	if err := mgr.Add(provisioner.NewEvictionSweeper(prov)); err != nil {
+		return nil, fmt.Errorf("add eviction-counter sweeper: %w", err)
+	}
+	return prov, nil
+}
+
+// setupUsageSampler builds and registers the worker CPU/memory usage sampler when
+// enabled (Q359 Phase 1). It samples worker pods per RunnerSet × container from
+// the metrics.k8s.io API and exports right-sizing series
+// (docs/operations/worker-rightsizing.md), degrading gracefully at runtime when
+// metrics-server is absent. WORKER_USAGE_SAMPLE_INTERVAL=0/off returns a nil
+// sampler — a safe no-op source for the RunnerSet reconciler.
+func setupUsageSampler(mgr ctrl.Manager, cfg agcConfig, namespace string) (*usage.Sampler, error) {
+	usageInterval, usageEnabled, err := workerUsageSampleInterval(cfg.WorkerUsageSampleInterval)
+	if err != nil {
+		return nil, fmt.Errorf("parse WORKER_USAGE_SAMPLE_INTERVAL: %w", err)
+	}
+	if !usageEnabled {
+		return nil, nil
+	}
+	mc, err := metricsclient.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return nil, fmt.Errorf("build metrics.k8s.io client: %w", err)
+	}
+	usageSampler := &usage.Sampler{
+		Client:    mgr.GetClient(),
+		Lister:    usage.NewClientsetLister(mc),
+		Namespace: namespace,
+		Interval:  usageInterval,
+		Metrics:   usage.NewMetrics(ctrlmetrics.Registry),
+		Log:       slog.New(logr.ToSlogHandler(ctrl.Log.WithName("usage"))),
+	}
+	if err := mgr.Add(usageSampler); err != nil {
+		return nil, fmt.Errorf("add worker usage sampler: %w", err)
+	}
+	return usageSampler, nil
+}
+
+// buildScheme builds the AGC client scheme: the core Kubernetes types
+// (clientgoscheme, which already includes corev1) plus the agc-group v1alpha1
+// RunnerGroup kinds and the actions-gateway.com/v2alpha1 kinds the RunnerSet
+// reconciler consumes. Kept as a standalone, test-reachable helper so scheme
+// registration is verifiable without standing up a manager.
+func buildScheme() (*runtime.Scheme, error) {
+	scheme := runtime.NewScheme()
+	// clientgoscheme already includes corev1; no need to add it separately.
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	// Register the v2alpha1 (actions-gateway.com) kinds so they are first-class in
+	// the AGC's client scheme alongside v1alpha1. M1 wires no reconciler for them;
+	// the RunnerSet reconciler that consumes them lands in M3a.
+	if err := agcv2alpha1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	return scheme, nil
 }
 
 // useImageVolume decides the worker-wrapper delivery mechanism (Q235). The
