@@ -394,7 +394,7 @@ The `autoscaling.k8s.io` CRDs are not part of core Kubernetes, so an opt-in can 
 
 - **provisions the gateway normally** — the AGC is created with its `agcResources` sizing and reaches `Ready=True`. A missing optional right-sizing prerequisite is not a reason to withhold a tenant's runners;
 - **does not fail or retry the write** — nothing is applied against a kind the apiserver does not serve, so there is no error to hot-loop on;
-- **surfaces it** — the advisory `AGCAutoscalingUnavailable=True` condition (reason `VPACRDNotInstalled`, naming the remediation) plus one Warning Event per transition. The condition is advisory: it never gates `Ready`, exactly like `EgressUnattributed`;
+- **surfaces it** — the advisory `AGCAutoscalingUnavailable=True` condition (reason `VPACRDNotInstalled`, naming the remediation) plus one Warning Event per transition. The condition is advisory: it never gates `Ready`, exactly like `EgressUnattributed`. Like every other v2 gateway condition it also exports a Prometheus gauge, `actions_gateway_agc_autoscaling_unavailable` (Q390), so the unsatisfiable opt-in is alertable rather than visible only via `kubectl describe`;
 - **converges on its own** — the gateway re-probes every 10 minutes, so installing the vertical-pod-autoscaler later takes effect without an operator edit. Ten minutes is a poll, not a hot loop: one cached-discovery lookup per gateway per interval.
 
 The chart-level opt-in has no equivalent runtime path — Helm renders the object at install time, so `vpa.enabled: true` without the CRDs fails `helm install` loudly, the same prerequisite contract as `metrics.serviceMonitor.enabled`.
