@@ -8,11 +8,12 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, and F8 shipped.** The F1
+> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, F4, and F8 shipped.** The F1
 > Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe
-> rewrite) shipped as Q362, F3's share-and-gate split as Q374, and F8's god-function
+> rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule
+> consolidation as Q364, and F8's god-function
 > decomposition as Q367. The remaining findings are tracked by Queue rows
-> [Q364](../STATUS.md#Q364)–[Q366](../STATUS.md#Q366),
+> [Q365](../STATUS.md#Q365)–[Q366](../STATUS.md#Q366),
 > [Q368](../STATUS.md#Q368)–[Q370](../STATUS.md#Q370);
 > [Q371](../STATUS.md#Q371) adds the prevention gates; [Q372](../STATUS.md#Q372)
 > (Deferred) carries the re-run trigger.
@@ -188,7 +189,7 @@ only, so the drift it guards could reach `main`), and `api/**` was missing from
 `unit-test.yml`'s `code` paths-filter, so an api-only change skipped its own gofmt,
 golangci-lint, and unit tests. Both fixed in the same change.
 
-**F4 — `githubCIDREgressRule` exists; the egress-proxy builder open-codes it twice.** → [Q364](../STATUS.md#Q364)
+**F4 — `githubCIDREgressRule` exists; the egress-proxy builder open-codes it twice.** ✅ **Shipped** (Q364)
 
 The shared helper at [builder.go:404](../../cmd/gmc/internal/controller/builder.go)
 is called from three sites — but not from `egressproxy_builder.go`, which
@@ -199,6 +200,22 @@ The helper's own doc comment claims to be the shared one.
 Three independent spellings of "which CIDRs may we reach on 443" in a
 security-relevant allowlist builder is where a policy bug hides. Same failure class
 as the PR #59 `ipBlock` trap the file's own comments warn about.
+
+**Shipped in Q364, but only *one* of the two open-coded loops was a spelling of the
+GitHub-CIDR rule.** The three-way equivalence check found: the first loop
+(`githubCIDRs []net.IPNet`, gated `managed && egressUsesCIDR && len>0`) is
+byte-for-byte the helper's output — consolidated onto `githubCIDREgressRule`, so the
+GitHub-CIDR 443 allowlist now has one spelling across v1 and v2. The *second* loop is
+**not** the GitHub rule: it renders `spec.destinationCIDRs` — CRD-documented as
+"EXTRA, non-GitHub IP ranges" — a `[]string` operator allowlist gated *without*
+`egressUsesCIDR` (it applies in every egress mode, while the GitHub rule is CIDR-mode
+only). It shares only the port-443 ipBlock shape, not the meaning, so folding it into
+the GitHub helper would conflate two distinct allowlists; it stays a separate rule
+with a comment saying why. A `reflect.DeepEqual` drift test pins the GitHub rule to
+the helper's output (it passed against both the pre- and post-consolidation builders,
+proving the rendered policy is unchanged) and locks in that the destinationCIDRs rule
+stays distinct — including that it survives FQDN mode while the GitHub rule is gated
+out.
 
 **F5 — Four hand-rolled implementations of one broker wire protocol.** → [Q368](../STATUS.md#Q368)
 
