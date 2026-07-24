@@ -362,6 +362,35 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway --version 
   --set wrapper.image.digest=sha256:<wrapper>
 ```
 
+## Patch releases and backports
+
+A patch release (`vX.Y.Z+1`) is **bugfix-only** by SemVer. That has a release-
+engineering consequence: **do not tag a patch from `main` once `main` has merged
+features headed for the next minor** — doing so ships those unreleased features in
+the patch's images *and* chart, and advertises them in the patch's docs (the site
+builds each version from its tag). Tag a patch from the released line instead:
+
+- **Ephemeral branch off the tag (branchless-friendly).** For a one-off patch:
+  `git switch --detach vX.Y.Z`, `git switch -c release-X.Y`, cherry-pick the fix,
+  tag `vX.Y.(Z+1)`, push the tag. Delete the branch afterward if you don't maintain
+  the line.
+- **Long-lived release branch.** If you support multiple minor lines at once, keep
+  a `release-X.Y` branch at the minor's tag and land backported fixes on it.
+
+You only need a branch/backport **when `main` isn't itself the intended patch** —
+i.e. when it has diverged past the release with content you don't want in the
+patch. If `main` is clean and ready to ship, that's the next **minor** (`vX.(Y+1).0`),
+not a patch.
+
+The **docs site follows automatically**: `mike` builds each version from its own
+tag, so a patch tagged off the release line publishes docs with only that line's
+content — no unreleased features. And the site's `stable` alias + default root
+redirect move **only to the highest released version**, so a backport patch
+released *after* a newer minor updates its own version's docs without demoting the
+site (see
+[website.md § Versioned deploy](../development/website.md#versioned-deploy-mike)).
+No docs-specific branch is ever required beyond what the release itself needs.
+
 ## Rollback
 
 A release is just a tag and a set of immutable, digest-addressed images — nothing
