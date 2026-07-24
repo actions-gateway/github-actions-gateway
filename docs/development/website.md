@@ -6,17 +6,10 @@ tree with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/).
 
 - Config: `mkdocs.yml` · theme overrides: `overrides/` · styles + scripts:
   `docs/stylesheets/extra.css`, `docs/javascripts/extra.js`
-- Deployed by `.github/workflows/pages.yml` — the site tracks the latest
-  **stable release tag**, not the `main` branch: pushing a `v*` release tag
-  (the same push that runs `publish.yml`) rebuilds and publishes the docs as of
-  that release, so a feature merged to `main` but not yet in a tagged/released
-  chart never reads as shipped on the live site (Q387). Prereleases
-  (`0.x`, `-rc`/`-alpha`/`-beta`) are gated out, matching `publish.yml`'s
-  prerelease test. `workflow_dispatch` is available for a manual redeploy — use
-  it for a docs-only fix that shouldn't wait for the next release. Pull requests
-  only build/validate (never publish). A full per-release *versioned* docs tree
-  (mike/Docusaurus, a version selector) is a larger, distinct change tracked by
-  Q238.
+- Deployed by `.github/workflows/pages.yml` as a **versioned tree** (see
+  [§ Versioned deploy](#versioned-deploy-mike)): the site tracks the latest
+  **stable release**, with the unreleased `main` docs available as an opt-in `dev`
+  version. Pull requests only build/validate (never publish).
 
 ## Custom domain
 
@@ -26,9 +19,10 @@ project-page subpath). Two pieces keep the domain bound to the Actions-based
 Pages deploy:
 
 - **`docs/CNAME`** — contains the bare domain `actions-gateway.com`. MkDocs copies
-  `docs_dir` root files verbatim into the built site root, so every Pages artifact
-  re-asserts the domain. Without it, an Actions deploy would clear the custom
-  domain. Don't delete or rename it.
+  `docs_dir` root files verbatim into each built version, and the `pages.yml`
+  `publish` job **re-asserts it at the artifact root** (`mike` does not keep a root
+  `CNAME`). Without a root CNAME, an Actions deploy would clear the custom domain.
+  Don't delete or rename it.
 - **`site_url: https://actions-gateway.com/`** in `mkdocs.yml` — drives canonical
   URLs, `sitemap.xml`, and Open Graph / social meta, and roots the site at `/`
   (no more `/github-actions-gateway/` base path).
@@ -44,6 +38,61 @@ hardening — not yet done.**
 (The original build plan and decision log is `docs/plan/website.md`; this doc is
 the durable how-to-maintain reference.)
 
+## Versioned deploy (mike)
+
+The published site is a **versioned tree** managed by
+[`mike`](https://github.com/jimporter/mike) (Q238), not a single copy of `main`.
+Each version is a full built copy under its own path on the `gh-pages` branch, and
+Material renders a **version selector** from `mike`'s `versions.json`
+(`extra.version.provider: mike` in `mkdocs.yml`):
+
+| Version | Source | Selector entry | Indexed |
+|---|---|---|---|
+| `stable` (alias of the latest release, e.g. `1.1.0`) | the stable `vX.Y.Z` tag | default — root `/` redirects here | yes |
+| older releases (`1.0.0`, …) | each stable `vX.Y.Z` tag | listed, reachable via the selector | yes |
+| `dev` | the `main` branch | opt-in via the selector, titled "dev (main)" | no (`robots.txt` disallows `/dev/`) |
+
+`stable` is the default, so a visitor lands on the latest **released** docs — a
+feature merged to `main` but not yet in a tagged/released chart appears only under
+the opt-in `dev` version, never as "Available now" on the released site.
+
+**What deploys when** (`.github/workflows/pages.yml`):
+
+- **push to `main`** → `mike deploy dev` (refreshes the unreleased `dev` docs).
+- **stable `v*` tag push** → `mike deploy --alias-type=copy --update-aliases X.Y.Z stable`
+  then `mike set-default stable` (publishes the release and moves `stable` + the
+  root redirect to it). This is the same tag push that runs `publish.yml`.
+- **prerelease tag** (`0.x`, `-rc`/`-alpha`/`-beta`) → **no deploy** (the same
+  prerelease test `publish.yml` uses, Q293).
+- **`workflow_dispatch`** → deploys the `version`/`alias` inputs (or derives from
+  the ref when blank) — used for **seeding** already-released versions and manual
+  redeploys.
+
+Pages source stays **"GitHub Actions"**: `mike` maintains the tree on `gh-pages`,
+and the `publish` job serves that whole tree as the Pages artifact.
+`--alias-type=copy` makes `stable/` a real directory — GitHub Pages artifact
+deploys don't follow symlinks, so a symlinked alias would 404 on deep links.
+
+### Seeding already-released versions
+
+`mike` only knows the versions it has deployed, so releases cut **before** this
+workflow landed aren't in the tree yet, and the site root has nothing to redirect
+to until a `stable` version exists. Seed the existing releases once via
+`workflow_dispatch` (oldest first, newest last so `stable` ends on the latest):
+
+- `version=1.0.0`, `alias=` (blank), `set_default=false`
+- `version=1.1.0`, `alias=stable`, `set_default=true`
+
+A subsequent `main` push adds the `dev` entry. From then on the workflow maintains
+everything automatically.
+
+### Local preview of the versioned site
+
+`make docs-serve` previews the **current working tree** only (no selector) — the
+right tool for writing content. To preview the full versioned tree with the
+selector, run `mike` from the docs venv against a local `gh-pages`:
+`.venv-docs/bin/mike serve`.
+
 ## SEO & analytics
 
 Three pieces of machine-readable/operational metadata are wired centrally so they
@@ -55,8 +104,10 @@ apply site-wide, not per page:
   those config values updates the structured data automatically; don't hand-paste
   schema into individual pages. Validate built output at
   [validator.schema.org](https://validator.schema.org/).
-- **`robots.txt`** — `docs/robots.txt` is copied verbatim into the site root (same
-  mechanism as `docs/CNAME`). It allows all crawlers and references the sitemap.
+- **`robots.txt`** — `docs/robots.txt` lands inside each built version; the
+  `pages.yml` `publish` job writes the **root** `robots.txt` that points crawlers
+  at the default (stable) `sitemap.xml` and `Disallow`s `/dev/` so the unreleased
+  version stays out of the index (avoiding duplicate content across versions).
 - **`sitemap.xml`** — generated automatically by MkDocs Material because
   `site_url` is set; no extra config. `robots.txt` points crawlers at it.
 

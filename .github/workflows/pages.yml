@@ -7,30 +7,57 @@ on:
       - 'overrides/**'
       - 'requirements-docs.txt'
       - '.github/workflows/pages.yml'
-  # Deploy the PUBLISHED docs, not every main merge (Q387). The site tracks the
-  # latest STABLE release tag rather than the `main` branch: a feature merged to
-  # main but not yet in a tagged/released chart must not read as "Available now"
-  # on https://actions-gateway.com. So the deploy job triggers on a `v*` tag push
-  # (the same tag push that runs publish.yml) and gates out prereleases — see the
-  # build job's `gate` step and the deploy job's `if`. pull_request only validates
-  # that the site builds; it never publishes. workflow_dispatch remains available
-  # for an on-demand redeploy (e.g. a docs-only typo fix that shouldn't wait for
-  # the next release). A full per-release versioned docs tree (mike/Docusaurus) is
-  # a larger, distinct change tracked by Q238.
+  # Versioned docs deploy (Q238). The public site is a mike-managed versioned
+  # tree on the `gh-pages` branch, NOT a single copy of `main`:
+  #   - a push to `main`      -> (re)deploys the `dev` version (unreleased)
+  #   - a STABLE `v*` tag push -> deploys that release and moves the `stable`
+  #                               alias + default root redirect to it
+  #   - a prerelease tag (0.x, -rc/-alpha/-beta) -> no deploy
+  # `stable` is the default a visitor lands on, so a feature merged to `main` but
+  # not yet in a tagged/released chart shows only under the opt-in `dev` version
+  # in the selector, never as "Available now" on the released docs (this is the
+  # Q387 availability fix, generalised). Pull requests only build-validate the
+  # site; they never publish. workflow_dispatch deploys a chosen version (see the
+  # inputs) — used to seed already-released versions and for manual redeploys.
+  #
+  # Pages source stays "GitHub Actions": mike maintains the version tree on
+  # gh-pages, and the publish job deploys that tree as the Pages artifact (with
+  # the custom-domain CNAME re-asserted at the artifact root). See
+  # docs/development/website.md § Versioned deploy.
   push:
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version id to deploy (e.g. 1.1.0, or dev). Blank = derive from the ref.'
+        required: false
+      alias:
+        description: 'Alias to (re)assign to this version (e.g. stable). Blank = none.'
+        required: false
+      set_default:
+        description: 'Make this alias/version the default the site root redirects to.'
+        type: boolean
+        default: false
 
+# PR builds are per-ref and cancelable; every deploy shares one group and never
+# cancels, so concurrent main/tag pushes serialise on the gh-pages branch instead
+# of racing it.
 concurrency:
-  group: pages-${{ github.ref }}
+  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+permissions:
+  contents: read
+
 jobs:
+  # Pull-request validation only: prove the site builds. The versioned deploy
+  # path (mike) is exercised on push/dispatch, not on PRs, so keep this a plain
+  # one-shot build — the same gate that ran before versioning.
   build:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    outputs:
-      deploy: ${{ steps.gate.outputs.deploy }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
@@ -38,45 +65,151 @@ jobs:
           python-version: '3.x'
       - run: pip install -r requirements-docs.txt
       - run: mkdocs build --site-dir _site
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: _site
-      - id: gate
-        name: Decide whether to publish
-        env:
-          EVENT: ${{ github.event_name }}
-          REF: ${{ github.ref }}
-        # Publish only for a manual dispatch or a STABLE release tag (Q387). The
-        # prerelease test mirrors publish.yml's single source of truth (Q293): a
-        # tag is a prerelease when its SemVer core is 0.x (pre-1.0) OR it carries
-        # a '-' suffix (-rc/-alpha/-beta). Keeping the two in step means the
-        # public site republishes on exactly the tags that ship a stable chart.
-        run: |
-          set -euo pipefail
-          deploy=false
-          if [[ "${EVENT}" == "workflow_dispatch" ]]; then
-            deploy=true
-          elif [[ "${REF}" == refs/tags/v* ]]; then
-            version="${REF#refs/tags/v}"
-            if [[ "${version}" == 0.* || "${version}" == *-* ]]; then
-              deploy=false
-            else
-              deploy=true
-            fi
-          fi
-          echo "deploy=${deploy}" >> "${GITHUB_OUTPUT}"
 
-  deploy:
-    needs: build
-    if: needs.build.outputs.deploy == 'true'
+  # Push/dispatch: update the mike version tree on gh-pages and deploy it.
+  publish:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
-      pages: write
-      id-token: write
+      contents: write   # push the gh-pages version tree
+      pages: write      # deploy the Pages artifact
+      id-token: write   # OIDC for actions/deploy-pages
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.x'
+      - run: pip install -r requirements-docs.txt
+
+      - name: Resolve version, alias, and default
+        id: resolve
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          IN_VERSION: ${{ github.event.inputs.version }}
+          IN_ALIAS: ${{ github.event.inputs.alias }}
+          IN_DEFAULT: ${{ github.event.inputs.set_default }}
+        # Decide WHAT to deploy. `deploy=false` means "nothing to publish" (a
+        # prerelease tag): the mike/deploy steps below are skipped and the job is
+        # a green no-op. The prerelease test mirrors publish.yml's single source
+        # of truth (Q293): a tag is a prerelease when its SemVer core is 0.x or it
+        # carries a '-' suffix (-rc/-alpha/-beta).
+        run: |
+          set -euo pipefail
+          version=""
+          alias=""
+          is_default=false
+          title=""
+          deploy=false
+
+          resolve_from_ref() {
+            if [[ "${REF}" == "refs/heads/main" ]]; then
+              version="dev"
+              title="dev (main)"
+              deploy=true
+            elif [[ "${REF}" == refs/tags/v* ]]; then
+              local core="${REF#refs/tags/v}"
+              if [[ "${core}" == 0.* || "${core}" == *-* ]]; then
+                deploy=false
+              else
+                version="${core}"
+                title="${core}"
+                alias="stable"
+                is_default=true
+                deploy=true
+              fi
+            fi
+          }
+
+          if [[ "${EVENT}" == "workflow_dispatch" && -n "${IN_VERSION}" ]]; then
+            version="${IN_VERSION}"
+            title="${IN_VERSION}"
+            alias="${IN_ALIAS}"
+            is_default="${IN_DEFAULT}"
+            deploy=true
+          else
+            resolve_from_ref
+          fi
+
+          {
+            echo "deploy=${deploy}"
+            echo "version=${version}"
+            echo "alias=${alias}"
+            echo "is_default=${is_default}"
+            echo "title=${title}"
+          } >> "${GITHUB_OUTPUT}"
+          echo "Resolved: deploy=${deploy} version=${version} alias=${alias} default=${is_default}"
+
+      - name: Deploy the version with mike
+        if: steps.resolve.outputs.deploy == 'true'
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+          ALIAS: ${{ steps.resolve.outputs.alias }}
+          IS_DEFAULT: ${{ steps.resolve.outputs.is_default }}
+          TITLE: ${{ steps.resolve.outputs.title }}
+        # mike commits the built version into a subdir of gh-pages and pushes it.
+        # --alias-type=copy makes an alias (e.g. `stable`) a real directory, not a
+        # symlink: GitHub Pages artifact deploys don't follow symlinks, so a
+        # symlinked `stable/` would 404 on deep links. --update-aliases lets a new
+        # release take over the `stable` alias from the previous one.
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          args=(deploy --push --update-aliases)
+          if [[ -n "${ALIAS}" ]]; then
+            args+=(--alias-type=copy)
+          fi
+          if [[ -n "${TITLE}" ]]; then
+            args+=(--title "${TITLE}")
+          fi
+          args+=("${VERSION}")
+          if [[ -n "${ALIAS}" ]]; then
+            args+=("${ALIAS}")
+          fi
+          mike "${args[@]}"
+
+          if [[ "${IS_DEFAULT}" == "true" ]]; then
+            mike set-default --push "${ALIAS:-${VERSION}}"
+          fi
+
+      - name: Assemble the Pages artifact from the gh-pages version tree
+        if: steps.resolve.outputs.deploy == 'true'
+        # Serve the whole mike tree (all versions + root redirect + versions.json)
+        # via the "GitHub Actions" Pages source. Re-assert the custom-domain CNAME
+        # at the artifact root — mike does not keep a root CNAME — and give the
+        # root a robots.txt that indexes the default (stable) sitemap while keeping
+        # the unreleased `dev` version out of search results.
+        run: |
+          set -euo pipefail
+          rm -rf _site
+          mkdir -p _site
+          git archive gh-pages | tar -x -C _site
+          cp docs/CNAME _site/CNAME
+          cat > _site/robots.txt <<'ROBOTS'
+          # Versioned docs: index the default (stable) release; keep the unreleased
+          # `dev` version out of search results to avoid duplicate content.
+          User-agent: *
+          Allow: /
+          Disallow: /dev/
+
+          Sitemap: https://actions-gateway.com/stable/sitemap.xml
+          ROBOTS
+
+      - name: Upload Pages artifact
+        if: steps.resolve.outputs.deploy == 'true'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        if: steps.resolve.outputs.deploy == 'true'
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

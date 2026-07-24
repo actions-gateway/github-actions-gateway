@@ -135,7 +135,7 @@ substance is what readers judge.
 | **No links to `CLAUDE.md`** | `CLAUDE.md`/`AGENTS.md` is the agent entrypoint only. Human docs never link to it; the dependency direction is one-way (`CLAUDE.md` → `docs/`). Content humans need lives in `docs/` or `CONTRIBUTING.md`. |
 | **Table of contents** | Long docs (~400+ lines) carry a `## Table of Contents` after the intro listing h2s (plus h3 for operator docs). Anchors follow GitHub slug rules (duplicate headings get `-1`/`-2`); verify against the rendered page. |
 | **Cut filler** | Delete "in order to", "it should be noted that", "please note", and hedging preambles. A pure win for brevity and scannability. |
-| **Versioning** | Docs describe `main`: mark unshipped behavior `(planned)`, never as if it ships. API versions (`v1alpha1`→v2…) are documented together on `main` with reference + migration guides — one running gateway serves them at once. A versioned docs *tree* (frozen per-release copies) is a different thing, [deferred](../STATUS.md#Q238) until supported releases' docs conflict. |
+| **Versioning** | Docs describe `main`: mark unshipped behavior `(planned)`, never as if it ships. API versions (`v1alpha1`→v2…) are documented together on `main` with reference + migration guides — one running gateway serves them at once. Separately, the published *site* is a versioned *tree* (a built copy per release): it defaults to the latest stable release, with `main` behind an opt-in `dev` version — see [website.md § Versioned deploy](website.md#versioned-deploy-mike). |
 
 ## Maintenance
 
