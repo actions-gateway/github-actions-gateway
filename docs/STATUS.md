@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q393
+**Next ID:** Q394
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -62,6 +62,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q377"></a>Q377 | [Change-scope `make test`/coverage to affected modules](../scripts/go-test.sh) | `speed` `tests` | 🔲 | M | Tests dominate `make check` runtime; reuse go-lint.sh's affected-module scoping. Needs care: cover-check floors are per-module, so a scoped run gates only the modules it ran. |
 | <a id="Q382"></a>Q382 | [Q-ID allocation under parallel sessions](development/maintaining-backlog.md) | `infra` `retro` | 🔲 | M | 5 ID-allocating merges on 07-20 forced 3 renumberings across one PR's rebases — the global `Next ID` counter is the contention point. Explore provisional session IDs normalized at merge, or reserved blocks. Distinct from [Q376](#Q376). |
 | <a id="Q392"></a>Q392 | [Adopt `ApplyManifestWithWebhookRetry` in remaining webhook-apply specs](../cmd/gmc/test/utils/resources.go) | `tests` | 🔲 | S | Q391 hardened only vault-WI's apply. direct_egress/provisioning/isolation/v2_multigateway `BeforeAll`s still one-shot the same webhook-triggering apply with no retry on transient `context deadline exceeded`. Adopt the helper across them. |
+| <a id="Q393"></a>Q393 | [Derive the docs announce bar from the release version](../overrides/main.html) | `docs` `infra` | 🔲 | S | Announce bar ('vX.Y.Z is here') in `overrides/main.html` is hand-edited per release. Derive it from the current version, or add it to the release.md checklist so it isn't forgotten. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
