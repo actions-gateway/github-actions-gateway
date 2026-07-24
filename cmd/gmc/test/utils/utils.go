@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2" // nolint:revive,staticcheck
+	. "github.com/onsi/ginkgo/v2" //nolint:revive,staticcheck
 )
 
 func warnError(err error) {
@@ -109,7 +109,7 @@ func GetProjectDir() (string, error) {
 // UncommentCode searches for target in the file and remove the comment prefix
 // of the target content. The target content may span multiple lines.
 func UncommentCode(filename, target, prefix string) error {
-	content, err := os.ReadFile(filename) //nolint:gosec // G304: kubebuilder scaffold helper reads a developer-supplied source path
+	content, err := os.ReadFile(filename)
 	if err != nil {
 		return fmt.Errorf("failed to read file %q: %w", filename, err)
 	}

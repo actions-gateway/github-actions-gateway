@@ -166,7 +166,8 @@ and catch real regressions — and we are explicit about the rest.
 | **Static security findings** | Track — `gosec` ([Q80](../STATUS.md)); unchecked errors via `errcheck` ([Q81](../STATUS.md)). |
 | **Reachable CVEs** | Track — `govulncheck` + `trivy`, already gating ([backpressure.md](backpressure.md)). |
 | **Open-item count / age** | Track lightly — the labeled Queue in [docs/STATUS.md](../STATUS.md) is the register; formal aging is overkill at this scale. |
-| **Cyclomatic complexity** | Skip for now — most long functions are legitimate wiring; high noise-to-signal. |
+| **Function length** | Track — `funlen` as a ratcheted ceiling ([Q371](../STATUS.md)): the threshold starts just above the worst surviving function and lowers as long functions are decomposed, the same "gates by not getting worse" pattern the coverage ratchet uses. Cyclomatic complexity proper (`gocyclo`) stays skipped — length is the cheaper proxy, and Q367 showed the god `main`/`run` functions were the real target. |
+| **Suppression hygiene** | Track — `nolintlint` (`allow-unused: false`, `require-specific: true`) ([Q371](../STATUS.md)): an inert or blanket `//nolint` directive fails the build, so a suppression cannot outlive the finding it documents (the class the dead `nolint:gocyclo` on the old `main()` was). |
 | Technical-debt ratio, defect ratio, DORA velocity (lead time, change-failure rate), debt index | **Skip** — each needs an issue tracker, a remediation-cost estimator, or a delivery cadence this project does not have. Revisit if the project grows a team and a release pipeline. |
 
 The principle: **a metric earns a place only when it changes a decision.** A
@@ -182,9 +183,9 @@ top of the formatting, lint, `govulncheck`, and `trivy` gates that already run
 ([backpressure.md](backpressure.md)). Each gate is the durable form of a
 detect-and-pay-down cycle: once paid, it does not regress.
 
-Where a gate is threshold-shaped (coverage, `dupl`), it gates by **not getting
-worse** — a ratchet or tuned threshold — rather than an arbitrary absolute bar,
-so it raises quality without manufacturing low-value work.
+Where a gate is threshold-shaped (coverage, `dupl`, `funlen`), it gates by **not
+getting worse** — a ratchet or tuned threshold — rather than an arbitrary
+absolute bar, so it raises quality without manufacturing low-value work.
 
 ## Where it all lives
 
