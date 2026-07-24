@@ -18,6 +18,36 @@ require_cmd() {
 	}
 }
 
+# step MESSAGE — print a blank line then a "==> MESSAGE" progress header to
+# stdout. die MESSAGE — print a blank line then "ERROR: MESSAGE" to stderr and
+# exit 1. Both are the plain progress/abort idiom the live-probe scripts share
+# (probe-live-run.sh, probe-investigations-cd.sh); kept here so they stay one
+# implementation rather than a per-script copy (Q370 / F10).
+step() { echo; echo "==> $*"; }
+die() { echo; echo "ERROR: $*" >&2; exit 1; }
+
+# gh_curl DESCRIPTION METHOD URL [EXTRA_CURL_ARGS...] — make a GitHub API call,
+# print the response body, and die() with the status and body when the HTTP code
+# is not 2xx. Deliberately does NOT pass curl -f: error responses must be
+# captured and shown, not swallowed. Extra args (auth headers, -d payloads) are
+# forwarded verbatim after the URL. Shared by the live-probe scripts (Q370 / F10).
+gh_curl() {
+	local description="$1" method="$2" url="$3"
+	shift 3
+	local resp http_code body
+	resp=$(curl -s -w '\n__HTTP_STATUS__%{http_code}' -X "$method" "$url" "$@")
+	http_code=$(echo "$resp" | grep '__HTTP_STATUS__' | sed 's/.*__HTTP_STATUS__//')
+	body=$(echo "$resp" | grep -v '__HTTP_STATUS__')
+	if [[ ! "$http_code" =~ ^2 ]]; then
+		echo >&2
+		echo "ERROR: $description failed (HTTP $http_code)" >&2
+		echo "  URL: $method $url" >&2
+		echo "  Response: $body" >&2
+		exit 1
+	fi
+	echo "$body"
+}
+
 # confirm_or_exit MESSAGE — print MESSAGE then require an interactive y/yes
 # before continuing; exit non-zero on anything else. ASSUME_YES=1 skips the
 # prompt (automation). Gate billable or destructive operations with this so a

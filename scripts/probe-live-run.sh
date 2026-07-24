@@ -32,34 +32,14 @@ set -euo pipefail
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# step, die, and gh_curl live in the shared helper library (Q370 / F10).
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
+
 RUNNER_TMP=$(mktemp -d /tmp/actions-runner-XXXXXX)
 RUNNER_CACHE_DIR="${PROBE_RUNNER_CACHE:-$HOME/.cache/github-actions-runner}"
 RAW_PAYLOAD="${PROBE_RAW_OUTPUT:-/tmp/probe-raw-payload.json}"
 REG_TOKEN=""  # set later; used by cleanup
-
-step() { echo; echo "==> $*"; }
-die()  { echo; echo "ERROR: $*" >&2; exit 1; }
-
-# gh_curl DESCRIPTION METHOD URL [EXTRA_CURL_ARGS...]
-# Makes a GitHub API call. Prints the response body and exits with a clear
-# error message if the HTTP status is not 2xx. Does NOT use curl -f so that
-# error responses are always captured and shown.
-gh_curl() {
-    local description="$1" method="$2" url="$3"
-    shift 3
-    local resp http_code body
-    resp=$(curl -s -w '\n__HTTP_STATUS__%{http_code}' -X "$method" "$url" "$@")
-    http_code=$(echo "$resp" | grep '__HTTP_STATUS__' | sed 's/.*__HTTP_STATUS__//')
-    body=$(echo "$resp" | grep -v '__HTTP_STATUS__')
-    if [[ ! "$http_code" =~ ^2 ]]; then
-        echo >&2
-        echo "ERROR: $description failed (HTTP $http_code)" >&2
-        echo "  URL: $method $url" >&2
-        echo "  Response: $body" >&2
-        exit 1
-    fi
-    echo "$body"
-}
 
 cleanup() {
     if [[ -d "${RUNNER_TMP:-}" ]]; then

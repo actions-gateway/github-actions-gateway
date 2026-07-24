@@ -26,17 +26,8 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
-
-# Temp files used by --check; cleaned up on exit. Declared empty so the EXIT
-# trap's cleanup is a no-op when no temp file was created (and never trips
-# `set -u` on macOS bash 3.2's empty-array expansion).
-TMP_FILES=()
-cleanup() {
-	if [[ ${#TMP_FILES[@]} -gt 0 ]]; then
-		rm -f "${TMP_FILES[@]}"
-	fi
-}
-trap cleanup EXIT
+# shellcheck source=scripts/lib/chart-sync.sh
+source "$REPO_ROOT/scripts/lib/chart-sync.sh"
 
 # The GMC bundles its own controller-gen copy of the (imported, v1alpha1)
 # RunnerGroup type; it must stay byte-identical to the AGC authoritative copy or a
@@ -184,6 +175,7 @@ sync() {
 	for i in "${!CRD_SRCS[@]}"; do
 		render "${CRD_SRCS[$i]}" "${CRD_DSTS[$i]}" "${CRD_BLOCKS[$i]}" "${CRD_CONVERSIONS[$i]}"
 	done
+	echo "wrote ${#CRD_DSTS[@]} chart CRD templates from controller-gen sources."
 }
 
 # check renders each chart CRD to a temp file and compares it against the on-disk
@@ -193,8 +185,7 @@ sync() {
 check() {
 	local rc=0 i tmp
 	for i in "${!CRD_SRCS[@]}"; do
-		tmp="$(mktemp)"
-		TMP_FILES+=("$tmp")
+		tmp="$(chart_sync_mktemp)"
 		render "${CRD_SRCS[$i]}" "$tmp" "${CRD_BLOCKS[$i]}" "${CRD_CONVERSIONS[$i]}"
 		if ! diff -u "${CRD_DSTS[$i]}" "$tmp"; then
 			echo "ERROR: ${CRD_DSTS[$i]} is out of sync with ${CRD_SRCS[$i]}." >&2
@@ -217,20 +208,4 @@ check() {
 	echo "chart CRD templates and the GMC-bundled RunnerGroup CRD are in sync."
 }
 
-main() {
-	case "${1:-}" in
-	--check)
-		check
-		;;
-	"")
-		sync
-		echo "wrote ${#CRD_DSTS[@]} chart CRD templates from controller-gen sources."
-		;;
-	*)
-		echo "usage: $0 [--check]" >&2
-		exit 2
-		;;
-	esac
-}
-
-main "$@"
+chart_sync_main "$@"
