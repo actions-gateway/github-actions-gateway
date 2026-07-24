@@ -209,6 +209,15 @@ gh run watch "$(gh run list --workflow=publish.yml --branch=vX.Y.Z -L1 --json da
 > A `workflow_dispatch` run with a `tag` input publishes the same way without a
 > git tag — use it to dry-run the pipeline against a throwaway `vX.Y.Z-rc1` tag.
 
+> **The docs site republishes on this same tag push (Q387).** A **stable** `vX.Y.Z`
+> tag also triggers [`pages.yml`](../../.github/workflows/pages.yml), which rebuilds
+> and deploys [actions-gateway.com](https://actions-gateway.com) from the released
+> tree — so the public docs reflect the shipped chart, never a feature merged to
+> `main` but not yet released. Prerelease tags (`0.x`, `-rc`/`-alpha`/`-beta`) are
+> gated out and do **not** deploy the site. A docs-only fix that shouldn't wait for
+> the next release can be published on demand with the `pages.yml`
+> `workflow_dispatch`.
+
 ### 3. Verify the publish
 
 Confirm every image **and the chart** was signed by *this* workflow before

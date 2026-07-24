@@ -475,16 +475,16 @@ func buildEgressProxyPDB(ep *gmcv2alpha1.EgressProxy) *policyv1.PodDisruptionBud
 func buildEgressProxyNetworkPolicy(ep *gmcv2alpha1.EgressProxy, githubCIDRs []net.IPNet) *networkingv1.NetworkPolicy {
 	egress := []networkingv1.NetworkPolicyEgressRule{dnsEgressRule()}
 	managed := ep.Spec.ManagedNetworkPolicy == nil || *ep.Spec.ManagedNetworkPolicy
-	if managed && egressUsesCIDR(ep.Spec) && len(githubCIDRs) > 0 {
-		peers := make([]networkingv1.NetworkPolicyPeer, 0, len(githubCIDRs))
-		for _, cidr := range githubCIDRs {
-			c := cidr.String()
-			peers = append(peers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: c}})
+	// GitHub-CIDR 443 allowlist: the shared helper (builder.go) is the single
+	// spelling of this rule across v1 and v2, so the proxy and workload policies
+	// cannot silently diverge on which CIDRs may be reached on 443. The helper's
+	// `ok` return encodes the len(githubCIDRs) > 0 fail-closed check; egressUsesCIDR
+	// gates it to CIDR mode (an FQDN mode carries the GitHub allowlist on a
+	// CNI-native policy instead — see this function's doc comment).
+	if managed && egressUsesCIDR(ep.Spec) {
+		if rule, ok := githubCIDREgressRule(githubCIDRs); ok {
+			egress = append(egress, rule)
 		}
-		egress = append(egress, networkingv1.NetworkPolicyEgressRule{
-			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(443))}},
-			To:    peers,
-		})
 	}
 
 	// Operator-allowlisted extra CIDRs (Q242 G.1) are native ipBlock peers on the
@@ -494,6 +494,12 @@ func buildEgressProxyNetworkPolicy(ep *gmcv2alpha1.EgressProxy, githubCIDRs []ne
 	// proxies still get the standard NetworkPolicy, so these peers are honored there
 	// too (NetworkPolicies are additive). Gated on managedNetworkPolicy: when the GMC
 	// is not managing this proxy's policy, it adds nothing for the operator to layer.
+	//
+	// This is deliberately NOT githubCIDREgressRule: destinationCIDRs are EXTRA,
+	// non-GitHub ranges (spec doc), a []string operator allowlist gated WITHOUT
+	// egressUsesCIDR (it applies in every egress mode). It shares only the port-443
+	// ipBlock shape with the GitHub rule, not its meaning — folding it into the
+	// GitHub helper would conflate two distinct allowlists (Q364).
 	if managed && len(ep.Spec.DestinationCIDRs) > 0 {
 		peers := make([]networkingv1.NetworkPolicyPeer, 0, len(ep.Spec.DestinationCIDRs))
 		for _, c := range ep.Spec.DestinationCIDRs {

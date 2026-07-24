@@ -7,19 +7,18 @@ on:
       - 'overrides/**'
       - 'requirements-docs.txt'
       - '.github/workflows/pages.yml'
+  # Deploy the PUBLISHED docs, not every main merge (Q387). The site tracks the
+  # latest STABLE release tag rather than the `main` branch: a feature merged to
+  # main but not yet in a tagged/released chart must not read as "Available now"
+  # on https://actions-gateway.com. So the deploy job triggers on a `v*` tag push
+  # (the same tag push that runs publish.yml) and gates out prereleases — see the
+  # build job's `gate` step and the deploy job's `if`. pull_request only validates
+  # that the site builds; it never publishes. workflow_dispatch remains available
+  # for an on-demand redeploy (e.g. a docs-only typo fix that shouldn't wait for
+  # the next release). A full per-release versioned docs tree (mike/Docusaurus) is
+  # a larger, distinct change tracked by Q238.
   push:
-    branches: [main]
-    paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
-      - 'overrides/**'
-      - 'requirements-docs.txt'
-      - '.github/workflows/pages.yml'
-  # The site is launched (Q129). Deploy now runs automatically on push to main
-  # (see the deploy job's `if`): merging docs changes publishes them to
-  # https://actions-gateway.com with no manual step. workflow_dispatch remains
-  # available for an on-demand redeploy. pull_request only validates that the
-  # site builds; it never publishes.
+    tags: ['v*']
   workflow_dispatch:
 
 concurrency:
@@ -30,6 +29,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      deploy: ${{ steps.gate.outputs.deploy }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
@@ -40,10 +41,34 @@ jobs:
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: _site
+      - id: gate
+        name: Decide whether to publish
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        # Publish only for a manual dispatch or a STABLE release tag (Q387). The
+        # prerelease test mirrors publish.yml's single source of truth (Q293): a
+        # tag is a prerelease when its SemVer core is 0.x (pre-1.0) OR it carries
+        # a '-' suffix (-rc/-alpha/-beta). Keeping the two in step means the
+        # public site republishes on exactly the tags that ship a stable chart.
+        run: |
+          set -euo pipefail
+          deploy=false
+          if [[ "${EVENT}" == "workflow_dispatch" ]]; then
+            deploy=true
+          elif [[ "${REF}" == refs/tags/v* ]]; then
+            version="${REF#refs/tags/v}"
+            if [[ "${version}" == 0.* || "${version}" == *-* ]]; then
+              deploy=false
+            else
+              deploy=true
+            fi
+          fi
+          echo "deploy=${deploy}" >> "${GITHUB_OUTPUT}"
 
   deploy:
     needs: build
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: needs.build.outputs.deploy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
