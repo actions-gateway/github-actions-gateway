@@ -8,10 +8,12 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, and F3 shipped.** The F1 Secret
-> leak was fixed and merged the same day (Q373, #727); F2 (the probe rewrite)
-> shipped as Q362 and F3's share-and-gate split as Q374. The remaining findings are
-> tracked by Queue rows [Q364](../STATUS.md#Q364)–[Q370](../STATUS.md#Q370);
+> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, and F8 shipped.** The F1
+> Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe
+> rewrite) shipped as Q362, F3's share-and-gate split as Q374, and F8's god-function
+> decomposition as Q367. The remaining findings are tracked by Queue rows
+> [Q364](../STATUS.md#Q364)–[Q366](../STATUS.md#Q366),
+> [Q368](../STATUS.md#Q368)–[Q370](../STATUS.md#Q370);
 > [Q371](../STATUS.md#Q371) adds the prevention gates; [Q372](../STATUS.md#Q372)
 > (Deferred) carries the re-run trigger.
 >
@@ -261,7 +263,7 @@ ServiceAccounts, RoleBindings, NetworkPolicies, and HPAs.
 Keep three as bespoke: `applyRoleBinding` (immutable `roleRef`), `applyService`
 (preserve server-assigned `ClusterIP`), `applyProxyDeployment` (HPA owns replicas).
 
-**F8 — Two god wiring functions with the linter switched off.** → [Q367](../STATUS.md#Q367)
+**F8 — Two god wiring functions with the linter switched off.** ✅ **Shipped** (Q367)
 
 - [cmd/gmc/cmd/main.go:73](../../cmd/gmc/cmd/main.go) — **669 lines**, prefixed
   `// nolint:gocyclo`, interleaving ~12 concerns: ~25 flag declarations, logging
@@ -269,13 +271,32 @@ Keep three as bespoke: `applyRoleBinding` (immutable `roleRef`), `applyService`
   manager construction, image-digest policy, v2 CRD detection, 8 controller
   registrations, 6 webhook registrations, health checks. None of it is
   test-reachable.
-- [cmd/agc/main.go](../../cmd/agc/main.go) `run()` — **431 lines** with 23 scattered
-  inline `os.Getenv` calls, so there is no single place to see the AGC's config
-  surface, no validation pass, and no way to unit-test config resolution.
+- [cmd/agc/main.go](../../cmd/agc/main.go) `run()` — **431 lines** (grown to 462 by
+  the time Q367 ran) with 23 (measured: 24) scattered inline `os.Getenv` calls, so
+  there is no single place to see the AGC's config surface, no validation pass, and
+  no way to unit-test config resolution.
 
 Both already proved the fix works — `validateLeaderElectionTimings`,
 `parseAPIServerCIDRs`, `validateImageDigest`, `useImageVolume` were extracted. The
 extraction simply stopped.
+
+**Shipped in Q367.** Pure refactor — same flags, env vars, defaults, and startup
+ordering (the argument: `os.Getenv` is side-effect-free and the environment is
+immutable during startup, so hoisting all reads to a snapshot cannot change
+behavior; every erroring/side-effecting step kept its original sequence position).
+
+GMC `main()` fell **669 → 83 lines**: flag declarations moved to `addFlags`
+(`flags.go`, bound to a passed `flag.FlagSet` so defaults are testable); cross-flag
+validation to `resolveConfig`/`buildCacheOptions` and image/digest policy to
+`resolveImages` (`config.go`); the option builders, `newManager`, and the
+controller/webhook/health registration to `config.go`/`wiring.go`. The inert
+`// nolint:gocyclo` is gone. AGC `run()` fell **462 → 329 lines**: the 24 env reads
+became a single `loadConfig` snapshot, with `buildRegistrar`, `buildBrokerConfig`,
+`buildScheme`, `configureProxyTrust`, `setupProvisioner`, and `setupUsageSampler`
+carved out. New unit tests cover the now-reachable config helpers (`loadConfig`,
+`buildRegistrar`, `buildBrokerConfig`, `buildScheme`, `addFlags`, `resolveConfig`,
+`buildCacheOptions`, `resolveImages`). The `funlen`/`nolintlint` gates that would
+lock this in stay with Q371.
 
 **F9 — `broker` and `scaleset` duplicate the error taxonomy verbatim.** → [Q369](../STATUS.md#Q369)
 
@@ -343,11 +364,12 @@ justification in `.golangci.yml`. That leaves **8 non-`gosec` suppressions in th
 entire codebase**. This is unusually disciplined and makes a suppression gate cheap
 to adopt rather than a cleanup project.
 
-One concrete payoff waiting: there is exactly one `nolint:gocyclo` in the repo
-(`cmd/gmc/cmd/main.go:72`) and **`gocyclo` is not enabled**. The suppression is
-inert — someone knew the function was over the line and pre-silenced a gate that
-does not exist. `nolintlint` with `allow-unused: false` converts that from
-invisible to a build failure.
+One concrete payoff has since been realized: the repo's only `nolint:gocyclo`
+(`cmd/gmc/cmd/main.go`) was inert — someone knew the function was over the line and
+pre-silenced a gate that does not exist (`gocyclo` is not enabled). Q367 removed it
+when the function shrank to 83 lines; `nolintlint` with `allow-unused: false`
+(Q371) would have converted such an inert suppression from invisible to a build
+failure.
 
 ### The `funlen` threshold curve
 
@@ -364,8 +386,8 @@ Measured 2026-07-20 over non-test, non-generated Go:
 [technical-debt.md](../development/technical-debt.md) currently records
 *"Cyclomatic complexity | Skip for now — most long functions are legitimate wiring;
 high noise-to-signal."* The curve says that call was too pessimistic: at a high
-threshold the gate fires on a handful, not a flood. Sequence the gate **after**
-[Q367](../STATUS.md#Q367) clears the two god `main`s, then set the threshold just
+threshold the gate fires on a handful, not a flood. Q367 has now cleared the two
+god `main`s, so the gate (Q371) can set the threshold just
 above the worst legitimate survivor and ratchet down — the same "gates by not
 getting worse" pattern the coverage ratchet already uses, with no allowlist of
 shame. **Q371 should update that metrics-table row** when the gate lands; it is

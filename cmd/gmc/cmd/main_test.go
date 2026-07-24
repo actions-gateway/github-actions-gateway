@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -89,7 +90,7 @@ func TestParseAllowedEgressCIDRs(t *testing.T) {
 func TestMustEnv(t *testing.T) {
 	t.Run("set returns the value", func(t *testing.T) {
 		t.Setenv("GMC_TEST_MUST_ENV", "some-value")
-		got, err := mustEnv("GMC_TEST_MUST_ENV")
+		got, err := mustEnv(os.Getenv, "GMC_TEST_MUST_ENV")
 		if err != nil {
 			t.Fatalf("mustEnv() returned error: %v", err)
 		}
@@ -103,7 +104,7 @@ func TestMustEnv(t *testing.T) {
 		// os.Unsetenv is not available pre-1.17 semantics, but Setenv("") still
 		// leaves it "set but empty", which mustEnv treats identically to unset).
 		t.Setenv("GMC_TEST_MUST_ENV_UNSET", "")
-		got, err := mustEnv("GMC_TEST_MUST_ENV_UNSET")
+		got, err := mustEnv(os.Getenv, "GMC_TEST_MUST_ENV_UNSET")
 		if err == nil {
 			t.Errorf("mustEnv() = %q, nil; want error", got)
 		}
