@@ -101,7 +101,7 @@ On retirement, **move the row to [flake-watch-retired.md](flake-watch-retired.md
 
 `docs/STATUS.md` keeps a plan-level **Progress** table above the Queue — one row per plan doc. Update it only when a plan's overall status changes (⚠️ → ✅, a new plan lands, a plan retires); most STATUS.md commits touch only the Queue. If completing a Queue row closes the last open item under a Progress row, update both in the same commit.
 
-When you remove a Queue row for a **shipped user-facing capability**, also check whether it graduates a bullet on the website [roadmap.md](../roadmap.md) — an "In progress / near-term" item moving to "Available now (1.0)" — and state its true maturity (GA vs. alpha) so the roadmap doesn't overclaim. The roadmap is hand-maintained; nothing else catches the drift.
+When you remove a Queue row for a **shipped user-facing capability**, also check whether it graduates a bullet on the website [roadmap.md](../roadmap.md) — an "In progress / near-term" item moving to "Available now (1.0)" — and state its true maturity (GA vs. alpha) so the roadmap doesn't overclaim. `make roadmap-check` (in `make check`) catches the drift for you: each forward-looking roadmap bullet carries an invisible `<!-- q:QN -->` annotation, so deleting the row here fails the gate until the bullet moves. Deleting the row and the annotation without moving the bullet defeats it, which is the one case still on you.
 
 ### `⚠️` means an open *Queue* row remains — deferred residuals don't count
 
