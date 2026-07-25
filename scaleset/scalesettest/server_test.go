@@ -63,10 +63,11 @@ func TestServer_RecordsCallOrder(t *testing.T) {
 		}
 		return -1
 	}
-	if idx("runner-registration") < 0 || idx("create-scaleset") < 0 {
+	const created = "create-scaleset name=s group=7"
+	if idx("runner-registration") < 0 || idx(created) < 0 {
 		t.Fatalf("expected bootstrap + create in call log: %v", calls)
 	}
-	if idx("runner-registration") > idx("create-scaleset") {
+	if idx("runner-registration") > idx(created) {
 		t.Errorf("bootstrap must precede create-scaleset: %v", calls)
 	}
 }

@@ -3,265 +3,56 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
+	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 )
 
-// testAdminJWT is the admin token the fake's runner-registration hop hands out: an
-// unsigned JWT with a far-future exp. The shape matters — the scaleset client parses
-// the admin token's exp to decide when to re-mint it, and treats an unparseable token
-// as already expired, so a fake handing out an opaque string would make the client
-// re-run the whole two-hop bootstrap before every single call and hide whether its
-// caching works at all.
-var testAdminJWT = func() string {
-	enc := func(v string) string { return base64.RawURLEncoding.EncodeToString([]byte(v)) }
-	return enc(`{"alg":"none","typ":"JWT"}`) + "." +
-		enc(fmt.Sprintf(`{"exp":%d}`, time.Now().Add(time.Hour).Unix())) + ".not-a-signature"
-}()
+// installToken is the App installation token the probe's token provider hands the
+// scaleset client, and the one the stub's registration-token hop requires.
+const installToken = "install-token"
 
 // staticTokenProvider satisfies tokenProvider with a fixed token.
 type staticTokenProvider struct{ token string }
 
 func (s staticTokenProvider) Token(context.Context) (string, error) { return s.token, nil }
 
-// scalesetFake is an httptest handler faking the full scale-set endpoint
-// chain: REST registration-token, the RemoteAuth runner-registration hop, and
-// the Actions Service (runnergroups, runnerscalesets CRUD, sessions, the
-// message queue, acquirejobs, generatejitconfig). It records the calls it
-// serves so tests can assert the orchestration order and cleanup.
-type scalesetFake struct {
-	t *testing.T
-
-	mu    sync.Mutex
-	calls []string
-
-	// URL is set after the httptest server starts (self-referential: the
-	// admin connection and queue URL point back at this server).
-	URL string
-
-	// queueStatus controls the long-poll response when the script is
-	// exhausted (default 202).
-	queueStatus int
-	// groupsStatus, when non-zero, is returned by the runnergroups lookup
-	// instead of the happy-path body (exercises the fallback-to-1 branch).
-	groupsStatus int
-	// sessionsStatus, when non-zero, is returned by session create
-	// (exercises the create-session error path).
-	sessionsStatus int
-	// wantGroupID is the runnerGroupId create-scaleset must receive
-	// (default 7, the id the happy-path lookup returns).
-	wantGroupID float64
-	// queueScript is consumed one entry per poll; a nil entry means an empty
-	// (202) response. When exhausted, polls return queueStatus.
-	queueScript []*scaleset.RunnerScaleSetMessage
-	queuePolls  int
-	// staticAcquireStatus, when non-zero, is returned by the _apis/runtime
-	// acquirejobs route — the route the scaleset client always targets. It
-	// models the broker-host backend that 404s there while honouring the
-	// acquireJobUrl delivered on the message (Q264 plan §2a-3).
-	staticAcquireStatus int
-}
-
-func (f *scalesetFake) record(s string) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.calls = append(f.calls, s)
-}
-
-func (f *scalesetFake) recorded() []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]string(nil), f.calls...)
-}
-
-func (f *scalesetFake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path
-	switch {
-	case strings.HasSuffix(path, "/actions/runners/registration-token"):
-		f.record("registration-token " + path)
-		if got := r.Header.Get("Authorization"); got != "Bearer install-token" {
-			f.t.Errorf("registration-token auth = %q, want install token", got)
-		}
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"token":"reg-token","expires_at":"2026-01-01T00:00:00Z"}`))
-
-	case path == "/actions/runner-registration":
-		f.record("runner-registration")
-		if got := r.Header.Get("Authorization"); got != "RemoteAuth reg-token" {
-			f.t.Errorf("runner-registration auth = %q, want RemoteAuth reg-token", got)
-		}
-		body, _ := io.ReadAll(r.Body)
-		if !strings.Contains(string(body), `"runner_event":"register"`) {
-			f.t.Errorf("runner-registration body = %s, want runner_event register", body)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]string{"url": f.URL, "token": testAdminJWT})
-
-	case strings.HasPrefix(path, "/_apis/runtime/runnergroups/"):
-		f.record("runnergroups")
-		f.requireAdmin(r)
-		if f.groupsStatus != 0 {
-			w.WriteHeader(f.groupsStatus)
-			return
-		}
-		_, _ = w.Write([]byte(`{"count":1,"value":[{"id":7,"name":"Default"}]}`))
-
-	case path == "/_apis/runtime/runnerscalesets" && r.Method == http.MethodGet:
-		f.record("get-scaleset name=" + r.URL.Query().Get("name"))
-		f.requireAdmin(r)
-		_, _ = w.Write([]byte(`{"count":1,"value":[{"id":42,"name":"gag-probe-scaleset","runnerGroupId":7}]}`))
-
-	case path == "/_apis/runtime/runnerscalesets" && r.Method == http.MethodPost:
-		f.record("create-scaleset")
-		f.requireAdmin(r)
-		body, _ := io.ReadAll(r.Body)
-		var in map[string]any
-		_ = json.Unmarshal(body, &in)
-		want := f.wantGroupID
-		if want == 0 {
-			want = 7
-		}
-		if in["runnerGroupId"] != want {
-			f.t.Errorf("create scale set runnerGroupId = %v, want %v", in["runnerGroupId"], want)
-		}
-		_, _ = w.Write([]byte(`{"id":42,"name":"gag-probe-scaleset","runnerGroupId":7}`))
-
-	case path == "/_apis/runtime/runnerscalesets/42" && r.Method == http.MethodDelete:
-		f.record("delete-scaleset")
-		f.requireAdmin(r)
-		w.WriteHeader(http.StatusNoContent)
-
-	case path == "/_apis/runtime/runnerscalesets/42/sessions" && r.Method == http.MethodPost:
-		f.record("create-session")
-		f.requireAdmin(r)
-		if f.sessionsStatus != 0 {
-			w.WriteHeader(f.sessionsStatus)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"sessionId":               "11111111-2222-3333-4444-555555555555",
-			"ownerName":               "gag-probe",
-			"messageQueueUrl":         f.URL + "/queue/42/messages?dummy=1",
-			"messageQueueAccessToken": "queue-token",
-			"statistics":              map[string]int{"totalAssignedJobs": 0},
-		})
-
-	case strings.HasPrefix(path, "/_apis/runtime/runnerscalesets/42/sessions/") && r.Method == http.MethodDelete:
-		f.record("delete-session")
-		f.requireAdmin(r)
-		w.WriteHeader(http.StatusNoContent)
-
-	case strings.HasPrefix(path, "/_apis/runtime/runnerscalesets/42/sessions/") && r.Method == http.MethodPatch:
-		f.record("refresh-session")
-		f.requireAdmin(r)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"sessionId":               "11111111-2222-3333-4444-555555555555",
-			"messageQueueUrl":         f.URL + "/queue/42/messages?dummy=1",
-			"messageQueueAccessToken": "queue-token",
-		})
-
-	case path == "/queue/42/messages":
-		f.record("queue-poll cap=" + r.Header.Get("X-ScaleSetMaxCapacity") +
-			" last=" + r.URL.Query().Get("lastMessageId"))
-		if got := r.Header.Get("Authorization"); got != "Bearer queue-token" {
-			f.t.Errorf("queue poll auth = %q, want queue token", got)
-		}
-		var msg *scaleset.RunnerScaleSetMessage
-		f.mu.Lock()
-		if f.queuePolls < len(f.queueScript) {
-			msg = f.queueScript[f.queuePolls]
-		}
-		f.queuePolls++
-		f.mu.Unlock()
-		if msg == nil {
-			status := f.queueStatus
-			if status == 0 {
-				status = http.StatusAccepted
-			}
-			w.Header().Set("X-RateLimit-Remaining", "4999")
-			w.WriteHeader(status)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(msg)
-
-	case path == "/queue/42/acquirejobs":
-		body, _ := io.ReadAll(r.Body)
-		f.record("acquirejobs(queue-base) " + strings.TrimSpace(string(body)))
-		_ = json.NewEncoder(w).Encode(map[string]any{"count": 0, "value": []int64{}})
-
-	case path == "/_apis/runtime/runnerscalesets/42/acquirablejobs":
-		f.record("acquirablejobs")
-		_, _ = w.Write([]byte(`{"count":0,"value":[]}`))
-
-	case path == "/_apis/runtime/runnerscalesets/42/acquirejobs":
-		body, _ := io.ReadAll(r.Body)
-		tokenKind := "other"
-		switch r.Header.Get("Authorization") {
-		case "Bearer queue-token":
-			tokenKind = "queue"
-		case "Bearer " + testAdminJWT:
-			tokenKind = "admin"
-		}
-		f.record("acquirejobs(" + tokenKind + ") " + strings.TrimSpace(string(body)))
-		if f.staticAcquireStatus != 0 {
-			w.WriteHeader(f.staticAcquireStatus)
-			return
-		}
-		var ids []int64
-		_ = json.Unmarshal(body, &ids)
-		// Echo back only ids below the bogus threshold, mimicking the
-		// partial-batch subset response.
-		var won []int64
-		for _, id := range ids {
-			if id < 9999999999 {
-				won = append(won, id)
-			}
-		}
-		if won == nil {
-			won = []int64{}
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"count": len(won), "value": won})
-
-	case path == "/_apis/runtime/runnerscalesets/42/generatejitconfig":
-		f.record("generatejitconfig")
-		f.requireAdmin(r)
-		blob := base64.StdEncoding.EncodeToString([]byte(`{".runner":{},".credentials":{}}`))
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"runner":           map[string]any{"id": 77, "name": "gag-probe-scaleset-runner"},
-			"encodedJITConfig": blob,
-		})
-
-	default:
-		f.t.Errorf("unexpected request: %s %s", r.Method, path)
-		w.WriteHeader(http.StatusNotFound)
-	}
-}
-
-func (f *scalesetFake) requireAdmin(r *http.Request) {
-	if got := r.Header.Get("Authorization"); got != "Bearer "+testAdminJWT {
-		f.t.Errorf("%s auth = %q, want admin JWT", r.URL.Path, got)
-	}
-	if got := r.URL.Query().Get("api-version"); got != "6.0-preview" {
-		f.t.Errorf("%s api-version = %q, want 6.0-preview", r.URL.Path, got)
-	}
-}
-
-func newScalesetProbeForTest(t *testing.T, fake *scalesetFake, cfg scalesetConfig) (*scalesetProbe, *httptest.Server) {
+// newScalesetStub starts the shared scale-set protocol stub (scaleset/scalesettest)
+// configured for the probe: the installation token pinned, so a bootstrap hop
+// presenting the wrong credential fails the run rather than passing unnoticed, and a
+// poll window short enough that the probe's empty-queue polls do not stall a test
+// while still keeping its polling loops off a hot spin.
+func newScalesetStub(t *testing.T) *scalesettest.Server {
 	t.Helper()
-	srv := httptest.NewServer(fake)
+	srv := scalesettest.New()
 	t.Cleanup(srv.Close)
-	fake.URL = srv.URL
+	srv.SetInstallationToken(installToken)
+	srv.SetPollTimeout(50 * time.Millisecond)
+	return srv
+}
+
+// newScalesetProbeForTest builds a probe against the stub with the scenario's
+// defaults filled in and its log output discarded.
+func newScalesetProbeForTest(t *testing.T, srv *scalesettest.Server, cfg scalesetConfig) *scalesetProbe {
+	t.Helper()
+	return newScalesetProbeLogging(t, srv, cfg, io.Discard)
+}
+
+// newScalesetProbeLogging is newScalesetProbeForTest with the probe's log output
+// captured, for the tests that assert on what the probe REPORTS — the probe's
+// findings are log lines, so that is where its evidence has to be checked.
+func newScalesetProbeLogging(t *testing.T, srv *scalesettest.Server, cfg scalesetConfig, w io.Writer) *scalesetProbe {
+	t.Helper()
 	if cfg.ConfigURL == "" {
 		cfg.ConfigURL = "https://github.com/test-org"
 	}
@@ -271,28 +62,22 @@ func newScalesetProbeForTest(t *testing.T, fake *scalesetFake, cfg scalesetConfi
 	if cfg.GroupName == "" {
 		cfg.GroupName = "Default"
 	}
-	return newScalesetProbeAgainst(t, cfg, srv), srv
+	return newScalesetProbeOn(t, cfg, srv.URL, srv.HTTPClient(), w)
 }
 
-// newScalesetProbeAgainst builds a probe whose scaleset client targets srv for
-// both the REST bootstrap and the Actions Service.
-func newScalesetProbeAgainst(t *testing.T, cfg scalesetConfig, srv *httptest.Server) *scalesetProbe {
-	t.Helper()
-	return newScalesetProbeLogging(t, cfg, srv, io.Discard)
-}
-
-// newScalesetProbeLogging is newScalesetProbeAgainst with the probe's log output
-// captured, for the tests that assert on what the probe REPORTS — the probe's
-// findings are log lines, so that is where its evidence has to be checked.
-func newScalesetProbeLogging(t *testing.T, cfg scalesetConfig, srv *httptest.Server, w io.Writer) *scalesetProbe {
+// newScalesetProbeOn builds a probe whose scaleset client targets base for both the
+// REST bootstrap and the Actions Service, over hc, logging to w. It takes cfg
+// verbatim — the bespoke error-path tests below drive it against a hand-written
+// handler rather than the protocol stub.
+func newScalesetProbeOn(t *testing.T, cfg scalesetConfig, base string, hc *http.Client, w io.Writer) *scalesetProbe {
 	t.Helper()
 	p, err := newScalesetProbe(
 		slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		cfg,
-		staticTokenProvider{token: "install-token"},
-		srv.URL,
-		srv.Client(),
-		srv.Client(),
+		staticTokenProvider{token: installToken},
+		base,
+		hc,
+		hc,
 	)
 	if err != nil {
 		t.Fatalf("newScalesetProbe: %v", err)
@@ -300,17 +85,51 @@ func newScalesetProbeLogging(t *testing.T, cfg scalesetConfig, srv *httptest.Ser
 	return p
 }
 
-func TestScalesetProbe_FullFlowAndCleanup(t *testing.T) {
-	// The step-7 basic poll gets a 200 message so the decode branch of
-	// pollQueueOnce is exercised alongside the empty-202 default.
-	statsBody, _ := json.Marshal([]map[string]any{})
-	fake := &scalesetFake{
-		t: t,
-		queueScript: []*scaleset.RunnerScaleSetMessage{
-			{MessageID: 1, MessageType: "RunnerScaleSetJobMessages", Body: string(statsBody)},
-		},
+// requireCalls fails the test for every want the stub's call log does not contain.
+func requireCalls(t *testing.T, srv *scalesettest.Server, want ...string) {
+	t.Helper()
+	calls := srv.Calls()
+	for _, w := range want {
+		if !slices.Contains(calls, w) {
+			t.Errorf("call log missing %q; got:\n%s", w, strings.Join(calls, "\n"))
+		}
 	}
-	p, _ := newScalesetProbeForTest(t, fake, scalesetConfig{})
+}
+
+// callIndex returns the position of the first call equal to want, or -1.
+func callIndex(calls []string, want string) int {
+	return slices.Index(calls, want)
+}
+
+// countCalls returns how many recorded calls start with prefix.
+func countCalls(calls []string, prefix string) int {
+	n := 0
+	for _, c := range calls {
+		if strings.HasPrefix(c, prefix) {
+			n++
+		}
+	}
+	return n
+}
+
+// formatIDs renders a request-id batch the way the stub's call log does, so a test
+// can build the exact recorded call it expects.
+func formatIDs(ids []int64) string {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = strconv.FormatInt(id, 10)
+	}
+	return "[" + strings.Join(parts, " ") + "]"
+}
+
+func TestScalesetProbe_FullFlowAndCleanup(t *testing.T) {
+	srv := newScalesetStub(t)
+	// A job queued against the scale set's label before it registers: the step-7
+	// poll advertises capacity 1, so the backend assigns it and the poll returns a
+	// real message — exercising the decode branch of pollQueueOnce alongside the
+	// empty-202 default the other tests take.
+	srv.PrequeueJobs(1)
+	p := newScalesetProbeForTest(t, srv, scalesetConfig{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -318,86 +137,74 @@ func TestScalesetProbe_FullFlowAndCleanup(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	got := strings.Join(fake.recorded(), "\n")
-	for _, want := range []string{
+	requireCalls(t, srv,
 		"registration-token /orgs/test-org/actions/runners/registration-token",
 		"runner-registration",
-		"runnergroups",
-		"create-scaleset",
-		"create-session",
-		"queue-poll cap=1 last=0",
-		"acquirejobs(queue) []",
-		"acquirejobs(queue) [9999999999]",
-		"acquirejobs(admin) [9999999999]",
-		"acquirablejobs",
-		"generatejitconfig",
-		"delete-session",
-		"delete-scaleset",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("call sequence missing %q; got:\n%s", want, got)
-		}
-	}
+		"runnergroups name=Default",
+		"create-scaleset name=gag-probe-scaleset group=7",
+		"create-session id=1",
+		"poll id=1 cap=1 last=0",
+		// The acquire matrix: the client's own construction on an empty batch and
+		// on an id never offered, the same route under the admin JWT, ARC's
+		// read-only listing, and the queue-host route family.
+		"acquirejobs id=1 auth=queue ids=[]",
+		"acquirejobs id=1 auth=queue ids=[9999999999]",
+		"acquirejobs id=1 auth=admin ids=[9999999999]",
+		"acquirablejobs id=1",
+		"acquirejobs-queuehost id=1 auth=queue ids=[9999999999]",
+		"generatejitconfig id=1",
+		"delete-session id=1",
+		"delete-scaleset id=1",
+	)
 	// Cleanup ordering: session deleted before the scale set.
-	if si, ci := strings.Index(got, "delete-session"), strings.Index(got, "delete-scaleset"); si > ci {
-		t.Errorf("session must be deleted before the scale set; got:\n%s", got)
+	calls := srv.Calls()
+	if si, ci := callIndex(calls, "delete-session id=1"), callIndex(calls, "delete-scaleset id=1"); si > ci {
+		t.Errorf("session must be deleted before the scale set; got:\n%s", strings.Join(calls, "\n"))
 	}
 }
 
 func TestScalesetProbe_RepoScopedRegistrationToken(t *testing.T) {
-	fake := &scalesetFake{t: t}
-	p, _ := newScalesetProbeForTest(t, fake, scalesetConfig{ConfigURL: "https://github.com/test-org/test-repo"})
+	srv := newScalesetStub(t)
+	p := newScalesetProbeForTest(t, srv, scalesetConfig{ConfigURL: "https://github.com/test-org/test-repo"})
 
 	if err := p.run(context.Background()); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	got := strings.Join(fake.recorded(), "\n")
-	if !strings.Contains(got, "registration-token /repos/test-org/test-repo/actions/runners/registration-token") {
-		t.Errorf("expected repo-scoped registration-token path; got:\n%s", got)
-	}
+	requireCalls(t, srv, "registration-token /repos/test-org/test-repo/actions/runners/registration-token")
 }
 
 func TestScalesetProbe_JobTestAcquiresAndSeesAssigned(t *testing.T) {
-	availableBody, _ := json.Marshal([]map[string]any{
-		{"messageType": "JobAvailable", "runnerRequestId": 1234},
-	})
-	assignedBody, _ := json.Marshal([]map[string]any{
-		{"messageType": "JobAssigned", "runnerRequestId": 1234},
-	})
-	fake := &scalesetFake{
-		t: t,
-		queueScript: []*scaleset.RunnerScaleSetMessage{
-			nil, // step-7 basic poll sees an empty queue
-			{MessageID: 1, MessageType: "RunnerScaleSetJobMessages", Body: string(availableBody)},
-			{MessageID: 2, MessageType: "RunnerScaleSetJobMessages", Body: string(assignedBody)},
-		},
-	}
-	p, _ := newScalesetProbeForTest(t, fake, scalesetConfig{JobTest: true})
+	srv := newScalesetStub(t)
+	// The GHES path: a queued job is offered as JobAvailable and must be claimed
+	// with acquirejobs before a JobAssigned follows.
+	srv.EnableGHESAcquireFlow()
+	ids := srv.PrequeueJobs(1)
+	p := newScalesetProbeForTest(t, srv, scalesetConfig{JobTest: true})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := p.run(ctx); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	got := strings.Join(fake.recorded(), "\n")
-	if !strings.Contains(got, "acquirejobs(queue) [1234]") {
-		t.Errorf("job test did not acquire the offered id; got:\n%s", got)
-	}
-	if !strings.Contains(got, "queue-poll cap=1 last=1") {
-		t.Errorf("job test did not advance lastMessageId after the first message; got:\n%s", got)
-	}
+	requireCalls(t, srv,
+		// The offered id was claimed through the client's own construction …
+		"acquirejobs id=1 auth=queue ids="+formatIDs(ids),
+		// … and the cursor advanced past the JobAvailable before the JobAssigned
+		// that followed it could be read.
+		"poll id=1 cap=1 last=1",
+	)
 }
 
 func TestScalesetProbe_RegistrationTokenErrorSurfaces(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(`{"message":"Resource not accessible by integration"}`))
 	}))
 	defer srv.Close()
 
-	p := newScalesetProbeAgainst(t, scalesetConfig{
+	p := newScalesetProbeOn(t, scalesetConfig{
 		ConfigURL: "https://github.com/test-org", ScaleSetName: "x",
-	}, srv)
+	}, srv.URL, srv.Client(), io.Discard)
 	err := p.run(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "registration token") {
 		t.Fatalf("want registration token error, got %v", err)
@@ -414,7 +221,8 @@ func TestScalesetProbe_BadConfigURLPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := newScalesetProbeAgainst(t, scalesetConfig{ConfigURL: "https://github.com/a/b/c"}, srv)
+	p := newScalesetProbeOn(t, scalesetConfig{ConfigURL: "https://github.com/a/b/c"},
+		srv.URL, srv.Client(), io.Discard)
 	err := p.run(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "org or owner/repo") {
 		t.Fatalf("want org/repo path error, got %v", err)
@@ -422,11 +230,7 @@ func TestScalesetProbe_BadConfigURLPath(t *testing.T) {
 }
 
 func TestRunScalesetProbe_EntryPoint(t *testing.T) {
-	fake := &scalesetFake{t: t}
-	srv := httptest.NewServer(fake)
-	defer srv.Close()
-	fake.URL = srv.URL
-
+	srv := newScalesetStub(t)
 	cfg := scalesetConfig{
 		ConfigURL:    "https://github.com/test-org",
 		ScaleSetName: "gag-probe-scaleset",
@@ -434,13 +238,10 @@ func TestRunScalesetProbe_EntryPoint(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := runScalesetProbe(ctx, logger, cfg, staticTokenProvider{token: "install-token"}, srv.URL); err != nil {
+	if err := runScalesetProbe(ctx, logger, cfg, staticTokenProvider{token: installToken}, srv.URL); err != nil {
 		t.Fatalf("runScalesetProbe: %v", err)
 	}
-	got := strings.Join(fake.recorded(), "\n")
-	if !strings.Contains(got, "delete-scaleset") {
-		t.Errorf("entry point did not run to cleanup; got:\n%s", got)
-	}
+	requireCalls(t, srv, "delete-scaleset id=1")
 }
 
 func TestScalesetProbe_AdminConnectionRejected(t *testing.T) {
@@ -455,9 +256,9 @@ func TestScalesetProbe_AdminConnectionRejected(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := newScalesetProbeAgainst(t, scalesetConfig{
+	p := newScalesetProbeOn(t, scalesetConfig{
 		ConfigURL: "https://github.com/test-org", ScaleSetName: "x",
-	}, srv)
+	}, srv.URL, srv.Client(), io.Discard)
 	err := p.run(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "runner-registration") {
 		t.Fatalf("want runner-registration error, got %v", err)
@@ -475,9 +276,9 @@ func TestScalesetProbe_AdminConnectionMissingFields(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := newScalesetProbeAgainst(t, scalesetConfig{
+	p := newScalesetProbeOn(t, scalesetConfig{
 		ConfigURL: "https://github.com/test-org", ScaleSetName: "x",
-	}, srv)
+	}, srv.URL, srv.Client(), io.Discard)
 	err := p.run(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "missing url or token") {
 		t.Fatalf("want missing url/token error, got %v", err)
@@ -485,109 +286,94 @@ func TestScalesetProbe_AdminConnectionMissingFields(t *testing.T) {
 }
 
 func TestScalesetProbe_RunnerGroupFallbackToDefault(t *testing.T) {
-	fake := &scalesetFake{t: t, groupsStatus: http.StatusInternalServerError, wantGroupID: 1}
-	p, _ := newScalesetProbeForTest(t, fake, scalesetConfig{})
+	srv := newScalesetStub(t)
+	srv.FailRunnerGroups(true)
+	p := newScalesetProbeForTest(t, srv, scalesetConfig{})
 
 	if err := p.run(context.Background()); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	got := strings.Join(fake.recorded(), "\n")
-	if !strings.Contains(got, "create-scaleset") {
-		t.Errorf("scale set not created after group fallback; got:\n%s", got)
-	}
+	// The lookup failed, so the scale set must have been created against GitHub's
+	// default group id — not against the id the lookup would have returned (7).
+	requireCalls(t, srv, "create-scaleset name=gag-probe-scaleset group=1")
 }
 
 func TestScalesetProbe_SessionCreateFailureStillDeletesScaleSet(t *testing.T) {
-	fake := &scalesetFake{t: t, sessionsStatus: http.StatusForbidden}
-	p, _ := newScalesetProbeForTest(t, fake, scalesetConfig{})
+	srv := newScalesetStub(t)
+	srv.FailSessionCreate(true)
+	p := newScalesetProbeForTest(t, srv, scalesetConfig{})
 
 	err := p.run(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "create session") {
 		t.Fatalf("want create session error, got %v", err)
 	}
-	got := strings.Join(fake.recorded(), "\n")
-	if !strings.Contains(got, "delete-scaleset") {
-		t.Errorf("scale set must be deleted on the error path; got:\n%s", got)
-	}
-	if strings.Contains(got, "delete-session") {
-		t.Errorf("no session existed; delete-session must not fire; got:\n%s", got)
+	requireCalls(t, srv, "delete-scaleset id=1")
+	if n := countCalls(srv.Calls(), "delete-session"); n != 0 {
+		t.Errorf("no session existed; delete-session must not fire; got:\n%s",
+			strings.Join(srv.Calls(), "\n"))
 	}
 }
 
 func TestScalesetProbe_JobTestTimesOutOnEmptyQueue(t *testing.T) {
-	fake := &scalesetFake{t: t} // queue always 202
-	p, _ := newScalesetProbeForTest(t, fake, scalesetConfig{JobTest: true})
+	srv := newScalesetStub(t) // no jobs queued: every poll answers 202
+	p := newScalesetProbeForTest(t, srv, scalesetConfig{JobTest: true})
 	p.jobTestTimeout = 300 * time.Millisecond
 
 	if err := p.run(context.Background()); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	got := strings.Join(fake.recorded(), "\n")
-	if !strings.Contains(got, "delete-scaleset") {
-		t.Errorf("timeout path must still clean up; got:\n%s", got)
-	}
-	// The empty-queue polls must never have acquired anything beyond the two
-	// shape probes.
-	if strings.Contains(got, "acquirejobs(queue) [1234]") {
-		t.Errorf("nothing should be acquired on an empty queue; got:\n%s", got)
+	requireCalls(t, srv, "delete-scaleset id=1")
+	// The empty-queue polls must never have acquired anything beyond the two shape
+	// probes, which claim an empty batch and an id that was never offered.
+	for _, c := range srv.Calls() {
+		if !strings.HasPrefix(c, "acquirejobs") {
+			continue
+		}
+		if !strings.HasSuffix(c, "ids=[]") && !strings.HasSuffix(c, "ids=[9999999999]") {
+			t.Errorf("nothing should be acquired on an empty queue; got %q", c)
+		}
 	}
 }
 
 func TestScalesetProbe_JobTestSkipsNonAvailableEntries(t *testing.T) {
-	startedBody, _ := json.Marshal([]map[string]any{
-		{"messageType": "JobStarted", "runnerRequestId": 55},
-	})
-	assignedBody, _ := json.Marshal([]map[string]any{
-		{"messageType": "JobAssigned", "runnerRequestId": 55},
-	})
-	fake := &scalesetFake{
-		t: t,
-		queueScript: []*scaleset.RunnerScaleSetMessage{
-			nil, // step-7 basic poll
-			{MessageID: 1, MessageType: "RunnerScaleSetJobMessages", Body: string(startedBody)},
-			{MessageID: 2, MessageType: "RunnerScaleSetJobMessages", Body: "not-json"},
-			{MessageID: 3, MessageType: "RunnerScaleSetJobMessages", Body: string(assignedBody)},
-		},
-	}
-	p, _ := newScalesetProbeForTest(t, fake, scalesetConfig{JobTest: true})
+	srv := newScalesetStub(t)
+	// Two messages the job test has nothing to do with, ahead of the assignment it
+	// is waiting for: a lifecycle message carrying no acquirable id, and a body it
+	// cannot decode at all. Both must be skipped without wedging the cursor.
+	srv.SeedMessage([]scaleset.JobMessage{{
+		MessageType:     scaleset.MessageTypeJobStarted,
+		RunnerRequestID: 55,
+		JobID:           "job-55",
+	}})
+	srv.SeedRawMessage("not-json")
+	srv.PrequeueJobs(1)
+	p := newScalesetProbeForTest(t, srv, scalesetConfig{JobTest: true})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := p.run(ctx); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	got := strings.Join(fake.recorded(), "\n")
-	// JobStarted carries no acquirable id and the bad body is skipped; only
-	// the two shape probes may acquire.
-	if strings.Contains(got, "acquirejobs(queue) [55]") {
-		t.Errorf("JobStarted entry must not be acquired; got:\n%s", got)
-	}
-	if !strings.Contains(got, "queue-poll cap=1 last=1") ||
-		!strings.Contains(got, "queue-poll cap=1 last=2") {
-		t.Errorf("lastMessageId must advance across skipped messages; got:\n%s", got)
+	// The cursor advanced past both skipped messages to reach the JobAssigned.
+	requireCalls(t, srv, "poll id=1 cap=1 last=1", "poll id=1 cap=1 last=2")
+	// The JobStarted entry carries no acquirable id, so it must never be claimed.
+	for _, c := range srv.Calls() {
+		if strings.HasPrefix(c, "acquirejobs") && strings.Contains(c, "ids=[55]") {
+			t.Errorf("JobStarted entry must not be acquired; got %q", c)
+		}
 	}
 }
 
 func TestScalesetProbe_CapacityTestSequence(t *testing.T) {
-	assigned1, _ := json.Marshal([]map[string]any{
-		{"messageType": "JobAssigned", "runnerRequestId": 0, "jobId": "aaa"},
-	})
-	assigned2, _ := json.Marshal([]map[string]any{
-		{"messageType": "JobAssigned", "runnerRequestId": 0, "jobId": "bbb"},
-	})
-	fake := &scalesetFake{
-		t: t,
-		queueScript: []*scaleset.RunnerScaleSetMessage{
-			nil, // capacity-0 poll: jobs held
-			{MessageID: 1, MessageType: "RunnerScaleSetJobMessages", Body: string(assigned1)},
-			{MessageID: 2, MessageType: "RunnerScaleSetJobMessages", Body: string(assigned2)},
-			{MessageID: 1, MessageType: "RunnerScaleSetJobMessages", Body: string(assigned1)}, // replay
-		},
-	}
+	srv := newScalesetStub(t)
+	// Two jobs queued against the label: at capacity 0 neither may be assigned, and
+	// each widening of the gate releases exactly one more.
+	srv.PrequeueJobs(2)
+
 	dir := t.TempDir()
 	jit1 := dir + "/jit-1.b64"
 	jit2 := dir + "/jit-2.b64"
-	p, _ := newScalesetProbeForTest(t, fake, scalesetConfig{
+	p := newScalesetProbeForTest(t, srv, scalesetConfig{
 		CapacityTest:   true,
 		JITConfigFiles: []string{jit1, jit2},
 		HoldSeconds:    1,
@@ -599,27 +385,23 @@ func TestScalesetProbe_CapacityTestSequence(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	got := strings.Join(fake.recorded(), "\n")
-	for _, want := range []string{
-		"queue-poll cap=0 last=0", // phase 1: capacity 0
-		"queue-poll cap=1 last=0", // phase 2: capacity 1 (cursor unchanged by 202)
-		"queue-poll cap=2 last=1", // phase 3: capacity 2, cursor advanced
-		"refresh-session",         // phase 4: PATCH
-		"queue-poll cap=2 last=0", // phase 5: replay poll on fresh session
-		"generatejitconfig",       // JIT mints
-		"delete-scaleset",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("call sequence missing %q; got:\n%s", want, got)
-		}
+	requireCalls(t, srv,
+		"poll id=1 cap=0 last=0", // phase 1: capacity 0 — nothing assignable
+		"poll id=1 cap=1 last=0", // phase 2: capacity 1 (cursor unchanged by the 202)
+		"poll id=1 cap=2 last=1", // phase 3: capacity 2, cursor advanced
+		"refresh-session id=1",   // phase 4: PATCH
+		"poll id=1 cap=2 last=0", // phase 5: replay poll on the fresh session
+		"generatejitconfig id=1", // JIT mints
+		"delete-scaleset id=1",
+	)
+	calls := srv.Calls()
+	// Two session creates (initial + replay recreate) and two deletes (replay test
+	// + deferred cleanup of the recreated session).
+	if n := countCalls(calls, "create-session"); n != 2 {
+		t.Errorf("create-session count = %d, want 2; got:\n%s", n, strings.Join(calls, "\n"))
 	}
-	// Two session creates (initial + replay recreate) and two deletes (replay
-	// test + deferred cleanup of the recreated session).
-	if n := strings.Count(got, "create-session"); n != 2 {
-		t.Errorf("create-session count = %d, want 2; got:\n%s", n, got)
-	}
-	if n := strings.Count(got, "delete-session"); n != 2 {
-		t.Errorf("delete-session count = %d, want 2; got:\n%s", n, got)
+	if n := countCalls(calls, "delete-session"); n != 2 {
+		t.Errorf("delete-session count = %d, want 2; got:\n%s", n, strings.Join(calls, "\n"))
 	}
 	// The JIT blobs must land in the files, 0600.
 	for _, f := range []string{jit1, jit2} {
@@ -638,19 +420,18 @@ func TestScalesetProbe_CapacityTestSequence(t *testing.T) {
 }
 
 func TestScalesetProbe_CleanupMode(t *testing.T) {
-	fake := &scalesetFake{t: t}
-	p, _ := newScalesetProbeForTest(t, fake, scalesetConfig{Cleanup: true})
+	srv := newScalesetStub(t)
+	// A scale set an interrupted run leaked — the state cleanup mode exists to find.
+	srv.AddScaleSet("gag-probe-scaleset", 7)
+	p := newScalesetProbeForTest(t, srv, scalesetConfig{Cleanup: true})
 
 	if err := p.run(context.Background()); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	got := strings.Join(fake.recorded(), "\n")
-	if !strings.Contains(got, "get-scaleset name=gag-probe-scaleset") ||
-		!strings.Contains(got, "delete-scaleset") {
-		t.Errorf("cleanup mode must look up by name and delete; got:\n%s", got)
-	}
-	if strings.Contains(got, "create-scaleset") || strings.Contains(got, "create-session") {
-		t.Errorf("cleanup mode must not create anything; got:\n%s", got)
+	requireCalls(t, srv, "get-scaleset name=gag-probe-scaleset", "delete-scaleset id=1")
+	calls := srv.Calls()
+	if countCalls(calls, "create-scaleset") != 0 || countCalls(calls, "create-session") != 0 {
+		t.Errorf("cleanup mode must not create anything; got:\n%s", strings.Join(calls, "\n"))
 	}
 }
 
@@ -760,17 +541,11 @@ func TestParseScalesetConfig_Errors(t *testing.T) {
 // (nil, nil), so without the observer hook the probe would have nothing to say about
 // the long-poll's status, latency, or rate-limit headers.
 func TestScalesetProbe_ReportsRawWireTheClientHides(t *testing.T) {
-	fake := &scalesetFake{t: t} // every poll answers 202
-	srv := httptest.NewServer(fake)
-	defer srv.Close()
-	fake.URL = srv.URL
+	srv := newScalesetStub(t) // no jobs queued: every poll answers 202
+	srv.SetRateLimitRemaining(4999)
 
 	var logs bytes.Buffer
-	p := newScalesetProbeLogging(t, scalesetConfig{
-		ConfigURL:    "https://github.com/test-org",
-		ScaleSetName: "gag-probe-scaleset",
-		GroupName:    "Default",
-	}, srv, &logs)
+	p := newScalesetProbeLogging(t, srv, scalesetConfig{}, &logs)
 
 	if err := p.run(context.Background()); err != nil {
 		t.Fatalf("run: %v", err)
@@ -789,7 +564,7 @@ func TestScalesetProbe_ReportsRawWireTheClientHides(t *testing.T) {
 		}
 	}
 	// The queue URL's query carries a signature — it must never reach the log.
-	if strings.Contains(got, "path=/queue/42/messages?") {
+	if strings.Contains(got, "path=/queue/1/message?") {
 		t.Errorf("wire log leaked the queue query string:\n%s", got)
 	}
 }
@@ -800,36 +575,15 @@ func TestScalesetProbe_ReportsRawWireTheClientHides(t *testing.T) {
 // library-vs-wire divergence and the probe must say so — trying the client's own
 // construction FIRST is what makes the finding meaningful (Q362).
 func TestScalesetProbe_JobTestReportsAcquireRouteDivergence(t *testing.T) {
-	srv := httptest.NewServer(nil)
-	availableBody, _ := json.Marshal([]map[string]any{
-		{"messageType": "JobAvailable", "runnerRequestId": 1234,
-			"acquireJobUrl": srv.URL + "/queue/42/acquirejobs"},
-	})
-	assignedBody, _ := json.Marshal([]map[string]any{
-		{"messageType": "JobAssigned", "runnerRequestId": 1234},
-	})
-	fake := &scalesetFake{
-		t: t,
-		// The static _apis/runtime acquire route 404s, as the broker-host
-		// tenant was observed to do live.
-		staticAcquireStatus: http.StatusNotFound,
-		queueScript: []*scaleset.RunnerScaleSetMessage{
-			nil, // step-7 basic poll
-			{MessageID: 1, MessageType: "RunnerScaleSetJobMessages", Body: string(availableBody)},
-			{MessageID: 2, MessageType: "RunnerScaleSetJobMessages", Body: string(assignedBody)},
-		},
-	}
-	srv.Config.Handler = fake
-	defer srv.Close()
-	fake.URL = srv.URL
+	srv := newScalesetStub(t)
+	srv.EnableGHESAcquireFlow()
+	// The static _apis/runtime acquire route 404s, as the broker-host tenant was
+	// observed to do live, while the delivered acquireJobUrl still claims.
+	srv.FailStaticAcquireRoute(true)
+	ids := srv.PrequeueJobs(1)
 
 	var logs bytes.Buffer
-	p := newScalesetProbeLogging(t, scalesetConfig{
-		ConfigURL:    "https://github.com/test-org",
-		ScaleSetName: "gag-probe-scaleset",
-		GroupName:    "Default",
-		JobTest:      true,
-	}, srv, &logs)
+	p := newScalesetProbeLogging(t, srv, scalesetConfig{JobTest: true}, &logs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -837,16 +591,16 @@ func TestScalesetProbe_JobTestReportsAcquireRouteDivergence(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 
-	got := logs.String()
-	if !strings.Contains(got, "DIVERGENCE") {
-		t.Errorf("probe did not report the acquire-route divergence; log was:\n%s", got)
+	if !strings.Contains(logs.String(), "DIVERGENCE") {
+		t.Errorf("probe did not report the acquire-route divergence; log was:\n%s", logs.String())
 	}
-	calls := strings.Join(fake.recorded(), "\n")
 	// The client's construction must have been attempted before the fallback.
-	ci := strings.Index(calls, "acquirejobs(queue) [1234]")
-	fi := strings.Index(calls, "acquirejobs(queue-base) [1234]")
+	calls := srv.Calls()
+	ci := callIndex(calls, "acquirejobs id=1 auth=queue ids="+formatIDs(ids))
+	fi := callIndex(calls, "acquirejobs-queuehost id=1 auth=queue ids="+formatIDs(ids))
 	if ci < 0 || fi < 0 || ci > fi {
-		t.Errorf("client construction must be tried before the delivered URL; calls:\n%s", calls)
+		t.Errorf("client construction must be tried before the delivered URL; calls:\n%s",
+			strings.Join(calls, "\n"))
 	}
 }
 
@@ -854,33 +608,12 @@ func TestScalesetProbe_JobTestReportsAcquireRouteDivergence(t *testing.T) {
 // on a backend that honours the client's route, the fallback must not fire and no
 // divergence must be claimed.
 func TestScalesetProbe_NoDivergenceReportedWhenTheClientRouteWorks(t *testing.T) {
-	srv := httptest.NewServer(nil)
-	availableBody, _ := json.Marshal([]map[string]any{
-		{"messageType": "JobAvailable", "runnerRequestId": 1234,
-			"acquireJobUrl": srv.URL + "/queue/42/acquirejobs"},
-	})
-	assignedBody, _ := json.Marshal([]map[string]any{
-		{"messageType": "JobAssigned", "runnerRequestId": 1234},
-	})
-	fake := &scalesetFake{
-		t: t,
-		queueScript: []*scaleset.RunnerScaleSetMessage{
-			nil,
-			{MessageID: 1, MessageType: "RunnerScaleSetJobMessages", Body: string(availableBody)},
-			{MessageID: 2, MessageType: "RunnerScaleSetJobMessages", Body: string(assignedBody)},
-		},
-	}
-	srv.Config.Handler = fake
-	defer srv.Close()
-	fake.URL = srv.URL
+	srv := newScalesetStub(t)
+	srv.EnableGHESAcquireFlow()
+	ids := srv.PrequeueJobs(1)
 
 	var logs bytes.Buffer
-	p := newScalesetProbeLogging(t, scalesetConfig{
-		ConfigURL:    "https://github.com/test-org",
-		ScaleSetName: "gag-probe-scaleset",
-		GroupName:    "Default",
-		JobTest:      true,
-	}, srv, &logs)
+	p := newScalesetProbeLogging(t, srv, scalesetConfig{JobTest: true}, &logs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -892,6 +625,12 @@ func TestScalesetProbe_NoDivergenceReportedWhenTheClientRouteWorks(t *testing.T)
 	}
 	if !strings.Contains(logs.String(), "acquirejobs (client construction)") {
 		t.Errorf("probe must report the client-construction acquire result:\n%s", logs.String())
+	}
+	// The offered job was claimed on the client's route, so the delivered-URL
+	// fallback must never have been reached.
+	if n := countCalls(srv.Calls(), "acquirejobs-queuehost id=1 auth=queue ids="+formatIDs(ids)); n != 0 {
+		t.Errorf("the delivered-URL fallback must not fire; calls:\n%s",
+			strings.Join(srv.Calls(), "\n"))
 	}
 }
 
