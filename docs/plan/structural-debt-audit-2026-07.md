@@ -16,7 +16,7 @@ Classification follows [technical-debt.md](../development/technical-debt.md).
 > out to [Q394](../STATUS.md#Q394)), F8's god-function decomposition as Q367,
 > F10's script-sprawl cleanup as Q370, the §Prevention gates (nolintlint + a
 > ratcheted funlen) as Q371, and F6's foundation move as Q365 (which left the
-> interleaved v1/v2 condition collectors to [Q398](../STATUS.md#Q398)). The one
+> interleaved v1/v2 condition collectors to [Q403](../STATUS.md#Q403)). The one
 > remaining finding is tracked by [Q369](../STATUS.md#Q369); [Q372](../STATUS.md#Q372)
 > (Deferred) carries the re-run trigger.
 >

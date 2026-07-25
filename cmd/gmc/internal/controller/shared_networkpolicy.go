@@ -147,6 +147,13 @@ func dnsEgressRule() networkingv1.NetworkPolicyEgressRule {
 			// V2 / Cilium Local Redirect), policy is enforced against that pod's
 			// identity. It carries k8s-app=node-local-dns, not kube-dns, so the peer
 			// above does not match it. AND of namespace + pod selector, same as kube-dns.
+			// NOTE: this contradicts Google's NodeLocal DNSCache docs, which name
+			// Dataplane V2 as needing NO extra NetworkPolicy rules. Their exemption
+			// covers the hostNetwork/link-local mode (the ipBlock peer below); on DPv2
+			// the cache is NOT hostNetwork, so it has exactly the pod identity Cilium
+			// enforces against. Verified live on GKE DPv2 (Q229; symptom + repro in
+			// docs/operations/troubleshooting.md "DNS Times Out Under the Egress
+			// NetworkPolicy").
 			{
 				NamespaceSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{dnsNamespaceLabel: dnsNamespaceValue},

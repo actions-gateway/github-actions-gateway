@@ -185,13 +185,14 @@ elegance, it is the absence of anything better.
 ### Upstream state of the art
 
 This is a known, accepted, unsolved gap — not an oversight, and not something to
-re-derive. Two upstream issues track it; check them before assuming anything
-here has changed:
+re-derive. Three upstream issues surround it; check them before assuming
+anything here has changed:
 
 | Issue | What it covers | State |
 |---|---|---|
 | [kubernetes#106476](https://github.com/kubernetes/kubernetes/issues/106476) | The race itself: SIGTERM is delivered before load balancers and ingress controllers have processed the endpoint removal. The recurring ask is a **"termination gate"** — readiness gates, but for deletion | Open since 2021, `triage/accepted`, `lifecycle/frozen` |
 | [kubernetes#116965](https://github.com/kubernetes/kubernetes/issues/116965) | Under **graceful node shutdown** the pod reportedly never enters `Terminating` and is not removed from EndpointSlices until it reaches `Completed`/`Failed` | Open since 2023, `triage/accepted`, `priority/important-longterm` |
+| [kubernetes#124648](https://github.com/kubernetes/kubernetes/issues/124648) | *Related, narrower scope than often cited:* "Readiness probe stops too early at **eviction**" — the probe worker is halted when eviction sets the pod phase to `Failed` before containers stop. The reporter states the probe works during termination on ordinary delete. It does **not** cover the delete-path behaviour measured below (probe runs and fails, `Ready` never flips) | Open since 2024, `triage/accepted`, `priority/backlog` |
 
 No KEP exists for the termination gate. The blocking design question, per SIG
 Network maintainers on 106476, is *"who do we wait for?"* — a pod may sit behind
@@ -202,17 +203,24 @@ infeasible at scale.
 
 ### Measured: on graceful node shutdown, nothing removes the endpoint (Q388)
 
-Both issues above were reproduced on kind, Kubernetes **1.35.0**, with the
-kubelet configured GKE-style (`shutdownGracePeriod: 30s`,
-`shutdownGracePeriodCriticalPods: 15s`) and a two-replica Service whose pods
-fail readiness the instant they get SIGTERM.
+Both termination paths — ordinary delete, and the 116965 graceful-node-shutdown
+case — were measured on kind, Kubernetes **1.35.0**, with the kubelet configured
+GKE-style (`shutdownGracePeriod: 30s`, `shutdownGracePeriodCriticalPods: 15s`)
+and a two-replica Service whose pods fail readiness the instant they get
+SIGTERM.
 
-**124648, ordinary `kubectl delete`.** The readiness probe (1s period, failure
+**Ordinary `kubectl delete`.** The readiness probe (1s period, failure
 threshold 1) began failing at SIGTERM and kept failing. The pod's `Ready`
 condition stayed `True` for the entire 48-second termination and never flipped.
 The endpoint *was* withdrawn immediately, but by the `deletionTimestamp`, not by
-readiness. **A readiness probe that starts failing on SIGTERM is never
-observed.**
+readiness. **The probe runs and fails, but its result never reaches the `Ready`
+condition — endpoint removal is driven by `deletionTimestamp` regardless.**
+
+Note this is *adjacent to but distinct from* 124648, which is scoped to the
+eviction path and whose reporter states the probe works during termination on
+ordinary delete. On this evidence the delete-path behaviour (probe results never
+reflected into `Ready` during termination) appears to be unreported upstream —
+Q401 tracks filing it.
 
 **116965, graceful node shutdown.** With the node powering off:
 
@@ -240,8 +248,9 @@ budget that leaves roughly 5s for the tunnel drain.
 Worth noting the upstream design intent is exactly what the proxy does. A SIG
 Node maintainer on 116965: *"the Kubernetes-portable behavior is to use the
 readiness endpoint to control being in rotation during graceful shutdown."*
-Failing `/readyz` is correct and stays. It simply does not work yet, because of
-124648.
+Failing `/readyz` is correct and stays. It simply does not work yet: as measured
+above (Q388), the probe's failures never reach the `Ready` condition on the
+delete path — and on eviction, 124648 halts the probe worker outright.
 
 !!! note "Reproducing this yourself: kind needs dbus first"
 

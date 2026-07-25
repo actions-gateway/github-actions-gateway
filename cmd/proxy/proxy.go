@@ -391,11 +391,13 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 //	OPEN for a bounded linger, so those stragglers are served rather than refused.
 //
 //	Do NOT read the /readyz failure as what drives endpoint removal. Measured on
-//	kind (Kubernetes 1.35, Q388): a readiness probe that starts failing on
-//	SIGTERM is never observed. The pod's Ready condition stayed True for a full
-//	48s termination while its 1s-period probe failed throughout, which is
-//	kubernetes#124648. Endpoint removal on the ordinary delete path is driven by
-//	the deletionTimestamp instead, and that happens whether or not /readyz fails.
+//	kind (Kubernetes 1.35, Q388): the 1s-period probe failed throughout a full
+//	48s termination, but its result never reached the pod's Ready condition,
+//	which stayed True the whole time. Endpoint removal on the ordinary delete
+//	path is driven by the deletionTimestamp instead, and that happens whether or
+//	not /readyz fails. (kubernetes#124648 is the related but distinct
+//	eviction-path gap — there the probe worker is halted outright; the
+//	delete-path behaviour above is the Q388 measurement, not that issue.)
 //	Failing it stays worthwhile (it is what the upstream design intends, and it
 //	is correct for any consumer that does watch readiness) but it earns no part
 //	of the drain budget, and the linger cannot be justified by it.

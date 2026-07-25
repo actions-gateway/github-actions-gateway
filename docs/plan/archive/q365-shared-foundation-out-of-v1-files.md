@@ -64,7 +64,7 @@ per-object:
 
 `metrics.go` is left alone: its collectors interleave v1 and v2 series inside a
 single `Collect`, so separating them is a redesign, not a move. Filed as
-[Q398](../../STATUS.md#Q398).
+[Q403](../../STATUS.md#Q403).
 
 ### AGC — `cmd/agc/internal/listener`
 
