@@ -8,16 +8,17 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, F4, F5, F7, F8, F9, F10, and the prevention gates shipped.** The F1
+> **Status: ✅ Done — filed 2026-07-20; every finding F1–F10 and the prevention gates shipped.** The F1
 > Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe
 > rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule
 > consolidation as Q364, F5's broker-double consolidation as Q368, F7's
 > CreateOrPatch collapse as Q366 (which spun the owner-reference-policy question
 > out to [Q394](../STATUS.md#Q394)), F8's god-function decomposition as Q367, F9's
-> error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, and the
-> §Prevention gates (nolintlint + a ratcheted funlen) as Q371. The remaining
-> finding is tracked by Queue row [Q365](../STATUS.md#Q365);
-> [Q372](../STATUS.md#Q372) (Deferred) carries the re-run trigger.
+> error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the
+> §Prevention gates (nolintlint + a ratcheted funlen) as Q371, and F6's foundation
+> move as Q365 (which left the interleaved v1/v2 condition collectors to
+> [Q403](../STATUS.md#Q403)). [Q372](../STATUS.md#Q372) (Deferred) carries the
+> re-run trigger.
 >
 > The ID range is not contiguous because concurrent branches allocated IDs while
 > this audit was in flight: Q361 went to a CI-latency item (#722) and Q363 to a
@@ -263,7 +264,7 @@ httptest import (fakegithub's own tests) is correctly ignored. It runs in
 
 ### Medium-high
 
-**F6 — Shared foundation lives in v1-named files; blocks the Q273 sunset.** → [Q365](../STATUS.md#Q365)
+**F6 — Shared foundation lives in v1-named files; blocks the Q273 sunset.** ✅ **Shipped** (Q365)
 
 Most cross-version foundation sits in files named for v1 that v2 imports:
 
@@ -285,6 +286,20 @@ Consequence: **deleting v1 today is a multi-hundred-line refactor, not a `git rm
 Doing the moves *now*, while both versions are live, is mechanical and
 behavior-free, and directly de-risks the already-blocked [Q273](../STATUS.md#Q273).
 This is why the row sorts adjacent to Q273 rather than by its own severity.
+
+**Shipped in Q365.** Re-measured at implementation time (2026-07-24, after Q360,
+Q364 and Q366 reshaped the GMC package), the cross-version foundation moved into
+eight `shared_*.go` files in `cmd/gmc/internal/controller` and the v1-only
+IP-range pass into `ipranges_v1.go`; `cert.go` and `metrics_cert.go` turned out to
+hold the same problem (the PKI primitives and mount layout) and were split the same
+way. The AGC half became a new leaf package, `cmd/agc/internal/runnercore`, holding
+`Metrics`, `EventRecorder`, `ConditionUpdater` and `AdmitFunc`. One correction to
+the list above: `JobHandlerFunc` is **not** version-neutral — its parameters are the
+classic `AcquireJob` response and it returns a `broker.TaskResult` from the classic
+`broker` module — so it stayed in `listener`, where Q264 deletes it wholesale. The
+move was proven behaviour-free by an AST diff of every top-level declaration in both
+packages before and after: byte-identical apart from package qualifiers and the one
+deliberate `reconcileAll` → `refreshV1ProxyNetworkPolicies` extraction.
 
 ### Medium
 

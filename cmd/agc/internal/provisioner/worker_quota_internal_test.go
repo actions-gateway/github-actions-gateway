@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -163,7 +163,7 @@ func TestAdmit_QuotaRungClosesGate(t *testing.T) {
 
 	release, ok, reason := p.AdmitFor(rg)(context.Background())
 	require.False(t, ok, "an exhausted namespace quota must close the admission gate")
-	assert.Equal(t, listener.AdmitReasonQuota, reason)
+	assert.Equal(t, runnercore.AdmitReasonQuota, reason)
 	assert.Nil(t, release)
 	assert.Zero(t, p.admission.reservedCount("ns/g"), "a quota refusal must not consume a ceiling slot")
 

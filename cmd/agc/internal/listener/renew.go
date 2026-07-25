@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 )
 
@@ -46,7 +47,7 @@ func StartRenewLoop(
 	cancelJob context.CancelFunc,
 	client *broker.Client,
 	runServiceURL, planID, jobID, jobToken string,
-	metrics *Metrics,
+	metrics *runnercore.Metrics,
 	namespace string,
 	clk Clock,
 	log *slog.Logger,

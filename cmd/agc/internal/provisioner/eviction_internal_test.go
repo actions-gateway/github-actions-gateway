@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -43,7 +43,7 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	m := &listener.Metrics{
+	m := &runnercore.Metrics{
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "test_q106_eviction_retries_total",
 		}, []string{"namespace", "runner_group"}),

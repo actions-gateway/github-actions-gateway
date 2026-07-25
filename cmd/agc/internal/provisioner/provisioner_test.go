@@ -13,6 +13,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -43,8 +44,8 @@ func errOnly(h listener.JobHandlerFunc) func(ctx context.Context, runServiceURL,
 
 // newTestMetrics builds a Metrics with unregistered counters/histograms safe
 // for per-test use (not added to the global Prometheus registry).
-func newTestMetrics() *listener.Metrics {
-	return &listener.Metrics{
+func newTestMetrics() *runnercore.Metrics {
+	return &runnercore.Metrics{
 		JobDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name: "t_prov_job_duration_seconds",
 		}, []string{"namespace", "runner_group"}),
@@ -90,12 +91,12 @@ func (q *quotaPodCreateClient) Create(ctx context.Context, obj client.Object, op
 	return q.Client.Create(ctx, obj, opts...)
 }
 
-// recordedEvent captures a single listener.EventRecorder.Event call.
+// recordedEvent captures a single runnercore.EventRecorder.Event call.
 type recordedEvent struct {
 	namespace, name, eventtype, reason, action, note string
 }
 
-// fakeEventRecorder implements listener.EventRecorder, capturing events for
+// fakeEventRecorder implements runnercore.EventRecorder, capturing events for
 // assertions. Safe for concurrent use (the eviction path emits from goroutines).
 type fakeEventRecorder struct {
 	mu     sync.Mutex

@@ -3,7 +3,7 @@ package controller
 import (
 	"testing"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -17,8 +17,8 @@ import (
 // newSidecarMetrics builds a Metrics carrying only the reap-blocking-sidecar gauge,
 // unregistered, so the test can read it with testutil without touching the global
 // controller-runtime registry.
-func newSidecarMetrics() *listener.Metrics {
-	return &listener.Metrics{
+func newSidecarMetrics() *runnercore.Metrics {
+	return &runnercore.Metrics{
 		ReapBlockingSidecarTemplates: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "actions_gateway_reap_blocking_sidecar_templates",
 			Help: "test",

@@ -1,6 +1,6 @@
 # NetworkPolicy port matching under kube-proxy Destination NAT (DNAT)
 
-This doc is the canonical writeup of the kube-proxy DNAT vs. NetworkPolicy-port-match trap that the AGC `buildAGCNetworkPolicy` apiserver egress rule has to work around. Cited from [`docs/design/network-architecture.md`](../design/network-architecture.md), [`docs/operations/troubleshooting.md`](../operations/troubleshooting.md), [`kind-iteration.md`](kind-iteration.md), and the code at [`cmd/gmc/internal/controller/builder.go`](../../cmd/gmc/internal/controller/builder.go) (where the rule lists both `443` and `6443`).
+This doc is the canonical writeup of the kube-proxy DNAT vs. NetworkPolicy-port-match trap that the AGC apiserver egress rule has to work around. Cited from [`docs/design/network-architecture.md`](../design/network-architecture.md), [`docs/operations/troubleshooting.md`](../operations/troubleshooting.md), [`kind-iteration.md`](kind-iteration.md), and the code at [`cmd/gmc/internal/controller/shared_networkpolicy.go`](../../cmd/gmc/internal/controller/shared_networkpolicy.go) (`agcAPIServerEgressRule`, where the rule lists both `443` and `6443`).
 
 **Status:** the recommended fix below landed; the AGC NP now lists both ports. The reproduction and analysis are preserved here because (1) the next reader tempted to "tidy up" the duplicate ports needs to find this, and (2) the same post-DNAT pattern recurs for ingress rules and for any Service whose backend port differs from the Service port — the worked example is the fastest way to recognise it.
 
@@ -27,7 +27,7 @@ One debug pod (`alpine:3.20`) labelled with **both** labels:
 app=actions-gateway-controller,actions-gateway/component=workload
 ```
 
-Manifests are not checked in — copy `buildAGCNetworkPolicy` and `buildWorkloadNetworkPolicy` from [`cmd/gmc/internal/controller/builder.go`](../../cmd/gmc/internal/controller/builder.go) into a single YAML, point them at a `repro` namespace, add a stand-in proxy pod so the workload NP's proxy podSelector has a real target.
+Manifests are not checked in — copy `buildAGCNetworkPolicyFrom` ([`shared_networkpolicy.go`](../../cmd/gmc/internal/controller/shared_networkpolicy.go)) and `buildWorkloadNetworkPolicy` ([`builder.go`](../../cmd/gmc/internal/controller/builder.go)) into a single YAML, point them at a `repro` namespace, add a stand-in proxy pod so the workload NP's proxy podSelector has a real target.
 
 ### Observations
 
@@ -132,7 +132,7 @@ The minimal, environment-agnostic change is to ensure the AGC's apiserver
 egress rule matches both the in-Service port (`443`, for production where the
 Service does no port translation) and the kind-style host port (`6443`, for
 kind clusters and any cluster where the apiserver Endpoints listen on
-`6443`). The shipped rule in [`cmd/gmc/internal/controller/builder.go`](../../cmd/gmc/internal/controller/builder.go) `buildAGCNetworkPolicy` does this:
+`6443`). The shipped rule in [`cmd/gmc/internal/controller/shared_networkpolicy.go`](../../cmd/gmc/internal/controller/shared_networkpolicy.go) `agcAPIServerEgressRule` does this:
 
 ```go
 {

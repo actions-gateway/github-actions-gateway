@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -34,8 +34,8 @@ const reaperTestBaselineRecheck = time.Hour
 
 // reaperMetrics builds a Metrics with only the reaper counter, unregistered
 // (not added to the global Prometheus registry) for per-test isolation.
-func reaperMetrics() *listener.Metrics {
-	return &listener.Metrics{
+func reaperMetrics() *runnercore.Metrics {
+	return &runnercore.Metrics{
 		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_reaper_worker_pods_reaped_total",
 		}, []string{"namespace", "runner_group", "reason"}),

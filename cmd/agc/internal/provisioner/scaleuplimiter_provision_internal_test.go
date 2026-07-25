@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,17 +18,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// sharedMetrics returns one process-wide listener.Metrics: NewMetrics registers
+// sharedMetrics returns one process-wide runnercore.Metrics: NewMetrics registers
 // with the global controller-runtime registry, which panics on a duplicate
 // registration, so it may be built only once per test binary. Tests keep their
 // counter series independent by using distinct runner_group label values.
 var (
 	sharedMetricsOnce sync.Once
-	sharedMetricsInst *listener.Metrics
+	sharedMetricsInst *runnercore.Metrics
 )
 
-func sharedMetrics() *listener.Metrics {
-	sharedMetricsOnce.Do(func() { sharedMetricsInst = listener.NewMetrics() })
+func sharedMetrics() *runnercore.Metrics {
+	sharedMetricsOnce.Do(func() { sharedMetricsInst = runnercore.NewMetrics() })
 	return sharedMetricsInst
 }
 

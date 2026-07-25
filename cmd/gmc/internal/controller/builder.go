@@ -3,8 +3,6 @@ package controller
 import (
 	"fmt"
 	"net"
-	"sort"
-	"strings"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
@@ -20,62 +18,19 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
+// v1 ActionsGateway object builders. The version-neutral foundation these sit on —
+// the label vocabulary, the pod/port/security constants, the NetworkPolicy rules,
+// the AGC Deployment assembly and the PKI primitives — lives in the shared_*.go
+// files so removing v1 (Q273) removes this file, not the foundation.
 const (
-	labelManagedBy    = "app.kubernetes.io/managed-by"
-	labelManagerValue = "actions-gateway-gmc"
-
-	// app.kubernetes.io/component values for the objects the GMC creates, and the
-	// app.kubernetes.io/name value for worker-tier objects (the AGC/proxy names are
-	// agcAppName/proxyAppName below). Stamped via the recommendedLabels helpers.
-	componentControllerLabel = "controller"
-	componentProxyLabel      = "proxy"
-	componentRunnerLabel     = "runner"
-	appNameWorker            = "actions-runner"
-
-	// agcContainerName is the AGC control-plane container's name inside the AGC pod.
-	// It is a distinct, shorter identity from agcAppName (the workload/app name), and
-	// anything that addresses the container by name — notably the managed
-	// VerticalPodAutoscaler's containerPolicy (Q360), which silently applies to
-	// nothing if the name does not match — must use this constant.
-	agcContainerName = "agc"
-
-	agcSAName    = agcnames.ControllerName
-	workerSAName = agcnames.WorkerSAName
-	proxyAppName = gmcnames.ProxyName
-	agcAppName   = agcnames.ControllerName
-
-	// agcTenantRoleName is the shipped singleton ClusterRole that defines
-	// the AGC permission set. Per-tenant RoleBindings reference it; the GMC
-	// holds `bind` on this exact name so it never needs `escalate` or to
-	// hold the AGC's full permission set itself.
-	agcTenantRoleName = "agc-tenant-role"
-
-	// agcCredsVolumeName / agcCredsMountPath define how the GitHub App Secret is
-	// projected into the AGC pod. Keys (appId, installationId, privateKey) are
-	// mounted as read-only files; no credential ever appears in an env var.
-	agcCredsVolumeName = "github-app-credentials"          //nolint:gosec // G101: a volume name, not a credential
-	agcCredsMountPath  = "/etc/actions-gateway/github-app" //nolint:gosec // G101: a mount-path constant, not a credential
-
-	// Workload-identity (Q201): the AGC presents a kubelet-projected ServiceAccount
-	// token to Vault Kubernetes auth instead of mounting a GitHub App Secret. The
-	// token is audience-scoped to Vault and read fresh from disk at each Vault login;
-	// it is never a stored Secret. vaultTokenAudience is the projected token's
-	// audience — operators bind their Vault k8s-auth role to it (the MVP fixes it; a
-	// configurable audience is a documented follow-up).
-	vaultTokenVolumeName = "vault-token"
-	vaultTokenMountDir   = "/var/run/secrets/actions-gateway/vault-token" //nolint:gosec // G101: a mount-path constant, not a credential
-	vaultTokenFile       = "token"
-	vaultTokenAudience   = "vault"
-	// vaultTokenExpirationSeconds is the projected token's lifetime. The kubelet
-	// rotates it well before expiry and the vaultsigner re-reads it on each login, so
-	// a short lifetime bounds the blast radius of a leaked token without risking a
-	// stale read.
-	vaultTokenExpirationSeconds int64 = 600
-
+	// v1 provisions one AGC and one proxy per namespace, so its child names are
+	// fixed singletons. v2 derives every name from the CR (see
+	// actionsgateway_v2_builder.go / egressproxy_builder.go).
+	agcSAName        = agcnames.ControllerName
+	workerSAName     = agcnames.WorkerSAName
 	proxyServiceName = gmcnames.ProxyName
 	// proxyServiceMonitorName / agcServiceMonitorName are the per-tenant
 	// Prometheus-Operator ServiceMonitors that scrape the proxy and AGC mTLS
@@ -83,76 +38,6 @@ const (
 	// serverName for its Service.
 	proxyServiceMonitorName = proxyServiceName + "-metrics"
 	agcServiceMonitorName   = agcAppName + "-metrics"
-	proxyPort               = int32(8080)
-	// healthMetricsPort is the plaintext health listener port (/healthz,
-	// /readyz) probed by the kubelet on both the proxy and the AGC pods. It
-	// carries no Prometheus metrics — those moved to the mTLS metricsPort below
-	// so blanket client-cert enforcement on the metrics listener does not break
-	// the certless kubelet probes. The AGC manager pins its health bind address
-	// to this port (healthProbeBindAddress in cmd/agc/main.go).
-	healthMetricsPort = int32(8081)
-
-	// metricsPort is the dedicated mTLS Prometheus-metrics listener port for
-	// both the proxy and the AGC. Each serves /metrics over HTTPS and requires a
-	// client certificate signed by the per-tenant metrics CA (see
-	// metrics_cert.go); the metrics-scrape NetworkPolicy ingress rule targets
-	// this port. The GMC pins the AGC manager's metrics bind address here
-	// (cmd/agc/main.go) so the ingress rule provably matches the live listener.
-	metricsPort = int32(8443)
-
-	// metricsScrapeNamespaceLabel / metricsScrapeNamespaceValue select the
-	// namespace(s) permitted to scrape the proxy and AGC metrics port.
-	// Mirrors the convention used by the GMC's own metrics-allow
-	// NetworkPolicy shipped by the chart
-	// (charts/actions-gateway/templates/networkpolicy.yaml): an operator
-	// labels their Prometheus namespace `metrics: enabled`. Kubelet probe
-	// traffic originates from the node and is exempted from NetworkPolicy
-	// enforcement by every CNI this project targets, so no explicit kubelet
-	// ingress rule is needed — and node IPs are not portably expressible as a
-	// NetworkPolicy peer anyway.
-	metricsScrapeNamespaceLabel = "metrics"
-	metricsScrapeNamespaceValue = "enabled"
-
-	// dnsNamespaceLabel / dnsNamespaceValue and dnsPodLabel / dnsPodValue select
-	// the cluster DNS service (CoreDNS / kube-dns) as the sole permitted DNS
-	// egress peer. The namespace is matched via the well-known immutable
-	// `kubernetes.io/metadata.name` label that every Kubernetes ≥1.21 stamps on
-	// each namespace (so no manual labelling of kube-system is required); the
-	// pods via the conventional `k8s-app: kube-dns` label CoreDNS carries by
-	// default in every distribution this controller targets. See dnsEgressRule
-	// for why egress is confined to this peer (Q105).
-	dnsNamespaceLabel = "kubernetes.io/metadata.name"
-	dnsNamespaceValue = "kube-system"
-	dnsPodLabel       = "k8s-app"
-	dnsPodValue       = "kube-dns"
-
-	// dnsNodeLocalPodValue selects the NodeLocal DNSCache pods (`node-local-dns`),
-	// the third permitted DNS egress peer (Q229). On clusters where the CNI
-	// transparently redirects cluster-DNS traffic to a per-node cache *pod* — GKE
-	// Dataplane V2 (Cilium) drives this via a `RedirectService`/Cilium Local
-	// Redirect that rewrites the kube-dns ClusterIP to the local node-local-dns
-	// pod — the policy is enforced against that redirect *backend's* identity, not
-	// the kube-dns Service or pods. node-local-dns carries `k8s-app: node-local-dns`
-	// (not `kube-dns`) and, on Dataplane V2, runs with a regular pod IP and
-	// `-setupinterface=false` (no 169.254.x link-local address), so neither the
-	// kube-dns podSelector nor the link-local ipBlock below matches it and DNS is
-	// dropped. Selecting node-local-dns by its conventional label restores
-	// resolution while staying within Q105's attribution property (still cluster
-	// DNS only, port 53 only — never an arbitrary resolver). Harmless on clusters
-	// without NodeLocal DNSCache: the selector simply matches no pod. See
-	// dnsEgressRule.
-	dnsNodeLocalPodValue = "node-local-dns"
-
-	// dnsNodeLocalCIDR is the IPv4 link-local block (RFC 3927). On clusters
-	// running NodeLocal DNSCache (node-local-dns), pods send DNS to a link-local
-	// address — 169.254.20.10 by the kube-standard `__PILLAR__LOCAL__DNS__`
-	// convention — served by a hostNetwork DNSCache pod on each node, which the
-	// kube-dns podSelector cannot match. Allowing the whole 169.254.0.0/16 block
-	// is the simplest correct rule and stays within Q105's attribution property:
-	// link-local is non-routable and node-scoped, so it cannot reach an arbitrary
-	// external resolver — the DNS-exfiltration channel Q105 closed stays closed
-	// (Q136). See dnsEgressRule.
-	dnsNodeLocalCIDR = "169.254.0.0/16"
 
 	// npProxyName is the NetworkPolicy that restricts proxy pod egress to GitHub CIDRs.
 	npProxyName = gmcnames.ProxyName
@@ -162,32 +47,16 @@ const (
 	// npWorkloadName is the NetworkPolicy that restricts AGC and worker pod egress to the proxy only.
 	npWorkloadName = gmcnames.WorkloadNetworkPolicyName
 
-	// labelComponent / componentWorkload identify AGC and worker pods as "workload" for
-	// NetworkPolicy podSelector matching.
-	labelComponent    = "actions-gateway/component"
-	componentWorkload = "workload"
-
 	finalizerName = "actions-gateway.github.com/gmc-cleanup"
-
-	// defaultNoProxy excludes cluster-internal traffic from the proxy. svc.cluster.local
-	// covers all Kubernetes Services (e.g. fakegithub.e2e-infra.svc.cluster.local) so
-	// the proxy is only used for external (GitHub.com) traffic as intended.
-	defaultNoProxy = "svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12"
 
 	// defaultSecurityProfile is the PSA enforcement level applied when an
 	// ActionsGateway omits spec.securityProfile. Mirrors the CRD's
 	// +kubebuilder:default; kept here so hand-applied CRs without the field
-	// still get baseline rather than an empty (unenforced) profile.
+	// still get baseline rather than an empty (unenforced) profile. v2 has no
+	// analogue — PSA moved to the namespace (Q175), so the v2 AGC reads the
+	// namespace's security-profile label instead.
 	defaultSecurityProfile = "baseline"
-
-	// defaultLogLevel is the log verbosity threaded to the AGC and proxy when an
-	// ActionsGateway omits spec.logLevel. Mirrors the CRD's +kubebuilder:default;
-	// kept here so a hand-applied CR without the field still runs at info rather
-	// than emitting an empty LOG_LEVEL the workloads would have to interpret.
-	defaultLogLevel = "info"
 )
-
-func ptr[T any](v T) *T { return &v }
 
 // securityProfileOrDefault returns the configured security profile, falling
 // back to defaultSecurityProfile when unset.
@@ -197,87 +66,6 @@ func securityProfileOrDefault(profile string) string {
 	}
 	return profile
 }
-
-// logLevelOrDefault returns the configured log level, falling back to
-// defaultLogLevel when unset. Threaded to the AGC and proxy as LOG_LEVEL.
-func logLevelOrDefault(level string) string {
-	if level == "" {
-		return defaultLogLevel
-	}
-	return level
-}
-
-// hardenedContainerSecurityContext returns the restricted container
-// SecurityContext applied to every GMC-managed container (AGC and proxy):
-// non-root, read-only root filesystem, no privilege escalation, all Linux
-// capabilities dropped, and the RuntimeDefault seccomp profile. Defining it once
-// keeps the security baseline from drifting between Deployments — hardening (or
-// accidentally relaxing) one container must not silently leave the other behind.
-func hardenedContainerSecurityContext() *corev1.SecurityContext {
-	return &corev1.SecurityContext{
-		RunAsNonRoot:             ptr(true),
-		ReadOnlyRootFilesystem:   ptr(true),
-		AllowPrivilegeEscalation: ptr(false),
-		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-		SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
-	}
-}
-
-// nonrootPodSecurityContext returns the pod-level SecurityContext shared by the
-// AGC and proxy Deployments: fsGroup 65532 so the distroless nonroot UID can read
-// group-owned mounted Secrets (cert/key files projected with mode 0o440). See the
-// TLS-mode comment in buildProxyDeployment for the 0o440-vs-0o400 rationale.
-func nonrootPodSecurityContext() *corev1.PodSecurityContext {
-	return &corev1.PodSecurityContext{FSGroup: ptr(int64(65532))}
-}
-
-// The proxy pod's shutdown budget (Q384 + Q386).
-//
-// There is deliberately no `preStop` hook here, even though endpoint removal
-// races SIGTERM and something must absorb that race. A preStop sleep is the
-// canonical remedy, but it is *serial* with the drain and its cost is
-// unconditional: the kubelet grants a terminating pod min(grace period,
-// remaining node-shutdown window), so on a truncated window — spot preemption,
-// graceful node shutdown — a preStop sleep spends scarce budget idling and
-// leaves less for draining than if it were absent, partially undoing Q384
-// exactly where disruption is most frequent.
-//
-// cmd/proxy absorbs the race in-process instead, by holding the CONNECT listener
-// open after SIGTERM until arrivals go quiet (lingerForEndpointRemoval). That
-// linger is spent INSIDE the drain budget rather than ahead of it, so it costs
-// nothing here: the two waits overlap, and the worst case stays what Q384 sized.
-//
-// The arithmetic — every term is a real wait the kubelet must accommodate:
-//
-//	drain budget (linger + tunnel drain, cmd/proxy)  45s
-//	+ force-close unwind + health listener shutdown   7s
-//	+ headroom for process exit and kubelet jitter    8s
-//	= terminationGracePeriodSeconds                  60s
-//
-// Raising PROXY_SHUTDOWN_DRAIN_TIMEOUT on a pool without raising the grace
-// period here re-breaks Q384: the drain would still be running when SIGKILL
-// lands. The two are documented together in docs/operations/troubleshooting.md.
-const (
-	// proxyDrainBudgetSeconds mirrors defaultShutdownDrainTimeout in
-	// cmd/proxy/proxy.go. cmd/proxy is a separate Go module, so this cannot be
-	// an import — change both together.
-	proxyDrainBudgetSeconds = 45
-
-	// proxyDrainTailSeconds covers what cmd/proxy does after the drain deadline
-	// expires: tunnelCloseGrace (2s) waiting for force-closed relays to unwind,
-	// then healthShutdownTimeout (5s) for the health/metrics listener.
-	proxyDrainTailSeconds = 7
-
-	// proxyExitHeadroomSeconds absorbs process exit and kubelet scheduling
-	// jitter so the budget above is a bound, not a coincidence.
-	proxyExitHeadroomSeconds = 8
-
-	// proxyTerminationGracePeriodSeconds is the sum of the terms above. Stated
-	// as the arithmetic rather than a literal so the claim the manifest makes
-	// stays checkable against the code that has to fit inside it.
-	proxyTerminationGracePeriodSeconds = proxyDrainBudgetSeconds +
-		proxyDrainTailSeconds + proxyExitHeadroomSeconds
-)
 
 // componentLabels returns the metadata labels stamped on a GMC-created object of
 // the given component: the recommended app.kubernetes.io/* set (managed-by the GMC,
@@ -290,21 +78,6 @@ func componentLabels(ag *gmcv1alpha1.ActionsGateway, appName, component string) 
 	l["actions-gateway/owner-name"] = ag.Name
 	l["actions-gateway/owner-ns"] = ag.Namespace
 	return l
-}
-
-// copyRecommendedLabels copies the app.kubernetes.io/* recommended metadata from
-// src (an object's metadata labels) into dst (a pod template's labels) without
-// overwriting any functional selector label already in dst. Used to carry a
-// Deployment's recommended labels onto its pods so the pods group with their owner
-// under Lens/k9s/Argo and Prometheus relabel rules.
-func copyRecommendedLabels(dst, src map[string]string) {
-	for k, v := range src {
-		if strings.HasPrefix(k, "app.kubernetes.io/") {
-			if _, ok := dst[k]; !ok {
-				dst[k] = v
-			}
-		}
-	}
 }
 
 // managedLabels is componentLabels for the AGC control-plane component — the common
@@ -349,133 +122,6 @@ func buildAGCRoleBinding(ag *gmcv1alpha1.ActionsGateway) *rbacv1.RoleBinding {
 		RoleRef:    rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: agcTenantRoleName},
 		Subjects:   []rbacv1.Subject{{Kind: "ServiceAccount", Name: agcSAName, Namespace: ag.Namespace}},
 	}
-}
-
-// metricsScrapeIngressRule returns a NetworkPolicy ingress rule that permits
-// Prometheus scrapes of the mTLS metrics port (metricsPort) from any namespace
-// labelled metrics=enabled. It is applied to both the proxy and AGC
-// NetworkPolicies so per-tenant traffic-volume metrics (CONNECT counts, active
-// tunnels, dial errors) are reachable only by the operator's monitoring stack,
-// not by every pod in the tenant namespace (L-8). The plaintext kubelet probe
-// port (healthMetricsPort) carries no metrics and needs no rule — see
-// metricsScrapeNamespaceLabel for why kubelet probe traffic is already exempt.
-func metricsScrapeIngressRule() networkingv1.NetworkPolicyIngressRule {
-	return networkingv1.NetworkPolicyIngressRule{
-		From: []networkingv1.NetworkPolicyPeer{{
-			NamespaceSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{metricsScrapeNamespaceLabel: metricsScrapeNamespaceValue},
-			},
-		}},
-		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(metricsPort))}},
-	}
-}
-
-// dnsEgressRule returns a NetworkPolicy egress rule permitting DNS (UDP/TCP 53)
-// to the cluster DNS service ONLY — never to any destination. It is shared by
-// the proxy, workload, and AGC policies so the DNS posture cannot drift between
-// them. Three `To` peers (OR'd) cover the ways a pod reaches cluster DNS:
-//
-//  1. The kube-dns / CoreDNS Service in kube-system, matched by an AND of
-//     namespace + pod selector (the direct path on a cluster without NodeLocal
-//     DNSCache).
-//  2. The NodeLocal DNSCache pods (`k8s-app: node-local-dns`) in kube-system,
-//     matched by an AND of namespace + pod selector. On a CNI that redirects
-//     cluster-DNS traffic to a per-node cache *pod* — GKE Dataplane V2 (Cilium)
-//     does this via a RedirectService / Cilium Local Redirect — the egress is
-//     enforced against the redirect backend's identity, which is node-local-dns,
-//     not kube-dns; without this peer DNS is silently dropped (Q229).
-//  3. The IPv4 link-local block 169.254.0.0/16, matched by an ipBlock (the path
-//     on a cluster running NodeLocal DNSCache in the classic link-local mode,
-//     where pods send DNS to a link-local address served by a per-node
-//     hostNetwork cache — Q136).
-//
-// An unrestricted port-53 rule (To: nil ≡ any server) is an unattributed
-// data-exfiltration side-channel: DNS queries can smuggle data to an
-// attacker-controlled resolver, bypassing the per-tenant egress-IP attribution
-// that is a headline isolation property of this system (Q105). Every other
-// egress path forces traffic through the tenant proxy, whose source IPs are
-// attributable; confining DNS to the in-cluster resolver keeps it on that
-// attributable path — kube-dns recurses upstream on the pod's behalf, so the
-// proxy can still resolve GitHub hostnames to do its job. Both peers preserve
-// that property: link-local 169.254.0.0/16 is non-routable and node-scoped, so
-// it cannot reach an external resolver. Only the open "any resolver" breadth is
-// removed, not legitimate resolution.
-//
-// kindnet does not enforce egress NetworkPolicy (see Q7b, worker-egress
-// isolation), so this restriction is guarded at the
-// spec/authoring level by TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS
-// rather than by a live e2e deny test; a runtime negative needs a
-// policy-enforcing CNI such as Calico.
-func dnsEgressRule() networkingv1.NetworkPolicyEgressRule {
-	proto53UDP := corev1.ProtocolUDP
-	proto53TCP := corev1.ProtocolTCP
-	return networkingv1.NetworkPolicyEgressRule{
-		To: []networkingv1.NetworkPolicyPeer{
-			// A single peer with both selectors set is an AND: kube-dns pods *within*
-			// kube-system. Splitting them into two peers would be an OR and would also
-			// admit any pod labelled k8s-app=kube-dns in any namespace.
-			{
-				NamespaceSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{dnsNamespaceLabel: dnsNamespaceValue},
-				},
-				PodSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{dnsPodLabel: dnsPodValue},
-				},
-			},
-			// NodeLocal DNSCache redirect-to-pod path (Q229): on a CNI that redirects
-			// the kube-dns ClusterIP to a per-node node-local-dns *pod* (GKE Dataplane
-			// V2 / Cilium Local Redirect), policy is enforced against that pod's
-			// identity. It carries k8s-app=node-local-dns, not kube-dns, so the peer
-			// above does not match it. AND of namespace + pod selector, same as kube-dns.
-			// NOTE: this contradicts Google's NodeLocal DNSCache docs, which name
-			// Dataplane V2 as needing NO extra NetworkPolicy rules. Their exemption
-			// covers the hostNetwork/link-local mode (the ipBlock peer below); on DPv2
-			// the cache is NOT hostNetwork, so it has exactly the pod identity Cilium
-			// enforces against. Verified live on GKE DPv2 (Q229; symptom + repro in
-			// docs/operations/troubleshooting.md "DNS Times Out Under the Egress
-			// NetworkPolicy").
-			{
-				NamespaceSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{dnsNamespaceLabel: dnsNamespaceValue},
-				},
-				PodSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{dnsPodLabel: dnsNodeLocalPodValue},
-				},
-			},
-			// NodeLocal DNSCache path: pods reach the per-node hostNetwork cache at a
-			// link-local address (169.254.20.10 by convention). hostNetwork pods are
-			// not matched by any pod/namespace selector, so this peer is an ipBlock.
-			// The block is non-routable, so it does not widen the exfil surface.
-			{
-				IPBlock: &networkingv1.IPBlock{CIDR: dnsNodeLocalCIDR},
-			},
-		},
-		Ports: []networkingv1.NetworkPolicyPort{
-			{Protocol: &proto53UDP, Port: ptr(intstr.FromInt32(53))},
-			{Protocol: &proto53TCP, Port: ptr(intstr.FromInt32(53))},
-		},
-	}
-}
-
-// githubCIDREgressRule returns an egress rule permitting TCP/443 to the given GitHub
-// CIDRs, and false when the CIDR set is empty (before the IPRangeReconciler's first
-// fetch) so the caller omits the rule entirely. Omitting it is fail-closed: GitHub
-// egress is denied until the refresh loop patches the policy with the fetched ranges,
-// never opened wide. Shared by the v1 proxy NetworkPolicy and the v2 direct-egress
-// AGC/workload NetworkPolicies (§H.10).
-func githubCIDREgressRule(githubCIDRs []net.IPNet) (networkingv1.NetworkPolicyEgressRule, bool) {
-	if len(githubCIDRs) == 0 {
-		return networkingv1.NetworkPolicyEgressRule{}, false
-	}
-	peers := make([]networkingv1.NetworkPolicyPeer, 0, len(githubCIDRs))
-	for _, cidr := range githubCIDRs {
-		c := cidr.String()
-		peers = append(peers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: c}})
-	}
-	return networkingv1.NetworkPolicyEgressRule{
-		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(443))}},
-		To:    peers,
-	}, true
 }
 
 // buildProxyNetworkPolicy constructs the NetworkPolicy for proxy pods.
@@ -566,19 +212,8 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 // both this policy and buildWorkloadNetworkPolicy) end up with: DNS + proxy +
 // k8s API egress. Worker pods (selected only by buildWorkloadNetworkPolicy)
 // are limited to DNS + proxy — they cannot directly reach GitHub or the k8s
-// API server.
-//
-// Why both 443 and 6443: NetworkPolicy port matches are evaluated against the
-// *post-DNAT* destination port. In production clusters the `kubernetes`
-// Service typically points at backends listening on 443, so a 443 rule
-// matches. In kind, the apiserver runs inside the control-plane container on
-// 6443 and the Service does port translation (10.96.0.1:443 → node:6443), so
-// the policy evaluator sees 6443 — a 443-only rule never matches, and the
-// AGC silently loses k8s API access. This is the port-axis equivalent of the
-// `ipBlock: <ClusterIP>/32` trap that bit the proxy NP in PR #59. See
-// docs/development/networkpolicy-port-matching.md for the full diagnosis. Allowing both keeps the
-// policy precise (only apiserver-style ports) while working in both kind and
-// every production deployment topology this controller targets.
+// API server. The rule itself (443 + 6443, and why both) is
+// agcAPIServerEgressRule in shared_networkpolicy.go.
 //
 // By default the egress rule has no `To` restriction because the Kubernetes API
 // server is not a regular pod; its ClusterIP/node IPs are not predictable at
@@ -591,56 +226,10 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 // working. This is an opt-in tightening, never a loosening; the entries are
 // pre-validated as CIDRs at GMC startup.
 //
-// Ingress: the policy declares PolicyTypeIngress (default-deny) and admits only
-// monitoring-namespace scrapes of the metrics port. Nothing else connects to
-// the AGC on ingress — it is a pure client (it long-polls the GitHub broker,
-// calls the k8s API, and dials the proxy), so default-deny closes L-8: without
-// this, the AGC NP carried no ingress policy type and any pod in the namespace
-// could scrape per-tenant metrics off the controller-runtime metrics server.
+// Ingress is default-deny plus the monitoring-namespace metrics scrape — see
+// buildAGCNetworkPolicyFrom, which assembles the policy for both versions.
 func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, apiServerCIDRs []string) *networkingv1.NetworkPolicy {
 	return buildAGCNetworkPolicyFrom(ag.Namespace, npAGCName, agcAppName, managedLabels(ag), apiServerCIDRs)
-}
-
-// agcAPIServerEgressRule returns the AGC's Kubernetes API-server egress rule
-// (443/6443), optionally scoped to apiServerCIDRs (Q145): an empty list leaves
-// `To` nil — any-destination, the secure default that does not depend on a
-// predictable apiserver IP. Shared by the v1 and v2 AGC NetworkPolicy builders.
-func agcAPIServerEgressRule(apiServerCIDRs []string) networkingv1.NetworkPolicyEgressRule {
-	rule := networkingv1.NetworkPolicyEgressRule{
-		Ports: []networkingv1.NetworkPolicyPort{
-			{Port: ptr(intstr.FromInt32(443))},
-			{Port: ptr(intstr.FromInt32(6443))},
-		},
-	}
-	if len(apiServerCIDRs) > 0 {
-		peers := make([]networkingv1.NetworkPolicyPeer, 0, len(apiServerCIDRs))
-		for _, cidr := range apiServerCIDRs {
-			peers = append(peers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: cidr}})
-		}
-		rule.To = peers
-	}
-	return rule
-}
-
-// buildAGCNetworkPolicyFrom assembles the AGC egress policy shared by the v1 and
-// v2 ActionsGateway reconcilers: additive to the workload policy, it permits DNS +
-// Kubernetes API server egress and admits monitoring-namespace metrics scrapes.
-// The callers differ in the metadata labels and, under v2 multi-gateway, in the
-// policy name and the `app` selector value (both per-gateway, so each AGC NP
-// selects exactly its own gateway's AGC pods).
-func buildAGCNetworkPolicyFrom(namespace, name, appLabel string, labels map[string]string, apiServerCIDRs []string) *networkingv1.NetworkPolicy {
-	return &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: labels},
-		Spec: networkingv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": appLabel}},
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress, networkingv1.PolicyTypeIngress},
-			Ingress:     []networkingv1.NetworkPolicyIngressRule{metricsScrapeIngressRule()},
-			Egress: []networkingv1.NetworkPolicyEgressRule{
-				dnsEgressRule(),
-				agcAPIServerEgressRule(apiServerCIDRs),
-			},
-		},
-	}
 }
 
 // proxyResources returns the proxy container's resource requirements: the
@@ -855,17 +444,6 @@ func metricsServiceDNSName(ag *gmcv1alpha1.ActionsGateway, svcName string) strin
 	return fmt.Sprintf("%s.%s.svc", svcName, ag.Namespace)
 }
 
-// serviceMonitorGVK is the Prometheus-Operator ServiceMonitor GroupVersionKind.
-// Per-tenant ServiceMonitors are built as unstructured objects so the GMC does
-// not take a compile-time dependency on the prometheus-operator API module;
-// the monitoring.coreos.com CRD is an optional, operator-installed prerequisite
-// (see applyOrPruneServiceMonitors for the graceful CRD-absent handling).
-var serviceMonitorGVK = schema.GroupVersionKind{
-	Group:   "monitoring.coreos.com",
-	Version: "v1",
-	Kind:    "ServiceMonitor",
-}
-
 // buildMetricsServiceMonitor builds a per-tenant ServiceMonitor that scrapes one
 // component's (proxy or AGC) mTLS metrics port. It is built as an unstructured
 // object (see serviceMonitorGVK). The ServiceMonitor lives in the tenant
@@ -942,16 +520,6 @@ func buildMetricsServiceMonitor(ag *gmcv1alpha1.ActionsGateway, smName, appName,
 		panic(fmt.Sprintf("build ServiceMonitor spec: %v", err))
 	}
 	return sm
-}
-
-// toStringMapIface converts a map[string]string to the map[string]interface{}
-// shape unstructured nested content requires.
-func toStringMapIface(m map[string]string) map[string]interface{} {
-	out := make(map[string]interface{}, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
-	return out
 }
 
 func buildProxyServiceAddr(ag *gmcv1alpha1.ActionsGateway) string {
@@ -1118,208 +686,12 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 		managedLabels(ag), ag.Spec.GitHubAppRef.Name, proxyTLSSecretName, agcImage, env, corev1.ResourceRequirements{})
 }
 
-// agcWorkloadNames carries the per-gateway derived names for the AGC
-// control-plane Deployment, ServiceAccount, and metrics Secret. v1 (one gateway
-// per namespace) passes the fixed singleton names; v2 (multi-gateway, M3b)
-// derives them per ActionsGateway so two gateways in one namespace never collide
-// on a fixed name (§H.16 #1). The `app` value is load-bearing three ways — it is
-// the Deployment name, the pod `app` label value, and the AGC NetworkPolicy and
-// Service selector — so all of them select exactly this gateway's AGC pods and
-// two AGC Deployments never adopt each other's pods.
-type agcWorkloadNames struct {
-	app              string
-	serviceAccount   string
-	metricsTLSSecret string
-}
-
-// buildAGCDeploymentFrom assembles the AGC Deployment pod spec shared by the v1
-// and v2 ActionsGateway reconcilers: the GitHub App credential file mount (never
-// env), the proxy CA pin (public cert only), the metrics mTLS mount, the hardened
-// container/pod SecurityContext, and the probes. The callers differ only in the
-// metadata labels, the derived resource names (v1 fixed, v2 per-gateway), the
-// credential/proxy-CA Secret names, the env list, and the container resources,
-// which are passed in. metaLabels are the Deployment's metadata labels; the
-// pod-template `app` label is names.app so it matches the AGC NetworkPolicy and
-// Service selectors. resources is the AGC container's resource requirements — the
-// zero value (v1) leaves the container without requests/limits, unchanged from
-// before; v2 passes the platform default overlaid with spec.agcResources (Q171).
-func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels map[string]string, credSecretName, proxyTLSSecret, agcImage string, env []corev1.EnvVar, resources corev1.ResourceRequirements) *appsv1.Deployment {
-	// 0o440 + fsGroup 65532 — see the matching block in buildProxyDeployment for
-	// why 0o400 alone leaves the file unreadable to the non-root AGC user.
-	credMode := int32(0o440)
-	caMode := int32(0o444)
-
-	volumes := []corev1.Volume{
-		{
-			// Metrics mTLS server bundle (ca.crt + tls.crt + tls.key). The AGC's
-			// controller-runtime metrics server serves /metrics over mTLS on metricsPort
-			// and verifies scraper client certs against ca.crt.
-			Name: metricsTLSVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  names.metricsTLSSecret,
-					DefaultMode: &credMode,
-				},
-			},
-		},
-	}
-	volumeMounts := []corev1.VolumeMount{
-		{Name: metricsTLSVolumeName, MountPath: metricsTLSMountPath, ReadOnly: true},
-	}
-
-	// Credential wiring, by union member (Q196/Q197/Q201):
-	//   - possession (githubApp): credSecretName names the GitHub App Secret; mount
-	//     its appId/installationId/privateKey as read-only files (never env).
-	//   - delegation (workloadIdentity): credSecretName is "", so no Secret exists to
-	//     mount. The AGC instead presents a kubelet-projected ServiceAccount token to
-	//     Vault; project it audience-scoped to Vault, read-only. No App key, ever.
-	if credSecretName != "" {
-		volumes = append(volumes, corev1.Volume{
-			Name: agcCredsVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  credSecretName,
-					DefaultMode: &credMode,
-				},
-			},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name: agcCredsVolumeName, MountPath: agcCredsMountPath, ReadOnly: true,
-		})
-	} else {
-		volumes = append(volumes, corev1.Volume{
-			Name: vaultTokenVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Projected: &corev1.ProjectedVolumeSource{
-					DefaultMode: &credMode,
-					Sources: []corev1.VolumeProjection{{
-						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
-							Audience:          vaultTokenAudience,
-							ExpirationSeconds: ptr(vaultTokenExpirationSeconds),
-							Path:              vaultTokenFile,
-						},
-					}},
-				},
-			},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name: vaultTokenVolumeName, MountPath: vaultTokenMountDir, ReadOnly: true,
-		})
-	}
-	// Proxy CA cert (public part only — private key excluded via Items). The AGC pins
-	// the proxy's TLS cert rather than trusting the cluster CA, preventing MITM even
-	// from a compromised cluster CA. Mounted only when egress is proxied: a v2 gateway
-	// with no defaultProxyRef egresses directly (§H.10), has no proxy TLS Secret, and
-	// mounting a non-existent Secret would wedge the pod at ContainerCreating.
-	if proxyTLSSecret != "" {
-		volumes = append(volumes, corev1.Volume{
-			Name: proxyCACertVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  proxyTLSSecret,
-					Items:       []corev1.KeyToPath{{Key: corev1.TLSCertKey, Path: corev1.TLSCertKey}},
-					DefaultMode: &caMode,
-				},
-			},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name: proxyCACertVolumeName, MountPath: proxyCACertMountPath, ReadOnly: true,
-		})
-	}
-
-	// Record the referenced GitHub App Secret name so kubectl rollout history shows
-	// the cause of any credential-rotation rolling update. Omitted for workload
-	// identity (credSecretName ""), which holds no Secret to rotate.
-	var podAnnotations map[string]string
-	if credSecretName != "" {
-		podAnnotations = map[string]string{"actions-gateway/github-app-secret": credSecretName}
-	}
-
-	// "app"/"actions-gateway/component: workload" are the functional selectors; the
-	// recommended app.kubernetes.io/* metadata is carried over from the Deployment's
-	// metaLabels additively (works for both the v1 and v2 callers, whose metaLabels
-	// already carry the per-gateway instance).
-	podLabels := map[string]string{"app": names.app, labelManagedBy: labelManagerValue, labelComponent: componentWorkload}
-	copyRecommendedLabels(podLabels, metaLabels)
-
-	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: names.app, Namespace: namespace, Labels: metaLabels},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: ptr(int32(1)),
-			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": names.app}},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels:      podLabels,
-					Annotations: podAnnotations,
-				},
-				Spec: corev1.PodSpec{
-					ServiceAccountName: names.serviceAccount,
-					SecurityContext:    nonrootPodSecurityContext(),
-					// 60s lets the AGC's signal handler (ctrl.SetupSignalHandler in
-					// cmd/agc/main.go) drain in-flight session work and release its
-					// listener-renewal lock cleanly on rollout instead of losing the
-					// lock to a SIGKILL.
-					TerminationGracePeriodSeconds: ptr(int64(60)),
-					Volumes:                       volumes,
-					Containers: []corev1.Container{{
-						Name:      agcContainerName,
-						Image:     agcImage,
-						Env:       env,
-						Resources: resources,
-						// The AGC pins its controller-runtime metrics server to
-						// metricsPort and its health server to healthMetricsPort
-						// (cmd/agc/main.go); declaring the ports documents the
-						// listeners — metrics is the one buildAGCNetworkPolicy's
-						// metrics-scrape ingress rule admits, health is kubelet-only.
-						Ports: []corev1.ContainerPort{
-							{Name: "health", ContainerPort: healthMetricsPort, Protocol: corev1.ProtocolTCP},
-							{Name: "metrics", ContainerPort: metricsPort, Protocol: corev1.ProtocolTCP},
-						},
-						VolumeMounts: volumeMounts,
-						// StartupProbe gives the AGC manager's informer cache room to
-						// sync before liveness takes over (30 × 5s = 150s), mirroring
-						// the GMC manager's probe. The AGC binds its health listener
-						// early in mgr.Start — independently of the initial GitHub App
-						// token fetch, which runs as a manager Runnable (see
-						// cmd/agc/main.go) — so this budget covers cache sync, not the
-						// token exchange.
-						StartupProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(healthMetricsPort)},
-							},
-							FailureThreshold: 30,
-							PeriodSeconds:    5,
-						},
-						LivenessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(healthMetricsPort)},
-							},
-							PeriodSeconds: 20,
-						},
-						ReadinessProbe: &corev1.Probe{
-							ProbeHandler: corev1.ProbeHandler{
-								HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(healthMetricsPort)},
-							},
-							PeriodSeconds: 10,
-						},
-						SecurityContext: hardenedContainerSecurityContext(),
-					}},
-				},
-			},
-		},
-	}
-}
-
 // buildRunnerGroup builds a RunnerGroup CR from a spec entry.
 func buildRunnerGroup(ag *gmcv1alpha1.ActionsGateway, spec agcv1alpha1.RunnerGroupSpec, name string) *agcv1alpha1.RunnerGroup {
 	return &agcv1alpha1.RunnerGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ag.Namespace, Labels: managedLabels(ag)},
 		Spec:       spec,
 	}
-}
-
-func fieldRef(path string) *corev1.EnvVarSource {
-	return &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: path}}
 }
 
 // tracingEnv translates spec.tracing into the standard OpenTelemetry OTEL_*
@@ -1348,32 +720,4 @@ func tracingEnv(t gmcv1alpha1.TracingConfig) []corev1.EnvVar {
 		env = append(env, corev1.EnvVar{Name: "OTEL_RESOURCE_ATTRIBUTES", Value: attrs})
 	}
 	return env
-}
-
-// formatResourceAttributes renders a resource-attribute map as the
-// comma-separated key=value list OTEL_RESOURCE_ATTRIBUTES expects. Keys are
-// sorted so the rendered value is deterministic — without this the random map
-// iteration order would churn the AGC Deployment on every reconcile.
-func formatResourceAttributes(attrs map[string]string) string {
-	if len(attrs) == 0 {
-		return ""
-	}
-	keys := make([]string, 0, len(attrs))
-	for k := range attrs {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	pairs := make([]string, 0, len(keys))
-	for _, k := range keys {
-		pairs = append(pairs, k+"="+attrs[k])
-	}
-	return strings.Join(pairs, ",")
-}
-
-// buildNoProxy merges user-provided CIDRs with mandatory cluster-internal exclusions.
-func buildNoProxy(userCIDRs []string) string {
-	if len(userCIDRs) > 0 {
-		return strings.Join(userCIDRs, ",") + "," + defaultNoProxy
-	}
-	return defaultNoProxy
 }

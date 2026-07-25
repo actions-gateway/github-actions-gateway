@@ -14,6 +14,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"go.opentelemetry.io/otel"
@@ -52,7 +53,7 @@ type conditionUpdate struct {
 	condition metav1.Condition
 }
 
-// channelConditionUpdater implements listener.ConditionUpdater. After enqueuing, it
+// channelConditionUpdater implements runnercore.ConditionUpdater. After enqueuing, it
 // wakes the reconciler (wake) so the pushed condition is drained promptly rather than
 // waiting for the next worker-Pod event or the resync period (Q333).
 type channelConditionUpdater struct {
@@ -75,7 +76,7 @@ type RunnerGroupReconciler struct {
 	TokenManager *token.Manager
 	Registrar    agentpool.Registrar
 	BrokerConfig BrokerConfig
-	Metrics      *listener.Metrics
+	Metrics      *runnercore.Metrics
 	Log          *slog.Logger
 	Provisioner  *provisioner.Provisioner
 	AgentKeyType agentpool.KeyType // defaults to KeyTypeRSA (the secure default) when empty
@@ -613,9 +614,9 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 // newListenerConfig assembles the listener.Config for a single goroutine bound
 // to the given already-claimed pool agent. Split out from the multiplexer
 // factory so it can be unit-tested directly.
-func (r *RunnerGroupReconciler) newListenerConfig(rg *v1alpha1.RunnerGroup, pool *agentpool.Pool, brokerCfg BrokerConfig, condUpdater listener.ConditionUpdater, agent *agentpool.Agent) listener.Config {
+func (r *RunnerGroupReconciler) newListenerConfig(rg *v1alpha1.RunnerGroup, pool *agentpool.Pool, brokerCfg BrokerConfig, condUpdater runnercore.ConditionUpdater, agent *agentpool.Agent) listener.Config {
 	jobHandler := listener.JobHandlerFunc(nil)
-	admit := listener.AdmitFunc(nil)
+	admit := runnercore.AdmitFunc(nil)
 	if r.Provisioner != nil {
 		jobHandler = r.Provisioner.HandlerFor(rg)
 		// Gate job acquisition on worker capacity before AcquireJob claims the

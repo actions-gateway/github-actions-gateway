@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,7 +61,7 @@ type runnerSetTarget struct {
 	// to the RunnerSet reconciler's event channel. Distinct from the v1 path's
 	// Provisioner.Events because one Provisioner is shared across both owners. Nil
 	// disables event recording.
-	events listener.EventRecorder
+	events runnercore.EventRecorder
 }
 
 // Key returns the RunnerSet's namespace/name.

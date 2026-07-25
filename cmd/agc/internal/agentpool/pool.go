@@ -112,7 +112,7 @@ type Registrar interface {
 }
 
 // RecycleMetrics records agent recycle outcomes. Implemented by
-// listener.Metrics; nil disables recording.
+// runnercore.Metrics; nil disables recording.
 type RecycleMetrics interface {
 	IncAgentRecycle(namespace, group, trigger string)
 	IncAgentRecycleError(namespace, group string)

@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 )
 
 // admissionGate is an in-memory, per-RunnerGroup reservation counter that gates
@@ -86,7 +86,7 @@ func WorkerCeiling(rg *v1alpha1.RunnerGroup) (limit int32, bounded bool) {
 
 // AdmitFor returns an AdmitFunc for the v1 RunnerGroup controller, wrapping the
 // RunnerGroup in the v1 Target adapter and delegating to Admit.
-func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) listener.AdmitFunc {
+func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitFunc {
 	return p.Admit(p.runnerGroupTarget(snapshot))
 }
 
@@ -123,7 +123,7 @@ func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) listener.AdmitFun
 // The returned AdmitFunc is safe for concurrent use across the owner's listeners.
 // v1 wires it via AdmitFor; the v2 RunnerSet controller wires it directly with a
 // RunnerSet-backed Target.
-func (p *Provisioner) Admit(target Target) listener.AdmitFunc {
+func (p *Provisioner) Admit(target Target) runnercore.AdmitFunc {
 	key := target.Key().String()
 	return func(ctx context.Context) (release func(), ok bool, reason string) {
 		if !p.DisableQuotaAdmission {
@@ -132,13 +132,13 @@ func (p *Provisioner) Admit(target Target) listener.AdmitFunc {
 				// ceiling: Debug, with the metric's reason label and the owner's
 				// WorkerQuotaExceeded condition as the operator-facing signals.
 				p.logForKey(target.Key()).Debug("job admission deferred: no namespace ResourceQuota headroom for another worker pod", "detail", detail)
-				return nil, false, listener.AdmitReasonQuota
+				return nil, false, runnercore.AdmitReasonQuota
 			}
 		}
 		limit, bounded := target.Ceiling(ctx)
 		release, ok = p.admission.admit(key, limit, bounded)
 		if !ok {
-			return nil, false, listener.AdmitReasonCeiling
+			return nil, false, runnercore.AdmitReasonCeiling
 		}
 		return release, true, ""
 	}

@@ -62,7 +62,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -127,13 +126,6 @@ type ActionsGatewayReconciler struct {
 	Recorder events.EventRecorder
 }
 
-// DefaultEgressStaleThreshold is the EgressRulesStale age threshold when
-// ActionsGatewayReconciler.EgressStaleThreshold is unset. It is just over twice
-// the 24h IP-range refresh interval, so a single entirely-missed refresh (age
-// peaks at ~2 intervals before the next success) does not trip the condition;
-// only a genuinely stalled loop does (Q157).
-const DefaultEgressStaleThreshold = 49 * time.Hour
-
 // Reconcile reconciles an ActionsGateway CR.
 func (r *ActionsGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var ag gmcv1alpha1.ActionsGateway
@@ -185,18 +177,6 @@ func (r *ActionsGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	return r.updateStatus(ctx, &ag)
 }
-
-// provisioningError wraps a reconcileResources failure with the named step that
-// was in progress when it failed, so Reconcile can surface that step in the
-// Degraded condition before returning early (Q156). It Unwraps to the underlying
-// error so errors.Is/As and IsConflict-style checks still see the cause.
-type provisioningError struct {
-	step string
-	err  error
-}
-
-func (e *provisioningError) Error() string { return fmt.Sprintf("%s: %v", e.step, e.err) }
-func (e *provisioningError) Unwrap() error { return e.err }
 
 func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.IPNet, proxyAddr string) (retErr error) {
 	// Debug step markers: this method applies ~12 child resources and on failure
@@ -583,25 +563,6 @@ func (r *ActionsGatewayReconciler) updateStatus(ctx context.Context, ag *gmcv1al
 	return ctrl.Result{}, nil
 }
 
-// quotaCheck maps one proxy-footprint resource to the ResourceQuota hard key
-// that constrains it. A footprint resource may be capped by more than one quota
-// key (e.g. CPU requests are limited by both "requests.cpu" and the legacy
-// "cpu" alias), so the slice can hold multiple entries per footprint key.
-type quotaCheck struct {
-	footprint corev1.ResourceName // key into the footprint ResourceList
-	hardKey   corev1.ResourceName // ResourceQuota .Hard key it is measured against
-}
-
-var proxyQuotaChecks = []quotaCheck{
-	{corev1.ResourcePods, corev1.ResourcePods},
-	{corev1.ResourceRequestsCPU, corev1.ResourceRequestsCPU},
-	{corev1.ResourceRequestsCPU, corev1.ResourceCPU}, // legacy alias for requests.cpu
-	{corev1.ResourceRequestsMemory, corev1.ResourceRequestsMemory},
-	{corev1.ResourceRequestsMemory, corev1.ResourceMemory}, // legacy alias for requests.memory
-	{corev1.ResourceLimitsCPU, corev1.ResourceLimitsCPU},
-	{corev1.ResourceLimitsMemory, corev1.ResourceLimitsMemory},
-}
-
 // proxyFootprint returns the quota footprint of `replicas` proxy pods: the
 // per-replica requests/limits scaled by replicas, plus the pod count. Keys
 // mirror ResourceQuota hard keys (pods, requests.cpu, requests.memory,
@@ -611,66 +572,11 @@ func proxyFootprint(ag *gmcv1alpha1.ActionsGateway, replicas int32) corev1.Resou
 	return footprintFromResources(proxyResources(ag), replicas)
 }
 
-// footprintFromResources returns the ResourceQuota footprint of `replicas` pods with
-// per-pod requests/limits `res`: the per-replica requests/limits scaled by replicas,
-// plus the pod count. Keys mirror ResourceQuota hard keys (pods, requests.cpu,
-// requests.memory, limits.cpu, limits.memory). It is linear in replicas, so the
-// *additional* demand to grow a pool from m to n pods is
-// footprintFromResources(res, n-m). Shared by the v1 ActionsGateway proxy
-// (proxyFootprint) and the v2 EgressProxy quota eval (egressProxyFootprint).
-func footprintFromResources(res corev1.ResourceRequirements, replicas int32) corev1.ResourceList {
-	if replicas < 0 {
-		replicas = 0
-	}
-	out := corev1.ResourceList{
-		corev1.ResourcePods: *resource.NewQuantity(int64(replicas), resource.DecimalSI),
-	}
-	if q, ok := res.Requests[corev1.ResourceCPU]; ok {
-		out[corev1.ResourceRequestsCPU] = mulQuantity(q, int64(replicas))
-	}
-	if q, ok := res.Requests[corev1.ResourceMemory]; ok {
-		out[corev1.ResourceRequestsMemory] = mulQuantity(q, int64(replicas))
-	}
-	if q, ok := res.Limits[corev1.ResourceCPU]; ok {
-		out[corev1.ResourceLimitsCPU] = mulQuantity(q, int64(replicas))
-	}
-	if q, ok := res.Limits[corev1.ResourceMemory]; ok {
-		out[corev1.ResourceLimitsMemory] = mulQuantity(q, int64(replicas))
-	}
-	return out
-}
-
-// mulQuantity returns q multiplied by n. n is bounded by the CRD's
-// proxy.maxReplicas maximum (100), so repeated addition stays cheap and exact
-// (resource.Quantity has no scalar-multiply primitive that preserves the
-// canonical form across both DecimalSI and BinarySI).
-func mulQuantity(q resource.Quantity, n int64) resource.Quantity {
-	out := resource.Quantity{Format: q.Format}
-	for i := int64(0); i < n; i++ {
-		out.Add(q)
-	}
-	return out
-}
-
 func proxyMaxReplicas(ag *gmcv1alpha1.ActionsGateway) int32 {
 	if ag.Spec.Proxy.MaxReplicas != nil {
 		return *ag.Spec.Proxy.MaxReplicas
 	}
 	return 10
-}
-
-// proxyQuotaConditions carries the computed status of the two namespace-quota
-// conditions for the proxy pool. They follow the project's two-tier convention
-// (see docs/development/kubernetes-conventions.md): a warning tier
-// (ProxyQuotaPressure) and an error tier (ProxyQuotaExceeded), mutually
-// exclusive — the error supersedes the warning.
-type proxyQuotaConditions struct {
-	pressure        bool
-	pressureReason  string
-	pressureMessage string
-	exceeded        bool
-	exceededReason  string
-	exceededMessage string
 }
 
 // evalProxyQuota computes the ProxyQuotaPressure (warning) and ProxyQuotaExceeded
@@ -691,147 +597,6 @@ type proxyQuotaConditions struct {
 // signal and avoids false precision.
 func (r *ActionsGatewayReconciler) evalProxyQuota(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, proxyDep *appsv1.Deployment) proxyQuotaConditions {
 	return evalProxyPoolQuota(ctx, r, ag.Namespace, proxyMaxReplicas(ag), proxyResources(ag), proxyDep)
-}
-
-// evalProxyPoolQuota computes the ProxyQuotaPressure (warning) and
-// ProxyQuotaExceeded (error) conditions for a namespace-ResourceQuota-bounded,
-// HPA-scaled proxy pool against the platform-owned namespace ResourceQuota (Q82).
-// Both are advisory and do NOT gate Ready — the pool keeps serving at its current
-// scale. Shared by the v1 ActionsGateway proxy (evalProxyQuota) and the v2
-// EgressProxy (evalEgressProxyQuota); the caller supplies the pool's namespace,
-// maxReplicas, per-replica resources, and current proxy Deployment.
-//
-//   - ProxyQuotaExceeded (error): the proxy Deployment is *currently* having replica
-//     creates rejected by quota — read from its ReplicaFailure condition, the
-//     authoritative runtime signal.
-//   - ProxyQuotaPressure (warning): predictive. Given the current remaining quota
-//     headroom (hard − used), the pool cannot grow from its current replica count up
-//     to maxReplicas.
-//
-// The headroom check ignores quota scopes; face-value hard/used is sufficient for an
-// advisory signal and avoids false precision.
-func evalProxyPoolQuota(ctx context.Context, reader client.Reader, namespace string, maxReplicas int32, res corev1.ResourceRequirements, proxyDep *appsv1.Deployment) proxyQuotaConditions {
-	st := proxyQuotaConditions{
-		pressureReason:  "QuotaHeadroomSufficient",
-		pressureMessage: "namespace ResourceQuota admits scaling the proxy pool to maxReplicas",
-		exceededReason:  "NoRejection",
-		exceededMessage: "proxy replica creation is not being rejected by the namespace ResourceQuota",
-	}
-
-	// Error tier — observed rejection. The Deployment surfaces ReplicaFailure when
-	// its ReplicaSet cannot create pods; a quota rejection carries an "exceeded
-	// quota" message, which distinguishes it from other create failures (PSA,
-	// image, scheduling).
-	if proxyDep != nil {
-		if c := findDeploymentCondition(proxyDep, appsv1.DeploymentReplicaFailure); c != nil &&
-			c.Status == corev1.ConditionTrue && strings.Contains(c.Message, "exceeded quota") {
-			st.exceeded = true
-			st.exceededReason = "ReplicasRejected"
-			st.exceededMessage = "proxy replica creation is being rejected by the namespace ResourceQuota: " + c.Message
-		}
-	}
-
-	// Warning tier — predictive headroom check.
-	var quotas corev1.ResourceQuotaList
-	if err := reader.List(ctx, &quotas, client.InNamespace(namespace)); err != nil {
-		st.pressureReason = "QuotaUnknown"
-		st.pressureMessage = fmt.Sprintf("could not read namespace ResourceQuota: %v", err)
-	} else if len(quotas.Items) == 0 {
-		st.pressureReason = "NoQuota"
-		st.pressureMessage = "no namespace ResourceQuota constrains the proxy pool"
-	} else {
-		current := int32(0)
-		if proxyDep != nil {
-			current = proxyDep.Status.Replicas
-		}
-		additional := maxReplicas - current
-		if additional > 0 {
-			demand := footprintFromResources(res, additional)
-			st.pressure, st.pressureMessage = quotaHeadroomViolations(
-				demand, quotas.Items, proxyQuotaChecks,
-				"proxy cannot scale to maxReplicas with current quota headroom: ")
-			if st.pressure {
-				st.pressureReason = "InsufficientQuotaHeadroom"
-			}
-		}
-	}
-
-	// Error supersedes warning: while replicas are actively rejected, the
-	// headroom warning is redundant noise. Keep the two conditions mutually
-	// exclusive so each maps cleanly to one alert severity.
-	if st.exceeded {
-		st.pressure = false
-		st.pressureReason = "Superseded"
-		st.pressureMessage = "superseded by ProxyQuotaExceeded"
-	}
-	return st
-}
-
-// quotaHeadroomViolations reports whether `demand` exceeds the remaining headroom
-// (hard − used) of any quota for any mapped resource, and a human-readable
-// message. The bool is true when at least one resource is over headroom.
-func quotaHeadroomViolations(demand corev1.ResourceList, quotas []corev1.ResourceQuota, checks []quotaCheck, msgPrefix string) (bool, string) {
-	var violations []string
-	for i := range quotas {
-		q := &quotas[i]
-		hard := q.Status.Hard
-		if len(hard) == 0 {
-			// Status not yet populated by the quota controller (e.g. just after
-			// the admin edits .spec.hard); fall back to the requested cap.
-			hard = q.Spec.Hard
-		}
-		for _, c := range checks {
-			need, ok := demand[c.footprint]
-			if !ok {
-				continue
-			}
-			limit, ok := hard[c.hardKey]
-			if !ok {
-				continue
-			}
-			remaining := limit.DeepCopy()
-			if u, ok := q.Status.Used[c.hardKey]; ok {
-				remaining.Sub(u)
-			}
-			if need.Cmp(remaining) > 0 {
-				violations = append(violations, fmt.Sprintf(
-					"needs %s more %s but quota %q has %s free", need.String(), c.hardKey, q.Name, remaining.String()))
-			}
-		}
-	}
-	if len(violations) == 0 {
-		return false, ""
-	}
-	return true, msgPrefix + strings.Join(violations, "; ")
-}
-
-// findDeploymentCondition returns the named Deployment status condition, or nil.
-func findDeploymentCondition(dep *appsv1.Deployment, t appsv1.DeploymentConditionType) *appsv1.DeploymentCondition {
-	for i := range dep.Status.Conditions {
-		if dep.Status.Conditions[i].Type == t {
-			return &dep.Status.Conditions[i]
-		}
-	}
-	return nil
-}
-
-// resourceListEqual reports whether two ResourceLists hold the same keys with
-// numerically equal quantities. It is used by the ResourceQuota watch predicate
-// to ignore status-only churn (.status.used changes as pods come and go) and
-// reconcile only when an admin changes a quota's .spec.hard. reflect.DeepEqual
-// is unsuitable: resource.Quantity caches a formatted string in an unexported
-// field, so equal values can compare unequal.
-func resourceListEqual(a, b corev1.ResourceList) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for k, va := range a {
-		vb, ok := b[k]
-		if !ok || va.Cmp(vb) != 0 {
-			return false
-		}
-	}
-	return true
 }
 
 // setCredentialUnavailable sets CredentialUnavailable=True and Ready=False on the
@@ -957,13 +722,6 @@ func (r *ActionsGatewayReconciler) evalRunnerGroupHealth(ctx context.Context, ag
 		reason:   gmcv1alpha1.ReasonRunnerGroupsImpaired,
 		message:  fmt.Sprintf("%d of %d RunnerGroup(s) impaired: %s", len(impaired), len(rgList.Items), strings.Join(impaired, "; ")),
 	}
-}
-
-// egressStale carries the computed EgressRulesStale condition (Q157).
-type egressStale struct {
-	stale   bool
-	reason  string
-	message string
 }
 
 // evalEgressRulesStale computes the EgressRulesStale condition (Q157) for a
@@ -1127,23 +885,6 @@ func runnerGroupImpairingConditionsChanged() predicate.Predicate {
 	}
 }
 
-// quotaHardChangedPredicate enqueues ResourceQuota create/delete and only those
-// updates that change .spec.hard, ignoring the high-frequency .status.used churn
-// as pods come and go — only the hard cap feeds the ProxyQuota conditions (Q82).
-// Shared by the v1 ActionsGateway and v2 EgressProxy quota watches (Q326).
-func quotaHardChangedPredicate() predicate.Predicate {
-	return predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			oldQ, ok1 := e.ObjectOld.(*corev1.ResourceQuota)
-			newQ, ok2 := e.ObjectNew.(*corev1.ResourceQuota)
-			if !ok1 || !ok2 {
-				return true
-			}
-			return !resourceListEqual(oldQ.Spec.Hard, newQ.Spec.Hard)
-		},
-	}
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -1199,11 +940,6 @@ func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // separate decision (Q394) — do not add or drop an owner here without it.
 // applyNamespacePSA stays on Server-Side Apply (it already detects and reports
 // out-of-band PSA-label edits via field-manager conflicts).
-
-// errRoleRefImmutable signals that an existing RoleBinding references a
-// different (immutable) roleRef than desired, so it must be deleted and
-// recreated rather than patched. It never escapes applyRoleBinding.
-var errRoleRefImmutable = errors.New("rolebinding roleRef changed; recreate required")
 
 // applyServiceAccount creates the ServiceAccount or patches its managed labels.
 // Un-owned: reclaimed by the reconcileDelete finalizer (Q394).
@@ -1487,16 +1223,6 @@ func (r *ActionsGatewayReconciler) applyServiceMonitor(ctx context.Context, ag *
 // controller-runtime default) lets an out-of-band edit by an administrator
 // be detected as a conflict on the next reconcile.
 const psaFieldManager = "actionsgateway-controller-psa"
-
-// TenantNamespaceMarkerLabel is the label a trusted administrator must apply to a
-// tenant namespace to mark it as managed by the GMC. The namespace-psa-guard
-// ValidatingAdmissionPolicy (config/admission-policy/namespace-psa-guard.yaml)
-// denies the GMC ServiceAccount any namespace patch unless the existing namespace
-// already carries this label set to "true" — confining the GMC's cluster-wide
-// namespaces:patch grant to managed tenants so a compromised GMC cannot relabel
-// kube-system PSA (k8s best-practices audit finding B2 / Queue Q56). The GMC never
-// sets this label itself; doing so would defeat the control.
-const TenantNamespaceMarkerLabel = "actions-gateway.github.com/tenant"
 
 // applyNamespacePSA stamps Pod Security Admission labels on the tenant namespace
 // using Server-Side Apply so the controller declares ownership only of the six

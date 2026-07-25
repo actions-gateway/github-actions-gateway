@@ -1,5 +1,12 @@
-// Package listener implements the per-RunnerGroup listener goroutine pool.
-package listener
+// Package runnercore holds the contracts the AGC's runner tier shares across CRD
+// versions and job-acquisition protocols: the Prometheus metric set every
+// component emits into, the worker-capacity admission gate, and the non-blocking
+// condition and event sinks the reconcilers drain.
+//
+// Nothing here is specific to the classic long-poll protocol (that lives in
+// internal/listener) or to one API version, so removing either — the v1 sunset
+// (Q273) or the classic-machinery removal (Q264) — leaves this package standing.
+package runnercore
 
 import (
 	"github.com/prometheus/client_golang/prometheus"

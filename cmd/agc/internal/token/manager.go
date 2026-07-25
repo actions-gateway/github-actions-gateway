@@ -40,7 +40,7 @@ const refreshLeadTime = 5 * time.Minute
 // 30s. This is distinct from the exponential backoff used for *failed* fetches.
 const minRefreshInterval = 30 * time.Second
 
-// MetricsRecorder is implemented by listener.Metrics to record token events.
+// MetricsRecorder is implemented by runnercore.Metrics to record token events.
 // nil-safe: all methods must check for nil before calling.
 type MetricsRecorder interface {
 	IncTokenRefreshes(namespace string)

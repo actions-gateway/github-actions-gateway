@@ -1,3 +1,7 @@
+// Package listener implements the per-RunnerGroup listener goroutine pool for the
+// classic long-poll acquisition protocol. The version- and protocol-neutral
+// contracts it reports through — the metric set, the capacity gate, the condition
+// and event sinks — live in internal/runnercore.
 package listener
 
 import (
@@ -7,6 +11,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -24,24 +29,6 @@ func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) 
 
 // RealClock is the production Clock implementation.
 var RealClock Clock = realClock{}
-
-// ConditionUpdater submits RunnerGroup condition updates to the reconciler.
-// Implementations must be non-blocking.
-type ConditionUpdater interface {
-	SetCondition(namespace, name string, cond metav1.Condition)
-}
-
-// EventRecorder records a Kubernetes Event about the owning RunnerGroup/RunnerSet
-// (identified by namespace/name). The reconciler drains these and records them on
-// the live owner object, so job-lifecycle incidents surface in `kubectl describe`
-// and event watchers — complementing the metrics/conditions that already track the
-// same state. Like ConditionUpdater, implementations must be non-blocking (drop on
-// a full channel) so a listener or provisioner goroutine never blocks on event
-// delivery. action and note follow the client-go events API (the "what happened"
-// verb and the human-readable message).
-type EventRecorder interface {
-	Event(namespace, name, eventtype, reason, action, note string)
-}
 
 // JobHandlerFunc is called with the AcquireJob response bytes after a successful
 // acquisition. In M2 this is a stub; in M3 it becomes the pod provisioner.
@@ -107,32 +94,6 @@ type ClaimResult struct {
 	WinnerConcluded <-chan struct{}
 }
 
-// AdmitFunc gates job acquisition on available worker capacity (Q59). It is
-// called after a job is delivered but before AcquireJob claims it from GitHub.
-// ok=false means there is no capacity: the listener skips the acquire, leaving
-// the job queued at GitHub for redelivery to a sibling session — rather than
-// claiming a job whose worker pod it cannot place, which would be cancelled when
-// the unrenewed lock lapses. ok=true returns release, which the listener calls
-// exactly once when the reserved slot is freed (acquire failure or job
-// completion) so the gate's in-flight count tracks only live jobs.
-//
-// reason is set only when ok=false and names which rung refused (an AdmitReason*
-// constant); it becomes the `reason` label on
-// actions_gateway_jobs_admission_rejected_total so an operator can tell "at the
-// configured ceiling" from "out of namespace quota".
-type AdmitFunc func(ctx context.Context) (release func(), ok bool, reason string)
-
-// AdmitReason* are the AdmitFunc rejection reasons, used verbatim as the `reason`
-// label of actions_gateway_jobs_admission_rejected_total. Both mean the job was
-// deliberately left queued at GitHub, but they call for different operator action:
-// ceiling → raise maxWorkers/priorityTiers (or accept the throttling); quota →
-// raise the namespace ResourceQuota (see the owner's WorkerQuotaExceeded condition
-// for the binding resource).
-const (
-	AdmitReasonCeiling = "ceiling"
-	AdmitReasonQuota   = "quota"
-)
-
 // Config holds the dependencies injected into a listener goroutine.
 type Config struct {
 	Group     string // RunnerGroup name
@@ -144,12 +105,12 @@ type Config struct {
 	Broker     *broker.Client
 	HTTPClient *http.Client // used for OAuth token fetch; nil uses a bounded httpx.NewClient()
 
-	Conditions ConditionUpdater
+	Conditions runnercore.ConditionUpdater
 	// Events records owner-scoped Kubernetes Events for job-lifecycle incidents that
 	// this goroutine detects (acquisition failure, non-retriable session failure).
 	// Nil disables event recording (the metric/condition remains the signal).
-	Events        EventRecorder
-	Metrics       *Metrics
+	Events        runnercore.EventRecorder
+	Metrics       *runnercore.Metrics
 	IdleThreshold int // consecutive 202s before idle shutdown; 0 means 50
 	// RenewInterval is the cadence of the per-job RenewJob loop. 0 means 60s.
 	RenewInterval time.Duration
@@ -173,7 +134,7 @@ type Config struct {
 	// ok=true the returned release func is called when the reserved slot is freed
 	// (acquire failure or job completion). Nil disables the gate, leaving the
 	// provisioner's post-acquire ceilingCheck as the only (backstop) limit.
-	Admit AdmitFunc
+	Admit runnercore.AdmitFunc
 	// ClaimJob deduplicates provisioning of one job across the sibling listener
 	// goroutines of this RunnerGroup (Q260). Under a concurrent burst GitHub's
 	// broker fans one job out to several sibling sessions as messages with

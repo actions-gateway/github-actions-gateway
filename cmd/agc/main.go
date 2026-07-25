@@ -37,8 +37,8 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
@@ -257,7 +257,7 @@ func run() error {
 	tokenMgr := token.NewManager(expProvider, nil)
 
 	// ── 3. Build Prometheus metrics ──────────────────────────────────────────
-	m := listener.NewMetrics()
+	m := runnercore.NewMetrics()
 	// The ScaleSet acquisition tier (Q264 Option E) emits its own counter series,
 	// separate from the classic listener metrics; a Classic-only AGC simply never
 	// increments them.
@@ -535,7 +535,7 @@ func configureProxyTrust() error {
 // to consume. The construction and mgr.Add ordering here is preserved verbatim
 // from run(); the wrapper-delivery detection makes a live apiserver-version
 // discovery call, so this must run after the manager is constructed.
-func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *listener.Metrics,
+func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *runnercore.Metrics,
 	tokenMgr *token.Manager) (*provisioner.Provisioner, error) {
 	// Bounded client for the provisioner's GitHub REST calls (Q138): an overall
 	// 60s deadline plus a transport ResponseHeaderTimeout, so a slow GitHub API

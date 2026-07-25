@@ -445,7 +445,7 @@ operator-confirmed, per-cluster `apiServerCIDRs` opt-in.
 **Related.** [05-security.md §5.2](05-security.md#52-agc--proxy-level-threats-namespace-scoped);
 [security-operations.md § Tightening AGC apiserver egress](../operations/security-operations.md#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist);
 [network-architecture.md § Policy 2](network-architecture.md#policy-2-actions-gateway-controller--agc--kubernetes-api-server);
-[`builder.go`](../../cmd/gmc/internal/controller/builder.go).
+[`shared_networkpolicy.go`](../../cmd/gmc/internal/controller/shared_networkpolicy.go).
 
 ---
 
