@@ -129,16 +129,22 @@ backwards:
   feature-ahead `main` as the released docs, reintroducing the "Available now"
   drift that Q387 and versioning exist to prevent.
 
-`docs_ref` restores that ref's `docs/`, `mkdocs.yml`, and `overrides/` over the
-working tree. Three things are deliberately **not** taken from the tag:
+`docs_ref` restores that ref's `docs/` and `mkdocs.yml` over the working tree. Four
+things are deliberately **not** taken from the tag:
 
 | Kept from the current checkout | Why |
 |---|---|
 | `requirements-docs.txt` | An old pin predates `mike` and version-selector support. |
 | `site_url` and `docs/CNAME` | Where the site lives is a property of the site, not of the release. `v1.0.0` predates the custom domain: it has no `docs/CNAME`, and its `site_url` still points at the retired `actions-gateway.github.io/github-actions-gateway/` subpath, which would give that version dead canonical URLs, sitemap, and announce-bar links. |
+| `overrides/` | Site chrome, not release documentation. The announce bar advertises the newest release site-wide, which is the signal a visitor reading older docs wants. Taking it from the tag pins each version to whatever the banner said the day it was cut, and the banner has lagged: `v1.1.0` and `v1.2.0` both shipped saying *"v1.0.0 is here"*. |
 | `extra.version` | A pre-versioning tag has no version block, so its pages would render with no selector and strand a visitor on an old release. |
 
-Those overrides ride in an
+**That safety net covers seeds only.** A stable tag push has a blank `docs_ref` and
+builds the tag wholesale, `overrides/` included, so the announce bar must still be
+correct **in the tag**. Bumping it is a pre-flight step in
+[release.md](../operations/release.md#1-pre-flight).
+
+The `mkdocs.yml` overrides ride in an
 [`INHERIT`](https://www.mkdocs.org/user-guide/configuration/#inheritance) overlay
 (`mkdocs.versioned.yml`) rather than a YAML rewrite, so the tag's own nav and config
 stay byte-for-byte intact: MkDocs deep-merges the inherited mapping, and scalars
