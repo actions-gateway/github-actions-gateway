@@ -31,6 +31,10 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# step, die, and gh_curl live in the shared helper library (Q370 / F10).
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
+
 RUNNER_TMP=$(mktemp -d /tmp/actions-runner-XXXXXX)
 RUNNER_CACHE_DIR="${PROBE_RUNNER_CACHE:-$HOME/.cache/github-actions-runner}"
 REG_TOKEN=""  # set later; used by cleanup
@@ -40,8 +44,7 @@ LOG_D=/tmp/probe-inv-d.log
 PAYLOAD_C=/tmp/probe-inv-c-payload.json
 PAYLOAD_D=/tmp/probe-inv-d-payload.json
 
-step()  { echo; echo "==> $*"; }
-die()   { echo; echo "ERROR: $*" >&2; exit 1; }
+# info/warn are local: only this script uses the indented-detail log levels.
 info()  { echo "  $*"; }
 warn()  { echo "  WARNING: $*" >&2; }
 
@@ -90,24 +93,6 @@ REPO="${GITHUB_OWNER_REPO##*/}"
 info "app_id=$GITHUB_APP_ID  installation_id=$GITHUB_APP_INSTALLATION_ID  repo=$GITHUB_OWNER_REPO"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-# gh_curl DESCRIPTION METHOD URL [EXTRA_CURL_ARGS...]
-gh_curl() {
-    local description="$1" method="$2" url="$3"
-    shift 3
-    local resp http_code body
-    resp=$(curl -s -w '\n__HTTP_STATUS__%{http_code}' -X "$method" "$url" "$@")
-    http_code=$(echo "$resp" | grep '__HTTP_STATUS__' | sed 's/.*__HTTP_STATUS__//')
-    body=$(echo "$resp" | grep -v '__HTTP_STATUS__')
-    if [[ ! "$http_code" =~ ^2 ]]; then
-        echo >&2
-        echo "ERROR: $description failed (HTTP $http_code)" >&2
-        echo "  URL: $method $url" >&2
-        echo "  Response: $body" >&2
-        exit 1
-    fi
-    echo "$body"
-}
 
 # trigger_dispatch — fires a workflow_dispatch for probe-test.yml on main.
 trigger_dispatch() {

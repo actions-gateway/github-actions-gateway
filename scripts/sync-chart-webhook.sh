@@ -24,11 +24,8 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
-
-# Temp file used by --check; cleaned up on exit. Initialised empty so the EXIT
-# trap never trips `set -u` regardless of which path the script exits from.
-TMP_WEBHOOK=""
-trap 'rm -f "$TMP_WEBHOOK"' EXIT
+# shellcheck source=scripts/lib/chart-sync.sh
+source "$REPO_ROOT/scripts/lib/chart-sync.sh"
 
 # Authoritative controller-gen source (owned by `make -C cmd/gmc manifests`,
 # generated from the +kubebuilder:webhook marker on the ActionsGateway webhook).
@@ -130,6 +127,7 @@ render() {
 
 sync() {
 	render "$SRC_WEBHOOK" "$DST_WEBHOOK"
+	echo "wrote $DST_WEBHOOK from $SRC_WEBHOOK."
 }
 
 # check renders the chart webhook to a temp file and compares it against the
@@ -137,9 +135,10 @@ sync() {
 # the committed chart (and any uncommitted hand-edit), not just whether a regen
 # produced a git diff.
 check() {
-	TMP_WEBHOOK="$(mktemp)"
-	render "$SRC_WEBHOOK" "$TMP_WEBHOOK"
-	if ! diff -u "$DST_WEBHOOK" "$TMP_WEBHOOK"; then
+	local tmp
+	tmp="$(chart_sync_mktemp)"
+	render "$SRC_WEBHOOK" "$tmp"
+	if ! diff -u "$DST_WEBHOOK" "$tmp"; then
 		echo "ERROR: $DST_WEBHOOK is out of sync with $SRC_WEBHOOK." >&2
 		echo "Re-sync and commit: make chart-webhook" >&2
 		exit 1
@@ -147,20 +146,4 @@ check() {
 	echo "chart webhook template is in sync with $SRC_WEBHOOK."
 }
 
-main() {
-	case "${1:-}" in
-	--check)
-		check
-		;;
-	"")
-		sync
-		echo "wrote $DST_WEBHOOK from $SRC_WEBHOOK."
-		;;
-	*)
-		echo "usage: $0 [--check]" >&2
-		exit 2
-		;;
-	esac
-}
-
-main "$@"
+chart_sync_main "$@"
