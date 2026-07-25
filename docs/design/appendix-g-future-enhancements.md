@@ -779,4 +779,93 @@ embed the library.
 
 ---
 
+## G.16. `ProvisioningRequest` Pre-Acquire Capacity Probe (`check-capacity`)
+
+**Current behavior.** The admission gate refuses to claim a job when the declared
+worker ceiling is reached (Q59) or the namespace `ResourceQuota` has no headroom
+(#784). It has no rung for *placeability*: a tenant whose worker shape cannot be
+scheduled keeps claiming jobs, each spending a JIT runner record and holding a
+GitHub lock until `pendingPodDeadline` reaps the pod. `WorkersUnschedulable`
+(Q157/Q303) reports the scheduler's verdict but never reaches the gate, and
+[§D.8](appendix-d-alternatives-considered.md#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on)
+records why it cannot be gated on directly wherever a cluster autoscaler is
+running: the Pending pod *is* the scale-up request.
+
+**The gap this closes.** cluster-autoscaler's `ProvisioningRequest`
+(`autoscaling.x-k8s.io/v1`) resolves that conflict. Class
+`check-capacity.autoscaling.x-k8s.io` is a one-off feasibility question for a pod
+shape *without creating the pods*; `best-effort-atomic-scale-up.autoscaling.x-k8s.io`
+provisions the capacity atomically instead. Either way the answer arrives before
+the claim, with no GitHub lock ticking, and asking is itself the request for
+capacity, so the autoscaler trigger is not forfeited. No CI runner controller
+appears to use this primitive.
+
+**Sketch.** Two further values of the `spec.capacityGate.mode` enum introduced by
+the [capacity-aware-intake plan](../plan/capacity-aware-intake.md) (`Probe`,
+`Provision`), reusing that plan's rung, condition, rejection-metric label,
+rate-limiting behavior, and fail-open contract unchanged. A negative answer
+refuses the claim, leaving the job queued at GitHub for redelivery. Off by
+default, per-RunnerSet (which is per-pod-shape, since a set resolves to exactly
+one `RunnerTemplate`), with a short-TTL cached verdict because a probe per job
+would be far too chatty.
+
+**Cost, including the parts that are easy to miss.** The plan estimates ~2,400 to
+3,400 lines across five or more PRs, dominated by four things:
+
+1. **It cannot be synchronous.** `Admit` runs inline before `AcquireJob`;
+   `ProvisioningRequest` is create-object-then-await-conditions. So this needs a
+   background prober plus a verdict cache, not a `Target` method that blocks. The
+   quota rung was cheap precisely because it is a cached informer read.
+2. **Each `podSet` must reference a real `core/v1` `PodTemplate` object** in the
+   namespace, so the AGC has to create, hash-name, refresh, and garbage-collect
+   one per worker shape, kept consistent with the pod the provisioner would
+   actually build. The Q359 sizing profile mutates that shape from status, so the
+   shape is not stable.
+3. **`check-capacity` reserves, it does not merely answer.** Upstream v1 is
+   self-contradictory (the `provisioningClassName` field doc says it does not
+   reserve; the class constant says it reserves for a specified time) and ships
+   `BookingExpired`/`CapacityRevoked` conditions plus a
+   `autoscaling.x-k8s.io/consume-provisioning-request` pod annotation. A
+   TTL-cached "yes" reused for *N* jobs is therefore either stale feasibility or a
+   single-use booking spent many times, and `Provision` mode additionally has to
+   annotate worker pods to consume what it reserved. The condition to read also
+   drifts by version (`CapacityAvailable` in the field docs, absent from the v1
+   condition constants, which carry `Provisioned`), so a reader must tolerate
+   both.
+4. **Nothing in the test estate can answer a probe.** envtest can install the CRD
+   but no autoscaler stamps conditions, so this needs a fake-CA condition
+   stamper; kind has no autoscaler at all; and a real end-to-end proof needs a
+   cluster whose autoscaler implements the class, which is provider-specific and
+   gated. GKE serves the `ProvisioningRequest` API (`v1`, from
+   `1.32.2-gke.1652000`) but
+   [documents only its own `queued-provisioning.gke.io` class](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/provisioningrequest)
+   for flex-start: GPU/TPU-oriented, one `podSet` per request, no documented
+   `check-capacity` support as of 2026-07. The dogfood cluster therefore cannot
+   validate this class today, which is exactly the provider-support half of the
+   trigger below. Validation, not code, is the dominant cost.
+
+Plus the ordinary surface: a new API dependency (vendor
+`k8s.io/autoscaler/cluster-autoscaler/apis`, or hand-roll ~120 lines of local
+types, which is the recommendation), startup CRD detection mirroring
+`RunnerSetInstalled`, RBAC on both `provisioningrequests` and `podtemplates` in
+the AGC markers *and* the GMC-granted tenant role, and an operator prerequisite
+(cluster-autoscaler run with provisioning requests enabled).
+
+**Why deferred.** The cheaper rungs cover most of the harm at a fraction of the
+cost and are prerequisites rather than detours: gating on the scheduler's verdict
+where the cluster cannot grow, and on the autoscaler's own declination where it
+can, both feed the same rung this would later reuse. Building the
+`ProvisioningRequest` machinery first would also mean choosing a caching and
+booking model with no measurement of how much residual claim-burn is actually
+left after rate-bounding.
+
+**Triggers to revisit.** Any one of: measurement from the cheaper rungs shows
+residual burn that rate-bounding cannot make acceptable (the GPU/spot case, where
+one wasted claim per deadline window is still expensive); an operator asks with a
+cluster already running cluster-autoscaler with provisioning requests enabled;
+or provider support for `check-capacity` broadens enough that the fail-open path
+stops being the common one.
+
+---
+
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)
