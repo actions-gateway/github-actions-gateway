@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -185,10 +186,11 @@ func TestAdmitFor_ReadsFreshSpec(t *testing.T) {
 
 	// Snapshot captured maxWorkers=1.
 	admit := p.AdmitFor(rg)
-	r1, ok := admit(context.Background())
+	r1, ok, _ := admit(context.Background())
 	require.True(t, ok)
-	_, ok = admit(context.Background())
+	_, ok, reason := admit(context.Background())
 	require.False(t, ok, "ceiling of 1 should reject the second admit")
+	assert.Equal(t, listener.AdmitReasonCeiling, reason)
 
 	// Operator raises maxWorkers to 2; the gate must pick it up without a restart.
 	var current v1alpha1.RunnerGroup
@@ -196,7 +198,7 @@ func TestAdmitFor_ReadsFreshSpec(t *testing.T) {
 	current.Spec.MaxWorkers = ptr.To(int32(2))
 	require.NoError(t, fc.Update(context.Background(), &current))
 
-	r2, ok := admit(context.Background())
+	r2, ok, _ := admit(context.Background())
 	assert.True(t, ok, "raised ceiling should admit a second slot")
 
 	r1()

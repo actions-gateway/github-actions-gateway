@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
@@ -11,7 +10,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,71 +35,12 @@ const (
 	conditionWorkerQuotaExceeded = v1alpha1.ConditionWorkerQuotaExceeded
 )
 
-// quotaCheck maps a worker-footprint resource to the ResourceQuota hard key that
-// constrains it (including the legacy cpu/memory aliases for requests).
-type quotaCheck struct {
-	footprint corev1.ResourceName
-	hardKey   corev1.ResourceName
-}
-
-var workerQuotaChecks = []quotaCheck{
-	{corev1.ResourcePods, corev1.ResourcePods},
-	{corev1.ResourceRequestsCPU, corev1.ResourceRequestsCPU},
-	{corev1.ResourceRequestsCPU, corev1.ResourceCPU},
-	{corev1.ResourceRequestsMemory, corev1.ResourceRequestsMemory},
-	{corev1.ResourceRequestsMemory, corev1.ResourceMemory},
-	{corev1.ResourceLimitsCPU, corev1.ResourceLimitsCPU},
-	{corev1.ResourceLimitsMemory, corev1.ResourceLimitsMemory},
-}
-
 // workerFootprint returns the quota footprint of `count` v1 RunnerGroup worker
-// pods. See workerFootprintForContainers.
+// pods. The footprint arithmetic itself lives in the provisioner package
+// (provisioner.WorkerFootprint) so the admission gate's quota rung and these
+// conditions size a worker pod identically — see that file's header.
 func workerFootprint(rg *v1alpha1.RunnerGroup, count int32) corev1.ResourceList {
-	return workerFootprintForContainers(rg.Spec.PodTemplate.Spec.Containers, count)
-}
-
-// workerFootprintForContainers returns the quota footprint of `count` worker pods
-// with the given containers: the per-pod container requests/limits (summed across
-// containers) scaled by count, plus the pod count. Keys mirror ResourceQuota hard
-// keys. Linear in count. Owner-agnostic so the v1 RunnerGroup (PodTemplate) and v2
-// RunnerSet (resolved RunnerTemplate) capacity checks share one footprint calc.
-func workerFootprintForContainers(containers []corev1.Container, count int32) corev1.ResourceList {
-	if count < 0 {
-		count = 0
-	}
-	var reqCPU, reqMem, limCPU, limMem resource.Quantity
-	for i := range containers {
-		res := containers[i].Resources
-		reqCPU.Add(res.Requests[corev1.ResourceCPU])
-		reqMem.Add(res.Requests[corev1.ResourceMemory])
-		limCPU.Add(res.Limits[corev1.ResourceCPU])
-		limMem.Add(res.Limits[corev1.ResourceMemory])
-	}
-	out := corev1.ResourceList{
-		corev1.ResourcePods: *resource.NewQuantity(int64(count), resource.DecimalSI),
-	}
-	add := func(key corev1.ResourceName, per resource.Quantity) {
-		if per.IsZero() {
-			return
-		}
-		out[key] = mulQuantity(per, int64(count))
-	}
-	add(corev1.ResourceRequestsCPU, reqCPU)
-	add(corev1.ResourceRequestsMemory, reqMem)
-	add(corev1.ResourceLimitsCPU, limCPU)
-	add(corev1.ResourceLimitsMemory, limMem)
-	return out
-}
-
-// mulQuantity returns q multiplied by n via repeated addition (n is bounded by
-// the worker ceiling). resource.Quantity has no scalar-multiply primitive that
-// preserves the canonical form across DecimalSI and BinarySI.
-func mulQuantity(q resource.Quantity, n int64) resource.Quantity {
-	out := resource.Quantity{Format: q.Format}
-	for i := int64(0); i < n; i++ {
-		out.Add(q)
-	}
-	return out
+	return provisioner.WorkerFootprint(rg.Spec.PodTemplate.Spec.Containers, count)
 }
 
 // workerQuotaConditions carries the computed status of the two worker
@@ -150,7 +89,7 @@ func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha
 	}
 
 	// Error tier — can the quota admit even one more worker pod?
-	if over, msg := quotaHeadroomViolations(workerFootprint(rg, 1), quotas.Items,
+	if over, msg := provisioner.QuotaHeadroomViolations(workerFootprint(rg, 1), quotas.Items,
 		"namespace ResourceQuota cannot admit another worker pod; new jobs will be rejected: "); over {
 		st.exceeded = true
 		st.exceededReason = "QuotaExhausted"
@@ -161,7 +100,7 @@ func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha
 	if ceiling, bounded := provisioner.WorkerCeiling(rg); bounded {
 		current := r.countActiveWorkerPods(ctx, rg)
 		if additional := ceiling - current; additional > 0 {
-			if over, msg := quotaHeadroomViolations(workerFootprint(rg, additional), quotas.Items,
+			if over, msg := provisioner.QuotaHeadroomViolations(workerFootprint(rg, additional), quotas.Items,
 				"workers cannot scale to the configured ceiling with current quota headroom: "); over {
 				st.pressure = true
 				st.pressureReason = "InsufficientQuotaHeadroom"
@@ -211,44 +150,6 @@ func countActiveWorkerPodsByLabel(ctx context.Context, c client.Reader, ns, labe
 		n++
 	}
 	return n
-}
-
-// quotaHeadroomViolations reports whether `demand` exceeds the remaining headroom
-// (hard − used) of any quota for any mapped resource, with a human-readable
-// message. Mirrors the GMC proxy headroom check; the logic is intentionally
-// duplicated because the two controllers live in separate Go modules and the
-// shared convention (not shared code) keeps them consistent.
-func quotaHeadroomViolations(demand corev1.ResourceList, quotas []corev1.ResourceQuota, msgPrefix string) (bool, string) {
-	var violations []string
-	for i := range quotas {
-		q := &quotas[i]
-		hard := q.Status.Hard
-		if len(hard) == 0 {
-			hard = q.Spec.Hard
-		}
-		for _, c := range workerQuotaChecks {
-			need, ok := demand[c.footprint]
-			if !ok {
-				continue
-			}
-			limit, ok := hard[c.hardKey]
-			if !ok {
-				continue
-			}
-			remaining := limit.DeepCopy()
-			if u, ok := q.Status.Used[c.hardKey]; ok {
-				remaining.Sub(u)
-			}
-			if need.Cmp(remaining) > 0 {
-				violations = append(violations, fmt.Sprintf(
-					"needs %s more %s but quota %q has %s free", need.String(), c.hardKey, q.Name, remaining.String()))
-			}
-		}
-	}
-	if len(violations) == 0 {
-		return false, ""
-	}
-	return true, msgPrefix + strings.Join(violations, "; ")
 }
 
 // --- metrics ---------------------------------------------------------------

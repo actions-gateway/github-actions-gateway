@@ -59,6 +59,18 @@ type Target interface {
 	// path used to actually build a pod.
 	Ceiling(ctx context.Context) (limit int32, bounded bool)
 
+	// QuotaExhausted reports whether the namespace ResourceQuota currently lacks
+	// the headroom to admit one more worker pod of this owner's shape, with a
+	// human-readable detail naming the binding resource. It is the observed
+	// counterpart to Ceiling's declared limit, and the admission gate refuses to
+	// claim a job when it returns true (#784) — see admission.go for why the quota
+	// rung is safe to gate on and the scheduler's Unschedulable verdict is not.
+	//
+	// Fail-open by contract: an owner or quota it cannot read yields false, leaving
+	// the provisioner's maxQuotaRetries loop as the backstop. Like Ceiling it is a
+	// per-delivery cache read, not the full Resolve path.
+	QuotaExhausted(ctx context.Context) (exhausted bool, detail string)
+
 	// Resolve returns the current, fully-resolved provisioning inputs, re-read on
 	// every acquired job. A non-nil error means a required reference no longer
 	// resolves (v2: missing RunnerTemplate/EgressProxy); the provisioner fails the

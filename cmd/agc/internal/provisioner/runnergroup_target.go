@@ -68,6 +68,15 @@ func (t *runnerGroupTarget) Ceiling(ctx context.Context) (int32, bool) {
 	return WorkerCeilingFromTiers(tierThresholds(rg.Spec.PriorityTiers), rg.Spec.MaxWorkers)
 }
 
+// QuotaExhausted checks live namespace-ResourceQuota headroom against one more
+// worker pod built from the current spec.podTemplate. Fail-open on any read
+// failure (current falls back to the listener-start snapshot; WorkerQuotaExhausted
+// returns false when it cannot list quotas).
+func (t *runnerGroupTarget) QuotaExhausted(ctx context.Context) (bool, string) {
+	rg := t.current(ctx)
+	return WorkerQuotaExhausted(ctx, t.p.Client, rg.Namespace, rg.Spec.PodTemplate.Spec.Containers)
+}
+
 func (t *runnerGroupTarget) Resolve(ctx context.Context) (*ResolvedSpec, error) {
 	rg := t.current(ctx)
 	p := t.p

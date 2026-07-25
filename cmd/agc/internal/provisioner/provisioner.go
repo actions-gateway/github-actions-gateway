@@ -214,6 +214,18 @@ type Provisioner struct {
 	PollInterval       time.Duration
 	DefaultWorkerImage string
 
+	// DisableQuotaAdmission turns OFF the admission gate's namespace-ResourceQuota
+	// rung (#784), reverting to the pre-#784 behaviour where quota exhaustion is
+	// discovered only after AcquireJob, by createPodWithQuotaRetry burning lock time.
+	// Opt-out rather than opt-in: leaving jobs queued at GitHub strictly dominates
+	// claiming them and then failing to place them, so the safer path is the default.
+	// main.go sets it from AGC_QUOTA_ADMISSION=false — an escape hatch for a cluster
+	// whose ResourceQuota .status is unreliable enough to starve a tenant. There is
+	// deliberately no tenant-facing CRD field for it: on a GMC-provisioned gateway the
+	// AGC's env is reachable only via the testing-only AGC_EXTRA_* passthrough, so the
+	// opt-out gets promoted to a real field if a production case ever needs it.
+	DisableQuotaAdmission bool
+
 	// WrapperImage is the GAG worker-wrapper image (ghcr.io/actions-gateway/wrapper,
 	// a ~2 MB scratch image holding just the wrapper binary). When non-empty, the
 	// provisioner injects the wrapper into every worker pod and overrides the

@@ -115,7 +115,23 @@ type ClaimResult struct {
 // the unrenewed lock lapses. ok=true returns release, which the listener calls
 // exactly once when the reserved slot is freed (acquire failure or job
 // completion) so the gate's in-flight count tracks only live jobs.
-type AdmitFunc func(ctx context.Context) (release func(), ok bool)
+//
+// reason is set only when ok=false and names which rung refused (an AdmitReason*
+// constant); it becomes the `reason` label on
+// actions_gateway_jobs_admission_rejected_total so an operator can tell "at the
+// configured ceiling" from "out of namespace quota".
+type AdmitFunc func(ctx context.Context) (release func(), ok bool, reason string)
+
+// AdmitReason* are the AdmitFunc rejection reasons, used verbatim as the `reason`
+// label of actions_gateway_jobs_admission_rejected_total. Both mean the job was
+// deliberately left queued at GitHub, but they call for different operator action:
+// ceiling → raise maxWorkers/priorityTiers (or accept the throttling); quota →
+// raise the namespace ResourceQuota (see the owner's WorkerQuotaExceeded condition
+// for the binding resource).
+const (
+	AdmitReasonCeiling = "ceiling"
+	AdmitReasonQuota   = "quota"
+)
 
 // Config holds the dependencies injected into a listener goroutine.
 type Config struct {

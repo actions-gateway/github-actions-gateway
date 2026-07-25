@@ -152,17 +152,23 @@ func applySecurityDefaults(spec *corev1.PodSpec, securityProfile string) {
 // a container that sets either requests or limits keeps the tenant's values.
 func (p *Provisioner) applyResourceDefaults(spec *corev1.PodSpec) {
 	for i := range spec.Containers {
-		r := &spec.Containers[i].Resources
-		if len(r.Requests) > 0 || len(r.Limits) > 0 {
-			continue
-		}
-		r.Requests = corev1.ResourceList{
-			corev1.ResourceCPU:    defaultWorkerCPU,
-			corev1.ResourceMemory: defaultWorkerMemory,
-		}
-		r.Limits = corev1.ResourceList{
-			corev1.ResourceCPU:    defaultWorkerCPU,
-			corev1.ResourceMemory: defaultWorkerMemory,
-		}
+		spec.Containers[i].Resources = gapFilledResources(&spec.Containers[i])
+	}
+}
+
+// gapFilledResources returns c's effective requests/limits: the tenant's values
+// when it declares either, else the defaults applyResourceDefaults stamps. Shared
+// with WorkerFootprint so the namespace-quota headroom arithmetic sizes the pod
+// the provisioner would actually build — a template that declares no resources
+// still consumes 500m/1Gi of the quota, and a footprint that read it as zero would
+// leave the admission gate blind to exactly the templates most likely to be
+// running at scale.
+func gapFilledResources(c *corev1.Container) corev1.ResourceRequirements {
+	if len(c.Resources.Requests) > 0 || len(c.Resources.Limits) > 0 {
+		return c.Resources
+	}
+	return corev1.ResourceRequirements{
+		Requests: DefaultWorkerResources(),
+		Limits:   DefaultWorkerResources(),
 	}
 }
