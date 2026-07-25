@@ -8,16 +8,16 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, F4, F5, F7, F8, F10, and the prevention gates shipped.** The F1
+> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, F4, F5, F7, F8, F9, F10, and the prevention gates shipped.** The F1
 > Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe
 > rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule
 > consolidation as Q364, F5's broker-double consolidation as Q368, F7's
 > CreateOrPatch collapse as Q366 (which spun the owner-reference-policy question
-> out to [Q394](../STATUS.md#Q394)), F8's god-function decomposition as Q367,
-> F10's script-sprawl cleanup as Q370, and the §Prevention gates (nolintlint + a
-> ratcheted funlen) as Q371. The remaining findings are tracked by Queue rows
-> [Q365](../STATUS.md#Q365) and [Q369](../STATUS.md#Q369); [Q372](../STATUS.md#Q372)
-> (Deferred) carries the re-run trigger.
+> out to [Q394](../STATUS.md#Q394)), F8's god-function decomposition as Q367, F9's
+> error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, and the
+> §Prevention gates (nolintlint + a ratcheted funlen) as Q371. The remaining
+> finding is tracked by Queue row [Q365](../STATUS.md#Q365);
+> [Q372](../STATUS.md#Q372) (Deferred) carries the re-run trigger.
 >
 > The ID range is not contiguous because concurrent branches allocated IDs while
 > this audit was in flight: Q361 went to a CI-latency item (#722) and Q363 to a
