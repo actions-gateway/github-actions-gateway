@@ -41,6 +41,20 @@ The full gate takes ~6 minutes. Every one of those minutes is a window in which 
 
 **When it does not apply:** if the conflict touches *any* other file — code, a plan doc, another page under `docs/` — this is a normal conflict. Resolve it and run the full `make check` (plus whatever heavier tier the change warrants) before pushing. The fast path is licensed by the narrowness of the diff, not by the presence of `STATUS.md` in it.
 
+### A moved row defeats conflict detection
+
+Git raises a delete/modify conflict only when both sides touch the *same* lines. Reordering a row moves it, so a branch that **relocates** a row while `main` **deletes** it produces no conflict at all: git applies the delete at the old position and the re-add at the new one, and a completed row silently comes back. **A clean rebase is not evidence of a correct one.**
+
+This is the second mechanism behind [Q395](../STATUS.md#Q395), and the more dangerous of the two, because the squash-merge case at least leaves a conflict to notice. Both occurred on 2026-07-25: the squash case in [#766](https://github.com/actions-gateway/github-actions-gateway/pull/766)/[#768](https://github.com/actions-gateway/github-actions-gateway/pull/768), and the reorder case while rebasing a release-planning branch across [#805](https://github.com/actions-gateway/github-actions-gateway/pull/805), which had shipped the very row that branch was relabelling.
+
+**The check.** After any rebase that reordered rows, list the IDs your branch has that `origin/main` does not:
+
+```bash
+comm -23 <(grep -o 'id="Q[0-9]*"' docs/STATUS.md | sort -u) <(git show origin/main:docs/STATUS.md | grep -o 'id="Q[0-9]*"' | sort -u)
+```
+
+Every ID it prints should be one *you* filed. Anything else is a row `main` deleted and your rebase brought back — check whether its work shipped before you push.
+
 ## When the context doesn't fit, write the doc — whatever the item's size
 
 The trigger for writing a doc is **information loss, not item size**: `Sz` estimates effort, not how much context the work rests on. If fitting the caps means dropping a decision the work depends on, an investigation finding a future session would re-derive, or a blocker's rationale — write (or extend) the doc and link it. Compressing prose is fine; dropping a clause because it doesn't fit is the signal. The content picks the home:
