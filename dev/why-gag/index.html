@@ -2413,7 +2413,7 @@ letting tenants run their own runners.</p>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">Auto</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Recovery for quota-blocked and evicted jobs</strong> — the lock is fast-cancelled and the job re-queued, no manual rerun</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Handling for quota-blocked and evicted jobs</strong> — a job the quota has no room for is never claimed, so it stays queued for a sibling with capacity; anything that slips through is lock-cancelled and re-queued, no manual rerun</span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">1</span>
@@ -2461,7 +2461,7 @@ footprint.</p>
 <tr>
 <td>Safe under a per-tenant <code>ResourceQuota</code></td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> quota-blocked jobs stall; manual cleanup + rerun</td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../design/04-operational-flows/">auto lock-cancel + re-queue</a></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../design/04-operational-flows/">won't claim a job it can't place</a><br><span class="gag-cont">live quota headroom checked <em>before</em> the claim, so the job stays queued for a sibling; if headroom is lost after the claim, auto lock-cancel + re-queue</span></td>
 </tr>
 <tr>
 <td>Guaranteed floor for critical runner types</td>
