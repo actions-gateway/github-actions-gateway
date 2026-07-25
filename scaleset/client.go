@@ -417,7 +417,7 @@ func statusError(status int, header http.Header, body []byte) error {
 	case status >= 200 && status <= 299:
 		return nil
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
-		return &UnauthorizedError{StatusCode: status}
+		return &UnauthorizedError{Source: errSource, StatusCode: status}
 	case status == http.StatusConflict:
 		// A generic 409 — the caller (CreateSession, GenerateJITConfig, …) translates
 		// it into the endpoint-specific conflict type. A 409 means different things per
@@ -426,7 +426,7 @@ func statusError(status int, header http.Header, body []byte) error {
 	case status == http.StatusNotFound || status == http.StatusGone:
 		return &NotFoundError{StatusCode: status}
 	case status == http.StatusTooManyRequests:
-		return parseRateLimitError(header)
+		return httpx.ParseRateLimitError(errSource, header)
 	default:
 		return fmt.Errorf("unexpected status %d: %s", status, githubapp.SanitizeBody(body, 512))
 	}
@@ -714,12 +714,12 @@ func (c *Client) GetMessage(ctx context.Context, sess *RunnerScaleSetSession, ca
 		return nil, nil
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		c.recordPollError("unauthorized")
-		return nil, &UnauthorizedError{StatusCode: resp.StatusCode}
+		return nil, &UnauthorizedError{Source: errSource, StatusCode: resp.StatusCode}
 	case resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone:
 		return nil, &NotFoundError{StatusCode: resp.StatusCode}
 	case resp.StatusCode == http.StatusTooManyRequests:
 		c.recordPollError("rate_limited")
-		return nil, parseRateLimitError(resp.Header)
+		return nil, httpx.ParseRateLimitError(errSource, resp.Header)
 	case resp.StatusCode >= 500:
 		c.recordPollError("server_error")
 		return nil, fmt.Errorf("scaleset: GetMessage: unexpected status %d: %s",
@@ -858,20 +858,6 @@ func pollErrorReason(err error) string {
 		return "timeout"
 	}
 	return "transport"
-}
-
-// parseRateLimitError builds a *RateLimitError from a 429 response's headers,
-// honoring Retry-After (seconds) when present.
-func parseRateLimitError(header http.Header) *RateLimitError {
-	ra := header.Get("Retry-After")
-	if ra == "" {
-		return &RateLimitError{RetryAfter: -1}
-	}
-	secs, err := strconv.ParseFloat(ra, 64)
-	if err != nil {
-		return &RateLimitError{RetryAfter: -1}
-	}
-	return &RateLimitError{RetryAfter: time.Duration(secs * float64(time.Second))}
 }
 
 // parseJWTExpiry reads the exp claim from a JWT without verifying its signature —

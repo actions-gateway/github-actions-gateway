@@ -8,11 +8,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 )
 
 // VersionTooOldError is returned by CreateSession when GitHub rejects the
@@ -26,31 +26,29 @@ func (e *VersionTooOldError) Error() string {
 	return fmt.Sprintf("broker: runner version too old: %s", e.Message)
 }
 
+// errSource labels this package's shared typed errors, keeping their messages
+// prefixed "broker: " now that the types themselves are shared with the scaleset
+// protocol client (Q369).
+const errSource = httpx.SourceBroker
+
 // RateLimitError is returned when GitHub responds with 429 Too Many Requests.
 // RetryAfter is the duration the caller should wait before retrying.
 // It is parsed from the Retry-After header when present; otherwise -1 signals
 // that the caller should apply exponential backoff.
-type RateLimitError struct {
-	RetryAfter time.Duration // -1 if no Retry-After header was present
-}
-
-func (e *RateLimitError) Error() string {
-	if e.RetryAfter < 0 {
-		return "broker: rate limited (no Retry-After header)"
-	}
-	return fmt.Sprintf("broker: rate limited, retry after %s", e.RetryAfter)
-}
+//
+// It is an alias for httpx.RateLimitError, the one declaration shared with the
+// scaleset protocol client (Q369): a caller handling both protocols matches a
+// single type, and errors.As against this name also matches a scaleset rate
+// limit.
+type RateLimitError = httpx.RateLimitError
 
 // UnauthorizedError is returned by CreateSession and GetMessage when the
 // broker responds with 401 Unauthorized or 403 Forbidden. Callers should
 // treat this as a signal to refresh the bearer token before retrying.
-type UnauthorizedError struct {
-	StatusCode int
-}
-
-func (e *UnauthorizedError) Error() string {
-	return fmt.Sprintf("broker: unauthorized (HTTP %d)", e.StatusCode)
-}
+//
+// It is an alias for httpx.UnauthorizedError, the one declaration shared with
+// the scaleset protocol client (Q369).
+type UnauthorizedError = httpx.UnauthorizedError
 
 // SessionExpiredError is returned by GetMessage when the broker responds with
 // 404 Not Found or 410 Gone, indicating the session no longer exists server-side.
@@ -318,7 +316,7 @@ func (c *Client) CreateSession(ctx context.Context, agentID int64, agentName, ru
 		return nil, fmt.Errorf("broker: CreateSession: 400 %s", msg)
 	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return nil, &UnauthorizedError{StatusCode: resp.StatusCode}
+		return nil, &UnauthorizedError{Source: errSource, StatusCode: resp.StatusCode}
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("broker: CreateSession: unexpected status %d from %s: %s",
@@ -417,14 +415,14 @@ func (c *Client) GetMessage(ctx context.Context, sessionID string) (*TaskAgentMe
 	case http.StatusAccepted: // 202 — no job queued
 		return nil, nil
 	case http.StatusUnauthorized, http.StatusForbidden: // 401, 403
-		return nil, &UnauthorizedError{StatusCode: resp.StatusCode}
+		return nil, &UnauthorizedError{Source: errSource, StatusCode: resp.StatusCode}
 	case http.StatusNotFound, http.StatusGone: // 404, 410 — session no longer exists
 		return nil, &SessionExpiredError{StatusCode: resp.StatusCode}
 	case http.StatusTooManyRequests: // 429
 		if c.PollMetrics != nil {
 			c.PollMetrics.IncPollError("rate_limited")
 		}
-		return nil, parseRateLimitError(resp)
+		return nil, httpx.ParseRateLimitError(errSource, resp.Header)
 	case http.StatusOK:
 		// fall through to decode
 	default:
@@ -640,18 +638,4 @@ func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
 // shared across the repo (see githubapp/sanitize.go).
 func capBody(b []byte, n int) string {
 	return githubapp.SanitizeBody(b, n)
-}
-
-// parseRateLimitError builds a *RateLimitError from a 429 response, honoring
-// the Retry-After header when present.
-func parseRateLimitError(resp *http.Response) *RateLimitError {
-	ra := resp.Header.Get("Retry-After")
-	if ra == "" {
-		return &RateLimitError{RetryAfter: -1}
-	}
-	secs, err := strconv.ParseFloat(ra, 64)
-	if err != nil {
-		return &RateLimitError{RetryAfter: -1}
-	}
-	return &RateLimitError{RetryAfter: time.Duration(secs * float64(time.Second))}
 }

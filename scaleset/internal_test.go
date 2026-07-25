@@ -5,9 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 )
 
 func TestStatusError_Mapping(t *testing.T) {
@@ -34,18 +37,56 @@ func TestStatusError_Mapping(t *testing.T) {
 	}
 }
 
-func TestParseRateLimitError_RetryAfter(t *testing.T) {
-	if got := parseRateLimitError(http.Header{}); got.RetryAfter != -1 {
-		t.Errorf("no header: RetryAfter = %v, want -1", got.RetryAfter)
+// TestStatusError_SharedTaxonomy covers this package's half of the unified error
+// taxonomy (Q369): RateLimitError and UnauthorizedError are the httpx
+// declarations, statusError attributes them to this protocol, and their messages
+// keep the "scaleset: " prefix they carried when the types were package-local.
+// Retry-After parsing itself is tested in githubapp/httpx.
+func TestStatusError_SharedTaxonomy(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		retryAfter string // "" = header absent
+		wantWait   time.Duration
+		wantMsg    string
+	}{
+		{"Retry-After honored", "5", 5 * time.Second, "scaleset: rate limited, retry after 5s"},
+		{"no Retry-After", "", -1, "scaleset: rate limited (no Retry-After header)"},
+		{"unparseable Retry-After", "not-a-number", -1, "scaleset: rate limited (no Retry-After header)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := http.Header{}
+			if tc.retryAfter != "" {
+				h.Set("Retry-After", tc.retryAfter)
+			}
+			err := statusError(http.StatusTooManyRequests, h, nil)
+			var rl *httpx.RateLimitError
+			if !errors.As(err, &rl) {
+				t.Fatalf("429 error = %v, want *httpx.RateLimitError", err)
+			}
+			if rl.Source != httpx.SourceScaleSet {
+				t.Errorf("Source = %q, want %q", rl.Source, httpx.SourceScaleSet)
+			}
+			if rl.RetryAfter != tc.wantWait {
+				t.Errorf("RetryAfter = %v, want %v", rl.RetryAfter, tc.wantWait)
+			}
+			if got := err.Error(); got != tc.wantMsg {
+				t.Errorf("message = %q, want %q", got, tc.wantMsg)
+			}
+		})
 	}
-	h := http.Header{}
-	h.Set("Retry-After", "5")
-	if got := parseRateLimitError(h); got.RetryAfter != 5*time.Second {
-		t.Errorf("Retry-After 5: RetryAfter = %v, want 5s", got.RetryAfter)
-	}
-	h.Set("Retry-After", "not-a-number")
-	if got := parseRateLimitError(h); got.RetryAfter != -1 {
-		t.Errorf("bad Retry-After: RetryAfter = %v, want -1", got.RetryAfter)
+
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		err := statusError(status, http.Header{}, nil)
+		var ue *httpx.UnauthorizedError
+		if !errors.As(err, &ue) {
+			t.Fatalf("HTTP %d error = %v, want *httpx.UnauthorizedError", status, err)
+		}
+		if ue.Source != httpx.SourceScaleSet || ue.StatusCode != status {
+			t.Errorf("HTTP %d: got %+v, want scaleset/%d", status, ue, status)
+		}
+		if want := fmt.Sprintf("scaleset: unauthorized (HTTP %d)", status); err.Error() != want {
+			t.Errorf("message = %q, want %q", err.Error(), want)
+		}
 	}
 }
 
