@@ -21,11 +21,8 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
-
-# Temp file used by --check; cleaned up on exit. Initialised empty so the EXIT
-# trap never trips `set -u` regardless of which path the script exits from.
-TMP_RULES=""
-trap 'rm -f "$TMP_RULES"' EXIT
+# shellcheck source=scripts/lib/chart-sync.sh
+source "$REPO_ROOT/scripts/lib/chart-sync.sh"
 
 # Authoritative controller-gen source (owned by `make -C cmd/gmc manifests`,
 # generated from the GMC controllers' +kubebuilder:rbac markers).
@@ -62,6 +59,7 @@ render() {
 
 sync() {
 	render "$SRC_ROLE" "$DST_RULES"
+	echo "wrote $DST_RULES from $SRC_ROLE."
 }
 
 # check renders the fragment to a temp file and compares it against the on-disk
@@ -69,9 +67,10 @@ sync() {
 # committed chart (and any uncommitted hand-edit), not just whether a regen
 # produced a git diff.
 check() {
-	TMP_RULES="$(mktemp)"
-	render "$SRC_ROLE" "$TMP_RULES"
-	if ! diff -u "$DST_RULES" "$TMP_RULES"; then
+	local tmp
+	tmp="$(chart_sync_mktemp)"
+	render "$SRC_ROLE" "$tmp"
+	if ! diff -u "$DST_RULES" "$tmp"; then
 		echo "ERROR: $DST_RULES is out of sync with $SRC_ROLE." >&2
 		echo "Re-sync and commit: make chart-rbac" >&2
 		exit 1
@@ -79,20 +78,4 @@ check() {
 	echo "chart manager-role rules fragment is in sync with $SRC_ROLE."
 }
 
-main() {
-	case "${1:-}" in
-	--check)
-		check
-		;;
-	"")
-		sync
-		echo "wrote $DST_RULES from $SRC_ROLE."
-		;;
-	*)
-		echo "usage: $0 [--check]" >&2
-		exit 2
-		;;
-	esac
-}
-
-main "$@"
+chart_sync_main "$@"

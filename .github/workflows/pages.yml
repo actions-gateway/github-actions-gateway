@@ -100,11 +100,20 @@ jobs:
         # a green no-op. The prerelease test mirrors publish.yml's single source
         # of truth (Q293): a tag is a prerelease when its SemVer core is 0.x or it
         # carries a '-' suffix (-rc/-alpha/-beta).
+        #
+        # For a stable release tag we set `stable_tag=true` rather than hardcoding
+        # the `stable` alias: the deploy step only claims `stable` + the default
+        # root redirect when this version is the HIGHEST released one, so a backport
+        # patch to an older supported line (e.g. v1.2.5 cut after v1.3.0) publishes
+        # its own version without demoting the site from the newer minor. A
+        # workflow_dispatch with an explicit alias/set_default is honored verbatim
+        # (that is the seeding path).
         run: |
           set -euo pipefail
           version=""
           alias=""
           is_default=false
+          stable_tag=false
           title=""
           deploy=false
 
@@ -120,8 +129,7 @@ jobs:
               else
                 version="${core}"
                 title="${core}"
-                alias="stable"
-                is_default=true
+                stable_tag=true
                 deploy=true
               fi
             fi
@@ -142,9 +150,10 @@ jobs:
             echo "version=${version}"
             echo "alias=${alias}"
             echo "is_default=${is_default}"
+            echo "stable_tag=${stable_tag}"
             echo "title=${title}"
           } >> "${GITHUB_OUTPUT}"
-          echo "Resolved: deploy=${deploy} version=${version} alias=${alias} default=${is_default}"
+          echo "Resolved: deploy=${deploy} version=${version} alias=${alias} default=${is_default} stable_tag=${stable_tag}"
 
       - name: Deploy the version with mike
         if: steps.resolve.outputs.deploy == 'true'
@@ -152,33 +161,51 @@ jobs:
           VERSION: ${{ steps.resolve.outputs.version }}
           ALIAS: ${{ steps.resolve.outputs.alias }}
           IS_DEFAULT: ${{ steps.resolve.outputs.is_default }}
+          STABLE_TAG: ${{ steps.resolve.outputs.stable_tag }}
           TITLE: ${{ steps.resolve.outputs.title }}
-        # mike commits the built version into a subdir of gh-pages and pushes it.
-        # --alias-type=copy makes an alias (e.g. `stable`) a real directory, not a
-        # symlink: GitHub Pages artifact deploys don't follow symlinks, so a
-        # symlinked `stable/` would 404 on deep links. --update-aliases lets a new
-        # release take over the `stable` alias from the previous one.
+        # mike commits each version into a subdir of gh-pages; the branch is pushed
+        # once at the end. --alias-type=copy makes an alias (e.g. `stable`) a real
+        # directory, not a symlink: GitHub Pages artifact deploys don't follow
+        # symlinks, so a symlinked `stable/` would 404 on deep links.
+        #
+        # `stable` + the default root redirect only move to a release tag when it is
+        # the HIGHEST released version, so a backport patch to an older supported
+        # line never demotes the site from a newer minor. A workflow_dispatch's
+        # explicit alias/default is applied verbatim instead (the seeding path).
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
-          args=(deploy --push --update-aliases)
+          # 1) Deploy the version itself (with an explicit dispatch alias if given).
+          args=(deploy --update-aliases --title "${TITLE}")
           if [[ -n "${ALIAS}" ]]; then
-            args+=(--alias-type=copy)
-          fi
-          if [[ -n "${TITLE}" ]]; then
-            args+=(--title "${TITLE}")
-          fi
-          args+=("${VERSION}")
-          if [[ -n "${ALIAS}" ]]; then
-            args+=("${ALIAS}")
+            args+=(--alias-type=copy "${VERSION}" "${ALIAS}")
+          else
+            args+=("${VERSION}")
           fi
           mike "${args[@]}"
 
+          # 2) Honor an explicit workflow_dispatch default.
           if [[ "${IS_DEFAULT}" == "true" ]]; then
-            mike set-default --push "${ALIAS:-${VERSION}}"
+            mike set-default "${ALIAS:-${VERSION}}"
           fi
+
+          # 3) Automatic stable handling for a release tag: claim `stable` + the
+          #    default only when this version is the highest released one (semver).
+          #    A backport to an older line just updates its own version's docs.
+          if [[ "${STABLE_TAG}" == "true" ]]; then
+            highest="$(mike list 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -1 || true)"
+            if [[ "${highest}" == "${VERSION}" ]]; then
+              mike deploy --alias-type=copy --update-aliases --title "${TITLE}" "${VERSION}" stable
+              mike set-default stable
+            else
+              echo "Backport: ${VERSION} is not the highest release (${highest}); leaving stable unchanged."
+            fi
+          fi
+
+          # 4) Publish the updated version tree.
+          git push origin gh-pages
 
       - name: Assemble the Pages artifact from the gh-pages version tree
         if: steps.resolve.outputs.deploy == 'true'

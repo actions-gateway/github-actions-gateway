@@ -399,28 +399,28 @@ func boolConditionStatus(b bool) metav1.ConditionStatus {
 	return metav1.ConditionFalse
 }
 
-// --- apply helpers (CreateOrPatch + controller owner reference) ---
+// --- apply helpers ---
+//
+// All delegate to applyManagedChild (apply_helpers.go), the one shared
+// CreateOrPatch code path. Unlike v1, the v2 reconciler stamps a controller owner
+// reference on every namespaced child; the sole exception is the cluster-scoped
+// applyClusterRunnerTemplateReaderBinding, which cannot be owned by a namespaced
+// ActionsGateway (see the per-child ownerRef policy, Q394).
 
 func (r *ActionsGatewayV2Reconciler) applyServiceAccount(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *corev1.ServiceAccount) error {
-	obj := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
-		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
-	})
-	return err
+	return applyManagedChild(ctx, r.Client, r.Scheme, ag, &corev1.ServiceAccount{}, desired, nil)
 }
 
 func (r *ActionsGatewayV2Reconciler) applyRoleBinding(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *rbacv1.RoleBinding) error {
-	obj := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+	obj := &rbacv1.RoleBinding{}
+	err := applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		// roleRef is immutable; on a roleRef change the binding must be recreated.
 		if obj.ResourceVersion != "" && obj.RoleRef != desired.RoleRef {
 			return errRoleRefImmutable
 		}
-		obj.Labels = desired.Labels
 		obj.RoleRef = desired.RoleRef
 		obj.Subjects = desired.Subjects
-		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
+		return nil
 	})
 	if errors.Is(err, errRoleRefImmutable) {
 		if delErr := r.Delete(ctx, obj); delErr != nil && !apierrors.IsNotFound(delErr) {
@@ -439,13 +439,12 @@ func (r *ActionsGatewayV2Reconciler) applyRoleBinding(ctx context.Context, ag *g
 // reconcileDelete removes it explicitly.
 func (r *ActionsGatewayV2Reconciler) applyClusterRunnerTemplateReaderBinding(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) error {
 	desired := buildClusterRunnerTemplateReaderBinding(ag)
-	obj := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+	obj := &rbacv1.ClusterRoleBinding{}
+	err := applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
 		// roleRef is immutable; on a roleRef change the binding must be recreated.
 		if obj.ResourceVersion != "" && obj.RoleRef != desired.RoleRef {
 			return errRoleRefImmutable
 		}
-		obj.Labels = desired.Labels
 		obj.RoleRef = desired.RoleRef
 		obj.Subjects = desired.Subjects
 		return nil
@@ -460,25 +459,22 @@ func (r *ActionsGatewayV2Reconciler) applyClusterRunnerTemplateReaderBinding(ctx
 }
 
 func (r *ActionsGatewayV2Reconciler) applyService(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *corev1.Service) error {
-	obj := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
+	obj := &corev1.Service{}
+	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
+		// Preserve server-assigned Spec fields (ClusterIP); set only managed fields.
 		obj.Spec.Type = desired.Spec.Type
 		obj.Spec.Selector = desired.Spec.Selector
 		obj.Spec.Ports = desired.Spec.Ports
-		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
+		return nil
 	})
-	return err
 }
 
 func (r *ActionsGatewayV2Reconciler) applyNetworkPolicy(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *networkingv1.NetworkPolicy) error {
-	obj := &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
+	obj := &networkingv1.NetworkPolicy{}
+	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		obj.Spec = desired.Spec
-		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
+		return nil
 	})
-	return err
 }
 
 // applyDeployment creates or patches the AGC Deployment. Replacing the whole Spec
@@ -486,24 +482,20 @@ func (r *ActionsGatewayV2Reconciler) applyNetworkPolicy(ctx context.Context, ag 
 // EgressProxy), so no other controller owns `.spec.replicas`. An HPA-targeted
 // Deployment must not be applied this way — see assignHPATargetDeploymentSpec (Q283).
 func (r *ActionsGatewayV2Reconciler) applyDeployment(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *appsv1.Deployment) error {
-	obj := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
+	obj := &appsv1.Deployment{}
+	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		obj.Spec = desired.Spec
-		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
+		return nil
 	})
-	return err
 }
 
 func (r *ActionsGatewayV2Reconciler) applyOwnedSecret(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *corev1.Secret) error {
-	obj := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
+	obj := &corev1.Secret{}
+	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		obj.Type = desired.Type
 		obj.Data = desired.Data
-		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
+		return nil
 	})
-	return err
 }
 
 // --- status ---

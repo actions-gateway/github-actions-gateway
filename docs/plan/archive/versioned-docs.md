@@ -47,12 +47,20 @@ ever visible under the opt-in `dev` version, never as the released docs.
 - **`--alias-type=copy` for aliases.** GitHub Pages artifact deploys don't follow
   symlinks, so mike's default symlinked `stable/` would 404 on deep links. `copy`
   makes `stable/` a real directory; `stable/operations/…` resolves.
-- **Trigger model mirrors `publish.yml`.** A stable `v*` tag deploys the release
-  and moves `stable`; a prerelease tag (`0.x`, `-rc`/`-alpha`/`-beta`) does not
-  deploy — the same prerelease test `publish.yml` uses (Q293), so the site
-  republishes on exactly the tags that ship a stable chart. A `main` push refreshes
-  `dev`. `workflow_dispatch` deploys an explicit `version`/`alias` (for seeding and
-  manual redeploys).
+- **Trigger model mirrors `publish.yml`.** A stable `v*` tag deploys the release; a
+  prerelease tag (`0.x`, `-rc`/`-alpha`/`-beta`) does not deploy — the same
+  prerelease test `publish.yml` uses (Q293), so the site republishes on exactly the
+  tags that ship a stable chart. A `main` push refreshes `dev`. `workflow_dispatch`
+  deploys an explicit `version`/`alias` (for seeding and manual redeploys).
+- **`stable`/default is semver-aware, not latest-tag-wins.** A stable tag claims the
+  `stable` alias + the default root redirect **only when it is the highest released
+  version** (`mike list` → `sort -V`). This handles patch releases: a backport to an
+  older supported line (e.g. `v1.2.5` cut after `v1.3.0`) publishes its own version
+  without demoting the site from `1.3.0`. Because `mike` builds each version from
+  its tag, a patch tagged off the release line (not off feature-ahead `main`)
+  carries only that line's content — so correct release engineering makes the docs
+  correct for free; no docs-specific branch is needed. See
+  [release.md § Patch releases and backports](../../operations/release.md#patch-releases-and-backports).
 
 ## Rollout
 
@@ -70,7 +78,12 @@ mike deploy of `dev` + `1.0.0` + `1.1.0 stable`, `set-default stable`, then
 `stable/`, a correct `versions.json`, a real (non-symlink) `stable/` directory with
 working deep links, and the injected root `CNAME`. The `resolve` step's
 event/ref→version mapping was table-tested across `main`, stable tag, prerelease
-tag, and each `workflow_dispatch` input shape.
+tag, and each `workflow_dispatch` input shape. Cross-run **accumulation** was
+verified too (a fresh clone with no local `gh-pages` deploys a new version onto the
+existing ones via `origin/gh-pages`, which `fetch-depth: 0` makes available). The
+semver-aware `stable` decision was table-tested across first release, forward
+release, backport-after-newer-minor (keeps `stable`), double-digit ordering
+(`1.10.0` > `1.9.0`), and re-run idempotency.
 
 ## Follow-ups
 

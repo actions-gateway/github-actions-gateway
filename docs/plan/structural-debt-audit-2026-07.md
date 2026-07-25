@@ -8,14 +8,15 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, F4, F5, F8, and the prevention gates shipped.** The F1
+> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, F4, F5, F7, F8, F10, and the prevention gates shipped.** The F1
 > Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe
 > rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule
-> consolidation as Q364, F5's broker-double consolidation as Q368, F8's
-> god-function decomposition as Q367, and the §Prevention gates (nolintlint + a
+> consolidation as Q364, F5's broker-double consolidation as Q368, F7's
+> CreateOrPatch collapse as Q366 (which spun the owner-reference-policy question
+> out to [Q394](../STATUS.md#Q394)), F8's god-function decomposition as Q367,
+> F10's script-sprawl cleanup as Q370, and the §Prevention gates (nolintlint + a
 > ratcheted funlen) as Q371. The remaining findings are tracked by Queue rows
-> [Q365](../STATUS.md#Q365)–[Q366](../STATUS.md#Q366),
-> [Q369](../STATUS.md#Q369)–[Q370](../STATUS.md#Q370); [Q372](../STATUS.md#Q372)
+> [Q365](../STATUS.md#Q365) and [Q369](../STATUS.md#Q369); [Q372](../STATUS.md#Q372)
 > (Deferred) carries the re-run trigger.
 >
 > The ID range is not contiguous because concurrent branches allocated IDs while
@@ -287,7 +288,7 @@ This is why the row sorts adjacent to Q273 rather than by its own severity.
 
 ### Medium
 
-**F7 — ~29 near-identical `CreateOrPatch` wrappers across three GMC reconcilers.** → [Q366](../STATUS.md#Q366)
+**F7 — ~29 near-identical `CreateOrPatch` wrappers across three GMC reconcilers.** ✅ **Shipped** (Q366)
 
 33 `CreateOrPatch` calls across 29 `apply*` functions
 (`actionsgateway_controller.go` 16/13, `actionsgateway_v2_controller.go` 8/7,
@@ -303,6 +304,33 @@ ServiceAccounts, RoleBindings, NetworkPolicies, and HPAs.
 
 Keep three as bespoke: `applyRoleBinding` (immutable `roleRef`), `applyService`
 (preserve server-assigned `ClusterIP`), `applyProxyDeployment` (HPA owns replicas).
+
+**Shipped in Q366.** Re-measured at implementation time (2026-07-24, after Q360 and
+Q364 reshaped the package) the counts had shrunk to **26 `CreateOrPatch` calls / 26
+`apply*` wrappers** (v1 11, v2 7, EgressProxy 8) — one call per wrapper, no
+double-call wrappers left. All 26 now delegate to a single generic
+`applyManagedChild[T client.Object]` (`apply_helpers.go`): it keys the shell by the
+desired object's namespace/name, writes the managed labels, runs a per-type
+`copyManaged` closure, and — **only when the caller passes a non-nil owner** —
+stamps the controller reference. The three "bespoke" behaviours did not need
+separate skeletons: the immutable-`roleRef` recreate is a thin branch *around* the
+one path (the closure returns `errRoleRefImmutable`; the wrapper does the
+delete+recreate), and `applyService`/`applyProxyDeployment`/the EgressProxy
+conditional-scale Deployment are just different `copyManaged` closures. So the
+8–12-line skeleton collapsed 26→1 while every wrapper kept its exact
+type/fields/owner behaviour.
+
+The refactor was strictly behaviour-preserving: the per-call-site owner-reference
+decision is passed through unchanged (v1 stays 4-of-11 owned, v2 all-but-the-
+cluster-scoped-binding, EgressProxy all-owned). New table tests
+(`apply_helpers_ownerref_test.go`) pin that contract per helper — including an
+explicit `4 of 11` assertion for v1 — so the collapse cannot silently add or drop
+an owner.
+
+The ownerRef-policy inconsistency itself was **deliberately not resolved here** — a
+force-removed-finalizer leak is a security-relevant behaviour question that must be
+decided on its own, not smuggled into a cleanup. It is filed as
+[Q394](../STATUS.md#Q394) for a separate, signed-off decision.
 
 **F8 — Two god wiring functions with the linter switched off.** ✅ **Shipped** (Q367)
 
@@ -350,7 +378,7 @@ only in parameter type (`*http.Response` vs `http.Header`). Callers handling bot
 protocols must type-switch on two unrelated types with the same name.
 `githubapp/httpx/` already exists as the natural home.
 
-**F10 — Script-layer sprawl.** → [Q370](../STATUS.md#Q370)
+**F10 — Script-layer sprawl.** ✅ **Shipped** (Q370)
 
 - `scripts/dogfood/setup.sh` — 688 lines / 32KB, 15 functions spanning cluster
   creation, node pools, credentials, CRD install, Helm install, CA-bundle patching,
@@ -365,6 +393,27 @@ protocols must type-switch on two unrelated types with the same name.
 - `scripts/sync-chart-{crds,rbac,webhook}.sh` triplicate an identical
   trap/`render`/`sync`/`check`/`main` skeleton — even the header comments are
   verbatim copies. Extract to `scripts/lib/chart-sync.sh`.
+
+**Shipped in Q370, two of the three threads — the other two premises were stale on
+re-measurement.** The `sync-chart-*.sh` triplication is gone: the temp-file
+registry, EXIT-trap cleanup, and `--check`/write/usage dispatch moved to the new
+`scripts/lib/chart-sync.sh`, which the three now source (each keeps only its
+genuinely-different `render`/`sync`/`check`). The two named `common.sh`
+non-adopters now source it: the byte-identical `step`/`die`/`gh_curl` were promoted
+into `common.sh` and the local copies deleted (`info`/`warn` stayed local to
+`probe-investigations-cd.sh` — single-script, not duplicated). `docs-preview.sh`'s
+`die` was left alone: it prints a script-name-prefixed message, so it is not the
+same contract. `setup.sh` needed no work — re-measured at 730 lines but **already
+decomposed** into 16 concern-scoped functions (`create_cluster`, `install_gag`,
+`apply_cr`, …) behind a clean orchestrating `main()`; the length is inherent step
+complexity, not a god function, and moving single-use bootstrap functions into
+`dogfood/lib/` would split the from-zero flow across files for no reuse gain while
+risking the Q380 bootstrap. The `command -v`/`repo_root` counts were also stale:
+`repo_root="$(git rev-parse …)"` is the required pre-source idiom (`common.sh`'s own
+header mandates it, not sprawl), and the remaining `command -v` guards are
+graceful-detection sites where `require_cmd`'s fail-fast `exit 1` would be wrong
+(the tool-checker itself, the `PreToolUse` hooks, `local-throttle.sh`'s optional
+probes) — no clean swap exists, so none was forced.
 
 ## Prevention: what a linter could and could not have caught
 
