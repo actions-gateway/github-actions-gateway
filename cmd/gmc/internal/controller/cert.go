@@ -14,19 +14,10 @@ import (
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 )
 
-const (
-	proxyTLSSecretName = "actions-gateway-proxy-tls"
-
-	proxyTLSVolumeName = "proxy-tls"
-	proxyTLSMountPath  = "/etc/actions-gateway/proxy-tls"
-
-	proxyCACertVolumeName = "proxy-ca"
-	proxyCACertMountPath  = "/etc/actions-gateway/proxy-ca"
-
-	// proxyCertRenewBefore is the lead time before cert expiry at which the GMC
-	// re-issues the cert. 30 days gives operators ample time to notice and restart pods.
-	proxyCertRenewBefore = 30 * 24 * time.Hour
-)
+// proxyTLSSecretName is the v1 ActionsGateway's fixed per-namespace proxy TLS
+// Secret. v2 derives the name from the EgressProxy (egressProxyTLSSecretName).
+// The version-neutral mount layout and certificate primitives are in shared_pki.go.
+const proxyTLSSecretName = "actions-gateway-proxy-tls"
 
 // generateProxyCert generates a self-signed 2048-bit RSA TLS certificate for the
 // proxy Service. The certificate lists all in-cluster DNS names for the Service as
@@ -83,17 +74,4 @@ func generateProxyCert(ag *gmcv1alpha1.ActionsGateway) ([]byte, []byte, error) {
 	}
 
 	return certBuf.Bytes(), keyBuf.Bytes(), nil
-}
-
-// parseCertPEM decodes the first PEM certificate block and returns the parsed cert.
-func parseCertPEM(certPEM []byte) (*x509.Certificate, error) {
-	block, _ := pem.Decode(certPEM)
-	if block == nil {
-		return nil, fmt.Errorf("no PEM block found")
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse certificate: %w", err)
-	}
-	return cert, nil
 }

@@ -12,7 +12,6 @@ import (
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -329,23 +328,10 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 		r.Cache.MarkRefreshed(time.Now())
 	}
 
-	var agList gmcv1alpha1.ActionsGatewayList
-	if err := r.List(ctx, &agList); err != nil {
-		log.Error("failed to list ActionsGateways", "error", err)
+	// v1 pass (ipranges_v1.go): patch every managed v1 ActionsGateway's proxy
+	// NetworkPolicy. Deleted wholesale by the v1 sunset (Q273).
+	if err := r.refreshV1ProxyNetworkPolicies(ctx, log, cidrs); err != nil {
 		return err
-	}
-
-	for i := range agList.Items {
-		ag := &agList.Items[i]
-		if !ag.DeletionTimestamp.IsZero() {
-			continue // skip CRs being deleted; their NetworkPolicy is already being removed
-		}
-		if ag.Spec.Proxy.ManagedNetworkPolicy != nil && !*ag.Spec.Proxy.ManagedNetworkPolicy {
-			continue
-		}
-		if err := r.patchNetworkPolicy(ctx, ag, cidrs); err != nil {
-			log.Error("failed to patch NetworkPolicy", "namespace", ag.Namespace, "name", ag.Name, "error", err)
-		}
 	}
 
 	// v2 NetworkPolicy refresh passes are gated on the opt-in
@@ -462,25 +448,6 @@ func (r *IPRangeReconciler) patchEgressProxyNetworkPolicy(ctx context.Context, e
 	}
 	if r.Metrics != nil {
 		r.Metrics.IPRangeUpdates.WithLabelValues(ep.Namespace).Inc()
-	}
-	return nil
-}
-
-func (r *IPRangeReconciler) patchNetworkPolicy(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, cidrs []net.IPNet) error {
-	var np networkingv1.NetworkPolicy
-	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: npProxyName}, &np); err != nil {
-		return client.IgnoreNotFound(err) // NetworkPolicy may not exist yet or is being removed
-	}
-
-	desired := buildProxyNetworkPolicy(ag, cidrs)
-	np.Spec.Egress = desired.Spec.Egress
-	np.Spec.Ingress = desired.Spec.Ingress
-
-	if err := r.Update(ctx, &np); err != nil {
-		return err
-	}
-	if r.Metrics != nil {
-		r.Metrics.IPRangeUpdates.WithLabelValues(ag.Namespace).Inc()
 	}
 	return nil
 }

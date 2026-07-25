@@ -1,19 +1,20 @@
 package controller
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/pem"
 	"fmt"
-	"math/big"
 	"time"
 
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 )
 
+// The v1 ActionsGateway's fixed per-namespace metrics Secret names and its
+// proxy+AGC SAN list. v2 derives both per CR (metricsTLSSecretNameV2 /
+// metricsServerSANsV2, and the EgressProxy's own pair). The version-neutral
+// bundle type, mount layout and signing primitives are in shared_pki.go.
 const (
 	// metricsTLSSecretName holds the server bundle (ca.crt + tls.crt + tls.key)
 	// mounted read-only into both the AGC and proxy pods. They serve /metrics
@@ -24,31 +25,7 @@ const (
 	// tls.key). It is published for the monitoring stack to present when
 	// scraping; it is never mounted into AGC/proxy pods.
 	metricsClientSecretName = "actions-gateway-metrics-client"
-
-	metricsTLSVolumeName = "metrics-tls"
-	metricsTLSMountPath  = "/etc/actions-gateway/metrics-tls"
-
-	// metricsCACertKey is the Secret data key under which the metrics CA cert is
-	// stored alongside the standard tls.crt/tls.key of a kubernetes.io/tls Secret.
-	metricsCACertKey = "ca.crt"
-
-	// metricsScraperCN is the Common Name on the scraper client certificate.
-	metricsScraperCN = "actions-gateway-metrics-scraper"
-
-	// metricsCertRenewBefore mirrors proxyCertRenewBefore: the GMC re-issues the
-	// whole bundle once the server cert is within this window of expiry.
-	metricsCertRenewBefore = 30 * 24 * time.Hour
 )
-
-// metricsCertBundle is the full per-tenant metrics PKI: one CA signing a server
-// leaf (for the AGC/proxy metrics listeners) and a client leaf (for the scraper).
-type metricsCertBundle struct {
-	caPEM         []byte
-	serverCertPEM []byte
-	serverKeyPEM  []byte
-	clientCertPEM []byte
-	clientKeyPEM  []byte
-}
 
 // generateMetricsCerts builds a self-signed CA and signs a server certificate
 // (SANs covering the proxy and AGC Service DNS names; ServerAuth) and a client
@@ -126,48 +103,4 @@ func metricsServerSANs(ag *gmcv1alpha1.ActionsGateway) []string {
 		)
 	}
 	return sans
-}
-
-// signLeaf fills in the boilerplate fields on tmpl, signs it with the CA, and
-// returns the leaf cert + key as PEM. The key is RSA-2048, PKCS#8 encoded.
-func signLeaf(caCert *x509.Certificate, caKey *rsa.PrivateKey, tmpl *x509.Certificate) ([]byte, []byte, error) {
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, nil, fmt.Errorf("generate key: %w", err)
-	}
-	serial, err := randSerial()
-	if err != nil {
-		return nil, nil, err
-	}
-	tmpl.SerialNumber = serial
-	tmpl.NotBefore = time.Now().Add(-1 * time.Minute)
-	tmpl.NotAfter = time.Now().Add(365 * 24 * time.Hour)
-	tmpl.BasicConstraintsValid = true
-
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, caCert, &key.PublicKey, caKey)
-	if err != nil {
-		return nil, nil, fmt.Errorf("create certificate: %w", err)
-	}
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		return nil, nil, fmt.Errorf("marshal key: %w", err)
-	}
-	return encodeCertPEM(der), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), nil
-}
-
-// randSerial returns a random 128-bit certificate serial number.
-func randSerial() (*big.Int, error) {
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		return nil, fmt.Errorf("generate serial: %w", err)
-	}
-	return serial, nil
-}
-
-// encodeCertPEM PEM-encodes a DER certificate.
-func encodeCertPEM(der []byte) []byte {
-	var buf bytes.Buffer
-	// pem.Encode to a bytes.Buffer never errors.
-	_ = pem.Encode(&buf, &pem.Block{Type: "CERTIFICATE", Bytes: der})
-	return buf.Bytes()
 }
