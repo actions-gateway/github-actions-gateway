@@ -91,15 +91,55 @@ func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitF
 }
 
 // Admit returns an AdmitFunc bound to the given Target that gates job acquisition
-// on the owner's worker ceiling via the in-memory reservation counter (Q59). The
-// ceiling is re-read from the fresh spec on each call so maxWorkers/priorityTiers
-// edits take effect without an AGC restart (Q117). The returned AdmitFunc is safe
-// for concurrent use across the owner's listeners. v1 wires it via AdmitFor; the
-// v2 RunnerSet controller wires it directly with a RunnerSet-backed Target.
+// on two independent rungs, both re-read on every delivered job so spec and cluster
+// changes take effect without an AGC restart (Q117):
+//
+//  1. Observed namespace-ResourceQuota headroom (#784) — Target.QuotaExhausted.
+//  2. The owner's declared worker ceiling (Q59) — Target.Ceiling, counted against
+//     the in-memory reservation gate.
+//
+// The quota rung comes first and reserves nothing: a job we decline for quota was
+// never counted against the ceiling, so the reservation arithmetic is untouched.
+// Without it, quota exhaustion is handled one layer down by createPodWithQuotaRetry
+// — which holds the GitHub job lock across up to maxQuotaRetries × quotaRetryDelay
+// (150s of a ~10-minute lock at the defaults) and, on budget exhaustion, drops the
+// job *with the lock held*: precisely the failure the Q59 gate exists to prevent.
+// Refusing to claim leaves the job queued at GitHub for a sibling with capacity.
+//
+// # Why quota and not the scheduler's verdict
+//
+// The quota rung and WorkersUnschedulable look symmetrical and are not, so only the
+// former gates acquisition:
+//
+//   - A ResourceQuota rejection is never an autoscaler input — no cluster autoscaler
+//     adds a node because a namespace quota is full — so declining to claim forfeits
+//     no capacity, and the condition is self-clearing: in-flight jobs complete and
+//     release headroom.
+//   - A Pending unschedulable pod, by contrast, *is* the request for a node. Gating
+//     on it would suppress the very signal cluster-autoscaler needs and starve the
+//     tenant exactly when scale-up would have rescued it. That rung needs a capacity-
+//     feasibility primitive (ProvisioningRequest), not this gate.
+//
+// The returned AdmitFunc is safe for concurrent use across the owner's listeners.
+// v1 wires it via AdmitFor; the v2 RunnerSet controller wires it directly with a
+// RunnerSet-backed Target.
 func (p *Provisioner) Admit(target Target) runnercore.AdmitFunc {
 	key := target.Key().String()
-	return func(ctx context.Context) (release func(), ok bool) {
+	return func(ctx context.Context) (release func(), ok bool, reason string) {
+		if !p.DisableQuotaAdmission {
+			if exhausted, detail := target.QuotaExhausted(ctx); exhausted {
+				// Per-delivery and high-volume while a tenant sits at its quota
+				// ceiling: Debug, with the metric's reason label and the owner's
+				// WorkerQuotaExceeded condition as the operator-facing signals.
+				p.logForKey(target.Key()).Debug("job admission deferred: no namespace ResourceQuota headroom for another worker pod", "detail", detail)
+				return nil, false, runnercore.AdmitReasonQuota
+			}
+		}
 		limit, bounded := target.Ceiling(ctx)
-		return p.admission.admit(key, limit, bounded)
+		release, ok = p.admission.admit(key, limit, bounded)
+		if !ok {
+			return nil, false, runnercore.AdmitReasonCeiling
+		}
+		return release, true, ""
 	}
 }

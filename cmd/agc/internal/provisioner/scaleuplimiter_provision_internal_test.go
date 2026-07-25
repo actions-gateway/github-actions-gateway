@@ -37,6 +37,9 @@ func sharedMetrics() *runnercore.Metrics {
 type stubTarget struct {
 	key  client.ObjectKey
 	spec *ResolvedSpec
+	// quotaExhausted/quotaDetail drive the admission gate's quota rung (#784).
+	quotaExhausted bool
+	quotaDetail    string
 }
 
 func (s *stubTarget) Key() client.ObjectKey { return s.key }
@@ -47,7 +50,10 @@ func (s *stubTarget) PodOwnerLabels() map[string]string {
 	return map[string]string{LabelRunnerSet: s.key.Name}
 }
 func (s *stubTarget) Ceiling(context.Context) (int32, bool) { return 0, false }
-func (s *stubTarget) RecordEvent(_, _, _, _ string)         {}
+func (s *stubTarget) QuotaExhausted(context.Context) (bool, string) {
+	return s.quotaExhausted, s.quotaDetail
+}
+func (s *stubTarget) RecordEvent(_, _, _, _ string) {}
 func (s *stubTarget) Resolve(context.Context) (*ResolvedSpec, error) {
 	return s.spec, nil
 }

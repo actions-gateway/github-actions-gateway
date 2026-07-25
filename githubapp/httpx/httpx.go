@@ -14,6 +14,11 @@
 // listener, which holds the connection open by design and so cannot carry an
 // overall read deadline; it is bounded by a transport-level ResponseHeaderTimeout
 // instead — see broker.NewHTTPClient.
+//
+// The package is also the home of the error taxonomy shared by the GitHub
+// protocol clients: RateLimitError and UnauthorizedError are declared here once
+// and aliased by the broker and scaleset packages, so a caller spanning both
+// protocols matches one type rather than two same-named ones (Q369).
 package httpx
 
 import (

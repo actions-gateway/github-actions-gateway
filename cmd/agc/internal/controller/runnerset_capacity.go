@@ -109,10 +109,11 @@ func (r *RunnerSetReconciler) evalRunnerSetWorkerQuota(ctx context.Context, rs *
 		exceededMessage: "namespace ResourceQuota can admit more worker pods",
 	}
 
-	var containers []corev1.Container
-	if tmpl != nil {
-		containers = tmpl.PodTemplate.Spec.Containers
-	}
+	// Size the footprint off the SAME shape the Target would provision — sizing
+	// profile applied (Q359 Phase 3) — so these conditions and the admission gate's
+	// quota rung (#784) never contradict each other for a set on a Binpack/Throughput
+	// profile. Static/no profile passes the template through untouched.
+	containers := runnerSetWorkerContainers(rs, tmpl)
 
 	var quotas corev1.ResourceQuotaList
 	if err := r.List(ctx, &quotas, client.InNamespace(rs.Namespace)); err != nil {
@@ -127,7 +128,7 @@ func (r *RunnerSetReconciler) evalRunnerSetWorkerQuota(ctx context.Context, rs *
 	}
 
 	// Error tier — can the quota admit even one more worker pod?
-	if over, msg := quotaHeadroomViolations(workerFootprintForContainers(containers, 1), quotas.Items,
+	if over, msg := provisioner.QuotaHeadroomViolations(provisioner.WorkerFootprint(containers, 1), quotas.Items,
 		"namespace ResourceQuota cannot admit another worker pod; new jobs will be rejected: "); over {
 		st.exceeded = true
 		st.exceededReason = "QuotaExhausted"
@@ -138,7 +139,7 @@ func (r *RunnerSetReconciler) evalRunnerSetWorkerQuota(ctx context.Context, rs *
 	if ceiling, bounded := provisioner.WorkerCeilingFromTiers(runnerSetTierThresholds(rs.Spec.PriorityTiers), rs.Spec.MaxWorkers); bounded {
 		current := countActiveWorkerPodsByLabel(ctx, r.Client, rs.Namespace, provisioner.LabelRunnerSet, rs.Name)
 		if additional := ceiling - current; additional > 0 {
-			if over, msg := quotaHeadroomViolations(workerFootprintForContainers(containers, additional), quotas.Items,
+			if over, msg := provisioner.QuotaHeadroomViolations(provisioner.WorkerFootprint(containers, additional), quotas.Items,
 				"workers cannot scale to the configured ceiling with current quota headroom: "); over {
 				st.pressure = true
 				st.pressureReason = "InsufficientQuotaHeadroom"
@@ -153,6 +154,18 @@ func (r *RunnerSetReconciler) evalRunnerSetWorkerQuota(ctx context.Context, rs *
 		st.pressureMessage = "superseded by WorkerQuotaExceeded"
 	}
 	return st
+}
+
+// runnerSetWorkerContainers returns the containers of the worker pod this set would
+// provision right now: the resolved template's pod spec with the sizing profile
+// applied, exactly as runnerSetTarget.Resolve builds it. Shared by the WorkerQuota
+// conditions and the admission gate's quota rung so both size a worker identically.
+// A nil template (references unresolved) yields no containers.
+func runnerSetWorkerContainers(rs *v2alpha1.RunnerSet, tmpl *v2alpha1.RunnerTemplateSpec) []corev1.Container {
+	if tmpl == nil {
+		return nil
+	}
+	return applySizingProfile(tmpl.PodTemplate, rs.Spec.Sizing, tmpl, rs.Status.SizingRecommendation).Spec.Containers
 }
 
 // quotaToRunnerSets maps a ResourceQuota event to every RunnerSet in the same

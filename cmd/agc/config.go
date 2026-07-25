@@ -45,6 +45,10 @@ type agcConfig struct {
 	// right-sizing sampler (Q359); parsed by workerUsageSampleInterval in run().
 	WorkerUsageSampleInterval string
 
+	// QuotaAdmission (AGC_QUOTA_ADMISSION, "false" opts out) controls the admission
+	// gate's namespace-ResourceQuota rung (#784). On by default.
+	QuotaAdmission string
+
 	// Registrar selection (buildRegistrar). Stub URLs win over GITHUB_ORG_URL so an
 	// explicitly-configured fakegithub stub takes precedence (testing).
 	StubAuthURL         string // STUB_AUTH_URL
@@ -80,6 +84,7 @@ func loadConfig(getenv func(string) string) agcConfig {
 		WrapperImage:              getenv("WRAPPER_IMAGE"),
 		WrapperDelivery:           getenv("WRAPPER_DELIVERY"),
 		WorkerUsageSampleInterval: getenv("WORKER_USAGE_SAMPLE_INTERVAL"),
+		QuotaAdmission:            getenv("AGC_QUOTA_ADMISSION"),
 		StubAuthURL:               getenv("STUB_AUTH_URL"),
 		StubBrokerURL:             getenv("STUB_BROKER_URL"),
 		GitHubOrgURL:              getenv("GITHUB_ORG_URL"),

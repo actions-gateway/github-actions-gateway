@@ -107,6 +107,30 @@ func (t *runnerSetTarget) Ceiling(ctx context.Context) (int32, bool) {
 	return provisioner.WorkerCeilingFromTiers(runnerSetTierThresholds(rs.Spec.PriorityTiers), rs.Spec.MaxWorkers)
 }
 
+// QuotaExhausted checks live namespace-ResourceQuota headroom against one more
+// worker pod of this set's current shape. It resolves only the template chain (not
+// the proxy) — the pod shape is all the footprint needs — and applies the sizing
+// profile, so the gate sizes the same pod Resolve would build.
+//
+// Fail-open at every step: an unreadable set or gateway, a template chain that does
+// not resolve, or an unreadable quota all yield false. A set whose references are
+// broken must fail closed in Resolve (§H.7), not be silently starved by the gate.
+func (t *runnerSetTarget) QuotaExhausted(ctx context.Context) (bool, string) {
+	rs := &v2alpha1.RunnerSet{}
+	if err := t.client.Get(ctx, t.key, rs); err != nil {
+		return false, ""
+	}
+	gw := &v2alpha1.ActionsGateway{}
+	if err := t.client.Get(ctx, types.NamespacedName{Namespace: t.key.Namespace, Name: rs.Spec.GatewayRef.Name}, gw); err != nil {
+		return false, ""
+	}
+	tmpl, _, _, res := resolveTemplateChain(ctx, t.client, t.key.Namespace, rs, gw)
+	if !res.resolved() {
+		return false, ""
+	}
+	return provisioner.WorkerQuotaExhausted(ctx, t.client, t.key.Namespace, runnerSetWorkerContainers(rs, tmpl))
+}
+
 // Resolve re-reads the RunnerSet and resolves its references into a provisioning
 // spec. A missing RunnerSet/Gateway/Template/Proxy yields an error so the job is
 // failed without creating a worker pod (fail-closed, §H.7).

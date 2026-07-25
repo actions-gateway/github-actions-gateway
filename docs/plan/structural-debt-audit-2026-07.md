@@ -8,17 +8,17 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ⚠️ Partial — filed 2026-07-20; F1–F8 and F10 (all but F9) and the prevention gates shipped.** The F1
+> **Status: ✅ Done — filed 2026-07-20; every finding F1–F10 and the prevention gates shipped.** The F1
 > Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe
 > rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule
 > consolidation as Q364, F5's broker-double consolidation as Q368, F7's
 > CreateOrPatch collapse as Q366 (which spun the owner-reference-policy question
-> out to [Q394](../STATUS.md#Q394)), F8's god-function decomposition as Q367,
-> F10's script-sprawl cleanup as Q370, the §Prevention gates (nolintlint + a
-> ratcheted funlen) as Q371, and F6's foundation move as Q365 (which left the
-> interleaved v1/v2 condition collectors to [Q403](../STATUS.md#Q403)). The one
-> remaining finding is tracked by [Q369](../STATUS.md#Q369); [Q372](../STATUS.md#Q372)
-> (Deferred) carries the re-run trigger.
+> out to [Q394](../STATUS.md#Q394)), F8's god-function decomposition as Q367, F9's
+> error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the
+> §Prevention gates (nolintlint + a ratcheted funlen) as Q371, and F6's foundation
+> move as Q365 (which left the interleaved v1/v2 condition collectors to
+> [Q403](../STATUS.md#Q403)). [Q372](../STATUS.md#Q372) (Deferred) carries the
+> re-run trigger.
 >
 > The ID range is not contiguous because concurrent branches allocated IDs while
 > this audit was in flight: Q361 went to a CI-latency item (#722) and Q363 to a
@@ -382,7 +382,7 @@ carved out. New unit tests cover the now-reachable config helpers (`loadConfig`,
 `buildCacheOptions`, `resolveImages`). The `funlen`/`nolintlint` gates that would
 lock this in stay with Q371.
 
-**F9 — `broker` and `scaleset` duplicate the error taxonomy verbatim.** → [Q369](../STATUS.md#Q369)
+**F9 — `broker` and `scaleset` duplicate the error taxonomy verbatim.** ✅ **Shipped** (Q369)
 
 `RateLimitError` and `UnauthorizedError` are each declared twice
 ([broker/client.go:33,47](../../broker/client.go) and
@@ -392,6 +392,30 @@ exists in both ([broker/client.go:647](../../broker/client.go),
 only in parameter type (`*http.Response` vs `http.Header`). Callers handling both
 protocols must type-switch on two unrelated types with the same name.
 `githubapp/httpx/` already exists as the natural home.
+
+**Shipped in Q369, premise confirmed on re-measurement.** The two pairs were
+semantically identical — same single field (`RetryAfter time.Duration` with the same
+-1 "no header, back off exponentially" sentinel; `StatusCode int`), no `Unwrap`/`Is`
+method on either, and `Error()` text differing only in the `broker: ` / `scaleset: `
+prefix — so unifying them changed no protocol's behavior. Both now alias one
+declaration in [githubapp/httpx/errors.go](../../githubapp/httpx/errors.go), which
+carries a `Source` field (`SourceBroker`/`SourceScaleSet`) purely to keep those
+message prefixes; it never gates matching. The two `parseRateLimitError` bodies
+collapsed into the exported `httpx.ParseRateLimitError(source, header)` — the
+`*http.Response` caller passes `resp.Header`.
+
+Aliases (not renames) were deliberate: `broker.RateLimitError` and
+`scaleset.UnauthorizedError` are referenced from `cmd/agc`, `cmd/probe`, and the
+compatibility matrix, and an alias keeps every one of those call sites valid *while*
+making the two names the same type — which is the actual fix, since an `errors.As`
+against either now matches an error from either protocol. The regression guard the
+compiler cannot give is `errors_q369_test.go` in both listener packages:
+`scalesetlistener`'s drives real 429/401 responses through *both* protocol clients
+and asserts that listener's own matchers (`isRateLimited`, `isUnauthorized`) fire
+for each, plus a cross-package assignment that fails to *compile* if the types are
+ever re-split; `listener`'s does the same for the classic matchers. Both halves were
+verified to fail by temporarily re-declaring a distinct `scaleset` type — the
+matcher assertions returned false and the assignment stopped compiling, as intended.
 
 **F10 — Script-layer sprawl.** ✅ **Shipped** (Q370)
 

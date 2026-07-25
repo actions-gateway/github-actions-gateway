@@ -1620,9 +1620,13 @@ kubectl get pod -n <namespace> <worker-pod> \
 
 ## Jobs Failing Due to Namespace ResourceQuota Exhaustion
 
-**Symptoms.** `actions_gateway_quota_retries_exhausted_total` is incrementing. Pod creation fails with a `Forbidden` error containing "exceeded quota" in the AGC logs. Jobs are being abandoned before a pod is ever scheduled. The `RunnerGroup` reports `WorkerQuotaExceeded=True` (and `actions_gateway_worker_quota_exceeded` reads `1`). `kubectl describe` on the owning `RunnerGroup`/`RunnerSet` shows a `Warning` event with reason `QuotaRetriesExhausted` (Q170) each time a job's pod creation is abandoned.
+**Symptoms.** `actions_gateway_jobs_admission_rejected_total{reason="quota"}` is climbing while jobs sit queued in GitHub — the AGC is declining to claim work it cannot place. The `RunnerGroup`/`RunnerSet` reports `WorkerQuotaExceeded=True` (and `actions_gateway_worker_quota_exceeded` reads `1`).
 
-The AGC surfaces two non-blocking conditions on each `RunnerGroup` for the namespace-quota axis (Q82), each exported as a gauge so you can alert without kube-state-metrics. They are distinct from Q59's configured-ceiling backpressure (`actions_gateway_jobs_admission_rejected_total`), which is normal load-shedding to a sibling, not a quota problem:
+If instead `actions_gateway_quota_retries_exhausted_total` is incrementing, pod creation is failing with a `Forbidden` error containing "exceeded quota" in the AGC logs and jobs are abandoned before a pod is ever scheduled, with a `Warning` event of reason `QuotaRetriesExhausted` (Q170) on the owner. That is the same root cause reaching the AGC one layer later — see [When quota exhaustion still reaches the retry path](#when-quota-exhaustion-still-reaches-the-retry-path) below.
+
+**The admission gate declines on quota (#784).** When the namespace `ResourceQuota` cannot admit another worker pod, the AGC skips `acquirejob` for newly delivered jobs, exactly as it does at the configured ceiling — leaving them queued at GitHub for redelivery to a sibling with capacity. Claiming them instead would hold the GitHub job lock across up to `maxQuotaRetries` × `quotaRetryDelay` (150s of a ~10-minute lock at the defaults) and, on budget exhaustion, drop the job *with the lock held*, which gets the run cancelled rather than requeued. The check is a live read of every `ResourceQuota` in the namespace (`hard − used`) against one more worker's footprint, and it **fails open**: a quota the AGC cannot read leaves the gate exactly as it was.
+
+The AGC surfaces two non-blocking conditions on each `RunnerGroup` for the namespace-quota axis (Q82), each exported as a gauge so you can alert without kube-state-metrics. Distinguish them from Q59's configured-ceiling backpressure (`actions_gateway_jobs_admission_rejected_total{reason="ceiling"}`), which is normal load-shedding to a sibling, not a quota problem:
 
 | Condition / metric | Meaning | Severity |
 |---|---|---|
@@ -1648,6 +1652,9 @@ kubectl get runnergroup -n <namespace> <name> \
 # actions_gateway_quota_retries_total{namespace, runner_group}
 # actions_gateway_quota_retries_exhausted_total{namespace, runner_group}
 
+# Deliveries declined up-front because the quota had no headroom (#784).
+# actions_gateway_jobs_admission_rejected_total{namespace, runner_group, reason="quota"}
+
 # Inspect current quota usage
 kubectl describe resourcequota -n <namespace>
 
@@ -1663,11 +1670,30 @@ kubectl describe runnergroup -n <namespace> <name> | grep -A1 QuotaRetriesExhaus
 - If quota clears quickly but the retry window is too short: increase `maxQuotaRetries` or `quotaRetryDelay` on the RunnerGroup spec (defaults: 5 retries / 30s delay).
 - If quota retry is causing unwanted job-lock hold time: set `maxQuotaRetries: 0` to fail immediately on quota exhaustion — the job lock is dropped and GitHub redelivers the job.
 
+### When quota exhaustion still reaches the retry path
+
+The admission gate reduces how often `createPodWithQuotaRetry` is entered; it does not replace it. Quota can still be gone by the time the pod is created, because:
+
+- a **sibling AGC or another workload** in the namespace consumed the headroom between the gate's read and the pod create;
+- the gate's read is of `ResourceQuota.status`, which is **eventually consistent** — `used` lags the pods that already exist;
+- the AGC **restarted** between the claim and the create;
+- the gate is **off** (`AGC_QUOTA_ADMISSION=false`, below), or it **failed open** on a quota it could not read.
+
+So keep `maxQuotaRetries`/`quotaRetryDelay` tuned; the two mechanisms are layered, not alternatives.
+
+### Turning the quota rung off
+
+The gate's quota rung is **on by default**, and the AGC honours `AGC_QUOTA_ADMISSION=false` in its own environment to revert to the pre-#784 behaviour (claim first, discover quota exhaustion in the retry loop). On a GMC-provisioned gateway there is deliberately no tenant-facing field for it: the only route to the AGC Deployment's env is the testing-only `AGC_EXTRA_*` passthrough behind the GMC's `--allow-agc-extra-env`, which is not for production use.
+
+The one situation that would justify the escape hatch is a cluster whose `ResourceQuota.status` accounting is unreliable enough to starve a tenant that in fact has room — symptom: `reason="quota"` rejections climbing while `kubectl describe resourcequota` shows real headroom and no worker pods are being created. Fix the quota accounting first. If you hit a case that genuinely needs the opt-out in production, open an issue so it can be promoted to a supported field rather than worked around.
+
 ---
 
 ## Jobs Not Being Acquired Despite Queued Work (Capacity Gate Saturated)
 
-**Symptoms.** Workflow jobs sit queued in GitHub while `actions_gateway_jobs_admission_rejected_total{namespace, runner_group}` climbs and `actions_gateway_jobs_acquired_total` plateaus for the same group. `kubectl get pods` shows the group already running its full complement of worker pods. The AGC is healthy — this is throttling, not a fault.
+**Symptoms.** Workflow jobs sit queued in GitHub while `actions_gateway_jobs_admission_rejected_total{namespace, runner_group, reason="ceiling"}` climbs and `actions_gateway_jobs_acquired_total` plateaus for the same group. `kubectl get pods` shows the group already running its full complement of worker pods. The AGC is healthy — this is throttling, not a fault.
+
+> **Check the `reason` label first.** `reason="quota"` is a different problem with a different fix — the namespace `ResourceQuota` is out of headroom, not the group's ceiling. See [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion). The rest of this section is about `reason="ceiling"`.
 
 **Cause.** This is the pre-acquisition admission gate working as designed (Q59). When a RunnerGroup is already at its worker ceiling (`maxWorkers`, or the maximum `priorityTiers` threshold), the AGC **deliberately skips `acquirejob`** for newly delivered jobs and leaves them queued at GitHub, so they are redelivered to a session with capacity rather than claimed-then-dropped (which would get the run cancelled). A rising rejection counter therefore means *demand exceeds the configured ceiling*, not that anything is broken. The gate's reservation count is in-memory and resets on AGC restart, so a brief post-restart burst of acquisitions is normal.
 
@@ -1676,7 +1702,7 @@ kubectl describe runnergroup -n <namespace> <name> | grep -A1 QuotaRetriesExhaus
 ```sh
 # Compare admission rejections against successful acquisitions for the group.
 # A sustained gap with rejections rising = the ceiling is the bottleneck.
-#   actions_gateway_jobs_admission_rejected_total{namespace, runner_group}
+#   actions_gateway_jobs_admission_rejected_total{namespace, runner_group, reason="ceiling"}
 #   actions_gateway_jobs_acquired_total{namespace, runner_group}
 
 # Confirm the group is at its ceiling.
@@ -1690,7 +1716,7 @@ kubectl get runnergroup <group> -n <namespace> \
 
 **Resolution.**
 - If the ceiling is intentionally protective (e.g. it sits below the namespace `ResourceQuota` to leave headroom): no action — jobs drain as in-flight work completes, and GitHub redelivers within its delivery window.
-- If the group should run more concurrent jobs: raise `maxWorkers` (or the top `priorityTiers` threshold) on the RunnerGroup spec, and ensure the namespace `ResourceQuota` has matching headroom — otherwise the [ResourceQuota path](#jobs-failing-due-to-namespace-resourcequota-exhaustion) becomes the new bottleneck.
+- If the group should run more concurrent jobs: raise `maxWorkers` (or the top `priorityTiers` threshold) on the RunnerGroup spec, and ensure the namespace `ResourceQuota` has matching headroom — otherwise the rejections simply reappear as `reason="quota"` and the [ResourceQuota path](#jobs-failing-due-to-namespace-resourcequota-exhaustion) becomes the new bottleneck.
 - If rejections appear with worker pods **below** the ceiling, suspect leaked reservations from pods that never reached a terminal phase — check for [stuck-Pending pods](#worker-pod-reaped-while-pending-workerpodstuckpending); the gate's slot is released when the job completes or its pod is reaped. An AGC restart clears any stale in-memory reservation.
 
 ---

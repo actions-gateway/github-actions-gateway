@@ -683,11 +683,15 @@ type RunnerGroupStatus struct {
     //                         max priorityTier threshold) within the namespace
     //                         ResourceQuota headroom (hard − used).
     //   WorkerQuotaExceeded — advisory ERROR (Q82); true when the namespace
-    //                         ResourceQuota cannot admit even one more worker pod
-    //                         (the next acquired job's pod will be rejected).
-    //                         Supersedes the warning. Distinct from Q59's
-    //                         configured-ceiling admission backpressure
-    //                         (jobs_admission_rejected_total), which is normal.
+    //                         ResourceQuota cannot admit even one more worker pod.
+    //                         Supersedes the warning. While it holds, the admission
+    //                         gate declines new deliveries on the same live headroom
+    //                         check (#784), counted as
+    //                         jobs_admission_rejected_total{reason="quota"} — so the
+    //                         next job is left queued at GitHub rather than claimed
+    //                         and then rejected at pod creation. Distinct from Q59's
+    //                         configured-ceiling backpressure (reason="ceiling"),
+    //                         which is normal load-shedding to a sibling.
     //   WorkersUnschedulable — abnormal-is-true, impairing (Q157); true when worker
     //                         pods sit Pending past the scheduling grace (half
     //                         pendingPodDeadline) because the scheduler cannot place

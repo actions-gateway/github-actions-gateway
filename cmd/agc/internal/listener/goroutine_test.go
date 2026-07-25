@@ -1624,7 +1624,7 @@ func newTestMetrics() *runnercore.Metrics {
 		}, []string{"namespace", "reason"}),
 		JobsAdmissionRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_jobs_admission_rejected_total",
-		}, []string{"namespace", "runner_group"}),
+		}, []string{"namespace", "runner_group", "reason"}),
 		JobsDuplicateDeliveryTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_jobs_duplicate_delivery_total",
 		}, []string{"namespace", "runner_group"}),
@@ -1737,14 +1737,14 @@ func TestListener_AdmissionRejected(t *testing.T) {
 	cfg.Metrics = m
 	cfg.IsLastPoller = func() bool { return true }
 	// Gate is full: every delivered job is rejected.
-	cfg.Admit = func(_ context.Context) (func(), bool) { return nil, false }
+	cfg.Admit = func(_ context.Context) (func(), bool, string) { return nil, false, runnercore.AdmitReasonCeiling }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	done := runAndWait(ctx, cfg)
 
 	assert.Eventually(t, func() bool {
-		return testutil.ToFloat64(m.JobsAdmissionRejectedTotal.WithLabelValues("default", "test-rg")) >= 1
+		return testutil.ToFloat64(m.JobsAdmissionRejectedTotal.WithLabelValues("default", "test-rg", runnercore.AdmitReasonCeiling)) >= 1
 	}, 2*time.Second, 10*time.Millisecond, "admission rejection counter should be incremented")
 	assert.False(t, acquireCalled.Load(), "AcquireJob must not be called when admission is rejected")
 
@@ -1849,9 +1849,9 @@ func TestListener_AdmissionReleasedOnCompletion(t *testing.T) {
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.Metrics = newTestMetrics()
 	cfg.IsLastPoller = func() bool { return true }
-	cfg.Admit = func(_ context.Context) (func(), bool) {
+	cfg.Admit = func(_ context.Context) (func(), bool, string) {
 		admitCalls.Add(1)
-		return func() { releaseCalls.Add(1) }, true
+		return func() { releaseCalls.Add(1) }, true, ""
 	}
 	handlerDone := make(chan struct{}, 1)
 	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {

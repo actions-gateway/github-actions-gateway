@@ -84,10 +84,10 @@ func TestListener_Q266_FanoutLoserDefersRecycleUntilWinnerCompletes(t *testing.T
 			LoserRecycleDeferTimeout: 30 * time.Second,
 			// Unlimited worker capacity; the closure only lets us observe reservations so
 			// we can prove a deferred loser frees its slot before parking (does not pin it).
-			Admit: func(_ context.Context) (func(), bool) {
+			Admit: func(_ context.Context) (func(), bool, string) {
 				admitHeld.Add(1)
 				var once sync.Once
-				return func() { once.Do(func() { admitHeld.Add(-1) }) }, true
+				return func() { once.Do(func() { admitHeld.Add(-1) }) }, true, ""
 			},
 			MarkAgentConsumed: func() {},
 			// One ReleaseAgent call per goroutine exit — our collapse detector.

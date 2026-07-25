@@ -104,8 +104,8 @@ func NewMetrics() *Metrics {
 
 		JobsAdmissionRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_jobs_admission_rejected_total",
-			Help: "Jobs left queued at GitHub because the pre-acquisition capacity gate was full (acquire skipped for redelivery).",
-		}, []string{"namespace", "runner_group"}),
+			Help: "Jobs left queued at GitHub because the pre-acquisition capacity gate refused (acquire skipped for redelivery). reason=ceiling: the owner is at its configured worker ceiling. reason=quota: the namespace ResourceQuota has no headroom for another worker pod.",
+		}, []string{"namespace", "runner_group", "reason"}),
 
 		JobsDuplicateDeliveryTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_jobs_duplicate_delivery_total",
