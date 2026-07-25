@@ -2684,13 +2684,13 @@ diverges.</p>
 <hr />
 <h2 id="the-mental-model">The mental model<a class="headerlink" href="#the-mental-model" title="Permanent link">&para;</a></h2>
 <p>In ARC scale-set mode, <strong>each scale set is its own controller surface</strong>: one
-<code>AutoscalingRunnerSet</code> CR, one long-running <code>.NET</code> listener pod, its own
+<code>AutoscalingRunnerSet</code> CR, one long-running listener pod, its own
 <code>maxRunners</code> cap, configured by its own Helm release. Ten runner types means ten
 scale sets, ten listener pods, ten Helm releases.</p>
 <p>In GAG, <strong>one tenant declares one <code>ActionsGateway</code></strong> and lists its runner types as
 <code>runnerGroups[]</code> entries inside it. A single per-tenant controller — the Actions
 Gateway Controller (AGC) — multiplexes every group's listener as a goroutine
-(~60 KiB) in one shared pod, instead of one ~256 MiB listener pod per scale set.
+(~12 KiB) in one shared pod, instead of one always-on listener pod per scale set.
 The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>; from there a
 tenant's whole gateway (controller, egress proxy pool, RBAC, NetworkPolicies) is
 provisioned from that single CR.</p>
@@ -2700,11 +2700,11 @@ provisioned from that single CR.</p>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>─────────────────────                   ─────────────────────────────
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>namespace: team-a                       namespace: team-a
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  AutoscalingRunnerSet &quot;cpu&quot;              ActionsGateway &quot;team-a-gateway&quot;
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    └─ listener pod (~256 MiB)              runnerGroups:
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    └─ listener pod (always-on)             runnerGroups:
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  AutoscalingRunnerSet &quot;gpu&quot;                 - name: cpu   (goroutine listener)
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    └─ listener pod (~256 MiB)               - name: gpu   (goroutine listener)
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    └─ listener pod (always-on)              - name: gpu   (goroutine listener)
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  AutoscalingRunnerSet &quot;arm&quot;                 - name: arm   (goroutine listener)
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    └─ listener pod (~256 MiB)             └─ one AGC pod multiplexes all three
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    └─ listener pod (always-on)            └─ one AGC pod multiplexes all three
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  (shared cluster egress)                  └─ per-tenant egress proxy pool
 </code></pre></div>
 <blockquote>
@@ -2741,9 +2741,9 @@ is a v2 capability; see <a href="#v2-differences-worth-knowing">the v2 note</a> 
 <td>Installed once by the platform; provisions every tenant's AGC.</td>
 </tr>
 <tr>
-<td>The <code>.NET</code> <code>AutoscalingListener</code> pod (one per scale set)</td>
+<td>The <code>AutoscalingListener</code> pod (one per scale set)</td>
 <td>a goroutine inside the shared per-tenant AGC pod</td>
-<td>~256 MiB/pod → ~60 KiB/goroutine; no per-listener cluster IP.</td>
+<td>one always-on pod per scale set → ~12 KiB/goroutine in one shared pod; no per-listener cluster IP.</td>
 </tr>
 <tr>
 <td><code>githubConfigUrl</code></td>
@@ -2946,7 +2946,7 @@ HPA-managed between <code>spec.proxy.minReplicas</code> and <code>maxReplicas</c
 </tr>
 <tr>
 <td><strong>Listener</strong></td>
-<td>one ~256 MiB pod per scale set, 24/7</td>
+<td>one always-on pod per scale set, 24/7</td>
 <td>one shared goroutine pod per tenant</td>
 <td>No action; expect far fewer pods/IPs at rest.</td>
 </tr>

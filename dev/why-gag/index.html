@@ -2380,13 +2380,13 @@ letting tenants run their own runners.</p>
 </ul>
 </li>
 <li>
-<p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 17H7V7h10m4 4V9h-2V7a2 2 0 0 0-2-2h-2V3h-2v2h-2V3H9v2H7c-1.11 0-2 .89-2 2v2H3v2h2v2H3v2h2v2a2 2 0 0 0 2 2h2v2h2v-2h2v2h2v-2h2a2 2 0 0 0 2-2v-2h2v-2h-2v-2m-6 2h-2v-2h2m2-2H9v6h6z"/></svg></span> <strong>Listener memory piles up</strong></p>
+<p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 17H7V7h10m4 4V9h-2V7a2 2 0 0 0-2-2h-2V3h-2v2h-2V3H9v2H7c-1.11 0-2 .89-2 2v2H3v2h2v2H3v2h2v2a2 2 0 0 0 2 2h2v2h2v-2h2v2h2v-2h2a2 2 0 0 0 2-2v-2h2v-2h-2v-2m-6 2h-2v-2h2m2-2H9v6h6z"/></svg></span> <strong>Listener pods pile up</strong></p>
 <hr />
-<p>One .NET listener pod per scale set, running 24/7:</p>
+<p>One always-on listener pod per scale set, running 24/7:</p>
 <ul>
-<li>~256 MiB resident + a cluster IP each</li>
+<li>a pod slot + a cluster IP each</li>
 <li>held alive just to long-poll GitHub</li>
-<li>10 scale sets ≈ 2.5 GiB before a job runs</li>
+<li>10 scale sets ≈ 10 always-on pods before a job runs</li>
 </ul>
 </li>
 <li>
@@ -2404,8 +2404,8 @@ letting tenants run their own runners.</p>
 <h2 id="what-changes-with-gag">What changes with GAG<a class="headerlink" href="#what-changes-with-gag" title="Permanent link">&para;</a></h2>
 <div class="gag-stats" markdown="0">
   <div class="gag-stat">
-    <span class="gag-stat__num">600&nbsp;KiB</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener memory for 10 runner sets</strong> — one shared pod, versus ~2.5 GiB across 10 on ARC</span>
+    <span class="gag-stat__num">1&nbsp;pod</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener footprint for 10 runner sets</strong> — every listener is a ~12&nbsp;KiB goroutine in one shared pod, versus 10 always-on listener pods (and 10 cluster IPs) on ARC</span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">0</span>
@@ -2479,9 +2479,9 @@ footprint.</p>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../design/network-architecture/">per-tenant proxy pool</a><br><span class="gag-cont"><span class="gag-v2-badge">v2</span> proxy optional</span></td>
 </tr>
 <tr>
-<td>Listener memory, 10 runner sets at rest</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> ~2.5 GiB across 10 pods</td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> ~600 KiB in 1 shared pod</td>
+<td>Listener footprint, 10 runner sets at rest</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> 10 always-on pods + 10 cluster IPs</td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> 1 shared pod — ~12 KiB per listener session</td>
 </tr>
 <tr>
 <td>Per-tenant utilization metrics</td>

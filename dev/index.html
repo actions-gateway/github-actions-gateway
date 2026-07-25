@@ -2376,9 +2376,9 @@
 <hr />
 <p>Listeners are goroutines, not pods:</p>
 <ul>
-<li>~60 KiB per runner group</li>
+<li>~12 KiB per listener session</li>
 <li>One shared pod per tenant</li>
-<li>600 KiB vs 2.5 GiB for ten groups</li>
+<li>1 pod vs 10 always-on pods for ten groups</li>
 </ul>
 </li>
 <li>

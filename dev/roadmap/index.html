@@ -2347,8 +2347,8 @@ tagged chart. Check the release notes for the exact image digests to pin.</p>
   egress (NAT / firewall / VPN) when many jobs land at once. Off by default; ARC
   exposes only a <code>maxRunners</code> count cap, not a creation-rate control.</li>
 <li><strong>Scale-to-zero workers with low listener overhead.</strong> Worker pods exist only
-  while a job runs; listeners are goroutines (~60 KiB each) in one shared pod
-  rather than a .NET pod per runner group.</li>
+  while a job runs; listeners are goroutines (~12 KiB each) in one shared pod
+  rather than an always-on listener pod per runner group.</li>
 <li><strong>Per-tenant isolated egress IPs.</strong> A dedicated proxy pool per tenant gives
   each team its own GitHub egress IPs to allow-list, with a contained blast
   radius. <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> In the v2 API the proxy is a standalone,
