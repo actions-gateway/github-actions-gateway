@@ -2882,8 +2882,8 @@ is the root reason the ecosystem standardised on a <code>preStop</code> sleep: i
 elegance, it is the absence of anything better.</p>
 <h3 id="upstream-state-of-the-art">Upstream state of the art<a class="headerlink" href="#upstream-state-of-the-art" title="Permanent link">&para;</a></h3>
 <p>This is a known, accepted, unsolved gap — not an oversight, and not something to
-re-derive. Two upstream issues track it; check them before assuming anything
-here has changed:</p>
+re-derive. Three upstream issues surround it; check them before assuming
+anything here has changed:</p>
 <table>
 <thead>
 <tr>
@@ -2903,6 +2903,11 @@ here has changed:</p>
 <td>Under <strong>graceful node shutdown</strong> the pod reportedly never enters <code>Terminating</code> and is not removed from EndpointSlices until it reaches <code>Completed</code>/<code>Failed</code></td>
 <td>Open since 2023, <code>triage/accepted</code>, <code>priority/important-longterm</code></td>
 </tr>
+<tr>
+<td><a href="https://github.com/kubernetes/kubernetes/issues/124648">kubernetes#124648</a></td>
+<td><em>Related, narrower scope than often cited:</em> "Readiness probe stops too early at <strong>eviction</strong>" — the probe worker is halted when eviction sets the pod phase to <code>Failed</code> before containers stop. The reporter states the probe works during termination on ordinary delete. It does <strong>not</strong> cover the delete-path behaviour measured below (probe runs and fails, <code>Ready</code> never flips)</td>
+<td>Open since 2024, <code>triage/accepted</code>, <code>priority/backlog</code></td>
+</tr>
 </tbody>
 </table>
 <p>No KEP exists for the termination gate. The blocking design question, per SIG
@@ -2912,16 +2917,22 @@ cluster, and deletion cannot be un-started once begun. Synchronising state back
 from every kube-proxy on every endpoint change is explicitly considered
 infeasible at scale.</p>
 <h3 id="measured-on-graceful-node-shutdown-nothing-removes-the-endpoint-q388">Measured: on graceful node shutdown, nothing removes the endpoint (Q388)<a class="headerlink" href="#measured-on-graceful-node-shutdown-nothing-removes-the-endpoint-q388" title="Permanent link">&para;</a></h3>
-<p>Both issues above were reproduced on kind, Kubernetes <strong>1.35.0</strong>, with the
-kubelet configured GKE-style (<code>shutdownGracePeriod: 30s</code>,
-<code>shutdownGracePeriodCriticalPods: 15s</code>) and a two-replica Service whose pods
-fail readiness the instant they get SIGTERM.</p>
-<p><strong>124648, ordinary <code>kubectl delete</code>.</strong> The readiness probe (1s period, failure
+<p>Both termination paths — ordinary delete, and the 116965 graceful-node-shutdown
+case — were measured on kind, Kubernetes <strong>1.35.0</strong>, with the kubelet configured
+GKE-style (<code>shutdownGracePeriod: 30s</code>, <code>shutdownGracePeriodCriticalPods: 15s</code>)
+and a two-replica Service whose pods fail readiness the instant they get
+SIGTERM.</p>
+<p><strong>Ordinary <code>kubectl delete</code>.</strong> The readiness probe (1s period, failure
 threshold 1) began failing at SIGTERM and kept failing. The pod's <code>Ready</code>
 condition stayed <code>True</code> for the entire 48-second termination and never flipped.
 The endpoint <em>was</em> withdrawn immediately, but by the <code>deletionTimestamp</code>, not by
-readiness. <strong>A readiness probe that starts failing on SIGTERM is never
-observed.</strong></p>
+readiness. <strong>The probe runs and fails, but its result never reaches the <code>Ready</code>
+condition — endpoint removal is driven by <code>deletionTimestamp</code> regardless.</strong></p>
+<p>Note this is <em>adjacent to but distinct from</em> 124648, which is scoped to the
+eviction path and whose reporter states the probe works during termination on
+ordinary delete. On this evidence the delete-path behaviour (probe results never
+reflected into <code>Ready</code> during termination) appears to be unreported upstream —
+Q398 tracks filing it.</p>
 <p><strong>116965, graceful node shutdown.</strong> With the node powering off:</p>
 <table>
 <thead>
@@ -2964,8 +2975,9 @@ measured result rather than an inference.</p>
 <p>Worth noting the upstream design intent is exactly what the proxy does. A SIG
 Node maintainer on 116965: <em>"the Kubernetes-portable behavior is to use the
 readiness endpoint to control being in rotation during graceful shutdown."</em>
-Failing <code>/readyz</code> is correct and stays. It simply does not work yet, because of
-124648.</p>
+Failing <code>/readyz</code> is correct and stays. It simply does not work yet: as measured
+above (Q388), the probe's failures never reach the <code>Ready</code> condition on the
+delete path — and on eviction, 124648 halts the probe worker outright.</p>
 <div class="admonition note">
 <p class="admonition-title">Reproducing this yourself: kind needs dbus first</p>
 <p>Stock kind <strong>cannot</strong> run graceful node shutdown. The kubelet logs
