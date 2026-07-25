@@ -115,12 +115,19 @@ The maintainer's job is to cut the tag and verify the result.
   The banner in [`overrides/main.html`](../../overrides/main.html) is the
   "vX.Y.Z is here" strip at the top of every page on the site. A stable tag push
   deploys that tag's docs wholesale, so whatever the banner says at tag time is
-  what the released version advertises, permanently. This has been missed before:
-  both `v1.1.0` and `v1.2.0` shipped still saying *"v1.0.0 is here"*. Verify with:
+  what the released version advertises, permanently. Every stable tag to date has
+  missed this: `v1.0.0` shipped saying *"Alpha, pre-1.0"*, and `v1.1.0` and
+  `v1.2.0` both said *"v1.0.0 is here"*. Verify with:
 
   ```bash
-  grep -o '<strong>[^<]*</strong>' overrides/main.html | head -1
+  awk '/block announce/,/endblock/' overrides/main.html
   ```
+
+  **`publish.yml` now enforces this** via its `announce-bar` job, which every
+  publishing job depends on. A stable tag whose banner does not name it fails the
+  release before any image is pushed, so a miss costs you a re-cut tag rather than
+  a wrong release. Prereleases are exempt: they publish no docs, and the banner
+  should name the GA version rather than churn through every RC.
 
   (A `docs_ref` seed of an already-cut release pins `overrides/` to the current
   checkout instead, so re-seeding repairs past tags. That safety net does **not**
@@ -452,6 +459,11 @@ PR CI proves the image builds and the SBOM generates so those paths can't silent
 break; signing, SBOM attestation, and build-provenance attestation are all first
 exercised on a real `v*` tag, which is why step 3 verification matters on every
 release.
+
+`publish.yml` also runs one **pre-publish gate**, `announce-bar`, that every
+publishing job depends on. It is deliberately cheap and runs first, so a stale
+docs-site banner (see [Pre-flight](#1-pre-flight)) stops the release before an
+image, chart, or GitHub Release exists, rather than after.
 
 ## Supply-chain integrity of the pipeline itself
 
