@@ -273,6 +273,21 @@ node capacity rather than failing. Worth stating plainly because it is easy to
 read a `SizingWithinRange` verdict as "the template is right-sized" when it
 means "the template is not wasteful and will not OOM".
 
+### Phase 2 — restart persistence: confirmed
+
+Deleting the AGC pod mid-run (`dogfood-agc-…-227d6` → `…-fstfb`) left
+`status.sizingRecommendation` **byte-identical** across the restart —
+`sampleCount: 10`, the same `observedPeak`/`observedP95`, the same derived
+`requests`/`limits`, and the same `windowStart`. That is the warm-up safety
+rail doing its job: a freshly-started sampler holds an empty aggregate, and the
+reconciler declines to overwrite the persisted store with it.
+
+**The Prometheus metrics do reset**, and should not be mistaken for data loss.
+The gauges and histograms are in-process and start empty on a new pod, which is
+why the metric is documented as "since the AGC last restarted" and the operator
+recipe reaches for `max_over_time` to bridge restarts. The *recommendation* is
+what survives, because status — not the metric — is the store.
+
 ### Phase 3 — below-confidence fallback: confirmed
 
 With `spec.sizing.profile: Binpack` set while no container had reached
