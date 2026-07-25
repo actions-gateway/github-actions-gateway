@@ -1179,6 +1179,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D.8. Gating Intake on Capacity: Which Signals Are Safe to Gate On
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2360,6 +2371,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D.8. Gating Intake on Capacity: Which Signals Are Safe to Gate On
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2563,6 +2585,79 @@ that builds the pods. Generic tooling fails structurally (D.7 alternatives 1–2
 the GitOps loop remains available to operators who prefer it (alternative 3),
 and the general-purpose tool (alternative 4) is a valid <em>future extraction</em> of
 the shipped core, not a better first implementation.</p>
+<hr />
+<h2 id="d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">D.8. Gating Intake on Capacity: Which Signals Are Safe to Gate On<a class="headerlink" href="#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on" title="Permanent link">&para;</a></h2>
+<p>The pre-acquisition admission gate refuses to claim a job from GitHub when the
+worker pod that job needs cannot be provisioned, because a claimed job holds a
+single-use JIT runner record and a ticking job lock. Two rungs are implemented:
+the owner's declared worker ceiling (Q59) and observed namespace-<code>ResourceQuota</code>
+headroom (#784). A third, obvious-looking rung is deliberately <strong>not</strong>
+implemented on the same terms: the scheduler's own <code>Unschedulable</code> verdict, which
+the <code>WorkersUnschedulable</code> condition already publishes as observability.</p>
+<p>That looks inconsistent, and the reason it is not is worth recording, because it
+does not appear to be written down anywhere in the ecosystem and it explains why
+every other runner controller settled for timeouts instead.</p>
+<p><strong>The principle.</strong> A capacity signal is safe to gate intake on if, and only if,
+<strong>no other actor is waiting on that signal to make capacity appear.</strong> Gating
+suppresses the signal; suppressing a signal that something else acts on destroys
+the rescue.</p>
+<p>Applied to the four signals:</p>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Is it an input to another actor?</th>
+<th>Safe to gate on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ResourceQuota</code> headroom</td>
+<td>No. No autoscaler adds a node because a namespace quota is full. Self-clearing as in-flight jobs finish.</td>
+<td>Yes, unconditionally (#784)</td>
+</tr>
+<tr>
+<td>Scheduler <code>Unschedulable</code> verdict</td>
+<td><strong>Only if a cluster autoscaler is running.</strong> A Pending unschedulable pod <em>is</em> the request for a node.</td>
+<td>Conditionally: yes on a cluster that cannot grow, no otherwise</td>
+</tr>
+<tr>
+<td>Autoscaler declination (<code>NotTriggerScaleUp</code>, Karpenter <code>FailedScheduling</code>)</td>
+<td>No. The actor already evaluated this pod and declined, so nothing further is pending on it.</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>ProvisioningRequest</code> <code>check-capacity</code> answer</td>
+<td>No. Asking <em>is</em> the request for capacity, so the trigger is not forfeited.</td>
+<td>Yes (Appendix <a href="../appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">G.16</a>)</td>
+</tr>
+</tbody>
+</table>
+<p>Three consequences follow.</p>
+<p><strong>Elasticity is a property of the cluster, not of the signal.</strong> The scheduler's
+verdict is the <em>same</em> fact on every cluster; only the presence of an autoscaler
+changes whether acting on it is safe. So the choice cannot be made once in code.
+It is an operator input, and on a fixed-size cluster (on-premises, a contracted
+node count) the cheapest rung is also the correct one, because no rescue was ever
+coming and every wasted claim is pure loss.</p>
+<p><strong>Even where gating is safe, it should rate-limit rather than hard-stop.</strong> A gate
+derived from the existence of a stuck pod is self-clearing: intake stops, the pod
+is reaped at <code>pendingPodDeadline</code>, the condition clears, one job is claimed, and
+the cycle repeats. A burst of <em>N</em> wasted claims becomes roughly one per deadline
+window while a Pending pod remains present for much of it, which keeps any
+autoscaler being asked and keeps the tenant discovering recovery. Rate-bounding,
+not elimination, is the achievable property.</p>
+<p><strong>Predicting placement in-process is not a fourth option.</strong> Reimplementing the
+scheduler's filter plugins (taints, affinity, topology spread, DRA, extended
+resources) is a large surface that will drift from the scheduler.
+<code>WorkersUnschedulable</code> deliberately reads the scheduler's verdict rather than
+guessing, and any capacity rung should delegate for the same reason.</p>
+<p><strong>Verdict:</strong> the quota rung is unconditionally safe and is implemented; the
+scheduler-verdict rung is safe exactly where nothing will act on the pod, so it
+belongs behind an explicit, off-by-default operator choice; the autoscaler's own
+declination and a solicited <code>ProvisioningRequest</code> answer are both safe and differ
+only in cost. The sequencing of those rungs is planned in
+<a href="../../plan/capacity-aware-intake/">capacity-aware-intake.md</a>.</p>
 <hr />
 <p>← <a href="../appendix-c-ai-implementation/">Appendix C</a> | <a href="../">Back to index</a></p>
 

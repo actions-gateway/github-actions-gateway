@@ -3219,6 +3219,87 @@ workloads, or another controller wanting to embed the recommender). Start with
 increment 1; only build increment 2's webhook if a consumer exists that cannot
 embed the library.</p>
 <hr />
+<h2 id="g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">G.16. <code>ProvisioningRequest</code> Pre-Acquire Capacity Probe (<code>check-capacity</code>)<a class="headerlink" href="#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity" title="Permanent link">&para;</a></h2>
+<p><strong>Current behavior.</strong> The admission gate refuses to claim a job when the declared
+worker ceiling is reached (Q59) or the namespace <code>ResourceQuota</code> has no headroom
+(#784). It has no rung for <em>placeability</em>: a tenant whose worker shape cannot be
+scheduled keeps claiming jobs, each spending a JIT runner record and holding a
+GitHub lock until <code>pendingPodDeadline</code> reaps the pod. <code>WorkersUnschedulable</code>
+(Q157/Q303) reports the scheduler's verdict but never reaches the gate, and
+<a href="../appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">§D.8</a>
+records why it cannot be gated on directly wherever a cluster autoscaler is
+running: the Pending pod <em>is</em> the scale-up request.</p>
+<p><strong>The gap this closes.</strong> cluster-autoscaler's <code>ProvisioningRequest</code>
+(<code>autoscaling.x-k8s.io/v1</code>) resolves that conflict. Class
+<code>check-capacity.autoscaling.x-k8s.io</code> is a one-off feasibility question for a pod
+shape <em>without creating the pods</em>; <code>best-effort-atomic-scale-up.autoscaling.x-k8s.io</code>
+provisions the capacity atomically instead. Either way the answer arrives before
+the claim, with no GitHub lock ticking, and asking is itself the request for
+capacity, so the autoscaler trigger is not forfeited. No CI runner controller
+appears to use this primitive.</p>
+<p><strong>Sketch.</strong> Two further values of the <code>spec.capacityGate.mode</code> enum introduced by
+the <a href="../../plan/capacity-aware-intake/">capacity-aware-intake plan</a> (<code>Probe</code>,
+<code>Provision</code>), reusing that plan's rung, condition, rejection-metric label,
+rate-limiting behavior, and fail-open contract unchanged. A negative answer
+refuses the claim, leaving the job queued at GitHub for redelivery. Off by
+default, per-RunnerSet (which is per-pod-shape, since a set resolves to exactly
+one <code>RunnerTemplate</code>), with a short-TTL cached verdict because a probe per job
+would be far too chatty.</p>
+<p><strong>Cost, including the parts that are easy to miss.</strong> The plan estimates ~2,400 to
+3,400 lines across five or more PRs, dominated by four things:</p>
+<ol>
+<li><strong>It cannot be synchronous.</strong> <code>Admit</code> runs inline before <code>AcquireJob</code>;
+   <code>ProvisioningRequest</code> is create-object-then-await-conditions. So this needs a
+   background prober plus a verdict cache, not a <code>Target</code> method that blocks. The
+   quota rung was cheap precisely because it is a cached informer read.</li>
+<li><strong>Each <code>podSet</code> must reference a real <code>core/v1</code> <code>PodTemplate</code> object</strong> in the
+   namespace, so the AGC has to create, hash-name, refresh, and garbage-collect
+   one per worker shape, kept consistent with the pod the provisioner would
+   actually build. The Q359 sizing profile mutates that shape from status, so the
+   shape is not stable.</li>
+<li><strong><code>check-capacity</code> reserves, it does not merely answer.</strong> Upstream v1 is
+   self-contradictory (the <code>provisioningClassName</code> field doc says it does not
+   reserve; the class constant says it reserves for a specified time) and ships
+   <code>BookingExpired</code>/<code>CapacityRevoked</code> conditions plus a
+   <code>autoscaling.x-k8s.io/consume-provisioning-request</code> pod annotation. A
+   TTL-cached "yes" reused for <em>N</em> jobs is therefore either stale feasibility or a
+   single-use booking spent many times, and <code>Provision</code> mode additionally has to
+   annotate worker pods to consume what it reserved. The condition to read also
+   drifts by version (<code>CapacityAvailable</code> in the field docs, absent from the v1
+   condition constants, which carry <code>Provisioned</code>), so a reader must tolerate
+   both.</li>
+<li><strong>Nothing in the test estate can answer a probe.</strong> envtest can install the CRD
+   but no autoscaler stamps conditions, so this needs a fake-CA condition
+   stamper; kind has no autoscaler at all; and a real end-to-end proof needs a
+   cluster whose autoscaler implements the class, which is provider-specific and
+   gated. GKE serves the <code>ProvisioningRequest</code> API (<code>v1</code>, from
+   <code>1.32.2-gke.1652000</code>) but
+   <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/provisioningrequest">documents only its own <code>queued-provisioning.gke.io</code> class</a>
+   for flex-start: GPU/TPU-oriented, one <code>podSet</code> per request, no documented
+   <code>check-capacity</code> support as of 2026-07. The dogfood cluster therefore cannot
+   validate this class today, which is exactly the provider-support half of the
+   trigger below. Validation, not code, is the dominant cost.</li>
+</ol>
+<p>Plus the ordinary surface: a new API dependency (vendor
+<code>k8s.io/autoscaler/cluster-autoscaler/apis</code>, or hand-roll ~120 lines of local
+types, which is the recommendation), startup CRD detection mirroring
+<code>RunnerSetInstalled</code>, RBAC on both <code>provisioningrequests</code> and <code>podtemplates</code> in
+the AGC markers <em>and</em> the GMC-granted tenant role, and an operator prerequisite
+(cluster-autoscaler run with provisioning requests enabled).</p>
+<p><strong>Why deferred.</strong> The cheaper rungs cover most of the harm at a fraction of the
+cost and are prerequisites rather than detours: gating on the scheduler's verdict
+where the cluster cannot grow, and on the autoscaler's own declination where it
+can, both feed the same rung this would later reuse. Building the
+<code>ProvisioningRequest</code> machinery first would also mean choosing a caching and
+booking model with no measurement of how much residual claim-burn is actually
+left after rate-bounding.</p>
+<p><strong>Triggers to revisit.</strong> Any one of: measurement from the cheaper rungs shows
+residual burn that rate-bounding cannot make acceptable (the GPU/spot case, where
+one wasted claim per deadline window is still expensive); an operator asks with a
+cluster already running cluster-autoscaler with provisioning requests enabled;
+or provider support for <code>check-capacity</code> broadens enough that the fail-open path
+stops being the common one.</p>
+<hr />
 <p>← <a href="../appendix-f-cost-model/">Cost Model</a> | <a href="../">Back to index</a></p>
 
 
