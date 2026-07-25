@@ -16,7 +16,7 @@ API surface, and the contract cannot be walked back.
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
 | 2 | Add `v2` to each kind, mark it storage, extend conversion coverage | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
-| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)) |
+| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity gated on [Q417](../STATUS.md#Q417) |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q413](../STATUS.md#Q413)) |
 
 ## Why this is gated on a soak, not a date
@@ -100,6 +100,27 @@ removes classic's only consumer. Sequencing within the release still matters, si
 the Q147 dual-read window closes exactly when `v1alpha1` is removed. Order:
 storage-migrate first, drop served versions second, then strip the dual-read arms
 from the `ValidatingAdmissionPolicy` objects and the validating webhook.
+
+### Capability parity is a precondition of the removal
+
+Removing classic must not delete a capability along with it. Dropping a served API
+version is a contract change operators can plan for; silently losing a behaviour
+they rely on is not, and it is exactly what the deprecation policy exists to
+prevent.
+
+| Capability | State | Gate |
+|---|---|---|
+| Eviction recovery (detect an evicted worker, rerun the job, per-run retry budget) | Classic only. `handleEviction` is reached from one call site inside classic `provision()`; `ProvisionScaleSetWorker` is fire-and-forget and never observes `PodFailed`/`Evicted`, so no scale-set eviction is detected and no rerun fires. | [Q417](../STATUS.md#Q417) must land before the classic removal, or `v2.0.0` ships without automatic eviction recovery. Evidence and plan: [scaleset-eviction-recovery.md](scaleset-eviction-recovery.md). |
+
+This is a genuine gate, not a nice-to-have: eviction recovery is a headline
+capability in [01-executive-summary.md](../design/01-executive-summary.md),
+[README.md](../../README.md), and [why-gag.md](../why-gag.md), all of which describe
+it as a property of the system rather than of one acquisition tier. Removing classic
+without [Q417](../STATUS.md#Q417) would make those claims false at the same moment
+the only tier that satisfied them disappears.
+
+Any further capability found to be classic-only before the cut joins this table and
+gates the same removal.
 
 ## Phase 4 — docs and the cut
 
