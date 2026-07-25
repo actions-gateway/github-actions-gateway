@@ -42,7 +42,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -199,20 +198,13 @@ func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmc
 func (r *EgressProxyReconciler) applyCNIPolicy(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *unstructured.Unstructured) error {
 	obj := &unstructured.Unstructured{}
 	obj.SetGroupVersionKind(desired.GroupVersionKind())
-	obj.SetNamespace(desired.GetNamespace())
-	obj.SetName(desired.GetName())
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.SetLabels(desired.GetLabels())
+	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		spec, found, err := unstructured.NestedFieldCopy(desired.Object, "spec")
 		if err != nil || !found {
 			return fmt.Errorf("desired CNI policy missing spec: %w", err)
 		}
-		if err := unstructured.SetNestedField(obj.Object, spec, "spec"); err != nil {
-			return err
-		}
-		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
+		return unstructured.SetNestedField(obj.Object, spec, "spec")
 	})
-	return err
 }
 
 // deleteCNIPolicy removes a CNI-native egress policy by GVK+name, tolerating both a
@@ -368,17 +360,10 @@ func (r *EgressProxyReconciler) applyOrPruneServiceMonitor(ctx context.Context, 
 func (r *EgressProxyReconciler) applyServiceMonitor(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *unstructured.Unstructured) error {
 	obj := &unstructured.Unstructured{}
 	obj.SetGroupVersionKind(serviceMonitorGVK)
-	obj.SetNamespace(desired.GetNamespace())
-	obj.SetName(desired.GetName())
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.SetLabels(desired.GetLabels())
+	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		spec, _, _ := unstructured.NestedMap(desired.Object, "spec")
-		if err := unstructured.SetNestedMap(obj.Object, spec, "spec"); err != nil {
-			return err
-		}
-		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
+		return unstructured.SetNestedMap(obj.Object, spec, "spec")
 	})
-	return err
 }
 
 // recordEvent emits a Kubernetes Event on the EgressProxy when a Recorder is wired.
@@ -408,30 +393,26 @@ func (r *EgressProxyReconciler) recordEvent(ep *gmcv2alpha1.EgressProxy, eventty
 // rather than by a blanket spec overwrite: see assignHPATargetDeploymentSpec
 // (Q283) and its externally-scaled variant (Q173).
 func (r *EgressProxyReconciler) applyDeployment(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *appsv1.Deployment) error {
-	obj := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
+	obj := &appsv1.Deployment{}
+	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		if egressProxyManagedAutoscaling(ep) {
 			assignHPATargetDeploymentSpec(&obj.Spec, desired.Spec)
 		} else {
 			assignExternallyScaledDeploymentSpec(&obj.Spec, desired.Spec)
 		}
-		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
+		return nil
 	})
-	return err
 }
 
 func (r *EgressProxyReconciler) applyService(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *corev1.Service) error {
-	obj := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
+	obj := &corev1.Service{}
+	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		// Preserve server-assigned Spec fields (ClusterIP); set only managed fields.
 		obj.Spec.Type = desired.Spec.Type
 		obj.Spec.Selector = desired.Spec.Selector
 		obj.Spec.Ports = desired.Spec.Ports
-		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
+		return nil
 	})
-	return err
 }
 
 // reconcileHPA applies the managed HPA or, when managedAutoscaling is false
@@ -452,44 +433,36 @@ func (r *EgressProxyReconciler) reconcileHPA(ctx context.Context, ep *gmcv2alpha
 }
 
 func (r *EgressProxyReconciler) applyHPA(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *autoscalingv2.HorizontalPodAutoscaler) error {
-	obj := &autoscalingv2.HorizontalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
+	obj := &autoscalingv2.HorizontalPodAutoscaler{}
+	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		obj.Spec = desired.Spec
-		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
+		return nil
 	})
-	return err
 }
 
 func (r *EgressProxyReconciler) applyPDB(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *policyv1.PodDisruptionBudget) error {
-	obj := &policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
+	obj := &policyv1.PodDisruptionBudget{}
+	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		obj.Spec = desired.Spec
-		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
+		return nil
 	})
-	return err
 }
 
 func (r *EgressProxyReconciler) applyNetworkPolicy(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *networkingv1.NetworkPolicy) error {
-	obj := &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
+	obj := &networkingv1.NetworkPolicy{}
+	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		obj.Spec = desired.Spec
-		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
+		return nil
 	})
-	return err
 }
 
 func (r *EgressProxyReconciler) applyOwnedSecret(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *corev1.Secret) error {
-	obj := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
+	obj := &corev1.Secret{}
+	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		obj.Type = desired.Type
 		obj.Data = desired.Data
-		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
+		return nil
 	})
-	return err
 }
 
 // updateStatus reads the proxy Deployment's readiness and writes the uniform v2

@@ -8,13 +8,15 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, F4, F8, and the prevention gates shipped.** The F1
+> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, F4, F7, F8, and the prevention gates shipped.** The F1
 > Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe
 > rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule
-> consolidation as Q364, F8's god-function decomposition as Q367, and the
+> consolidation as Q364, F7's CreateOrPatch collapse as Q366 (which spun the
+> owner-reference-policy question out to [Q394](../STATUS.md#Q394)),
+> F8's god-function decomposition as Q367, and the
 > §Prevention gates (nolintlint + a ratcheted funlen) as Q371. The remaining
 > findings are tracked by Queue rows
-> [Q365](../STATUS.md#Q365)–[Q366](../STATUS.md#Q366),
+> [Q365](../STATUS.md#Q365),
 > [Q368](../STATUS.md#Q368)–[Q370](../STATUS.md#Q370); [Q372](../STATUS.md#Q372)
 > (Deferred) carries the re-run trigger.
 >
@@ -263,7 +265,7 @@ This is why the row sorts adjacent to Q273 rather than by its own severity.
 
 ### Medium
 
-**F7 — ~29 near-identical `CreateOrPatch` wrappers across three GMC reconcilers.** → [Q366](../STATUS.md#Q366)
+**F7 — ~29 near-identical `CreateOrPatch` wrappers across three GMC reconcilers.** ✅ **Shipped** (Q366)
 
 33 `CreateOrPatch` calls across 29 `apply*` functions
 (`actionsgateway_controller.go` 16/13, `actionsgateway_v2_controller.go` 8/7,
@@ -279,6 +281,33 @@ ServiceAccounts, RoleBindings, NetworkPolicies, and HPAs.
 
 Keep three as bespoke: `applyRoleBinding` (immutable `roleRef`), `applyService`
 (preserve server-assigned `ClusterIP`), `applyProxyDeployment` (HPA owns replicas).
+
+**Shipped in Q366.** Re-measured at implementation time (2026-07-24, after Q360 and
+Q364 reshaped the package) the counts had shrunk to **26 `CreateOrPatch` calls / 26
+`apply*` wrappers** (v1 11, v2 7, EgressProxy 8) — one call per wrapper, no
+double-call wrappers left. All 26 now delegate to a single generic
+`applyManagedChild[T client.Object]` (`apply_helpers.go`): it keys the shell by the
+desired object's namespace/name, writes the managed labels, runs a per-type
+`copyManaged` closure, and — **only when the caller passes a non-nil owner** —
+stamps the controller reference. The three "bespoke" behaviours did not need
+separate skeletons: the immutable-`roleRef` recreate is a thin branch *around* the
+one path (the closure returns `errRoleRefImmutable`; the wrapper does the
+delete+recreate), and `applyService`/`applyProxyDeployment`/the EgressProxy
+conditional-scale Deployment are just different `copyManaged` closures. So the
+8–12-line skeleton collapsed 26→1 while every wrapper kept its exact
+type/fields/owner behaviour.
+
+The refactor was strictly behaviour-preserving: the per-call-site owner-reference
+decision is passed through unchanged (v1 stays 4-of-11 owned, v2 all-but-the-
+cluster-scoped-binding, EgressProxy all-owned). New table tests
+(`apply_helpers_ownerref_test.go`) pin that contract per helper — including an
+explicit `4 of 11` assertion for v1 — so the collapse cannot silently add or drop
+an owner.
+
+The ownerRef-policy inconsistency itself was **deliberately not resolved here** — a
+force-removed-finalizer leak is a security-relevant behaviour question that must be
+decided on its own, not smuggled into a cleanup. It is filed as
+[Q394](../STATUS.md#Q394) for a separate, signed-off decision.
 
 **F8 — Two god wiring functions with the linter switched off.** ✅ **Shipped** (Q367)
 
