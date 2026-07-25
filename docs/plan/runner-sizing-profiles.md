@@ -1,8 +1,14 @@
 # Worker Right-Sizing Profiles (Recommendations First)
 
 > **Status: 🔄 Phases 1–3 shipped 2026-07-21/22 — tracked as [Q359](../STATUS.md#Q359).**
-> Remaining: live dogfood validation of all three phases (rides the next
-> dogfood session). This doc is the design sketch and phase record.
+> Live-validated on dogfood 2026-07-25: usage observability, the status
+> recommendation and its derivation, restart persistence, and the profile's
+> below-confidence fallback all behave as specified. The two behaviours gated on
+> 20 sampled jobs — the `SizingDrift` verdict and `Binpack` actuating — are
+> still unvalidated, because job completion on dogfood capped the sample count
+> at 10 ([Q399](../STATUS.md#Q399)). See
+> [Live validation](#live-validation-2026-07-25). This doc is the design sketch,
+> the phase record, and now the validation record.
 
 ## Goal
 
@@ -185,6 +191,181 @@ Decisions taken at pickup (implementation:
 - Open question 3 (ship `NodeShare` first) became moot — it shipped with the
   phase. Question 4 confirmed: profile parameters live on the `RunnerSet`
   (differently-tuned sets can share one template).
+
+## Live validation (2026-07-25)
+
+Run against the dogfood cluster rebuilt from zero the same session (see the
+[GKE dogfood runbook](gke-dogfood.md)), on a control-plane image built from
+`e0acd60`.
+Every published image predated these phases, so the validation image had to be
+built by hand — worth knowing before the next attempt, since neither the pinned
+`GAG_IMAGE_TAG` default nor the newest release carries this code.
+
+Tenant: `gag-dogfood`, `RunnerSet` `ci`, runner container asking `cpu: 2` /
+`memory: 2Gi` with a `3Gi` memory limit. Load was the repo's own CI, dispatched
+onto GAG with `unit-test.yml -f target_gag=true`.
+
+### Prerequisites behaved as documented
+
+- `metrics.k8s.io` is served by GKE's own metrics-server addon; no install step.
+  (It is *not* Available for roughly the first two minutes of a new cluster's
+  life, so a from-zero bootstrap's preflight reports it missing and then it
+  self-resolves; that artifact is tracked on the dogfood runbook, not here.)
+- The AGC's ServiceAccount could `list pods.metrics.k8s.io` in the tenant
+  namespace with no manual RBAC, confirming the shipped grant.
+- The sampler announced itself at startup: `worker usage sampler started`,
+  `interval 15`.
+
+### Phase 1 — usage observability: confirmed
+
+Scraped from the AGC's `/metrics` over mTLS. All seven metric families are
+exported with live data, labelled by namespace, runner set, and container:
+
+| Signal | Observed |
+|---|---|
+| `..._cpu_peak_cores{container="runner"}` | `3.744` cores |
+| `..._memory_peak_bytes{container="runner"}` | `2.383e+09` (≈2.22 GiB) |
+| `..._job_cpu_peak_cores` / `..._job_memory_peak_bytes` | per-job histograms populating the expected buckets |
+| `..._jobs_sampled_total` | counting finalized jobs |
+| `..._jobs_unsampled_total` | non-zero — short jobs correctly excluded |
+| `..._poll_errors_total` | absent (never incremented) |
+
+Two independent things worth recording:
+
+- **The measured peak matches the earlier hand-derivation.** The
+  [dogfood right-sizing exercise](dogfood-runner-rightsizing.md) put heavy CI
+  jobs at roughly 3.8 vCPU / 2.1 GiB by scraping `kubectl top` by hand; the
+  sampler independently measured 3.74 cores / 2.22 GiB on the same workload.
+  That is the feature reproducing, automatically, the number it was built to
+  stop people deriving manually.
+- **`jobs_unsampled_total` earns its place.** Some CI jobs finish inside one
+  15s sample interval, and the counter makes that visible instead of silently
+  biasing the histogram toward long jobs.
+
+### Phase 2 — recommendation in status: confirmed
+
+`status.sizingRecommendation` appeared on the `runner` container at exactly
+`sampleCount: 5` (`MinSamplesForRecommendation`), carrying `windowStart` and
+both raw statistics beside the derived values:
+
+```json
+{
+  "container": "runner",
+  "observedPeak":  { "cpu": "3745m", "memory": "2273Mi" },
+  "observedP95":   { "cpu": "3745m", "memory": "2273Mi" },
+  "requests":      { "cpu": "3750m", "memory": "2304Mi" },
+  "limits":        { "memory": "3200Mi" },
+  "sampleCount": 5,
+  "windowStart": "2026-07-25T02:12:25Z"
+}
+```
+
+Every derivation rule the docs state is reproduced by these numbers:
+
+- `requests` = p95 rounded **up** to the step: 3745m → 3750m (50m step),
+  2273Mi → 2304Mi (64Mi step, 36 × 64).
+- memory `limit` = max × 1.4 rounded up: 2273 × 1.4 = 3182.2 → 3200Mi (50 × 64).
+- **No CPU limit is recommended**, as designed.
+- `observedP95` equals `observedPeak` here because five samples is too few to
+  separate them — which is exactly why `sampleCount` is published alongside.
+
+`SizingDrift` was `False` with reason `InsufficientSamples` and a message
+naming the threshold, the documented behaviour below 20 samples.
+
+**The dogfood template is under-asking, not over-asking.** The measured
+recommendation (3750m CPU / 2304Mi) sits *above* the template's `cpu: 2` /
+`memory: 2Gi`. Drift only flags waste (ask ≥ 2× recommendation) or OOM risk
+(memory limit below the observed peak), so an under-provisioned CPU *request*
+is deliberately not flagged: CPU is compressible, and the job bursts into idle
+node capacity rather than failing. Worth stating plainly because it is easy to
+read a `SizingWithinRange` verdict as "the template is right-sized" when it
+means "the template is not wasteful and will not OOM".
+
+### Phase 2 — restart persistence: confirmed
+
+Deleting the AGC pod mid-run (`dogfood-agc-…-227d6` → `…-fstfb`) left
+`status.sizingRecommendation` **byte-identical** across the restart —
+`sampleCount: 10`, the same `observedPeak`/`observedP95`, the same derived
+`requests`/`limits`, and the same `windowStart`. That is the warm-up safety
+rail doing its job: a freshly-started sampler holds an empty aggregate, and the
+reconciler declines to overwrite the persisted store with it.
+
+**The Prometheus metrics do reset**, and should not be mistaken for data loss.
+The gauges and histograms are in-process and start empty on a new pod, which is
+why the metric is documented as "since the AGC last restarted" and the operator
+recipe reaches for `max_over_time` to bridge restarts. The *recommendation* is
+what survives, because status — not the metric — is the store.
+
+### Phase 3 — below-confidence fallback: confirmed
+
+With `spec.sizing.profile: Binpack` set while no container had reached
+`MinSamplesForDrift` samples:
+
+- `status.sizingProfileState` reported `AwaitingSamples`.
+- Worker pods provisioned the template's static ask verbatim
+  (`requests cpu 2 / memory 2Gi`, `limits memory 3Gi`) at **Burstable** QoS —
+  i.e. `Static`, not a partially-derived shape. Guaranteed QoS would have
+  indicated the profile actuating early.
+- No `SizingDrift` condition was set, matching the deliberate "no data, no
+  noise" branch rather than a `False/InsufficientSamples` on every set.
+
+### Editing a Classic RunnerSet needs an explicit version
+
+Enabling the profile the obvious way fails:
+
+```console
+$ kubectl patch runnerset ci -n gag-dogfood --type=merge \
+    -p '{"spec":{"sizing":{"profile":"Binpack"}}}'
+The RunnerSet "ci" is invalid: spec: Invalid value: a v2beta1 runner set must
+declare exactly one runnerLabel: v2beta1 is ScaleSet-only and the scale set's
+name is its single runs-on match target (Q264)
+```
+
+The object is a `Classic` set with three `runnerLabels` — a shape v2alpha1
+allows and v2beta1 does not. Unqualified `kubectl` addresses the storage
+version (v2beta1), so the write is rejected even though the field being set has
+nothing to do with labels or protocol. Qualifying the resource works:
+
+```bash
+kubectl patch runnersets.v2alpha1.actions-gateway.com ci -n gag-dogfood \
+  --type=merge -p '{"spec":{"sizing":{"profile":"Binpack"}}}'
+```
+
+This is not specific to sizing — it blocks *any* unqualified edit of a Classic
+multi-label RunnerSet, including `kubectl edit` and re-`apply`. Filed as
+[Q398](../STATUS.md#Q398).
+
+### Not reached: the ≥20-sample paths
+
+Two behaviours need `MinSamplesForDrift` (20) sampled jobs on a template
+container, and the session topped out at **10**:
+
+- the actual `SizingDrift` verdict (`SizingWithinRange` vs `SizingDriftDetected`),
+  as opposed to the `InsufficientSamples` state that was confirmed;
+- `Binpack` actuating — `sizingProfileState: Active` with derived
+  `requests`==`limits` at Guaranteed QoS.
+
+The cap was **not** the sizing code. Roughly 10 of ~44 GAG jobs dispatched
+across nine `workflow_dispatch` rounds actually finalized; the rest report a
+`started_at` with no conclusion, and the AGC logged the Q254 teardown path
+(`RenewJob: job lock definitively lost … broker: job not found (HTTP 404)`),
+which is what a job disposed of GitHub-side looks like from the gateway. Since
+only finalized jobs become samples, sample accrual is bounded by that
+completion rate. Tracked separately as [Q399](../STATUS.md#Q399) — it is a
+dogfood reliability question, not a right-sizing one, and it will throttle any
+future validation that needs a job population.
+
+When picking this up again, note that the drift verdict is judged against the
+**template's** ask, not against new samples — so once a set is past 20 samples,
+both branches can be exercised in seconds by editing `RunnerTemplate`
+resources, with no further soak:
+
+- `SizingDriftDetected` (waste) needs an ask ≥2× the recommendation. On the
+  dogfood shape only **memory** can do this: 2× the ~2.3Gi recommendation still
+  fits an `e2-standard-4`, whereas 2× the ~3.75-core CPU recommendation exceeds
+  node allocatable and would leave worker pods `Pending` instead.
+- `SizingDriftDetected` (OOM risk) needs a memory *limit* below the observed
+  peak, which will genuinely OOM-kill jobs — do it on a throwaway set.
 
 ## Non-goals
 
