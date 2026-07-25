@@ -14,10 +14,10 @@ API surface, and the contract cannot be walked back.
 | Phase | Scope | Sz | Status |
 |---|---|---|---|
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
-| 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q411](../STATUS.md#Q411)) |
-| 2 | Add `v2` to each kind, mark it storage, extend conversion coverage | M | ❌ Open ([Q411](../STATUS.md#Q411)) |
+| 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
+| 2 | Add `v2` to each kind, mark it storage, extend conversion coverage | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
 | 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)) |
-| 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q411](../STATUS.md#Q411)) |
+| 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q413](../STATUS.md#Q413)) |
 
 ## Why this is gated on a soak, not a date
 
@@ -62,7 +62,7 @@ none of them is a calendar check.
 | M1, M2, M3a, M3b, M5 shipped | ✅ Satisfied — see [v2-api.md](v2-api.md) milestones |
 | Graduated `v2alpha1` → `v2beta1` (webhook + storage migration) | ✅ Satisfied — Q74 |
 | Graduated `v2beta1` → `v2` | ❌ This plan, Phase 2 |
-| `v1alpha1` deprecated **with a named removal release** | ⚠️ Deprecated, but the removal release is named by [Q410](../STATUS.md#Q410) in `v1.3.0`. **This is a GA precondition**, which is why the 1.3 notice is on the critical path to 2.0. |
+| `v1alpha1` deprecated **with a named removal release** | ⚠️ Deprecated, but the removal release is named by [Q412](../STATUS.md#Q412) in `v1.3.0`. **This is a GA precondition**, which is why the 1.3 notice is on the critical path to 2.0. |
 | ≥1 representative tenant migrated v1→v2 with the tool for real | ⚠️ **Unverified.** Dogfood runs v2, but whether a v1→v2 `gag-migrate` run was ever exercised end-to-end on a real tenant needs confirming before GA, not asserting. Phase 1 item. |
 | Operator docs updated | ❌ Phase 4 |
 | Cross-namespace sharing (M4), direct egress | Not GA gates, by the DoD |

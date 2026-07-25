@@ -60,8 +60,14 @@ release-candidate validation from
 
 | Item | Why it gates |
 |---|---|
-| [Q409](../STATUS.md#Q409) | Deprecate `v2alpha1`: `+kubebuilder:deprecatedversion` markers, regenerated Custom Resource Definitions (CRDs), and operator docs routed to `v2beta1`. Without this the notice is not actually served to anyone. |
-| [Q410](../STATUS.md#Q410) | Name `v2.0.0` as the removal release for all three items in the table above. This is the "one release ahead" the policy promises; miss it in 1.3 and `v2.0.0` cannot legally remove anything under the project's own rules. |
+| [Q411](../STATUS.md#Q411) | Deprecate `v2alpha1` in the API itself: `+kubebuilder:deprecatedversion` markers and regenerated Custom Resource Definitions (CRDs). Without the marker the apiserver warns nobody, so the notice reaches only readers of the docs. |
+| [Q412](../STATUS.md#Q412) | Name `v2.0.0` as the removal release for all three items in the table above. This is the "one release ahead" the policy promises; miss it in 1.3 and `v2.0.0` cannot legally remove anything under the project's own rules. Also updates the docs that currently describe `v2alpha1` as merely "still served" to say deprecated, removed at `v2.0.0`. |
+
+The docs half of the notice already shipped as **Q409**: the ARC migration guide,
+getting-started, tenant onboarding, install, and the positioning pages were all
+re-routed onto `v2beta1`, leaving `v2alpha1` described only as the `gag-migrate`
+on-ramp. That settles which version new tenants onboard on, which was the open
+question this release's deprecation decision needed answered.
 
 ### C. Release mechanics — *gating*
 
@@ -97,9 +103,12 @@ Both are cheap, and both undermine the "`main` is green" precondition that
    both remaining paths are exercisable via template edits with no soak.
 3. **[Q400](../STATUS.md#Q400) and [Q404](../STATUS.md#Q404)** can run in parallel
    with the above by a different session. They touch CI configuration only.
-4. **[Q409](../STATUS.md#Q409) and [Q410](../STATUS.md#Q410)** are independent of all
-   of the above and can land at any point before the tag. Q409 changes generated
-   CRDs, so it should not race a session editing the same API packages.
+4. **[Q411](../STATUS.md#Q411) and [Q412](../STATUS.md#Q412)** are independent of all
+   of the above and can land at any point before the tag. Q411 changes generated
+   CRDs, so it should not race a session editing the same API packages. Neither can
+   be dropped on the grounds that Q409 already aligned the docs: the deprecation has
+   to reach the apiserver (Q411) and name its removal release (Q412), or it is a
+   statement of taste rather than a notice operators can plan against.
 5. **[Q393](../STATUS.md#Q393) last**, immediately before tagging, so the banner names
    the version actually being cut.
 
