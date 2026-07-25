@@ -160,8 +160,9 @@ Every capability above is available today.
 
 !!! warning "Where GAG is behind ARC"
 
-    It's **maturity, not capability.** ARC is GA and widely deployed; GAG's
-    recommended v2 API is still alpha and rides a Public-Preview runner-scale-set
+    It's **maturity, not capability.** ARC is GA and widely deployed; GAG's v2 API
+    has only just reached beta (`v2beta1`, its first stability contract) and rides a
+    Public-Preview runner-scale-set
     protocol. That is precisely why the v1 → v2 migration is handled on a committed,
     documented schedule with a working
     [`gag-migrate`](operations/migration-v1-to-v2.md) tool — the discipline is the

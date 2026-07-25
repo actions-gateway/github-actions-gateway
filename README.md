@@ -113,7 +113,7 @@ For day-2 operations — `helm upgrade` / rollback, per-component upgrades, and 
 
 See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough: GMC deployment, GitHub App Secret, and your first tenant.
 
-**New tenants should onboard on the v2 API** (`actions-gateway.com/v2alpha1` — a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone `EgressProxy`). It is alpha but is the recommended shape and where new capability lands. The older single-CR `v1alpha1` API is still served but **[deprecated](docs/operations/v1alpha1-deprecation.md)**; already on it? [`gag-migrate`](docs/operations/migration-v1-to-v2.md) moves a tenant to v2 without changing how jobs are acquired.
+**New tenants should onboard on the v2 API** (`actions-gateway.com/v2alpha1` — a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone `EgressProxy`). It has reached its first stability contract at `v2beta1` (the graduated, ScaleSet-only storage and hub version; `v2alpha1` stays served for coexistence and the `gag-migrate` on-ramp), and it is where new capability lands. The older single-CR `v1alpha1` API is still served but **[deprecated](docs/operations/v1alpha1-deprecation.md)**; already on it? [`gag-migrate`](docs/operations/migration-v1-to-v2.md) moves a tenant to v2 without changing how jobs are acquired.
 
 **Coming from Actions Runner Controller (ARC)?** The [Migrating from ARC guide](docs/operations/migration-from-arc.md) maps ARC scale-set concepts onto GAG and walks one runner group across with zero downtime.
 

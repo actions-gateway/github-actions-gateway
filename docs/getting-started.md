@@ -8,9 +8,11 @@
     The recommended shape for a new tenant is the **v2 API**
     (`actions-gateway.com/v2alpha1`) — a decomposed `ActionsGateway` +
     `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in
-    [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below. It is
-    **alpha** (the schema may still change before it graduates toward `v2beta1`),
-    but it is the direction the project is going and where new capabilities land.
+    [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below. The API
+    has reached its first stability contract: **`v2beta1`** is the graduated,
+    ScaleSet-only storage and hub version, and `v2alpha1` (used in the examples
+    here) stays served for coexistence and the `gag-migrate` on-ramp, with the
+    apiserver converting between them. It is where new capabilities land.
     The older single-CR **`v1alpha1`** API is still fully served but
     **[deprecated](operations/v1alpha1-deprecation.md)** — reach for it only if you
     have a specific reason to, and see the
