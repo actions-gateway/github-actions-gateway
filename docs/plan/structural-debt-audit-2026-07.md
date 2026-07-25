@@ -8,17 +8,15 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, F4, F7, F8, F10, and the prevention gates shipped.** The F1
+> **Status: ⚠️ Partial — filed 2026-07-20; F1, F2, F3, F4, F5, F7, F8, F10, and the prevention gates shipped.** The F1
 > Secret leak was fixed and merged the same day (Q373, #727); F2 (the probe
 > rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule
-> consolidation as Q364, F7's CreateOrPatch collapse as Q366 (which spun the
-> owner-reference-policy question out to [Q394](../STATUS.md#Q394)),
-> F8's god-function decomposition as Q367, F10's
-> script-sprawl cleanup as Q370, and the
-> §Prevention gates (nolintlint + a ratcheted funlen) as Q371. The remaining
-> findings are tracked by Queue rows
-> [Q365](../STATUS.md#Q365),
-> [Q368](../STATUS.md#Q368)–[Q369](../STATUS.md#Q369); [Q372](../STATUS.md#Q372)
+> consolidation as Q364, F5's broker-double consolidation as Q368, F7's
+> CreateOrPatch collapse as Q366 (which spun the owner-reference-policy question
+> out to [Q394](../STATUS.md#Q394)), F8's god-function decomposition as Q367,
+> F10's script-sprawl cleanup as Q370, and the §Prevention gates (nolintlint + a
+> ratcheted funlen) as Q371. The remaining findings are tracked by Queue rows
+> [Q365](../STATUS.md#Q365) and [Q369](../STATUS.md#Q369); [Q372](../STATUS.md#Q372)
 > (Deferred) carries the re-run trigger.
 >
 > The ID range is not contiguous because concurrent branches allocated IDs while
@@ -220,7 +218,7 @@ proving the rendered policy is unchanged) and locks in that the destinationCIDRs
 stays distinct — including that it survives FQDN mode while the GitHub rule is gated
 out.
 
-**F5 — Four hand-rolled implementations of one broker wire protocol.** → [Q368](../STATUS.md#Q368)
+**F5 — Four hand-rolled implementations of one broker wire protocol.** ✅ **Shipped** (Q368)
 
 `broker/brokertest/server.go` (746) + `test/fakegithub/main.go` (1118) +
 `cmd/agc/test/load/broker_stub.go` (373), plus the probe (F2).
@@ -238,6 +236,30 @@ Related: `cmd/probe/compat/compat.go` is a non-`_test.go` file that imports
 Its doc comment asserts it "never ships in a compiled artifact" — true today only
 because no `package main` imports it, with nothing enforcing that. A check asserting
 no `package main`-reachable file imports `httptest` would make the guarantee real.
+
+**Shipped in Q368.** The session and credential *mechanics* — minting
+`session-<n>` IDs, resolving a DELETE by `sessionId` query param or bearer token,
+owner-scoped session listing, the `#POST − #DELETE` active count, connection-reuse-safe
+JSON framing, and the JWT-issuer extraction — moved to one stdlib-only library,
+`broker/brokerstub`. All three doubles build on it. What stayed per-double is the
+*policy* that legitimately differs: fan-out job accounting (Q260) in `brokertest`,
+the single-use JIT lifecycle + opportunistic redelivery + Q154 lease model +
+registration/control APIs in `fakegithub`, saturated auto-delivery in the load
+stub. Folding those divergent `handleMessage`/`handleAcquireJob` bodies into one
+configurable handler would produce the "worse function than either" the
+[deliberate non-findings](#deliberate-non-findings) warn against — these are
+different test scenarios, not reimplementations of the wire protocol, which now
+exists once. `broker/brokerstub` is kept dependency-free so `fakegithub` links no
+third-party code (the `broker` client would pull in githubapp/JWT/Prometheus): the
+distroless Trivy-scanned image gains only the repo's own module, no new scan
+surface.
+
+The `httptest` guarantee is now real, not conventional:
+`TestNoPackageMainReachesHTTPTest` (in `cmd/probe/compat`) walks every
+`package main` in the workspace and fails if any transitively imports
+`net/http/httptest` in its compiled build graph — `go list -deps`, so a `_test.go`
+httptest import (fakegithub's own tests) is correctly ignored. It runs in
+`make check`.
 
 ### Medium-high
 

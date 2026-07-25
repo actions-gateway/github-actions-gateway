@@ -14,10 +14,15 @@
 // that turns a silent wire-protocol break into a visible test failure before
 // the v2beta1 API shape is frozen.
 //
-// This is a test/diagnostic package: it is not imported by the probe binary
-// (package main) and never ships in a compiled artifact. Checks() is the
-// catalogue; RunAll executes it; Report renders the published markdown report
-// (docs/development/broker-compatibility.md), kept in sync by a golden test.
+// This is a test/diagnostic package: it imports net/http/httptest but is not
+// imported by the probe binary (package main), so it never ships in a compiled
+// artifact. That guarantee is machine-enforced, not conventional:
+// TestNoPackageMainReachesHTTPTest asserts no `package main` in the workspace
+// transitively imports net/http/httptest, so importing this package (or any
+// broker test double) into a production binary fails the build gate. Checks()
+// is the catalogue; RunAll executes it; Report renders the published markdown
+// report (docs/development/broker-compatibility.md), kept in sync by a golden
+// test.
 package compat
 
 import (

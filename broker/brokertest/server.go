@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/broker/brokerstub"
 )
 
 // Server is a test HTTP server that implements the broker v2 protocol endpoints.
@@ -20,24 +21,24 @@ type Server struct {
 	URL    string
 	server *httptest.Server
 
-	mu                  sync.Mutex
-	tokenCounter        atomic.Int64
-	sessionCounter      int
-	sessions            map[string]bool                         // sessionID → active
-	sessionOwners       map[string]string                       // sessionID → ownerName ("<group>-<index>")
-	deletedSessions     map[string]chan struct{}                // sessionID → closed on DELETE
-	firstPollNotify     map[string]chan struct{}                // sessionID → closed on first GET /message
-	jobQueues           map[string]chan broker.TaskAgentMessage // sessionID → messages
-	bearerSessions      map[string]string                       // bearerToken → sessionID
-	failSessionOwner    string                                  // when non-empty, 401 POST /session for owners with this prefix
-	acquireJobResponse  any                                     // custom AcquireJob response; nil uses default
-	acquireCount        atomic.Int64
-	ackCount            atomic.Int64
-	renewJobCount       atomic.Int64
-	completeJobCount    atomic.Int64
-	lastCompleteJob     atomic.Value // broker.CompleteJobRequest of the most recent completejob
-	msgCounter          atomic.Int64
-	activeSessionsCount atomic.Int32 // +1 per POST /session, -1 per DELETE /session call
+	// sessions is the shared session registry (minting, bearer-DELETE
+	// resolution, owner-scoped listing, and the "#POST − #DELETE" active count).
+	sessions *brokerstub.Sessions
+
+	mu                 sync.Mutex
+	tokenCounter       atomic.Int64
+	deleted            map[string]bool                         // sessionID → DELETE resolved (guarded by mu; backs WaitForSessionDelete)
+	deletedSessions    map[string]chan struct{}                // sessionID → closed on DELETE
+	firstPollNotify    map[string]chan struct{}                // sessionID → closed on first GET /message
+	jobQueues          map[string]chan broker.TaskAgentMessage // sessionID → messages
+	failSessionOwner   string                                  // when non-empty, 401 POST /session for owners with this prefix
+	acquireJobResponse any                                     // custom AcquireJob response; nil uses default
+	acquireCount       atomic.Int64
+	ackCount           atomic.Int64
+	renewJobCount      atomic.Int64
+	completeJobCount   atomic.Int64
+	lastCompleteJob    atomic.Value // broker.CompleteJobRequest of the most recent completejob
+	msgCounter         atomic.Int64
 
 	// Fan-out job-accounting model (Q260). Off by default so existing tests are
 	// unaffected; EnableFanoutAccounting turns it on. It models the one property
@@ -74,12 +75,11 @@ type fanoutJob struct {
 // New creates and starts a new broker Stub. Call Close when done.
 func New() *Server {
 	s := &Server{
-		sessions:        make(map[string]bool),
-		sessionOwners:   make(map[string]string),
+		sessions:        brokerstub.NewSessions(),
+		deleted:         make(map[string]bool),
 		deletedSessions: make(map[string]chan struct{}),
 		firstPollNotify: make(map[string]chan struct{}),
 		jobQueues:       make(map[string]chan broker.TaskAgentMessage),
-		bearerSessions:  make(map[string]string),
 		jobs:            make(map[string]*fanoutJob),
 		reqToPlan:       make(map[string]string),
 	}
@@ -112,15 +112,7 @@ func (s *Server) HTTPClient() *http.Client {
 // (i.e. POST /session was called but DELETE /session has not been called yet).
 // Deleted sessions from prior tests are not included.
 func (s *Server) RegisteredSessions() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]string, 0, len(s.sessions))
-	for id, active := range s.sessions {
-		if active {
-			out = append(out, id)
-		}
-	}
-	return out
+	return s.sessions.ActiveIDs("")
 }
 
 // ActiveSessionsForOwner returns the IDs of currently-active sessions whose
@@ -131,16 +123,7 @@ func (s *Server) RegisteredSessions() []string {
 // global RegisteredSessions/ActiveSessionCount counters accumulate across the
 // whole package and cause cross-test flakes when used for exact-count assertions.
 func (s *Server) ActiveSessionsForOwner(group string) []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	prefix := group + "-"
-	out := make([]string, 0, len(s.sessions))
-	for id, active := range s.sessions {
-		if active && strings.HasPrefix(s.sessionOwners[id], prefix) {
-			out = append(out, id)
-		}
-	}
-	return out
+	return s.sessions.ActiveIDs(group + "-")
 }
 
 // EnqueueJob places a job message onto the given session's queue.
@@ -172,8 +155,11 @@ func (s *Server) EnqueueJob(sessionID string, payload broker.RunnerJobRequestBod
 // If the DELETE already arrived before this call, returns true immediately.
 func (s *Server) WaitForSessionDelete(sessionID string, timeout time.Duration) bool {
 	s.mu.Lock()
-	// Fast path: DELETE already received before this call.
-	if active, registered := s.sessions[sessionID]; registered && !active {
+	// Fast path: DELETE already resolved before this call. The delete signal is
+	// tracked under mu (alongside the notify channel) so the check-and-register
+	// is atomic with handleSession's close — the session identity itself lives
+	// in the shared registry under its own lock.
+	if s.deleted[sessionID] {
 		s.mu.Unlock()
 		return true
 	}
@@ -431,7 +417,7 @@ func (s *Server) fanoutMessage() (broker.TaskAgentMessage, bool) {
 // but not yet called DELETE /session. It is computed as (#POST /session − #DELETE /session)
 // so each listener goroutine contributes +1 on start and −1 on exit, regardless of v2 mode.
 func (s *Server) ActiveSessionCount() int {
-	return int(s.activeSessionsCount.Load())
+	return s.sessions.ActiveCount()
 }
 
 // SetAcquireJobResponse configures the JSON body returned by the next /acquirejob call.
@@ -469,18 +455,14 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := fmt.Sprintf("token-%d", s.tokenCounter.Add(1))
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"access_token": token,
-		"token_type":   "Bearer",
-	})
+	brokerstub.WriteToken(w, token)
 }
 
 // handleSession serves POST /session (create) and DELETE /session (delete).
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		bearer := brokerstub.Bearer(r)
 
 		// Parse ownerName ("<group>-<agentIndex>") so tests can scope session
 		// assertions to one RunnerGroup via ActiveSessionsForOwner. Best-effort:
@@ -490,56 +472,34 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
-		s.mu.Lock()
 		// Simulate a broker that rejects this owner's session creation (e.g. a
 		// consumed single-use credential). createSession maps 401 to a
 		// NonRetriableError, so the listener's permanent baseline exits and is not
 		// auto-restarted — the precondition for the controller's baseline-revival
 		// path (Q137). Scoped by owner prefix so one test's failure injection does
 		// not affect other RunnerGroups sharing this stub.
-		if p := s.failSessionOwner; p != "" && strings.HasPrefix(reqBody.OwnerName, p) {
-			s.mu.Unlock()
+		s.mu.Lock()
+		fail := s.failSessionOwner
+		s.mu.Unlock()
+		if fail != "" && strings.HasPrefix(reqBody.OwnerName, fail) {
 			http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		s.sessionCounter++
-		sessionID := fmt.Sprintf("session-%d", s.sessionCounter)
-		s.sessions[sessionID] = true
-		s.sessionOwners[sessionID] = reqBody.OwnerName
-		if bearer != "" {
-			s.bearerSessions[bearer] = sessionID
-		}
-		s.mu.Unlock()
 
-		s.activeSessionsCount.Add(1)
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"sessionId": sessionID,
-		})
+		sessionID := s.sessions.Create(reqBody.OwnerName, 0, "", bearer)
+		brokerstub.WriteJSON(w, http.StatusOK, map[string]string{"sessionId": sessionID})
 
 	case http.MethodDelete:
-		// Each goroutine calls DELETE exactly once on exit; decrement the per-goroutine
-		// counter regardless of v2 vs v1 mode.
-		s.activeSessionsCount.Add(-1)
+		// Each goroutine calls DELETE exactly once on exit; count it toward the
+		// per-goroutine "#POST − #DELETE" total regardless of v2 vs v1 mode.
+		s.sessions.CountDelete()
 
-		// Identify the session: use the sessionId query param (v1) or look up the
-		// Bearer token in the Authorization header (v2). The v2 path uses per-goroutine
-		// unique tokens so only the calling goroutine's session is marked deleted.
-		sessionID := r.URL.Query().Get("sessionId")
-		if sessionID == "" {
-			bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			s.mu.Lock()
-			if sid, ok := s.bearerSessions[bearer]; ok {
-				sessionID = sid
-				delete(s.bearerSessions, bearer)
-			}
-			s.mu.Unlock()
-		}
-
+		// Identify the session by the sessionId query param (v1) or the Bearer
+		// token (v2, per-goroutine unique) and mark it deleted.
+		sessionID, _ := s.sessions.ResolveDelete(r.URL.Query().Get("sessionId"), brokerstub.Bearer(r))
 		if sessionID != "" {
 			s.mu.Lock()
-			s.sessions[sessionID] = false
+			s.deleted[sessionID] = true
 			if ch, ok := s.deletedSessions[sessionID]; ok {
 				select {
 				case <-ch:

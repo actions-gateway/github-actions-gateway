@@ -4,7 +4,6 @@ package load
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,11 +14,14 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
+	"github.com/actions-gateway/github-actions-gateway/broker/brokerstub"
 )
 
 // brokerStub is an in-process implementation of the GitHub Actions broker v2
-// wire protocol, purpose-built for the load harness. It differs from
-// broker/brokertest in two ways the load model depends on:
+// wire protocol, purpose-built for the load harness. It shares the session and
+// credential mechanics (ID minting, bearer-DELETE resolution, JSON framing) with
+// every other in-repo broker double via broker/brokerstub, and layers on the two
+// behaviours the load model depends on:
 //
 //   - It auto-delivers a fresh job to every live session that polls (after an
 //     optional think-time), so the harness drives continuous load without an
@@ -53,52 +55,30 @@ type brokerStub struct {
 	acquireCount atomic.Int64
 	msgCounter   atomic.Int64
 
+	// sessions is the shared session registry (minting, bearer-DELETE
+	// resolution). The single-use lifecycle state below is load-specific and
+	// keyed off the IDs it mints.
+	sessions *brokerstub.Sessions
+
 	mu              sync.Mutex
-	sessionCounter  int
-	live            map[string]bool      // sessionID → live
-	sessionAgents   map[string]int64     // sessionID → agent ID
 	sessionReadyAt  map[string]time.Time // sessionID → when think-time started
 	consumedAgents  map[int64]bool       // agent IDs whose single-use record is spent
 	requestSessions map[string]string    // runner_request_id → delivering sessionID
 	deadPolls       map[string]int       // dead sessionID → polls since death
-	bearerSessions  map[string]string    // bearer token → sessionID
 }
 
 // longPollTick bounds how often a held GET /message rechecks for a ready job.
 const longPollTick = 25 * time.Millisecond
 
-// writeJSON marshals v and writes it as a fixed-length response with no trailing
-// newline. Both properties are load-bearing for connection reuse: the broker
-// client decodes GetMessage with json.Decoder, which stops at the end of the
-// JSON object — a trailing '\n' (as json.Encoder.Encode emits) or a
-// chunked/unknown-length body would leave the connection un-drained, so net/http
-// would not return it to the idle pool and every job delivery would leak a
-// connection (and its read/write goroutines). With an exact Content-Length and
-// no trailing byte, the decode consumes the whole body and the connection is
-// reused.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	b, err := json.Marshal(v)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(b)))
-	w.WriteHeader(status)
-	_, _ = w.Write(b)
-}
-
 func newBrokerStub(longPollHold, thinkTime time.Duration) *brokerStub {
 	s := &brokerStub{
 		longPollHold:    longPollHold,
 		thinkTime:       thinkTime,
-		live:            make(map[string]bool),
-		sessionAgents:   make(map[string]int64),
+		sessions:        brokerstub.NewSessions(),
 		sessionReadyAt:  make(map[string]time.Time),
 		consumedAgents:  make(map[int64]bool),
 		requestSessions: make(map[string]string),
 		deadPolls:       make(map[string]int),
-		bearerSessions:  make(map[string]string),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/token", s.handleToken)
@@ -135,58 +115,37 @@ func (s *brokerStub) handleToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]string{
-		"access_token": fmt.Sprintf("bearer-%d", s.msgCounter.Add(1)),
-		"token_type":   "Bearer",
-	})
+	brokerstub.WriteToken(w, fmt.Sprintf("bearer-%d", s.msgCounter.Add(1)))
 }
 
 func (s *brokerStub) handleSession(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		bearer := brokerstub.Bearer(r)
 		var reqBody struct {
-			OwnerName string `json:"ownerName"`
-			Agent     struct {
+			Agent struct {
 				ID int64 `json:"id"`
 			} `json:"agent"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
 		s.mu.Lock()
-		if s.consumedAgents[reqBody.Agent.ID] {
-			s.mu.Unlock()
+		consumed := s.consumedAgents[reqBody.Agent.ID]
+		s.mu.Unlock()
+		if consumed {
 			http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		s.sessionCounter++
-		id := fmt.Sprintf("session-%d", s.sessionCounter)
-		s.live[id] = true
-		s.sessionAgents[id] = reqBody.Agent.ID
+
+		id := s.sessions.Create("", reqBody.Agent.ID, "", bearer)
+		s.mu.Lock()
 		s.sessionReadyAt[id] = time.Now()
-		if bearer != "" {
-			s.bearerSessions[bearer] = id
-		}
 		s.mu.Unlock()
 
-		writeJSON(w, http.StatusOK, map[string]string{"sessionId": id})
+		brokerstub.WriteJSON(w, http.StatusOK, map[string]string{"sessionId": id})
 
 	case http.MethodDelete:
-		id := r.URL.Query().Get("sessionId")
-		if id == "" {
-			bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			s.mu.Lock()
-			if sid, ok := s.bearerSessions[bearer]; ok {
-				id = sid
-				delete(s.bearerSessions, bearer)
-			}
-			s.mu.Unlock()
-		}
-		if id != "" {
-			s.mu.Lock()
-			delete(s.live, id)
-			s.mu.Unlock()
-		}
+		s.sessions.ResolveDelete(r.URL.Query().Get("sessionId"), brokerstub.Bearer(r))
 		w.WriteHeader(http.StatusOK)
 
 	default:
@@ -217,13 +176,13 @@ func (s *brokerStub) handleMessage(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		if !s.live[id] {
-			s.mu.Unlock()
+		ready := s.sessionReadyAt[id]
+		s.mu.Unlock()
+
+		if !s.sessions.IsActive(id) {
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
-		ready := s.sessionReadyAt[id]
-		s.mu.Unlock()
 
 		if time.Since(ready) >= s.thinkTime {
 			s.deliverJob(w, id)
@@ -264,7 +223,7 @@ func (s *brokerStub) deliverJob(w http.ResponseWriter, sessionID string) {
 		"messageType": "RunnerJobRequest",
 		"body":        string(body),
 	}
-	writeJSON(w, http.StatusOK, msg)
+	brokerstub.WriteJSON(w, http.StatusOK, msg)
 }
 
 // handleAcquireJob consumes the delivering session's single-use agent (Q114)
@@ -282,18 +241,28 @@ func (s *brokerStub) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 	n := s.acquireCount.Add(1)
 	if reqBody.JobMessageID != "" {
 		s.mu.Lock()
-		if sid, ok := s.requestSessions[reqBody.JobMessageID]; ok {
+		sid, ok := s.requestSessions[reqBody.JobMessageID]
+		if ok {
 			delete(s.requestSessions, reqBody.JobMessageID)
-			if agentID := s.sessionAgents[sid]; agentID > 0 {
-				s.consumedAgents[agentID] = true
-			}
-			delete(s.live, sid)
-			s.deadPolls[sid] = 0
 		}
 		s.mu.Unlock()
+		if ok {
+			// Consume the delivering session's single-use agent. deadPolls is set
+			// under mu before the registry marks the session inactive, so a racing
+			// GET /message sees the dead signature (checked first) rather than a
+			// bare 202.
+			sess, _ := s.sessions.Get(sid)
+			s.mu.Lock()
+			if sess.AgentID > 0 {
+				s.consumedAgents[sess.AgentID] = true
+			}
+			s.deadPolls[sid] = 0
+			s.mu.Unlock()
+			s.sessions.SetInactive(sid)
+		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	brokerstub.WriteJSON(w, http.StatusOK, map[string]any{
 		"plan": map[string]string{"planId": fmt.Sprintf("plan-%d", n)},
 	})
 }
@@ -303,34 +272,17 @@ func (s *brokerStub) handleRenewJob(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{
+	brokerstub.WriteJSON(w, http.StatusOK, map[string]string{
 		"lockedUntil": time.Now().Add(10 * time.Minute).Format(time.RFC3339),
 	})
 }
 
 // assertionAgentID extracts the agent ID from the client_assertion JWT issuer
-// ("client-<agentID>"), without verifying the signature. Returns 0 when the
-// request carries no parsable assertion.
+// ("client-<agentID>"). Returns 0 when the request carries no parsable
+// assertion or the issuer is not in that form.
 func assertionAgentID(r *http.Request) int64 {
-	if err := r.ParseForm(); err != nil {
-		return 0
-	}
-	parts := strings.Split(r.PostFormValue("client_assertion"), ".")
-	if len(parts) != 3 {
-		return 0
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return 0
-	}
-	var claims struct {
-		Iss string `json:"iss"`
-	}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return 0
-	}
 	var id int64
-	if _, err := fmt.Sscanf(claims.Iss, "client-%d", &id); err != nil {
+	if _, err := fmt.Sscanf(brokerstub.AssertionIssuer(r), "client-%d", &id); err != nil {
 		return 0
 	}
 	return id

@@ -15,7 +15,7 @@ This repo uses a `go.work` workspace with no root-level Go module. The workspace
 | `cmd/gmc/` | `github.com/actions-gateway/github-actions-gateway/gmc` | `api`, `broker`, `githubapp`, `agc` |
 | `cmd/proxy/` | `github.com/actions-gateway/github-actions-gateway/proxy` | — |
 | `cmd/worker/` | `github.com/actions-gateway/github-actions-gateway/worker` | — |
-| `test/fakegithub/` | `github.com/actions-gateway/github-actions-gateway/fakegithub` | — |
+| `test/fakegithub/` | `github.com/actions-gateway/github-actions-gateway/fakegithub` | `broker` |
 
 The `api/` module holds the v2 (`actions-gateway.com`) `v2alpha1` API kinds shared by
 both controllers. It is a pure API leaf — only `k8s.io/*` and `controller-runtime`
@@ -34,11 +34,12 @@ The internal-dep edges form a directed acyclic graph that fans out from the two 
 probe ─┐
 agc ───┼─► broker ─► githubapp
 gmc ───┘
+fakegithub ─► broker   (broker/brokerstub only — the stdlib-only shared-double core)
 gmc ─► agc
 agc, gmc ─► api
 scaleset ─► githubapp
 
-proxy, worker, fakegithub   (standalone — no internal deps)
+proxy, worker   (standalone — no internal deps)
 ```
 
 `scaleset` (the GAG-owned runner-scale-set protocol client, Q264 Option E) is a
@@ -49,7 +50,7 @@ the AGC will import it in Q264 P3 when the scale-set acquisition tier lands.
 
 All runtime modules share a single `vendor/` at the repo root, produced by `go work vendor` and committed to git. Docker builds and CI rely on this — they invoke `go build` with `-mod=vendor` auto-selected (no proxy.golang.org during build).
 
-`test/fakegithub` is a pure-stdlib HTTP stub used by Tier B e2e tests, listed in `go.work` so its packages are covered by `go work vendor`.
+`test/fakegithub` is an HTTP stub used by Tier B e2e tests, listed in `go.work` so its packages are covered by `go work vendor`. It imports one internal package — `broker/brokerstub`, the shared session/credential mechanics every in-repo broker double now builds on (Q368) — which is deliberately standard-library-only, so the fakegithub binary links no third-party code and its distroless, Trivy-scanned image stays lean. Keep `broker/brokerstub` dependency-free for that reason: an import of the `broker` client (githubapp/JWT/Prometheus) would enlarge the scanned surface.
 
 `tools/` has its own separate `vendor/` (`tools/vendor/`) for the kubebuilder/controller-gen toolchain. That's independent and managed by `make tools`. Do not merge it into the workspace vendor.
 
