@@ -209,6 +209,33 @@ ships as reconciled defaults, not a post-install project.
 </div>
 </div>
 
+!!! info "Sandboxed runtimes compose with these defaults, and GAG's own CI runs that way"
+
+    A sandboxed runtime is just a `runtimeClassName` on the worker pod template,
+    so GAG and ARC can both set one. The differentiator is not that field. It is
+    the layer underneath it, and the evidence that the combination holds.
+
+    **Kata bounds the kernel, not the pod network.** A micro-VM does not change
+    the pod's network identity: the cloud metadata service still answers from
+    *inside* the guest, so a compromised job can mint node credentials over the
+    pod network even though the kernel it escaped into is disposable. GAG's
+    default-deny NetworkPolicies are what close that path, reconciled per tenant
+    rather than hand-built alongside. Kata is one layer, not a posture.
+
+    **GAG's own end-to-end CI runs under it.** The suite creates a `kind` cluster
+    inside a worker pod with `runtimeClassName: kata` and **zero**
+    `privileged: true`, validated on a nested-virtualization GKE node pool (node
+    kernel `6.8.0-1054-gke`, guest kernel `6.18.35`), and the default for that
+    suite ever since. The cluster-side how-to is written down, including
+    the capability set an unprivileged `dockerd` needs and
+    [what Kata does not buy you](operations/kata-dind-workloads.md#what-kata-does-not-buy-you).
+
+    **This is not yet a claim about untrusted pull requests.** That CI variant
+    still runs a permissive egress policy, because its jobs pull from CDN-fronted
+    public registries no CIDR allowlist can pin. Closing it takes an in-cluster
+    pull-through mirror plus egress scoped to the mirror, GitHub, and DNS: see
+    the [roadmap](roadmap.md#exploring--longer-term).
+
 For the full threat model, per-profile controls, and the abuse-response
 playbooks, see [Security](design/05-security.md) and
 [Security operations](operations/security-operations.md).

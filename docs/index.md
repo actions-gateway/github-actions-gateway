@@ -147,6 +147,7 @@ Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-co
     - Default-deny NetworkPolicies
     - Credentials never in env vars
     - Signed images + Software Bill of Materials (SBOM) + SLSA
+    - [Kata micro-VM workers](operations/kata-dind-workloads.md), proven in our own CI
 
 -   :material-account-cog:{ .lg .middle } __Tenant runner self-service__ <span class="gag-v2-badge">v2</span>
 

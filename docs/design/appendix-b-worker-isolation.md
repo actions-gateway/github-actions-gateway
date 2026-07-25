@@ -8,7 +8,11 @@ Worker pods execute arbitrary workflow code, which is untrusted by definition. T
 
 **This is optional.** Sandboxed runtimes add operational complexity (additional node configuration, larger pod startup latency, occasional kernel-feature incompatibilities) that may not be justified for every deployment. Use this appendix to decide whether to opt in.
 
-> **Validation status (as of 1.0).** This path is **documented and supported in the spec** — the AGC honours a `runtimeClassName` set on the worker `PodTemplate` and applies no override that would strip it — but it has **not been exercised on a real cluster** with gVisor or Kata installed. Validating it requires a cluster with the runtime handler and a nested-virt-capable / runsc-enabled node pool, which is deferred post-1.0 (Q15). Operators enabling it should validate the full job path on their own cluster before relying on it for isolation.
+> **Validation status.** The AGC honours a `runtimeClassName` set on the worker `PodTemplate` and applies no override that would strip it.
+>
+> **Kata Containers is live-validated (Q226/Q286).** GAG's own end-to-end CI creates a `kind` cluster inside a worker pod under `runtimeClassName: kata` with zero `privileged: true`, on a nested-virtualization GKE node pool, and that is the dogfood default. The validated node prerequisites, the capability set an unprivileged `dockerd` needs, and the boundary's real limits are in [Running DinD workloads under Kata](../operations/kata-dind-workloads.md).
+>
+> **gVisor has not been exercised on a real cluster (Q15).** Validating it needs a runsc-enabled node pool; operators selecting `runsc` should validate the full job path on their own cluster before relying on it for isolation.
 
 ---
 
