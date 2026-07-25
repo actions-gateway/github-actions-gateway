@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q397
+**Next ID:** Q398
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -49,8 +49,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q380"></a>Q380 | [Recreate dogfood from zero — `setup.sh` unproven](plan/gke-dogfood.md#recreate-is-not-yet-proven-end-to-end-q380) | `infra` | 🔲 | S | Cluster deleted 07-20 (`delete.sh` validated live), so the next dogfood session must bootstrap from nothing. The from-zero `setup.sh` path has never run — incl. the new `workers-od` pool. Validate before you need it; gaps in the plan. |
-| <a id="Q359"></a>Q359 | [Worker right-sizing profiles (recommendations first)](plan/runner-sizing-profiles.md) | `infra` | 🔲 | S | All 3 phases shipped (usage metrics + recipe; status recommendations + SizingDrift; opt-in Binpack/Throughput/NodeShare profiles). Remaining: live dogfood validation of the whole loop — pairs with [Q380](#Q380); see the plan. |
+| <a id="Q359"></a>Q359 | [Worker right-sizing profiles (recommendations first)](plan/runner-sizing-profiles.md) | `infra` | 🔲 | S | All 3 phases shipped (usage metrics + recipe; status recommendations + SizingDrift; opt-in Binpack/Throughput/NodeShare profiles). Remaining: live dogfood validation of the whole loop; see the plan. |
 | <a id="Q389"></a>Q389 | Probe's scale-set fake duplicates `scalesettest` | `tests` | 🔲 | S | `cmd/probe/scaleset_test.go` hand-rolls a ~250-line scale-set stub while [`scaleset/scalesettest`](../scaleset/scalesettest/) models the same protocol semantically and records calls via `Calls()`. Same class as Q368 (shipped), other protocol. |
 | <a id="Q369"></a>Q369 | [Unify the broker/scaleset error taxonomy](plan/structural-debt-audit-2026-07.md) | `infra` | 🔲 | S | `RateLimitError` and `UnauthorizedError` are declared in both packages, and `parseRateLimitError` twice with identical bodies. Callers spanning both protocols type-switch on two same-named types. `githubapp/httpx` is the home. F9. |
 | <a id="Q365"></a>Q365 | [Move shared foundation out of v1-named files](plan/structural-debt-audit-2026-07.md) | `infra` | 🔲 | M | Most cross-version GMC foundation sits in `builder.go`/`actionsgateway_controller.go`; AGC's `listener` pkg likewise owns `Metrics`/`AdmitFunc` used by both tiers. Do it now, while both live: de-risks [Q273](#Q273) from refactor to `git rm`. F6. |
@@ -62,6 +61,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q393"></a>Q393 | [Derive the docs announce bar from the release version](../overrides/main.html) | `docs` `infra` | 🔲 | S | Announce bar ('vX.Y.Z is here') in `overrides/main.html` is hand-edited per release. Derive it from the current version, or add it to the release.md checklist so it isn't forgotten. |
 | <a id="Q395"></a>Q395 | [Guard against resurrected done-rows in STATUS.md](development/maintaining-backlog.md) | `infra` `retro` | 🔲 | S | A row deleted by two concurrent PRs (Q387, #766+#768) was resurrected by squash-merge reconciliation, then fixed twice (#773, #774). Detect/guard done-rows whose work already shipped; related to Q382. |
 | <a id="Q396"></a>Q396 | [Benchmark eviction→GitHub-cancel latency on dogfood](design/04-operational-flows.md#worker-pod-eviction-and-auto-retry) | `tests` `docs` | 🔲 | S | Docs claim cancel within the ~10-min lock window (#782); live latency is unmeasured, as is whether rerun succeeds just 5 s (`evictionRetryDelay`) after eviction. Timestamp both in an eviction e2e; feed the number back into README/why-gag. |
+| <a id="Q397"></a>Q397 | [`validate-cluster.sh` false-negative on a fresh cluster](plan/gke-dogfood.md#recreate-is-proven-end-to-end-q380) | `infra` | 🔲 | S | GKE's metrics-server addon needs ~2 min to go Available; preflight runs inside that window on a from-zero bootstrap and warns it is absent. Harmless now, but `VALIDATE_STRICT=1` would fail recreate on it. Fix: bounded retry. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---

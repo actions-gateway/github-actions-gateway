@@ -834,37 +834,50 @@ install, every tenant namespace and CR, the cert-manager CA and all certs
 minted from it, the per-tenant metrics PKI, the in-cluster GitHub App secret,
 and every node pool. Recreate rebuilds these; it does not restore them.
 
-### Recreate is not yet proven end-to-end (Q380)
+### Recreate is proven end-to-end (Q380)
 
-> **State as of 2026-07-20: there is no dogfood cluster.** It was deleted with
-> `delete.sh` on that date. So the next dogfood session does not start from
-> `start.sh` — it starts from a full `setup.sh` bootstrap, and that path has
-> never run.
+> **Validated 2026-07-25.** The cluster was rebuilt from nothing — empty
+> project, no cluster, no node pools — by running `setup.sh` and then
+> `e2e-setup.sh` straight through. Both completed successfully. One real gap
+> was found and fixed on the way; everything else worked unchanged.
 
-`delete.sh` **is** proven: the 2026-07-20 deletion was its first live run and it
-worked end-to-end — occupancy probes read the cluster correctly (0 nodes, 0
-worker pods), the runner labels were reset to `ubuntu-latest` *before* the
-delete, the kubeconfig context was pruned, and the orphan sweep confirmed no
-disks or reserved addresses survived.
+`delete.sh` was already proven by the 2026-07-20 deletion: occupancy probes read
+the cluster correctly (0 nodes, 0 worker pods), the runner labels were reset to
+`ubuntu-latest` *before* the delete, the kubeconfig context was pruned, and the
+orphan sweep confirmed no disks or reserved addresses survived.
 
-`setup.sh` is **not**. It is written to be a from-zero bootstrap and is guarded
-to be idempotent, but **the from-zero path has never actually been executed.**
-Every run to date happened against a live cluster and so took the "already
-exists — skipping create" branch on the cluster and pool steps. Treat recreate
-as unverified until someone runs `setup.sh` → `e2e-setup.sh` against the empty
-project and fixes whatever breaks.
+`setup.sh` is now proven too, with one correction:
 
-Two known things that first run will settle:
+- **The cluster create was missing Workload Identity (fixed).**
+  `create_cluster` did not pass `--workload-pool`, even though Part A3 above
+  documents it as a hard prerequisite of the Part F e2e pool, whose
+  `--workload-metadata=GKE_METADATA` is rejected with a 400 without it. Every
+  previous run took the "already exists — skipping create" branch against a
+  cluster that had had Workload Identity retrofitted by hand, so the gap was
+  invisible. It is a create-time property, which is what makes it nasty:
+  omitting it is not observable until `e2e-setup.sh` runs much later, and is
+  then repairable only by a separate control-plane update. The flag is now in
+  the script; the rebuilt cluster reports `workloadIdentityConfig.workloadPool
+  = actions-gateway-dogfood.svc.id.goog`, and the Part F `e2e` pool created
+  cleanly against it — the direct proof that the fix is both necessary and
+  sufficient.
+- **`workers-od` created cleanly.** The pool this section previously called the
+  most likely thing to break did not break: its first-ever scripted creation
+  produced exactly the intended shape (`e2-standard-4`, `pd-standard` 100 GB,
+  no autoscaling, starts at 0, taint `dedicated=workers:NoSchedule`,
+  non-preemptible).
+- **The App secret round-trip worked with the secret absent.** `create_secret`
+  applies the Keychain-read key through `kubectl create --dry-run=client |
+  kubectl apply`, which upserts identically whether or not the Secret already
+  exists, so the absent case needed no change.
 
-- **`workers-od` has never been script-created.** It was added to `setup.sh`
-  (Part A4b) from a hand-made pool that no longer exists, so its `gcloud`
-  invocation has not been executed even once. Most likely thing to break.
-- **The App secret round-trip.** `create_secret` reads the App private key from
-  the local Keychain. That path ran on every past setup, but never in the case
-  that now applies — the in-cluster secret *absent* rather than upserted.
-
-Validate this before you need it. The failure mode this guards against is
-discovering a broken bootstrap at the moment dogfood is wanted for a release.
+**One artifact to expect on a from-zero run:** the preflight
+(`validate-cluster.sh`) reports `metrics-server: metrics.k8s.io API is not
+Available`. That is a race, not a real gap — GKE's metrics-server addon is still
+starting while `setup.sh` reaches preflight, and it was measured `Available`
+about two minutes into the cluster's life. The check is a WARN, so the bootstrap
+proceeds correctly, but it is a false negative and a run with `VALIDATE_STRICT=1`
+would fail the from-zero path on it. Tracked as [Q397](../STATUS.md#Q397).
 
 To go further and remove the project itself (irreversible, and it takes the
 GCP-side App wiring with it):
