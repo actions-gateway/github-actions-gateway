@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q408
+**Next ID:** Q409
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -88,6 +88,7 @@ Each trigger is tagged by source: **Demand:** an outside operator/user ask · **
 | <a id="Q174"></a>Q174 | [v2 bring-your-own proxy TLS certificate](plan/v2-api.md#deferred-out-of-the-critical-path) | `infra` `security` | M | **Demand:** an operator with managed PKI/Vault wants to supply the proxy cert instead of GMC's self-signed default. Add certificateSecretRef on EgressProxy. Invariant: same-namespace TLS Secret, no cross-tenant reuse. Additive; design goal 6. |
 | <a id="Q169"></a>Q169 | [AGC horizontal scaling / multi-replica HA](design/appendix-e-capacity-planning.md) | `infra` | L | **Event:** a single per-tenant AGC becomes a measured bottleneck or a SPOF concern (near the ~1000-session ceiling). Single-replica with an in-memory session registry by design; real HA needs distributed session state. |
 | <a id="Q15"></a>Q15 | [gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` `security` | S | **Demand:** an operator wants lightweight (non-VM) syscall-filtering for compute-only, non-DinD CI jobs — likeliest on GKE, where gVisor is first-party. Kata (Q224) already covers the DinD case, the primary sandboxing motivation here. |
+| <a id="Q408"></a>Q408 | [Untrusted-PR egress posture for Kata workers](design/appendix-g-future-enhancements.md#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror) | `security` `infra` | L | **Event:** GAG runs CI for untrusted PRs, OR an operator asks for it as a supported posture. Kata bounds the guest kernel; worker egress stays open (CDN-fronted registries, no FQDN enforcement on GKE DPv2). Needs an in-cluster pull-through mirror. |
 | <a id="Q11"></a>Q11 | [Ed25519 live probe — M-11b](plan/security.md) | `security` `tests` | S | **Decision:** the broker swaps RSA-OAEP session-key delivery for X25519 ECDH ([Q351](#Q351)), making Ed25519 the *secure* default. Until then it's a less-secure opt-in (loses the AES session-key layer); RSA-3072 stays the default. |
 | <a id="Q361"></a>Q361 | [CI latency round 2: lint + coverage module loops](plan/archive/unit-tests-speed.md#2026-07-20-re-baseline-q17-revival) | `speed` `infra` | M | **Decision:** CI latency is again the bottleneck (self-set threshold). Critical path is lint (~230 s per-module golangci-lint loop); coverage ~140 s. Levers in the linked re-baseline. |
 | <a id="Q18"></a>Q18 | [alerting.md](plan/docs.md) | `docs` | M | **Decision:** A real Prometheus/Alertmanager setup exists to document against (infra we'd stand up). |
