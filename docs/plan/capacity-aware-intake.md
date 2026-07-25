@@ -382,9 +382,11 @@ On the GKE dogfood cluster, per phase:
 4. Measure the event's latency from pod creation (Phase 2) to size the condition's
    staleness bound honestly in the operator doc.
 
-[Q399](../STATUS.md#Q399) (most dogfood jobs start but never complete) may
-perturb burst runs, but the counters above come from the admission path rather
-than from completions, so it should not block this measurement.
+Q399 (most dogfood jobs started but never completed) would have perturbed burst
+runs. It is fixed: the tenant moved off the Classic protocol to a single-label
+ScaleSet. The counters above come from the admission path rather than from
+completions, so they were never blocked by it either way. Detail:
+[gke-dogfood B7](gke-dogfood.md#b7-create-the-v2-tenant-objects).
 
 ## 10. Non-goals
 
