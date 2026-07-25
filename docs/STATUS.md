@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q404
+**Next ID:** Q405
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -56,6 +56,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q369"></a>Q369 | [Unify the broker/scaleset error taxonomy](plan/structural-debt-audit-2026-07.md) | `infra` | 🔲 | S | `RateLimitError` and `UnauthorizedError` are declared in both packages, and `parseRateLimitError` twice with identical bodies. Callers spanning both protocols type-switch on two same-named types. `githubapp/httpx` is the home. F9. |
 | <a id="Q394"></a>Q394 | [Decide the GMC v1 ownerRef / finalizer-GC policy](plan/structural-debt-audit-2026-07.md) | `security` `infra` | 🔲 | S | Only 4 of 11 v1 GMC `apply*` children set an ownerRef; the rest rely on the `reconcileDelete` finalizer, so force-removing it leaks SAs/RoleBindings/NPs/HPAs. Contract pinned by `apply_helpers_ownerref_test.go`. F7. |
 | <a id="Q403"></a>Q403 | [Split the v1 half of the GMC condition collectors](plan/structural-debt-audit-2026-07.md) | `infra` | 🔲 | S | Q365 left `cmd/gmc/internal/controller/metrics.go` alone: its five collectors each list v1 and v2 gateways inside one `Collect`, so [Q273](#Q273) must edit them rather than delete a file. Separating them is a redesign, not a move. |
+| <a id="Q404"></a>Q404 | [`make check` compiles no build-tagged file](development/testing.md) | `infra` `tests` | 🔲 | S | A refactor left an unused import in an `integration`-tagged test; `make check` passed and CI's integration leg failed on the build. A `go vet -tags integration,e2e,load` sweep per module is cheap and needs no envtest assets. |
 | <a id="Q376"></a>Q376 | [Stagger dispatch-batch gate runs](development/parallel-dispatch.md) | `docs` `speed` `infra` | 🔲 | S | Batch workers all run `make check` at once and queue on the heavy-build lock (observed waits up to 5 h). Stagger the gate across workers, or run it as a background task while docs/PR prep continue. |
 | <a id="Q377"></a>Q377 | [Change-scope `make test`/coverage to affected modules](../scripts/go-test.sh) | `speed` `tests` | 🔲 | M | Tests dominate `make check` runtime; reuse go-lint.sh's affected-module scoping. Needs care: cover-check floors are per-module, so a scoped run gates only the modules it ran. |
 | <a id="Q382"></a>Q382 | [Q-ID allocation under parallel sessions](development/maintaining-backlog.md) | `infra` `retro` | 🔲 | M | 5 ID-allocating merges on 07-20 forced 3 renumberings across one PR's rebases — the global `Next ID` counter is the contention point. Explore provisional session IDs normalized at merge, or reserved blocks. Distinct from [Q376](#Q376). |
