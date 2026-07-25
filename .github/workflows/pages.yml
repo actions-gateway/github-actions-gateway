@@ -24,6 +24,13 @@ on:
   # gh-pages, and the publish job deploys that tree as the Pages artifact (with
   # the custom-domain CNAME re-asserted at the artifact root). See
   # docs/development/website.md § Versioned deploy.
+  #
+  # Seeding a release cut BEFORE this workflow landed needs `docs_ref`. Dispatch
+  # from `main`, because that tag's own pages.yml predates versioning: it has
+  # neither these inputs nor mike, and its flat deploy would clobber the version
+  # tree. Point `docs_ref` at the tag so the released CONTENT is what gets
+  # published; without it a seed publishes feature-ahead `main` as the released
+  # docs, the exact "Available now" drift Q387/Q238 exist to prevent.
   push:
     branches: [main]
     tags: ['v*']
@@ -39,6 +46,9 @@ on:
         description: 'Make this alias/version the default the site root redirects to.'
         type: boolean
         default: false
+      docs_ref:
+        description: 'Ref to build the docs content from (e.g. v1.2.0). Blank = this ref. Use when seeding an already-released version.'
+        required: false
 
 # PR builds are per-ref and cancelable; every deploy shares one group and never
 # cancels, so concurrent main/tag pushes serialise on the gh-pages branch instead
@@ -86,6 +96,57 @@ jobs:
         with:
           python-version: '3.x'
       - run: pip install -r requirements-docs.txt
+
+      - name: Select the docs source
+        id: source
+        env:
+          DOCS_REF: ${{ github.event.inputs.docs_ref }}
+        # Decide WHICH docs content to build. Blank `docs_ref` (every push, and a
+        # plain redeploy) builds this checkout, the normal path.
+        #
+        # A non-blank `docs_ref` restores that ref's docs sources over the working
+        # tree so a seeded release publishes the content it actually shipped with,
+        # not feature-ahead `main`. Deliberately NOT restored:
+        #   - requirements-docs.txt: the toolchain stays this workflow's, because
+        #     an old pin predates mike and the version-selector support.
+        #   - `site_url` and `docs/CNAME`: where the site LIVES is a property of
+        #     the site, not of the release. v1.0.0 predates the custom domain
+        #     entirely, carrying no docs/CNAME (which would break the assemble
+        #     step's `cp`) and a site_url still on the old github.io project
+        #     subpath, which would give that version dead canonical URLs, sitemap,
+        #     and announce-bar links. Both are pinned to this checkout.
+        #   - mkdocs.yml's `extra.version` block: a pre-versioning tag has none,
+        #     so its pages would render with no version selector, stranding a
+        #     visitor on an old release.
+        #
+        # The overrides ride in an INHERIT overlay rather than a YAML rewrite, so
+        # the tag's own nav and config stay byte-for-byte intact (mkdocs deep-merges
+        # the parent, and scalars like site_url are replaced).
+        run: |
+          set -euo pipefail
+          config="mkdocs.yml"
+          if [[ -n "${DOCS_REF:-}" ]]; then
+            site_url="$(awk '/^site_url:/ {print $2; exit}' mkdocs.yml)"
+            if [[ -z "${site_url}" ]]; then
+              echo "::error::Could not read site_url from mkdocs.yml"
+              exit 1
+            fi
+
+            git checkout "${DOCS_REF}" -- docs mkdocs.yml overrides
+            git checkout HEAD -- docs/CNAME
+
+            config="mkdocs.versioned.yml"
+            {
+              echo 'INHERIT: ./mkdocs.yml'
+              echo "site_url: ${site_url}"
+              echo 'extra:'
+              echo '  version:'
+              echo '    provider: mike'
+              echo '    default: stable'
+            } > "${config}"
+            echo "Building docs content from ${DOCS_REF} (site_url=${site_url}) via ${config}"
+          fi
+          echo "config=${config}" >> "${GITHUB_OUTPUT}"
 
       - name: Resolve version, alias, and default
         id: resolve
@@ -163,6 +224,7 @@ jobs:
           IS_DEFAULT: ${{ steps.resolve.outputs.is_default }}
           STABLE_TAG: ${{ steps.resolve.outputs.stable_tag }}
           TITLE: ${{ steps.resolve.outputs.title }}
+          CONFIG: ${{ steps.source.outputs.config }}
         # mike commits each version into a subdir of gh-pages; the branch is pushed
         # once at the end. --alias-type=copy makes an alias (e.g. `stable`) a real
         # directory, not a symlink: GitHub Pages artifact deploys don't follow
@@ -177,8 +239,13 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
+          # Every mike call reads the same config the build does, so a `docs_ref`
+          # seed picks up the INHERIT overlay (and, through it, the tag's own
+          # mkdocs.yml) rather than this checkout's.
+          cfg=(--config-file "${CONFIG}")
+
           # 1) Deploy the version itself (with an explicit dispatch alias if given).
-          args=(deploy --update-aliases --title "${TITLE}")
+          args=(deploy "${cfg[@]}" --update-aliases --title "${TITLE}")
           if [[ -n "${ALIAS}" ]]; then
             args+=(--alias-type=copy "${VERSION}" "${ALIAS}")
           else
@@ -188,17 +255,17 @@ jobs:
 
           # 2) Honor an explicit workflow_dispatch default.
           if [[ "${IS_DEFAULT}" == "true" ]]; then
-            mike set-default "${ALIAS:-${VERSION}}"
+            mike set-default "${cfg[@]}" "${ALIAS:-${VERSION}}"
           fi
 
           # 3) Automatic stable handling for a release tag: claim `stable` + the
           #    default only when this version is the highest released one (semver).
           #    A backport to an older line just updates its own version's docs.
           if [[ "${STABLE_TAG}" == "true" ]]; then
-            highest="$(mike list 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -1 || true)"
+            highest="$(mike list "${cfg[@]}" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -1 || true)"
             if [[ "${highest}" == "${VERSION}" ]]; then
-              mike deploy --alias-type=copy --update-aliases --title "${TITLE}" "${VERSION}" stable
-              mike set-default stable
+              mike deploy "${cfg[@]}" --alias-type=copy --update-aliases --title "${TITLE}" "${VERSION}" stable
+              mike set-default "${cfg[@]}" stable
             else
               echo "Backport: ${VERSION} is not the highest release (${highest}); leaving stable unchanged."
             fi
@@ -229,6 +296,29 @@ jobs:
 
           Sitemap: https://actions-gateway.com/stable/sitemap.xml
           ROBOTS
+
+      - name: Verify the artifact serves a reachable root
+        if: steps.resolve.outputs.deploy == 'true'
+        # The root `/` of a mike tree is not a built page: it is the redirect stub
+        # `mike set-default` writes. Until some version claims the default, the tree
+        # has only version subdirs and the apex domain 404s, while this workflow
+        # still reports success on every push. That is exactly what happened between
+        # the Q238 cutover and the first seed. Fail loudly instead.
+        run: |
+          set -euo pipefail
+          rc=0
+          if [[ ! -f _site/index.html ]]; then
+            echo "::error::Pages artifact has no root index.html, so the apex domain will 404. No version owns the default; run 'mike set-default' via a workflow_dispatch seed (docs/development/website.md, Seeding already-released versions)."
+            rc=1
+          fi
+          if [[ ! -f _site/CNAME ]]; then
+            echo "::error::Pages artifact has no root CNAME; deploying would clear the custom domain."
+            rc=1
+          fi
+          if (( rc == 0 )); then
+            echo "Root OK: $(ls _site/index.html _site/CNAME)"
+          fi
+          exit "${rc}"
 
       - name: Upload Pages artifact
         if: steps.resolve.outputs.deploy == 'true'
