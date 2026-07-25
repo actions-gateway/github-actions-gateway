@@ -1,0 +1,2780 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/1.0.0/operations/troubleshooting/">
+      
+      
+        <link rel="prev" href="../runbook/">
+      
+      
+        <link rel="next" href="../security-operations/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Troubleshooting - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  
+  <meta property="og:image" content="https://actions-gateway.com/1.0.0assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.0.0assets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.0.0assets/icon-512.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#troubleshooting-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <strong>Alpha — pre-1.0.</strong> APIs, defaults, and capacity targets may change before the 1.0 release.
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Troubleshooting
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-validate-a-fresh-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Validate a Fresh Deployment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#helm-render-fails-gmcimage-must-be-pinned-by-digest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Helm Render Fails: gmc.image Must Be Pinned by Digest
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gmc-not-provisioning-tenant-resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GMC Not Provisioning Tenant Resources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tenant-namespace-missing-the-managed-tenant-marker-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tenant Namespace Missing the Managed-Tenant Marker Label
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agc-crashloopbackoff-or-not-acquiring-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AGC CrashLoopBackOff or Not Acquiring Jobs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runnergroup-activesessions-exceeds-maxlisteners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerGroup ActiveSessions Exceeds maxListeners
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runnergroup-stops-serving-jobs-with-stale-readytrue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerGroup Stops Serving Jobs With Stale Ready=True
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#listener-stalls-for-minutes-after-a-black-holed-broker-connection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Listener Stalls for Minutes After a Black-Holed Broker Connection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#orphaned-runnergroup-after-removing-it-from-the-spec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Orphaned RunnerGroup After Removing It From the Spec
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-networkpolicy-has-an-empty-github-allowlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy NetworkPolicy Has an Empty GitHub Allowlist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worker-pods-stuck-pending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker Pods Stuck Pending
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worker-pod-reaped-while-pending-workerpodstuckpending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker Pod Reaped While Pending (WorkerPodStuckPending)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-pool-not-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy Pool Not Scaling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metrics-scrape-returns-a-tls--connection-error" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metrics scrape returns a TLS / connection error
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ratelimited-condition-on-actionsgateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RateLimited Condition on ActionsGateway
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#github-app-secret-misconfiguration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHub App Secret Misconfiguration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#token-refresh-errors-spiking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token Refresh Errors Spiking
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#renewjob-failures-rising" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RenewJob Failures Rising
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sessions Stuck in 401/EOF GetMessage Loops (Tenant Throughput Decays to Zero)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#network-connectivity-failures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Network Connectivity Failures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-validate-a-fresh-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Validate a Fresh Deployment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#helm-render-fails-gmcimage-must-be-pinned-by-digest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Helm Render Fails: gmc.image Must Be Pinned by Digest
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gmc-not-provisioning-tenant-resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GMC Not Provisioning Tenant Resources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tenant-namespace-missing-the-managed-tenant-marker-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tenant Namespace Missing the Managed-Tenant Marker Label
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agc-crashloopbackoff-or-not-acquiring-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AGC CrashLoopBackOff or Not Acquiring Jobs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runnergroup-activesessions-exceeds-maxlisteners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerGroup ActiveSessions Exceeds maxListeners
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runnergroup-stops-serving-jobs-with-stale-readytrue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RunnerGroup Stops Serving Jobs With Stale Ready=True
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#listener-stalls-for-minutes-after-a-black-holed-broker-connection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Listener Stalls for Minutes After a Black-Holed Broker Connection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#orphaned-runnergroup-after-removing-it-from-the-spec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Orphaned RunnerGroup After Removing It From the Spec
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-networkpolicy-has-an-empty-github-allowlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy NetworkPolicy Has an Empty GitHub Allowlist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worker-pods-stuck-pending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker Pods Stuck Pending
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worker-pod-reaped-while-pending-workerpodstuckpending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker Pod Reaped While Pending (WorkerPodStuckPending)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-pool-not-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy Pool Not Scaling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#metrics-scrape-returns-a-tls--connection-error" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metrics scrape returns a TLS / connection error
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ratelimited-condition-on-actionsgateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RateLimited Condition on ActionsGateway
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#github-app-secret-misconfiguration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHub App Secret Misconfiguration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#token-refresh-errors-spiking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token Refresh Errors Spiking
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#renewjob-failures-rising" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RenewJob Failures Rising
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sessions Stuck in 401/EOF GetMessage Loops (Tenant Throughput Decays to Zero)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#network-connectivity-failures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Network Connectivity Failures
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="troubleshooting-guide">Troubleshooting Guide<a class="headerlink" href="#troubleshooting-guide" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Audience:</strong> SRE, Platform engineer</p>
+</blockquote>
+<p>Each section below covers a specific failure mode: symptoms, likely cause, diagnostic commands, and resolution steps.</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="#how-to-validate-a-fresh-deployment">How to Validate a Fresh Deployment</a></li>
+<li><a href="#helm-render-fails-gmcimage-must-be-pinned-by-digest">Helm Render Fails: gmc.image Must Be Pinned by Digest</a></li>
+<li><a href="#gmc-not-provisioning-tenant-resources">GMC Not Provisioning Tenant Resources</a></li>
+<li><a href="#tenant-namespace-missing-the-managed-tenant-marker-label">Tenant Namespace Missing the Managed-Tenant Marker Label</a></li>
+<li><a href="#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete">ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)</a></li>
+<li><a href="#agc-crashloopbackoff-or-not-acquiring-jobs">AGC CrashLoopBackOff or Not Acquiring Jobs</a></li>
+<li><a href="#runnergroup-activesessions-exceeds-maxlisteners">RunnerGroup ActiveSessions Exceeds maxListeners</a></li>
+<li><a href="#runnergroup-stops-serving-jobs-with-stale-readytrue">RunnerGroup Stops Serving Jobs With Stale Ready=True</a></li>
+<li><a href="#orphaned-runnergroup-after-removing-it-from-the-spec">Orphaned RunnerGroup After Removing It From the Spec</a></li>
+<li><a href="#proxy-networkpolicy-has-an-empty-github-allowlist">Proxy NetworkPolicy Has an Empty GitHub Allowlist</a></li>
+<li><a href="#worker-pods-stuck-pending">Worker Pods Stuck Pending</a></li>
+<li><a href="#worker-pod-reaped-while-pending-workerpodstuckpending">Worker Pod Reaped While Pending (WorkerPodStuckPending)</a></li>
+<li><a href="#proxy-pool-not-scaling">Proxy Pool Not Scaling</a></li>
+<li><a href="#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap">Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap</a></li>
+<li><a href="#metrics-scrape-returns-a-tls--connection-error">Metrics scrape returns a TLS / connection error</a></li>
+<li><a href="#ratelimited-condition-on-actionsgateway">RateLimited Condition on ActionsGateway</a></li>
+<li><a href="#github-app-secret-misconfiguration">GitHub App Secret Misconfiguration</a></li>
+<li><a href="#token-refresh-errors-spiking">Token Refresh Errors Spiking</a></li>
+<li><a href="#renewjob-failures-rising">RenewJob Failures Rising</a></li>
+<li><a href="#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero">Sessions Stuck in 401/EOF GetMessage Loops (Tenant Throughput Decays to Zero)</a></li>
+<li><a href="#network-connectivity-failures">Network Connectivity Failures</a></li>
+<li><a href="#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch">AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)</a></li>
+<li><a href="#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot">Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot</a></li>
+<li><a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a></li>
+<li><a href="#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a></li>
+<li><a href="#worker-pod-fails-to-start-after-secure-by-default-securitycontext">Worker Pod Fails to Start After Secure-by-Default SecurityContext</a></li>
+<li><a href="#securityprofile-downgrade-rejected-by-admission-webhook">securityProfile Downgrade Rejected by Admission Webhook</a></li>
+<li><a href="#tracing-sampler-rejected-by-admission">Tracing Sampler Rejected by Admission</a></li>
+<li><a href="#actionsgateway-rejected-missing-or-malformed-githuburl">ActionsGateway Rejected: Missing or Malformed <code>gitHubURL</code></a></li>
+<li><a href="#worker-pod-lifecycle-duration-rejected-by-admission">Worker-Pod Lifecycle Duration Rejected by Admission</a></li>
+<li><a href="#worker-pod-crashes-with-configuredsettings-argumentnullexception">Worker Pod Crashes With configuredSettings ArgumentNullException</a></li>
+<li><a href="#kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout">kubectl apply ActionsGateway Times Out On Webhook During GMC Rollout</a></li>
+<li><a href="#worker-https_proxy-returns-connection-refused-during-proxy-rollout">Worker HTTPS_PROXY Returns connection refused During Proxy Rollout</a></li>
+<li><a href="#prometheus-not-scraping-proxy-or-agc-metrics">Prometheus Not Scraping Proxy or AGC Metrics</a></li>
+<li><a href="#proxy-replica-stuck-pending-after-enabling-ha-defaults">Proxy Replica Stuck Pending After Enabling HA Defaults</a></li>
+</ul>
+<h2 id="how-to-validate-a-fresh-deployment">How to Validate a Fresh Deployment<a class="headerlink" href="#how-to-validate-a-fresh-deployment" title="Permanent link">&para;</a></h2>
+<p>Run these checks immediately after deploying a new tenant gateway or upgrading existing components.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># 1. Check ActionsGateway status</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A<span class="w"> </span><span class="m">20</span><span class="w"> </span>status:
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># 2. Confirm the AGC pod is running</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-controller
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># 3. Confirm the proxy pool is healthy</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># 4. Confirm RunnerGroup resources exist</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="c1"># 5. Check for condition errors</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+</code></pre></div>
+<p>Expected state after a healthy deployment:</p>
+<ul>
+<li><code>ActionsGateway</code> condition <code>Ready=True</code>.</li>
+<li><code>ActionsGateway</code> condition <code>AGCAvailable=True</code>.</li>
+<li><code>ActionsGateway</code> condition <code>ProxyAvailable=True</code>.</li>
+<li>AGC Deployment: <code>READY 1/1</code>.</li>
+<li>Proxy Deployment: <code>READY</code> count &gt;= <code>minReplicas</code>.</li>
+<li>HPA: <code>TARGETS</code> showing a CPU percentage (not <code>&lt;unknown&gt;</code>).</li>
+<li>Each RunnerGroup has at least one listener session (<code>actions_gateway_active_sessions &gt; 0</code>).</li>
+</ul>
+<hr />
+<h2 id="helm-render-fails-gmcimage-must-be-pinned-by-digest">Helm Render Fails: <code>gmc.image</code> Must Be Pinned by Digest<a class="headerlink" href="#helm-render-fails-gmcimage-must-be-pinned-by-digest" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> <code>helm install</code>, <code>helm upgrade</code>, <code>helm lint</code>, or <code>helm template</code> of the <code>actions-gateway</code> chart fails immediately with:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Error: execution error at (actions-gateway/templates/deployment.yaml:...):
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>gmc.image must be pinned by digest: set gmc.image.digest=sha256:&lt;64 hex digits&gt;
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>(see docs/operations/install.md, &quot;Pin images by digest&quot;).
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>DEV/TEST ONLY: set allowFloatingImageTags=true to allow a floating tag.
+</code></pre></div>
+<p><strong>Cause.</strong> <code>gmc.image.digest</code> is empty in the release values. The chart enforces digest pinning of the GMC's own controller image at render time (secure by default): nothing at runtime validates the image the GMC itself runs from, so an empty digest must never silently fall back to a mutable <code>:latest</code> tag. Common ways to get here:</p>
+<ul>
+<li>A fresh install without <code>--set gmc.image.digest=sha256:&lt;gmc&gt;</code>.</li>
+<li>A <code>helm upgrade</code> with a values file (or <code>--reset-values</code>) that omits the digest. (<code>--reuse-values</code> carries the previously pinned digest forward.)</li>
+<li>Offline rendering (<code>helm template</code> / <code>helm lint</code>) without supplying a digest.</li>
+</ul>
+<p><strong>Resolution.</strong></p>
+<ul>
+<li><strong>Production:</strong> pin the digest published for the release you are installing (see <a href="../release/">release.md</a> for where digests are recorded):</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>--install<span class="w"> </span>gag<span class="w"> </span>charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;
+</code></pre></div>
+<ul>
+<li><strong>Dev/test only:</strong> <code>--set allowFloatingImageTags=true</code> allows a floating tag for the GMC image <em>and</em> disables the GMC's startup digest check on the AGC/proxy images. Never use it in production.</li>
+<li><strong>Offline rendering:</strong> any well-formed digest satisfies the check, e.g. <code>--set-string gmc.image.digest=sha256:1111111111111111111111111111111111111111111111111111111111111111</code>.</li>
+</ul>
+<p>Note the contrast with the AGC/proxy images: those are validated by the GMC <strong>at startup</strong> (a floating tag there crash-loops the GMC — see <a href="../install/#pin-images-by-digest">install.md § Pin images by digest</a>), while the GMC's own image is validated by the chart <strong>at render time</strong>.</p>
+<hr />
+<h2 id="gmc-not-provisioning-tenant-resources">GMC Not Provisioning Tenant Resources<a class="headerlink" href="#gmc-not-provisioning-tenant-resources" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> An <code>ActionsGateway</code> CR was applied but nothing has been created in the tenant namespace: no AGC Deployment, no proxy Deployment, no RunnerGroup resources.</p>
+<p><strong>Likely causes.</strong>
+- GMC pod is not running or not the leader.
+- GMC lacks permission to write to the tenant namespace (RBAC misconfiguration during initial GMC install).
+- The <code>ActionsGateway</code> CR failed admission validation (check for validation errors in <code>kubectl apply</code> output or <code>Events</code>).</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check whether the GMC is running and has a leader</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>lease<span class="w"> </span>-n<span class="w"> </span>gmc-system
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Check GMC logs for reconcile errors</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>error
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Check events on the ActionsGateway CR</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="c1"># Check the Ready condition</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- If the GMC pod is not running, restore it from its Deployment.
+- If RBAC is missing, re-run <code>helm upgrade --install</code> of the chart (RBAC ships with it).
+- If the admission webhook is rejecting the CR, fix the CR spec and re-apply.
+- If a reconcile error is logged (e.g. <code>failed to create Deployment</code>), check the <code>actions_gateway_reconcile_errors_total</code> metric and read the full error from the GMC logs. Fix the underlying permissions or quota issue and the GMC's reconciler will retry.</p>
+<hr />
+<h2 id="tenant-namespace-missing-the-managed-tenant-marker-label">Tenant Namespace Missing the Managed-Tenant Marker Label<a class="headerlink" href="#tenant-namespace-missing-the-managed-tenant-marker-label" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> An <code>ActionsGateway</code> never becomes <code>Ready</code>. <code>kubectl describe</code> shows a
+<code>Warning</code> event with reason <code>NamespaceMarkerMissing</code>, and the GMC log reports a
+<code>Forbidden</code> error stamping Pod Security Admission labels, citing the
+<code>namespace-psa-guard</code> admission policy. This is common immediately after upgrading a
+cluster whose tenant namespaces predate the policy (see
+<a href="../upgrade/#migration-notes">Upgrade — Migration Notes</a>).</p>
+<p><strong>Cause.</strong> The GMC's cluster-wide <code>namespaces:patch</code> grant is gated by the
+<code>namespace-psa-guard</code> ValidatingAdmissionPolicy, which denies the GMC any namespace
+that is not labelled <code>actions-gateway.github.com/tenant: "true"</code>. The label confines
+the grant to managed tenants so a compromised GMC cannot relabel <code>kube-system</code> PSA
+(see <a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">Security §5.1/§5.3</a>).
+The GMC never sets this label itself — a trusted administrator must apply it. The
+same marker also gates the <code>gmc-tenant-resource-guard</code> policy, which confines every
+tenant-resource write (Deployments, Secrets, RoleBindings, …) to marked namespaces;
+provisioning fails at the PSA-stamping step first, so <code>NamespaceMarkerMissing</code> is the
+signal you will see, but applying the label clears both gates.</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Confirm the warning event</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A2<span class="w"> </span>NamespaceMarkerMissing
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Check whether the marker label is present</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>namespace<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.metadata.labels.actions-gateway\.github\.com/tenant}&#39;</span><span class="w">   </span><span class="c1"># want: true</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Confirm both policies and their bindings are installed</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingadmissionpolicy<span class="w"> </span>gmc-namespace-psa-guard<span class="w"> </span>gmc-tenant-resource-guard
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingadmissionpolicybinding<span class="w"> </span>gmc-namespace-psa-guard-binding<span class="w"> </span>gmc-tenant-resource-guard-binding
+</code></pre></div>
+<p><strong>Resolution.</strong> Apply the marker label as an administrator, then the GMC reconciler
+retries automatically:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway.github.com/tenant<span class="o">=</span><span class="nb">true</span>
+</code></pre></div>
+<p>If the GMC's ServiceAccount is installed under a non-default namespace or name, also
+confirm the policy's <code>matchConditions</code> username
+(<code>system:serviceaccount:gmc-system:gmc-controller-manager</code>) matches your install.</p>
+<hr />
+<h2 id="actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete">ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)<a class="headerlink" href="#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> You deleted an <code>ActionsGateway</code>, but the CR does not disappear:
+<code>kubectl get actionsgateway -n &lt;namespace&gt;</code> still lists it with a non-empty
+<code>metadata.deletionTimestamp</code>, and <code>kubectl describe</code> shows a repeating <code>Warning</code>
+event with reason <code>TeardownIncomplete</code>. Some tenant resources (e.g. the AGC
+Deployment, RoleBinding, or a ServiceAccount) are still present in the namespace.</p>
+<p><strong>Cause.</strong> Teardown is <strong>fail-closed by design</strong> (Q125): the GMC keeps the
+<code>actions-gateway.github.com/gmc-cleanup</code> finalizer on the CR and requeues until it
+can confirm <em>every</em> owned resource is deleted (or already gone). If a delete keeps
+failing — most often an API-server error, or a <code>Forbidden</code> from an admission policy
+or revoked RBAC — the finalizer is retained on purpose so a live, credentialed AGC
+Deployment is never orphaned by a half-finished teardown. A NotFound is treated as
+success, so an already-deleted resource never blocks convergence.</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Confirm the CR is mid-deletion and which resources remain</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.metadata.deletionTimestamp}{&quot;\n&quot;}{.metadata.finalizers}{&quot;\n&quot;}&#39;</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A3<span class="w"> </span>TeardownIncomplete
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># The event message names the namespace and the underlying error; also check the GMC log</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;delete resource during teardown&quot;</span>
+</code></pre></div>
+<p><strong>Resolution.</strong> Fix the underlying delete failure — restore API-server health, or
+re-grant the GMC the delete verb / re-apply the <code>gmc-tenant-resource-guard</code> marker if
+the namespace lost its <code>actions-gateway.github.com/tenant=true</code> label (the policy gates
+DELETE too, so an unmarked namespace blocks teardown). The reconciler retries on its
+own backoff and removes the finalizer automatically once every delete is confirmed.
+<strong>Do not</strong> manually strip the finalizer to force the CR away — that re-introduces the
+orphaned-AGC failure mode the fail-closed behaviour exists to prevent; clear the real
+delete error instead.</p>
+<hr />
+<h2 id="agc-crashloopbackoff-or-not-acquiring-jobs">AGC CrashLoopBackOff or Not Acquiring Jobs<a class="headerlink" href="#agc-crashloopbackoff-or-not-acquiring-jobs" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> The AGC pod is restarting repeatedly, or it is running but <code>actions_gateway_active_sessions</code> is zero and <code>actions_gateway_jobs_acquired_total</code> is not incrementing even when jobs are queued.</p>
+<p><strong>Likely causes.</strong>
+- GitHub App Secret is missing, malformed, or contains an invalid private key.
+- GitHub App <code>installationId</code> or <code>appId</code> is wrong.
+- The proxy pool is not reachable from the AGC (network policy or proxy pod not ready).
+- The AGC binary was built with an incompatible runner version (GitHub returns 400 on session creation).</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Check pod status and restarts</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Check logs for startup errors</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Check that the referenced Secret exists and has the right keys</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;gitHubAppRef.name&gt;
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;gitHubAppRef.name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">&#39;keys&#39;</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Expected keys: appId, installationId, privateKey</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Test proxy reachability — the AGC image is distroless (no shell, no curl),</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># so spawn an ephemeral curl pod in the same namespace and use the same proxy URL.</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>kubectl<span class="w"> </span>run<span class="w"> </span>nettest-<span class="nv">$$</span><span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--rm<span class="w"> </span>-it<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">  </span>--image<span class="o">=</span>curlimages/curl:latest<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">  </span>--overrides<span class="o">=</span><span class="s1">&#39;{&quot;spec&quot;:{&quot;automountServiceAccountToken&quot;:false,&quot;containers&quot;:[{&quot;name&quot;:&quot;c&quot;,&quot;image&quot;:&quot;curlimages/curl:latest&quot;,&quot;command&quot;:[&quot;sh&quot;,&quot;-c&quot;,&quot;curl -x https://actions-gateway-proxy:8080 -sI https://api.github.com&quot;]}]}}&#39;</span>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1"># Check RunnerGroup conditions</span>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A<span class="w"> </span><span class="m">10</span><span class="w"> </span>conditions
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="c1"># Check RunnerGroup events — the AGC emits Warning events for the common failures.</span>
+<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
+<a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="c1"># Look for:</span>
+<a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="c1">#   TokenUnavailable          — GitHub App installation token could not be fetched (Secret/appId/installationId).</span>
+<a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="c1">#   AgentPoolError            — agent Secret provisioning (EnsureAgents) failed.</span>
+<a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="c1">#   ListenerStartFailed       — listener goroutines could not be (re)started.</span>
+<a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="c1">#   AgentDeregistrationFailed — agent Secret cleanup on scale-down/delete failed.</span>
+<a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="c1">#   NoActiveSessions / ListenerActive — Ready condition transitions.</span>
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- If the Secret is missing or has wrong keys, recreate it. See <a href="../../getting-started/#2-create-a-github-app-credential-secret">Getting Started — GitHub App Secret</a>.
+- If the private key format is wrong, ensure it is a PEM-encoded RSA key starting with <code>-----BEGIN RSA PRIVATE KEY-----</code>. The Secret <code>stringData.privateKey</code> must include the full key including header and footer lines.
+- If the runner version is outdated, update <code>workerImage</code> in the RunnerGroup spec (or the AGC's <code>--worker-image</code> flag). Watch for <code>RunnerGroup</code> conditions with reason <code>VersionTooOld</code>.
+- If <code>appId</code> or <code>installationId</code> are wrong, update the Secret.</p>
+<hr />
+<h2 id="runnergroup-activesessions-exceeds-maxlisteners">RunnerGroup ActiveSessions Exceeds maxListeners<a class="headerlink" href="#runnergroup-activesessions-exceeds-maxlisteners" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> <code>kubectl get runnergroup -n &lt;namespace&gt; -o jsonpath='{.items[*].status.activeSessions}'</code> reports a value greater than the group's <code>spec.maxListeners</code>, typically climbing by one after each broker or network outage. GitHub shows more concurrent runner sessions for the group than the configured ceiling.</p>
+<p><strong>What happened.</strong> On AGC versions without the Q100 fix, a recoverable crash of the permanent baseline listener left the active count at zero for the duration of the restart backoff; a reconcile firing inside that window started a second permanent baseline on top of the pending restart. Permanent listeners are restarted after every recoverable exit and are exempt from the <code>maxListeners</code> ceiling, so each repeat of the race ratchets the session count up by one, indefinitely. Fixed versions make the multiplexer start idempotent, so the race cannot stack baselines.</p>
+<p><strong>Resolution.</strong>
+- Upgrade the AGC image to a version with the Q100 fix.
+- To clear excess listeners immediately on an affected version, restart the AGC Deployment (<code>kubectl rollout restart deploy/actions-gateway-controller -n &lt;namespace&gt;</code>). Listener sessions are in-memory; the restarted AGC re-creates exactly one baseline per RunnerGroup.</p>
+<hr />
+<h2 id="runnergroup-stops-serving-jobs-with-stale-readytrue">RunnerGroup Stops Serving Jobs With Stale Ready=True<a class="headerlink" href="#runnergroup-stops-serving-jobs-with-stale-readytrue" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> A RunnerGroup stops servicing queued jobs even though the AGC pod is healthy, while <code>status.activeSessions</code> and the <code>Ready=True</code> condition still report the group as operational. <code>kubectl get runnergroup -n &lt;namespace&gt; -o jsonpath='{.status.activeSessions}'</code> shows a stale nonzero value that does not match the (zero) sessions GitHub sees for the group.</p>
+<p><strong>What happened.</strong> The permanent baseline listener exited <em>non-retriably</em> — e.g. GitHub returned <code>401 Unauthorized</code> on session creation for a credential it considers dead. The multiplexer does not auto-restart a non-retriable exit (that restart is reserved for recoverable crashes), so the in-memory listener count drops to zero. On AGC versions without the Q137 fix the RunnerGroup was only re-reconciled on a watch event (a RunnerGroup edit or a worker-pod lifecycle event) or the 10-hour informer resync, so with no such event the dead baseline — and the status written just before it died — could persist for hours.</p>
+<p><strong>Resolution.</strong>
+- Upgrade the AGC image to a version with the Q137 fix. Fixed versions requeue the RunnerGroup on a bounded interval while the listener count is below the desired ceiling, so the reconciler re-runs its zero-listener recovery and revives the baseline within seconds; <code>status.activeSessions</code> and <code>Ready</code> then track reality again.
+- To recover immediately on an affected version, trigger a reconcile by editing the RunnerGroup (e.g. a no-op annotation change) or restart the AGC Deployment (<code>kubectl rollout restart deploy/actions-gateway-controller -n &lt;namespace&gt;</code>); the restarted AGC re-creates one baseline per RunnerGroup from scratch.
+- If the baseline keeps exiting non-retriably after revival, the underlying credential or runner-version problem is real — check <code>kubectl describe runnergroup</code> for <code>Degraded</code> / <code>Unauthorized</code> / <code>VersionTooOld</code> conditions and resolve per the <a href="#agc-crashloopbackoff-or-not-acquiring-jobs">AGC CrashLoopBackOff or Not Acquiring Jobs</a> section.</p>
+<hr />
+<h2 id="listener-stalls-for-minutes-after-a-black-holed-broker-connection">Listener Stalls for Minutes After a Black-Holed Broker Connection<a class="headerlink" href="#listener-stalls-for-minutes-after-a-black-holed-broker-connection" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> One of a RunnerGroup's sessions stops picking up jobs for minutes at a stretch even though the AGC pod is healthy, the broker is reachable, and other sessions in the same group keep working. The stall typically follows a network event that silently drops an established connection — a firewall/NAT idle-timeout that discards packets without sending a RST, an egress-proxy failover, or a broker-side hang — so the long-poll's TCP connection is <em>black-holed</em>: accepted but never answered. <code>actions_gateway_message_poll_errors_total{reason="timeout"}</code> increments when an affected listener recovers.</p>
+<p><strong>What happened.</strong> The broker <code>GetMessage</code> long-poll holds the connection open for ~50s waiting for a job. On AGC versions without the Q108 fix the broker client had no response-header deadline, so a black-holed connection blocked the listener goroutine inside a single <code>GetMessage</code> call until the operating system's TCP timeout expired — minutes — during which that listener served no jobs. Fixed versions give the broker client a <code>ResponseHeaderTimeout</code> sized just above the 50s hold: a healthy long-poll is never cut short, but a black-holed connection is torn down a few seconds past the hold, classified as a benign "no message, retry", and the listener immediately opens a fresh long-poll.</p>
+<p><strong>Resolution.</strong>
+- Upgrade the AGC image to a version with the Q108 fix. No configuration is required; the bound is built in.
+- A steady stream of <code>actions_gateway_message_poll_errors_total{reason="timeout"}</code> after upgrade indicates the network is repeatedly black-holing broker connections (rather than wedging a listener). Investigate the egress path — proxy/NAT idle timeouts shorter than the 50s long-poll hold are the usual cause; raise the idle timeout above ~60s so healthy long-polls are not severed mid-hold.</p>
+<hr />
+<h2 id="orphaned-runnergroup-after-removing-it-from-the-spec">Orphaned RunnerGroup After Removing It From the Spec<a class="headerlink" href="#orphaned-runnergroup-after-removing-it-from-the-spec" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> A runner group was removed from (or reordered within) <code>spec.runnerGroups</code> on an <code>ActionsGateway</code>, but a <code>RunnerGroup</code> for it still exists and keeps running listeners and worker pods. <code>kubectl get runnergroup -n &lt;namespace&gt;</code> lists more groups than the CR now declares:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Owner-labelled RunnerGroups for a gateway vs. what the spec now declares</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/owner-name<span class="o">=</span>&lt;gateway-name&gt;
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>&lt;gateway-name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .spec.runnerGroups[*]}{.runnerLabels[0]}{&quot;\n&quot;}{end}&#39;</span>
+</code></pre></div>
+<p><strong>What happened.</strong> On GMC versions without the Q101 fix, reconciliation only created/patched the groups currently in the spec and never deleted the ones removed — and because groups were keyed by list index, a remove or reorder could orphan a <code>RunnerGroup</code> CR that kept serving jobs until the entire <code>ActionsGateway</code> was deleted.</p>
+<p><strong>Resolution.</strong>
+- Upgrade the GMC to a version with the Q101 fix. Fixed versions reconcile <code>spec.runnerGroups</code> to the desired set: after applying the declared groups, the GMC prunes any owner-labelled <code>RunnerGroup</code> no longer in the spec, and keys pruning on owner labels (not list index) so a reorder never orphans a group. A subsequent reconcile (edit the CR, or wait for the next resync) cleans up any pre-existing orphans automatically.
+- To remove a stranded group immediately on an affected version, delete its <code>RunnerGroup</code> directly: <code>kubectl delete runnergroup &lt;name&gt; -n &lt;namespace&gt;</code>. The AGC's RunnerGroup cleanup stops its listeners and cascades to its worker pods. Confirm you are deleting an orphan (its <code>runnerLabels</code> are not in the current <code>ActionsGateway</code> spec), not a live group.</p>
+<hr />
+<h2 id="proxy-networkpolicy-has-an-empty-github-allowlist">Proxy NetworkPolicy Has an Empty GitHub Allowlist<a class="headerlink" href="#proxy-networkpolicy-has-an-empty-github-allowlist" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> On a freshly provisioned tenant, all proxy egress to GitHub is silently dropped: <code>curl</code> through the proxy times out (no <code>502</code>), the AGC cannot acquire jobs, and token refresh fails. The proxy <code>NetworkPolicy</code> exists but its <code>ipBlock</code> egress peers are empty.</p>
+<p><strong>Likely cause.</strong> The IP Range Reconciler's initial <code>api.github.com/meta</code> fetch failed or stalled at GMC startup. The cached ranges seed each proxy <code>NetworkPolicy</code>'s <code>ipBlock</code> allowlist; until the first fetch lands, the allowlist is empty. The reconciler retries the initial fetch on a capped exponential backoff (1s→30s), so a transient outage normally self-heals within seconds — but a sustained inability to reach <code>api.github.com</code> from the GMC pod (egress firewall, DNS, or a long GitHub outage) leaves the allowlist empty until connectivity returns.</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Inspect the proxy NetworkPolicy&#39;s GitHub ipBlock egress peers — empty means the cache never populated.</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.spec.egress[*].to[*].ipBlock.cidr}&#39;</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Look for retry warnings in the GMC log.</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;GitHub IP-range&quot;</span>
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- Confirm the GMC pod itself can reach <code>api.github.com</code> (corporate egress firewall, DNS, or proxy in front of the cluster). The reconciler retries automatically; once connectivity is restored the next successful fetch patches every existing proxy <code>NetworkPolicy</code>.
+- If the tenant manages its own egress policy (Cilium/Calico FQDN rules), set <code>spec.proxy.managedNetworkPolicy: false</code> so the reconciler leaves the policy alone.</p>
+<hr />
+<h2 id="worker-pods-stuck-pending">Worker Pods Stuck Pending<a class="headerlink" href="#worker-pods-stuck-pending" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> Jobs are acquired (<code>actions_gateway_jobs_acquired_total</code> increments) but worker pods remain in <code>Pending</code> state for more than 60 seconds. <code>pod_creation_latency_seconds</code> p95 exceeds the 15s SLO target.</p>
+<p><strong>Likely causes.</strong>
+- Namespace <code>ResourceQuota</code> is exhausted — no pod slot, CPU request, or memory request available.
+- No node has enough capacity for the pod's requested resources (GPU nodes may be at capacity).
+- <code>PriorityClass</code> referenced in <code>priorityTiers</code> does not exist.
+- Image pull is slow due to a large image on a cold node (expected; see SLO targets in <a href="../../design/appendix-a-capacity-slos/">Appendix A</a>).</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Check quota usage</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>resourcequota<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Describe a stuck pod to see the scheduling event</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;worker-pod-name&gt;
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Look for: &quot;Insufficient cpu&quot;, &quot;Insufficient memory&quot;, &quot;Insufficient nvidia.com/gpu&quot;,</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1">#           &quot;no nodes available to schedule pods&quot;, &quot;didn&#39;t match PodDisruptionBudget&quot;</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="c1"># Check whether the PriorityClass exists</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>kubectl<span class="w"> </span>get<span class="w"> </span>priorityclass<span class="w"> </span>&lt;priorityClassName&gt;
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># Check node capacity</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>nodes<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="s2">&quot;Allocated resources&quot;</span>
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- If quota is exhausted: raise the platform-owned <code>ResourceQuota</code> on the namespace (<code>kubectl edit resourcequota -n &lt;namespace&gt; &lt;quota-name&gt;</code>) or reduce <code>maxWorkers</code> / last-tier threshold.
+- If no GPU nodes are available: check node autoscaler status or provision additional nodes.
+- If a <code>PriorityClass</code> is missing: create it (cluster-admin action) or remove the tier reference.
+- If image pull is slow (first job on a cold node): this is expected. If it exceeds the p99 SLO (60s), consider pre-pulling the image via a DaemonSet or enabling image streaming.</p>
+<p><strong>Deadline.</strong> A pod that stays Pending is not held forever: after <code>pendingPodDeadline</code> (default 10m, per-RunnerGroup) the AGC deletes it to free the concurrency-ceiling slot it was holding — see the next runbook section. Diagnose a stuck pod (<code>kubectl describe pod</code>) <em>before</em> the deadline reaps it, or raise <code>pendingPodDeadline</code> temporarily while debugging.</p>
+<hr />
+<h2 id="worker-pod-reaped-while-pending-workerpodstuckpending">Worker Pod Reaped While Pending (WorkerPodStuckPending)<a class="headerlink" href="#worker-pod-reaped-while-pending-workerpodstuckpending" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> A <code>Warning</code> Event with reason <code>WorkerPodStuckPending</code> appears on the RunnerGroup (<code>kubectl describe runnergroup -n &lt;namespace&gt;</code>), <code>actions_gateway_worker_pods_reaped_total{reason="pending_deadline"}</code> increments, and the job the pod was created for is cancelled by GitHub (it never started, so its lock lapsed). The worker pod itself is gone.</p>
+<p><strong>What happened.</strong> The pod stayed <code>Pending</code> longer than the RunnerGroup's <code>pendingPodDeadline</code> (default 10m), so the AGC deleted it. A permanently Pending pod would otherwise hold one of the group's concurrency-ceiling slots forever — the ceiling counts Pending pods. The deadline is a capacity-protection mechanism, not a retry mechanism: the job is <strong>not</strong> re-queued automatically.</p>
+<p><strong>Likely causes.</strong>
+- <code>workerImage</code> (or the <code>podTemplate</code> container image) does not exist or is not pullable from the cluster — <code>ErrImagePull</code> / <code>ImagePullBackOff</code>.
+- <code>podTemplate</code> scheduling constraints (nodeSelector, tolerations, GPU resources) that no node satisfies.
+- Node autoscaler provisioning slower than the deadline (common for GPU node pools).</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># The reap event names the deleted pod and the deadline that fired</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--field-selector<span class="w"> </span><span class="nv">reason</span><span class="o">=</span>WorkerPodStuckPending
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Rate of reaps per group</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># PromQL: rate(actions_gateway_worker_pods_reaped_total{reason=&quot;pending_deadline&quot;}[1h])</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Reproduce the pull/scheduling failure before the next reap:</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># trigger a job, then describe the new Pending pod within the deadline window</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/runner-group<span class="o">=</span>&lt;group&gt;<span class="w"> </span>-w
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;worker-pod-name&gt;
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- Fix the unpullable image or unsatisfiable scheduling constraint — that is the root cause; the reap is the messenger.
+- If scheduling is legitimately slow (autoscaled GPU nodes), raise <code>spec.pendingPodDeadline</code> on the RunnerGroup (or the matching <code>runnerGroups[]</code> entry of the <code>ActionsGateway</code> CR) above the worst-case node-provisioning time, e.g. <code>pendingPodDeadline: "30m"</code>.
+- Re-run the cancelled workflow from the GitHub UI once the cause is fixed.</p>
+<hr />
+<h2 id="proxy-pool-not-scaling">Proxy Pool Not Scaling<a class="headerlink" href="#proxy-pool-not-scaling" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> The HPA for the proxy pool shows <code>TARGETS: &lt;unknown&gt;/60%</code> and the replica count does not increase under load.</p>
+<p><strong>Likely cause.</strong> <code>resources.requests.cpu</code> is unset or zero for proxy pods. The Kubernetes Horizontal Pod Autoscaler (HPA) computes CPU utilization as <code>(current_cpu_usage / requested_cpu)</code>. If <code>requests.cpu</code> is zero, the denominator is undefined and the HPA emits <code>&lt;unknown&gt;</code> for the target metric and stops scaling entirely.</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Check HPA status</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Check proxy pod resource requests</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-proxy<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.items[0].spec.containers[0].resources}&#39;</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Check metrics-server is running</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>-l<span class="w"> </span>k8s-app<span class="o">=</span>metrics-server
+</code></pre></div>
+<p><strong>Resolution.</strong></p>
+<p>Ensure <code>spec.proxy.resources.requests.cpu</code> is set to a non-zero value in the <code>ActionsGateway</code> spec. The default is <code>10m</code>. If you explicitly set <code>resources</code> without including <code>requests.cpu</code>, the whole <code>resources</code> block is replaced and defaults are lost — set all four sub-fields explicitly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">proxy</span><span class="p">:</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="nt">requests</span><span class="p">:</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">      </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10m&quot;</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">      </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;32Mi&quot;</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">limits</span><span class="p">:</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">      </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;100m&quot;</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">      </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;64Mi&quot;</span>
+</code></pre></div>
+<p>After updating the spec, patch the proxy Deployment or trigger a rollout; the HPA will start computing utilization on the next metrics scrape cycle (~30s).</p>
+<hr />
+<h2 id="proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap">Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap<a class="headerlink" href="#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> A worker job logs a connection reset, <code>EOF</code>, or <code>broken pipe</code> from the GitHub SDK / <code>curl</code> / <code>git</code>, with no proxy <code>502</code> response. The proxy pod itself is healthy and serving other tunnels.</p>
+<p><strong>Likely cause.</strong> The proxy enforces two per-tunnel deadlines on the CONNECT relay (M-18, 2026-05-31):</p>
+<ul>
+<li><strong>Idle timeout</strong> — 5 minutes of no data in either direction. A long-poll against the GitHub API or a stalled SDK call hits this first.</li>
+<li><strong>Hard lifetime cap</strong> — 6 hours absolute, regardless of activity. A continuous artifact stream or Twirp log relay that exceeds this is torn down even with traffic flowing.</li>
+</ul>
+<p>These are not bugs. They bound goroutine and file-descriptor exhaustion from slow or stuck clients. The healthy case (an actively-used GitHub API call) completes in seconds and does not trip either cap.</p>
+<p><strong>Diagnostics.</strong></p>
+<p>The proxy serves <code>/metrics</code> over mutual TLS on <code>:8443</code> (not <code>:8081</code>, which now
+carries only the plaintext <code>/healthz</code> + <code>/readyz</code> probes). Scraping requires the
+per-tenant scraper client certificate the GMC publishes — see
+<a href="#metrics-scrape-returns-a-tls--connection-error">Metrics scrape returns a TLS / connection error</a>
+for how to fetch the bundle. With the bundle written to <code>scraper.crt</code> /
+<code>scraper.key</code> / <code>metrics-ca.crt</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nv">ns</span><span class="o">=</span>&lt;namespace&gt;
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># Distribution of tunnel lifetimes; a heavy tail near 21600s (6h) or</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># a spike at 300s (5m idle) indicates clients hitting the caps.</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>curl<span class="w"> </span>-s<span class="w"> </span>--cert<span class="w"> </span>scraper.crt<span class="w"> </span>--key<span class="w"> </span>scraper.key<span class="w"> </span>--cacert<span class="w"> </span>metrics-ca.crt<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="s2">&quot;https://actions-gateway-proxy.</span><span class="nv">$ns</span><span class="s2">.svc:8443/metrics&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span>grep<span class="w"> </span>actions_gateway_proxy_tunnel_duration_seconds_bucket
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1"># Active vs. total tunnels — healthy ratio is &quot;active &lt;&lt; total&quot;.</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>curl<span class="w"> </span>-s<span class="w"> </span>--cert<span class="w"> </span>scraper.crt<span class="w"> </span>--key<span class="w"> </span>scraper.key<span class="w"> </span>--cacert<span class="w"> </span>metrics-ca.crt<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">  </span><span class="s2">&quot;https://actions-gateway-proxy.</span><span class="nv">$ns</span><span class="s2">.svc:8443/metrics&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">  </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;actions_gateway_proxy_connections_(active|total)&#39;</span>
+</code></pre></div>
+<p><strong>Resolution.</strong></p>
+<p>For idle hits: examine the workflow step that stalls. A workflow <code>sleep</code>-ing inside a long-running <code>curl --connect-timeout 0</code> or a misconfigured webhook receiver are typical causes. The fix is usually in the workflow, not the proxy.</p>
+<p>For lifetime-cap hits: split very long-running uploads or streams across multiple HTTP requests. The 6h cap is a safety net for stuck connections; a legitimately-long single stream should be rare.</p>
+<p>To change the defaults during an incident, patch the proxy Deployment with environment overrides — note that there is no env-var knob today; defaults are baked into the Server struct and require a code change to adjust. File a Queue item if a tenant repeatedly hits either cap on a legitimate workload.</p>
+<hr />
+<h2 id="metrics-scrape-returns-a-tls--connection-error">Metrics scrape returns a TLS / connection error<a class="headerlink" href="#metrics-scrape-returns-a-tls--connection-error" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> Prometheus (or a manual <code>curl</code>) of a per-tenant proxy or AGC
+<code>/metrics</code> endpoint fails with one of:</p>
+<ul>
+<li><code>remote error: tls: certificate required</code> / <code>bad certificate</code> — no client cert, or one signed by the wrong CA.</li>
+<li><code>connection refused</code> on <code>:8081/metrics</code> — the metrics endpoint moved to <code>:8443</code> (mTLS); <code>:8081</code> now serves only <code>/healthz</code> + <code>/readyz</code>.</li>
+<li><code>context deadline exceeded</code> / no route — the scraper namespace is not labelled <code>metrics: enabled</code>, so the NetworkPolicy drops the connection before the handshake.</li>
+</ul>
+<p><strong>Cause.</strong> The proxy and AGC serve <code>/metrics</code> over <strong>mutual TLS</strong> on <code>:8443</code>
+(Q69). A scraper must (1) connect from a namespace labelled <code>metrics: enabled</code>
+and (2) present a client certificate signed by the per-tenant metrics CA the GMC
+issues. Both halves are required.</p>
+<p><strong>Resolution.</strong></p>
+<ol>
+<li>Label the monitoring namespace so the NetworkPolicy admits it:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;prometheus-namespace&gt;<span class="w"> </span><span class="nv">metrics</span><span class="o">=</span>enabled
+</code></pre></div></li>
+<li>Fetch the scraper client bundle the GMC publishes in each tenant namespace and
+   point the scrape at <code>:8443</code> with <code>scheme: https</code>:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nv">ns</span><span class="o">=</span>&lt;tenant-namespace&gt;
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>actions-gateway-metrics-client<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ns</span><span class="s2">&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.tls\.crt}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span>&gt;<span class="w"> </span>scraper.crt
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>actions-gateway-metrics-client<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ns</span><span class="s2">&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.tls\.key}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span>&gt;<span class="w"> </span>scraper.key
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>actions-gateway-metrics-client<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$ns</span><span class="s2">&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.ca\.crt}&#39;</span><span class="w">  </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span>&gt;<span class="w"> </span>metrics-ca.crt
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>curl<span class="w"> </span>-s<span class="w"> </span>--cert<span class="w"> </span>scraper.crt<span class="w"> </span>--key<span class="w"> </span>scraper.key<span class="w"> </span>--cacert<span class="w"> </span>metrics-ca.crt<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span><span class="s2">&quot;https://actions-gateway-proxy.</span><span class="nv">$ns</span><span class="s2">.svc:8443/metrics&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head
+</code></pre></div>
+   Delete the extracted key file when finished. For a <code>ServiceMonitor</code>, mount the
+   bundle and reference it from <code>tlsConfig</code> (<code>cert</code>/<code>keySecret</code>/<code>ca</code>).</li>
+<li>If the cert is rejected after a CA rotation, the GMC re-issues the whole
+   bundle ~30 days before expiry but pods read certs at startup — restart the
+   proxy/AGC pods (and re-fetch the client bundle) after a rotation.</li>
+</ol>
+<hr />
+<h2 id="ratelimited-condition-on-actionsgateway">RateLimited Condition on ActionsGateway<a class="headerlink" href="#ratelimited-condition-on-actionsgateway" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> <code>kubectl get actionsgateway</code> shows a <code>RateLimited=True</code> condition. <code>actions_gateway_active_sessions</code> is at or near the per-installation budget.</p>
+<p><strong>Likely cause.</strong> The GitHub App installation's API budget (15,000 <code>GET /message</code> requests/hour) is exhausted. This occurs when the sum of <code>maxListeners</code> across all RunnerGroups simultaneously bursts to their ceiling for a sustained period.</p>
+<p><strong>SLO threshold.</strong> A <code>RateLimited</code> condition lasting more than 1 minute during non-peak hours indicates the installation is over budget. Durations exceeding 10 minutes during business hours should page on-call.</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Check the condition</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Check active sessions vs. budget</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1"># Budget: ~208 sessions (15000/hr ÷ 72 polls/session/hr)</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1"># Metric: actions_gateway_active_sessions{namespace=&quot;&lt;namespace&gt;&quot;}</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="c1"># Check per-RunnerGroup maxListeners sum</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.items[*].spec.maxListeners}&#39;</span>
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- If a burst is temporary and below 10 minutes: no action required, the condition will clear as the burst subsides.
+- If <code>maxListeners</code> values are set higher than needed, reduce them.
+- If the tenant's RunnerGroup count × <code>maxListeners</code> sustainably exceeds the installation budget, shard to a second <code>ActionsGateway</code> CR with a new GitHub App installation. See <a href="../../design/appendix-e-capacity-planning/#e6-when-to-shard-across-installations">Appendix E §E.6</a>.</p>
+<hr />
+<h2 id="github-app-secret-misconfiguration">GitHub App Secret Misconfiguration<a class="headerlink" href="#github-app-secret-misconfiguration" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> AGC logs show errors like <code>failed to create installation token</code>, <code>private key: RSA key parse error</code>, or <code>401 Unauthorized</code>. The <code>ActionsGateway</code> condition <code>AGCAvailable=False</code> with reason <code>CredentialError</code>.</p>
+<p><strong>Common misconfigurations.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Error message</th>
+<th>Likely cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>private key: RSA key parse error</code></td>
+<td>PEM key has extra whitespace, missing newline, or wrong format (PKCS#8 instead of RSA PKCS#1).</td>
+</tr>
+<tr>
+<td><code>401 Unauthorized</code> on token exchange</td>
+<td><code>appId</code> or <code>installationId</code> is wrong.</td>
+</tr>
+<tr>
+<td><code>404 Not Found</code> on token exchange</td>
+<td>The GitHub App is not installed in the target organization or the <code>installationId</code> does not match.</td>
+</tr>
+<tr>
+<td><code>422 Unprocessable Entity</code></td>
+<td>The App lacks the <code>Actions: Read</code> and <code>Administration: Read</code> permissions.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Check Secret keys exist and are non-empty</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.appId}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.installationId}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.privateKey}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1"># Expected first line: -----BEGIN RSA PRIVATE KEY-----</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="c1"># Verify the App ID and installation ID match the GitHub App</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="c1"># GitHub UI: Settings → Developer settings → GitHub Apps → &lt;app&gt; → General (App ID)</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="c1"># GitHub UI: Settings → Developer settings → GitHub Apps → &lt;app&gt; → Install App (Installation ID in URL)</span>
+</code></pre></div>
+<p><strong>Resolution.</strong> Re-create the Secret with correct values. To trigger a rolling update on the AGC Deployment after fixing the Secret, change <code>gitHubAppRef.name</code> in the <code>ActionsGateway</code> spec to reference the new Secret name (the GMC will roll the AGC Deployment automatically) or manually restart the Deployment:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<p>See <a href="../../getting-started/#rotating-github-app-credentials">Getting Started — Rotating GitHub App Credentials</a> for the full rotation procedure.</p>
+<hr />
+<h2 id="token-refresh-errors-spiking">Token Refresh Errors Spiking<a class="headerlink" href="#token-refresh-errors-spiking" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> <code>actions_gateway_token_refresh_errors_total</code> is increasing. GitHub App installation tokens expire after one hour; if refresh fails, new sessions cannot be established once the token expires.</p>
+<p><strong>Likely causes.</strong>
+- GitHub API is temporarily unavailable or returning 5xx errors.
+- The GitHub App private key was rotated but the Secret was not updated.
+- Network path from AGC to GitHub API is down (proxy pool issue).</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Check the error rate</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># Metric: rate(actions_gateway_token_refresh_errors_total[5m])</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Check AGC logs for the error detail</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;token refresh&quot;</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1"># Test connectivity to GitHub via the tenant proxy (AGC is distroless — use an</span>
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="c1"># ephemeral curl pod in the same namespace; it picks up the same NetworkPolicy egress).</span>
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>kubectl<span class="w"> </span>run<span class="w"> </span>nettest-<span class="nv">$$</span><span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--rm<span class="w"> </span>-it<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="w">  </span>--image<span class="o">=</span>curlimages/curl:latest<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="w">  </span>--overrides<span class="o">=</span><span class="s1">&#39;{&quot;spec&quot;:{&quot;automountServiceAccountToken&quot;:false,&quot;containers&quot;:[{&quot;name&quot;:&quot;c&quot;,&quot;image&quot;:&quot;curlimages/curl:latest&quot;,&quot;command&quot;:[&quot;sh&quot;,&quot;-c&quot;,&quot;curl -x https://actions-gateway-proxy:8080 -sI https://api.github.com/app&quot;]}]}}&#39;</span>
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- If GitHub is temporarily unavailable: the AGC's exponential back-off retry (5s → 60s cap) will recover automatically. Monitor until the error rate returns to zero.
+- If the private key was rotated: update the Secret. See <a href="../../getting-started/#rotating-github-app-credentials">Getting Started — Rotating GitHub App Credentials</a>.
+- If the proxy is unreachable: see <a href="#proxy-pool-not-scaling">Proxy Pool Not Scaling</a> and the network connectivity section below.</p>
+<p><strong>SLO.</strong> Token refresh errors should stay below 1 per hour per tenant. Above this rate, begin investigating immediately. In-flight sessions will fail at the next reconnection once the token expires (~1 hour).</p>
+<hr />
+<h2 id="renewjob-failures-rising">RenewJob Failures Rising<a class="headerlink" href="#renewjob-failures-rising" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> <code>actions_gateway_renewjob_errors_total</code> is increasing. Jobs may start being cancelled by GitHub before completion.</p>
+<p><strong>Likely causes.</strong>
+- Network connectivity issues between the AGC and GitHub (via proxy).
+- GitHub API is temporarily unavailable.
+- The runner job lock window expired before the renewer could refresh (AGC was slow or restarting).</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Check recent error rate</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># Metric: rate(actions_gateway_renewjob_errors_total[5m])</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># Check AGC logs for renewal errors and job IDs</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;renewjob&quot;</span>
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>
+<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="c1"># Confirm the proxy pool is healthy</span>
+<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-proxy
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- Transient GitHub API errors: the renewer retries; monitor until the rate returns to zero.
+- Proxy pool unhealthy: fix the proxy pool (see <a href="#proxy-pool-not-scaling">Proxy Pool Not Scaling</a>).
+- If the AGC restarted mid-job: jobs whose lock expired will have been cancelled by GitHub. These require manual re-run. Check <code>actions_gateway_eviction_retries_exhausted_total</code> for any jobs that were also evicted.</p>
+<p>Each <code>renewjob</code> error is a warning, not an immediate job failure — GitHub grants ~10 minutes per renewal window. A single transient error on a long-running job is rarely fatal.</p>
+<hr />
+<h2 id="sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero">Sessions Stuck in 401/EOF GetMessage Loops (Tenant Throughput Decays to Zero)<a class="headerlink" href="#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> On gateway versions without the Q114 self-heal (≤ the M4 validation build):
+- AGC logs fill with repeating <code>GetMessage error ... decode response: EOF</code> and later <code>broker: unauthorized (HTTP 401)</code> lines for the same session, backing off forever.
+- The repo/org runner list (<code>gh api .../actions/runners</code>) loses one runner after each completed job, and the registrations never come back.
+- <code>RunnerGroup</code> <code>status.activeSessions</code> decays over time; after roughly <code>maxListeners</code> completed jobs, queued workflow jobs wait forever even though the AGC pod is healthy.</p>
+<p><strong>Cause.</strong> GitHub deletes a JIT-registered runner record once it acquires a job (single-use runners). Pre-fix AGC versions keep polling the dead session with the dead agent's credentials instead of re-registering, so every completed job permanently burns one listener slot (<a href="../../plan/milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12, bug 2</a>).</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Repeating EOF/401 poll errors</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;decode response: EOF|unauthorized&quot;</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Listener slots remaining</span>
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.items[*].status.activeSessions}&#39;</span>
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>
+<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># On fixed versions, recycles should be happening instead:</span>
+<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="c1"># Metric: rate(actions_gateway_agent_recycles_total[15m])  — roughly tracks job completions</span>
+<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="c1"># Metric: actions_gateway_agent_recycle_errors_total       — should stay flat</span>
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- <strong>Upgrade</strong> to a gateway version with the Q114 self-heal. Fixed versions re-register each agent after every job (<code>actions_gateway_agent_recycles_total{trigger="post_job"}</code>) and heal stale sessions discovered after a restart (<code>trigger="stale_session"</code> / <code>"startup"</code>); no per-job operator action is needed.
+- <strong>Interim manual recovery on pre-fix versions:</strong> delete the RunnerGroup's agent Secrets and restart the AGC so it registers a fresh pool:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/runner-group<span class="o">=</span>&lt;group&gt;
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<p>Expect <code>409 Already exists</code> registration errors for any agent that never ran a job — its record survives server-side under an ID the AGC no longer knows. Delete the survivor from GitHub first: find its ID with <code>gh api '.../actions/runners?name=&lt;group&gt;-&lt;index&gt;'</code>, then <code>gh api -X DELETE .../actions/runners/&lt;id&gt;</code>. Fixed versions resolve this 409 automatically.</p>
+<p><strong>On fixed versions,</strong> a sustained rise of <code>actions_gateway_agent_recycle_errors_total</code> means the AGC cannot re-register agents (registration API unreachable, installation token failures, or revoked GitHub App runner-administration permission) — listener capacity shrinks until recycles succeed. Check AGC logs for <code>recycle</code> errors and verify the App's runner permissions.</p>
+<hr />
+<h2 id="network-connectivity-failures">Network Connectivity Failures<a class="headerlink" href="#network-connectivity-failures" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> The AGC cannot reach GitHub through the proxy. Logs show <code>connection refused</code>, <code>dial tcp: i/o timeout</code>, or <code>proxy: no response from proxy</code>.</p>
+<p><strong>Likely causes.</strong>
+- The proxy pod is not running or not ready.
+- <code>HTTP_PROXY</code>/<code>HTTPS_PROXY</code> environment variables are incorrect (wrong Service name or port).
+- <code>actions-gateway-workload</code> NetworkPolicy is blocking the AGC-to-proxy egress path (e.g. proxy ClusterIP changed after a recreate and the rule wasn't reconciled).
+- <code>actions-gateway-proxy</code> NetworkPolicy is blocking the proxy's egress to GitHub (IP ranges stale or <code>managedNetworkPolicy: false</code> with no replacement rule).
+- <code>actions-gateway-controller</code> NetworkPolicy is missing — AGC can't reach the K8s API server, so token refresh and webhook health checks fail before any GitHub traffic.</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Check proxy pod status</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-proxy
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># Verify the proxy Service exists and has endpoints</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>svc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpoints<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
+<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>
+<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="c1"># Check the AGC container&#39;s HTTPS_PROXY env var (distroless — inspect spec, not the running process)</span>
+<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .items[0].spec.containers[?(@.name==&quot;agc&quot;)].env[?(@.name==&quot;HTTPS_PROXY&quot;)]}{.name}={.value}{&quot;\n&quot;}{end}&#39;</span>
+<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a>
+<a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a><span class="c1"># Test proxy connectivity using an ephemeral curl pod in the same namespace</span>
+<a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>kubectl<span class="w"> </span>run<span class="w"> </span>nettest-<span class="nv">$$</span><span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--rm<span class="w"> </span>-it<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a><span class="w">  </span>--image<span class="o">=</span>curlimages/curl:latest<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a><span class="w">  </span>--overrides<span class="o">=</span><span class="s1">&#39;{&quot;spec&quot;:{&quot;automountServiceAccountToken&quot;:false,&quot;containers&quot;:[{&quot;name&quot;:&quot;c&quot;,&quot;image&quot;:&quot;curlimages/curl:latest&quot;,&quot;command&quot;:[&quot;sh&quot;,&quot;-c&quot;,&quot;curl -v -x https://actions-gateway-proxy:8080 https://api.github.com 2&gt;&amp;1 | head -20&quot;]}]}}&#39;</span>
+<a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a>
+<a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a><span class="c1"># Check NetworkPolicy rules — there are three: workload, agc, proxy</span>
+<a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a><span class="c1"># Expected: actions-gateway-workload, actions-gateway-controller, actions-gateway-proxy</span>
+<a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-24-21" name="__codelineno-24-21" href="#__codelineno-24-21"></a>
+<a id="__codelineno-24-22" name="__codelineno-24-22" href="#__codelineno-24-22"></a><span class="c1"># Check the IP range refresh metric</span>
+<a id="__codelineno-24-23" name="__codelineno-24-23" href="#__codelineno-24-23"></a><span class="c1"># Metric: actions_gateway_ip_range_updates_total{namespace=&quot;&lt;namespace&gt;&quot;}</span>
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- If the proxy pod is down: check its logs and restart if necessary.
+- If the <code>NetworkPolicy</code> egress rules are stale: trigger a manual refresh by temporarily setting <code>spec.proxy.managedNetworkPolicy: false</code> and back to <code>true</code>, or wait for the 24-hour automatic refresh cycle. Check the GitHub meta API for current IP ranges: <code>curl https://api.github.com/meta | jq .actions</code>.
+- If the <code>NO_PROXY</code> list is missing the cluster service CIDR: update <code>spec.proxy.noProxyCIDRs</code> to include your cluster's service CIDR (see the <code>noProxyCIDRs</code> field documentation in <a href="../../design/03-api-contracts/#31-kubernetes-crd-schemas">§3.1</a>).</p>
+<hr />
+<h2 id="agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch">AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)<a class="headerlink" href="#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> AGC logs show <code>dial tcp 10.96.0.1:443: i/o timeout</code> (or similar) when calling the K8s API server. The <code>actions-gateway-controller</code> NetworkPolicy <em>appears</em> to allow port 443, yet the connection is silently dropped. Most often surfaces in kind, but possible on any cluster where the <code>kubernetes</code> Service backends listen on a port other than 443.</p>
+<p><strong>Cause.</strong> NetworkPolicy enforcement evaluates packets <em>after</em> kube-proxy's DNAT. When a pod connects to <code>kubernetes.default.svc</code> (ClusterIP <code>10.96.0.1:443</code>), kube-proxy DNATs the destination to the apiserver's actual Endpoints address — in kind, that's <code>&lt;node-ip&gt;:6443</code>. The policy controller sees the post-DNAT destination port (6443), and an NP rule that allows only port 443 doesn't match. This is the port-axis equivalent of the <code>ipBlock: &lt;ClusterIP&gt;/32</code> trap that bit the proxy NP in PR #59.</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># 1. Confirm the apiserver Endpoints port. If it&#39;s 6443, the AGC NP must allow 6443.</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpointslice<span class="w"> </span>-n<span class="w"> </span>default<span class="w"> </span>-l<span class="w"> </span>kubernetes.io/service-name<span class="o">=</span>kubernetes<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.items[0].ports[0].port}{&quot;\n&quot;}&#39;</span>
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="c1"># 2. Confirm the AGC NetworkPolicy actually allows both 443 and 6443.</span>
+<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-controller<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>yq<span class="w"> </span><span class="s1">&#39;.spec.egress[].ports[].port&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+<a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>
+<a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="c1"># 3. If the cluster uses kindnet / kube-network-policies, check the verdict log</span>
+<a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="c1">#    on the node hosting the AGC pod. Look for lines like:</span>
+<a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="c1">#      &quot;Pod is not allowed to connect to port&quot; pod=&quot;&lt;ns&gt;/&lt;agc-pod&gt;&quot; port=6443</span>
+<a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.items[0].spec.nodeName}{&quot;\n&quot;}&#39;</span>
+<a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>kindnet<span class="w"> </span>--tail<span class="o">=</span><span class="m">200</span><span class="w"> </span>--field-selector<span class="w"> </span>spec.nodeName<span class="o">=</span>&lt;node-name&gt;
+</code></pre></div>
+<p><strong>Resolution.</strong> Ensure <code>buildAGCNetworkPolicy</code> allows both port 443 (production Service shape) <em>and</em> port 6443 (kind / Endpoints-on-6443 clusters). The shipped policy does this. If you see this on a custom build or a hand-edited NP, add the 6443 rule. The diagnosis writeup at <a href="../../development/networkpolicy-port-matching/"><code>docs/development/networkpolicy-port-matching.md</code></a> has a minimal repro and the reasoning behind allowing both ports.</p>
+<p>If you see the same symptom for an <em>ingress</em>-type rule or for a different Service whose backend port differs from the Service port, the same fix applies: list both ports, or omit the port restriction on that rule.</p>
+<hr />
+<h2 id="worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot">Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot<a class="headerlink" href="#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> Worker pod logs (look at the <code>runner</code> container) contain repeated lines like:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>System.Security.Authentication.AuthenticationException: The remote certificate is invalid because of errors in the certificate chain: UntrustedRoot
+</code></pre></div>
+<p>emitted from <code>JobExtension</code> connectivity checks, <code>ResultServer</code> init, <code>JobServerQueue</code> log uploads, the <code>GitHubActionsService</code> log-blob fetch, or <code>RunServer.CompleteJobAsync</code>. The runner retries for ~3 minutes, then exits 1. The AGC then logs <code>worker pod completed phase=Failed</code>, <code>renewjob</code> starts returning <code>401 Not authorized for this job</code>, and the GitHub workflow concludes <code>cancelled</code> even though the actual job steps may have run.</p>
+<p><strong>Cause.</strong> Runner.Worker's .NET HttpClient is validating the egress proxy's TLS cert and the worker pod's trust store does not include the cert-manager-issued self-signed CA that signed it. This is the worker-side mirror of the AGC's proxy-CA pinning (<a href="../../design/05-security/">§5.2</a> "Cross-Tenant Proxy CA Trust"): the AGC mounts the CA explicitly so its outbound HTTPS works; worker pods must do the same.</p>
+<p>The AGC's pod provisioner is supposed to project the per-tenant <code>actions-gateway-proxy-tls</code> Secret into every worker pod at <code>/etc/actions-gateway/proxy-ca/tls.crt</code> and set <code>PROXY_CA_CERT_PATH</code> so the worker entrypoint wrapper builds a combined <code>SSL_CERT_FILE</code> bundle before exec'ing <code>Runner.Worker</code>. UntrustedRoot means one of those steps did not happen.</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># 1. Inspect a failed worker pod&#39;s spec — the Secret volume must exist.</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;worker-pod-name&gt;<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>yq<span class="w"> </span><span class="s1">&#39;.spec.volumes[] | select(.name==&quot;proxy-ca&quot;)&#39;</span>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># Expected: a Secret volume with secretName: actions-gateway-proxy-tls and Items: [{key: tls.crt, path: tls.crt}]</span>
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="c1"># If empty: the AGC was deployed without PROXY_TLS_SECRET_NAME.</span>
+<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>
+<a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="c1"># 2. Confirm the AGC has the PROXY_TLS_SECRET_NAME env wired.</span>
+<a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .items[0].spec.containers[?(@.name==&quot;agc&quot;)].env[?(@.name==&quot;PROXY_TLS_SECRET_NAME&quot;)]}{.name}={.value}{&quot;\n&quot;}{end}&#39;</span>
+<a id="__codelineno-27-10" name="__codelineno-27-10" href="#__codelineno-27-10"></a><span class="c1"># Expected: PROXY_TLS_SECRET_NAME=actions-gateway-proxy-tls</span>
+<a id="__codelineno-27-11" name="__codelineno-27-11" href="#__codelineno-27-11"></a><span class="c1"># Empty means the GMC needs to roll the AGC Deployment (likely an upgrade across the 5h boundary).</span>
+<a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a>
+<a id="__codelineno-27-13" name="__codelineno-27-13" href="#__codelineno-27-13"></a><span class="c1"># 3. Confirm the worker container&#39;s PROXY_CA_CERT_PATH env.</span>
+<a id="__codelineno-27-14" name="__codelineno-27-14" href="#__codelineno-27-14"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;worker-pod-name&gt;<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-27-15" name="__codelineno-27-15" href="#__codelineno-27-15"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>yq<span class="w"> </span><span class="s1">&#39;.spec.containers[] | select(.name==&quot;runner&quot;) | .env[] | select(.name==&quot;PROXY_CA_CERT_PATH&quot;)&#39;</span>
+<a id="__codelineno-27-16" name="__codelineno-27-16" href="#__codelineno-27-16"></a>
+<a id="__codelineno-27-17" name="__codelineno-27-17" href="#__codelineno-27-17"></a><span class="c1"># 4. Confirm the proxy TLS Secret exists and contains tls.crt.</span>
+<a id="__codelineno-27-18" name="__codelineno-27-18" href="#__codelineno-27-18"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy-tls<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-27-19" name="__codelineno-27-19" href="#__codelineno-27-19"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.tls\.crt}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>openssl<span class="w"> </span>x509<span class="w"> </span>-noout<span class="w"> </span>-subject<span class="w"> </span>-issuer<span class="w"> </span>-dates
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- If the worker pod has no <code>proxy-ca</code> volume: ensure the AGC was started with <code>PROXY_TLS_SECRET_NAME=actions-gateway-proxy-tls</code> (the GMC injects this automatically — if it's missing, the GMC needs to roll the AGC Deployment, e.g. by bumping <code>ag.Spec</code> or restarting the GMC).
+- If the volume is present but the wrapper logs nothing about <code>proxy CA trust installed</code>: check that <code>PROXY_CA_CERT_PATH</code> is set on the runner container and the mounted file is non-empty. An empty/missing file is tolerated as a no-op, which silently leaves the runner with no proxy trust — the wrapper log line <code>no proxy CA cert mounted; skipping trust-store install</code> distinguishes this case from a wrapper that ran the install successfully.
+- If the proxy TLS Secret is missing or the cert has expired: the GMC's cert-manager integration (<a href="../../design/02-architecture/#21-tier-1--gateway-manager-controller-gmc">§2.1</a> "Proxy Deployer") owns rotation; check the GMC's logs for issuer errors. As a fallback, deleting the Secret triggers reissuance.
+- If the issue persists after the volume and env are correct: confirm the proxy pod is presenting the cert signed by the CA in the Secret — <code>kubectl exec</code> into a curl pod in the same namespace and run `openssl s_client -connect actions-gateway-proxy:8080 -showcerts </p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../runbook/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Runbook">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Runbook
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../security-operations/" class="md-footer__link md-footer__link--next" aria-label="Next: Security operations">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Security operations
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2707 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/1.0.0/operations/upgrade/">
+      
+      
+        <link rel="prev" href="../install/">
+      
+      
+        <link rel="next" href="../tenant-onboarding/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Upgrade - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  
+  <meta property="og:image" content="https://actions-gateway.com/1.0.0assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.0.0assets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.0.0assets/icon-512.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#upgrade-and-rollback-procedures" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <strong>Alpha — pre-1.0.</strong> APIs, defaults, and capacity targets may change before the 1.0 release.
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Upgrade
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pre-upgrade-validation-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-Upgrade Validation Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration Notes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Migration Notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#breaking-specnamespacequota-removed--the-resourcequota-is-now-platform-owned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BREAKING: spec.namespaceQuota removed — the ResourceQuota is now platform-owned
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#breaking-prioritytiers-priorityclasses-now-require-a-platform-allowlist-per-tier-preemptionpolicy-removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BREAKING: priorityTiers PriorityClasses now require a platform allowlist; per-tier preemptionPolicy removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tenant-namespaces-now-require-the-actions-gatewaygithubcomtenant-marker-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tenant namespaces now require the actions-gateway.github.com/tenant marker label
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker pods are now cleaned up automatically (one-time sweep recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AGC Deployment renamed from actions-gateway-agc to actions-gateway-controller
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gmc-manager-networkpolicy-is-now-enabled-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GMC manager NetworkPolicy is now enabled by default
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gmc-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GMC Upgrade
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GMC Upgrade">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gmc-install-and-upgrade-via-helm-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GMC install and upgrade via Helm (recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-upgrade-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-upgrade validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rollback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agc-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AGC Upgrade
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AGC Upgrade">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-tenant-upgrade-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Tenant Upgrade Procedure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rollback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy Upgrade
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proxy Upgrade">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-pre-upgrade-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Pre-Upgrade Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-update-the-proxy-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Update the Proxy Image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-watch-the-rollout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Watch the Rollout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-post-upgrade-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Post-Upgrade Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rollback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worker-image-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker Image Upgrade
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Worker Image Upgrade">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#upgrade-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrade Procedure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#canary-testing-a-new-worker-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Canary Testing a New Worker Image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#minimum-version-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Minimum Version Requirement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rollback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#post-upgrade-validation_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-Upgrade Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zero-downtime-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zero-Downtime Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pre-upgrade-validation-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-Upgrade Validation Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration Notes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Migration Notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#breaking-specnamespacequota-removed--the-resourcequota-is-now-platform-owned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BREAKING: spec.namespaceQuota removed — the ResourceQuota is now platform-owned
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#breaking-prioritytiers-priorityclasses-now-require-a-platform-allowlist-per-tier-preemptionpolicy-removed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BREAKING: priorityTiers PriorityClasses now require a platform allowlist; per-tier preemptionPolicy removed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tenant-namespaces-now-require-the-actions-gatewaygithubcomtenant-marker-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tenant namespaces now require the actions-gateway.github.com/tenant marker label
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker pods are now cleaned up automatically (one-time sweep recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AGC Deployment renamed from actions-gateway-agc to actions-gateway-controller
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gmc-manager-networkpolicy-is-now-enabled-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GMC manager NetworkPolicy is now enabled by default
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gmc-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GMC Upgrade
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GMC Upgrade">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gmc-install-and-upgrade-via-helm-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GMC install and upgrade via Helm (recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-upgrade-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-upgrade validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rollback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agc-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AGC Upgrade
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AGC Upgrade">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-tenant-upgrade-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Tenant Upgrade Procedure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rollback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy Upgrade
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proxy Upgrade">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-pre-upgrade-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Pre-Upgrade Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-update-the-proxy-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Update the Proxy Image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-watch-the-rollout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Watch the Rollout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-post-upgrade-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Post-Upgrade Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rollback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worker-image-upgrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker Image Upgrade
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Worker Image Upgrade">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#upgrade-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrade Procedure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#canary-testing-a-new-worker-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Canary Testing a New Worker Image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#minimum-version-requirement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Minimum Version Requirement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rollback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#post-upgrade-validation_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-Upgrade Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zero-downtime-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zero-Downtime Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="upgrade-and-rollback-procedures">Upgrade and Rollback Procedures<a class="headerlink" href="#upgrade-and-rollback-procedures" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Audience:</strong> Platform engineer</p>
+</blockquote>
+<p>For upgrade strategy intent, see <a href="../../design/02-architecture/#26-upgrade-strategy">§2.6 of the architecture doc</a>. For <strong>initial installation</strong> of the GMC, see <a href="../install/">install.md</a> — this document covers day-2 upgrade and rollback.</p>
+<p>The three independently versioned components — GMC, AGC, and worker image — each upgrade on their own cadence with separate procedures below.</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
+<li><a href="#migration-notes">Migration Notes</a></li>
+<li><a href="#breaking-specnamespacequota-removed--the-resourcequota-is-now-platform-owned">BREAKING: spec.namespaceQuota removed — the ResourceQuota is now platform-owned</a></li>
+<li><a href="#tenant-namespaces-now-require-the-actions-gatewaygithubcomtenant-marker-label">Tenant namespaces now require the actions-gateway.github.com/tenant marker label</a></li>
+<li><a href="#worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended">Worker pods are now cleaned up automatically (one-time sweep recommended)</a></li>
+<li><a href="#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller">AGC Deployment renamed from actions-gateway-agc to actions-gateway-controller</a></li>
+<li><a href="#gmc-manager-networkpolicy-is-now-enabled-by-default">GMC manager NetworkPolicy is now enabled by default</a></li>
+<li><a href="#gmc-upgrade">GMC Upgrade</a></li>
+<li><a href="#gmc-install-and-upgrade-via-helm-recommended">GMC install and upgrade via Helm (recommended)</a></li>
+<li><a href="#step-1-upgrade-the-crds">Step 1: Upgrade the CRDs</a></li>
+<li><a href="#step-2-roll-the-gmc-deployment">Step 2: Roll the GMC Deployment</a></li>
+<li><a href="#step-3-post-upgrade-validation">Step 3: Post-Upgrade Validation</a></li>
+<li><a href="#rollback">Rollback</a></li>
+<li><a href="#agc-upgrade">AGC Upgrade</a></li>
+<li><a href="#per-tenant-upgrade-procedure">Per-Tenant Upgrade Procedure</a></li>
+<li><a href="#rollback-1">Rollback</a></li>
+<li><a href="#proxy-upgrade">Proxy Upgrade</a></li>
+<li><a href="#step-1-pre-upgrade-checks">Step 1: Pre-Upgrade Checks</a></li>
+<li><a href="#step-2-update-the-proxy-image">Step 2: Update the Proxy Image</a></li>
+<li><a href="#step-3-watch-the-rollout">Step 3: Watch the Rollout</a></li>
+<li><a href="#step-4-post-upgrade-validation">Step 4: Post-Upgrade Validation</a></li>
+<li><a href="#rollback-2">Rollback</a></li>
+<li><a href="#worker-image-upgrade">Worker Image Upgrade</a></li>
+<li><a href="#upgrade-procedure">Upgrade Procedure</a></li>
+<li><a href="#canary-testing-a-new-worker-image">Canary Testing a New Worker Image</a></li>
+<li><a href="#minimum-version-requirement">Minimum Version Requirement</a></li>
+<li><a href="#rollback-3">Rollback</a></li>
+<li><a href="#post-upgrade-validation">Post-Upgrade Validation</a></li>
+<li><a href="#zero-downtime-configuration">Zero-Downtime Configuration</a></li>
+</ul>
+<h2 id="pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist<a class="headerlink" href="#pre-upgrade-validation-checklist" title="Permanent link">&para;</a></h2>
+<p>Before upgrading any component, confirm the system is healthy:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># 1. No active incidents or RateLimited conditions</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>--all-namespaces
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># 2. All AGC pods healthy</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>--all-namespaces<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># 3. All proxy pools healthy</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>--all-namespaces<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-proxy
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># 4. No CrashLoopBackOff pods</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>--all-namespaces<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>Running<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>Completed<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>Terminating
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># 5. No recent reconcile errors</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="c1"># Metric: rate(actions_gateway_reconcile_errors_total[5m]) == 0</span>
+</code></pre></div>
+<p>Also check the release notes for the new version before upgrading, particularly:
+- CRD schema changes (new required fields, removed fields, validation tightening).
+- Behavior changes that require configuration updates before the new binary takes effect.</p>
+<hr />
+<h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
+<h3 id="breaking-specnamespacequota-removed--the-resourcequota-is-now-platform-owned">BREAKING: <code>spec.namespaceQuota</code> removed — the ResourceQuota is now platform-owned<a class="headerlink" href="#breaking-specnamespacequota-removed--the-resourcequota-is-now-platform-owned" title="Permanent link">&para;</a></h3>
+<p><strong>This is a breaking CRD change, made pre-1.0 while the API can still break.</strong> The
+<code>spec.namespaceQuota</code> field has been removed from the <code>ActionsGateway</code> CRD. The
+namespace <code>ResourceQuota</code> (and any <code>LimitRange</code>) is now <strong>platform-owned</strong>: the
+platform admin creates and manages it on the tenant namespace, and the gateway
+operates within it but never creates or mutates it. The GMC's <code>resourcequotas</code>
+write RBAC has been dropped (least privilege — Q122/Q130). The rationale: a
+tenant-set quota is no real cap (the tenant could raise it in their own CR) and it
+fought GitOps and tenant-operator stacks (Capsule, HNC, vCluster, kiosk) that
+already own namespaces and quotas.</p>
+<p><strong>What you must do before (or as part of) the upgrade:</strong></p>
+<ol>
+<li><strong>Provision a platform-managed <code>ResourceQuota</code> in each tenant namespace</strong> <em>before</em>
+   the new GMC takes over — the gateway no longer creates one, so a namespace with
+   no quota becomes uncapped. For each tenant that relied on <code>spec.namespaceQuota</code>,
+   read the current values and create a standalone <code>ResourceQuota</code>:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Inspect the GAG-managed quota the old GMC created (named &quot;actions-gateway&quot;)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>resourcequota<span class="w"> </span>actions-gateway<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>-o<span class="w"> </span>yaml
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;tenant&gt;-quota</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;tenant-namespace&gt;</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">hard</span><span class="p">:</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">requests.cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;20&quot;</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">requests.memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;40Gi&quot;</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nt">pods</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;50&quot;</span>
+</code></pre></div>
+<ol>
+<li><strong>Adopt or replace the orphaned GAG-created quota.</strong> A <code>ResourceQuota</code> the old
+   GMC created carries an <code>ownerReference</code> to the <code>ActionsGateway</code> CR, so it would be
+   garbage-collected if the CR were ever deleted. Either adopt it by stripping that
+   ownerReference (so it survives independently), or delete it and recreate a
+   platform-managed one as in step 1:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Adopt: drop the ownerReference so the quota is no longer GC-tied to the CR</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>resourcequota<span class="w"> </span>actions-gateway<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="o">=</span><span class="s1">&#39;[{&quot;op&quot;:&quot;remove&quot;,&quot;path&quot;:&quot;/metadata/ownerReferences&quot;}]&#39;</span>
+</code></pre></div>
+<ol>
+<li><strong>Drop <code>namespaceQuota</code> from your <code>ActionsGateway</code> manifests / GitOps.</strong> On upgrade
+   the CRD's structural-schema pruning silently drops the now-unknown field from
+   stored and re-applied CRs — applying a manifest that still sets <code>namespaceQuota</code>
+   is <strong>not rejected</strong>, the field is just ignored. Remove it from source so intent
+   stays clear.</li>
+</ol>
+<h3 id="breaking-prioritytiers-priorityclasses-now-require-a-platform-allowlist-per-tier-preemptionpolicy-removed">BREAKING: <code>priorityTiers</code> PriorityClasses now require a platform allowlist; per-tier <code>preemptionPolicy</code> removed<a class="headerlink" href="#breaking-prioritytiers-priorityclasses-now-require-a-platform-allowlist-per-tier-preemptionpolicy-removed" title="Permanent link">&para;</a></h3>
+<p><strong>Two breaking CRD/admission changes, made pre-1.0 (Q132).</strong> Both concern
+<code>spec.runnerGroups[].priorityTiers</code>:</p>
+<ol>
+<li>
+<p><strong>The GMC validating webhook now rejects any <code>priorityClassName</code> not on the
+   platform allowlist.</strong> The allowlist is the new GMC <code>--allowed-priority-classes</code>
+   flag (comma-separated class names) and is <strong>empty by default</strong>, so after upgrade
+   <em>every</em> <code>ActionsGateway</code> that sets <code>priorityTiers</code> will be rejected on its next
+   apply until you configure the flag. The rationale: a tenant-chosen, cluster-scoped
+   <code>PriorityClass</code> with the default <code>PreemptLowerPriority</code> policy could evict other
+   tenants' running worker pods — a cross-tenant isolation break.</p>
+</li>
+<li>
+<p><strong>The per-tier <code>preemptionPolicy</code> field has been removed</strong> from the
+   <code>PriorityTier</code> schema. It was never wired to worker pods (a no-op) and was a
+   tenant-controlled preemption lever; preemption is now governed solely by the
+   platform-created <code>PriorityClass</code> object. Structural-schema pruning silently drops
+   the now-unknown field from stored/re-applied CRs (no apply rejection); remove it
+   from source so intent stays clear.</p>
+</li>
+</ol>
+<p>Migration steps:</p>
+<ol>
+<li><strong>Before rolling the GMC</strong>, decide which <code>PriorityClass</code> names tenants may use,
+   ensure those classes exist (create them with <code>preemptionPolicy: Never</code> unless a
+   tier is genuinely meant to preempt cross-tenant — see
+   <a href="../security-operations/#priority-classes-the-allowed-priority-classes-allowlist">security-operations.md § Priority classes</a>),
+   and set <code>--allowed-priority-classes</code> on the GMC Deployment (or the chart values).</li>
+<li><strong>Audit existing CRs</strong> for the classes they reference:
+   <code>kubectl get actionsgateway -A -o jsonpath='{range .items[*]}{range .spec.runnerGroups[*]}{range .spec.priorityTiers[*]}{.priorityClassName}{"\n"}{end}{end}{end}' | sort -u</code>.
+   Every name in that list must be on the allowlist or the next apply/reconcile of
+   that CR is rejected.</li>
+<li><strong>Drop <code>preemptionPolicy</code> from your <code>priorityTiers</code> manifests / GitOps.</strong></li>
+</ol>
+<h3 id="tenant-namespaces-now-require-the-actions-gatewaygithubcomtenant-marker-label">Tenant namespaces now require the <code>actions-gateway.github.com/tenant</code> marker label<a class="headerlink" href="#tenant-namespaces-now-require-the-actions-gatewaygithubcomtenant-marker-label" title="Permanent link">&para;</a></h3>
+<p>The GMC's cluster-wide write grants are now gated by two ValidatingAdmissionPolicies
+(both shipped by the Helm chart, gated on <code>admissionPolicy.enabled</code>):
+<code>namespace-psa-guard</code> gates <code>namespaces:patch</code>, and <code>gmc-tenant-resource-guard</code>
+gates create/update/delete of all tenant provisioning resources (Deployments,
+Services, ServiceAccounts, RoleBindings, Roles, NetworkPolicies, HPAs, PDBs,
+RunnerGroups, and Secret create/update). Both deny the GMC unless the target
+namespace already carries <code>actions-gateway.github.com/tenant: "true"</code>. <strong>Existing
+tenant namespaces created before this change do not have the label</strong>, so after
+upgrade the GMC cannot stamp their Pod Security Admission labels <em>or provision any
+resources in them</em>, and each affected <code>ActionsGateway</code> will emit a
+<code>NamespaceMarkerMissing</code> warning event.</p>
+<p>Before (or immediately after) upgrading, label every existing tenant namespace:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Label all namespaces that currently hold an ActionsGateway CR.</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .items[*]}{.metadata.namespace}{&quot;\n&quot;}{end}&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>xargs<span class="w"> </span>-I<span class="o">{}</span><span class="w"> </span>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span><span class="o">{}</span><span class="w"> </span>actions-gateway.github.com/tenant<span class="o">=</span><span class="nb">true</span><span class="w"> </span>--overwrite
+</code></pre></div>
+<p>For a phased rollout where you cannot label every namespace up front, temporarily set
+<strong>both</strong> bindings' <code>validationActions</code> to <code>[Audit]</code> (instead of <code>[Deny]</code>) so denials are
+logged but not enforced, label the namespaces, then restore <code>[Deny]</code> on each.</p>
+<h3 id="worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended">Worker pods are now cleaned up automatically (one-time sweep recommended)<a class="headerlink" href="#worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended" title="Permanent link">&para;</a></h3>
+<p>AGC versions with Q95 delete completed worker pods after <code>completedPodTTL</code>
+(default 5m) and stuck-Pending worker pods after <code>pendingPodDeadline</code> (default
+10m), and stamp every new worker pod and job Secret with an OwnerReference to
+its RunnerGroup. Two operator-visible consequences:</p>
+<ul>
+<li><strong>Behaviour change:</strong> completed worker pods no longer linger indefinitely.
+  If your debugging workflow relied on inspecting old pods, raise
+  <code>completedPodTTL</code> on the affected <code>runnerGroups[]</code> entries (see
+  <a href="../tenant-onboarding/#step-2-create-the-actionsgateway-resource">tenant-onboarding</a>).</li>
+<li><strong>One-time sweep:</strong> pods created by <em>pre-upgrade</em> AGC versions whose
+  RunnerGroup still exists are reaped automatically after upgrade, but pods
+  whose RunnerGroup was already deleted have no OwnerReference and no
+  reconciler to reap them. Clean those up once per tenant namespace:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Terminal worker pods left behind by pre-Q95 AGCs (label is stamped on all worker pods)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-runner<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--field-selector<span class="w"> </span><span class="s1">&#39;status.phase!=Running,status.phase!=Pending&#39;</span>
+</code></pre></div>
+<h3 id="agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller">AGC Deployment renamed from <code>actions-gateway-agc</code> to <code>actions-gateway-controller</code><a class="headerlink" href="#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller" title="Permanent link">&para;</a></h3>
+<p>Deployments and resources created by the GMC are now named <code>actions-gateway-controller</code>
+instead of <code>actions-gateway-agc</code>. After upgrading the GMC:</p>
+<ol>
+<li>The GMC creates a new <code>actions-gateway-controller</code> Deployment in each tenant namespace.</li>
+<li>The old <code>actions-gateway-agc</code> Deployment is left <strong>orphaned</strong> (still running but no longer
+   managed). Remove it manually per tenant:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>deploy<span class="w"> </span>actions-gateway-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<ol>
+<li>Pods labelled <code>app=actions-gateway-agc</code> become <code>app=actions-gateway-controller</code>. Update
+   any Prometheus alerts, Grafana dashboards, or PodMonitor selectors that reference the old
+   label before upgrading.</li>
+</ol>
+<h3 id="gmc-manager-networkpolicy-is-now-enabled-by-default">GMC manager NetworkPolicy is now enabled by default<a class="headerlink" href="#gmc-manager-networkpolicy-is-now-enabled-by-default" title="Permanent link">&para;</a></h3>
+<p>The default install ships the GMC manager NetworkPolicy enabled
+(<code>networkPolicy.enabled=true</code>). This flips the controller-manager pod to default-deny ingress and
+admits its <code>:8443</code> <code>/metrics</code> endpoint <strong>only</strong> from namespaces labelled
+<code>metrics: enabled</code>. <strong>If your Prometheus runs in an unlabelled namespace, GMC
+manager scrapes will start failing after upgrade.</strong> Label it before (or right
+after) upgrading:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;prometheus-namespace&gt;<span class="w"> </span><span class="nv">metrics</span><span class="o">=</span>enabled<span class="w"> </span>--overwrite
+</code></pre></div>
+<p>The validating-webhook port (<code>9443</code>) is re-allowed from any source, so CR
+admission is unaffected. This change also adds a <code>PodDisruptionBudget</code>
+(<code>minAvailable: 1</code>) and <code>priorityClassName: system-cluster-critical</code> to the
+manager — no operator action required. Runtime NetworkPolicy enforcement depends
+on your CNI; see <a href="../observability/">observability.md</a>. The Prometheus
+<code>ServiceMonitor</code> remains <strong>opt-in</strong> behind the <code>metrics.serviceMonitor.enabled</code>
+chart value.</p>
+<hr />
+<h2 id="gmc-upgrade">GMC Upgrade<a class="headerlink" href="#gmc-upgrade" title="Permanent link">&para;</a></h2>
+<p>The GMC runs <code>replicas: 2</code> with leader election. Only one replica reconciles at any time; leadership transfers seamlessly during a rolling update. In-flight reconciliations are idempotent — the new leader re-derives state and converges without producing duplicate resources.</p>
+<p>The active replica releases its leader lease on graceful shutdown (<code>--leader-elect-release-on-cancel</code>, on by default), so during a rollout the standby takes over within one retry period (~2s) instead of waiting out the full lease (~15s). This is why the Deployment's short <code>terminationGracePeriodSeconds: 10</code> introduces no reconcile gap. If you run on a slow or heavily loaded API server and see spurious leader-lease losses (the GMC restarting with "failed to renew lease"), widen the timing with the tunables below rather than disabling leader election:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--leader-elect-lease-duration</code></td>
+<td><code>15s</code></td>
+<td>How long a candidate waits before force-acquiring a stale lease.</td>
+</tr>
+<tr>
+<td><code>--leader-elect-renew-deadline</code></td>
+<td><code>10s</code></td>
+<td>How long the leader keeps retrying a renewal before stepping down.</td>
+</tr>
+<tr>
+<td><code>--leader-elect-retry-period</code></td>
+<td><code>2s</code></td>
+<td>Interval between election attempts (and the failover floor with release-on-cancel).</td>
+</tr>
+<tr>
+<td><code>--leader-elect-release-on-cancel</code></td>
+<td><code>true</code></td>
+<td>Release the lease on SIGTERM for fast failover. Leave on.</td>
+</tr>
+</tbody>
+</table>
+<p>The invariant <code>lease-duration &gt; renew-deadline &gt; retry-period × 1.2</code> is validated at startup; a misordered set makes the GMC exit immediately with a message naming the offending flags.</p>
+<h3 id="gmc-install-and-upgrade-via-helm-recommended">GMC install and upgrade via Helm (recommended)<a class="headerlink" href="#gmc-install-and-upgrade-via-helm-recommended" title="Permanent link">&para;</a></h3>
+<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong>, published and cosign-signed to the GHCR OCI registry (<code>oci://ghcr.io/actions-gateway/charts/actions-gateway</code>); the <a href="../../charts/actions-gateway/README.md"><code>charts/actions-gateway/</code></a> source path is the dev/CI copy of the same chart. The chart is the <strong>sole</strong> install/upgrade vehicle — there is no kustomize path. For dev/CI iteration <code>make deploy</code> wraps <code>helm install</code> of the local chart with floating image tags.</p>
+<blockquote>
+<p><strong>Release candidate — prerelease, not yet GA.</strong> The first published version is <strong><code>1.0.0-rc.1</code></strong> (chart version = release tag without the leading <code>v</code>), flagged on Artifact Hub as a prerelease. Pin <code>--version 1.0.0-rc.1</code> deliberately and treat it as a preview ahead of the <code>v1.0.0</code> cut. Copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.0.0-rc.1">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
+</blockquote>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># First install (from the published, signed OCI chart)</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.0.0-rc.1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># Upgrade in place to a newer published chart version (carries CRD field changes — see below)</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--reuse-values<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;new-gmc&gt;
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># Roll back to the previous release</span>
+<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>helm<span class="w"> </span>rollback<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
+</code></pre></div>
+<p>Four upgrade-time behaviors are specific to this chart:</p>
+<ul>
+<li><strong><code>gmc.image.digest</code> is required at render time.</strong> Both <code>helm install</code> and <code>helm upgrade</code> fail with <code>gmc.image must be pinned by digest …</code> when the release values carry no digest — e.g. a values file that omits it, or <code>--reset-values</code>. <code>--reuse-values</code> (as in the example above) carries the previously pinned digest forward; pass <code>--set gmc.image.digest=sha256:&lt;new-gmc&gt;</code> to move to the new release's image. See the <a href="../troubleshooting/#helm-render-fails-gmcimage-must-be-pinned-by-digest">troubleshooting runbook</a>. Dev/test only: <code>allowFloatingImageTags=true</code> opts out.</li>
+<li><strong>CRDs upgrade with the release.</strong> The <code>ActionsGateway</code> and <code>RunnerGroup</code> CRDs ship as templates under <code>templates/crds/</code> with <code>helm.sh/resource-policy: keep</code>, <strong>not</strong> the chart-root <code>crds/</code> directory — Helm never upgrades resources in <code>crds/</code>. So a <code>helm upgrade</code> applies additive CRD field changes automatically, and <code>helm uninstall</code> preserves the CRDs (and every tenant's <code>ActionsGateway</code>/<code>RunnerGroup</code> object) rather than cascade-deleting them. You do not run a separate CRD apply step. The <code>RunnerGroup</code> CRD is sourced from the AGC authoritative copy.</li>
+<li><strong>The webhook cert path depends on <code>certManager.enabled</code>.</strong> With the default <code>certManager.enabled=true</code>, cert-manager issues and rotates the serving cert; nothing to do on upgrade. With <code>certManager.enabled=false</code>, the chart generates a self-signed serving cert and wires the webhook <code>caBundle</code> itself. On an in-place <code>helm upgrade</code> the chart <strong>reuses the existing <code>webhook-server-cert</code> Secret</strong> (it looks the Secret up), so the cert does not rotate; it only regenerates if that Secret is missing (a fresh install, or after you delete it to force rotation). A <code>helm template</code> (no cluster) cannot look the Secret up and therefore renders a fresh cert each time — expected for offline rendering only.</li>
+<li><strong>The <code>namespace-psa-guard</code> and <code>gmc-tenant-resource-guard</code> bindings deny by default.</strong> If you are upgrading a cluster whose existing tenant namespaces are not yet labeled <code>actions-gateway.github.com/tenant=true</code>, label them <strong>before</strong> the upgrade (see the migration note above), or the GMC's namespace patches <em>and all tenant-resource writes</em> will be denied. To stage the rollout you can temporarily set both bindings to <code>Audit</code> by editing <code>validationActions</code> on each <code>ValidatingAdmissionPolicyBinding</code>, then flip them back to <code>Deny</code> once the labels are in place.</li>
+</ul>
+<p><code>helm upgrade</code> rolls the GMC Deployment (and carries additive CRD field changes —
+no separate CRD apply step). Watch the rollout:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system
+</code></pre></div>
+<p>The rolling update replaces one replica at a time. Leadership transfers before the old leader is deleted. The total rollout time is typically &lt; 30 seconds.</p>
+<h3 id="post-upgrade-validation">Post-upgrade validation<a class="headerlink" href="#post-upgrade-validation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Confirm both replicas are on the new image</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-o<span class="w"> </span>wide
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Confirm the GMC has re-elected a leader</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>lease<span class="w"> </span>-n<span class="w"> </span>gmc-system
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Confirm no new reconcile errors appeared</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># Metric: actions_gateway_reconcile_errors_total</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c1"># Spot-check one ActionsGateway CR</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
+</code></pre></div>
+<h3 id="rollback">Rollback<a class="headerlink" href="#rollback" title="Permanent link">&para;</a></h3>
+<p>Roll back to the previously deployed release with <code>helm rollback</code> (see the Helm
+section above):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>helm<span class="w"> </span>rollback<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system
+</code></pre></div>
+<p><code>helm rollback</code> restores the prior release's values and manifests. CRDs carry
+<code>helm.sh/resource-policy: keep</code>, so they are not rolled back automatically; if the
+rollback targets a different CRD schema version, consult the release notes for any
+CRD migration.</p>
+<hr />
+<h2 id="agc-upgrade">AGC Upgrade<a class="headerlink" href="#agc-upgrade" title="Permanent link">&para;</a></h2>
+<p>The AGC runs <code>replicas: 1</code>. <strong>Every AGC upgrade incurs a brief drain window</strong> — the period between the old pod terminating and the new pod acquiring sessions. During this window:</p>
+<ul>
+<li><strong>In-flight long polls</strong> are dropped. GitHub redelivers these jobs within ~2 minutes (GitHub's redelivery window).</li>
+<li><strong>Per-job RenewJob loops</strong> are abandoned. Any job whose lock window (~10 minutes per renewal) expires before the new AGC starts will be cancelled by GitHub. These require manual re-run.</li>
+<li><strong>Queued but unacquired jobs</strong> are redelivered after the session TTL expires (typically &lt; 2 minutes).</li>
+</ul>
+<p><strong>Scheduling guidance.</strong> Schedule AGC upgrades during low-traffic periods (off-peak hours, weekends) when in-flight job count is minimal. If zero-downtime is required, accept that GitHub redelivery provides effective recovery for most jobs.</p>
+<h3 id="per-tenant-upgrade-procedure">Per-Tenant Upgrade Procedure<a class="headerlink" href="#per-tenant-upgrade-procedure" title="Permanent link">&para;</a></h3>
+<p>Upgrade each tenant's AGC one at a time. If tenants are independent, you may parallelize across namespaces.</p>
+<p><strong>Step 1: Drain the AGC before upgrading (optional, reduces blackout window)</strong></p>
+<p>The AGC's SIGTERM handler calls <code>DELETE /sessions</code> for all open sessions before exiting, causing GitHub to immediately re-queue unacquired jobs rather than waiting for session TTL. To rely on this:</p>
+<ul>
+<li>Ensure <code>terminationGracePeriodSeconds</code> on the AGC Deployment is ≥ 30 seconds (the default).</li>
+<li>Do not use <code>kubectl delete pod</code> directly — it sends SIGKILL without a grace period. Use <code>kubectl rollout restart</code> or <code>kubectl set image</code> instead.</li>
+</ul>
+<p><strong>Step 2: Update the AGC image</strong></p>
+<p>The GMC manages the AGC Deployment. To update the AGC image, update the GMC's configuration (Helm values or Kustomize overlay) with the new AGC image tag and re-deploy the GMC, which will then roll each tenant's AGC Deployment. Alternatively, patch per-namespace:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span><span class="nb">set</span><span class="w"> </span>image<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nv">agc</span><span class="o">=</span>&lt;registry&gt;/agc:&lt;new-tag&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<p><strong>Step 3: Watch the rollout</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<p><strong>Step 4: Confirm session recovery</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># sessions should return to &gt;= 1 per RunnerGroup within a few seconds of pod startup</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># Metric: actions_gateway_active_sessions{namespace=&quot;&lt;namespace&gt;&quot;}</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># No new renewjob errors</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># Metric: rate(actions_gateway_renewjob_errors_total{namespace=&quot;&lt;namespace&gt;&quot;}[5m])</span>
+</code></pre></div>
+<p><strong>Step 5: Check for cancelled jobs</strong></p>
+<p>After the rollout, verify that jobs active during the restart have either completed or been redelivered. Check the GitHub Actions UI for any unexpectedly cancelled runs.</p>
+<h3 id="rollback_1">Rollback<a class="headerlink" href="#rollback_1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>undo<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<p>Then confirm sessions are re-established and job acquisition resumes.</p>
+<hr />
+<h2 id="proxy-upgrade">Proxy Upgrade<a class="headerlink" href="#proxy-upgrade" title="Permanent link">&para;</a></h2>
+<p>The proxy pool is HPA-managed and stateless. Rolling updates are non-disruptive as long as the <code>PodDisruptionBudget</code> (<code>minAvailable: 1</code>) is respected during the rollout.</p>
+<h3 id="step-1-pre-upgrade-checks">Step 1: Pre-Upgrade Checks<a class="headerlink" href="#step-1-pre-upgrade-checks" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Confirm the PodDisruptionBudget is in place</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pdb<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Confirm current replica count</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Confirm the HPA is healthy (TARGETS should show a percentage, not &lt;unknown&gt;)</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<h3 id="step-2-update-the-proxy-image">Step 2: Update the Proxy Image<a class="headerlink" href="#step-2-update-the-proxy-image" title="Permanent link">&para;</a></h3>
+<p>The GMC manages the proxy Deployment. Update the proxy image via the GMC's Helm values or Kustomize overlay, then re-deploy the GMC (which will reconcile the updated image into all tenant proxy Deployments). To patch a single namespace:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>kubectl<span class="w"> </span><span class="nb">set</span><span class="w"> </span>image<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nv">proxy</span><span class="o">=</span>&lt;registry&gt;/proxy:&lt;new-tag&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<h3 id="step-3-watch-the-rollout">Step 3: Watch the Rollout<a class="headerlink" href="#step-3-watch-the-rollout" title="Permanent link">&para;</a></h3>
+<p>The rolling update replaces one proxy pod at a time. Kubernetes honours the <code>PodDisruptionBudget</code> and only terminates a pod once its replacement is <code>Ready</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<p>In-flight <code>CONNECT</code> tunnels through the old proxy pod will be interrupted when that pod is terminated. The AGC and worker pods will reconnect through the remaining proxy pods automatically. For high-concurrency tenants, schedule the upgrade during a low-traffic window to minimise connection resets.</p>
+<h3 id="step-4-post-upgrade-validation">Step 4: Post-Upgrade Validation<a class="headerlink" href="#step-4-post-upgrade-validation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># All proxy pods on the new image</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-proxy<span class="w"> </span>-o<span class="w"> </span>wide
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># HPA still computing utilization (not &lt;unknown&gt;)</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># No spike in token or renewjob errors after the rollout</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="c1"># Metrics: token_refresh_errors_total, renewjob_errors_total</span>
+</code></pre></div>
+<h3 id="rollback_2">Rollback<a class="headerlink" href="#rollback_2" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>undo<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</code></pre></div>
+<hr />
+<h2 id="worker-image-upgrade">Worker Image Upgrade<a class="headerlink" href="#worker-image-upgrade" title="Permanent link">&para;</a></h2>
+<p>Worker image upgrades are non-disruptive: the new image takes effect on future jobs; running pods complete on the old image.</p>
+<h3 id="upgrade-procedure">Upgrade Procedure<a class="headerlink" href="#upgrade-procedure" title="Permanent link">&para;</a></h3>
+<p>Update <code>spec.runnerGroups[N].workerImage</code> in the <code>ActionsGateway</code> CR:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># Update spec.runnerGroups[N].workerImage to the new image digest</span>
+</code></pre></div>
+<p>The GMC propagates the change to the <code>RunnerGroup</code> CR. The AGC starts using the new image on the next job acquisition. No restart required.</p>
+<p><strong>Production recommendation:</strong> pin to a digest, not a tag:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nt">workerImage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/my-org/actions-runner-worker@sha256:abc123...</span>
+</code></pre></div>
+<p>This ensures the exact same image is used for all jobs until explicitly changed, and enables unambiguous rollback.</p>
+<h3 id="canary-testing-a-new-worker-image">Canary Testing a New Worker Image<a class="headerlink" href="#canary-testing-a-new-worker-image" title="Permanent link">&para;</a></h3>
+<p>To test a new image on a subset of jobs before rolling it out broadly:</p>
+<ol>
+<li>Add a second <code>RunnerGroup</code> with the new image and a distinct label (e.g. <code>canary</code>).</li>
+<li>Update a subset of workflows to use <code>runs-on: [self-hosted, canary]</code>.</li>
+<li>Monitor job success rates. If healthy, update the main <code>RunnerGroup</code> and remove the canary group.</li>
+</ol>
+<h3 id="minimum-version-requirement">Minimum Version Requirement<a class="headerlink" href="#minimum-version-requirement" title="Permanent link">&para;</a></h3>
+<p>GitHub enforces a minimum runner version at session creation time. If the worker image contains a runner below this threshold, the session goroutine will receive a <code>400 Bad Request</code> and surface a <code>VersionTooOld</code> condition on the <code>RunnerGroup</code>. Monitor <code>actions_gateway_active_sessions</code> and RunnerGroup conditions for this symptom after deploying an older image.</p>
+<h3 id="rollback_3">Rollback<a class="headerlink" href="#rollback_3" title="Permanent link">&para;</a></h3>
+<p>Set <code>workerImage</code> back to the previous digest:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="w">  </span>--type<span class="o">=</span>json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">  </span>-p<span class="o">=</span><span class="s1">&#39;[{&quot;op&quot;:&quot;replace&quot;,&quot;path&quot;:&quot;/spec/runnerGroups/0/workerImage&quot;,&quot;value&quot;:&quot;&lt;previous-digest&gt;&quot;}]&#39;</span>
+</code></pre></div>
+<hr />
+<h2 id="post-upgrade-validation_1">Post-Upgrade Validation<a class="headerlink" href="#post-upgrade-validation_1" title="Permanent link">&para;</a></h2>
+<p>After any component upgrade:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># All ActionsGateway CRs healthy</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>--all-namespaces
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># Active sessions restored</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="c1"># Metric: actions_gateway_active_sessions per namespace</span>
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>
+<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="c1"># No spike in errors</span>
+<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="c1"># Metrics: token_refresh_errors_total, renewjob_errors_total, reconcile_errors_total</span>
+<a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>
+<a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="c1"># Pod creation latency within SLO</span>
+<a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="c1"># Metric: histogram_quantile(0.95, rate(actions_gateway_pod_creation_latency_seconds_bucket[5m]))</span>
+</code></pre></div>
+<p>If a regression is detected within the first 15 minutes after an upgrade, roll back immediately rather than investigating in production. Investigate using a non-production environment.</p>
+<hr />
+<h2 id="zero-downtime-configuration">Zero-Downtime Configuration<a class="headerlink" href="#zero-downtime-configuration" title="Permanent link">&para;</a></h2>
+<p>The GMC and worker image upgrades are non-disruptive. The AGC upgrade is the only component with a brief drain window. To minimize its impact:</p>
+<ul>
+<li><strong>Time upgrades outside peak hours</strong> to reduce the number of in-flight jobs at risk.</li>
+<li><strong>Rely on SIGTERM drain</strong> — <code>kubectl rollout restart</code> (not <code>delete pod</code>) gives the AGC time to call <code>DELETE /sessions</code> before the pod exits, reducing the redelivery window from session TTL (minutes) to pod startup time (seconds).</li>
+<li><strong>Use a generous <code>terminationGracePeriodSeconds</code></strong> (≥ 30s). The AGC's SIGTERM handler is fast (a few hundred milliseconds for most tenants), but give it headroom for high-listener-count namespaces.</li>
+<li><strong>Accept the blackout as a known cost</strong> rather than attempting zero-downtime tricks. GitHub's 2-minute redelivery window means most jobs survive an AGC restart transparently; the risk window is only jobs whose <code>renewjob</code> lock happens to expire during the restart (unlikely in practice for a &lt; 5-second restart).</li>
+</ul>
+<hr />
+<p>← <a href=".">Back to Operations</a></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../install/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Install">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Install
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../tenant-onboarding/" class="md-footer__link md-footer__link--next" aria-label="Next: Tenant onboarding">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Tenant onboarding
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

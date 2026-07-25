@@ -1,0 +1,2779 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/1.0.0/operations/security-operations/">
+      
+      
+        <link rel="prev" href="../troubleshooting/">
+      
+      
+        <link rel="next" href="../release/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Security operations - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  
+  
+  <meta property="og:image" content="https://actions-gateway.com/1.0.0assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.0.0assets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.0.0assets/icon-512.png">
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#security-operations-abuse-detection--response" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            
+  <strong>Alpha — pre-1.0.</strong> APIs, defaults, and capacity targets may change before the 1.0 release.
+
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Security operations
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#threat--signal-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threat → signal map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prometheus-abuse-alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prometheus abuse alerts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audit-log-abuse-detections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit-log abuse detections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-playbooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response playbooks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Response playbooks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#suspected-compromised-agc-tenant-scoped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Suspected compromised AGC (tenant-scoped)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#suspected-compromised-gmc-cluster-scoped-tier-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Suspected compromised GMC (cluster-scoped, Tier-0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxy-saturation--slowloris" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy saturation / slowloris
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#posture-scanning-preventive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posture scanning (preventive)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Posture scanning (preventive)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#manifest-posture--polaris-automated-in-ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manifest posture — polaris (automated, in CI)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cis-benchmark-posture--kube-bench-manual-pre-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CIS-benchmark posture — kube-bench (manual, pre-production)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tenant-egress-posture--deliberate-widening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tenant egress posture &amp; deliberate widening
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tenant egress posture &amp; deliberate widening">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#managing-egress-at-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Managing egress at scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#priority-classes-the---allowed-priority-classes-allowlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority classes: the --allowed-priority-classes allowlist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#license-attribution-in-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License attribution in images
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#image-provenance-signature--sbom-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image provenance: signature &amp; SBOM verification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Image provenance: signature &amp; SBOM verification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verify-a-signature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verify a signature
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieve-and-inspect-the-sbom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieve and inspect the SBOM
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference Links
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#threat--signal-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Threat → signal map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prometheus-abuse-alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prometheus abuse alerts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audit-log-abuse-detections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audit-log abuse detections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-playbooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response playbooks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Response playbooks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#suspected-compromised-agc-tenant-scoped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Suspected compromised AGC (tenant-scoped)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#suspected-compromised-gmc-cluster-scoped-tier-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Suspected compromised GMC (cluster-scoped, Tier-0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proxy-saturation--slowloris" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy saturation / slowloris
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#posture-scanning-preventive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posture scanning (preventive)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Posture scanning (preventive)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#manifest-posture--polaris-automated-in-ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manifest posture — polaris (automated, in CI)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cis-benchmark-posture--kube-bench-manual-pre-production" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CIS-benchmark posture — kube-bench (manual, pre-production)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tenant-egress-posture--deliberate-widening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tenant egress posture &amp; deliberate widening
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tenant egress posture &amp; deliberate widening">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#managing-egress-at-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Managing egress at scale
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#priority-classes-the---allowed-priority-classes-allowlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority classes: the --allowed-priority-classes allowlist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#license-attribution-in-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License attribution in images
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#image-provenance-signature--sbom-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image provenance: signature &amp; SBOM verification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Image provenance: signature &amp; SBOM verification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#verify-a-signature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verify a signature
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retrieve-and-inspect-the-sbom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieve and inspect the SBOM
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference Links
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="security-operations-abuse-detection--response">Security Operations: Abuse Detection &amp; Response<a class="headerlink" href="#security-operations-abuse-detection--response" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Audience:</strong> SRE, Security</p>
+</blockquote>
+<p>This runbook turns the abuse
+heuristics in the <a href="../../design/05-security/">threat model</a> into concrete,
+operator-actionable detections. It complements — does not replace — the
+availability/SLO alerting in <a href="../observability/">observability.md</a> and the
+incident-response procedures in <a href="../runbook/">runbook.md</a>.</p>
+<p>The signals here detect <strong>abuse or compromise</strong> (a misbehaving tenant, a
+compromised AGC/GMC, a saturation attack), not ordinary capacity
+degradation. Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped">§5.1</a>
+and <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>
+of the threat model that says "operators should monitor X" is mapped below
+to the metric or audit-log query that surfaces it.</p>
+<p>Two detection substrates are used:</p>
+<ul>
+<li><strong>Prometheus metrics</strong> — emitted by the controllers and proxy today.
+  See <a href="../observability/">observability.md</a> for the full reference and how
+  to scrape them. Alert rules are in <a href="#prometheus-abuse-alerts">§ Prometheus abuse alerts</a>
+  below.</li>
+<li><strong>API-server audit log</strong> — the only substrate that can see a compromised
+  AGC/GMC issuing RBAC-permitted-but-anomalous calls (e.g. a full-body
+  Secret <code>list</code>). These detections require an audit policy that captures
+  the relevant verbs; the controllers cannot self-report calls made
+  out-of-band by a compromised binary. A sample audit policy is tracked
+  separately (see <a href="#audit-log-abuse-detections">§ Audit-log abuse detections</a>).</li>
+</ul>
+<hr />
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="#threat--signal-map">Threat → signal map</a></li>
+<li><a href="#prometheus-abuse-alerts">Prometheus abuse alerts</a></li>
+<li><a href="#audit-log-abuse-detections">Audit-log abuse detections</a></li>
+<li><a href="#response-playbooks">Response playbooks</a></li>
+<li><a href="#suspected-compromised-agc-tenant-scoped">Suspected compromised AGC (tenant-scoped)</a></li>
+<li><a href="#suspected-compromised-gmc-cluster-scoped-tier-0">Suspected compromised GMC (cluster-scoped, Tier-0)</a></li>
+<li><a href="#proxy-saturation--slowloris">Proxy saturation / slowloris</a></li>
+<li><a href="#posture-scanning-preventive">Posture scanning (preventive)</a></li>
+<li><a href="#manifest-posture--polaris-automated-in-ci">Manifest posture — polaris (automated, in CI)</a></li>
+<li><a href="#cis-benchmark-posture--kube-bench-manual-pre-production">CIS-benchmark posture — kube-bench (manual, pre-production)</a></li>
+<li><a href="#tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening</a></li>
+<li><a href="#managing-egress-at-scale">Managing egress at scale</a></li>
+<li><a href="#priority-classes-the-allowed-priority-classes-allowlist">Priority classes: the <code>--allowed-priority-classes</code> allowlist</a></li>
+<li><a href="#license-attribution-in-images">License attribution in images</a></li>
+<li><a href="#image-provenance-signature--sbom-verification">Image provenance: signature &amp; SBOM verification</a></li>
+<li><a href="#verify-a-signature">Verify a signature</a></li>
+<li><a href="#retrieve-and-inspect-the-sbom">Retrieve and inspect the SBOM</a></li>
+<li><a href="#reference-links">Reference Links</a></li>
+</ul>
+<h2 id="threat--signal-map">Threat → signal map<a class="headerlink" href="#threat--signal-map" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Threat (from <a href="../../design/05-security/">05-security.md</a>)</th>
+<th>Abuse signal</th>
+<th>Detection substrate</th>
+<th>Severity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Eviction-Retry API Misuse</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>) — compromised AGC looping <code>rerun-failed-jobs</code></td>
+<td><code>eviction_retries_total</code> rate climbs without matching node pressure; <code>eviction_retries_exhausted_total</code> increments</td>
+<td>Metric</td>
+<td>Ticket → Page on sustained climb</td>
+</tr>
+<tr>
+<td><strong>Proxy Pool Exhaustion / slowloris</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>, M-17/M-18)</td>
+<td><code>proxy_connections_active</code> pinned near capacity; <code>proxy_tunnel_duration_seconds</code> mass in the 6h bucket</td>
+<td>Metric</td>
+<td>Page</td>
+</tr>
+<tr>
+<td><strong>Server-Side Request Forgery (SSRF) / destination probing via proxy</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>, M-2/M-12)</td>
+<td><code>proxy_dial_errors_total</code> spike (workers repeatedly dialing blocked destinations)</td>
+<td>Metric</td>
+<td>Ticket</td>
+</tr>
+<tr>
+<td><strong>DoS via Resource Exhaustion</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>) — rogue workflow exhausting tenant quota</td>
+<td><code>kube_resourcequota</code> used/hard ratio sustained at 1.0</td>
+<td>Metric (kube-state-metrics)</td>
+<td>Ticket</td>
+</tr>
+<tr>
+<td><strong><code>ActionsGateway</code> CR in reserved namespace / spec probing</strong> (<a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped">§5.1</a>)</td>
+<td>Admission webhook <code>403</code> rejection rate</td>
+<td>Metric (controller-runtime)</td>
+<td>Ticket</td>
+</tr>
+<tr>
+<td><strong>Cross-Tenant GitHub App Credential Leakage / key compromise</strong> (<a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped">§5.1</a>)</td>
+<td><code>token_refresh_errors_total</code> spike (key revoked out-of-band, or a forged token rejected)</td>
+<td>Metric</td>
+<td>Page</td>
+</tr>
+<tr>
+<td><strong>Mass tenant provisioning</strong> (<a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped">§5.1</a>) — compromised GMC deploying workloads</td>
+<td><code>managed_gateways</code> jumps unexpectedly</td>
+<td>Metric</td>
+<td>Page</td>
+</tr>
+<tr>
+<td><strong>AGC overpermissioned Secret access</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>, H-2 residual) — compromised AGC binary issuing a full-body Secret <code>list</code></td>
+<td>AGC ServiceAccount <code>list secrets</code> in audit log (legit code path is metadata-only — see <a href="../../plan/security/">security.md H-2</a>)</td>
+<td>Audit log</td>
+<td>Page</td>
+</tr>
+<tr>
+<td><strong>GMC privilege escalation</strong> (<a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped">§5.1</a>) — compromised GMC reading Secrets / writing out-of-tenant resources</td>
+<td>GMC ServiceAccount <code>get secrets</code> beyond reconcile cadence; <code>namespaces patch</code> denied by <code>namespace-psa-guard</code>; any write denied by <code>gmc-tenant-resource-guard</code></td>
+<td>Audit log</td>
+<td>Page</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="prometheus-abuse-alerts">Prometheus abuse alerts<a class="headerlink" href="#prometheus-abuse-alerts" title="Permanent link">&para;</a></h2>
+<p>These rules reference metrics that are emitted today
+(<a href="../observability/#full-metrics-reference">observability.md § Full Metrics Reference</a>).
+Drop them into the same <code>PrometheusRule</code> group as the SLO alerts, or a
+dedicated <code>actions-gateway-security</code> group. Tune thresholds to your fleet.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">groups</span><span class="p">:</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway-security</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">rules</span><span class="p">:</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">      </span><span class="c1"># Page: eviction-retry loop — sustained re-queue rate without a</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="c1"># matching node-pressure event suggests rerun-failed-jobs abuse</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span><span class="c1"># (compromised AGC) rather than genuine eviction churn.</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayEvictionRetryAbuse</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">          </span><span class="no">sum by (namespace, runner_group) (</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">            </span><span class="no">rate(actions_gateway_eviction_retries_total[15m])</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">          </span><span class="no">) &gt; 0.05</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30m</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sustained</span><span class="nv"> </span><span class="s">eviction-retry</span><span class="nv"> </span><span class="s">rate</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}/{{</span><span class="nv"> </span><span class="s">$labels.runner_group</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Eviction</span><span class="nv"> </span><span class="s">retries</span><span class="nv"> </span><span class="s">have</span><span class="nv"> </span><span class="s">run</span><span class="nv"> </span><span class="s">&gt;0.05/s</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">30m.</span><span class="nv"> </span><span class="s">Correlate</span><span class="nv"> </span><span class="s">with</span><span class="nv"> </span><span class="s">node</span><span class="nv"> </span><span class="s">pressure;</span><span class="nv"> </span><span class="s">if</span><span class="nv"> </span><span class="s">nodes</span><span class="nv"> </span><span class="s">are</span><span class="nv"> </span><span class="s">healthy,</span><span class="nv"> </span><span class="s">suspect</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">rerun</span><span class="nv"> </span><span class="s">loop</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">inspect</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">AGC.&quot;</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">      </span><span class="c1"># Page: proxy connection pool saturation (slowloris / tunnel flood).</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">      </span><span class="c1"># Pair with HPA: if replicas are already at maxReplicas this is a</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">      </span><span class="c1"># ceiling, not headroom.</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayProxyConnectionsSaturated</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">          </span><span class="no">actions_gateway_proxy_connections_active &gt; 500</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5m</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Proxy</span><span class="nv"> </span><span class="s">CONNECT</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">saturated</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Active</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">&gt;</span><span class="nv"> </span><span class="s">500</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">5m.</span><span class="nv"> </span><span class="s">Check</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">slowloris</span><span class="nv"> </span><span class="s">(many</span><span class="nv"> </span><span class="s">long-lived</span><span class="nv"> </span><span class="s">tunnels)</span><span class="nv"> </span><span class="s">via</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">tunnel-duration</span><span class="nv"> </span><span class="s">histogram.&quot;</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">      </span><span class="c1"># Page: tunnels accumulating in the top (6h) duration bucket means</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">      </span><span class="c1"># connections are riding the absolute lifetime cap — the M-18</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">      </span><span class="c1"># slowloris signature.</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayProxyLongLivedTunnels</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="w">          </span><span class="no">increase(</span>
+<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="w">            </span><span class="no">actions_gateway_proxy_tunnel_duration_seconds_bucket{le=&quot;3600&quot;}[1h]</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="w">          </span><span class="no">) -</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="w">          </span><span class="no">increase(</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="w">            </span><span class="no">actions_gateway_proxy_tunnel_duration_seconds_bucket{le=&quot;1800&quot;}[1h]</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="w">          </span><span class="no">) &gt; 20</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15m</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Unusually</span><span class="nv"> </span><span class="s">long</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&gt;20</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">lasted</span><span class="nv"> </span><span class="s">30m–1h</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">last</span><span class="nv"> </span><span class="s">hour.</span><span class="nv"> </span><span class="s">GitHub</span><span class="nv"> </span><span class="s">long-polls</span><span class="nv"> </span><span class="s">are</span><span class="nv"> </span><span class="s">sticky</span><span class="nv"> </span><span class="s">but</span><span class="nv"> </span><span class="s">minutes-long;</span><span class="nv"> </span><span class="s">hour-long</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">warrant</span><span class="nv"> </span><span class="s">inspection.&quot;</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a>
+<a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a><span class="w">      </span><span class="c1"># Ticket: dial-error spike — workers repeatedly hitting blocked</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a><span class="w">      </span><span class="c1"># destinations (SSRF probing, or a misconfigured workload).</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayProxyDialErrorSpike</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55" href="#__codelineno-0-55"></a><span class="w">          </span><span class="no">rate(actions_gateway_proxy_dial_errors_total[5m]) &gt; 1</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56" href="#__codelineno-0-56"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10m</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57" href="#__codelineno-0-57"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58" href="#__codelineno-0-58"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59" href="#__codelineno-0-59"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60" href="#__codelineno-0-60"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Proxy</span><span class="nv"> </span><span class="s">upstream</span><span class="nv"> </span><span class="s">dial</span><span class="nv"> </span><span class="s">errors</span><span class="nv"> </span><span class="s">spiking</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61" href="#__codelineno-0-61"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Dial</span><span class="nv"> </span><span class="s">errors</span><span class="nv"> </span><span class="s">&gt;1/s</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">10m.</span><span class="nv"> </span><span class="s">The</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">only</span><span class="nv"> </span><span class="s">reaches</span><span class="nv"> </span><span class="s">GitHub</span><span class="nv"> </span><span class="s">CIDRs</span><span class="nv"> </span><span class="s">+</span><span class="nv"> </span><span class="s">DNS;</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">spike</span><span class="nv"> </span><span class="s">suggests</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">workload</span><span class="nv"> </span><span class="s">probing</span><span class="nv"> </span><span class="s">blocked</span><span class="nv"> </span><span class="s">destinations.&quot;</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62" href="#__codelineno-0-62"></a>
+<a id="__codelineno-0-63" name="__codelineno-0-63" href="#__codelineno-0-63"></a><span class="w">      </span><span class="c1"># Page: token-refresh error spike can mean the GitHub App key was</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64" href="#__codelineno-0-64"></a><span class="w">      </span><span class="c1"># revoked out-of-band — the expected first symptom of key compromise</span>
+<a id="__codelineno-0-65" name="__codelineno-0-65" href="#__codelineno-0-65"></a><span class="w">      </span><span class="c1"># response, or of an attacker&#39;s forged token being rejected.</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66" href="#__codelineno-0-66"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayTokenRefreshAbuse</span>
+<a id="__codelineno-0-67" name="__codelineno-0-67" href="#__codelineno-0-67"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-68" name="__codelineno-0-68" href="#__codelineno-0-68"></a><span class="w">          </span><span class="no">increase(actions_gateway_token_refresh_errors_total[10m]) &gt; 3</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69" href="#__codelineno-0-69"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10m</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70" href="#__codelineno-0-70"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71" href="#__codelineno-0-71"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
+<a id="__codelineno-0-72" name="__codelineno-0-72" href="#__codelineno-0-72"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-73" name="__codelineno-0-73" href="#__codelineno-0-73"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Token</span><span class="nv"> </span><span class="s">refresh</span><span class="nv"> </span><span class="s">failures</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74" href="#__codelineno-0-74"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;If</span><span class="nv"> </span><span class="s">no</span><span class="nv"> </span><span class="s">operator</span><span class="nv"> </span><span class="s">rotated</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">key,</span><span class="nv"> </span><span class="s">treat</span><span class="nv"> </span><span class="s">as</span><span class="nv"> </span><span class="s">possible</span><span class="nv"> </span><span class="s">key</span><span class="nv"> </span><span class="s">compromise.</span><span class="nv"> </span><span class="s">See</span><span class="nv"> </span><span class="s">runbook.md</span><span class="nv"> </span><span class="s">§</span><span class="nv"> </span><span class="s">GitHub</span><span class="nv"> </span><span class="s">App</span><span class="nv"> </span><span class="s">Key</span><span class="nv"> </span><span class="s">Compromise.&quot;</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75" href="#__codelineno-0-75"></a>
+<a id="__codelineno-0-76" name="__codelineno-0-76" href="#__codelineno-0-76"></a><span class="w">      </span><span class="c1"># Page: unexpected jump in managed gateways — a compromised GMC</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77" href="#__codelineno-0-77"></a><span class="w">      </span><span class="c1"># provisioning workloads, or runaway CR creation.</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78" href="#__codelineno-0-78"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayManagedGatewaysJump</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79" href="#__codelineno-0-79"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-80" name="__codelineno-0-80" href="#__codelineno-0-80"></a><span class="w">          </span><span class="no">increase(actions_gateway_managed_gateways[10m]) &gt; 5</span>
+<a id="__codelineno-0-81" name="__codelineno-0-81" href="#__codelineno-0-81"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-82" name="__codelineno-0-82" href="#__codelineno-0-82"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
+<a id="__codelineno-0-83" name="__codelineno-0-83" href="#__codelineno-0-83"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-84" name="__codelineno-0-84" href="#__codelineno-0-84"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Managed</span><span class="nv"> </span><span class="s">ActionsGateway</span><span class="nv"> </span><span class="s">count</span><span class="nv"> </span><span class="s">jumped&quot;</span>
+<a id="__codelineno-0-85" name="__codelineno-0-85" href="#__codelineno-0-85"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;More</span><span class="nv"> </span><span class="s">than</span><span class="nv"> </span><span class="s">5</span><span class="nv"> </span><span class="s">new</span><span class="nv"> </span><span class="s">ActionsGateway</span><span class="nv"> </span><span class="s">CRs</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">10m.</span><span class="nv"> </span><span class="s">Confirm</span><span class="nv"> </span><span class="s">this</span><span class="nv"> </span><span class="s">matches</span><span class="nv"> </span><span class="s">an</span><span class="nv"> </span><span class="s">expected</span><span class="nv"> </span><span class="s">onboarding;</span><span class="nv"> </span><span class="s">otherwise</span><span class="nv"> </span><span class="s">inspect</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">GMC</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">CR</span><span class="nv"> </span><span class="s">audit</span><span class="nv"> </span><span class="s">trail.&quot;</span>
+<a id="__codelineno-0-86" name="__codelineno-0-86" href="#__codelineno-0-86"></a>
+<a id="__codelineno-0-87" name="__codelineno-0-87" href="#__codelineno-0-87"></a><span class="w">      </span><span class="c1"># Ticket: tenant quota pinned at 100% — resource-exhaustion DoS or a</span>
+<a id="__codelineno-0-88" name="__codelineno-0-88" href="#__codelineno-0-88"></a><span class="w">      </span><span class="c1"># genuinely undersized quota. ResourceQuota is the hard cap, so this</span>
+<a id="__codelineno-0-89" name="__codelineno-0-89" href="#__codelineno-0-89"></a><span class="w">      </span><span class="c1"># is contained, but sustained saturation is worth a look.</span>
+<a id="__codelineno-0-90" name="__codelineno-0-90" href="#__codelineno-0-90"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayQuotaExhausted</span>
+<a id="__codelineno-0-91" name="__codelineno-0-91" href="#__codelineno-0-91"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-92" name="__codelineno-0-92" href="#__codelineno-0-92"></a><span class="w">          </span><span class="no">kube_resourcequota{type=&quot;used&quot;}</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93" href="#__codelineno-0-93"></a><span class="w">            </span><span class="no">/ ignoring(type) kube_resourcequota{type=&quot;hard&quot;} &gt;= 1</span>
+<a id="__codelineno-0-94" name="__codelineno-0-94" href="#__codelineno-0-94"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30m</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95" href="#__codelineno-0-95"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-96" name="__codelineno-0-96" href="#__codelineno-0-96"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
+<a id="__codelineno-0-97" name="__codelineno-0-97" href="#__codelineno-0-97"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-98" name="__codelineno-0-98" href="#__codelineno-0-98"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Tenant</span><span class="nv"> </span><span class="s">ResourceQuota</span><span class="nv"> </span><span class="s">saturated</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-99" name="__codelineno-0-99" href="#__codelineno-0-99"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Quota</span><span class="nv"> </span><span class="s">at</span><span class="nv"> </span><span class="s">100%</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">30m.</span><span class="nv"> </span><span class="s">Distinguish</span><span class="nv"> </span><span class="s">legitimate</span><span class="nv"> </span><span class="s">demand</span><span class="nv"> </span><span class="s">(raise</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">platform-owned</span><span class="nv"> </span><span class="s">ResourceQuota</span><span class="nv"> </span><span class="s">on</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">namespace)</span><span class="nv"> </span><span class="s">from</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">job-flood</span><span class="nv"> </span><span class="s">(inspect</span><span class="nv"> </span><span class="s">workflow</span><span class="nv"> </span><span class="s">sources).&quot;</span>
+<a id="__codelineno-0-100" name="__codelineno-0-100" href="#__codelineno-0-100"></a>
+<a id="__codelineno-0-101" name="__codelineno-0-101" href="#__codelineno-0-101"></a><span class="w">      </span><span class="c1"># Ticket: admission webhook rejecting CRs — a tenant repeatedly</span>
+<a id="__codelineno-0-102" name="__codelineno-0-102" href="#__codelineno-0-102"></a><span class="w">      </span><span class="c1"># probing reserved namespaces or invalid specs.</span>
+<a id="__codelineno-0-103" name="__codelineno-0-103" href="#__codelineno-0-103"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayWebhookRejections</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104" href="#__codelineno-0-104"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-105" name="__codelineno-0-105" href="#__codelineno-0-105"></a><span class="w">          </span><span class="no">rate(controller_runtime_webhook_requests_total{code=&quot;403&quot;}[10m]) &gt; 0.1</span>
+<a id="__codelineno-0-106" name="__codelineno-0-106" href="#__codelineno-0-106"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15m</span>
+<a id="__codelineno-0-107" name="__codelineno-0-107" href="#__codelineno-0-107"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-108" name="__codelineno-0-108" href="#__codelineno-0-108"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
+<a id="__codelineno-0-109" name="__codelineno-0-109" href="#__codelineno-0-109"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-110" name="__codelineno-0-110" href="#__codelineno-0-110"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Admission</span><span class="nv"> </span><span class="s">webhook</span><span class="nv"> </span><span class="s">rejecting</span><span class="nv"> </span><span class="s">ActionsGateway</span><span class="nv"> </span><span class="s">requests&quot;</span>
+<a id="__codelineno-0-111" name="__codelineno-0-111" href="#__codelineno-0-111"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sustained</span><span class="nv"> </span><span class="s">403s</span><span class="nv"> </span><span class="s">from</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">validating</span><span class="nv"> </span><span class="s">webhook.</span><span class="nv"> </span><span class="s">Check</span><span class="nv"> </span><span class="s">which</span><span class="nv"> </span><span class="s">principal</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">submitting</span><span class="nv"> </span><span class="s">CRs</span><span class="nv"> </span><span class="s">to</span><span class="nv"> </span><span class="s">reserved</span><span class="nv"> </span><span class="s">namespaces</span><span class="nv"> </span><span class="s">or</span><span class="nv"> </span><span class="s">with</span><span class="nv"> </span><span class="s">invalid</span><span class="nv"> </span><span class="s">specs.&quot;</span>
+</code></pre></div>
+<blockquote>
+<p><strong>Note on labels.</strong> The proxy metrics (<code>actions_gateway_proxy_*</code>) carry no
+intrinsic <code>namespace</code> label — each per-tenant proxy is a separate scrape
+target. The <code>{{ $labels.namespace }}</code> interpolation above resolves from
+the <code>namespace</code> label your <code>ServiceMonitor</code>/scrape config attaches to the
+target, not from the metric itself. If your scrape config does not add it,
+drop the interpolation.</p>
+</blockquote>
+<hr />
+<h2 id="audit-log-abuse-detections">Audit-log abuse detections<a class="headerlink" href="#audit-log-abuse-detections" title="Permanent link">&para;</a></h2>
+<p>The most dangerous abuse signals — a compromised AGC or GMC issuing RBAC
+calls that are <em>permitted</em> but <em>anomalous</em> — are invisible to Prometheus.
+The legitimate code paths avoid them (the AGC enumerates its Secrets
+metadata-only per <a href="../../plan/security/">H-2</a>; the GMC reads Secret bodies
+only during a reconcile via a cache-bypassing <code>Get</code>), so any of the calls
+below originating from a controller ServiceAccount indicates the binary is
+doing something its source does not.</p>
+<p>Detecting these requires an <strong>API-server audit policy</strong> that logs the
+relevant verbs at <code>Metadata</code> level or higher, shipped to a security
+information and event management (SIEM) system or log-based alerting
+backend. A sample policy and its wiring are tracked as a
+separate deliverable; this runbook specifies <em>what to alert on</em> once that
+policy is in place.</p>
+<table>
+<thead>
+<tr>
+<th>Detection</th>
+<th>Audit predicate</th>
+<th>Why it matters</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>AGC full-body Secret list</strong></td>
+<td><code>verb=list resource=secrets</code> by the AGC ServiceAccount (<code>system:serviceaccount:&lt;tenant-ns&gt;:actions-gateway-controller</code>) returning object bodies</td>
+<td>Legit AGC code lists Secret <em>metadata</em> only (<a href="../../plan/security/">H-2 residual</a>). A body <code>list</code> means out-of-band enumeration of user-managed Secrets.</td>
+<td>Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image.</td>
+</tr>
+<tr>
+<td><strong>AGC Secret access outside its label scope</strong></td>
+<td><code>verb=get resource=secrets</code> by the AGC SA for Secret names not matching <code>actions-gateway/runner-group=*</code> or the AGC's <code>gitHubAppRef</code></td>
+<td>The AGC only needs its agent-pool and payload Secrets. A <code>get</code> on a developer's <code>ghcr-pull-token</code> is exfiltration.</td>
+<td>As above.</td>
+</tr>
+<tr>
+<td><strong>GMC Secret reads beyond reconcile cadence</strong></td>
+<td><code>verb=get resource=secrets</code> by the GMC SA (<code>system:serviceaccount:gmc-system:gmc-controller-manager</code>) at a rate far above the reconcile/requeue cadence</td>
+<td>The GMC reads each <code>gitHubAppRef</code> Secret only during reconcile (cache-bypassed <code>Get</code>). A high <code>get</code> rate is credential harvesting.</td>
+<td>Treat the GMC as a Tier-0 compromise: isolate the GMC pod, rotate <strong>all</strong> tenant GitHub App keys, audit which Secrets were read.</td>
+</tr>
+<tr>
+<td><strong>GMC namespace-PSA escalation attempt</strong></td>
+<td><code>namespace-psa-guard</code> ValidatingAdmissionPolicy <code>deny</code> events for the GMC SA</td>
+<td>The guard (<a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a>) blocks the GMC relabelling non-tenant namespaces (e.g. <code>kube-system</code> → <code>privileged</code>). A denial means the GMC tried.</td>
+<td>A denial is a successful block, but a <em>signal</em> of compromise. Isolate the GMC and investigate.</td>
+</tr>
+<tr>
+<td><strong>GMC out-of-tenant resource write</strong></td>
+<td><code>gmc-tenant-resource-guard</code> ValidatingAdmissionPolicy <code>deny</code> events for the GMC SA</td>
+<td>The guard blocks the GMC creating/updating/deleting Deployments, RoleBindings, Secrets, NetworkPolicies, etc. in any namespace not marked <code>actions-gateway.github.com/tenant=true</code> (e.g. a Deployment or Secret into <code>kube-system</code>). A denial means the GMC tried (Q121/Q122).</td>
+<td>A denial is a successful block but a <em>signal</em> of compromise. Isolate the GMC and investigate.</td>
+</tr>
+<tr>
+<td><strong>GMC workload creation outside reconcile</strong></td>
+<td><code>verb=create resource=deployments|roles|rolebindings</code> by the GMC SA in a <em>marked tenant</em> namespace with no corresponding <code>ActionsGateway</code> CR change</td>
+<td>The <code>gmc-tenant-resource-guard</code> VAP already blocks writes into <em>unmarked</em> namespaces; this catches the residual — provisioning inside a legitimate tenant namespace without a triggering CR edit, which is lateral movement within the GMC's confined scope.</td>
+<td>Isolate the GMC; diff provisioned resources against live <code>ActionsGateway</code> CRs.</td>
+</tr>
+</tbody>
+</table>
+<p>Until the audit policy lands, these threats are mitigated structurally
+(RBAC scope, cache-bypass, the <code>namespace-psa-guard</code> and
+<code>gmc-tenant-resource-guard</code> VAPs, no Secret informer) but write-confinement
+denials aside are <strong>not observable</strong> — there is no alert that fires if a
+compromised binary exercises its standing <em>read</em> permissions. Closing that
+gap is the value of the audit policy. Note the two VAPs confine GMC <em>writes</em>
+(create/update/delete) only; Secret <em>reads</em> (<code>get</code>/<code>list</code>/<code>watch</code>) cannot be
+gated at admission and remain cluster-wide at the RBAC layer — the audit
+policy is the only detective control for them (see
+<a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped">§5.1</a>).</p>
+<hr />
+<h2 id="response-playbooks">Response playbooks<a class="headerlink" href="#response-playbooks" title="Permanent link">&para;</a></h2>
+<p>For the full credential-rotation procedure see
+<a href="../runbook/#github-app-key-compromise">runbook.md § GitHub App Key Compromise</a>.
+The abuse-specific first moves:</p>
+<h3 id="suspected-compromised-agc-tenant-scoped">Suspected compromised AGC (tenant-scoped)<a class="headerlink" href="#suspected-compromised-agc-tenant-scoped" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Contain.</strong> Scale the AGC to zero so it stops acting:
+   <code>kubectl scale deploy/actions-gateway-controller -n &lt;namespace&gt; --replicas=0</code>.
+   In-flight jobs will be cancelled by GitHub when <code>renewjob</code> lapses; this
+   is acceptable during a suspected breach.</li>
+<li><strong>Rotate.</strong> Rotate the tenant's GitHub App key
+   (<a href="../runbook/#github-app-key-compromise">runbook.md § GitHub App Key Compromise</a>) —
+   the AGC held it in memory.</li>
+<li><strong>Scope.</strong> Check the API-server audit log for Secret <code>get</code>/<code>list</code> calls
+   by the AGC ServiceAccount; enumerate which tenant Secrets may have been
+   read.</li>
+<li><strong>Verify the image.</strong> Confirm the running AGC image digest matches the
+   GMC-pinned <code>AGC_IMAGE</code> (digest pinning is enforced — see
+   <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2 Supply-Chain</a>).</li>
+</ol>
+<h3 id="suspected-compromised-gmc-cluster-scoped-tier-0">Suspected compromised GMC (cluster-scoped, Tier-0)<a class="headerlink" href="#suspected-compromised-gmc-cluster-scoped-tier-0" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Contain.</strong> Scale the GMC to zero:
+   <code>kubectl scale deploy/gmc-controller-manager -n gmc-system --replicas=0</code>.
+   Existing tenant gateways keep running (the GMC is not in the data path —
+   see <a href="../runbook/#gmc-total-failure">runbook.md § GMC Total Failure</a>); only
+   provisioning and reconcile pause.</li>
+<li><strong>Rotate everything.</strong> A compromised GMC can read every tenant's
+   <code>gitHubAppRef</code> Secret. Rotate <strong>all</strong> tenant GitHub App keys.</li>
+<li><strong>Scope.</strong> Audit GMC ServiceAccount <code>get secrets</code> and
+   <code>create</code>/<code>patch</code> calls; reconcile provisioned resources against live
+   <code>ActionsGateway</code> CRs to find anything created off-CR.</li>
+<li><strong>Verify the image.</strong> Confirm the GMC image digest against the deployed
+   manifest before scaling back up.</li>
+</ol>
+<h3 id="proxy-saturation--slowloris">Proxy saturation / slowloris<a class="headerlink" href="#proxy-saturation--slowloris" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Confirm the shape.</strong> Long-lived tunnels in the
+   <code>proxy_tunnel_duration_seconds</code> top bucket + pinned
+   <code>proxy_connections_active</code> ⇒ slowloris. Spread across many short tunnels
+   ⇒ genuine burst (let the HPA absorb it).</li>
+<li><strong>Identify the source.</strong> The proxy serves one tenant; the offending
+   tunnels originate from worker pods in that tenant namespace. Inspect
+   recent worker pods for the responsible workflow.</li>
+<li><strong>Mitigate.</strong> The proxy enforces a per-read idle deadline (5m) and a 6h
+   absolute lifetime cap (M-18), so hung tunnels self-terminate. If a single
+   workflow is the culprit, cancel its run in the GitHub Actions UI; the
+   worker pod and its tunnels are released on job completion.</li>
+</ol>
+<hr />
+<h2 id="posture-scanning-preventive">Posture scanning (preventive)<a class="headerlink" href="#posture-scanning-preventive" title="Permanent link">&para;</a></h2>
+<p>The detections above catch abuse at runtime. Two scanners catch posture
+regressions <em>before</em> they reach a cluster — one in CI on every chart change,
+one a pre-production manual step against the live cluster.</p>
+<h3 id="manifest-posture--polaris-automated-in-ci">Manifest posture — polaris (automated, in CI)<a class="headerlink" href="#manifest-posture--polaris-automated-in-ci" title="Permanent link">&para;</a></h3>
+<p><a href="https://polaris.docs.fairwinds.com/">polaris</a> audits the Kubernetes
+security/best-practice posture of the <strong>shipped install artifact</strong>: the CI
+<code>polaris</code> job (in <a href="../../.github/workflows/security-scan.yml"><code>.github/workflows/security-scan.yml</code></a>)
+renders the <a href="../../charts/actions-gateway">Helm chart</a> and checks the rendered
+manifests. It runs on every PR that touches the chart or the <code>Makefile</code>, and on
+every push to <code>main</code>.</p>
+<ul>
+<li><strong>What it gates.</strong> The scan fails the PR on any <code>danger</code> finding — a
+  privileged container, a host namespace, dangerous capabilities, a missing
+  <code>securityContext</code>, a floating <code>:latest</code> image tag, and similar real
+  regressions. A change that weakens the chart's hardened defaults cannot merge.</li>
+<li><strong>What it reports but does not block.</strong> <code>warning</code>-level findings are printed
+  for visibility. The handful that are false positives against a Helm-packaged
+  operator chart (the controller's required ServiceAccount-token automount, the
+  cross-document NetworkPolicy match polaris can't resolve statically, the
+  <code>IfNotPresent</code> pull policy that is correct for a digest-pinned image, and
+  Helm's <code>app.kubernetes.io/instance</code> labelling) are tuned to <code>ignore</code> in
+  <a href="../../charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a>,
+  each with a justifying comment. <strong>Never relax a <code>danger</code> check to silence a
+  finding — fix the chart instead</strong> (secure-by-default).</li>
+<li><strong>Run it yourself.</strong> <code>make polaris-scan</code> (needs <code>helm</code> and <code>polaris</code> on
+  <code>PATH</code>) runs the exact CI gate locally. It renders with a placeholder image
+  digest so the audit reflects the production, digest-pinned posture — a digest
+  is also required for the chart to render at all (an empty <code>gmc.image.digest</code>
+  fails the render; <code>make manifest-validate</code> asserts that rejection), so the
+  placeholder cannot mask a fail-open default.</li>
+</ul>
+<blockquote>
+<p>The scan audits <em>workload posture in the generated manifests</em>. It does not
+replace pinning real image digests (<code>gmc.image.digest</code>,
+<code>agc.image.digest</code>, <code>proxy.image.digest</code> in <code>values.yaml</code>) at install time —
+see <a href="../tenant-onboarding/">tenant-onboarding.md</a> and the chart README.</p>
+</blockquote>
+<h3 id="cis-benchmark-posture--kube-bench-manual-pre-production">CIS-benchmark posture — kube-bench (manual, pre-production)<a class="headerlink" href="#cis-benchmark-posture--kube-bench-manual-pre-production" title="Permanent link">&para;</a></h3>
+<p>polaris scans our <em>manifests</em>; it cannot see how the <em>cluster itself</em> is
+configured (kubelet flags, API-server settings, etcd permissions, control-plane
+file modes). Those are the province of the
+<a href="https://www.cisecurity.org/benchmark/kubernetes">CIS Kubernetes Benchmark</a>,
+which <a href="https://github.com/aquasecurity/kube-bench">kube-bench</a> checks against a
+<strong>live node</strong> — so it cannot run in our manifest-only CI and is instead a
+pre-production checklist item the cluster operator runs once per cluster (and
+after any control-plane upgrade).</p>
+<p>Run it as a Job on the cluster you are about to onboard tenants onto:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Runs kube-bench on every node via the upstream Job manifest, then collects</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># the report. Requires cluster-admin. Pin to a released tag, not main.</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/aquasecurity/kube-bench/v0.10.7/job.yaml
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">condition</span><span class="o">=</span><span class="nb">complete</span><span class="w"> </span>job/kube-bench<span class="w"> </span>--timeout<span class="o">=</span>120s
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>job/kube-bench
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>job<span class="w"> </span>kube-bench
+</code></pre></div>
+<p>Triage the report against this operator's needs:</p>
+<ul>
+<li><strong><code>[FAIL]</code> on control-plane / kubelet hardening</strong> (e.g. <code>--anonymous-auth=false</code>,
+  <code>--authorization-mode</code> not <code>AlwaysAllow</code>, read-only etcd data dir,
+  <code>--protect-kernel-defaults=true</code>) — fix at the cluster layer before
+  onboarding. These are cluster-admin remediations, not chart settings; managed
+  control planes (EKS/GKE/AKS) pass most of them by default and expose the rest
+  as cluster config.</li>
+<li><strong>NetworkPolicy / PodSecurity benchmark items</strong> — this operator already
+  satisfies the workload half: the chart ships GMC NetworkPolicies
+  (<code>networkPolicy.enabled=true</code>) and the GMC stamps Pod Security Admission
+  labels per tenant <code>securityProfile</code>. Confirm the cluster has a
+  NetworkPolicy-enforcing CNI (Calico/Cilium; kindnet does <strong>not</strong> enforce) and
+  the <code>PodSecurity</code> admission plugin enabled, or those controls are inert. To
+  prove enforcement on a live cluster, run the negative probes in
+  <a href="../../design/network-architecture/#how-to-validate-network-isolation">network-architecture.md § How to Validate Network Isolation</a> —
+  the "blocked" probes must actually time out (validated under Calico on a
+  kind cluster, Q7b 2026-06-11).</li>
+<li><strong>Cluster DNS must be labelled <code>k8s-app=kube-dns</code> in <code>kube-system</code>.</strong> Tenant
+  NetworkPolicies confine port-53 egress to the cluster DNS service rather than
+  leaving DNS open to any resolver (Q105 — an open DNS path is an unattributed
+  exfiltration side-channel). The selector matches the conventional CoreDNS
+  deployment: pods labelled <code>k8s-app: kube-dns</code> in the <code>kube-system</code> namespace
+  (matched via the immutable <code>kubernetes.io/metadata.name</code> namespace label). This
+  is the default on every mainstream distribution and managed control plane. If
+  your cluster runs DNS under a different label or namespace <strong>and</strong> uses an
+  enforcing CNI, tenant pods will fail to resolve any name until you either
+  relabel the DNS pods or set <code>spec.proxy.managedNetworkPolicy: false</code> and supply
+  your own DNS egress rule. Symptom: tenant workloads time out on every lookup
+  while non-DNS connectivity is unaffected.</li>
+<li><strong>NodeLocal DNSCache (<code>node-local-dns</code>) is supported.</strong> With node-local-dns,
+  pods send queries to a link-local IP (default <code>169.254.20.10</code>) served by a
+  <code>hostNetwork</code> <code>node-local-dns</code> pod, not to a <code>k8s-app: kube-dns</code> CoreDNS pod —
+  which the kube-dns podSelector cannot match. The tenant NetworkPolicies
+  therefore allow port-53 egress to the link-local block <code>169.254.0.0/16</code> as a
+  second peer alongside the kube-dns selector (Q136), so both topologies resolve
+  out of the box with no operator action. Link-local is non-routable and
+  node-scoped, so this preserves the no-arbitrary-resolver property of Q105 —
+  the link-local block cannot reach an external resolver. If your node-local-dns
+  cache listens on a non-default address <em>outside</em> <code>169.254.0.0/16</code>, set
+  <code>spec.proxy.managedNetworkPolicy: false</code> and supply your own DNS egress rule,
+  or add an additive NetworkPolicy — see
+  <a href="#tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening</a>.</li>
+<li><strong>Findings that don't apply</strong> (managed control plane hides the file, a check
+  for a component you don't run) — record the justification alongside the
+  cluster's onboarding ticket.</li>
+</ul>
+<p>The goal is <strong>zero critical (<code>[FAIL]</code>) findings that this stack depends on</strong>
+before the first production tenant (per
+<a href="../../plan/milestone-5/">milestone-5.md</a> §3).</p>
+<h2 id="tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening<a class="headerlink" href="#tenant-egress-posture--deliberate-widening" title="Permanent link">&para;</a></h2>
+<p><strong>The secure default is controller-managed and not opt-in.</strong> For every tenant,
+the GMC reconciles three NetworkPolicies that confine worker (and AGC) egress to
+exactly what the design requires: DNS to the cluster DNS service only, and all
+GitHub-bound traffic through the per-tenant egress proxy (whose source IPs are
+attributable). Worker pods cannot reach arbitrary destinations directly — that is
+the per-tenant egress-IP isolation property, and it is present automatically the
+moment a tenant is provisioned. Do <strong>not</strong> hand-edit the GMC-managed policies
+(<code>actions-gateway-workload</code>, <code>actions-gateway-controller</code>, <code>actions-gateway-proxy</code>):
+the controller reconciles them back, and the proxy policy's GitHub-CIDR rule is
+refreshed from <code>api.github.com/meta</code> every 24h, so a hand-edit would be reverted
+or go stale. See <a href="../../design/network-architecture/#networkpolicy-rules">network-architecture.md</a>
+for the full policy set.</p>
+<p>Some jobs legitimately need egress the proxy cannot carry — the CONNECT proxy
+tunnels HTTP/HTTPS to GitHub CIDRs only, so a non-HTTP protocol (a database, SSH,
+a raw TCP/UDP service), an internal artifact store or package mirror, or a
+specific custom DNS resolver is unreachable by default. <strong>Grant that egress with
+an <em>additional</em>, additive NetworkPolicy in the tenant namespace — not by relaxing
+the managed defaults.</strong> NetworkPolicies are additive (a union of allows), so an
+extra policy widens egress for the pods it selects without touching the floor.</p>
+<p>Worker pods carry two selectable labels, so you can target all workers or a single
+runner type:</p>
+<ul>
+<li><code>actions-gateway/component: workload</code> — every worker (and the AGC) in the tenant</li>
+<li><code>actions-gateway/runner-group: &lt;name&gt;</code> — workers of one specific RunnerGroup</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Applied by a platform admin (requires NetworkPolicy write in the tenant</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># namespace) — grants ONE runner type extra egress. CIDR + port + protocol.</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">networking.k8s.io/v1</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NetworkPolicy</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-builders-extra-egress</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nt">podSelector</span><span class="p">:</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">      </span><span class="nt">actions-gateway/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">workload</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">      </span><span class="nt">actions-gateway/runner-group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-builders</span><span class="w">   </span><span class="c1"># omit this line for tenant-wide</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span><span class="nt">policyTypes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">Egress</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span><span class="nt">egress</span><span class="p">:</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">to</span><span class="p">:</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">ipBlock</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">cidr</span><span class="p">:</span><span class="w"> </span><span class="nv">10.50.0.0/24</span><span class="p p-Indicator">}</span><span class="w">            </span><span class="c1"># internal registry / artifact store</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">      </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">443</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">5432</span><span class="p p-Indicator">}</span><span class="w">              </span><span class="c1"># e.g. Postgres</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">to</span><span class="p">:</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">ipBlock</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">cidr</span><span class="p">:</span><span class="w"> </span><span class="nv">10.50.0.53/32</span><span class="p p-Indicator">}</span><span class="w">           </span><span class="c1"># custom DNS resolver</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">      </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">UDP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">53</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">53</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<p><strong>This is a deliberate, documented trade-off, not a routine knob.</strong> Egress to the
+listed destinations leaves with the worker's own pod IP and therefore <strong>bypasses
+the per-tenant proxy egress-IP attribution</strong> for those flows. Untrusted job code
+(e.g. fork-PR workflows) can use any hole you open, so:</p>
+<ul>
+<li>Keep the allowlist as narrow as the use case requires — specific CIDRs and
+  ports, never a <code>0.0.0.0/0</code> catch-all.</li>
+<li>Authoring it requires namespace NetworkPolicy-write, so it is inherently a
+  platform/admin decision — which is the correct authority for relaxing
+  attribution. Track each grant in the tenant's onboarding ticket.</li>
+<li><strong>For a custom DNS resolver specifically, prefer a cluster-level CoreDNS
+  <code>forward</code> zone</strong> over reopening worker DNS: that keeps resolution on the
+  attributable in-cluster path while still resolving the names you need.</li>
+</ul>
+<p>If instead you want to take over the <strong>proxy's</strong> own egress policy (for example
+to express GitHub egress as FQDN rules under Cilium/Calico), set
+<code>spec.proxy.managedNetworkPolicy: false</code> on the <code>ActionsGateway</code> — the GMC then
+stops managing the proxy GitHub-CIDR rule and you own keeping it current. That is
+the supported, explicit hand-off; the managed path remains the default.</p>
+<h3 id="managing-egress-at-scale">Managing egress at scale<a class="headerlink" href="#managing-egress-at-scale" title="Permanent link">&para;</a></h3>
+<p>This project deliberately does <strong>not</strong> ship tooling to manage the <em>widening</em>
+policies — that is a cluster/platform concern with a mature ecosystem, and owning
+it here would re-create the coupling the managed-floor split avoids. What the
+project commits to instead is a stable <strong>integration surface</strong>: every worker pod
+carries two labels you can target from any policy engine, and these are a
+supported contract (they will not be renamed without a migration note):</p>
+<ul>
+<li><code>actions-gateway/component: workload</code> — all worker (and AGC) pods in the tenant</li>
+<li><code>actions-gateway/runner-group: &lt;name&gt;</code> — workers of one specific RunnerGroup</li>
+</ul>
+<p>For anything beyond a handful of static CIDRs, prefer the ecosystem over
+hand-written <code>NetworkPolicy</code>:</p>
+<ul>
+<li><strong>Your CNI's richer egress</strong> — <code>CiliumNetworkPolicy</code> <code>toFQDNs</code> (DNS-aware,
+  hostname allowlists), Calico <code>NetworkSet</code> (reusable CIDR groups) / DNS policy,
+  and policy tiers. This is the right tool for "let <code>gpu-builders</code> reach
+  <code>*.internal.corp</code> and a database." It pairs with the
+  <code>spec.proxy.managedNetworkPolicy: false</code> hand-off above.</li>
+<li><strong><code>AdminNetworkPolicy</code></strong> (<a href="https://network-policy-api.sigs.k8s.io/">sig-network <code>network-policy-api</code></a>)
+  — cluster-admin-level, cross-namespace egress baselines (<code>AdminNetworkPolicy</code> /
+  <code>BaselineAdminNetworkPolicy</code>), implemented by Cilium/Calico/OVN-Kubernetes. The
+  most direct fit for "platform admin governs egress across all tenant
+  namespaces" — maturing (alpha→beta), so confirm your CNI's support level.</li>
+<li><strong>Kyverno / OPA Gatekeeper</strong> — policy-as-code to <em>generate</em> per-namespace NPs
+  (e.g. a templated default-deny or egress allowance keyed off a namespace label)
+  and to <em>validate</em> that any admin-added egress conforms to your guardrails.</li>
+</ul>
+<p>The labels above are what make all of these targetable; the secure floor stays
+GMC-managed regardless.</p>
+<hr />
+<h2 id="priority-classes-the---allowed-priority-classes-allowlist">Priority classes: the <code>--allowed-priority-classes</code> allowlist<a class="headerlink" href="#priority-classes-the---allowed-priority-classes-allowlist" title="Permanent link">&para;</a></h2>
+<p>A tenant <code>RunnerGroup</code> can request scheduling priority for its worker pods via
+<code>priorityTiers[].priorityClassName</code>, which the AGC stamps onto the pods as
+<code>spec.priorityClassName</code>. <code>PriorityClass</code> is a <strong>cluster-scoped</strong> object carrying
+a priority <em>value</em> and a <code>preemptionPolicy</code> (Kubernetes default
+<code>PreemptLowerPriority</code>). Left unvalidated, a tenant could name a high-priority,
+preempting class and have the scheduler <strong>evict other tenants' running worker
+pods</strong> to schedule its own — a cross-tenant isolation break (Q132).</p>
+<p>The platform owns which classes a tenant may use:</p>
+<ol>
+<li><strong>The platform pre-creates the <code>PriorityClass</code> objects.</strong> The GMC never
+   creates cluster-scoped objects (same platform-ownership model as the
+   <code>ResourceQuota</code>, Q130). Create allowlisted classes with
+   <strong><code>preemptionPolicy: Never</code></strong> unless cross-tenant preemption is genuinely
+   intended for that tier — <code>PriorityClass</code> is global, so a <code>PreemptLowerPriority</code>
+   class lets <em>any</em> tenant that uses it evict <em>any</em> lower-priority pod cluster-wide,
+   across tenant boundaries.</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scheduling.k8s.io/v1</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClass</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nt">preemptionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span><span class="w">   </span><span class="c1"># orders ahead in scheduling without evicting others</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Standard</span><span class="nv"> </span><span class="s">self-hosted</span><span class="nv"> </span><span class="s">runner</span><span class="nv"> </span><span class="s">worker</span><span class="nv"> </span><span class="s">pods.&quot;</span>
+</code></pre></div>
+<ol>
+<li><strong>The platform allowlists the names on the GMC.</strong> Set the
+   <code>--allowed-priority-classes</code> flag (comma-separated) on the GMC controller. The
+   validating webhook rejects any <code>ActionsGateway</code> whose
+   <code>runnerGroups[].priorityTiers[].priorityClassName</code> is not on the list, naming
+   both the offending class and the permitted set.</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># GMC Deployment / Helm values — args on the controller-manager container</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">args</span><span class="p">:</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-priority-classes=runner-standard,runner-opportunistic</span>
+</code></pre></div>
+<p><strong>An empty/unset allowlist forbids every <code>priorityTiers</code> PriorityClass
+   reference</strong> (secure default): out of the box no tenant can set a
+   <code>PriorityClass</code>. Tenants that only need a soft concurrency ceiling can use
+   <code>maxWorkers</code> instead, which requires no <code>PriorityClass</code>.</p>
+<p>There is deliberately no tenant-settable per-tier <code>preemptionPolicy</code> field;
+preemption is governed entirely by the platform-created <code>PriorityClass</code> object.
+See <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2 — Cross-Tenant Pod Preemption via PriorityClass</a>.</p>
+<hr />
+<h2 id="license-attribution-in-images">License attribution in images<a class="headerlink" href="#license-attribution-in-images" title="Permanent link">&para;</a></h2>
+<p>The compiled binaries statically link third-party Go modules (MIT/BSD/Apache/ISC/…),
+whose licenses require reproducing their copyright/notice text wherever the
+binaries are redistributed — and a container image is a redistribution
+(Apache-2.0 §4(d), the MIT/BSD reproduce-the-notice clauses). Each of the four
+production images therefore ships its license attribution under <strong><code>/licenses/</code></strong>,
+the <a href="https://github.com/redhat-openshift-ecosystem/openshift-preflight">Red Hat/OpenShift container-certification</a>
+convention, which pairs with the <code>org.opencontainers.image.licenses="Apache-2.0"</code>
+label every image already carries.</p>
+<ul>
+<li><strong>What is bundled.</strong> <code>/licenses/</code> in the <code>agc</code>, <code>gmc</code>, <code>proxy</code>, and <code>worker</code>
+  images contains three files:</li>
+<li><code>LICENSE</code> — the project's own Apache-2.0 license.</li>
+<li><code>NOTICE</code> — the project's Apache-style copyright/attribution notice.</li>
+<li><code>THIRD-PARTY-NOTICES</code> — the aggregated license and notice texts of every
+    vendored module statically linked into the binary.</li>
+</ul>
+<p>The <code>worker</code> image is built on the upstream <code>actions-runner</code> base, which
+  carries its own license files for its components; the <code>/licenses/</code> files we add
+  cover only the wrapper binary and its dependencies.</p>
+<ul>
+<li><strong>Inspect it on a running pod.</strong> The files are plain text owned root-readable,
+  so any container can read them:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/gmc<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>/licenses/LICENSE
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># distroless images (agc/gmc/proxy) have no shell; use the worker base&#39;s shell,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># or copy a file out of any of them:</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;namespace&gt;/&lt;pod&gt;:/licenses/THIRD-PARTY-NOTICES<span class="w"> </span>./THIRD-PARTY-NOTICES
+</code></pre></div>
+<ul>
+<li><strong>How it is kept current.</strong> <code>THIRD-PARTY-NOTICES</code> lives at the repo root and is
+  <strong>generated and committed</strong> by <code>make third-party-notices</code>
+  (<a href="../../scripts/gen-third-party-notices.sh"><code>scripts/gen-third-party-notices.sh</code></a>),
+  which concatenates the <code>LICENSE</code>/<code>NOTICE</code>/<code>COPYING</code> files of every module under
+  the committed, version-pinned <code>vendor/</code> tree — offline, no network or module
+  cache. The CI <code>license-notices</code> workflow runs <code>make third-party-notices-check</code>
+  on every change to <code>vendor/**</code> (or the generator) and fails the PR if the
+  committed file is stale, so a dependency add/remove/bump cannot ship without
+  refreshed attribution.</li>
+</ul>
+<hr />
+<h2 id="image-provenance-signature--sbom-verification">Image provenance: signature &amp; SBOM verification<a class="headerlink" href="#image-provenance-signature--sbom-verification" title="Permanent link">&para;</a></h2>
+<p>The four first-party images (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>) are published to
+GHCR by the <a href="../../.github/workflows/publish.yml"><code>publish.yml</code></a> workflow on every
+<code>v*</code> release tag (the maintainer-facing cut-a-release procedure is in
+<a href="../release/">release.md</a>). Each one is:</p>
+<ul>
+<li><strong>Multi-arch</strong> (<code>linux/amd64</code> + <code>linux/arm64</code>): the published ref is an OCI
+  image <strong>index</strong>; the digest you pin at install time is the index digest, and
+  the kubelet resolves the node's per-arch manifest from it at pull time.</li>
+<li><strong>Signed keyless with <a href="https://docs.sigstore.dev/">cosign</a>.</strong> There is no
+  signing key to distribute or rotate — the signature is bound to a short-lived
+  <a href="https://docs.sigstore.dev/certificate_authority/overview/">Fulcio</a> certificate
+  issued against the GitHub Actions OIDC identity of the publish workflow and
+  recorded in the public <a href="https://docs.sigstore.dev/logging/overview/">Rekor</a>
+  transparency log. You verify <em>who signed it</em> (the workflow identity), not a key
+  you have to trust out-of-band. Signing is <strong>recursive</strong>: the index <em>and</em> each
+  per-arch manifest carry a signature, so verification succeeds against the
+  pinned index digest and also against a per-arch manifest digest (e.g. an image
+  mirrored or referenced by platform-specific manifest).</li>
+<li><strong>Accompanied by an SPDX-JSON SBOM per architecture</strong> (generated with
+  <a href="https://github.com/anchore/syft">syft</a>) attached as a cosign attestation to
+  that architecture's manifest, so you can enumerate exactly what shipped in the
+  image your nodes actually run.</li>
+</ul>
+<h3 id="verify-a-signature">Verify a signature<a class="headerlink" href="#verify-a-signature" title="Permanent link">&para;</a></h3>
+<p>Before deploying — or as a forensic step when investigating a suspected image
+swap (the "Verify the image" step in the
+<a href="#suspected-compromised-agc-tenant-scoped">compromised-AGC</a> and
+<a href="#suspected-compromised-gmc-cluster-scoped-tier-0">compromised-GMC</a> playbooks) —
+confirm the image was signed by <em>this project's</em> publish workflow:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Pin the identity to the publish workflow on a release tag, and the issuer to</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># GitHub&#39;s OIDC provider. A signature from any other identity (or none) fails.</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;
+</code></pre></div>
+<ul>
+<li><strong>A <code>cosign verify</code> failure is a stop-ship / incident signal.</strong> It means the
+  image was not signed by the publish workflow — a locally built, tampered, or
+  third-party image. Do not deploy it; if it is already running, treat it as a
+  suspected supply-chain compromise (isolate per the playbooks above).</li>
+<li>Always verify by <strong>digest</strong> (<code>@sha256:…</code>) for the running workload — a tag is
+  mutable; the digest is the bytes. <code>kubectl get pod &lt;p&gt; -o jsonpath='{.status.containerStatuses[*].imageID}'</code>
+  gives the digest actually pulled.</li>
+<li>The same <code>--certificate-identity-regexp</code> / <code>--certificate-oidc-issuer</code> pair is
+  what a cluster-admission policy engine (Kyverno <code>verifyImages</code>, Sigstore policy
+  controller) should enforce so unsigned images can't run at all — that
+  cluster-wide enforcement is the operator's to configure (the gateway does not
+  ship it, mirroring the registry-allowlist split in
+  <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2 Supply-Chain</a>).</li>
+</ul>
+<h3 id="retrieve-and-inspect-the-sbom">Retrieve and inspect the SBOM<a class="headerlink" href="#retrieve-and-inspect-the-sbom" title="Permanent link">&para;</a></h3>
+<p>The SBOMs ride with the image as signed attestations — <strong>one per architecture,
+attached to that architecture's manifest digest</strong> (not to the index, so the
+SBOM you audit is exactly what your nodes run) — and are also uploaded as build
+artifacts on each publish run. To pull and inspect one from the registry,
+resolve the per-arch digest from the index first:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Resolve the manifest digest for the architecture you are auditing.</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.manifests[] | select(.platform.os == &quot;linux&quot; and .platform.architecture == &quot;amd64&quot;) | .digest&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Download that arch&#39;s SPDX-JSON SBOM attestation, verifying its keyless signature first.</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="s2">&quot;ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>gmc.spdx.json
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.packages[].name&#39;</span><span class="w"> </span>gmc.spdx.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+</code></pre></div>
+<p>PR CI (<a href="../../.github/workflows/security-scan.yml"><code>security-scan.yml</code></a>) builds
+each image and generates the same SBOM as a build artifact, so SBOM generation is
+exercised on every code PR — but <strong>signing and attestation run only on
+publish</strong> (they need a registry push and the publish workflow's OIDC identity).
+A green PR therefore proves the image builds and the SBOM generates; it does not
+exercise the cosign sign/attest path.</p>
+<hr />
+<h2 id="reference-links">Reference Links<a class="headerlink" href="#reference-links" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../../design/05-security/">Threat model (05-security.md)</a> — the abuse heuristics this runbook operationalises</li>
+<li><a href="../observability/">observability.md</a> — full metrics reference and SLO alerting</li>
+<li><a href="../runbook/">runbook.md</a> — incident response and day-2 operations</li>
+<li><a href="../troubleshooting/">troubleshooting.md</a> — symptom → diagnosis → remediation</li>
+<li><a href="../../plan/security/">Security review findings (plan/security.md)</a> — per-finding status, including H-2 and the audit-policy follow-on</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../troubleshooting/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Troubleshooting">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Troubleshooting
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../release/" class="md-footer__link md-footer__link--next" aria-label="Next: Release">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Release
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>
