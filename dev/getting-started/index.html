@@ -2386,9 +2386,11 @@ exact commands to reproduce it.</p>
 <p>The recommended shape for a new tenant is the <strong>v2 API</strong>
 (<code>actions-gateway.com/v2alpha1</code>) — a decomposed <code>ActionsGateway</code> +
 <code>RunnerSet</code> + <code>RunnerTemplate</code> (+ optional <code>EgressProxy</code>), shown in
-<a href="#4-create-your-gateway-and-runner-set-v2-recommended">Step 4</a> below. It is
-<strong>alpha</strong> (the schema may still change before it graduates toward <code>v2beta1</code>),
-but it is the direction the project is going and where new capabilities land.
+<a href="#4-create-your-gateway-and-runner-set-v2-recommended">Step 4</a> below. The API
+has reached its first stability contract: <strong><code>v2beta1</code></strong> is the graduated,
+ScaleSet-only storage and hub version, and <code>v2alpha1</code> (used in the examples
+here) stays served for coexistence and the <code>gag-migrate</code> on-ramp, with the
+apiserver converting between them. It is where new capabilities land.
 The older single-CR <strong><code>v1alpha1</code></strong> API is still fully served but
 <strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong> — reach for it only if you
 have a specific reason to, and see the

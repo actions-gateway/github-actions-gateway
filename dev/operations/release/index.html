@@ -2794,6 +2794,16 @@ the signing and chart-publish paths work.</p>
   the commit you are about to tag. Run <code>make check</code> locally as a final gate.</li>
 <li>Choose the version <code>vX.Y.Z</code> (semver). The tag <strong>must</strong> match <code>v*</code> or
   <code>publish.yml</code> will refuse to publish.</li>
+<li><strong>Reconcile <a href="../../roadmap/"><code>docs/roadmap.md</code></a> against
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md"><code>docs/STATUS.md</code></a>
+  before you tag.</strong> The same freeze that applies to the announce bar applies
+  here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is
+  published permanently under that version. Nothing lints this. Walk the three
+  sections against the backlog: anything in <em>In progress / near-term</em> with no
+  Queue row has either shipped (move it to <em>Available now</em>) or been parked (move
+  it to <em>Exploring</em>), and a Deferred row describing a capability an adopter would
+  ask about belongs in <em>Exploring</em>. A 2026-07-25 audit found six of seven
+  near-term items already shipped.</li>
 <li><strong>Bump the docs-site announce bar to this release, and land it before you tag.</strong>
   The banner in <a href="../../overrides/main.html"><code>overrides/main.html</code></a> is the
   "vX.Y.Z is here" strip at the top of every page on the site. A stable tag push
