@@ -263,7 +263,7 @@ httptest import (fakegithub's own tests) is correctly ignored. It runs in
 
 ### Medium-high
 
-**F6 — Shared foundation lives in v1-named files; blocks the Q273 sunset.** → [Q365](../STATUS.md#Q365)
+**F6 — Shared foundation lives in v1-named files; blocks the Q273 sunset.** ✅ **Shipped** (Q365)
 
 Most cross-version foundation sits in files named for v1 that v2 imports:
 
@@ -285,6 +285,20 @@ Consequence: **deleting v1 today is a multi-hundred-line refactor, not a `git rm
 Doing the moves *now*, while both versions are live, is mechanical and
 behavior-free, and directly de-risks the already-blocked [Q273](../STATUS.md#Q273).
 This is why the row sorts adjacent to Q273 rather than by its own severity.
+
+**Shipped in Q365.** Re-measured at implementation time (2026-07-24, after Q360,
+Q364 and Q366 reshaped the GMC package), the cross-version foundation moved into
+eight `shared_*.go` files in `cmd/gmc/internal/controller` and the v1-only
+IP-range pass into `ipranges_v1.go`; `cert.go` and `metrics_cert.go` turned out to
+hold the same problem (the PKI primitives and mount layout) and were split the same
+way. The AGC half became a new leaf package, `cmd/agc/internal/runnercore`, holding
+`Metrics`, `EventRecorder`, `ConditionUpdater` and `AdmitFunc`. One correction to
+the list above: `JobHandlerFunc` is **not** version-neutral — its parameters are the
+classic `AcquireJob` response and it returns a `broker.TaskResult` from the classic
+`broker` module — so it stayed in `listener`, where Q264 deletes it wholesale. The
+move was proven behaviour-free by an AST diff of every top-level declaration in both
+packages before and after: byte-identical apart from package qualifiers and the one
+deliberate `reconcileAll` → `refreshV1ProxyNetworkPolicies` extraction.
 
 ### Medium
 
