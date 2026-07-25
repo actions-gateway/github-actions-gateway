@@ -127,9 +127,10 @@ schedules. The `LimitRange` above fills that gap (and covers any worker pod whos
 runner group leaves requests unset). See
 [Tenant Onboarding — LimitRange caveat](operations/tenant-onboarding.md#copy-pasteable-template).
 
-The gateway reads remaining quota and reacts to exhaustion (it fast-cancels and
-reruns quota-blocked jobs — see [why-gag](why-gag.md)), but the quota itself is
-yours to size and own.
+The gateway reads remaining quota and reacts to exhaustion (it won't claim a job
+the quota can't place, and lock-cancels then reruns any job that loses headroom
+after the claim — see [why-gag](why-gag.md)), but the quota itself is yours to
+size and own.
 
 ## 3. Create a GitHub App credential Secret
 
