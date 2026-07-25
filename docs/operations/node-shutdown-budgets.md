@@ -220,7 +220,7 @@ Note this is *adjacent to but distinct from* 124648, which is scoped to the
 eviction path and whose reporter states the probe works during termination on
 ordinary delete. On this evidence the delete-path behaviour (probe results never
 reflected into `Ready` during termination) appears to be unreported upstream —
-Q398 tracks filing it.
+Q400 tracks filing it.
 
 **116965, graceful node shutdown.** With the node powering off:
 
