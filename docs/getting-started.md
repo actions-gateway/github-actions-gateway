@@ -4,18 +4,19 @@
 > a local kind cluster — job → ephemeral worker pod → green on GitHub — with the
 > exact commands to reproduce it.
 
-!!! tip "New tenants: start on the v2 API"
-    The recommended shape for a new tenant is the **v2 API**
-    (`actions-gateway.com/v2alpha1`) — a decomposed `ActionsGateway` +
+!!! tip "New tenants: start on `v2beta1`"
+    The recommended shape for a new tenant is the **v2 API** at
+    **`actions-gateway.com/v2beta1`** — a decomposed `ActionsGateway` +
     `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in
-    [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below. The API
-    has reached its first stability contract: **`v2beta1`** is the graduated,
-    ScaleSet-only storage and hub version, and `v2alpha1` (used in the examples
-    here) stays served for coexistence and the `gag-migrate` on-ramp, with the
-    apiserver converting between them. It is where new capabilities land.
-    The older single-CR **`v1alpha1`** API is still fully served but
-    **[deprecated](operations/v1alpha1-deprecation.md)** — reach for it only if you
-    have a specific reason to, and see the
+    [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below.
+    `v2beta1` is the graduated, ScaleSet-only storage and hub version, v2's first
+    stability contract, and where new capabilities land. `v2alpha1` stays served
+    for coexistence and as the [`gag-migrate`](operations/migration-v1-to-v2.md)
+    on-ramp — it carries the deprecated `acquisitionProtocol` selector a migrating
+    v1 tenant needs, which a new tenant does not — and the apiserver converts
+    between the two. The older single-CR **`v1alpha1`** API is still fully served
+    but **[deprecated](operations/v1alpha1-deprecation.md)** — reach for it only if
+    you have a specific reason to, and see the
     [legacy v1 path](#legacy-the-v1alpha1-api-deprecated). Already on v1?
     [`gag-migrate`](operations/migration-v1-to-v2.md) moves you across without
     changing how your jobs are acquired.
@@ -81,7 +82,7 @@ kubectl label namespace team-a actions-gateway.github.com/tenant=true
 > onto the namespace as the `actions-gateway.com/security-profile` label (absent ⇒
 > `baseline`). The GMC dual-reads both spellings during coexistence. For the exact
 > v2 namespace labels and the profile-guard admission policy, see
-> [Tenant Onboarding — v2 API](operations/tenant-onboarding.md#v2-api-alpha-multiple-gateways-per-namespace).
+> [Tenant Onboarding — v2 API](operations/tenant-onboarding.md#v2-api-multiple-gateways-per-namespace).
 
 The namespace `ResourceQuota` (and any `LimitRange`) is **platform-owned**: the
 platform admin creates and manages it on the tenant namespace, and the gateway
@@ -152,7 +153,7 @@ stringData:
 
 ## 4. Create your gateway and runner set (v2, recommended)
 
-The **v2 API** (`actions-gateway.com/v2alpha1`) decomposes the single v1 CR into
+The **v2 API** (`actions-gateway.com/v2beta1`) decomposes the single v1 CR into
 small, composable kinds: an `ActionsGateway` (identity + GitHub binding), a
 `RunnerTemplate` (a reusable pod shape), a `RunnerSet` per runner type, and an
 optional `EgressProxy`. The set below is feature-equivalent to the legacy v1
@@ -160,7 +161,7 @@ example — a proxied gateway with a GPU runner set (priority tiers) and a Linux
 runner set:
 
 ```yaml
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: EgressProxy
 metadata:
   name: team-a-egress
@@ -169,7 +170,7 @@ spec:
   minReplicas: 2
   maxReplicas: 10
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerTemplate            # a reusable pod shape, referenced by many RunnerSets
 metadata:
   name: default
@@ -180,7 +181,7 @@ spec:
       containers:
         - name: runner
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: ActionsGateway
 metadata:
   name: team-a-gateway
@@ -198,7 +199,7 @@ spec:
   # securityProfile is a *namespace* label in v2 (set in Step 2), not a CR field —
   # all gateways in a namespace share one Pod Security level. See Tenant Onboarding.
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerSet
 metadata:
   name: gpu                      # v2 names its own runner set; no first-label-derives-name rule
@@ -206,8 +207,9 @@ metadata:
 spec:
   gatewayRef:  { name: team-a-gateway }
   templateRef: { name: default }
-  runnerLabels: ["gpu", "self-hosted"]
-  maxListeners: 10
+  # Exactly one label: it is this set's scale-set name at GitHub and its single
+  # runs-on match target (workflows say `runs-on: gpu`). Must be unique per gateway.
+  runnerLabels: ["gpu"]
   # priorityClassName values must be on the GMC --allowed-priority-classes
   # allowlist (platform-owned); preemption is set on the PriorityClass object.
   priorityTiers:
@@ -216,7 +218,7 @@ spec:
     - priorityClassName: runner-standard
       threshold: 20
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerSet
 metadata:
   name: linux
@@ -224,7 +226,7 @@ metadata:
 spec:
   gatewayRef:  { name: team-a-gateway }
   templateRef: { name: default }
-  runnerLabels: ["linux", "self-hosted"]
+  runnerLabels: ["linux"]
   maxWorkers: 30
 ```
 
@@ -238,7 +240,7 @@ DNS + the GitHub CIDR allowlist, but without a stable per-tenant egress IP to
 allow-list. That collapses the minimal onboarding to three objects. For the
 proxy-less flow, reusable/cluster-default templates, multiple gateways per
 namespace, the 52-character name cap, and workload-identity credentials, see
-[Tenant Onboarding — v2 API](operations/tenant-onboarding.md#v2-api-alpha-multiple-gateways-per-namespace)
+[Tenant Onboarding — v2 API](operations/tenant-onboarding.md#v2-api-multiple-gateways-per-namespace)
 and [Appendix H — v2 API decomposition](design/appendix-h-v2-api-decomposition.md).
 
 Tenants requiring more than 250 concurrent sessions should shard across multiple `ActionsGateway` CRs, each backed by a separate GitHub App installation. See [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md) for limits.

@@ -142,9 +142,9 @@ Every capability above is available today.
 
 !!! note "Onboarding: start on v2"
 
-    New tenants should onboard on the **recommended v2 API**
-    (`actions-gateway.com/v2alpha1` — a decomposed `ActionsGateway` + `RunnerSet` +
-    `RunnerTemplate`, with an optional standalone `EgressProxy`); the rows marked
+    New tenants should onboard on the **recommended v2 API** at
+    `actions-gateway.com/v2beta1` — a decomposed `ActionsGateway` + `RunnerSet` +
+    `RunnerTemplate`, with an optional standalone `EgressProxy`; the rows marked
     <span class="gag-v2-badge">v2</span> are v2-only. The single-CR `v1alpha1` shape
     shown below is still fully served but
     **[deprecated](operations/v1alpha1-deprecation.md)** — see the
@@ -292,7 +292,7 @@ The v2 object set below is feature-equivalent to the legacy single-CR example �
 proxied gateway with a GPU runner set (priority tiers) and a Linux runner set:
 
 ```yaml
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: EgressProxy               # (1)!
 metadata:
   name: team-a-egress
@@ -301,7 +301,7 @@ spec:
   minReplicas: 2
   maxReplicas: 10
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerTemplate            # (2)!
 metadata:
   name: default
@@ -312,7 +312,7 @@ spec:
       containers:
         - name: runner
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: ActionsGateway            # (3)!
 metadata:
   name: team-a-gateway
@@ -326,7 +326,7 @@ spec:
   defaultProxyRef:
     name: team-a-egress         # every RunnerSet inherits this unless it sets proxyRef
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerSet
 metadata:
   name: gpu
@@ -334,15 +334,14 @@ metadata:
 spec:
   gatewayRef:  { name: team-a-gateway }
   templateRef: { name: default }   # (4)!
-  runnerLabels: ["gpu", "self-hosted"]
-  maxListeners: 10
-  priorityTiers:                # (5)!
+  runnerLabels: ["gpu"]         # (5)!
+  priorityTiers:                # (6)!
     - priorityClassName: runner-critical
       threshold: 5
     - priorityClassName: runner-standard
       threshold: 20
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerSet
 metadata:
   name: linux
@@ -350,7 +349,7 @@ metadata:
 spec:
   gatewayRef:  { name: team-a-gateway }
   templateRef: { name: default }
-  runnerLabels: ["linux", "self-hosted"]
+  runnerLabels: ["linux"]
   maxWorkers: 30
 ```
 
@@ -372,7 +371,11 @@ spec:
     shares is **platform-owned**, set on the namespace by the platform admin, so it
     is a real cap the tenant cannot raise. Priority tiers decide who wins when it
     is contended.
-5.  The first 5 GPU pods get the higher-priority `PriorityClass`; the next tier
+5.  Exactly one label per runner set: it is the set's scale-set name at GitHub and
+    its single `runs-on` match target (`runs-on: gpu`), unique across the sets under
+    one gateway. This is the same single-name routing ARC scale sets use, so
+    `runs-on` lines carry across from ARC unedited.
+6.  The first 5 GPU pods get the higher-priority `PriorityClass`; the next tier
     bursts opportunistically; the final threshold caps total concurrency. The
     `priorityClassName` values must be on the platform's allowlist (the GMC
     `--allowed-priority-classes` flag), and whether a tier preempts is set on the

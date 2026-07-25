@@ -7,7 +7,7 @@ This checklist walks from pre-conditions through first successful job. For the f
 !!! tip "New tenants: onboard on the v2 API"
     Steps 0–3 (GitHub App, Secret, `ResourceQuota`) are the same for every tenant.
     At the gateway step, the recommended shape for a **new** tenant is the **v2 API**
-    (`actions-gateway.com/v2alpha1`) — see [v2 API](#v2-api-alpha-multiple-gateways-per-namespace)
+    at `actions-gateway.com/v2beta1` — see [v2 API](#v2-api-multiple-gateways-per-namespace)
     below and the [getting-started v2 walkthrough](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
     The single-CR `v1alpha1` flow in [Step 2](#step-2-create-the-actionsgateway-resource)
     is still fully supported but **[deprecated](v1alpha1-deprecation.md)**; already on
@@ -586,9 +586,9 @@ Onboarding is complete when:
 
 ---
 
-## v2 API (alpha): multiple gateways per namespace
+## v2 API: multiple gateways per namespace
 
-> **Audience:** Platform engineer adopting the **`v2alpha1`** (`actions-gateway.com`) API. This is an **alpha, early-adopter** API served *beside* `v1alpha1` — everything above (the `v1alpha1`, `actions-gateway.github.com` flow) stays fully supported. Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Deploy the GMC](../getting-started.md#1-deploy-the-gmc).
+> **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2beta1`** — the graduated, ScaleSet-only storage and hub version, and the version every **new** tenant should use. It is served *beside* `v1alpha1`, so everything above (the deprecated `actions-gateway.github.com/v1alpha1` flow) keeps working while you adopt it. `v2alpha1` is also still served, but only as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants moving off v1 — it carries the deprecated [`acquisitionProtocol`](#acquisition-protocol-v2alpha1-only) selector, which a new tenant does not need. Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Deploy the GMC](../getting-started.md#1-deploy-the-gmc).
 
 The biggest onboarding change in v2 is that a single namespace may hold **multiple `ActionsGateway`s**, lifting the v1 one-gateway-per-namespace rule ([Step 2](#step-2-create-the-actionsgateway-resource)). What that changes when onboarding a v2 tenant:
 
@@ -604,7 +604,7 @@ For the full reference — the naming table, per-gateway garbage-collection beha
 In v2 the egress proxy is **optional**. A gateway with no `spec.defaultProxyRef` and a `RunnerSet` with no `spec.proxyRef` egress **directly** to GitHub, collapsing the minimal onboarding to **three objects** — one `ActionsGateway`, one `RunnerTemplate`, one `RunnerSet`, with no `EgressProxy` at all:
 
 ```yaml
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: ActionsGateway
 metadata: { name: acme, namespace: team-a }
 spec:
@@ -614,7 +614,7 @@ spec:
   githubURL: https://github.com/acme
   # no defaultProxyRef ⇒ direct egress
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerTemplate
 metadata: { name: default, namespace: team-a }
 spec:
@@ -624,15 +624,15 @@ spec:
         - name: runner
           resources: { requests: { cpu: "1", memory: 2Gi } }
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerSet
 metadata: { name: linux, namespace: team-a }
 spec:
   gatewayRef:  { name: acme }
   templateRef: { name: default }
-  runnerLabels: [gag-linux]   # exactly one label: the ScaleSet default's runs-on name (see below)
+  runnerLabels: [gag-linux]   # exactly one label: this set's scale-set name and runs-on target
   maxWorkers: 50
-  # acquisitionProtocol omitted ⇒ ScaleSet (the default); no proxyRef / defaultProxyRef ⇒ direct egress
+  # no proxyRef / defaultProxyRef ⇒ direct egress
 ```
 
 What you trade, and what you do **not**:
@@ -643,52 +643,60 @@ What you trade, and what you do **not**:
 
 To add attribution later, create an `EgressProxy` and set `spec.defaultProxyRef` on the gateway (every `RunnerSet` under it inherits the proxy unless it sets its own `proxyRef`). A `proxyRef`/`defaultProxyRef` that names a **missing** `EgressProxy` is treated as an error and fails closed (`Ready=False`/`ProxyNotFound`) — it does **not** silently fall back to direct egress; only an entirely-unset reference means direct.
 
-### Acquisition protocol (`spec.acquisitionProtocol`)
+### Job acquisition, and the single-label rule
 
-A `RunnerSet` acquires jobs from GitHub with one of two protocols, selected by
-`spec.acquisitionProtocol`:
+On `v2beta1` there is nothing to choose: every `RunnerSet` acquires jobs with the
+**runner-scale-set message-queue protocol** — one listener session per set,
+capacity-gated assignment, and a full-runner worker. It is the only protocol the
+graduated version serves, because it removes a many-acquirers job-assignment race
+the older classic protocol was subject to under high burst (validated end-to-end
+before the default flip, Q264).
 
-- **`ScaleSet` (the default).** The runner-scale-set message-queue protocol: one
-  listener session per set, capacity-gated assignment, and a full-runner worker.
-  It is the default because it removes a many-acquirers job-assignment race the
-  classic protocol was subject to under high burst (validated end-to-end before
-  the default flip). A `ScaleSet` set **must declare exactly one `runnerLabel`** —
-  the scale set's name *is* its single `runs-on` match target at GitHub — and that
-  label must be unique across the `ScaleSet` sets under one gateway (a second set
-  claiming it is rejected at admission). Omitting the field selects `ScaleSet`, so
-  a runner set that does not name a protocol must carry a single label.
-- **`Classic` (deprecated).** The per-runner broker protocol. Select it explicitly
-  only to keep a classic-only capability during the migration window — chiefly
-  **multi-label matching**, which `ScaleSet` cannot express:
+The rule that follows from it, and the one most likely to bite when you author a
+set by hand:
 
-  ```yaml
-  apiVersion: actions-gateway.com/v2alpha1
-  kind: RunnerSet
-  metadata: { name: linux, namespace: team-a }
-  spec:
-    gatewayRef:  { name: acme }
-    templateRef: { name: default }
-    acquisitionProtocol: Classic       # deprecated; required for a multi-label set
-    runnerLabels: [self-hosted, linux]
-    maxListeners: 10                   # honored under Classic; ignored under ScaleSet
-    maxWorkers: 50
-  ```
+- **Exactly one `runnerLabel` per set.** The scale set's name *is* its single
+  `runs-on` match target at GitHub, so a set with two or more labels is rejected at
+  admission. Concurrency is governed by `maxWorkers`/`priorityTiers` (advertised to
+  GitHub as the scale set's capacity), not by a listener count.
+- **Unique under one gateway.** Two sets claiming the same label would register the
+  same scale-set name at GitHub; the second is rejected.
 
-  `Classic` is scheduled for removal one minor release after this deprecation
-  (Q264); new runner sets should prefer `ScaleSet` (a single label) and split a
-  multi-label group into one `ScaleSet` set per label.
+This is the same single-name routing ARC scale sets use, so workflows migrating
+from ARC carry their `runs-on` lines across unedited — see
+[Migrating from ARC](migration-from-arc.md#job-routing-a-11-map).
 
-The field is **immutable** — switching a live set's protocol is a re-registration
-storm, so change it by creating a new `RunnerSet`, not by editing an existing one.
-**Existing sets are unaffected by the default flip:** the value is recorded at
-admission, so a set created while the default was `Classic` keeps `Classic`. And
-`gag-migrate` writes `acquisitionProtocol: Classic` onto every set it emits, so a
-migrated tenant's multi-label groups keep working unchanged (opt a migrated set
-into `ScaleSet` later by creating a fresh single-label set).
+#### Acquisition protocol: `v2alpha1` only
 
-`maxListeners` has no effect on a `ScaleSet` set (there is one session per set;
-concurrency is governed by `maxWorkers`/`priorityTiers`, advertised to GitHub as
-the scale set's capacity). It remains meaningful only for `Classic`.
+`v2alpha1` — served as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp — carries
+a `spec.acquisitionProtocol` selector that `v2beta1` does not. It exists for one
+job: letting a tenant migrating off `v1alpha1` keep **multi-label matching**, which
+the scale-set model cannot express, until it is ready to split those groups up.
+
+```yaml
+apiVersion: actions-gateway.com/v2alpha1   # the field does not exist on v2beta1
+kind: RunnerSet
+metadata: { name: linux, namespace: team-a }
+spec:
+  gatewayRef:  { name: acme }
+  templateRef: { name: default }
+  acquisitionProtocol: Classic       # deprecated; required for a multi-label set
+  runnerLabels: [self-hosted, linux]
+  maxListeners: 10                   # honored under Classic; ignored under ScaleSet
+  maxWorkers: 50
+```
+
+- **A new tenant should never need this.** Author on `v2beta1` with one label per
+  set; `Classic` is deprecated and scheduled for removal one minor release out
+  (Q264).
+- **`gag-migrate` writes `acquisitionProtocol: Classic`** onto every set it emits,
+  so a migrated tenant's multi-label groups keep working unchanged. Opting one into
+  the scale-set protocol later means creating a fresh single-label set, not editing
+  the old one — the field is **immutable**, because switching a live set's protocol
+  is a re-registration storm.
+- **Editing a Classic set needs an explicit version.** An unqualified
+  `kubectl edit/patch/apply` addresses the `v2beta1` storage version, which rejects
+  the multi-label shape; qualify it (`kubectl edit runnersets.v2alpha1.actions-gateway.com …`).
 
 ### Optional `templateRef` (a default worker pod shape)
 
@@ -734,7 +742,7 @@ This is the [Appendix A](../design/appendix-a-capacity-slos.md) capacity sizing:
 The override is **per key**: set only the request/limit entries you want to change and every other entry keeps its platform default. For example, raising just the memory limit leaves the CPU request/limit and memory request at their defaults:
 
 ```yaml
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: ActionsGateway
 metadata:
   name: my-gateway
@@ -800,7 +808,7 @@ The GMC's own control plane has the same opt-in at the chart level — the `vpa.
 There is **no `githubApp` Secret** for this method — you do not run [Step 1](#step-1-create-the-github-app-secret). Instead you put the non-secret App identity (`appId`/`installationId`) inline and reference a Vault transit key:
 
 ```yaml
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: ActionsGateway
 metadata: { name: acme, namespace: team-a }
 spec:

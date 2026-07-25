@@ -3,7 +3,7 @@
 > **Audience:** Platform engineer / tenant operator
 
 !!! warning "`v1alpha1` is deprecated — new tenants should start on v2"
-    Onboard new tenants on the **v2 API** (`actions-gateway.com/v2alpha1`) — see
+    Onboard new tenants on the **v2 API** at `actions-gateway.com/v2beta1` — see
     [Getting Started](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
     `v1alpha1` stays fully served until removal, so nothing is forced, but it is the
     terminal API. Migrate existing tenants with [`gag-migrate`](migration-v1-to-v2.md)
@@ -12,8 +12,9 @@
 The `actions-gateway.github.com/v1alpha1` API group — the monolithic
 `ActionsGateway` (with an inline `proxy` and inline `runnerGroups[]`) and the
 standalone `RunnerGroup` kind — is **deprecated** in favor of the decomposed
-`actions-gateway.com/v2alpha1` API. This page records the deprecation, what stays
-working during the transition, and what changes at removal.
+`actions-gateway.com` API (`v2beta1` for new tenants; `v2alpha1` as the migration
+on-ramp). This page records the deprecation, what stays working during the
+transition, and what changes at removal.
 
 ## Status
 

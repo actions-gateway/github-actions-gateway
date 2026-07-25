@@ -242,10 +242,12 @@ Sealed Secrets — so the private key is never committed to Git.
 
 ### Optional: the v2 API CRDs
 
-The main chart installs the `v1alpha1` (`actions-gateway.github.com`) CRDs — the
-fully supported, standard path. The v2 (`actions-gateway.com`) API ships its five
-CRDs in a **separate, opt-in chart**, `actions-gateway-crds-v2`, split out so the
-main chart's Helm release Secret stays under the 1 MiB limit.
+The main chart installs the `v1alpha1` (`actions-gateway.github.com`) CRDs — still
+fully served, but [deprecated](v1alpha1-deprecation.md). The v2
+(`actions-gateway.com`) API that new tenants onboard on ships its five CRDs in a
+**separate, opt-in chart**, `actions-gateway-crds-v2`, split out so the main chart's
+Helm release Secret stays under the 1 MiB limit. Install it alongside the main chart
+unless you are running v1-only.
 
 Each v2 CRD is served at **two versions**: **`v2beta1`** (the served **and** storage
 version — the graduated, ScaleSet-only shape) and **`v2alpha1`** (still served for
