@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 )
 
 // admissionGate is an in-memory, per-RunnerGroup reservation counter that gates
@@ -86,7 +86,7 @@ func WorkerCeiling(rg *v1alpha1.RunnerGroup) (limit int32, bounded bool) {
 
 // AdmitFor returns an AdmitFunc for the v1 RunnerGroup controller, wrapping the
 // RunnerGroup in the v1 Target adapter and delegating to Admit.
-func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) listener.AdmitFunc {
+func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitFunc {
 	return p.Admit(p.runnerGroupTarget(snapshot))
 }
 
@@ -96,7 +96,7 @@ func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) listener.AdmitFun
 // edits take effect without an AGC restart (Q117). The returned AdmitFunc is safe
 // for concurrent use across the owner's listeners. v1 wires it via AdmitFor; the
 // v2 RunnerSet controller wires it directly with a RunnerSet-backed Target.
-func (p *Provisioner) Admit(target Target) listener.AdmitFunc {
+func (p *Provisioner) Admit(target Target) runnercore.AdmitFunc {
 	key := target.Key().String()
 	return func(ctx context.Context) (release func(), ok bool) {
 		limit, bounded := target.Ceiling(ctx)

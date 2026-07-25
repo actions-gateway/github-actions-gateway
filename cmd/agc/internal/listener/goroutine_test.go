@@ -24,6 +24,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/prometheus/client_golang/prometheus"
@@ -268,7 +269,7 @@ func (r *condRecorder) latest(condType string) (metav1.Condition, bool) {
 
 // ── eventRecorder ────────────────────────────────────────────────────────────
 
-// recordedEvent captures one listener.EventRecorder.Event call.
+// recordedEvent captures one runnercore.EventRecorder.Event call.
 type recordedEvent struct {
 	namespace, name, eventtype, reason, action, note string
 }
@@ -1610,8 +1611,8 @@ func TestListener_OAuthTokenFetchError(t *testing.T) {
 // ── Gap 7: AcquireJob failure increments metrics counter ─────────────────────
 
 // newTestMetrics builds a Metrics with unregistered counters safe for per-test use.
-func newTestMetrics() *listener.Metrics {
-	return &listener.Metrics{
+func newTestMetrics() *runnercore.Metrics {
+	return &runnercore.Metrics{
 		ActiveSessions: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "t_active_sessions",
 		}, []string{"namespace", "runner_group"}),

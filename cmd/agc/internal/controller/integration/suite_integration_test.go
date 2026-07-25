@@ -17,6 +17,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -106,11 +107,11 @@ func (stubProvider) TokenWithExpiry(_ context.Context) (*githubapp.InstallationT
 	}, nil
 }
 
-// sharedListenerMetrics returns the process-wide listener.Metrics, constructed
-// once. listener.NewMetrics registers with the controller-runtime metrics
+// sharedListenerMetrics returns the process-wide runnercore.Metrics, constructed
+// once. runnercore.NewMetrics registers with the controller-runtime metrics
 // registry, so it must be created a single time per test binary; counters
 // accumulate across tests, so assertions read before/after deltas.
-var sharedListenerMetrics = sync.OnceValue(listener.NewMetrics)
+var sharedListenerMetrics = sync.OnceValue(runnercore.NewMetrics)
 
 // brokerRegistrar returns credentials pointing to the stub server.
 type brokerRegistrar struct {
@@ -148,7 +149,7 @@ type provisionerOptions struct {
 	// metrics, when non-nil, is attached to the reconciler so the listener
 	// goroutines record into it (e.g. the Q260 duplicate-delivery counter). Nil
 	// leaves metrics unwired, as most suites do not assert on them.
-	metrics *listener.Metrics
+	metrics *runnercore.Metrics
 	// fanoutCompletion enables the guarded Q260 Option A so the winner of a
 	// fanned-out job fans completejob out to every deduped sibling delivery on
 	// completion. Off in every suite but the one that asserts on it.

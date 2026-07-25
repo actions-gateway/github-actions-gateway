@@ -9,6 +9,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/broker/brokertest"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
@@ -24,7 +25,7 @@ import (
 // completejob with result succeeded — exactly what the real worker reports to the
 // run service. Losing siblings are deduped by the planID claim and never run the
 // JobHandler, so their acquired deliveries are left unresolved.
-func fanoutMux(t *testing.T, srv *brokertest.Server, maxListeners int32, m *listener.Metrics, release <-chan struct{}, fanoutCompletion bool) *listener.Multiplexer {
+func fanoutMux(t *testing.T, srv *brokertest.Server, maxListeners int32, m *runnercore.Metrics, release <-chan struct{}, fanoutCompletion bool) *listener.Multiplexer {
 	t.Helper()
 	factory := func(idx int) listener.Config {
 		agent := &agentpool.Agent{
@@ -85,7 +86,7 @@ func fanoutMux(t *testing.T, srv *brokertest.Server, maxListeners int32, m *list
 // releases the winner to complete its own delivery. It returns once the winner's
 // completejob has been recorded. planID identifies the logical job for the caller's
 // JobState assertion.
-func driveFanout(t *testing.T, srv *brokertest.Server, mgr *listener.Multiplexer, m *listener.Metrics, planID string, n int, release chan struct{}) {
+func driveFanout(t *testing.T, srv *brokertest.Server, mgr *listener.Multiplexer, m *runnercore.Metrics, planID string, n int, release chan struct{}) {
 	t.Helper()
 	srv.EnableFanoutAccounting()
 	srv.EnqueueFanoutJob(planID, n)

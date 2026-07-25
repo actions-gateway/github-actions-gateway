@@ -27,6 +27,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/actions-gateway/github-actions-gateway/broker"
@@ -199,13 +200,13 @@ func EffectivePendingPodDeadline(rg *v1alpha1.RunnerGroup) time.Duration {
 // Provisioner creates and manages worker pods for acquired GitHub Actions jobs.
 type Provisioner struct {
 	Client  client.Client
-	Metrics *listener.Metrics
+	Metrics *runnercore.Metrics
 	// Events records owner-scoped Kubernetes Events for v1 RunnerGroup provisioning
 	// incidents (quota/eviction-retry exhaustion), routed through the runnerGroupTarget
 	// seam — the only Target the Provisioner itself constructs. The v2 RunnerSet path
 	// carries its own recorder on runnerSetTarget (built by the RunnerSet reconciler),
 	// since one Provisioner is shared across both owners. Nil disables event recording.
-	Events             listener.EventRecorder
+	Events             runnercore.EventRecorder
 	Log                *slog.Logger
 	MaxEvictionRetries int
 	EvictionRetryDelay time.Duration
@@ -313,7 +314,7 @@ type Provisioner struct {
 }
 
 // NewProvisioner creates a Provisioner with sensible defaults.
-func NewProvisioner(c client.Client, m *listener.Metrics, log *slog.Logger) *Provisioner {
+func NewProvisioner(c client.Client, m *runnercore.Metrics, log *slog.Logger) *Provisioner {
 	return &Provisioner{
 		Client:             c,
 		Metrics:            m,

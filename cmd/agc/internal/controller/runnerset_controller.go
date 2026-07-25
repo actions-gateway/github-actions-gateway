@@ -12,6 +12,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -57,7 +58,7 @@ type RunnerSetReconciler struct {
 	TokenManager *token.Manager
 	Registrar    agentpool.Registrar
 	BrokerConfig BrokerConfig
-	Metrics      *listener.Metrics
+	Metrics      *runnercore.Metrics
 	// ScaleSetMetrics holds the Prometheus counters for the ScaleSet acquisition tier
 	// (Q264 Option E). Nil disables scale-set observability (a Classic-only AGC needs
 	// none); the classic Metrics field is unaffected either way.
@@ -584,9 +585,9 @@ func (r *RunnerSetReconciler) getOrCreateMultiplexer(ctx context.Context, key ty
 // the v2 counterpart of RunnerGroupReconciler.newListenerConfig, wiring the
 // provisioner's owner-agnostic Handle/Admit against the RunnerSet Target and
 // delegating the rest to the shared assembleListenerConfig.
-func (r *RunnerSetReconciler) newListenerConfig(rs *v2alpha1.RunnerSet, target provisioner.Target, pool *agentpool.Pool, brokerCfg BrokerConfig, condUpdater listener.ConditionUpdater, agent *agentpool.Agent) listener.Config {
+func (r *RunnerSetReconciler) newListenerConfig(rs *v2alpha1.RunnerSet, target provisioner.Target, pool *agentpool.Pool, brokerCfg BrokerConfig, condUpdater runnercore.ConditionUpdater, agent *agentpool.Agent) listener.Config {
 	jobHandler := listener.JobHandlerFunc(nil)
-	admit := listener.AdmitFunc(nil)
+	admit := runnercore.AdmitFunc(nil)
 	if r.Provisioner != nil {
 		jobHandler = r.Provisioner.Handle(target)
 		admit = r.Provisioner.Admit(target)

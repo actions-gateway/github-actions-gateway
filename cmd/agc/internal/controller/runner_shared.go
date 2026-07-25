@@ -9,6 +9,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	corev1 "k8s.io/api/core/v1"
@@ -41,7 +42,7 @@ type eventRecord struct {
 	note      string
 }
 
-// channelEventRecorder implements listener.EventRecorder by pushing each event onto
+// channelEventRecorder implements runnercore.EventRecorder by pushing each event onto
 // a buffered channel the reconciler drains. The send is non-blocking: a full channel
 // drops the event rather than stalling the listener/provisioner goroutine, matching
 // channelConditionUpdater. Events are an incident-visibility complement to the
@@ -206,7 +207,7 @@ func reapWorkerPodsByLabel(
 	namespace, name, labelKey string,
 	ttl, deadline time.Duration,
 	log *slog.Logger,
-	metrics *listener.Metrics,
+	metrics *runnercore.Metrics,
 	emitStuckPending func(podName string, deadline time.Duration),
 ) (time.Duration, workerPodCounts, error) {
 	var pods corev1.PodList
@@ -274,13 +275,13 @@ func reapWorkerPodsByLabel(
 func assembleListenerConfig(
 	group, namespace string,
 	brokerCfg BrokerConfig,
-	condUpdater listener.ConditionUpdater,
-	eventRecorder listener.EventRecorder,
-	metrics *listener.Metrics,
+	condUpdater runnercore.ConditionUpdater,
+	eventRecorder runnercore.EventRecorder,
+	metrics *runnercore.Metrics,
 	agent *agentpool.Agent,
 	tokenManager *token.Manager,
 	jobHandler listener.JobHandlerFunc,
-	admit listener.AdmitFunc,
+	admit runnercore.AdmitFunc,
 	pool *agentpool.Pool,
 ) listener.Config {
 	agentBrokerURL := agent.BrokerURL
