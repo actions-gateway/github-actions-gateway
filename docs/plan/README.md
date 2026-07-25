@@ -23,6 +23,8 @@ The five-milestone delivery from
 | [milestone-4.md](milestone-4.md) | GMC, ActionsGateway CRD, proxy binary, webhook, TLS pinning | ✅ Done — all success criteria live-validated on a real `kind` cluster 2026-06-11/12 (§12) |
 | [milestone-5.md](milestone-5.md) | Hardening + 1,000-session load testing + posture audit + packaging | ⚠️ Packaging (Q12) now live-validated end-to-end (Q219, §1.5 — found+fixed an egress-proxy registration bug); load harness (Q13), polaris + kube-bench (Q14) shipped. Only staging-cluster residuals remain: 1,000-session proxy-HPA-under-burst + gVisor isolation ([Q15](../STATUS.md#Q15), deferred) |
 | [release-1.0.md](release-1.0.md) | The 1.0 release gate: multi-arch images + cosign-signed Helm chart, GA install docs, public website launch, pinned-digest GitHub Release | ✅ Done — 1.0 SHIPPED 2026-06-16 (`v1.0.0` live on GHCR, verified end-to-end against the published artifacts) |
+| [release-1.3.md](release-1.3.md) | The 1.3 release gate: worker right-sizing as the headline capability, plus the one-release-ahead deprecation notice that lets `v2.0.0` remove `v1alpha1`, `v2alpha1`, and the classic acquisition machinery together | ❌ Open — gates tracked by the `1.3-gate` label in [STATUS.md](../STATUS.md#queue) |
+| [v2-ga.md](v2-ga.md) | The last graduation rung (`v2beta1` → `v2`) and the `v2.0.0` release that executes the three coupled removals: soak criteria, the graduation hop, removal sequencing, docs | ❌ Open — starts after `v1.3.0` ships ([Q411](../STATUS.md#Q411)) |
 
 ## Security
 
