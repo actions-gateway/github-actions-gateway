@@ -64,7 +64,17 @@ type job struct {
 type qmessage struct {
 	id      int64
 	entries []scaleset.JobMessage
+	// rawBody, when non-nil, is delivered verbatim as the message body instead of
+	// the marshalled entries — see SeedRawMessage.
+	rawBody *string
 	deleted bool
+}
+
+// seedMessage is a message template SeedMessage/SeedRawMessage attach to every
+// newly created scale set's queue log, ahead of anything the model generates.
+type seedMessage struct {
+	entries []scaleset.JobMessage
+	rawBody *string
 }
 
 // session is a scale set's single active message-queue session.
@@ -116,6 +126,18 @@ type Server struct {
 	// rateLimitPolls makes every message poll answer 429 (no Retry-After) while set —
 	// the lever for the sustained-rate-limit condition path (Q325).
 	rateLimitPolls bool
+	// rateLimitRemaining, when positive, is echoed as X-RateLimit-Remaining on every
+	// message-poll response — see SetRateLimitRemaining.
+	rateLimitRemaining int
+	// failRunnerGroups makes the runnergroups lookup answer 500 while set — see
+	// FailRunnerGroups.
+	failRunnerGroups bool
+	// failStaticAcquire makes the _apis/runtime acquirejobs route answer 404 while
+	// set, leaving the queue-host route working — see FailStaticAcquireRoute.
+	failStaticAcquire bool
+	// installToken, when non-empty, is the installation token the REST
+	// registration-token hop requires — see SetInstallationToken.
+	installToken string
 	// failSessionRefresh makes session refresh (PATCH) answer 401 while set, and
 	// failSessionCreate does the same for session create (POST) — modelling revoked
 	// credentials at each call site, the levers for the Degraded/Unauthorized
@@ -135,6 +157,11 @@ type Server struct {
 	// waits for outstanding requests — cannot hang behind a long-poll.
 	closed    chan struct{}
 	closeOnce sync.Once
+
+	// pendingJobs and pendingMessages are the pre-registration queue state every
+	// newly created scale set inherits — see PrequeueJobs, SeedMessage.
+	pendingJobs     []*job
+	pendingMessages []seedMessage
 
 	scaleSets  map[int]*scaleSet
 	nextSSID   int
@@ -185,8 +212,10 @@ func New() *Server {
 	mux.HandleFunc("DELETE /_apis/runtime/runnerscalesets/{id}/sessions/{sid}", s.handleDeleteSession)
 	mux.HandleFunc("POST /_apis/runtime/runnerscalesets/{id}/generatejitconfig", s.handleGenerateJIT)
 	mux.HandleFunc("POST /_apis/runtime/runnerscalesets/{id}/acquirejobs", s.handleAcquireJobs)
+	mux.HandleFunc("GET /_apis/runtime/runnerscalesets/{id}/acquirablejobs", s.handleAcquirableJobs)
 	mux.HandleFunc("GET /queue/{id}/message", s.handlePoll)
 	mux.HandleFunc("DELETE /queue/{id}/message/{msgid}", s.handleDeleteMessage)
+	mux.HandleFunc("POST /queue/{id}/acquirejobs", s.handleQueueHostAcquireJobs)
 	s.server = httptest.NewServer(mux)
 	s.URL = s.server.URL
 	s.adminToken = s.mintAdminJWT(s.adminTokenTTL)
@@ -313,6 +342,101 @@ func (s *Server) FailSessionCreate(on bool) {
 	s.mu.Lock()
 	s.failSessionCreate = on
 	s.mu.Unlock()
+}
+
+// SetRateLimitRemaining makes every message-poll response carry
+// X-RateLimit-Remaining: n (n > 0; zero, the default, omits the header). GitHub's
+// queue reports the caller's remaining budget on every poll — including the 202 the
+// typed API collapses to (nil, nil) — so this is the lever for a test asserting that
+// a caller surfaces the rate-limit evidence the return value discards (U4).
+func (s *Server) SetRateLimitRemaining(n int) {
+	s.mu.Lock()
+	s.rateLimitRemaining = n
+	s.mu.Unlock()
+}
+
+// FailRunnerGroups makes the runnergroups lookup answer 500 while on, modelling a
+// backend that will not resolve a group by name — the lever for a caller's
+// fall-back-to-the-default-group path.
+func (s *Server) FailRunnerGroups(on bool) {
+	s.mu.Lock()
+	s.failRunnerGroups = on
+	s.mu.Unlock()
+}
+
+// FailStaticAcquireRoute makes the static _apis/runtime acquirejobs route answer 404
+// while on, leaving the queue-host route (the acquireJobUrl delivered on a
+// JobAvailable) working. It models the broker-host tenant observed live in Q264
+// §2a-3, and is the lever for proving a caller notices that divergence rather than
+// silently failing to claim. The refused attempt is still recorded, so a test can
+// assert the static route was tried first.
+func (s *Server) FailStaticAcquireRoute(on bool) {
+	s.mu.Lock()
+	s.failStaticAcquire = on
+	s.mu.Unlock()
+}
+
+// SetInstallationToken makes the REST registration-token hop require
+// "Authorization: Bearer <tok>", answering 401 otherwise (an empty token, the
+// default, accepts anything). It pins the first link of the token matrix (§2.5): the
+// App installation token, and only it, authorizes that call.
+func (s *Server) SetInstallationToken(tok string) {
+	s.mu.Lock()
+	s.installToken = tok
+	s.mu.Unlock()
+}
+
+// PrequeueJobs queues n jobs against the scale set's label *before* any scale set
+// exists, and returns their RunnerRequestIDs. Every scale set created afterwards
+// starts with a copy of them — the real routing behaviour for a workflow dispatched
+// with runs-on: <scale set name> ahead of the scale set registering. It is the way
+// to give jobs to a caller that creates its own scale set mid-run and so cannot be
+// handed an id to EnqueueJob against.
+func (s *Server) PrequeueJobs(n int) []int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ids := make([]int64, 0, n)
+	for range n {
+		s.nextReqID++
+		s.nextJobSeq++
+		s.pendingJobs = append(s.pendingJobs, &job{
+			reqID: s.nextReqID,
+			jobID: fmt.Sprintf("job-%d", s.nextJobSeq),
+			state: jobQueued,
+		})
+		ids = append(ids, s.nextReqID)
+	}
+	return ids
+}
+
+// SeedMessage appends one message to every newly created scale set's queue log,
+// ahead of the messages the model generates itself. It exists for the shapes the
+// model cannot reach on its own — a lifecycle message (JobStarted / JobCompleted)
+// with no preceding assignment on this scale set — so a test can prove a client
+// tolerates and skips a message it has nothing to do with, and that its cursor
+// still advances past it. Prefer EnqueueJob/CompleteAssignedJob whenever the model
+// can produce the message for real.
+func (s *Server) SeedMessage(entries []scaleset.JobMessage) {
+	s.mu.Lock()
+	s.pendingMessages = append(s.pendingMessages, seedMessage{entries: entries})
+	s.mu.Unlock()
+}
+
+// SeedRawMessage is SeedMessage with a verbatim body, for the one shape no typed
+// entry list can express: a body the client cannot decode. A client must skip it and
+// keep polling rather than wedge its cursor behind it.
+func (s *Server) SeedRawMessage(body string) {
+	s.mu.Lock()
+	s.pendingMessages = append(s.pendingMessages, seedMessage{rawBody: &body})
+	s.mu.Unlock()
+}
+
+// AddScaleSet registers a scale set out of band and returns its id, modelling one a
+// previous run leaked — the state a cleanup path exists to find by name and delete.
+func (s *Server) AddScaleSet(name string, groupID int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.newScaleSetLocked(name, groupID).id
 }
 
 // SetAdminTokenTTL controls the TTL of the admin JWT minted by the
@@ -492,6 +616,41 @@ func (s *Server) record(format string, args ...any) {
 	s.calls = append(s.calls, fmt.Sprintf(format, args...))
 }
 
+// newScaleSetLocked registers a scale set and gives it the pre-registration queue
+// state (PrequeueJobs, SeedMessage) every new scale set inherits. Caller holds s.mu.
+func (s *Server) newScaleSetLocked(name string, groupID int) *scaleSet {
+	s.nextSSID++
+	ss := &scaleSet{id: s.nextSSID, name: name, groupID: groupID}
+	for _, j := range s.pendingJobs {
+		clone := *j
+		ss.jobs = append(ss.jobs, &clone)
+	}
+	for _, m := range s.pendingMessages {
+		ss.messages = append(ss.messages, &qmessage{
+			id:      s.newMsgID(),
+			entries: m.entries,
+			rawBody: m.rawBody,
+		})
+	}
+	s.scaleSets[ss.id] = ss
+	return ss
+}
+
+// credentialKind names which token an inbound request presented, so a call log can
+// show the token half of the acquire matrix (§2.5) — including an attempt the route
+// then refuses. Caller holds s.mu.
+func (s *Server) credentialKind(r *http.Request, ss *scaleSet) string {
+	auth := r.Header.Get("Authorization")
+	switch {
+	case ss.session != nil && auth == "Bearer "+ss.session.queueToken:
+		return "queue"
+	case auth == "Bearer "+s.adminToken:
+		return "admin"
+	default:
+		return "other"
+	}
+}
+
 func (s *Server) newMsgID() int64 {
 	s.nextMsgID++
 	return s.nextMsgID
@@ -527,7 +686,12 @@ func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 func (s *Server) handleRegistrationToken(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.record("registration-token %s", r.URL.Path)
+	want := s.installToken
 	s.mu.Unlock()
+	if want != "" && r.Header.Get("Authorization") != "Bearer "+want {
+		http.Error(w, `{"message":"bad installation token"}`, http.StatusUnauthorized)
+		return
+	}
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"token":      "reg-token",
@@ -544,6 +708,16 @@ func (s *Server) handleRunnerRegistration(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"message":"bad RemoteAuth"}`, http.StatusUnauthorized)
 		return
 	}
+	// The hop is a *registration*: the backend keys off runner_event, so a caller
+	// that omits it gets no admin connection.
+	var reg struct {
+		RunnerEvent string `json:"runner_event"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&reg)
+	if reg.RunnerEvent != "register" {
+		http.Error(w, `{"message":"runner_event must be register"}`, http.StatusBadRequest)
+		return
+	}
 	// Mint a fresh admin JWT with the current TTL — a short TTL forces the client
 	// to re-mint on its next admin call.
 	s.adminToken = s.mintAdminJWT(s.adminTokenTTL)
@@ -558,6 +732,10 @@ func (s *Server) handleRunnerGroups(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
 	}
+	if s.failRunnerGroups {
+		http.Error(w, `{"message":"runner groups unavailable"}`, http.StatusInternalServerError)
+		return
+	}
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"count": 1,
 		"value": []scaleset.RunnerGroup{{ID: 7, Name: name}},
@@ -567,15 +745,13 @@ func (s *Server) handleRunnerGroups(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateScaleSet(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.record("create-scaleset")
+	var in scaleset.RunnerScaleSet
+	_ = json.NewDecoder(r.Body).Decode(&in)
+	s.record("create-scaleset name=%s group=%d", in.Name, in.RunnerGroupID)
 	if !s.requireAdmin(w, r) {
 		return
 	}
-	var in scaleset.RunnerScaleSet
-	_ = json.NewDecoder(r.Body).Decode(&in)
-	s.nextSSID++
-	ss := &scaleSet{id: s.nextSSID, name: in.Name, groupID: in.RunnerGroupID}
-	s.scaleSets[ss.id] = ss
+	ss := s.newScaleSetLocked(in.Name, in.RunnerGroupID)
 	_ = json.NewEncoder(w).Encode(scaleset.RunnerScaleSet{
 		ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID, Labels: in.Labels, RunnerSetting: in.RunnerSetting,
 	})
@@ -820,19 +996,85 @@ func (s *Server) handleAcquireJobs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
 		return
 	}
+	var ids []int64
+	_ = json.NewDecoder(r.Body).Decode(&ids)
+	// Record before authorizing, so a refused attempt (an admin JWT on a
+	// queue-token route, or the 404 FailStaticAcquireRoute models) is still visible
+	// as "this route was tried, with this token, for these ids".
+	s.record("acquirejobs id=%d auth=%s ids=%v", id, s.credentialKind(r, ss), ids)
+	if s.failStaticAcquire {
+		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+		return
+	}
 	// acquirejobs is authorized by the queue token, not the admin JWT (§2.5).
 	if r.Header.Get("Authorization") != "Bearer "+ss.session.queueToken {
 		http.Error(w, `{"message":"invalid queue token"}`, http.StatusUnauthorized)
 		return
 	}
+	_ = json.NewEncoder(w).Encode(s.claimLocked(ss, ids))
+}
+
+// handleQueueHostAcquireJobs serves the acquire verb on the message-queue host — the
+// route family a JobAvailable's acquireJobUrl points at, outside /_apis/runtime. The
+// broker-host tenant honours it even when the static route 404s (Q264 §2a-3), so
+// modelling both is what lets a caller measure one against the other. It claims
+// identically and is authorized by the same queue token.
+func (s *Server) handleQueueHostAcquireJobs(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id, _ := strconv.Atoi(r.PathValue("id"))
+	s.acquireJobsCalls++
+	ss := s.scaleSets[id]
+	if ss == nil || ss.session == nil {
+		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+		return
+	}
 	var ids []int64
 	_ = json.NewDecoder(r.Body).Decode(&ids)
-	s.record("acquirejobs id=%d ids=%v", id, ids)
+	s.record("acquirejobs-queuehost id=%d auth=%s ids=%v", id, s.credentialKind(r, ss), ids)
+	if r.Header.Get("Authorization") != "Bearer "+ss.session.queueToken {
+		http.Error(w, `{"message":"invalid queue token"}`, http.StatusUnauthorized)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(s.claimLocked(ss, ids))
+}
+
+// handleAcquirableJobs serves ARC's read-only listing of the jobs currently offered
+// but unclaimed. It claims nothing — a caller comparing acquire constructions can
+// issue it safely — and is authorized by the admin JWT, unlike the acquire verb.
+func (s *Server) handleAcquirableJobs(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id, _ := strconv.Atoi(r.PathValue("id"))
+	s.record("acquirablejobs id=%d", id)
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	ss := s.scaleSets[id]
+	if ss == nil {
+		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+		return
+	}
+	type acquirable struct {
+		RunnerRequestID int64  `json:"runnerRequestId"`
+		AcquireJobURL   string `json:"acquireJobUrl"`
+	}
+	value := []acquirable{}
+	for _, j := range ss.jobs {
+		if j.state == jobAvailable {
+			value = append(value, acquirable{RunnerRequestID: j.reqID, AcquireJobURL: s.acquireURL(ss.id)})
+		}
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"count": len(value), "value": value})
+}
+
+// claimLocked claims each offered-but-unclaimed id for the scale set and returns the
+// {count, value} acquire response. Claim-once: a second claim of the same id finds it
+// already assigned and is refused. Caller holds s.mu.
+func (s *Server) claimLocked(ss *scaleSet, ids []int64) map[string]any {
 	var won []int64
 	for _, reqID := range ids {
 		for _, j := range ss.jobs {
-			// Claim-once: only an offered-but-unclaimed job can be won; a second
-			// claim of the same id finds it already assigned and is refused.
 			if j.reqID == reqID && j.state == jobAvailable {
 				j.state = jobAssigned
 				ss.appendMessage(s.newMsgID(), []scaleset.JobMessage{{
@@ -849,7 +1091,13 @@ func (s *Server) handleAcquireJobs(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.notifyLocked() // the JobAssigned messages just appended are deliverable now
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"count": len(won), "value": won})
+	return map[string]any{"count": len(won), "value": won}
+}
+
+// acquireURL is the queue-host acquire endpoint a JobAvailable advertises for a
+// scale set — the acquireJobUrl the real backend delivers on the offer.
+func (s *Server) acquireURL(scaleSetID int) string {
+	return fmt.Sprintf("%s/queue/%d/acquirejobs", s.URL, scaleSetID)
 }
 
 // handlePoll serves the message queue's long poll. It re-evaluates assignment against
@@ -886,6 +1134,11 @@ func (s *Server) handlePoll(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		s.mu.Lock()
+		// The queue reports the caller's remaining budget on every poll, whatever the
+		// status — including the 202 a typed API collapses to "no message".
+		if s.rateLimitRemaining > 0 {
+			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(s.rateLimitRemaining))
+		}
 		if s.rateLimitPolls {
 			s.mu.Unlock()
 			http.Error(w, `{"message":"rate limited"}`, http.StatusTooManyRequests)
@@ -907,7 +1160,7 @@ func (s *Server) handlePoll(w http.ResponseWriter, r *http.Request) {
 		// dynamic gate the live probe proved (§2b-1). GHES instead offers each queued
 		// job as JobAvailable for the client to claim.
 		if s.ghesAcquireFlow {
-			ss.offerAvailable(s.newMsgID)
+			ss.offerAvailable(s.newMsgID, s.acquireURL(ss.id))
 		} else {
 			ss.assignUnderCapacity(capacity, s.newMsgID)
 		}
@@ -976,11 +1229,17 @@ func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 // encodeMessage renders a queue message with the scale set's current statistics
 // snapshot attached (the server-authoritative counts, read off every envelope).
 func (s *Server) encodeMessage(ss *scaleSet, m *qmessage) scaleset.RunnerScaleSetMessage {
-	body, _ := json.Marshal(m.entries)
+	var body string
+	if m.rawBody != nil {
+		body = *m.rawBody
+	} else {
+		b, _ := json.Marshal(m.entries)
+		body = string(b)
+	}
 	return scaleset.RunnerScaleSetMessage{
 		MessageID:   m.id,
 		MessageType: "RunnerScaleSetJobMessages",
-		Body:        string(body),
+		Body:        body,
 		Statistics:  ss.stats(),
 	}
 }
@@ -1027,14 +1286,16 @@ func (ss *scaleSet) assignUnderCapacity(capacity int, nextID func() int64) {
 	}
 }
 
-// offerAvailable offers each still-queued job as a JobAvailable message (GHES flow).
-func (ss *scaleSet) offerAvailable(nextID func() int64) {
+// offerAvailable offers each still-queued job as a JobAvailable message (GHES flow),
+// carrying the queue-host acquireJobUrl the real backend delivers on the offer.
+func (ss *scaleSet) offerAvailable(nextID func() int64, acquireURL string) {
 	for _, j := range ss.jobs {
 		if j.state == jobQueued {
 			j.state = jobAvailable
 			ss.appendMessage(nextID(), []scaleset.JobMessage{{
 				MessageType:     scaleset.MessageTypeJobAvailable,
 				RunnerRequestID: j.reqID,
+				AcquireJobURL:   acquireURL,
 			}})
 		}
 	}
