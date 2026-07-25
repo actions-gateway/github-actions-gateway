@@ -2953,19 +2953,29 @@ egress to <code>169.254.169.254/32</code>. Kata alone is not the control.</p>
   forever and keeps the worker pod from reaping, stranding the runner slot.
   See <a href="../in-runner-image-builds/#sidecar-containers-must-be-native-sidecars-q249">In-runner image builds § Sidecar containers must be native
   sidecars</a>.</li>
-<li><strong>Validated as an architecture; GAG's own CI cutover is in flight.</strong> The
+<li><strong>Validated as an architecture, and GAG's own CI runs on it.</strong> The
   unprivileged <code>dockerd</code> + <code>kind</code> path was proven end-to-end on GKE
   (<code>1.35.5-gke.1241004</code>, Ubuntu 24.04, <code>c2-standard-4</code> nested-virt, Kata
   3.32.0/QEMU) — see <a href="../../plan/archive/kata-on-gke/">Kata Containers on GKE</a> for the
   evidence. GAG's dogfood e2e ships the Kata worker shape as
   <a href="../../deploy/dogfood-e2e/overlays/kata"><code>deploy/dogfood-e2e/overlays/kata</code></a>
-  (selected with <code>E2E_VARIANT=kata scripts/dogfood/e2e-start.sh</code>); no bundled
-  all-in-one runner image is needed — the daemon is a stock <code>docker:28-dind</code>
-  native sidecar with a six-step entrypoint, and the toolchain rides the
-  regular runner container. A full <code>make e2e</code> run green through that overlay
-  (and the subsequent default flip from <code>dind</code> to <code>kata</code>) is the remaining
-  Q286 gate. Confirm the steps on your own cluster before cutting over
-  privileged workloads.</li>
+  and selects it <strong>by default</strong>; <code>E2E_VARIANT=dind scripts/dogfood/e2e-start.sh</code>
+  is the explicit fallback. No bundled all-in-one runner image is needed: the
+  daemon is a stock <code>docker:28-dind</code> native sidecar with a six-step entrypoint,
+  and the toolchain rides the regular runner container. A full <code>make e2e</code> run is
+  green through that overlay. Confirm the steps on your own cluster before
+  cutting over privileged workloads.</li>
+<li><strong>The validated posture is <em>trusted</em> CI, not untrusted pull requests.</strong> Kata
+  bounds the guest kernel, but it does not narrow egress, and GAG's own e2e
+  tenant runs a permissive egress policy because its jobs pull from CDN-fronted
+  public registries: a CIDR allowlist rots, and fully-qualified-domain-name
+  policy is not enforceable on GKE Dataplane V2. Running an external
+  contributor's pull request on this shape safely needs an in-cluster
+  pull-through registry mirror, so workers need no direct registry egress, plus
+  an egress policy scoped to that mirror, GitHub, and DNS. Until you have both,
+  treat Kata isolation as protection against a kernel escape, not as a licence
+  to run untrusted code. See
+  <a href="../../design/appendix-g-future-enhancements/#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror">Appendix G.14</a>.</li>
 </ul>
 <h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>

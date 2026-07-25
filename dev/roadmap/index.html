@@ -2371,7 +2371,11 @@ tagged chart. Check the release notes for the exact image digests to pin.</p>
   feedback loop.</li>
 <li><strong>Secure by default.</strong> Pod Security Admission, default-deny network policies,
   credentials kept out of environment variables, and signed images with a
-  Software Bill of Materials (SBOM) and SLSA provenance — reconciled, not opt-in.</li>
+  Software Bill of Materials (SBOM) and SLSA provenance — reconciled, not opt-in.
+  Sandboxed worker runtimes compose with all of it: <strong>Kata Containers is
+  validated</strong> on a nested-virtualization node pool and is the default for GAG's
+  own end-to-end CI, which builds a <code>kind</code> cluster inside an unprivileged worker
+  pod. See <a href="../operations/kata-dind-workloads/">Running DinD workloads under Kata</a>.</li>
 <li><strong>The v2 API — the recommended shape for new tenants.</strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> A decomposed
   <code>v2alpha1</code> (<code>actions-gateway.com</code>) API ships <em>beside</em> <code>v1alpha1</code> and is the path
   new tenants should onboard on: the single-acquirer <strong>runner-scale-set</strong> acquisition
@@ -2425,6 +2429,16 @@ last gaps an outside operator hits.</p>
 are intentionally uncommitted — each waits on a real operator need or a measured
 limit before it becomes scheduled work.</p>
 <ul>
+<li><strong>CI for untrusted pull requests on Kata workers.</strong> Kata micro-VM workers are
+  validated today, but only for <em>trusted</em> CI: the isolation bounds the guest
+  kernel, while the runner's egress stays permissive because its jobs pull from
+  CDN-fronted public registries that no CIDR allowlist can pin and that GKE
+  Dataplane V2 cannot enforce by fully-qualified domain name. The path to
+  running an external contributor's pull request safely is two pieces on top of
+  what already ships: an in-cluster pull-through registry mirror, so a worker
+  needs no direct registry egress at all, and a tight egress policy scoped to
+  that mirror, GitHub, and DNS. Designed, not built. If you run public OSS CI
+  and want this, say so on an issue: it is the trigger that schedules the work.</li>
 <li><strong>Controller horizontal scaling / high availability.</strong> The per-tenant
   controller is single-replica by design today; distributed session state would
   enable multi-replica HA if a single controller becomes a measured bottleneck.</li>

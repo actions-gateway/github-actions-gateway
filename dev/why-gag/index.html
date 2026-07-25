@@ -2592,6 +2592,30 @@ ships as reconciled defaults, not a post-install project.</p>
 </ul>
 </div>
 </div>
+<div class="admonition info">
+<p class="admonition-title">Sandboxed runtimes compose with these defaults, and GAG's own CI runs that way</p>
+<p>A sandboxed runtime is just a <code>runtimeClassName</code> on the worker pod template,
+so GAG and ARC can both set one. The differentiator is not that field. It is
+the layer underneath it, and the evidence that the combination holds.</p>
+<p><strong>Kata bounds the kernel, not the pod network.</strong> A micro-VM does not change
+the pod's network identity: the cloud metadata service still answers from
+<em>inside</em> the guest, so a compromised job can mint node credentials over the
+pod network even though the kernel it escaped into is disposable. GAG's
+default-deny NetworkPolicies are what close that path, reconciled per tenant
+rather than hand-built alongside. Kata is one layer, not a posture.</p>
+<p><strong>GAG's own end-to-end CI runs under it.</strong> The suite creates a <code>kind</code> cluster
+inside a worker pod with <code>runtimeClassName: kata</code> and <strong>zero</strong>
+<code>privileged: true</code>, validated on a nested-virtualization GKE node pool (node
+kernel <code>6.8.0-1054-gke</code>, guest kernel <code>6.18.35</code>), and the default for that
+suite ever since. The cluster-side how-to is written down, including
+the capability set an unprivileged <code>dockerd</code> needs and
+<a href="../operations/kata-dind-workloads/#what-kata-does-not-buy-you">what Kata does not buy you</a>.</p>
+<p><strong>This is not yet a claim about untrusted pull requests.</strong> That CI variant
+still runs a permissive egress policy, because its jobs pull from CDN-fronted
+public registries no CIDR allowlist can pin. Closing it takes an in-cluster
+pull-through mirror plus egress scoped to the mirror, GitHub, and DNS: see
+the <a href="../roadmap/#exploring--longer-term">roadmap</a>.</p>
+</div>
 <p>For the full threat model, per-profile controls, and the abuse-response
 playbooks, see <a href="../design/05-security/">Security</a> and
 <a href="../operations/security-operations/">Security operations</a>.</p>
