@@ -43,13 +43,13 @@ tagged chart. Check the release notes for the exact image digests to pin.
   rather than an always-on listener pod per runner group.
 - **Per-tenant isolated egress IPs.** A dedicated proxy pool per tenant gives
   each team its own GitHub egress IPs to allow-list, with a contained blast
-  radius. <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> In the v2 API the proxy is a standalone,
+  radius. <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> In the v2 API the proxy is a standalone,
   optionally shared `EgressProxy` (or omitted for direct egress), with a
   DNS-aware (FQDN) egress-policy mode on Cilium/Calico.
 - **Observability, per tenant and fleet-wide.** Prometheus metrics scoped per
   tenant and runner group, plus ready-to-apply Grafana dashboards and alerts as
   code, and a cross-tenant rollup for platform admins.
-- **Measured worker right-sizing.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> The gateway samples every
+- **Measured worker right-sizing.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> The gateway samples every
   worker pod's CPU/memory, publishes per-runner-set, per-job usage peaks, and
   derives the recommendation for you: recommended `requests`/`limits` surfaced
   in `RunnerSet` status (with sample count and observed p95/max for confidence)
@@ -68,24 +68,38 @@ tagged chart. Check the release notes for the exact image digests to pin.
   validated** on a nested-virtualization node pool and is the default for GAG's
   own end-to-end CI, which builds a `kind` cluster inside an unprivileged worker
   pod. See [Running DinD workloads under Kata](operations/kata-dind-workloads.md).
-- **The v2 API — the recommended shape for new tenants.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> A decomposed
-  `v2alpha1` (`actions-gateway.com`) API ships *beside* `v1alpha1` and is the path
+- **The v2 API — the recommended shape for new tenants.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> A decomposed
+  `actions-gateway.com` API ships *beside* `v1alpha1` and is the path
   new tenants should onboard on: the single-acquirer **runner-scale-set** acquisition
   protocol as the default (the same model ARC uses, no many-acquirers fan-out),
   reusable `RunnerTemplate` and cluster-wide `ClusterRunnerTemplate`, multiple scoped
   gateways per namespace, an optional standalone `EgressProxy`, per-gateway
   control-plane sizing (`agcResources`, optionally handed to a Vertical Pod Autoscaler
-  with `agcAutoscaling`), and a `v1 → v2` migration tool. The
+  with `agcAutoscaling`), and a `v1 → v2` migration tool. It has reached its first
+  stability contract: **`v2beta1`** is the graduated, ScaleSet-only storage and hub
+  version, `v2alpha1` stays served for coexistence and the `gag-migrate` on-ramp,
+  and the apiserver converts between them through a webhook the GMC hosts. The
   single-CR `v1alpha1` API (and its classic acquisition protocol) is still fully served
-  but **[deprecated](operations/v1alpha1-deprecation.md)** — it is removed on a
-  schedule tied to v2 reaching beta, not on an adoption count. See the migration
+  but **[deprecated](operations/v1alpha1-deprecation.md)**; removing them is the
+  near-term work below. See the migration
   guide's [Why upgrade to v2](operations/migration-v1-to-v2.md#why-upgrade-to-v2)
-  for the full list. Graduation toward `v2beta1` is near-term work (below).
+  for the full list.
 - **Day-2 operations.** Helm upgrade and rollback paths, a backup/restore and
   disaster-recovery runbook, and troubleshooting guides.
-- **Workload-identity credentials.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> Mint short-lived GitHub credentials through
+- **An onboarding and migration path that is already written.** A
+  [switching-from-ARC walkthrough](operations/migration-from-arc.md) that moves one
+  runner group across with zero downtime, a
+  [getting-started guide](getting-started.md) covering first-time GitHub App setup
+  and credential rotation, a cluster [pre-flight check](operations/install.md)
+  (`scripts/validate-cluster.sh`) that fails loudly on a network-policy-less CNI
+  rather than silently voiding tenant isolation, an
+  [air-gapped / private-registry install](operations/air-gapped-install.md), a
+  [recorded demo](demo.md) of one real job on a local kind cluster, and an
+  [interactive savings calculator](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc)
+  for the cost argument.
+- **Workload-identity credentials.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> Mint short-lived GitHub credentials through
   an external signer (`credentials.type: WorkloadIdentity`), so the GitHub App
-  private key never enters the cluster. Available in the `v2alpha1` API only —
+  private key never enters the cluster. Available in the v2 API only —
   v1's flat credential shape has no equivalent.
 
 See [Why GAG?](why-gag.md) for the capability-by-capability comparison against
@@ -97,26 +111,21 @@ for how to run each of the above.
 Work that is scoped and actively being built — adoption-enabling polish and the
 last gaps an outside operator hits.
 
-- **Coming-from-ARC migration guide.** A "switching from ARC" walkthrough mapping
-  scale sets to runner groups and runner labels, with the gotchas — the single
-  biggest switching-friction blocker today.
-- **Quantified cost story.** Real per-job and dollar figures plus an interactive
-  savings calculator versus ARC, replacing today's qualitative "lower cost"
-  framing.
-- **End-to-end demo.** A short screencast of a kind-cluster deploy showing a job
-  flow from GitHub to worker pod and back.
-- **Onboarding polish.** A first-time GitHub App setup walkthrough and a
-  `ResourceQuota` sizing helper so the first install lands cleanly.
-- **Install pre-flight check.** Validate the cluster (network-policy-enforcing
-  CNI, Kubernetes version, cert-manager, metrics-server) before install, so a
-  misconfigured cluster fails loudly instead of silently voiding tenant
-  isolation.
-- **Air-gapped / private-registry install.** Image-pull-secret support and a
-  mirror-the-images guide for egress-restricted enterprises.
-- **API graduation.** Promote the v2 API from `v2alpha1` toward `v2beta1` with a
-  conversion webhook and storage migration. The `v2beta1` cut is **ScaleSet-only** —
-  it retires the deprecated classic acquisition protocol and the `v1alpha1` API
-  together, on a named release announced at least one release ahead.
+- **Retiring `v1alpha1` and the classic acquisition protocol.** The graduation
+  that made this possible has shipped, so what remains is the removal itself:
+  the single-CR `v1alpha1` API and the classic (many-acquirers) protocol both
+  come out on a named release announced at least one release ahead. The
+  deprecation window opened at v1.1.0, and `gag-migrate` already moves a tenant
+  across without changing how jobs are acquired.
+- **Capacity-aware job intake.** Additional opt-in rungs on the pre-claim gate,
+  so a job is not claimed when the cluster demonstrably cannot place its worker:
+  one sourced from the scheduler's `Unschedulable` verdict (for fixed-size and
+  on-prem clusters) and one from a cluster-autoscaler or Karpenter declination
+  (for elastic clusters, where the scheduler signal alone is unsafe). Off by
+  default; the live quota-headroom check already ships.
+- **`ResourceQuota` sizing helper.** Turn a tenant's runner shapes and
+  concurrency into the quota numbers a platform admin should set, so the first
+  install lands without a guess.
 
 ## Exploring / longer-term
 
@@ -143,6 +152,29 @@ limit before it becomes scheduled work.
   (KEDA / VPA / custom HPA) or TLS certificate instead of the managed defaults.
 - **Cross-namespace proxy sharing.** Share an egress proxy pool across namespaces
   with explicit consent (same-namespace sharing already works).
+- **First-class GPU runner support.** Priority tiers and the `NodeShare` sizing
+  profile already carry the GPU cases, but GPU Operator / Node Feature Discovery
+  awareness, and `nodeSelector` / toleration / `RuntimeClass` conventions that
+  make a GPU runner set feel native, wait on a concrete GPU workload to design
+  against.
+- **A worker cache backend.** Workers are storage-less by design, so
+  `actions/cache` and Docker layer caching have no home. Adding an optional
+  PVC or object-store cache needs a security review of cross-job cache
+  isolation first: a shared cache between tenants' jobs is an obvious
+  exfiltration path.
+- **A warm worker pool.** An opt-in pool of idle pods per runner set, for teams
+  that still hit pod-schedule latency after image pre-pull and caching.
+- **gVisor validation.** The `runtimeClassName` path is validated end-to-end
+  with Kata; gVisor is documented but unproven on a real cluster. It waits on an
+  operator who wants lightweight syscall filtering for compute-only,
+  non-Docker-in-Docker jobs, since Kata already covers the DinD case.
+- **SPIFFE / SPIRE workload identity.** A keyless, SPIRE-backed signer slots
+  behind the existing signer interface alongside the deferred cloud-KMS
+  providers, for operators who want no GitHub App private key anywhere.
+- **An Operator Lifecycle Manager bundle.** Helm-only is the deliberate install
+  stance; an OperatorHub catalog entry waits on OpenShift demand.
+- **A published benchmark and case study.** Real GitHub-at-scale numbers behind
+  the cost model, which needs a funded scale run rather than a local cluster.
 
 ## How priorities are set
 

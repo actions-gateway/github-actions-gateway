@@ -111,6 +111,16 @@ The maintainer's job is to cut the tag and verify the result.
   the commit you are about to tag. Run `make check` locally as a final gate.
 - Choose the version `vX.Y.Z` (semver). The tag **must** match `v*` or
   `publish.yml` will refuse to publish.
+- **Reconcile [`docs/roadmap.md`](../roadmap.md) against
+  [`docs/STATUS.md`](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md)
+  before you tag.** The same freeze that applies to the announce bar applies
+  here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is
+  published permanently under that version. Nothing lints this. Walk the three
+  sections against the backlog: anything in *In progress / near-term* with no
+  Queue row has either shipped (move it to *Available now*) or been parked (move
+  it to *Exploring*), and a Deferred row describing a capability an adopter would
+  ask about belongs in *Exploring*. A 2026-07-25 audit found six of seven
+  near-term items already shipped.
 - **Bump the docs-site announce bar to this release, and land it before you tag.**
   The banner in [`overrides/main.html`](../../overrides/main.html) is the
   "vX.Y.Z is here" strip at the top of every page on the site. A stable tag push
