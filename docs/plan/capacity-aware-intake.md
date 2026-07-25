@@ -280,6 +280,44 @@ on the stuck pod. Verified upstream 2026-07-25:
   kube-scheduler's own reason**, so the discriminator must be the reporting
   controller, never the reason string alone.
 
+**One matcher per autoscaler project, not per cloud provider, and no plugin
+interface.** The obvious worry is a combinatorial integration surface, and the
+counts say otherwise, because both projects emit their events from shared core
+code that every provider vendors (verified 2026-07-25):
+
+| Project | Provider implementations | Event vocabularies |
+|---|---|---|
+| cluster-autoscaler | 36 dirs under `cloudprovider/`, ~30 real clouds (the rest are `builder`/`mocks`/`test`/`kubemark`/`kwok`) | 1 |
+| Karpenter | 16 listed in the `kubernetes-sigs/karpenter` README (AWS, Azure, GCP, IBM, OCI, Cluster API, Alibaba, Hetzner, Proxmox, Linode, …) | 1 |
+
+Searching either organization's provider code for those event reasons returns
+zero hits: CA emits from `processors/status/eventing_scale_up_processor.go` and
+Karpenter from `pkg/controllers/provisioning/scheduling/events.go`. So ~46
+providers collapse to two string matchers. The managed offerings are not a third
+vocabulary either: GKE's autoscaler is CA-derived, EKS runs upstream CA or
+Karpenter, AKS runs CA or Node Auto Provisioning (which is Karpenter), and
+OpenShift's MachineAutoscaler wraps CA.
+
+A provider abstraction is therefore not warranted, and the distinguishing rule is
+worth stating because this repo has legitimately built one before: **pluggable
+backends earn their keep when the *behavior* differs per provider, not when only
+the recognized input differs.** Q245's `--fqdn-policy-backend=cilium|calico|gke`
+needed real backends because each CNI requires emitting a different CRD. Here
+every autoscaler yields the same boolean and the same action, so a registry plus
+an interface plus a config field would be pure overhead over two `case` arms.
+
+**The proprietary tail is handled by the fail-open contract, not by research.**
+Commercial optimizers (CAST AI, Spot Ocean, Zesty) may emit their own events or
+none, and cannot be enumerated. An unrecognized autoscaler produces no match,
+which yields `declined=false`, which is exactly today's behavior. That asymmetry
+is the safety argument: a missed match costs nothing, a wrong match starves a
+tenant, so the matcher stays deliberately narrow and broad coverage is explicitly
+not a goal. If demand for a specific proprietary autoscaler ever appears, the
+extension point is data rather than code (an operator-settable list of extra
+`(reason, reportingController)` pairs, following the
+`--allowed-infra-priority-classes` allowlist pattern, ~20 lines and no per-vendor
+code). Documented here as an extension point; not built until asked for.
+
 **Scope.** A matcher over pod Events (new
 `cmd/agc/internal/controller/autoscaler_verdict.go`), read with a live
 (uncached) client **only** for pods already Pending past the scheduling grace and
@@ -357,6 +395,9 @@ than from completions, so it should not block this measurement.
   optimism) is the warm-worker-pool item,
   [G.12](../design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers)/[Q268](../STATUS.md#Q268).
 * Cross-RunnerSet coordination on a shared pool (§4 residual).
+* A pluggable autoscaler-provider interface, or coverage of every autoscaler.
+  Two matchers cover both open-source event vocabularies across ~46 provider
+  implementations, and fail-open covers the rest (§7).
 * Auto-detecting cluster elasticity to pick a mode. Open question, not scope: a
   reconcile-time *warning* when a mode's precondition looks violated (an
   autoscaler is present but the set asked for `SchedulerVerdict`) is cheap and
