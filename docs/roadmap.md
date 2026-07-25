@@ -111,19 +111,19 @@ for how to run each of the above.
 Work that is scoped and actively being built — adoption-enabling polish and the
 last gaps an outside operator hits.
 
-- **Retiring `v1alpha1` and the classic acquisition protocol.** The graduation
+- **Retiring `v1alpha1` and the classic acquisition protocol.** <!-- q:Q273 --> The graduation
   that made this possible has shipped, so what remains is the removal itself:
   the single-CR `v1alpha1` API and the classic (many-acquirers) protocol both
   come out on a named release announced at least one release ahead. The
   deprecation window opened at v1.1.0, and `gag-migrate` already moves a tenant
   across without changing how jobs are acquired.
-- **Capacity-aware job intake.** Additional opt-in rungs on the pre-claim gate,
+- **Capacity-aware job intake.** <!-- q:Q405,Q406 --> Additional opt-in rungs on the pre-claim gate,
   so a job is not claimed when the cluster demonstrably cannot place its worker:
   one sourced from the scheduler's `Unschedulable` verdict (for fixed-size and
   on-prem clusters) and one from a cluster-autoscaler or Karpenter declination
   (for elastic clusters, where the scheduler signal alone is unsafe). Off by
   default; the live quota-headroom check already ships.
-- **`ResourceQuota` sizing helper.** Turn a tenant's runner shapes and
+- **`ResourceQuota` sizing helper.** <!-- q:Q410 --> Turn a tenant's runner shapes and
   concurrency into the quota numbers a platform admin should set, so the first
   install lands without a guess.
 
@@ -133,7 +133,7 @@ Directions we expect to pursue as demand and validated evidence accumulate. Thes
 are intentionally uncommitted — each waits on a real operator need or a measured
 limit before it becomes scheduled work.
 
-- **CI for untrusted pull requests on Kata workers.** Kata micro-VM workers are
+- **CI for untrusted pull requests on Kata workers.** <!-- q:Q408 --> Kata micro-VM workers are
   validated today, but only for *trusted* CI: the isolation bounds the guest
   kernel, while the runner's egress stays permissive because its jobs pull from
   CDN-fronted public registries that no CIDR allowlist can pin and that GKE
@@ -143,37 +143,37 @@ limit before it becomes scheduled work.
   needs no direct registry egress at all, and a tight egress policy scoped to
   that mirror, GitHub, and DNS. Designed, not built. If you run public OSS CI
   and want this, say so on an issue: it is the trigger that schedules the work.
-- **Controller horizontal scaling / high availability.** The per-tenant
+- **Controller horizontal scaling / high availability.** <!-- q:Q169 --> The per-tenant
   controller is single-replica by design today; distributed session state would
   enable multi-replica HA if a single controller becomes a measured bottleneck.
-- **Richer egress proxy.** Optional allow-listing, rate-limiting, audit logging,
+- **Richer egress proxy.** <!-- q:Q19 --> Optional allow-listing, rate-limiting, audit logging,
   and per-runner-group proxy pools.
-- **Bring-your-own proxy infrastructure.** Supply your own proxy autoscaler
+- **Bring-your-own proxy infrastructure.** <!-- q:Q174 --> Supply your own proxy autoscaler
   (KEDA / VPA / custom HPA) or TLS certificate instead of the managed defaults.
-- **Cross-namespace proxy sharing.** Share an egress proxy pool across namespaces
+- **Cross-namespace proxy sharing.** <!-- q:Q166 --> Share an egress proxy pool across namespaces
   with explicit consent (same-namespace sharing already works).
-- **First-class GPU runner support.** Priority tiers and the `NodeShare` sizing
+- **First-class GPU runner support.** <!-- q:Q216 --> Priority tiers and the `NodeShare` sizing
   profile already carry the GPU cases, but GPU Operator / Node Feature Discovery
   awareness, and `nodeSelector` / toleration / `RuntimeClass` conventions that
   make a GPU runner set feel native, wait on a concrete GPU workload to design
   against.
-- **A worker cache backend.** Workers are storage-less by design, so
+- **A worker cache backend.** <!-- q:Q215 --> Workers are storage-less by design, so
   `actions/cache` and Docker layer caching have no home. Adding an optional
   PVC or object-store cache needs a security review of cross-job cache
   isolation first: a shared cache between tenants' jobs is an obvious
   exfiltration path.
-- **A warm worker pool.** An opt-in pool of idle pods per runner set, for teams
+- **A warm worker pool.** <!-- q:Q268 --> An opt-in pool of idle pods per runner set, for teams
   that still hit pod-schedule latency after image pre-pull and caching.
-- **gVisor validation.** The `runtimeClassName` path is validated end-to-end
+- **gVisor validation.** <!-- q:Q15 --> The `runtimeClassName` path is validated end-to-end
   with Kata; gVisor is documented but unproven on a real cluster. It waits on an
   operator who wants lightweight syscall filtering for compute-only,
   non-Docker-in-Docker jobs, since Kata already covers the DinD case.
-- **SPIFFE / SPIRE workload identity.** A keyless, SPIRE-backed signer slots
+- **SPIFFE / SPIRE workload identity.** <!-- q:Q214 --> A keyless, SPIRE-backed signer slots
   behind the existing signer interface alongside the deferred cloud-KMS
   providers, for operators who want no GitHub App private key anywhere.
-- **An Operator Lifecycle Manager bundle.** Helm-only is the deliberate install
+- **An Operator Lifecycle Manager bundle.** <!-- q:Q217 --> Helm-only is the deliberate install
   stance; an OperatorHub catalog entry waits on OpenShift demand.
-- **A published benchmark and case study.** Real GitHub-at-scale numbers behind
+- **A published benchmark and case study.** <!-- q:Q198 --> Real GitHub-at-scale numbers behind
   the cost model, which needs a funded scale run rather than a local cluster.
 
 ## How priorities are set

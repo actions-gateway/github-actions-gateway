@@ -91,7 +91,7 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-backlog plan-index-check no-plan-refs-check go-version-check license-header-check conflict-markers-check v2-api-sync-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: lint lint-backlog roadmap-check plan-index-check no-plan-refs-check go-version-check license-header-check conflict-markers-check v2-api-sync-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
 	@# Advisory, not a gate: the fast check deliberately omits the dependency-drift
 	@# gates (vendor-check/tidy-check/license-notices run in CI). This reminds you to
 	@# run `make vendor-sync` when a change touches dep files. Never fails the build.
@@ -144,7 +144,7 @@ v2-api-sync-check: ## Fail if a shared api/v2alpha1 + api/v2beta1 file diverges 
 # decision (which modules a diff makes golangci-lint cover). Lightweight
 # pure-bash checks; part of `check` and the CI shellcheck job.
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate, v2 API sync gate)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate)
 	scripts/verify-release-test.sh
 	scripts/validate-cluster-test.sh
 	scripts/lint-backlog-test.sh
@@ -153,6 +153,7 @@ scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, v
 	scripts/dogfood/validate-release-test.sh
 	scripts/dogfood/pool-test.sh
 	scripts/go-lint-scope-test.sh
+	scripts/check-roadmap-test.sh
 	scripts/check-conflict-markers-test.sh
 	scripts/check-v2-api-sync-test.sh
 
@@ -294,6 +295,15 @@ lint: $(GOLANGCI_LINT) ## Run gofmt (all modules) + golangci-lint, change-scoped
 .PHONY: lint-backlog
 lint-backlog: ## Enforce backlog format rules on docs/STATUS.md (vendored from the backlog skill)
 	scripts/lint-backlog.sh
+
+# The public roadmap and the backlog drift apart silently — a 2026-07-25 audit
+# found six of seven "near-term" items already shipped. Because done Queue rows
+# are deleted, a roadmap bullet naming a Q-ID that STATUS.md no longer has is an
+# exact signal the work shipped. Rationale + the annotation format are in the
+# script header.
+.PHONY: roadmap-check
+roadmap-check: ## Fail when docs/roadmap.md names backlog rows that shipped or moved tables
+	scripts/check-roadmap.sh
 
 # Catches the "closed plan never archived" drift that makes docs/plan/README.md
 # read as stale. Rationale + the ⓘ exemption live in the script header.
