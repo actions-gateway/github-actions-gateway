@@ -1,8 +1,14 @@
 # Worker Right-Sizing Profiles (Recommendations First)
 
 > **Status: 🔄 Phases 1–3 shipped 2026-07-21/22 — tracked as [Q359](../STATUS.md#Q359).**
-> Remaining: live dogfood validation of all three phases (rides the next
-> dogfood session). This doc is the design sketch and phase record.
+> Live-validated on dogfood 2026-07-25: usage observability, the status
+> recommendation and its derivation, restart persistence, and the profile's
+> below-confidence fallback all behave as specified. The two behaviours gated on
+> 20 sampled jobs — the `SizingDrift` verdict and `Binpack` actuating — are
+> still unvalidated, because job completion on dogfood capped the sample count
+> at 10 ([Q399](../STATUS.md#Q399)). See
+> [Live validation](#live-validation-2026-07-25). This doc is the design sketch,
+> the phase record, and now the validation record.
 
 ## Goal
 
@@ -188,8 +194,9 @@ Decisions taken at pickup (implementation:
 
 ## Live validation (2026-07-25)
 
-Run against the dogfood cluster rebuilt from zero the same session
-([Q380](../STATUS.md#Q380)), on a control-plane image built from `e0acd60`.
+Run against the dogfood cluster rebuilt from zero the same session (see the
+[GKE dogfood runbook](gke-dogfood.md)), on a control-plane image built from
+`e0acd60`.
 Every published image predated these phases, so the validation image had to be
 built by hand — worth knowing before the next attempt, since neither the pinned
 `GAG_IMAGE_TAG` default nor the newest release carries this code.
@@ -202,7 +209,8 @@ onto GAG with `unit-test.yml -f target_gag=true`.
 
 - `metrics.k8s.io` is served by GKE's own metrics-server addon; no install step.
   (It is *not* Available for roughly the first two minutes of a new cluster's
-  life, which is a from-zero preflight artifact — [Q397](../STATUS.md#Q397).)
+  life, so a from-zero bootstrap's preflight reports it missing and then it
+  self-resolves; that artifact is tracked on the dogfood runbook, not here.)
 - The AGC's ServiceAccount could `list pods.metrics.k8s.io` in the tenant
   namespace with no manual RBAC, confirming the shipped grant.
 - The sampler announced itself at startup: `worker usage sampler started`,
@@ -326,6 +334,38 @@ kubectl patch runnersets.v2alpha1.actions-gateway.com ci -n gag-dogfood \
 This is not specific to sizing — it blocks *any* unqualified edit of a Classic
 multi-label RunnerSet, including `kubectl edit` and re-`apply`. Filed as
 [Q398](../STATUS.md#Q398).
+
+### Not reached: the ≥20-sample paths
+
+Two behaviours need `MinSamplesForDrift` (20) sampled jobs on a template
+container, and the session topped out at **10**:
+
+- the actual `SizingDrift` verdict (`SizingWithinRange` vs `SizingDriftDetected`),
+  as opposed to the `InsufficientSamples` state that was confirmed;
+- `Binpack` actuating — `sizingProfileState: Active` with derived
+  `requests`==`limits` at Guaranteed QoS.
+
+The cap was **not** the sizing code. Roughly 10 of ~44 GAG jobs dispatched
+across nine `workflow_dispatch` rounds actually finalized; the rest report a
+`started_at` with no conclusion, and the AGC logged the Q254 teardown path
+(`RenewJob: job lock definitively lost … broker: job not found (HTTP 404)`),
+which is what a job disposed of GitHub-side looks like from the gateway. Since
+only finalized jobs become samples, sample accrual is bounded by that
+completion rate. Tracked separately as [Q399](../STATUS.md#Q399) — it is a
+dogfood reliability question, not a right-sizing one, and it will throttle any
+future validation that needs a job population.
+
+When picking this up again, note that the drift verdict is judged against the
+**template's** ask, not against new samples — so once a set is past 20 samples,
+both branches can be exercised in seconds by editing `RunnerTemplate`
+resources, with no further soak:
+
+- `SizingDriftDetected` (waste) needs an ask ≥2× the recommendation. On the
+  dogfood shape only **memory** can do this: 2× the ~2.3Gi recommendation still
+  fits an `e2-standard-4`, whereas 2× the ~3.75-core CPU recommendation exceeds
+  node allocatable and would leave worker pods `Pending` instead.
+- `SizingDriftDetected` (OOM risk) needs a memory *limit* below the observed
+  peak, which will genuinely OOM-kill jobs — do it on a throwaway set.
 
 ## Non-goals
 
