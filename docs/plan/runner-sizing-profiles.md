@@ -186,6 +186,93 @@ Decisions taken at pickup (implementation:
   phase. Question 4 confirmed: profile parameters live on the `RunnerSet`
   (differently-tuned sets can share one template).
 
+## Live validation (2026-07-25)
+
+Run against the dogfood cluster rebuilt from zero the same session
+([Q380](../STATUS.md#Q380)), on a control-plane image built from `e0acd60`.
+Every published image predated these phases, so the validation image had to be
+built by hand — worth knowing before the next attempt, since neither the pinned
+`GAG_IMAGE_TAG` default nor the newest release carries this code.
+
+Tenant: `gag-dogfood`, `RunnerSet` `ci`, runner container asking `cpu: 2` /
+`memory: 2Gi` with a `3Gi` memory limit. Load was the repo's own CI, dispatched
+onto GAG with `unit-test.yml -f target_gag=true`.
+
+### Prerequisites behaved as documented
+
+- `metrics.k8s.io` is served by GKE's own metrics-server addon; no install step.
+  (It is *not* Available for roughly the first two minutes of a new cluster's
+  life, which is a from-zero preflight artifact — [Q397](../STATUS.md#Q397).)
+- The AGC's ServiceAccount could `list pods.metrics.k8s.io` in the tenant
+  namespace with no manual RBAC, confirming the shipped grant.
+- The sampler announced itself at startup: `worker usage sampler started`,
+  `interval 15`.
+
+### Phase 1 — usage observability: confirmed
+
+Scraped from the AGC's `/metrics` over mTLS. All seven metric families are
+exported with live data, labelled by namespace, runner set, and container:
+
+| Signal | Observed |
+|---|---|
+| `..._cpu_peak_cores{container="runner"}` | `3.744` cores |
+| `..._memory_peak_bytes{container="runner"}` | `2.383e+09` (≈2.22 GiB) |
+| `..._job_cpu_peak_cores` / `..._job_memory_peak_bytes` | per-job histograms populating the expected buckets |
+| `..._jobs_sampled_total` | counting finalized jobs |
+| `..._jobs_unsampled_total` | non-zero — short jobs correctly excluded |
+| `..._poll_errors_total` | absent (never incremented) |
+
+Two independent things worth recording:
+
+- **The measured peak matches the earlier hand-derivation.** The
+  [dogfood right-sizing exercise](dogfood-runner-rightsizing.md) put heavy CI
+  jobs at roughly 3.8 vCPU / 2.1 GiB by scraping `kubectl top` by hand; the
+  sampler independently measured 3.74 cores / 2.22 GiB on the same workload.
+  That is the feature reproducing, automatically, the number it was built to
+  stop people deriving manually.
+- **`jobs_unsampled_total` earns its place.** Some CI jobs finish inside one
+  15s sample interval, and the counter makes that visible instead of silently
+  biasing the histogram toward long jobs.
+
+### Phase 3 — below-confidence fallback: confirmed
+
+With `spec.sizing.profile: Binpack` set while no container had reached
+`MinSamplesForDrift` samples:
+
+- `status.sizingProfileState` reported `AwaitingSamples`.
+- Worker pods provisioned the template's static ask verbatim
+  (`requests cpu 2 / memory 2Gi`, `limits memory 3Gi`) at **Burstable** QoS —
+  i.e. `Static`, not a partially-derived shape. Guaranteed QoS would have
+  indicated the profile actuating early.
+- No `SizingDrift` condition was set, matching the deliberate "no data, no
+  noise" branch rather than a `False/InsufficientSamples` on every set.
+
+### Editing a Classic RunnerSet needs an explicit version
+
+Enabling the profile the obvious way fails:
+
+```console
+$ kubectl patch runnerset ci -n gag-dogfood --type=merge \
+    -p '{"spec":{"sizing":{"profile":"Binpack"}}}'
+The RunnerSet "ci" is invalid: spec: Invalid value: a v2beta1 runner set must
+declare exactly one runnerLabel: v2beta1 is ScaleSet-only and the scale set's
+name is its single runs-on match target (Q264)
+```
+
+The object is a `Classic` set with three `runnerLabels` — a shape v2alpha1
+allows and v2beta1 does not. Unqualified `kubectl` addresses the storage
+version (v2beta1), so the write is rejected even though the field being set has
+nothing to do with labels or protocol. Qualifying the resource works:
+
+```bash
+kubectl patch runnersets.v2alpha1.actions-gateway.com ci -n gag-dogfood \
+  --type=merge -p '{"spec":{"sizing":{"profile":"Binpack"}}}'
+```
+
+This is not specific to sizing — it blocks *any* unqualified edit of a Classic
+multi-label RunnerSet, including `kubectl edit` and re-`apply`. Filed as
+[Q398](../STATUS.md#Q398).
+
 ## Non-goals
 
 - **AGC / GMC / proxy-pool autoscaling** — separate concerns, both shipped:
