@@ -2798,11 +2798,17 @@ the signing and chart-publish paths work.</p>
   The banner in <a href="../../overrides/main.html"><code>overrides/main.html</code></a> is the
   "vX.Y.Z is here" strip at the top of every page on the site. A stable tag push
   deploys that tag's docs wholesale, so whatever the banner says at tag time is
-  what the released version advertises, permanently. This has been missed before:
-  both <code>v1.1.0</code> and <code>v1.2.0</code> shipped still saying <em>"v1.0.0 is here"</em>. Verify with:</li>
+  what the released version advertises, permanently. Every stable tag to date has
+  missed this: <code>v1.0.0</code> shipped saying <em>"Alpha, pre-1.0"</em>, and <code>v1.1.0</code> and
+  <code>v1.2.0</code> both said <em>"v1.0.0 is here"</em>. Verify with:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>grep<span class="w"> </span>-o<span class="w"> </span><span class="s1">&#39;&lt;strong&gt;[^&lt;]*&lt;/strong&gt;&#39;</span><span class="w"> </span>overrides/main.html<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>awk<span class="w"> </span><span class="s1">&#39;/block announce/,/endblock/&#39;</span><span class="w"> </span>overrides/main.html
 </code></pre></div>
+<p><strong><code>publish.yml</code> now enforces this</strong> via its <code>announce-bar</code> job, which every
+  publishing job depends on. A stable tag whose banner does not name it fails the
+  release before any image is pushed, so a miss costs you a re-cut tag rather than
+  a wrong release. Prereleases are exempt: they publish no docs, and the banner
+  should name the GA version rather than churn through every RC.</p>
 <p>(A <code>docs_ref</code> seed of an already-cut release pins <code>overrides/</code> to the current
   checkout instead, so re-seeding repairs past tags. That safety net does <strong>not</strong>
   apply to a fresh tag push. See
@@ -3106,6 +3112,10 @@ chart pins it.</p>
 break; signing, SBOM attestation, and build-provenance attestation are all first
 exercised on a real <code>v*</code> tag, which is why step 3 verification matters on every
 release.</p>
+<p><code>publish.yml</code> also runs one <strong>pre-publish gate</strong>, <code>announce-bar</code>, that every
+publishing job depends on. It is deliberately cheap and runs first, so a stale
+docs-site banner (see <a href="#1-pre-flight">Pre-flight</a>) stops the release before an
+image, chart, or GitHub Release exists, rather than after.</p>
 <h2 id="supply-chain-integrity-of-the-pipeline-itself">Supply-chain integrity of the pipeline itself<a class="headerlink" href="#supply-chain-integrity-of-the-pipeline-itself" title="Permanent link">&para;</a></h2>
 <p>The publish job holds <code>packages: write</code> + <code>id-token: write</code> + <code>attestations:
 write</code>: its ambient OIDC identity <em>is</em> the release trust root. A hijacked upstream action tag executing in
