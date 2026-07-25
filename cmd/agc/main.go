@@ -558,6 +558,12 @@ func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *listener.Metrics,
 	// secure-by-default worker SecurityContext to the namespace's PSA level.
 	prov.SecurityProfile = cfg.SecurityProfile
 	prov.HTTPClient = httpClient
+	// #784: the admission gate refuses to claim a job when the namespace
+	// ResourceQuota has no headroom for its worker pod, instead of claiming it and
+	// burning lock time in createPodWithQuotaRetry. ON by default; AGC_QUOTA_ADMISSION=false
+	// reverts to the pre-#784 behaviour. Operator runbook: the quota-backpressure
+	// section in docs/operations/troubleshooting.md.
+	prov.DisableQuotaAdmission = cfg.QuotaAdmission == "false"
 	if cfg.WorkerImage != "" {
 		prov.DefaultWorkerImage = cfg.WorkerImage
 	}

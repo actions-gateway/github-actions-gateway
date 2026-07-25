@@ -47,14 +47,16 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	// explicit release (the deduped-loser path below) together free it exactly once.
 	var admitRelease func()
 	if cfg.Admit != nil {
-		release, ok := cfg.Admit(ctx)
+		release, ok, reason := cfg.Admit(ctx)
 		if !ok {
 			if cfg.Metrics != nil {
-				cfg.Metrics.JobsAdmissionRejectedTotal.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
+				cfg.Metrics.JobsAdmissionRejectedTotal.WithLabelValues(cfg.Namespace, cfg.Group, reason).Inc()
 			}
 			// Per-delivery line that can be high-volume under sustained capacity
 			// pressure; Debug, with the metric as the operator-facing signal (Q87, Theme D).
-			log.Debug("job admission rejected: worker capacity full; leaving job queued for redelivery", "messageId", msg.MessageID)
+			// reason distinguishes the configured ceiling from exhausted namespace quota.
+			log.Debug("job admission rejected: no worker capacity; leaving job queued for redelivery",
+				"reason", reason, "messageId", msg.MessageID)
 			return false, nil
 		}
 		admitRelease = release

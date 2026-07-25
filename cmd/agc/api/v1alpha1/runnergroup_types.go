@@ -96,6 +96,12 @@ type RunnerGroupSpec struct {
 	// namespace ResourceQuota is exhausted. The AGC holds the job lock and waits for
 	// quota to free up between attempts. Set to 0 to disable quota retry. Defaults to
 	// 5 when omitted.
+	//
+	// This is the backstop, not the first line of defence: the admission gate already
+	// declines to claim a job when the quota has no headroom, so this path is reached
+	// only for what that live check cannot see — a sibling AGC or another workload
+	// taking the headroom first, an eventually-consistent ResourceQuota .status, or an
+	// AGC restart between the claim and the pod create.
 	// +optional
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=20
