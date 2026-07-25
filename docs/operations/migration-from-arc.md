@@ -211,7 +211,7 @@ Differences and quirks an ARC operator should know:
 
 | Area | ARC scale-set behavior | GAG behavior | What to do |
 |---|---|---|---|
-| **Evicted / quota-blocked job** | Runner marked `Failed`; job sits in GitHub's queue until a **manual rerun** | The job lock is fast-cancelled and the job **re-queued automatically**; it runs as soon as capacity frees | Nothing — this is the headline upgrade. You can stop the manual-rerun runbook. |
+| **Evicted / quota-blocked job** | Runner marked `Failed`; job sits in GitHub's queue until a **manual rerun** | The job is cancelled when its lock lapses (~10 min at worst) and **re-queued automatically**; it runs as soon as capacity frees | Nothing — this is the headline upgrade. You can stop the manual-rerun runbook. |
 | **Job routing** | `runs-on: <scale-set-name>` (single name) | same single-name model | [Carry the name across as the label](#job-routing-a-11-map); no workflow edit. |
 | **Auth** | PAT or GitHub App | **GitHub App only** | Create a GitHub App if you were on a PAT. |
 | **Listener** | one always-on pod per scale set, 24/7 | one shared goroutine pod per gateway | No action; expect far fewer pods/IPs at rest. |

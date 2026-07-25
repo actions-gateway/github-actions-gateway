@@ -28,7 +28,7 @@ Running many runner groups for one tenant in a shared Kubernetes namespace creat
 
 **Listener overhead at scale.** ARC runs one listener pod per scale set — held alive 24/7 to long-poll GitHub, each costing a pod slot, a cluster IP, a scheduling unit, an image to pull, and an upgrade surface. A tenant with 10 scale sets holds 10 always-on pods and 10 cluster IPs at rest, before any job runs. Teams that also pin `minRunners > 0` to mask runner-pod cold-start latency multiply this further with idle runner pods on expensive hardware.
 
-**No automatic recovery from worker eviction.** When a runner pod is preempted, OOM-killed, or lost to a node failure, ARC has no built-in flow to fast-cancel the GitHub job lock and rerun. The runner is left orphaned and the job stays stuck in GitHub's queue until someone manually clears the runner and reruns the workflow; the only automatic backstop is GitHub's own queue timeout, documented as at least 24 hours with queue times reaching up to 48.
+**No automatic recovery from worker eviction.** When a runner pod is preempted, OOM-killed, or lost to a node failure, ARC has no built-in flow to cancel the GitHub job lock and rerun. The runner is left orphaned and the job stays stuck in GitHub's queue until someone manually clears the runner and reruns the workflow; the only automatic backstop is GitHub's own queue timeout, documented as at least 24 hours with queue times reaching up to 48.
 
 **Platform team as bottleneck.** Onboarding a tenant means provisioning namespace, quotas, controller scope, scale sets, NetworkPolicies, and egress — a platform-team checklist per team. Subsequent changes (new runner type, quota adjustment, scaling tweak) land as tickets.
 

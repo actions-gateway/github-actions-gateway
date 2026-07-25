@@ -21,7 +21,7 @@ hide:
 <div class="gag-vs-hero__proof">
   <p class="gag-vs-hero__proof-cap">When a worker is evicted or blocked by a full <code>ResourceQuota</code></p>
   <div class="gag-vs-row gag-vs-row--arc"><span class="gag-vs-row__tag">ARC</span><span class="gag-vs-row__text">the runner is marked <code>Failed</code> and the job sits in GitHub's queue until someone reruns it by hand</span></div>
-  <div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">the job lock is fast-cancelled and the job re-queued automatically — it runs as soon as capacity frees up, no manual rerun</span></div>
+  <div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">the job is cancelled when its lock lapses (~10 min at worst) and re-queued automatically: no manual rerun, and it runs as soon as capacity frees up</span></div>
 </div>
 </div>
 

@@ -33,7 +33,7 @@ kubectl edit resourcequota -n <namespace> <quota-name>
 # Update spec.hard values, save and exit
 ```
 
-The change takes effect immediately. Running jobs are not interrupted; the new quota applies on the next pod creation attempt. The gateway reads remaining quota and reacts to exhaustion (it fast-cancels and reruns quota-blocked jobs) but never writes the quota itself.
+The change takes effect immediately. Running jobs are not interrupted; the new quota applies on the next pod creation attempt. The gateway reads remaining quota and reacts to exhaustion (it won't claim a job the quota can't place, and lock-cancels then reruns any job that loses headroom after the claim) but never writes the quota itself.
 
 ---
 

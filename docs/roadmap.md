@@ -28,9 +28,10 @@ tagged chart. Check the release notes for the exact image digests to pin.
 - **One resource per tenant.** A single `ActionsGateway` custom resource
   provisions an isolated gateway — controller, egress proxy pool, role-based
   access control (RBAC), and network policies — inside the platform-owned quota.
-- **Automatic recovery for blocked and evicted jobs.** A quota-blocked or
-  evicted job has its GitHub lock fast-cancelled and is re-queued, with a
-  per-job retry budget — no manual rerun.
+- **Automatic recovery for blocked and evicted jobs.** A quota-blocked job is
+  never claimed, so it stays queued for a sibling with capacity; an evicted job
+  is cancelled at GitHub when its lock lapses (~10 min at worst) and re-queued,
+  with a per-job retry budget. No manual rerun either way.
 - **Priority tiers per runner group.** Reserve a guaranteed floor of slots for
   expensive runner types so cheap CPU jobs can't starve critical GPU work.
 - **Worker scale-up rate limiting (opt-in).** An optional per-runner-group token
