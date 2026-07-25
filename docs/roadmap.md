@@ -64,6 +64,10 @@ tagged chart. Check the release notes for the exact image digests to pin.
 - **Secure by default.** Pod Security Admission, default-deny network policies,
   credentials kept out of environment variables, and signed images with a
   Software Bill of Materials (SBOM) and SLSA provenance — reconciled, not opt-in.
+  Sandboxed worker runtimes compose with all of it: **Kata Containers is
+  validated** on a nested-virtualization node pool and is the default for GAG's
+  own end-to-end CI, which builds a `kind` cluster inside an unprivileged worker
+  pod. See [Running DinD workloads under Kata](operations/kata-dind-workloads.md).
 - **The v2 API — the recommended shape for new tenants.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> A decomposed
   `v2alpha1` (`actions-gateway.com`) API ships *beside* `v1alpha1` and is the path
   new tenants should onboard on: the single-acquirer **runner-scale-set** acquisition
@@ -120,6 +124,16 @@ Directions we expect to pursue as demand and validated evidence accumulate. Thes
 are intentionally uncommitted — each waits on a real operator need or a measured
 limit before it becomes scheduled work.
 
+- **CI for untrusted pull requests on Kata workers.** Kata micro-VM workers are
+  validated today, but only for *trusted* CI: the isolation bounds the guest
+  kernel, while the runner's egress stays permissive because its jobs pull from
+  CDN-fronted public registries that no CIDR allowlist can pin and that GKE
+  Dataplane V2 cannot enforce by fully-qualified domain name. The path to
+  running an external contributor's pull request safely is two pieces on top of
+  what already ships: an in-cluster pull-through registry mirror, so a worker
+  needs no direct registry egress at all, and a tight egress policy scoped to
+  that mirror, GitHub, and DNS. Designed, not built. If you run public OSS CI
+  and want this, say so on an issue: it is the trigger that schedules the work.
 - **Controller horizontal scaling / high availability.** The per-tenant
   controller is single-replica by design today; distributed session state would
   enable multi-replica HA if a single controller becomes a measured bottleneck.

@@ -434,19 +434,29 @@ egress to `169.254.169.254/32`. Kata alone is not the control.
   forever and keeps the worker pod from reaping, stranding the runner slot.
   See [In-runner image builds § Sidecar containers must be native
   sidecars](in-runner-image-builds.md#sidecar-containers-must-be-native-sidecars-q249).
-- **Validated as an architecture; GAG's own CI cutover is in flight.** The
+- **Validated as an architecture, and GAG's own CI runs on it.** The
   unprivileged `dockerd` + `kind` path was proven end-to-end on GKE
   (`1.35.5-gke.1241004`, Ubuntu 24.04, `c2-standard-4` nested-virt, Kata
   3.32.0/QEMU) — see [Kata Containers on GKE](../plan/archive/kata-on-gke.md) for the
   evidence. GAG's dogfood e2e ships the Kata worker shape as
   [`deploy/dogfood-e2e/overlays/kata`](../../deploy/dogfood-e2e/overlays/kata)
-  (selected with `E2E_VARIANT=kata scripts/dogfood/e2e-start.sh`); no bundled
-  all-in-one runner image is needed — the daemon is a stock `docker:28-dind`
-  native sidecar with a six-step entrypoint, and the toolchain rides the
-  regular runner container. A full `make e2e` run green through that overlay
-  (and the subsequent default flip from `dind` to `kata`) is the remaining
-  Q286 gate. Confirm the steps on your own cluster before cutting over
-  privileged workloads.
+  and selects it **by default**; `E2E_VARIANT=dind scripts/dogfood/e2e-start.sh`
+  is the explicit fallback. No bundled all-in-one runner image is needed: the
+  daemon is a stock `docker:28-dind` native sidecar with a six-step entrypoint,
+  and the toolchain rides the regular runner container. A full `make e2e` run is
+  green through that overlay. Confirm the steps on your own cluster before
+  cutting over privileged workloads.
+- **The validated posture is *trusted* CI, not untrusted pull requests.** Kata
+  bounds the guest kernel, but it does not narrow egress, and GAG's own e2e
+  tenant runs a permissive egress policy because its jobs pull from CDN-fronted
+  public registries: a CIDR allowlist rots, and fully-qualified-domain-name
+  policy is not enforceable on GKE Dataplane V2. Running an external
+  contributor's pull request on this shape safely needs an in-cluster
+  pull-through registry mirror, so workers need no direct registry egress, plus
+  an egress policy scoped to that mirror, GitHub, and DNS. Until you have both,
+  treat Kata isolation as protection against a kernel escape, not as a licence
+  to run untrusted code. See
+  [Appendix G.14](../design/appendix-g-future-enhancements.md#g14-kata-e2e-untrusted-pr-posture--tight-egress--in-cluster-pull-through-mirror).
 
 ## Related
 
