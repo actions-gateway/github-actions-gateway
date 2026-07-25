@@ -115,9 +115,20 @@ jobs:
         #     step's `cp`) and a site_url still on the old github.io project
         #     subpath, which would give that version dead canonical URLs, sitemap,
         #     and announce-bar links. Both are pinned to this checkout.
+        #   - `overrides/`: site chrome, not release documentation. Its announce
+        #     bar advertises the newest release site-wide, which is exactly the
+        #     signal a visitor reading older docs needs. Taking it from the tag
+        #     instead pins each version to whatever the banner said the day it was
+        #     cut, and the banner has historically lagged: both v1.1.0 and v1.2.0
+        #     shipped still saying "v1.0.0 is here", so a faithful seed left the
+        #     default landing page advertising a two-releases-stale version.
         #   - mkdocs.yml's `extra.version` block: a pre-versioning tag has none,
         #     so its pages would render with no version selector, stranding a
         #     visitor on an old release.
+        #
+        # NOTE this only covers seeds. A stable tag push has a blank `docs_ref`
+        # and builds the tag wholesale, overrides included, so the banner must
+        # still be correct IN the tag: see docs/operations/release.md, Pre-flight.
         #
         # The overrides ride in an INHERIT overlay rather than a YAML rewrite, so
         # the tag's own nav and config stay byte-for-byte intact (mkdocs deep-merges
@@ -132,7 +143,7 @@ jobs:
               exit 1
             fi
 
-            git checkout "${DOCS_REF}" -- docs mkdocs.yml overrides
+            git checkout "${DOCS_REF}" -- docs mkdocs.yml
             git checkout HEAD -- docs/CNAME
 
             config="mkdocs.versioned.yml"

@@ -111,6 +111,21 @@ The maintainer's job is to cut the tag and verify the result.
   the commit you are about to tag. Run `make check` locally as a final gate.
 - Choose the version `vX.Y.Z` (semver). The tag **must** match `v*` or
   `publish.yml` will refuse to publish.
+- **Bump the docs-site announce bar to this release, and land it before you tag.**
+  The banner in [`overrides/main.html`](../../overrides/main.html) is the
+  "vX.Y.Z is here" strip at the top of every page on the site. A stable tag push
+  deploys that tag's docs wholesale, so whatever the banner says at tag time is
+  what the released version advertises, permanently. This has been missed before:
+  both `v1.1.0` and `v1.2.0` shipped still saying *"v1.0.0 is here"*. Verify with:
+
+  ```bash
+  grep -o '<strong>[^<]*</strong>' overrides/main.html | head -1
+  ```
+
+  (A `docs_ref` seed of an already-cut release pins `overrides/` to the current
+  checkout instead, so re-seeding repairs past tags. That safety net does **not**
+  apply to a fresh tag push. See
+  [website.md § Seeding](../development/website.md#seeding-already-released-versions).)
 
 #### Validate the release candidate on dogfood
 
