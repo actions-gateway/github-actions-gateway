@@ -2914,7 +2914,7 @@ HPA-managed between <code>spec.minReplicas</code> and <code>maxReplicas</code>.<
 <tr>
 <td><strong>Evicted / quota-blocked job</strong></td>
 <td>Runner marked <code>Failed</code>; job sits in GitHub's queue until a <strong>manual rerun</strong></td>
-<td>The job lock is fast-cancelled and the job <strong>re-queued automatically</strong>; it runs as soon as capacity frees</td>
+<td>The job is cancelled when its lock lapses (~10 min at worst) and <strong>re-queued automatically</strong>; it runs as soon as capacity frees</td>
 <td>Nothing — this is the headline upgrade. You can stop the manual-rerun runbook.</td>
 </tr>
 <tr>

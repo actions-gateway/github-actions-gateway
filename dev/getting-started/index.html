@@ -2487,9 +2487,10 @@ to supply defaults it is refused with <code>must specify requests.cpu</code> and
 schedules. The <code>LimitRange</code> above fills that gap (and covers any worker pod whose
 runner group leaves requests unset). See
 <a href="../operations/tenant-onboarding/#copy-pasteable-template">Tenant Onboarding — LimitRange caveat</a>.</p>
-<p>The gateway reads remaining quota and reacts to exhaustion (it fast-cancels and
-reruns quota-blocked jobs — see <a href="../why-gag/">why-gag</a>), but the quota itself is
-yours to size and own.</p>
+<p>The gateway reads remaining quota and reacts to exhaustion (it won't claim a job
+the quota can't place, and lock-cancels then reruns any job that loses headroom
+after the claim — see <a href="../why-gag/">why-gag</a>), but the quota itself is yours to
+size and own.</p>
 <h2 id="3-create-a-github-app-credential-secret">3. Create a GitHub App credential Secret<a class="headerlink" href="#3-create-a-github-app-credential-secret" title="Permanent link">&para;</a></h2>
 <p>Create this in the tenant's namespace:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>

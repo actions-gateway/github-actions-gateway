@@ -3172,7 +3172,7 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>resourcequota<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;quota-name&gt;
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Update spec.hard values, save and exit</span>
 </code></pre></div>
-<p>The change takes effect immediately. Running jobs are not interrupted; the new quota applies on the next pod creation attempt. The gateway reads remaining quota and reacts to exhaustion (it fast-cancels and reruns quota-blocked jobs) but never writes the quota itself.</p>
+<p>The change takes effect immediately. Running jobs are not interrupted; the new quota applies on the next pod creation attempt. The gateway reads remaining quota and reacts to exhaustion (it won't claim a job the quota can't place, and lock-cancels then reruns any job that loses headroom after the claim) but never writes the quota itself.</p>
 <hr />
 <h3 id="scaling-maxlisteners">Scaling maxListeners<a class="headerlink" href="#scaling-maxlisteners" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
