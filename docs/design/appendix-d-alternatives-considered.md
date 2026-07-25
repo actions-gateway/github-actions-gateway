@@ -230,4 +230,64 @@ the shipped core, not a better first implementation.
 
 ---
 
+## D.8. Gating Intake on Capacity: Which Signals Are Safe to Gate On
+
+The pre-acquisition admission gate refuses to claim a job from GitHub when the
+worker pod that job needs cannot be provisioned, because a claimed job holds a
+single-use JIT runner record and a ticking job lock. Two rungs are implemented:
+the owner's declared worker ceiling (Q59) and observed namespace-`ResourceQuota`
+headroom (#784). A third, obvious-looking rung is deliberately **not**
+implemented on the same terms: the scheduler's own `Unschedulable` verdict, which
+the `WorkersUnschedulable` condition already publishes as observability.
+
+That looks inconsistent, and the reason it is not is worth recording, because it
+does not appear to be written down anywhere in the ecosystem and it explains why
+every other runner controller settled for timeouts instead.
+
+**The principle.** A capacity signal is safe to gate intake on if, and only if,
+**no other actor is waiting on that signal to make capacity appear.** Gating
+suppresses the signal; suppressing a signal that something else acts on destroys
+the rescue.
+
+Applied to the four signals:
+
+| Signal | Is it an input to another actor? | Safe to gate on |
+|---|---|---|
+| `ResourceQuota` headroom | No. No autoscaler adds a node because a namespace quota is full. Self-clearing as in-flight jobs finish. | Yes, unconditionally (#784) |
+| Scheduler `Unschedulable` verdict | **Only if a cluster autoscaler is running.** A Pending unschedulable pod *is* the request for a node. | Conditionally: yes on a cluster that cannot grow, no otherwise |
+| Autoscaler declination (`NotTriggerScaleUp`, Karpenter `FailedScheduling`) | No. The actor already evaluated this pod and declined, so nothing further is pending on it. | Yes |
+| `ProvisioningRequest` `check-capacity` answer | No. Asking *is* the request for capacity, so the trigger is not forfeited. | Yes (Appendix [G.16](appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
+
+Three consequences follow.
+
+**Elasticity is a property of the cluster, not of the signal.** The scheduler's
+verdict is the *same* fact on every cluster; only the presence of an autoscaler
+changes whether acting on it is safe. So the choice cannot be made once in code.
+It is an operator input, and on a fixed-size cluster (on-premises, a contracted
+node count) the cheapest rung is also the correct one, because no rescue was ever
+coming and every wasted claim is pure loss.
+
+**Even where gating is safe, it should rate-limit rather than hard-stop.** A gate
+derived from the existence of a stuck pod is self-clearing: intake stops, the pod
+is reaped at `pendingPodDeadline`, the condition clears, one job is claimed, and
+the cycle repeats. A burst of *N* wasted claims becomes roughly one per deadline
+window while a Pending pod remains present for much of it, which keeps any
+autoscaler being asked and keeps the tenant discovering recovery. Rate-bounding,
+not elimination, is the achievable property.
+
+**Predicting placement in-process is not a fourth option.** Reimplementing the
+scheduler's filter plugins (taints, affinity, topology spread, DRA, extended
+resources) is a large surface that will drift from the scheduler.
+`WorkersUnschedulable` deliberately reads the scheduler's verdict rather than
+guessing, and any capacity rung should delegate for the same reason.
+
+**Verdict:** the quota rung is unconditionally safe and is implemented; the
+scheduler-verdict rung is safe exactly where nothing will act on the pod, so it
+belongs behind an explicit, off-by-default operator choice; the autoscaler's own
+declination and a solicited `ProvisioningRequest` answer are both safe and differ
+only in cost. The sequencing of those rungs is planned in
+[capacity-aware-intake.md](../plan/capacity-aware-intake.md).
+
+---
+
 ← [Appendix C](appendix-c-ai-implementation.md) | [Back to index](README.md)
