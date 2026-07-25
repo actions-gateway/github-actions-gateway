@@ -1,0 +1,61 @@
+# Kyverno PolicyException — let github-actions-gateway (GAG) pods through a
+# strict cluster baseline that would otherwise reject them.
+#
+# Apply this ONLY if you run strict cluster-wide Kyverno policies that GAG pods
+# legitimately cannot satisfy. The two GAG cannot meet are:
+#
+#   * readOnlyRootFilesystem — NO worker profile sets it; the runner writes to
+#     its working tree, tool cache, and temp dirs on the root filesystem.
+#   * drop-ALL-capabilities / allowPrivilegeEscalation:false — the DEFAULT
+#     `baseline` worker profile does not set these, because baseline CI relies
+#     on in-job sudo. (Tenants on securityProfile: restricted DO satisfy them
+#     and need no exception.)
+#
+# See ../../../admission-policies.md for the full compatibility matrix.
+#
+# Requires Kyverno's PolicyExceptions feature to be enabled
+# (--enablePolicyException, and the exception's own namespace allowlisted via
+# --exceptionNamespace). Edit the policyName/ruleNames below to match the actual
+# names of YOUR strict cluster policies — the values here assume the common
+# Kyverno "Pod Security Standards (restricted)" policy names.
+#
+# This exception is deliberately narrow: it names specific rules, not whole
+# policies, so every other guardrail in those policies still applies to GAG pods.
+apiVersion: kyverno.io/v2
+kind: PolicyException
+metadata:
+  name: gag-pods-exception
+  # Place this in the namespace Kyverno is configured to read exceptions from
+  # (often `kyverno`). It applies cluster-wide via the match block below.
+  namespace: kyverno
+spec:
+  # Scope: pods in GAG tenant namespaces (marker label) plus the GMC install
+  # namespace. Replace `actions-gateway-system` with your GMC install namespace
+  # if you changed it.
+  match:
+    any:
+      - resources:
+          kinds: [Pod]
+          namespaceSelector:
+            matchLabels:
+              actions-gateway.github.com/tenant: "true"
+      - resources:
+          kinds: [Pod]
+          namespaces: [actions-gateway-system]
+  exceptions:
+    # Exempt GAG pods from the read-only-root-filesystem requirement.
+    - policyName: require-ro-rootfs
+      ruleNames:
+        - validate-readOnlyRootFilesystem
+        - autogen-validate-readOnlyRootFilesystem
+    # Exempt DEFAULT (baseline-profile) worker pods from the strict
+    # capability-drop / no-privilege-escalation rules. Remove this block if all
+    # your tenants run securityProfile: restricted (those workers comply).
+    - policyName: disallow-capabilities-strict
+      ruleNames:
+        - require-drop-all
+        - autogen-require-drop-all
+    - policyName: disallow-privilege-escalation
+      ruleNames:
+        - privilege-escalation
+        - autogen-privilege-escalation
