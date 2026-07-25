@@ -322,6 +322,12 @@ Both GitHub doubles model the real backend's long poll: an empty poll is **held*
 
 The AGC's scale-set listener also enforces its own floor (`minPollInterval`) between two consecutive polls that deliver nothing, so a *real* backend that declines to hold the poll cannot spin it either. That is defense in depth, not a substitute — a double that does not long-poll still distorts every timing assertion around it.
 
+### The broker doubles share one protocol core
+
+Three broker doubles implement the GitHub Actions broker wire protocol: [`broker/brokertest`](../../broker/brokertest/) (the in-process integration stub), [`test/fakegithub`](../../test/fakegithub/) (the deployed Tier B e2e image), and the [load harness stub](../../cmd/agc/test/load/broker_stub.go). They diverge in what a job delivery and an AcquireJob *mean* — fan-out accounting (Q260), single-use JIT consumption (Q114), saturated auto-delivery — but the session and credential *mechanics* are identical: minting `session-<n>` IDs, resolving a DELETE by its `sessionId` query param or bearer token, owner-scoped session listing, and the connection-reuse-safe JSON framing. Those live once in [`broker/brokerstub`](../../broker/brokerstub/) (Q368); each double layers its own delivery/acquire policy on top. `broker/brokerstub` is deliberately **standard-library-only** so the fakegithub distroless image links no third-party code — do not import the `broker` client (or anything else) into it.
+
+**No `package main` may reach `net/http/httptest`.** A production binary must never link a test server. `TestNoPackageMainReachesHTTPTest` (in `cmd/probe/compat`) enforces this: it walks every `package main` in the workspace and fails if any transitively imports `net/http/httptest` in its compiled build graph (`go list -deps`, so a `_test.go` file importing httptest — as fakegithub's own tests do — is correctly ignored). It runs in `make check`; a stray import of a broker double into a shipped binary fails the gate.
+
 ## Load tests
 
 The load harness (Q13) pins the design's headline capacity claim — thousands of virtual runner sessions multiplexed per AGC, each costing one re-registration per job (the single-use JIT lifecycle, Q114). It is gated by the `//go:build load` tag and lives under [`cmd/agc/test/load/`](../../cmd/agc/test/load/); its [README](../../cmd/agc/test/load/README.md) documents every knob and how to read the output, and [milestone-5.md §2](../plan/milestone-5.md) the design rationale.

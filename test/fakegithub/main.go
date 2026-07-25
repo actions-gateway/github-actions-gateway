@@ -83,6 +83,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/actions-gateway/github-actions-gateway/broker/brokerstub"
 )
 
 func main() {
@@ -131,12 +133,15 @@ type runnerRecord struct {
 }
 
 type server struct {
-	mu             sync.Mutex
-	tokenCounter   atomic.Int64
-	msgCounter     atomic.Int64
-	sessionCounter int
-	sessions       map[string]bool
-	jobQueues      map[string][]message // sessionID → jobs enqueued directly to it
+	mu           sync.Mutex
+	tokenCounter atomic.Int64
+	msgCounter   atomic.Int64
+	// sessions is the shared session registry: it mints "session-<n>" IDs,
+	// tracks each session's owner/agent/version, and resolves a DELETE by its
+	// sessionId query param or bearer token. The single-use and redelivery
+	// state below is fakegithub-specific and keyed off the IDs it mints.
+	sessions  *brokerstub.Sessions
+	jobQueues map[string][]message // sessionID → jobs enqueued directly to it
 	// ownerPending holds jobs awaiting opportunistic delivery to any live
 	// session of an owner — GitHub redelivers a job whose session went away
 	// before acquiring it to any other polling session (M1 Investigation C/D).
@@ -147,7 +152,6 @@ type server struct {
 	// would be lost — fakegithub's per-session queue would otherwise be a
 	// fidelity gap relative to GitHub's pool-wide delivery (Q114).
 	ownerPending    map[string][]message // owner ("<group>-…" prefix-keyed) → jobs
-	bearerSessions  map[string]string    // bearer → sessionID
 	acquireResponse any                  // nil = default
 	acquireCount    atomic.Int64
 
@@ -163,9 +167,6 @@ type server struct {
 	runnerNames          map[string]int64        // live record name → ID
 	clientRunners        map[string]int64        // clientId → runner ID
 	consumedAgents       map[int64]bool          // runner IDs whose record was consumed
-	sessionAgents        map[string]int64        // sessionID → agent ID
-	sessionOwners        map[string]string       // sessionID → ownerName
-	sessionVersions      map[string]string       // sessionID → agent.version (runnerVersion)
 	deadPolls            map[string]int          // dead sessionID → GET /message count since death
 	requestSessions      map[string]string       // runnerRequestId → delivering sessionID
 	// jobTokens maps a job's runner_request_id to the job-scoped token issued in
@@ -233,17 +234,13 @@ type message struct {
 
 func newServer() *server {
 	return &server{
-		sessions:        make(map[string]bool),
+		sessions:        brokerstub.NewSessions(),
 		jobQueues:       make(map[string][]message),
 		ownerPending:    make(map[string][]message),
-		bearerSessions:  make(map[string]string),
 		runners:         make(map[int64]*runnerRecord),
 		runnerNames:     make(map[string]int64),
 		clientRunners:   make(map[string]int64),
 		consumedAgents:  make(map[int64]bool),
-		sessionAgents:   make(map[string]int64),
-		sessionOwners:   make(map[string]string),
-		sessionVersions: make(map[string]string),
 		deadPolls:       make(map[string]int),
 		requestSessions: make(map[string]string),
 		jobTokens:       make(map[string]string),
@@ -475,10 +472,10 @@ func (s *server) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.singleUse.Load() {
-		if clientID := assertionIssuer(r); clientID != "" {
+		if clientID := brokerstub.AssertionIssuer(r); clientID != "" {
 			s.mu.Lock()
 			// clientRunners entries survive record consumption (see
-			// consumeSessionLocked) precisely so this lookup can reject the
+			// consumeSession) precisely so this lookup can reject the
 			// dead credential.
 			id, known := s.clientRunners[clientID]
 			consumed := known && s.consumedAgents[id]
@@ -489,44 +486,14 @@ func (s *server) handleToken(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	token := fmt.Sprintf("bearer-%d", s.tokenCounter.Add(1))
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"access_token": token,
-		"token_type":   "Bearer",
-	})
-}
-
-// assertionIssuer extracts the iss claim from the client_assertion JWT in an
-// OAuth token request, without verifying the signature. Returns "" when the
-// request carries no parsable assertion.
-func assertionIssuer(r *http.Request) string {
-	if err := r.ParseForm(); err != nil {
-		return ""
-	}
-	assertion := r.PostFormValue("client_assertion")
-	parts := strings.Split(assertion, ".")
-	if len(parts) != 3 {
-		return ""
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return ""
-	}
-	var claims struct {
-		Iss string `json:"iss"`
-	}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return ""
-	}
-	return claims.Iss
+	brokerstub.WriteToken(w, fmt.Sprintf("bearer-%d", s.tokenCounter.Add(1)))
 }
 
 // handleSession serves POST /session and DELETE /session.
 func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
-		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		bearer := brokerstub.Bearer(r)
 
 		var reqBody struct {
 			OwnerName string `json:"ownerName"`
@@ -567,39 +534,23 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		s.sessionCounter++
-		id := fmt.Sprintf("session-%d", s.sessionCounter)
-		s.sessions[id] = true
-		s.sessionAgents[id] = reqBody.Agent.ID
-		s.sessionOwners[id] = reqBody.OwnerName
-		// Record agent.version (the runnerVersion the AGC pins). GitHub validates
-		// it at session creation; capturing it lets specs assert it is non-empty
-		// and correct (Q71/Q118 runner-version contract).
-		s.sessionVersions[id] = reqBody.Agent.Version
-		if bearer != "" {
-			s.bearerSessions[bearer] = id
-		}
 		s.mu.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"sessionId": id})
+
+		// Record agent.version (the runnerVersion the AGC pins) alongside the
+		// owner and agent ID in the shared registry. GitHub validates the version
+		// at session creation; capturing it lets specs assert it is non-empty and
+		// correct (Q71/Q118 runner-version contract).
+		id := s.sessions.Create(reqBody.OwnerName, reqBody.Agent.ID, reqBody.Agent.Version, bearer)
+		brokerstub.WriteJSON(w, http.StatusOK, map[string]string{"sessionId": id})
 
 	case http.MethodDelete:
-		id := r.URL.Query().Get("sessionId")
-		if id == "" {
-			bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			s.mu.Lock()
-			if sid, ok := s.bearerSessions[bearer]; ok {
-				id = sid
-				delete(s.bearerSessions, bearer)
-			}
-			s.mu.Unlock()
-		}
-		if id != "" {
-			s.mu.Lock()
-			s.sessions[id] = false
+		id, ok := s.sessions.ResolveDelete(r.URL.Query().Get("sessionId"), brokerstub.Bearer(r))
+		if ok {
 			// A listener recycling its agent deletes the old session; carry any
 			// jobs still queued on it to the owner pool for redelivery.
-			s.requeueLocked(id)
+			sess, _ := s.sessions.Get(id)
+			s.mu.Lock()
+			s.requeueLocked(id, sess.Owner)
 			s.mu.Unlock()
 		}
 		w.WriteHeader(http.StatusOK)
@@ -626,6 +577,10 @@ func (s *server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.URL.Query().Get("sessionId")
+	// The session's owner is immutable once created, so resolve it once from the
+	// shared registry (outside the poll loop and its lock) rather than per-tick.
+	sess, _ := s.sessions.Get(id)
+	owner := sess.Owner
 	deadline := time.Now().Add(s.longPollHold)
 	for {
 		s.mu.Lock()
@@ -643,7 +598,6 @@ func (s *server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		// Under the Q154 redelivery model, first return any of this owner's leases
 		// that expired unclaimed to the deliverable pool, so a skipped job becomes
 		// redeliverable on this very poll.
-		owner := s.sessionOwners[id]
 		inRedeliver := s.redelivery.Load() && s.inRedeliveryScopeLocked(owner)
 		if inRedeliver {
 			s.expireLeasesLocked(owner)
@@ -712,13 +666,17 @@ func (s *server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 
 	if s.singleUse.Load() && reqBody.JobMessageID != "" {
 		s.mu.Lock()
-		if sid, ok := s.requestSessions[reqBody.JobMessageID]; ok {
+		sid, ok := s.requestSessions[reqBody.JobMessageID]
+		if ok {
 			delete(s.requestSessions, reqBody.JobMessageID)
-			if s.inSingleUseScopeLocked(s.sessionOwners[sid]) {
-				s.consumeSessionLocked(sid)
-			}
 		}
 		s.mu.Unlock()
+		if ok {
+			sess, _ := s.sessions.Get(sid)
+			if s.inSingleUseScopeLocked(sess.Owner) {
+				s.consumeSession(sid)
+			}
+		}
 	}
 
 	// Q154: an acquired job is terminal — drop its lease and record the claim so
@@ -822,33 +780,39 @@ func (s *server) inSingleUseScopeLocked(ownerName string) bool {
 	return s.singleUseOwnerPrefix == "" || strings.HasPrefix(ownerName, s.singleUseOwnerPrefix)
 }
 
-// consumeSessionLocked marks a session's agent as consumed and the session as
-// dead. Caller must hold s.mu.
-func (s *server) consumeSessionLocked(sessionID string) {
-	agentID := s.sessionAgents[sessionID]
-	if agentID > 0 {
-		s.consumedAgents[agentID] = true
-		if rec, ok := s.runners[agentID]; ok {
-			delete(s.runners, agentID)
+// consumeSession marks a session's agent as consumed and the session as dead.
+// It does its own locking: the single-use bookkeeping (consumed agents, runner
+// records, dead-poll counter, job requeue) is set under s.mu, then the shared
+// registry is told to mark the session inactive. The dead-poll counter is set
+// before the registry flips the session so a racing GET /message sees the dead
+// signature (checked first) rather than a bare 202.
+func (s *server) consumeSession(sessionID string) {
+	sess, _ := s.sessions.Get(sessionID)
+	s.mu.Lock()
+	if sess.AgentID > 0 {
+		s.consumedAgents[sess.AgentID] = true
+		if rec, ok := s.runners[sess.AgentID]; ok {
+			delete(s.runners, sess.AgentID)
 			delete(s.runnerNames, rec.Name)
 			// clientRunners entry is kept so /token can 401 the dead credential.
 		}
 	}
-	s.sessions[sessionID] = false
 	s.deadPolls[sessionID] = 0
-	s.requeueLocked(sessionID)
+	s.requeueLocked(sessionID, sess.Owner)
+	s.mu.Unlock()
+	s.sessions.SetInactive(sessionID)
 }
 
 // requeueLocked moves any jobs still queued on a now-dead session to its
 // owner's pending pool so a live session can pick them up. Caller must hold
-// s.mu. The acquired job that triggered consumption is already dequeued, so
-// this only carries genuinely undelivered jobs.
-func (s *server) requeueLocked(sessionID string) {
+// s.mu and pass the session's owner. The acquired job that triggered
+// consumption is already dequeued, so this only carries genuinely undelivered
+// jobs.
+func (s *server) requeueLocked(sessionID, owner string) {
 	q := s.jobQueues[sessionID]
 	if len(q) == 0 {
 		return
 	}
-	owner := s.sessionOwners[sessionID]
 	s.ownerPending[owner] = append(s.ownerPending[owner], q...)
 	delete(s.jobQueues, sessionID)
 }
@@ -893,8 +857,12 @@ func (s *server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	s.requestSessions[reqID] = id
-	owner := s.sessionOwners[id]
-	if s.sessions[id] {
+	// Reading session liveness (shared registry) under s.mu keeps the decision
+	// atomic with the enqueue: whichever way a concurrent DELETE races, a job
+	// placed on jobQueues[id] here is always caught by requeueLocked (which runs
+	// under s.mu on delete), so it is never stranded on a dead session's queue.
+	sess, _ := s.sessions.Get(id)
+	if sess.Active {
 		// Target session is live: queue it there so a specific session can be
 		// addressed (the single-use spec relies on this to consume one session).
 		s.jobQueues[id] = append(s.jobQueues[id], msg)
@@ -902,7 +870,7 @@ func (s *server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 		// Target session is already gone (recycled between the test's session
 		// query and this enqueue): hand the job to the owner pool so the next
 		// live session picks it up, mirroring GitHub's pool-wide redelivery.
-		s.ownerPending[owner] = append(s.ownerPending[owner], msg)
+		s.ownerPending[sess.Owner] = append(s.ownerPending[sess.Owner], msg)
 	}
 	s.mu.Unlock()
 	w.WriteHeader(http.StatusOK)
@@ -917,15 +885,7 @@ func (s *server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	ownerPrefix := r.URL.Query().Get("owner")
-	s.mu.Lock()
-	var active []string
-	for id, ok := range s.sessions {
-		if ok && (ownerPrefix == "" || strings.HasPrefix(s.sessionOwners[id], ownerPrefix)) {
-			active = append(active, id)
-		}
-	}
-	s.mu.Unlock()
+	active := s.sessions.ActiveIDs(r.URL.Query().Get("owner"))
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(active)
 }
@@ -941,15 +901,7 @@ func (s *server) handleSessionVersions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	ownerPrefix := r.URL.Query().Get("owner")
-	s.mu.Lock()
-	versions := make(map[string]string)
-	for id, ok := range s.sessions {
-		if ok && (ownerPrefix == "" || strings.HasPrefix(s.sessionOwners[id], ownerPrefix)) {
-			versions[id] = s.sessionVersions[id]
-		}
-	}
-	s.mu.Unlock()
+	versions := s.sessions.Versions(r.URL.Query().Get("owner"))
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(versions)
 }
@@ -1108,7 +1060,8 @@ func (s *server) recordAcquireLocked(req string) {
 	if lj, ok := s.leased[req]; ok {
 		owner = lj.owner
 	} else if sid, ok := s.requestSessions[req]; ok {
-		owner = s.sessionOwners[sid]
+		sess, _ := s.sessions.Get(sid)
+		owner = sess.Owner
 	}
 	if !s.inRedeliveryScopeLocked(owner) {
 		return
