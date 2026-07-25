@@ -67,7 +67,9 @@ the opt-in `dev` version, never as "Available now" on the released site.
   prerelease test `publish.yml` uses, Q293).
 - **`workflow_dispatch`** → deploys the `version`/`alias` inputs verbatim (or
   derives from the ref when blank) — used for **seeding** already-released versions
-  and manual redeploys.
+  and manual redeploys. The `docs_ref` input picks which ref the docs *content* is
+  built from, independently of the ref the workflow logic runs from (see § Seeding
+  below).
 
 **Backports don't demote the site.** A patch cut for an older supported line (e.g.
 `v1.2.5` released *after* `v1.3.0`) publishes/updates its own `1.2.5` version but
@@ -84,12 +86,63 @@ deploys don't follow symlinks, so a symlinked alias would 404 on deep links.
 ### Seeding already-released versions
 
 `mike` only knows the versions it has deployed, so releases cut **before** this
-workflow landed aren't in the tree yet, and the site root has nothing to redirect
-to until a `stable` version exists. Seed the existing releases once via
-`workflow_dispatch` (oldest first, newest last so `stable` ends on the latest):
+workflow landed aren't in the tree yet, and **the site root has nothing to redirect
+to until some version claims the default**: the apex domain 404s while every push
+still reports success. That was the state from the Q238 cutover until the first
+seed, because `mike set-default` runs only for a stable tag push or an explicit
+dispatch, and the last release predated the cutover by four days. The
+*Verify the artifact serves a reachable root* step now fails the deploy rather than
+publishing a 404 silently.
 
-- `version=1.0.0`, `alias=` (blank), `set_default=false`
-- `version=1.1.0`, `alias=stable`, `set_default=true`
+Seed the existing releases once via `workflow_dispatch`, **oldest first, newest
+last** so `stable` ends on the latest:
+
+| `version` | `docs_ref` | `alias` | `set_default` |
+|---|---|---|---|
+| `1.0.0` | `v1.0.0` | *(blank)* | `true` |
+| `1.1.0` | `v1.1.0` | *(blank)* | `true` |
+| `1.2.0` | `v1.2.0` | `stable` | `true` |
+
+Run each from `main`, waiting for one to finish before starting the next (they
+serialise on the shared `pages-deploy` concurrency group):
+
+```bash
+gh workflow run pages.yml --ref main -f version=1.0.0 -f docs_ref=v1.0.0 -f set_default=true
+```
+
+`set_default=true` on **every** seed, not just the last, is deliberate. Each run
+re-points the root redirect at the version it just deployed, so the root is
+serviceable from the first seed onward and the final row leaves it on `stable`. With
+`set_default` left off, the first two runs would produce a tree with no root
+redirect at all, which the *Verify the artifact serves a reachable root* step
+correctly rejects: their content would reach `gh-pages` but never get published.
+
+**Always dispatch from `main`, and always set `docs_ref`.** The two are easy to get
+backwards:
+
+- *Dispatching from the tag doesn't work.* `workflow_dispatch` reads the workflow
+  file **at the ref you dispatch on**, and a pre-versioning tag's `pages.yml` has
+  neither these inputs nor `mike`. The run would reject the inputs, and its flat
+  single-copy deploy would clobber the whole version tree.
+- *Omitting `docs_ref` publishes the wrong content.* `mike` builds the **current
+  checkout**, so a seed dispatched from `main` without it would publish
+  feature-ahead `main` as the released docs, reintroducing the "Available now"
+  drift that Q387 and versioning exist to prevent.
+
+`docs_ref` restores that ref's `docs/`, `mkdocs.yml`, and `overrides/` over the
+working tree. Three things are deliberately **not** taken from the tag:
+
+| Kept from the current checkout | Why |
+|---|---|
+| `requirements-docs.txt` | An old pin predates `mike` and version-selector support. |
+| `site_url` and `docs/CNAME` | Where the site lives is a property of the site, not of the release. `v1.0.0` predates the custom domain: it has no `docs/CNAME`, and its `site_url` still points at the retired `actions-gateway.github.io/github-actions-gateway/` subpath, which would give that version dead canonical URLs, sitemap, and announce-bar links. |
+| `extra.version` | A pre-versioning tag has no version block, so its pages would render with no selector and strand a visitor on an old release. |
+
+Those overrides ride in an
+[`INHERIT`](https://www.mkdocs.org/user-guide/configuration/#inheritance) overlay
+(`mkdocs.versioned.yml`) rather than a YAML rewrite, so the tag's own nav and config
+stay byte-for-byte intact: MkDocs deep-merges the inherited mapping, and scalars
+such as `site_url` are replaced.
 
 A subsequent `main` push adds the `dev` entry. From then on the workflow maintains
 everything automatically.
