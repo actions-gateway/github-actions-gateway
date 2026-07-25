@@ -55,7 +55,57 @@ env:
   BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f
 
 jobs:
+  # Cheap stop-ship gate, ahead of every publishing job. A stable tag push makes
+  # pages.yml deploy THAT TAG's docs wholesale, so whatever the docs-site announce
+  # bar says at tag time is what the released version advertises, permanently, and
+  # no later fix to `main` reaches it. Relying on the release checklist has not
+  # worked: all three stable tags shipped a stale banner (v1.0.0 still said
+  # "Alpha - pre-1.0", v1.1.0 and v1.2.0 both said "v1.0.0 is here"), which left
+  # the site's default landing page advertising a two-releases-old version until
+  # it was caught by hand. Fail the release instead of publishing a wrong one.
+  #
+  # Prereleases are exempt: pages.yml publishes no docs for them, and the banner
+  # should name the GA version rather than churn through every RC.
+  announce-bar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: The announce bar names this release
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-${GITHUB_REF_NAME}}"
+          version="${tag#v}"
+
+          # Same prerelease test as the publish job's tag resolver (Q293): SemVer
+          # core 0.x, or any '-' suffix (-rc/-alpha/-beta).
+          if [[ "${version}" == 0.* || "${version}" == *-* ]]; then
+            echo "Prerelease ${tag}: no docs are published for this tag, skipping."
+            exit 0
+          fi
+
+          # Match on `block announce`/`endblock` rather than the literal Jinja
+          # delimiters: '{' opens an interval expression in POSIX ERE, so the
+          # braces would need escaping to be matched literally.
+          announce="$(awk '/block announce/,/endblock/' overrides/main.html)"
+          if [[ -z "${announce}" ]]; then
+            echo "::error::No announce block found in overrides/main.html. If the block was renamed, update this gate in .github/workflows/publish.yml."
+            exit 1
+          fi
+
+          if [[ "${announce}" != *"v${version}"* ]]; then
+            echo "::error::The docs-site announce bar in overrides/main.html does not name ${tag}. A stable tag deploys its own docs, so this release would ship advertising the wrong version. Bump the banner, land it, and re-cut the tag. See docs/operations/release.md, Pre-flight."
+            echo "Announce block found:"
+            echo "${announce}"
+            exit 1
+          fi
+
+          echo "Announce bar names ${tag}."
+
   publish:
+    needs: announce-bar
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
