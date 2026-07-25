@@ -110,9 +110,9 @@ next phase proceeds.
 
 ### Phase 1: measure the real baseline (gate)
 
-Extend [Q396](../STATUS.md#Q396) to the scale-set tier. Evict a worker mid-job
-with no `timeout-minutes` set and timestamp eviction, GitHub's conclusion, and
-the annotation text.
+Tracked by [Q396](../STATUS.md#Q396), whose scope now covers both tiers. Evict a
+worker mid-job with no `timeout-minutes` set and timestamp eviction, GitHub's
+conclusion, and the annotation text.
 
 **Decides:** whether there is meaningful latency to remove, and which mechanism
 owns it. If GitHub's own detection dominates, the fast-release idea is dead and
