@@ -1730,15 +1730,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v2-api-alpha-multiple-gateways-per-namespace" class="md-nav__link">
+  <a href="#v2-api-multiple-gateways-per-namespace" class="md-nav__link">
     <span class="md-ellipsis">
       
-        v2 API (alpha): multiple gateways per namespace
+        v2 API: multiple gateways per namespace
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="v2 API (alpha): multiple gateways per namespace">
+    <nav class="md-nav" aria-label="v2 API: multiple gateways per namespace">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1753,13 +1753,30 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#acquisition-protocol-specacquisitionprotocol" class="md-nav__link">
+  <a href="#job-acquisition-and-the-single-label-rule" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Acquisition protocol (spec.acquisitionProtocol)
+        Job acquisition, and the single-label rule
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Job acquisition, and the single-label rule">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#acquisition-protocol-v2alpha1-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acquisition protocol: v2alpha1 only
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -2702,15 +2719,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v2-api-alpha-multiple-gateways-per-namespace" class="md-nav__link">
+  <a href="#v2-api-multiple-gateways-per-namespace" class="md-nav__link">
     <span class="md-ellipsis">
       
-        v2 API (alpha): multiple gateways per namespace
+        v2 API: multiple gateways per namespace
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="v2 API (alpha): multiple gateways per namespace">
+    <nav class="md-nav" aria-label="v2 API: multiple gateways per namespace">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2725,13 +2742,30 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#acquisition-protocol-specacquisitionprotocol" class="md-nav__link">
+  <a href="#job-acquisition-and-the-single-label-rule" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Acquisition protocol (spec.acquisitionProtocol)
+        Job acquisition, and the single-label rule
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Job acquisition, and the single-label rule">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#acquisition-protocol-v2alpha1-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acquisition protocol: v2alpha1 only
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -2824,7 +2858,7 @@
 <p class="admonition-title">New tenants: onboard on the v2 API</p>
 <p>Steps 0–3 (GitHub App, Secret, <code>ResourceQuota</code>) are the same for every tenant.
 At the gateway step, the recommended shape for a <strong>new</strong> tenant is the <strong>v2 API</strong>
-(<code>actions-gateway.com/v2alpha1</code>) — see <a href="#v2-api-alpha-multiple-gateways-per-namespace">v2 API</a>
+at <code>actions-gateway.com/v2beta1</code> — see <a href="#v2-api-multiple-gateways-per-namespace">v2 API</a>
 below and the <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">getting-started v2 walkthrough</a>.
 The single-CR <code>v1alpha1</code> flow in <a href="#step-2-create-the-actionsgateway-resource">Step 2</a>
 is still fully supported but <strong><a href="../v1alpha1-deprecation/">deprecated</a></strong>; already on
@@ -3486,9 +3520,9 @@ gateway will not fight it.</p>
 </tbody>
 </table>
 <hr />
-<h2 id="v2-api-alpha-multiple-gateways-per-namespace">v2 API (alpha): multiple gateways per namespace<a class="headerlink" href="#v2-api-alpha-multiple-gateways-per-namespace" title="Permanent link">&para;</a></h2>
+<h2 id="v2-api-multiple-gateways-per-namespace">v2 API: multiple gateways per namespace<a class="headerlink" href="#v2-api-multiple-gateways-per-namespace" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Audience:</strong> Platform engineer adopting the <strong><code>v2alpha1</code></strong> (<code>actions-gateway.com</code>) API. This is an <strong>alpha, early-adopter</strong> API served <em>beside</em> <code>v1alpha1</code> — everything above (the <code>v1alpha1</code>, <code>actions-gateway.github.com</code> flow) stays fully supported. Install the opt-in <code>actions-gateway-crds-v2</code> chart first; see <a href="../../getting-started/#1-deploy-the-gmc">Getting Started — Deploy the GMC</a>.</p>
+<p><strong>Audience:</strong> Platform engineer onboarding a tenant on the <strong><code>actions-gateway.com</code></strong> API, at <strong><code>v2beta1</code></strong> — the graduated, ScaleSet-only storage and hub version, and the version every <strong>new</strong> tenant should use. It is served <em>beside</em> <code>v1alpha1</code>, so everything above (the deprecated <code>actions-gateway.github.com/v1alpha1</code> flow) keeps working while you adopt it. <code>v2alpha1</code> is also still served, but only as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp for tenants moving off v1 — it carries the deprecated <a href="#acquisition-protocol-v2alpha1-only"><code>acquisitionProtocol</code></a> selector, which a new tenant does not need. Install the opt-in <code>actions-gateway-crds-v2</code> chart first; see <a href="../../getting-started/#1-deploy-the-gmc">Getting Started — Deploy the GMC</a>.</p>
 </blockquote>
 <p>The biggest onboarding change in v2 is that a single namespace may hold <strong>multiple <code>ActionsGateway</code>s</strong>, lifting the v1 one-gateway-per-namespace rule (<a href="#step-2-create-the-actionsgateway-resource">Step 2</a>). What that changes when onboarding a v2 tenant:</p>
 <ul>
@@ -3500,7 +3534,7 @@ gateway will not fight it.</p>
 <p>For the full reference — the naming table, per-gateway garbage-collection behavior, the CRD chart prerequisite, and the failure modes — see <a href="../troubleshooting/#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites">Troubleshooting — Multiple v2 gateways in one namespace</a> and <a href="../../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API decomposition</a>.</p>
 <h3 id="proxy-less-onboarding-direct-egress">Proxy-less onboarding (direct egress)<a class="headerlink" href="#proxy-less-onboarding-direct-egress" title="Permanent link">&para;</a></h3>
 <p>In v2 the egress proxy is <strong>optional</strong>. A gateway with no <code>spec.defaultProxyRef</code> and a <code>RunnerSet</code> with no <code>spec.proxyRef</code> egress <strong>directly</strong> to GitHub, collapsing the minimal onboarding to <strong>three objects</strong> — one <code>ActionsGateway</code>, one <code>RunnerTemplate</code>, one <code>RunnerSet</code>, with no <code>EgressProxy</code> at all:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
 <a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="nt">spec</span><span class="p">:</span>
@@ -3510,7 +3544,7 @@ gateway will not fight it.</p>
 <a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/acme</span>
 <a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="w">  </span><span class="c1"># no defaultProxyRef ⇒ direct egress</span>
 <a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="nn">---</span>
-<a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerTemplate</span>
 <a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a><span class="nt">spec</span><span class="p">:</span>
@@ -3520,15 +3554,15 @@ gateway will not fight it.</p>
 <a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
 <a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a><span class="w">          </span><span class="nt">resources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> requests</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="p p-Indicator">,</span><span class="nt"> memory</span><span class="p">:</span><span class="w"> </span><span class="nv">2Gi</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-25-20" name="__codelineno-25-20" href="#__codelineno-25-20"></a><span class="nn">---</span>
-<a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-25-22" name="__codelineno-25-22" href="#__codelineno-25-22"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
 <a id="__codelineno-25-23" name="__codelineno-25-23" href="#__codelineno-25-23"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">linux</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-25-24" name="__codelineno-25-24" href="#__codelineno-25-24"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-25-25" name="__codelineno-25-25" href="#__codelineno-25-25"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-25-26" name="__codelineno-25-26" href="#__codelineno-25-26"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-25-27" name="__codelineno-25-27" href="#__codelineno-25-27"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">gag-linux</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># exactly one label: the ScaleSet default&#39;s runs-on name (see below)</span>
+<a id="__codelineno-25-27" name="__codelineno-25-27" href="#__codelineno-25-27"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">gag-linux</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># exactly one label: this set&#39;s scale-set name and runs-on target</span>
 <a id="__codelineno-25-28" name="__codelineno-25-28" href="#__codelineno-25-28"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
-<a id="__codelineno-25-29" name="__codelineno-25-29" href="#__codelineno-25-29"></a><span class="w">  </span><span class="c1"># acquisitionProtocol omitted ⇒ ScaleSet (the default); no proxyRef / defaultProxyRef ⇒ direct egress</span>
+<a id="__codelineno-25-29" name="__codelineno-25-29" href="#__codelineno-25-29"></a><span class="w">  </span><span class="c1"># no proxyRef / defaultProxyRef ⇒ direct egress</span>
 </code></pre></div>
 <p>What you trade, and what you do <strong>not</strong>:</p>
 <ul>
@@ -3537,24 +3571,32 @@ gateway will not fight it.</p>
 <li><strong>The trade is surfaced in status.</strong> A proxy-less gateway and runner set report <code>status.proxyMode: Direct</code> (visible as the <code>Egress</code> print column) plus an advisory <code>EgressUnattributed</code> condition (<code>True</code>). The condition is informational — it does <strong>not</strong> make the object <code>NotReady</code>. Check it with <code>kubectl get actionsgateway,runnerset -n &lt;ns&gt;</code> (the <code>Egress</code> column) or <code>kubectl describe</code>.</li>
 </ul>
 <p>To add attribution later, create an <code>EgressProxy</code> and set <code>spec.defaultProxyRef</code> on the gateway (every <code>RunnerSet</code> under it inherits the proxy unless it sets its own <code>proxyRef</code>). A <code>proxyRef</code>/<code>defaultProxyRef</code> that names a <strong>missing</strong> <code>EgressProxy</code> is treated as an error and fails closed (<code>Ready=False</code>/<code>ProxyNotFound</code>) — it does <strong>not</strong> silently fall back to direct egress; only an entirely-unset reference means direct.</p>
-<h3 id="acquisition-protocol-specacquisitionprotocol">Acquisition protocol (<code>spec.acquisitionProtocol</code>)<a class="headerlink" href="#acquisition-protocol-specacquisitionprotocol" title="Permanent link">&para;</a></h3>
-<p>A <code>RunnerSet</code> acquires jobs from GitHub with one of two protocols, selected by
-<code>spec.acquisitionProtocol</code>:</p>
+<h3 id="job-acquisition-and-the-single-label-rule">Job acquisition, and the single-label rule<a class="headerlink" href="#job-acquisition-and-the-single-label-rule" title="Permanent link">&para;</a></h3>
+<p>On <code>v2beta1</code> there is nothing to choose: every <code>RunnerSet</code> acquires jobs with the
+<strong>runner-scale-set message-queue protocol</strong> — one listener session per set,
+capacity-gated assignment, and a full-runner worker. It is the only protocol the
+graduated version serves, because it removes a many-acquirers job-assignment race
+the older classic protocol was subject to under high burst (validated end-to-end
+before the default flip, Q264).</p>
+<p>The rule that follows from it, and the one most likely to bite when you author a
+set by hand:</p>
 <ul>
-<li><strong><code>ScaleSet</code> (the default).</strong> The runner-scale-set message-queue protocol: one
-  listener session per set, capacity-gated assignment, and a full-runner worker.
-  It is the default because it removes a many-acquirers job-assignment race the
-  classic protocol was subject to under high burst (validated end-to-end before
-  the default flip). A <code>ScaleSet</code> set <strong>must declare exactly one <code>runnerLabel</code></strong> —
-  the scale set's name <em>is</em> its single <code>runs-on</code> match target at GitHub — and that
-  label must be unique across the <code>ScaleSet</code> sets under one gateway (a second set
-  claiming it is rejected at admission). Omitting the field selects <code>ScaleSet</code>, so
-  a runner set that does not name a protocol must carry a single label.</li>
-<li><strong><code>Classic</code> (deprecated).</strong> The per-runner broker protocol. Select it explicitly
-  only to keep a classic-only capability during the migration window — chiefly
-  <strong>multi-label matching</strong>, which <code>ScaleSet</code> cannot express:</li>
+<li><strong>Exactly one <code>runnerLabel</code> per set.</strong> The scale set's name <em>is</em> its single
+  <code>runs-on</code> match target at GitHub, so a set with two or more labels is rejected at
+  admission. Concurrency is governed by <code>maxWorkers</code>/<code>priorityTiers</code> (advertised to
+  GitHub as the scale set's capacity), not by a listener count.</li>
+<li><strong>Unique under one gateway.</strong> Two sets claiming the same label would register the
+  same scale-set name at GitHub; the second is rejected.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<p>This is the same single-name routing ARC scale sets use, so workflows migrating
+from ARC carry their <code>runs-on</code> lines across unedited — see
+<a href="../migration-from-arc/#job-routing-a-11-map">Migrating from ARC</a>.</p>
+<h4 id="acquisition-protocol-v2alpha1-only">Acquisition protocol: <code>v2alpha1</code> only<a class="headerlink" href="#acquisition-protocol-v2alpha1-only" title="Permanent link">&para;</a></h4>
+<p><code>v2alpha1</code> — served as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp — carries
+a <code>spec.acquisitionProtocol</code> selector that <code>v2beta1</code> does not. It exists for one
+job: letting a tenant migrating off <code>v1alpha1</code> keep <strong>multi-label matching</strong>, which
+the scale-set model cannot express, until it is ready to split those groups up.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span><span class="w">   </span><span class="c1"># the field does not exist on v2beta1</span>
 <a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
 <a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">linux</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="nt">spec</span><span class="p">:</span>
@@ -3565,19 +3607,19 @@ gateway will not fight it.</p>
 <a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="w">  </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">                   </span><span class="c1"># honored under Classic; ignored under ScaleSet</span>
 <a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
 </code></pre></div>
-<p><code>Classic</code> is scheduled for removal one minor release after this deprecation
-  (Q264); new runner sets should prefer <code>ScaleSet</code> (a single label) and split a
-  multi-label group into one <code>ScaleSet</code> set per label.</p>
-<p>The field is <strong>immutable</strong> — switching a live set's protocol is a re-registration
-storm, so change it by creating a new <code>RunnerSet</code>, not by editing an existing one.
-<strong>Existing sets are unaffected by the default flip:</strong> the value is recorded at
-admission, so a set created while the default was <code>Classic</code> keeps <code>Classic</code>. And
-<code>gag-migrate</code> writes <code>acquisitionProtocol: Classic</code> onto every set it emits, so a
-migrated tenant's multi-label groups keep working unchanged (opt a migrated set
-into <code>ScaleSet</code> later by creating a fresh single-label set).</p>
-<p><code>maxListeners</code> has no effect on a <code>ScaleSet</code> set (there is one session per set;
-concurrency is governed by <code>maxWorkers</code>/<code>priorityTiers</code>, advertised to GitHub as
-the scale set's capacity). It remains meaningful only for <code>Classic</code>.</p>
+<ul>
+<li><strong>A new tenant should never need this.</strong> Author on <code>v2beta1</code> with one label per
+  set; <code>Classic</code> is deprecated and scheduled for removal one minor release out
+  (Q264).</li>
+<li><strong><code>gag-migrate</code> writes <code>acquisitionProtocol: Classic</code></strong> onto every set it emits,
+  so a migrated tenant's multi-label groups keep working unchanged. Opting one into
+  the scale-set protocol later means creating a fresh single-label set, not editing
+  the old one — the field is <strong>immutable</strong>, because switching a live set's protocol
+  is a re-registration storm.</li>
+<li><strong>Editing a Classic set needs an explicit version.</strong> An unqualified
+  <code>kubectl edit/patch/apply</code> addresses the <code>v2beta1</code> storage version, which rejects
+  the multi-label shape; qualify it (<code>kubectl edit runnersets.v2alpha1.actions-gateway.com …</code>).</li>
+</ul>
 <h3 id="optional-templateref-a-default-worker-pod-shape">Optional <code>templateRef</code> (a default worker pod shape)<a class="headerlink" href="#optional-templateref-a-default-worker-pod-shape" title="Permanent link">&para;</a></h3>
 <p><code>RunnerSet.spec.templateRef</code> is <strong>optional</strong>. A <code>RunnerSet</code> that omits it resolves a worker pod shape through a fallback chain, so a tenant does not have to name a template in every runner set. The chain (resolved at runtime, fail-closed):</p>
 <ol>
@@ -3627,7 +3669,7 @@ the scale set's capacity). It remains meaningful only for <code>Classic</code>.<
 <li><strong>CPU</strong> — raise <code>limits.cpu</code> only if <code>container_cpu_throttled_seconds_total</code> shows sustained throttling during peak reconcile churn.</li>
 </ul>
 <p>The override is <strong>per key</strong>: set only the request/limit entries you want to change and every other entry keeps its platform default. For example, raising just the memory limit leaves the CPU request/limit and memory request at their defaults:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
 <a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-gateway</span>
@@ -3692,7 +3734,7 @@ the scale set's capacity). It remains meaningful only for <code>Classic</code>.<
 <h3 id="workload-identity-credentials-external-signer">Workload-identity credentials (external signer)<a class="headerlink" href="#workload-identity-credentials-external-signer" title="Permanent link">&para;</a></h3>
 <p><code>spec.credentials</code> is a discriminated union (keyed by <code>credentials.type</code>) with two members. The default, <code>GitHubApp</code> (every example above), is the <strong>possession model</strong>: the App's RSA private key lives in a namespace <code>Secret</code> (<a href="#step-1-create-the-github-app-secret">Step 1</a>) and the AGC signs the App JWT in-process. <code>WorkloadIdentity</code> is the opt-in <strong>delegation model</strong>: <strong>no App private key is ever stored in the cluster</strong> — an external signer signs the App JWT, and the AGC proves its own pod identity to that signer. Use it when policy forbids a long-lived signing key at rest in the cluster and you run a signer (HashiCorp Vault in the MVP) the AGC can reach. See <a href="../../design/05-security/#57-workload-identity-the-no-pem-delegation-model">security §5.7</a> for the trust model.</p>
 <p>There is <strong>no <code>githubApp</code> Secret</strong> for this method — you do not run <a href="#step-1-create-the-github-app-secret">Step 1</a>. Instead you put the non-secret App identity (<code>appId</code>/<code>installationId</code>) inline and reference a Vault transit key:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
 <a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="nt">metadata</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">acme</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="nt">spec</span><span class="p">:</span>

@@ -2323,7 +2323,7 @@
 </blockquote>
 <div class="admonition warning">
 <p class="admonition-title"><code>v1alpha1</code> is deprecated — new tenants should start on v2</p>
-<p>Onboard new tenants on the <strong>v2 API</strong> (<code>actions-gateway.com/v2alpha1</code>) — see
+<p>Onboard new tenants on the <strong>v2 API</strong> at <code>actions-gateway.com/v2beta1</code> — see
 <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started</a>.
 <code>v1alpha1</code> stays fully served until removal, so nothing is forced, but it is the
 terminal API. Migrate existing tenants with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>
@@ -2332,8 +2332,9 @@ at your convenience — the move changes the API objects, not how jobs are acqui
 <p>The <code>actions-gateway.github.com/v1alpha1</code> API group — the monolithic
 <code>ActionsGateway</code> (with an inline <code>proxy</code> and inline <code>runnerGroups[]</code>) and the
 standalone <code>RunnerGroup</code> kind — is <strong>deprecated</strong> in favor of the decomposed
-<code>actions-gateway.com/v2alpha1</code> API. This page records the deprecation, what stays
-working during the transition, and what changes at removal.</p>
+<code>actions-gateway.com</code> API (<code>v2beta1</code> for new tenants; <code>v2alpha1</code> as the migration
+on-ramp). This page records the deprecation, what stays working during the
+transition, and what changes at removal.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong><code>v1alpha1</code> is deprecated but still served.</strong> Both API groups are served side by

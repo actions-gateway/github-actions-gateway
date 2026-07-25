@@ -2756,10 +2756,12 @@ Flux <code>HelmRelease</code> examples (with the CRD-pruning gotcha handled) and
 source the GitHub App credential Secret securely — External Secrets Operator or
 Sealed Secrets — so the private key is never committed to Git.</p>
 <h3 id="optional-the-v2-api-crds">Optional: the v2 API CRDs<a class="headerlink" href="#optional-the-v2-api-crds" title="Permanent link">&para;</a></h3>
-<p>The main chart installs the <code>v1alpha1</code> (<code>actions-gateway.github.com</code>) CRDs — the
-fully supported, standard path. The v2 (<code>actions-gateway.com</code>) API ships its five
-CRDs in a <strong>separate, opt-in chart</strong>, <code>actions-gateway-crds-v2</code>, split out so the
-main chart's Helm release Secret stays under the 1 MiB limit.</p>
+<p>The main chart installs the <code>v1alpha1</code> (<code>actions-gateway.github.com</code>) CRDs — still
+fully served, but <a href="../v1alpha1-deprecation/">deprecated</a>. The v2
+(<code>actions-gateway.com</code>) API that new tenants onboard on ships its five CRDs in a
+<strong>separate, opt-in chart</strong>, <code>actions-gateway-crds-v2</code>, split out so the main chart's
+Helm release Secret stays under the 1 MiB limit. Install it alongside the main chart
+unless you are running v1-only.</p>
 <p>Each v2 CRD is served at <strong>two versions</strong>: <strong><code>v2beta1</code></strong> (the served <strong>and</strong> storage
 version — the graduated, ScaleSet-only shape) and <strong><code>v2alpha1</code></strong> (still served for
 coexistence and the <code>gag-migrate</code> on-ramp). The apiserver converts between them

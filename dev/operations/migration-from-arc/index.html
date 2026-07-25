@@ -1486,10 +1486,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#job-routing-the-one-that-bites" class="md-nav__link">
+  <a href="#job-routing-a-11-map" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Job routing: the one that bites
+        Job routing: a 1:1 map
       
     </span>
   </a>
@@ -1547,15 +1547,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#worked-migration-one-runner-group-end-to-end" class="md-nav__link">
+  <a href="#worked-migration-one-scale-set-end-to-end" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Worked migration: one runner group, end to end
+        Worked migration: one scale set, end to end
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Worked migration: one runner group, end to end">
+    <nav class="md-nav" aria-label="Worked migration: one scale set, end to end">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1581,10 +1581,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-translate-the-scale-set-into-a-runnergroups-entry" class="md-nav__link">
+  <a href="#2-translate-the-scale-set-into-the-v2-object-set" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Translate the scale set into a runnerGroups entry
+        2. Translate the scale set into the v2 object set
       
     </span>
   </a>
@@ -1637,17 +1637,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#v2-differences-worth-knowing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v2 differences worth knowing
-      
-    </span>
-  </a>
   
 </li>
       
@@ -2465,10 +2454,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#job-routing-the-one-that-bites" class="md-nav__link">
+  <a href="#job-routing-a-11-map" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Job routing: the one that bites
+        Job routing: a 1:1 map
       
     </span>
   </a>
@@ -2526,15 +2515,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#worked-migration-one-runner-group-end-to-end" class="md-nav__link">
+  <a href="#worked-migration-one-scale-set-end-to-end" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Worked migration: one runner group, end to end
+        Worked migration: one scale set, end to end
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Worked migration: one runner group, end to end">
+    <nav class="md-nav" aria-label="Worked migration: one scale set, end to end">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2560,10 +2549,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-translate-the-scale-set-into-a-runnergroups-entry" class="md-nav__link">
+  <a href="#2-translate-the-scale-set-into-the-v2-object-set" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Translate the scale set into a runnerGroups entry
+        2. Translate the scale set into the v2 object set
       
     </span>
   </a>
@@ -2620,17 +2609,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#v2-differences-worth-knowing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        v2 differences worth knowing
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#where-to-go-next" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2672,48 +2650,54 @@ are new to GAG, read <a href="../../why-gag/">Why GAG</a> and
 <a href="../../getting-started/">Getting Started</a> first, then come back here.</p>
 <p>The good news up front: GAG was designed to make this migration cheap. The worker
 pod template is the <strong>same Kubernetes type</strong> ARC uses, so your pod spec transfers
-with no schema translation, and ARC and GAG can run <strong>side by side</strong> on the same
-cluster — you migrate one runner group at a time and roll back by pointing
-<code>runs-on</code> back at the old labels.</p>
+with no schema translation; job routing is the <strong>same single-name model</strong> ARC
+scale sets use, so your <code>runs-on</code> lines need no edit; and ARC and GAG can run
+<strong>side by side</strong> on the same cluster, so you migrate one scale set at a time and
+roll back by pointing <code>runs-on</code> back at the old name.</p>
 <p><strong>Scope.</strong> This covers ARC's <strong>scale-set mode</strong> (the <code>AutoscalingRunnerSet</code> /
-<code>gha-runner-scale-set</code> chart — GitHub's current and recommended mode). Legacy ARC
-(<code>RunnerDeployment</code> + <code>HorizontalRunnerAutoscaler</code>) maps similarly but its
-per-pod listener and label model differ; the <a href="#job-routing-the-one-that-bites">job-routing</a>
-and <a href="#concept-mapping-arc--gag">concept-mapping</a> sections note where legacy ARC
-diverges.</p>
+<code>gha-runner-scale-set</code> chart — GitHub's current and recommended mode), and targets
+GAG's <strong>v2 API</strong> (<code>actions-gateway.com/v2beta1</code>), which is where new tenants
+onboard. Legacy ARC (<code>RunnerDeployment</code> + <code>HorizontalRunnerAutoscaler</code>) maps
+similarly, but its multi-label routing needs one extra step called out in
+<a href="#job-routing-a-11-map">Job routing</a>.</p>
+<blockquote>
+<p><strong>Do not migrate via GAG's v1 API.</strong> The older single-CR
+<code>actions-gateway.github.com/v1alpha1</code> shape is
+<strong><a href="../v1alpha1-deprecation/">deprecated</a></strong> and, more to the point here, it is
+<em>Classic-protocol only</em> — it would move you <strong>off</strong> the single-acquirer model
+your ARC scale sets already use. Migrate straight to v2.</p>
+</blockquote>
 <hr />
 <h2 id="the-mental-model">The mental model<a class="headerlink" href="#the-mental-model" title="Permanent link">&para;</a></h2>
 <p>In ARC scale-set mode, <strong>each scale set is its own controller surface</strong>: one
 <code>AutoscalingRunnerSet</code> CR, one long-running listener pod, its own
 <code>maxRunners</code> cap, configured by its own Helm release. Ten runner types means ten
 scale sets, ten listener pods, ten Helm releases.</p>
-<p>In GAG, <strong>one tenant declares one <code>ActionsGateway</code></strong> and lists its runner types as
-<code>runnerGroups[]</code> entries inside it. A single per-tenant controller — the Actions
-Gateway Controller (AGC) — multiplexes every group's listener as a goroutine
+<p>In GAG, a tenant declares one <code>ActionsGateway</code> (identity and GitHub binding) and
+one <code>RunnerSet</code> per runner type. A single per-gateway controller — the Actions
+Gateway Controller (AGC) — multiplexes every set's listener as a goroutine
 (~12 KiB) in one shared pod, instead of one always-on listener pod per scale set.
 The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>; from there a
-tenant's whole gateway (controller, egress proxy pool, RBAC, NetworkPolicies) is
-provisioned from that single CR.</p>
+tenant's whole gateway (controller, egress proxy, RBAC, NetworkPolicies) is
+provisioned from those CRs.</p>
 <p>So the shape of the migration is: <strong>N ARC scale sets in a namespace → 1
-<code>ActionsGateway</code> with N <code>runnerGroups</code> in that namespace.</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ARC (scale-set mode)                    GAG (v1 API)
+<code>ActionsGateway</code> + N <code>RunnerSet</code>s in that namespace</strong>, sharing a <code>RunnerTemplate</code>
+wherever the pod shapes are the same.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ARC (scale-set mode)                    GAG (v2 API)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>─────────────────────                   ─────────────────────────────
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>namespace: team-a                       namespace: team-a
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  AutoscalingRunnerSet &quot;cpu&quot;              ActionsGateway &quot;team-a-gateway&quot;
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    └─ listener pod (always-on)             runnerGroups:
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  AutoscalingRunnerSet &quot;gpu&quot;                 - name: cpu   (goroutine listener)
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    └─ listener pod (always-on)              - name: gpu   (goroutine listener)
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  AutoscalingRunnerSet &quot;arm&quot;                 - name: arm   (goroutine listener)
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    └─ listener pod (always-on)            └─ one AGC pod multiplexes all three
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  (shared cluster egress)                  └─ per-tenant egress proxy pool
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    └─ listener pod (always-on)           EgressProxy   &quot;team-a-egress&quot;
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  AutoscalingRunnerSet &quot;gpu&quot;              RunnerTemplate &quot;default&quot; (shared shape)
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    └─ listener pod (always-on)           RunnerSet &quot;cpu&quot;  (goroutine listener)
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  AutoscalingRunnerSet &quot;arm&quot;              RunnerSet &quot;gpu&quot;  (goroutine listener)
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    └─ listener pod (always-on)           RunnerSet &quot;arm&quot;  (goroutine listener)
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  (shared cluster egress)                 └─ one AGC pod multiplexes all three
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>                                          └─ per-tenant egress proxy pool
 </code></pre></div>
-<blockquote>
-<p><strong>One gateway per namespace (v1).</strong> The v1 API allows exactly one
-<code>ActionsGateway</code> per namespace — all your runner groups for a tenant live under
-it. If you genuinely need multiple independent gateways in one namespace, that
-is a v2 capability; see <a href="#v2-differences-worth-knowing">the v2 note</a> and the
-<a href="../migration-v1-to-v2/">v1 → v2 migration guide</a>.</p>
-</blockquote>
+<p>Unlike GAG's deprecated v1 shape, v2 puts <strong>no one-gateway-per-namespace limit</strong>
+on you: if your ARC namespace spans two GitHub orgs, that is two
+<code>ActionsGateway</code>s side by side, closer to how your scale sets are laid out today.</p>
 <hr />
 <h2 id="concept-mapping-arc--gag">Concept mapping: ARC → GAG<a class="headerlink" href="#concept-mapping-arc--gag" title="Permanent link">&para;</a></h2>
 <table>
@@ -2727,12 +2711,12 @@ is a v2 capability; see <a href="#v2-differences-worth-knowing">the v2 note</a> 
 <tbody>
 <tr>
 <td><code>AutoscalingRunnerSet</code> (one per runner type)</td>
-<td>one <code>runnerGroups[]</code> entry in the <code>ActionsGateway</code> CR</td>
-<td>N scale sets collapse into one CR with N entries.</td>
+<td>one <code>RunnerSet</code> CR</td>
+<td>1:1. Each keeps its own name, labels, and caps.</td>
 </tr>
 <tr>
 <td><code>gha-runner-scale-set</code> Helm release per scale set</td>
-<td>one <code>ActionsGateway</code> CR for the whole tenant</td>
+<td>plain CRs applied with <code>kubectl</code></td>
 <td>You stop managing a Helm release per runner type. The GMC is the only Helm install (<a href="../install/">Install</a>).</td>
 </tr>
 <tr>
@@ -2742,72 +2726,72 @@ is a v2 capability; see <a href="#v2-differences-worth-knowing">the v2 note</a> 
 </tr>
 <tr>
 <td>The <code>AutoscalingListener</code> pod (one per scale set)</td>
-<td>a goroutine inside the shared per-tenant AGC pod</td>
+<td>a goroutine inside the shared per-gateway AGC pod</td>
 <td>one always-on pod per scale set → ~12 KiB/goroutine in one shared pod; no per-listener cluster IP.</td>
 </tr>
 <tr>
 <td><code>githubConfigUrl</code></td>
-<td><code>spec.gitHubURL</code></td>
-<td>Same org / enterprise / repo URL form.</td>
+<td><code>ActionsGateway.spec.githubURL</code></td>
+<td>Same org / enterprise / repo URL form. <strong>Immutable</strong> in v2 — no accidental rebinding of a live gateway.</td>
 </tr>
 <tr>
 <td><code>githubConfigSecret</code> (PAT <strong>or</strong> GitHub App)</td>
-<td><code>spec.gitHubAppRef.name</code> → a namespace <code>Secret</code> (<code>appId</code>, <code>installationId</code>, <code>privateKey</code>)</td>
-<td><strong>GAG is GitHub-App-only — no Personal Access Token (PAT) path.</strong> If your scale sets authenticate with a PAT, you create a GitHub App first; see <a href="#1-create-the-github-app-secret">GitHub App setup</a>.</td>
+<td><code>ActionsGateway.spec.credentials</code></td>
+<td><strong>GAG is GitHub-App-only — no Personal Access Token (PAT) path.</strong> See <a href="#1-create-the-github-app-secret">GitHub App setup</a>. v2 also offers <code>type: WorkloadIdentity</code> to keep the signing key out of the cluster entirely.</td>
 </tr>
 <tr>
-<td><code>runnerScaleSetName</code> / the install name you put in <code>runs-on</code></td>
-<td><code>runnerGroups[].runnerLabels</code> (a label <strong>set</strong>)</td>
-<td>The routing model differs — see <a href="#job-routing-the-one-that-bites">Job routing</a>.</td>
+<td><code>runnerScaleSetName</code> / the name you put in <code>runs-on</code></td>
+<td><code>RunnerSet.spec.runnerLabels</code> (exactly one label)</td>
+<td><strong>Same model.</strong> See <a href="#job-routing-a-11-map">Job routing</a>.</td>
 </tr>
 <tr>
 <td><code>runnerGroup</code> (the GitHub runner-group name)</td>
 <td>n/a</td>
-<td>GAG registers runners by <strong>label</strong>, not by a GitHub runner group. There is no <code>runnerGroup</code> field.</td>
+<td>GAG registers a scale set per <code>RunnerSet</code>; there is no <code>runnerGroup</code> field.</td>
 </tr>
 <tr>
 <td><code>spec.template</code> (pod template, a <code>PodTemplateSpec</code>)</td>
-<td><code>runnerGroups[].podTemplate</code> (the same <code>PodTemplateSpec</code>)</td>
-<td><code>resources</code>, <code>nodeSelector</code>, <code>tolerations</code>, <code>affinity</code>, <code>topologySpreadConstraints</code>, <code>runtimeClassName</code>, <code>securityContext</code>, <code>volumes</code>, init/sidecar containers transfer <strong>one-to-one</strong>. Renamed <code>template</code> → <code>podTemplate</code> only to keep the type unambiguous.</td>
+<td><code>RunnerTemplate.spec.podTemplate</code> (the same <code>PodTemplateSpec</code>)</td>
+<td><code>resources</code>, <code>nodeSelector</code>, <code>tolerations</code>, <code>affinity</code>, <code>topologySpreadConstraints</code>, <code>runtimeClassName</code>, <code>securityContext</code>, <code>volumes</code>, init/sidecar containers transfer <strong>one-to-one</strong>. ARC inlines this per scale set; a <code>RunnerTemplate</code> is referenced by many <code>RunnerSet</code>s, so identical shapes are written once.</td>
 </tr>
 <tr>
 <td>runner container image (ARC default <code>ghcr.io/actions/actions-runner</code>)</td>
-<td><code>runnerGroups[].workerImage</code> (same image, or unset for the default)</td>
-<td><strong>Drop-in.</strong> GAG injects its wrapper into the worker pod at runtime, so your existing ARC image — or the unset default — runs jobs unchanged. See <a href="#your-runner-image-works-unchanged">Your runner image works unchanged</a> below.</td>
+<td><code>RunnerTemplate.spec.workerImage</code> (same image, or unset for the default)</td>
+<td><strong>Drop-in.</strong> See <a href="#your-runner-image-works-unchanged">Your runner image works unchanged</a>.</td>
 </tr>
 <tr>
 <td><code>maxRunners</code> (per scale set)</td>
-<td><code>runnerGroups[].maxWorkers</code> (per group) + the <strong>namespace <code>ResourceQuota</code></strong></td>
-<td>The real cap is the platform-owned quota, shared across groups; <code>maxWorkers</code> is the per-group ceiling. See <a href="#quotas-and-scheduling">Quotas</a>.</td>
+<td><code>RunnerSet.spec.maxWorkers</code> + the <strong>namespace <code>ResourceQuota</code></strong></td>
+<td>The real cap is the platform-owned quota, shared across sets; <code>maxWorkers</code> is the per-set ceiling. See <a href="#quotas-and-scheduling">Quotas</a>.</td>
 </tr>
 <tr>
 <td><code>minRunners</code> (warm pool to mask cold start)</td>
 <td>n/a — <strong>not needed</strong></td>
-<td>The goroutine listener never goes cold, so there is no cold-start to mask; GAG always scales workers to zero between jobs. Dropping <code>minRunners &gt; 0</code> is what removes your idle GPU/compute pods.</td>
+<td>The goroutine listener never goes cold, so there is no cold start to mask; GAG always scales workers to zero between jobs. Dropping <code>minRunners &gt; 0</code> is what removes your idle GPU/compute pods.</td>
 </tr>
 <tr>
 <td><code>containerMode: kubernetes</code> / <code>dind</code></td>
-<td>a <code>podTemplate</code> choice + <code>securityProfile</code></td>
-<td>GAG always runs one worker pod per job. Docker-in-Docker needs <code>securityProfile: privileged</code> (a platform-granted opt-in); see <a href="#security-profiles">Security profiles</a>.</td>
+<td>a template choice + the namespace security profile</td>
+<td>GAG always runs one worker pod per job. Docker-in-Docker needs a platform-owned <code>ClusterRunnerTemplate</code> plus a privileged-eligible namespace; see <a href="#security-profiles">Security profiles</a>.</td>
 </tr>
 <tr>
 <td>Per-scale-set scaling math (<code>minRunners</code>/<code>maxRunners</code>)</td>
-<td><code>runnerGroups[].maxListeners</code> + <code>maxWorkers</code></td>
-<td><code>maxListeners</code> caps concurrent job acquisition; <code>maxWorkers</code> caps concurrent worker pods.</td>
+<td><code>RunnerSet.spec.maxWorkers</code> (+ optional <code>sizing</code>)</td>
+<td>One knob instead of two. Concurrency is advertised to GitHub as the scale set's capacity.</td>
 </tr>
 <tr>
 <td>Pod Security / NetworkPolicy / RBAC hand-built around ARC</td>
-<td>reconciled from the one CR by the GMC</td>
+<td>reconciled from the CRs by the GMC</td>
 <td>GAG ships these as secure-by-default; you do not assemble them per tenant (<a href="../../why-gag/#secure-by-default">Why GAG → Secure by default</a>).</td>
 </tr>
 <tr>
 <td>(no ARC equivalent)</td>
-<td><code>runnerGroups[].priorityTiers</code></td>
+<td><code>RunnerSet.spec.priorityTiers</code></td>
 <td>A guaranteed floor of preempting slots for a runner type under a shared quota — the thing ARC's per-scale-set <code>maxRunners</code> cannot express.</td>
 </tr>
 <tr>
 <td>(no ARC equivalent)</td>
-<td>per-tenant egress proxy pool / dedicated egress IPs</td>
+<td><code>EgressProxy</code> / dedicated egress IPs</td>
 <td>See <a href="#egress-isolation-the-big-difference">Egress isolation</a>.</td>
 </tr>
 </tbody>
@@ -2827,49 +2811,47 @@ userland intact.</p>
 <blockquote>
 <p><strong>Docker-in-Docker:</strong> because the injected wrapper runs in place of the image
 entrypoint, an <code>actions-runner-dind</code> image's bundled <code>dockerd</code> startup is
-<strong>skipped</strong>. Run DinD as a <strong>sidecar</strong> container with <code>securityProfile: privileged</code>
-instead (see <a href="#security-profiles">Security profiles</a>) — GAG's DinD model regardless
-of the worker image.</p>
+<strong>skipped</strong>. Run DinD as a <strong>sidecar</strong> container in a privileged
+<code>ClusterRunnerTemplate</code> instead (see <a href="#security-profiles">Security profiles</a>) —
+GAG's DinD model regardless of the worker image.</p>
 </blockquote>
 <hr />
-<h2 id="job-routing-the-one-that-bites">Job routing: the one that bites<a class="headerlink" href="#job-routing-the-one-that-bites" title="Permanent link">&para;</a></h2>
-<p>This is the single behavioral difference most likely to surprise you, so it gets
-its own section.</p>
-<p><strong>ARC scale-set mode routes by the scale-set name.</strong> A workflow targets a scale
-set with <code>runs-on: &lt;runnerScaleSetName&gt;</code> — a single name that equals the install
-name. Scale-set mode deliberately dropped the arbitrary multi-label matching that
-legacy ARC <code>RunnerDeployment</code> had; the name <em>is</em> the selector.</p>
-<p><strong>GAG routes by a label set.</strong> Each <code>runnerGroups[]</code> entry declares
-<code>runnerLabels: [...]</code>, and a job is routed to a group when the job's <code>runs-on</code>
-labels match that group's label set — the same multi-label model GitHub uses for
-any self-hosted runner. So in GAG you write:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># workflow</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">jobs</span><span class="p">:</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">build</span><span class="p">:</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">self-hosted</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">linux</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">gpu</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># matched against a runnerGroup&#39;s runnerLabels</span>
+<h2 id="job-routing-a-11-map">Job routing: a 1:1 map<a class="headerlink" href="#job-routing-a-11-map" title="Permanent link">&para;</a></h2>
+<p>This is the section that used to carry a warning. Against GAG's v2 API it does not,
+and that is worth stating plainly because it is the difference between a migration
+that touches your workflows and one that does not.</p>
+<p><strong>ARC scale-set mode routes by the scale-set name.</strong> A workflow targets a scale set
+with <code>runs-on: &lt;runnerScaleSetName&gt;</code> — a single name that equals the install name.
+Scale-set mode deliberately dropped the arbitrary multi-label matching legacy ARC
+<code>RunnerDeployment</code> had; the name <em>is</em> the selector.</p>
+<p><strong>GAG v2 routes the same way.</strong> A <code>RunnerSet</code> declares <strong>exactly one</strong>
+<code>runnerLabels</code> entry, that label is the scale set's name at GitHub, and a workflow
+targets it with that one label in <code>runs-on</code>. So carrying your ARC scale-set name
+across as the label means <strong>existing workflows route unchanged</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># ARC:  runs-on: gpu-large   →   GAG: runs-on: gpu-large   (no edit)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu-large&quot;</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># the ARC scale-set name, carried across verbatim</span>
 </code></pre></div>
-<p>What this means for migration:</p>
+<p>Rules worth knowing:</p>
 <ul>
-<li><strong>Coming from scale-set mode (single name):</strong> pick a <code>runnerLabels</code> set that
-  includes a label your workflows can target. The simplest zero-churn move is to
-  add the <strong>old scale-set name as one of the labels</strong> so existing <code>runs-on: &lt;name&gt;</code>
-  keeps working, e.g. a scale set named <code>gpu-large</code> becomes
-  <code>runnerLabels: ["self-hosted", "gpu-large"]</code>. Then optionally migrate workflows
-  to richer label sets at your own pace.</li>
-<li><strong><code>runnerLabels</code> must be non-empty.</strong> An empty set would match <em>every</em> workflow
-  run, so admission rejects it (<code>MinItems=1</code>). Each label is ≤ 256 chars and may
-  not contain whitespace or commas (comma is the <code>runs-on</code> list separator).</li>
-<li><strong>Distinct groups need distinct label sets.</strong> Two runner groups whose labels
-  both match a job is an ambiguous route — give each group a label that uniquely
-  identifies it (the old scale-set name works well for this).</li>
-<li><strong><code>self-hosted</code> is conventional, not magic.</strong> GitHub adds <code>self-hosted</code>
-  implicitly to self-hosted runners; include it in <code>runnerLabels</code> so
-  <code>runs-on: self-hosted</code> style workflows still match.</li>
+<li><strong>Exactly one label.</strong> A set with two or more labels is rejected at admission —
+  the scale set has one name, so it has one match target.</li>
+<li><strong>Unique per gateway.</strong> Two <code>RunnerSet</code>s under one <code>ActionsGateway</code> may not share
+  their label; they would register the same scale-set name at GitHub and collide.
+  Keeping your ARC names gives you uniqueness for free, since ARC already required
+  distinct install names.</li>
+<li><strong>No <code>self-hosted</code>.</strong> Under the scale-set model <code>self-hosted</code> is not part of the
+  match, exactly as in ARC scale-set mode. Do not add it.</li>
+<li><strong>Labels are ≤ 256 chars</strong> and may not contain whitespace or commas.</li>
 </ul>
 <blockquote>
-<p><strong>Coming from legacy ARC (<code>RunnerDeployment</code> + labels)?</strong> Your label model is
-already close to GAG's — carry the same label set into <code>runnerLabels</code> and most
-workflows route unchanged.</p>
+<p><strong>Coming from legacy ARC (<code>RunnerDeployment</code> + multi-label <code>runs-on</code>)?</strong> This is
+the one place your migration needs a workflow edit, and it is the same edit
+GitHub's own scale-set migration requires: multi-label matching does not exist in
+the scale-set model. Split each <code>runs-on: [self-hosted, linux, gpu]</code> target into
+its own <code>RunnerSet</code> with a single descriptive label (<code>gpu-linux</code>), and update the
+workflows to <code>runs-on: gpu-linux</code>. Migrate to ARC scale sets first if you would
+rather do that change under ARC.</p>
 </blockquote>
 <hr />
 <h2 id="egress-isolation-the-big-difference">Egress isolation: the big difference<a class="headerlink" href="#egress-isolation-the-big-difference" title="Permanent link">&para;</a></h2>
@@ -2877,14 +2859,22 @@ workflows route unchanged.</p>
 leaves via whatever node / NAT the pod lands on, so you cannot attribute a source
 IP to a tenant or allow-list one team's runners without allow-listing the whole
 cluster.</p>
-<p>GAG gives <strong>each tenant its own egress proxy pool</strong> (Tier 3). All GitHub-bound
+<p>GAG gives <strong>each tenant its own egress proxy pool</strong> (Tier 3), declared as an
+<code>EgressProxy</code> and pointed at by the gateway's <code>defaultProxyRef</code>. All GitHub-bound
 traffic from the AGC and worker pods routes through that pool, so every tenant
 gets a dedicated, stable set of egress IPs never shared with another tenant. That
 is what makes GitHub Enterprise Managed Users (EMU) IP allow-listing, per-tenant
 incident attribution, and avoiding shared-NAT throttling possible. The pool is
-HPA-managed between <code>spec.proxy.minReplicas</code> and <code>maxReplicas</code>.</p>
+HPA-managed between <code>spec.minReplicas</code> and <code>maxReplicas</code>.</p>
 <p>Differences and quirks an ARC operator should know:</p>
 <ul>
+<li><strong>The proxy is optional, but it is the reason to be here.</strong> A gateway with no
+  <code>defaultProxyRef</code> and sets with no <code>proxyRef</code> egress <strong>directly</strong>: still
+  default-deny-restricted to DNS + the GitHub CIDR allowlist, but with no
+  per-tenant IP <em>attribution</em>. The trade is surfaced as <code>status.proxyMode: Direct</code>
+  plus an advisory <code>EgressUnattributed</code> condition. If per-tenant egress IPs are
+  what brought you off ARC, keep the proxy. See
+  <a href="../tenant-onboarding/#proxy-less-onboarding-direct-egress">Proxy-less onboarding</a>.</li>
 <li><strong>Default-deny egress is the default, and it needs a policy-aware CNI.</strong> GAG
   provisions NetworkPolicies that restrict worker pods to <strong>DNS + the tenant
   proxy only</strong> (no direct GitHub, no Kubernetes API), and the proxy pods to the
@@ -2896,23 +2886,18 @@ HPA-managed between <code>spec.proxy.minReplicas</code> and <code>maxReplicas</c
   <a href="../../design/network-architecture/#how-to-validate-network-isolation">network-architecture § How to Validate Network Isolation</a>.</li>
 <li><strong>The GitHub IP allow-list is maintained for you.</strong> The GMC refreshes the
   GitHub CIDR set the proxy permits, so the egress allow-list tracks GitHub's
-  published ranges without operator action.</li>
+  published ranges without operator action. <code>egressPolicyMode: FQDN</code> allow-lists
+  GitHub by hostname instead, where your CNI supports it.</li>
 <li><strong>Internal destinations need <code>noProxyCIDRs</code>.</strong> Anything your jobs reach
   <em>inside</em> the cluster or your network (artifact stores, internal registries)
-  must be excluded from the proxy via <code>spec.proxy.noProxyCIDRs</code> (CIDRs, bare IPs,
-  or <code>NO_PROXY</code> domain suffixes). Cluster-internal defaults are appended
+  must be excluded from the proxy via <code>EgressProxy.spec.noProxyCIDRs</code> (CIDRs, bare
+  IPs, or <code>NO_PROXY</code> domain suffixes). Cluster-internal defaults are appended
   automatically. <strong>Admission rejects any entry that would route GitHub traffic
-  around the proxy</strong> (a host matching <code>gitHubURL</code> or <code>github.com</code> /
+  around the proxy</strong> (a host matching <code>githubURL</code> or <code>github.com</code> /
   <code>githubusercontent.com</code> / <code>ghcr.io</code>) — that would break egress-IP attribution.</li>
 <li><strong>The AGC↔proxy hop is HTTPS with a pinned cert.</strong> The GMC issues a per-tenant
   self-signed cert and pins it into the AGC trust store, so the proxy hop is not
   eavesdroppable by other tenants on the cluster.</li>
-<li><strong>v2 makes the proxy optional.</strong> In the v2 API you may run <strong>direct egress</strong>
-  (no proxy) — egress is still default-deny-restricted to DNS + GitHub, but you
-  lose per-tenant IP <em>attribution</em>. The trade is surfaced as
-  <code>status.proxyMode: Direct</code> + an advisory <code>EgressUnattributed</code> condition. Keep
-  the proxy if you came to GAG <em>for</em> the per-tenant egress IPs. See the
-  <a href="../tenant-onboarding/#proxy-less-onboarding-direct-egress">v2 onboarding note</a>.</li>
 </ul>
 <hr />
 <h2 id="gotchas-and-behavioral-differences">Gotchas and behavioral differences<a class="headerlink" href="#gotchas-and-behavioral-differences" title="Permanent link">&para;</a></h2>
@@ -2935,8 +2920,8 @@ HPA-managed between <code>spec.proxy.minReplicas</code> and <code>maxReplicas</c
 <tr>
 <td><strong>Job routing</strong></td>
 <td><code>runs-on: &lt;scale-set-name&gt;</code> (single name)</td>
-<td><code>runs-on:</code> matched against a label <strong>set</strong></td>
-<td><a href="#job-routing-the-one-that-bites">Add the old name as a label</a>.</td>
+<td>same single-name model</td>
+<td><a href="#job-routing-a-11-map">Carry the name across as the label</a>; no workflow edit.</td>
 </tr>
 <tr>
 <td><strong>Auth</strong></td>
@@ -2947,7 +2932,7 @@ HPA-managed between <code>spec.proxy.minReplicas</code> and <code>maxReplicas</c
 <tr>
 <td><strong>Listener</strong></td>
 <td>one always-on pod per scale set, 24/7</td>
-<td>one shared goroutine pod per tenant</td>
+<td>one shared goroutine pod per gateway</td>
 <td>No action; expect far fewer pods/IPs at rest.</td>
 </tr>
 <tr>
@@ -2959,31 +2944,37 @@ HPA-managed between <code>spec.proxy.minReplicas</code> and <code>maxReplicas</c
 <tr>
 <td><strong>Per-runner-type cap</strong></td>
 <td><code>maxRunners</code> per scale set</td>
-<td><code>maxWorkers</code> per group <strong>+ shared namespace <code>ResourceQuota</code></strong></td>
-<td>The quota is the real cap; size it for all groups (<a href="#quotas-and-scheduling">Quotas</a>).</td>
+<td><code>maxWorkers</code> per set <strong>+ shared namespace <code>ResourceQuota</code></strong></td>
+<td>The quota is the real cap; size it for all sets (<a href="#quotas-and-scheduling">Quotas</a>).</td>
 </tr>
 <tr>
 <td><strong>Critical-runner floor</strong></td>
 <td>none (each scale set caps only itself)</td>
-<td><code>priorityTiers</code> per group</td>
+<td><code>priorityTiers</code> per set</td>
 <td>Optionally reserve preempting slots for expensive runner types.</td>
 </tr>
 <tr>
 <td><strong>DinD / privileged</strong></td>
 <td><code>containerMode: dind</code></td>
-<td><code>securityProfile: privileged</code> (platform-granted, per namespace)</td>
-<td>Requires a namespace eligibility label; see <a href="#security-profiles">Security profiles</a>.</td>
+<td>a privileged <code>ClusterRunnerTemplate</code> + privileged-eligible namespace</td>
+<td>Platform-granted, not tenant-settable; see <a href="#security-profiles">Security profiles</a>.</td>
 </tr>
 <tr>
-<td><strong>One gateway per namespace</strong></td>
+<td><strong>Pod template reuse</strong></td>
+<td><code>template</code> copied into every scale set</td>
+<td>one <code>RunnerTemplate</code> referenced by many sets</td>
+<td>Deduplicate identical shapes; keep separate templates where they genuinely differ.</td>
+</tr>
+<tr>
+<td><strong>Gateways per namespace</strong></td>
 <td>many scale sets per namespace</td>
-<td>one <code>ActionsGateway</code> per namespace (v1)</td>
-<td>Put all runner types in one CR; use v2 or a second namespace if you truly need separate gateways.</td>
+<td>many <code>RunnerSet</code>s, and many gateways, per namespace</td>
+<td>No restructuring needed. (GAG's deprecated v1 API had a one-gateway limit; v2 does not.)</td>
 </tr>
 <tr>
 <td><strong>Quota / RBAC / NetworkPolicy</strong></td>
 <td>hand-assembled per tenant</td>
-<td>reconciled from the CR</td>
+<td>reconciled from the CRs</td>
 <td>Remove your bespoke policy manifests after cutover.</td>
 </tr>
 <tr>
@@ -2992,41 +2983,58 @@ HPA-managed between <code>spec.proxy.minReplicas</code> and <code>maxReplicas</c
 <td>finished pod kept for <code>completedPodTTL</code> (default <code>5m</code>), then deleted</td>
 <td>Raise <code>completedPodTTL</code> if you need a longer <code>kubectl logs</code> window.</td>
 </tr>
+<tr>
+<td><strong>Cluster version</strong></td>
+<td>ARC supports older clusters</td>
+<td><strong>Kubernetes ≥ 1.31</strong> for v2</td>
+<td>The AGC selects its <code>RunnerSet</code>s with a server-side CRD field selector that is alpha-off on 1.30. Confirm before you start.</td>
+</tr>
 </tbody>
 </table>
 <h3 id="quotas-and-scheduling">Quotas and scheduling<a class="headerlink" href="#quotas-and-scheduling" title="Permanent link">&para;</a></h3>
 <p>In ARC, each scale set's <code>maxRunners</code> is its own independent cap. In GAG, the real
 ceiling is the <strong>platform-owned namespace <code>ResourceQuota</code></strong>, shared across every
-runner group, and <code>maxWorkers</code> is a per-group ceiling within it. This is
-deliberate — a tenant-authored cap is no cap (the tenant could raise it), and it
-is what makes per-tenant quotas <em>safe</em>: a quota-blocked job recovers instead of
-dying. Size the quota for the proxy pool at <code>proxy.maxReplicas</code> <strong>plus</strong> worker
-pods up to each group's <code>maxWorkers</code>; the
+runner set, and <code>maxWorkers</code> is a per-set ceiling within it. This is deliberate — a
+tenant-authored cap is no cap (the tenant could raise it), and it is what makes
+per-tenant quotas <em>safe</em>: a quota-blocked job recovers instead of dying. Size the
+quota for the proxy pool at <code>maxReplicas</code> <strong>plus</strong> worker pods up to each set's
+<code>maxWorkers</code>; the
 <a href="../tenant-onboarding/#step-1b-set-the-platform-owned-resourcequota">onboarding quota step</a>
-has the formula. When a group should never be starved by cheaper runners, use
+has the formula. When a set should never be starved by cheaper runners, use
 <code>priorityTiers</code> to reserve a floor of preempting slots — the primitive ARC's
 per-scale-set model has no equivalent for.</p>
 <h3 id="security-profiles">Security profiles<a class="headerlink" href="#security-profiles" title="Permanent link">&para;</a></h3>
-<p>ARC's <code>containerMode: dind</code> becomes GAG's <code>securityProfile: privileged</code>, which is a
-<strong>platform decision, not tenant-settable</strong>: the namespace must carry the
-<code>actions-gateway.github.com/privileged-profile=allowed</code> eligibility label
-(applied by an administrator) or admission rejects the CR. The default
-<code>baseline</code> profile is correct for ordinary build/test workloads; use <code>restricted</code>
-for high-isolation tenants. You can <em>harden</em> a profile in place freely but
-<em>relaxing</em> it is an explicit annotated opt-in. Full rules:
+<p>ARC's <code>containerMode: dind</code> becomes two platform-owned grants in GAG v2, neither
+tenant-settable:</p>
+<ol>
+<li><strong>A privileged namespace.</strong> The Pod Security level is a <strong>namespace label</strong> in
+   v2 (<code>actions-gateway.com/security-profile</code>), shared by every gateway in the
+   namespace. <code>privileged</code> additionally requires the namespace to carry
+   <code>actions-gateway.com/privileged-profile: allowed</code>, applied by an administrator,
+   or admission rejects it.</li>
+<li><strong>A privileged template.</strong> A namespaced <code>RunnerTemplate</code> may <strong>not</strong> declare
+   privileged containers — a tenant must not self-author a privileged worker
+   shape. Privileged DinD/sysbox/Kata shapes are published by a platform admin as a
+   cluster-scoped <code>ClusterRunnerTemplate</code>, which a <code>RunnerSet</code> references with
+   <code>templateRef: { kind: ClusterRunnerTemplate, name: … }</code>.</li>
+</ol>
+<p>The default <code>baseline</code> profile is correct for ordinary build/test workloads; use
+<code>restricted</code> for high-isolation tenants. You can <em>harden</em> a profile in place freely
+but <em>relaxing</em> it is an explicit annotated opt-in. Full rules:
 <a href="../tenant-onboarding/#pre-conditions">tenant-onboarding Pre-Conditions</a> and
 <a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">Security § 5.3</a>.</p>
 <hr />
-<h2 id="worked-migration-one-runner-group-end-to-end">Worked migration: one runner group, end to end<a class="headerlink" href="#worked-migration-one-runner-group-end-to-end" title="Permanent link">&para;</a></h2>
-<p>This migrates a single ARC scale set to a GAG runner group with <strong>zero downtime</strong>
+<h2 id="worked-migration-one-scale-set-end-to-end">Worked migration: one scale set, end to end<a class="headerlink" href="#worked-migration-one-scale-set-end-to-end" title="Permanent link">&para;</a></h2>
+<p>This migrates a single ARC scale set to a GAG runner set with <strong>zero downtime</strong>
 — ARC keeps serving until you cut workflows over, and rollback is one line.</p>
 <p>Worked example: an ARC scale set named <strong><code>gpu-large</code></strong> in namespace <strong><code>team-a</code></strong>,
 authenticated with a GitHub App, running GPU workflows.</p>
 <h3 id="0-confirm-prerequisites">0. Confirm prerequisites<a class="headerlink" href="#0-confirm-prerequisites" title="Permanent link">&para;</a></h3>
-<p>GAG's GMC is installed (<a href="../install/">Install</a>) and your cluster's CNI enforces
-egress NetworkPolicy (<a href="#egress-isolation-the-big-difference">Egress isolation</a>).
-Confirm the namespace is marked a managed tenant and has a platform-owned
-<code>ResourceQuota</code> — see the
+<p>The GMC is installed <strong>with the v2 CRD chart</strong> (<a href="../install/#optional-the-v2-api-crds">Install</a>),
+the cluster is <strong>Kubernetes ≥ 1.31</strong>, and its CNI enforces egress NetworkPolicy
+(<a href="#egress-isolation-the-big-difference">Egress isolation</a>). Confirm the namespace is
+marked a managed tenant, carries its security-profile label, and has a
+platform-owned <code>ResourceQuota</code> — see the
 <a href="../tenant-onboarding/#pre-conditions">tenant-onboarding Pre-Conditions</a>. <strong>Leave
 the ARC scale set running</strong> throughout.</p>
 <h3 id="1-create-the-github-app-secret">1. Create the GitHub App Secret<a class="headerlink" href="#1-create-the-github-app-secret" title="Permanent link">&para;</a></h3>
@@ -3037,58 +3045,82 @@ namespace per
 If your scale set used a <strong>PAT</strong>, register a GitHub App now (<code>Actions: Read</code> +
 <code>Administration: Read</code>, installed on the same org/repos) — GAG has no PAT path.
 Never copy a private key through an environment variable or shell history.</p>
-<h3 id="2-translate-the-scale-set-into-a-runnergroups-entry">2. Translate the scale set into a <code>runnerGroups</code> entry<a class="headerlink" href="#2-translate-the-scale-set-into-a-runnergroups-entry" title="Permanent link">&para;</a></h3>
-<p>Lift your ARC <code>spec.template</code> straight into <code>podTemplate</code> (same type), and turn the
-scale-set name into a label so existing <code>runs-on</code> keeps working:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
+<h3 id="2-translate-the-scale-set-into-the-v2-object-set">2. Translate the scale set into the v2 object set<a class="headerlink" href="#2-translate-the-scale-set-into-the-v2-object-set" title="Permanent link">&para;</a></h3>
+<p>Lift your ARC <code>spec.template</code> straight into the <code>RunnerTemplate</code> (same type), and
+carry the scale-set name across as the runner set's single label so existing
+<code>runs-on</code> keeps working:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-gateway</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-egress</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">gitHubAppRef</span><span class="p">:</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">github-app-v1</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nt">gitHubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span><span class="w">   </span><span class="c1"># was ARC&#39;s githubConfigUrl</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span><span class="nt">securityProfile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">baseline</span><span class="w">                  </span><span class="c1"># privileged only if you used containerMode: dind</span>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span><span class="nt">proxy</span><span class="p">:</span>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="nt">minReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
-<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="nt">maxReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
-<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
-<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="c1"># A runner group has no `name` field — the RunnerGroup CR name is derived from</span>
-<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="c1"># the gateway name + first runnerLabel. Keeping the old ARC scale-set name as</span>
-<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span><span class="c1"># the first label so `runs-on: gpu-large` still routes AND names the group:</span>
-<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu-large&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">      </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
-<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w">              </span><span class="c1"># was ARC&#39;s maxRunners (real cap is the namespace quota)</span>
-<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">      </span><span class="c1"># No minRunners: GAG scales to zero with no cold-start penalty.</span>
-<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">      </span><span class="nt">podTemplate</span><span class="p">:</span><span class="w">                </span><span class="c1"># ← paste your ARC spec.template here, unchanged</span>
-<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
-<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
-<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
-<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">                </span><span class="nt">requests</span><span class="p">:</span>
-<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">                  </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span>
-<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">                  </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16Gi&quot;</span>
-<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">                </span><span class="nt">limits</span><span class="p">:</span>
-<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">                  </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">minReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">maxReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="nn">---</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerTemplate</span><span class="w">           </span><span class="c1"># your ARC spec.template, written once and shared</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span><span class="nt">podTemplate</span><span class="p">:</span><span class="w">                 </span><span class="c1"># ← paste your ARC spec.template here, unchanged</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">          </span><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">            </span><span class="nt">requests</span><span class="p">:</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">              </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">              </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16Gi&quot;</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">            </span><span class="nt">limits</span><span class="p">:</span>
+<a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">              </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span>
+<a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="nn">---</span>
+<a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
+<a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-gateway</span>
+<a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="w">  </span><span class="nt">credentials</span><span class="p">:</span>
+<a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GitHubApp</span>
+<a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">    </span><span class="nt">githubApp</span><span class="p">:</span>
+<a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">github-app-v2</span><span class="w">      </span><span class="c1"># name-only Secret ref in this namespace</span>
+<a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span><span class="w">   </span><span class="c1"># was ARC&#39;s githubConfigUrl (immutable)</span>
+<a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">  </span><span class="nt">defaultProxyRef</span><span class="p">:</span>
+<a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-egress</span><span class="w">        </span><span class="c1"># every RunnerSet below inherits this</span>
+<a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="w">  </span><span class="c1"># No securityProfile field: the Pod Security level is a namespace label in v2.</span>
+<a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="nn">---</span>
+<a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
+<a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-large</span><span class="w">              </span><span class="c1"># v2 names the set explicitly</span>
+<a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">gpu</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu-large&quot;</span><span class="p p-Indicator">]</span><span class="w">  </span><span class="c1"># the ARC scale-set name: runs-on: gpu-large still routes</span>
+<a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w">               </span><span class="c1"># was ARC&#39;s maxRunners (real cap is the namespace quota)</span>
+<a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a><span class="w">  </span><span class="c1"># No minRunners: GAG scales to zero with no cold-start penalty.</span>
 </code></pre></div>
-<p>Add one <code>runnerGroups[]</code> entry per ARC scale set you are migrating in this
-namespace — they all live under this one <code>ActionsGateway</code>.</p>
+<p>Add one <code>RunnerSet</code> per ARC scale set you are migrating in this namespace — they
+all point at the same <code>ActionsGateway</code>, and share a <code>RunnerTemplate</code> wherever the
+pod shapes match. Where they differ, add a template per shape.</p>
 <h3 id="3-apply-and-validate-provisioning">3. Apply and validate provisioning<a class="headerlink" href="#3-apply-and-validate-provisioning" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>actionsgateway.yaml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>gateway.yaml
 </code></pre></div>
-<p>Wait for <code>Ready=True</code> and confirm the AGC, proxy pool, RBAC, NetworkPolicies, and
-the <code>RunnerGroup</code> CR(s) came up — follow
+<p>Wait for <code>Ready=True</code> on the gateway and each runner set, and confirm the AGC,
+proxy pool, RBAC, and NetworkPolicies came up — follow
 <a href="../tenant-onboarding/#step-3-validate-provisioning">tenant-onboarding Step 3</a> and
 <a href="../tenant-onboarding/#step-4-validate-listener-sessions">Step 4</a>. At this point
-<strong>both</strong> the ARC scale set and the GAG runner group are registered with GitHub and
-listening; GitHub will route a matching job to whichever acquires it first.</p>
+<strong>both</strong> the ARC scale set and the GAG runner set are registered with GitHub;
+GitHub routes a matching job to whichever acquires it first.</p>
 <h3 id="4-cut-workflows-over-and-verify">4. Cut workflows over and verify<a class="headerlink" href="#4-cut-workflows-over-and-verify" title="Permanent link">&para;</a></h3>
-<p>Run a test job targeting the labels and confirm a GAG worker pod is created,
+<p>Run a test job targeting the label and confirm a GAG worker pod is created,
 egresses through the proxy, and is deleted on completion
 (<a href="../tenant-onboarding/#step-5-run-a-test-job">tenant-onboarding Step 5</a>). Because
-you kept the old name as a label, existing <code>runs-on: gpu-large</code> workflows already
-land on GAG. Watch a few real jobs through the GAG path before removing ARC.</p>
+you carried the name across as the label, existing <code>runs-on: gpu-large</code> workflows
+already land on GAG. Watch a few real jobs through the GAG path before removing
+ARC.</p>
 <h3 id="5-decommission-the-arc-scale-set">5. Decommission the ARC scale set<a class="headerlink" href="#5-decommission-the-arc-scale-set" title="Permanent link">&para;</a></h3>
 <p>Once you trust the GAG path, scale the ARC scale set to zero / uninstall its Helm
 release:</p>
@@ -3096,31 +3128,13 @@ release:</p>
 </code></pre></div>
 <p>Repeat steps 2–5 for each remaining scale set, then remove any bespoke
 NetworkPolicy / RBAC / quota manifests you hand-built around ARC — GAG reconciles
-those from the CR now.</p>
+those from the CRs now.</p>
 <h3 id="rollback">Rollback<a class="headerlink" href="#rollback" title="Permanent link">&para;</a></h3>
 <p>Nothing in this flow removes ARC until step 5, so rollback during migration is
-trivial: if the GAG path misbehaves, <strong>keep the ARC scale set running</strong> and point
-<code>runs-on</code> back at the scale-set name (or just delete the GAG runner group entry
-and re-apply). Because both register independently with GitHub, there is no
-split-brain to untangle.</p>
-<hr />
-<h2 id="v2-differences-worth-knowing">v2 differences worth knowing<a class="headerlink" href="#v2-differences-worth-knowing" title="Permanent link">&para;</a></h2>
-<p>GAG's v1 API (<code>actions-gateway.github.com/v1alpha1</code>, the GA default) is the right
-target for a first migration and everything above uses it. The opt-in v2 API
-(<code>actions-gateway.com</code>) adds capabilities an ARC operator may want later:</p>
-<ul>
-<li><strong>Multiple gateways per namespace</strong> — lifts the v1 one-gateway-per-namespace
-  rule, closer to ARC's many-scale-sets-per-namespace model.</li>
-<li><strong>Reusable <code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code></strong> — share one pod template
-  across runner sets instead of inlining it per group (ARC inlines <code>template</code> per
-  scale set).</li>
-<li><strong>Optional egress proxy (direct egress)</strong> — see
-  <a href="#egress-isolation-the-big-difference">Egress isolation</a>.</li>
-<li><strong>Workload-identity credentials</strong> — keep the GitHub App signing key out of the
-  cluster entirely (external signer).</li>
-</ul>
-<p>These are not required to replace ARC. If you adopt v2 later, see the
-<a href="../migration-v1-to-v2/">v1 → v2 migration guide</a>.</p>
+trivial: if the GAG path misbehaves, <strong>keep the ARC scale set running</strong> and delete
+the GAG <code>RunnerSet</code> (or point <code>runs-on</code> back at the ARC scale-set name if you gave
+the GAG set a different label). Because both register independently with GitHub,
+there is no split-brain to untangle.</p>
 <hr />
 <h2 id="where-to-go-next">Where to go next<a class="headerlink" href="#where-to-go-next" title="Permanent link">&para;</a></h2>
 <ul>
@@ -3131,6 +3145,8 @@ target for a first migration and everything above uses it. The opt-in v2 API
 <li><a href="../../design/network-architecture/">Network architecture</a> — egress proxy and
   NetworkPolicy detail, with isolation-validation probes.</li>
 <li><a href="../troubleshooting/">Troubleshooting</a> — common first-day failures.</li>
+<li><a href="../v1alpha1-deprecation/"><code>v1alpha1</code> deprecation notice</a> — only if you are
+  <em>already</em> on GAG's v1 API; new migrations should not start there.</li>
 </ul>
 
 
