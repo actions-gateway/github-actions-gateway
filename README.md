@@ -14,7 +14,7 @@ Actions Runner Controller (ARC) scale-set mode is the common starting point. Onc
 
 | Gap at multi-tenant scale | How GAG closes it |
 | --- | --- |
-| An evicted runner pod leaves its job stuck in GitHub's queue, up to the 24-hour timeout | Cancels the job lock in seconds and reruns, with a per-job retry budget |
+| An evicted runner pod leaves its job stuck in GitHub's queue until a manual rerun (GitHub's own queue timeout: at least 24 h, up to 48 h) | Cancels the job within the remaining lock window (~10 min worst case) and reruns, with a per-job retry budget |
 | Tenants can't be given isolated GitHub egress IPs | Dedicated per-tenant egress IP pool for allowlisting and contained blast radius |
 | Idle runner and listener compute stays provisioned between jobs | Workers scale to zero between jobs; listeners run as ~60 KiB goroutines, not ~256 MiB pods |
 
@@ -28,7 +28,7 @@ Running many runner groups for one tenant in a shared Kubernetes namespace creat
 
 **Listener overhead at scale.** ARC's scale-set listener is one pod per scale set running a full .NET runtime — roughly 256 MiB resident, plus a cluster IP, held alive 24/7 to long-poll GitHub. A tenant with 10 scale sets pays ~2.5 GiB of memory and 10 pod slots at rest, before any job runs. Teams that also pin `minRunners > 0` to mask runner-pod cold-start latency multiply this further with idle runner pods on expensive hardware.
 
-**No automatic recovery from worker eviction.** When a runner pod is preempted, OOM-killed, or lost to a node failure, ARC has no built-in flow to fast-cancel the GitHub job lock and rerun. The runner is left orphaned and the job stays stuck in GitHub's queue — up to its 24-hour timeout — until someone manually clears the runner and reruns the workflow.
+**No automatic recovery from worker eviction.** When a runner pod is preempted, OOM-killed, or lost to a node failure, ARC has no built-in flow to fast-cancel the GitHub job lock and rerun. The runner is left orphaned and the job stays stuck in GitHub's queue until someone manually clears the runner and reruns the workflow; the only automatic backstop is GitHub's own queue timeout, documented as at least 24 hours with queue times reaching up to 48.
 
 **Platform team as bottleneck.** Onboarding a tenant means provisioning namespace, quotas, controller scope, scale sets, NetworkPolicies, and egress — a platform-team checklist per team. Subsequent changes (new runner type, quota adjustment, scaling tweak) land as tickets.
 
@@ -36,7 +36,7 @@ Running many runner groups for one tenant in a shared Kubernetes namespace creat
 
 **Scheduling priority tiers per `RunnerGroup`.** The `priorityTiers` field maps Kubernetes `PriorityClass` objects to cumulative pod-count thresholds. The first N pods of a GPU runner group get a preempting `PriorityClass` and will displace lower-priority CPU pods when quota is contended — guaranteeing they schedule. Higher tiers use `preemptionPolicy: Never`, so burst capacity gains scheduling preference without evicting running jobs. A final threshold caps total concurrency per group. Crucially, GAG gates admission at the **broker-claim layer** — it decides whether to claim a job from GitHub *before* acquiring it, so a job it cannot place is left queued for redelivery rather than claimed-then-cancelled. A Kubernetes job-queue manager such as Kueue operates one layer below this, on pod creation *after* the job is already claimed, and structurally cannot make that call (see [Appendix D.5](docs/design/appendix-d-alternatives-considered.md#d5-kueue-and-kubernetes-job-queue--quota-managers)).
 
-**Automatic eviction retry with fast lock cancel.** When the AGC sees a worker pod in `Evicted` status, it immediately stops lock renewal so GitHub cancels the job in seconds instead of waiting the full lock expiry, then calls GitHub's rerun API to reschedule. A configurable per-job retry budget prevents loops on persistently failing workloads.
+**Automatic eviction retry with fast lock cancel.** When the AGC sees a worker pod in `Evicted` status, it immediately stops lock renewal, so GitHub cancels the job when the outstanding lock lapses: within the remaining lock window, ~10 minutes at worst, instead of stranding it until someone manually clears the runner. The AGC then calls GitHub's rerun API to reschedule. A configurable per-job retry budget prevents loops on persistently failing workloads.
 
 **Per-tenant dedicated egress IP pool.** A Horizontal Pod Autoscaler (HPA)-managed pool of stateless HTTPS CONNECT proxy pods per tenant. All GitHub traffic from the AGC and worker pods routes through this pool, so each tenant gets egress IPs never shared with other tenants. Enables per-team allowlisting on the GitHub side, clean per-tenant audit attribution, and contained blast radius for rate limits or abuse flags.
 

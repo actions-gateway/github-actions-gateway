@@ -177,7 +177,7 @@ sequenceDiagram
     end
 ```
 
-The AGC stops renewal immediately on detecting `Evicted` (rather than waiting for lock expiry) so that GitHub cancels the run quickly and the re-queued job enters the delivery queue as soon as possible. The `evictionRetryDelay` default of 5 seconds gives GitHub time to process the cancellation before the rerun API is called.
+The AGC stops renewal immediately on detecting `Evicted`, so the outstanding lock starts lapsing at once and GitHub cancels the run when it expires: within the remaining lock window, at worst ~10 minutes from the last renewal (the lock TTL — see `RenewJobResponse.LockedUntil` in `broker/types.go`). The AGC then waits `evictionRetryDelay` (default 5 seconds) before calling the rerun API. The actual eviction-to-cancellation latency against live GitHub has not been measured, and neither has whether the rerun call succeeds while the run is still winding down inside that window; Q396 tracks a dogfood benchmark for both.
 
 `maxEvictionRetries` is a hard lifetime cap per `run_id`, not a per-eviction-wave allowance: once exhausted, every subsequent eviction of that run is a no-op (counted by `eviction_retries_exhausted_total`) until the AGC restarts and the in-memory counters reset. Because a single workflow run can have several worker pods evicted simultaneously under node pressure, the check-and-increment of the per-run counter is serialized per `run_id`, so concurrent evictions can never collectively exceed the budget.
 

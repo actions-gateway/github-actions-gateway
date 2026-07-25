@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q396
+**Next ID:** Q397
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -61,6 +61,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q392"></a>Q392 | [Adopt `ApplyManifestWithWebhookRetry` in remaining webhook-apply specs](../cmd/gmc/test/utils/resources.go) | `tests` | 🔲 | S | Q391 hardened only vault-WI's apply. direct_egress/provisioning/isolation/v2_multigateway `BeforeAll`s still one-shot the same webhook-triggering apply with no retry on transient `context deadline exceeded`. Adopt the helper across them. |
 | <a id="Q393"></a>Q393 | [Derive the docs announce bar from the release version](../overrides/main.html) | `docs` `infra` | 🔲 | S | Announce bar ('vX.Y.Z is here') in `overrides/main.html` is hand-edited per release. Derive it from the current version, or add it to the release.md checklist so it isn't forgotten. |
 | <a id="Q395"></a>Q395 | [Guard against resurrected done-rows in STATUS.md](development/maintaining-backlog.md) | `infra` `retro` | 🔲 | S | A row deleted by two concurrent PRs (Q387, #766+#768) was resurrected by squash-merge reconciliation, then fixed twice (#773, #774). Detect/guard done-rows whose work already shipped; related to Q382. |
+| <a id="Q396"></a>Q396 | [Benchmark eviction→GitHub-cancel latency on dogfood](design/04-operational-flows.md#worker-pod-eviction-and-auto-retry) | `tests` `docs` | 🔲 | S | Docs claim cancel within the ~10-min lock window (#782); live latency is unmeasured, as is whether rerun succeeds just 5 s (`evictionRetryDelay`) after eviction. Timestamp both in an eviction e2e; feed the number back into README/why-gag. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
