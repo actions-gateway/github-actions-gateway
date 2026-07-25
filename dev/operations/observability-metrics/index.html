@@ -2506,8 +2506,8 @@
 <tr>
 <td><code>actions_gateway_jobs_admission_rejected_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td>Delivered jobs the pre-acquisition capacity gate left queued at GitHub (acquire skipped because the group is at its worker ceiling). Expected to rise under sustained saturation; a persistent gap vs. <code>jobs_acquired_total</code> means demand exceeds the group's <code>maxWorkers</code> / <code>priorityTiers</code> ceiling — raise the ceiling or namespace <code>ResourceQuota</code>.</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>reason</code></td>
+<td>Delivered jobs the pre-acquisition capacity gate left queued at GitHub (acquire skipped). Expected to rise under sustained saturation; a persistent gap vs. <code>jobs_acquired_total</code> means demand exceeds available capacity. The <code>reason</code> label says which limit bound and therefore what to raise: <code>reason="ceiling"</code> — the owner is at its configured <code>maxWorkers</code> / max <code>priorityTiers</code> threshold (Q59); <code>reason="quota"</code> — the namespace <code>ResourceQuota</code> has no headroom for another worker pod, so the AGC declined to claim rather than claim-and-stall (#784). Read the owner's <code>WorkerQuotaExceeded</code> condition for the binding resource.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_jobs_duplicate_delivery_total</code></td>

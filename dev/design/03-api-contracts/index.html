@@ -3038,51 +3038,55 @@
 <a id="__codelineno-0-662" name="__codelineno-0-662" href="#__codelineno-0-662"></a><span class="w">    </span><span class="c1">//                         max priorityTier threshold) within the namespace</span>
 <a id="__codelineno-0-663" name="__codelineno-0-663" href="#__codelineno-0-663"></a><span class="w">    </span><span class="c1">//                         ResourceQuota headroom (hard − used).</span>
 <a id="__codelineno-0-664" name="__codelineno-0-664" href="#__codelineno-0-664"></a><span class="w">    </span><span class="c1">//   WorkerQuotaExceeded — advisory ERROR (Q82); true when the namespace</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665" href="#__codelineno-0-665"></a><span class="w">    </span><span class="c1">//                         ResourceQuota cannot admit even one more worker pod</span>
-<a id="__codelineno-0-666" name="__codelineno-0-666" href="#__codelineno-0-666"></a><span class="w">    </span><span class="c1">//                         (the next acquired job&#39;s pod will be rejected).</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667" href="#__codelineno-0-667"></a><span class="w">    </span><span class="c1">//                         Supersedes the warning. Distinct from Q59&#39;s</span>
-<a id="__codelineno-0-668" name="__codelineno-0-668" href="#__codelineno-0-668"></a><span class="w">    </span><span class="c1">//                         configured-ceiling admission backpressure</span>
-<a id="__codelineno-0-669" name="__codelineno-0-669" href="#__codelineno-0-669"></a><span class="w">    </span><span class="c1">//                         (jobs_admission_rejected_total), which is normal.</span>
-<a id="__codelineno-0-670" name="__codelineno-0-670" href="#__codelineno-0-670"></a><span class="w">    </span><span class="c1">//   WorkersUnschedulable — abnormal-is-true, impairing (Q157); true when worker</span>
-<a id="__codelineno-0-671" name="__codelineno-0-671" href="#__codelineno-0-671"></a><span class="w">    </span><span class="c1">//                         pods sit Pending past the scheduling grace (half</span>
-<a id="__codelineno-0-672" name="__codelineno-0-672" href="#__codelineno-0-672"></a><span class="w">    </span><span class="c1">//                         pendingPodDeadline) because the scheduler cannot place</span>
-<a id="__codelineno-0-673" name="__codelineno-0-673" href="#__codelineno-0-673"></a><span class="w">    </span><span class="c1">//                         them — PodScheduled=False/Unschedulable: no matching</span>
-<a id="__codelineno-0-674" name="__codelineno-0-674" href="#__codelineno-0-674"></a><span class="w">    </span><span class="c1">//                         node, affinity, or untolerated taints. Distinct from</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675" href="#__codelineno-0-675"></a><span class="w">    </span><span class="c1">//                         the WorkerQuota ladder: a quota rejection blocks pod</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676" href="#__codelineno-0-676"></a><span class="w">    </span><span class="c1">//                         admission so no pod exists, so the two never both fire</span>
-<a id="__codelineno-0-677" name="__codelineno-0-677" href="#__codelineno-0-677"></a><span class="w">    </span><span class="c1">//                         for one cause. Rolls up into the gateway&#39;s</span>
-<a id="__codelineno-0-678" name="__codelineno-0-678" href="#__codelineno-0-678"></a><span class="w">    </span><span class="c1">//                         RunnerGroupsDegraded; exported as the gauge</span>
-<a id="__codelineno-0-679" name="__codelineno-0-679" href="#__codelineno-0-679"></a><span class="w">    </span><span class="c1">//                         actions_gateway_workers_unschedulable.</span>
-<a id="__codelineno-0-680" name="__codelineno-0-680" href="#__codelineno-0-680"></a><span class="w">    </span><span class="c1">// The listType=map / listMapKey=type markers let server-side apply merge</span>
-<a id="__codelineno-0-681" name="__codelineno-0-681" href="#__codelineno-0-681"></a><span class="w">    </span><span class="c1">// conditions by type instead of treating the slice as atomic.</span>
-<a id="__codelineno-0-682" name="__codelineno-0-682" href="#__codelineno-0-682"></a><span class="w">    </span><span class="c1">//</span>
-<a id="__codelineno-0-683" name="__codelineno-0-683" href="#__codelineno-0-683"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-684" name="__codelineno-0-684" href="#__codelineno-0-684"></a><span class="w">    </span><span class="c1">// +listType=map</span>
-<a id="__codelineno-0-685" name="__codelineno-0-685" href="#__codelineno-0-685"></a><span class="w">    </span><span class="c1">// +listMapKey=type</span>
-<a id="__codelineno-0-686" name="__codelineno-0-686" href="#__codelineno-0-686"></a><span class="w">    </span><span class="nx">Conditions</span><span class="w"> </span><span class="p">[]</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Condition</span><span class="w"> </span><span class="s">`json:&quot;conditions,omitempty&quot;`</span>
-<a id="__codelineno-0-687" name="__codelineno-0-687" href="#__codelineno-0-687"></a>
-<a id="__codelineno-0-688" name="__codelineno-0-688" href="#__codelineno-0-688"></a><span class="w">    </span><span class="c1">// ActiveSessions is the number of currently open long-poll sessions</span>
-<a id="__codelineno-0-689" name="__codelineno-0-689" href="#__codelineno-0-689"></a><span class="w">    </span><span class="c1">// managed by this RunnerGroup.</span>
-<a id="__codelineno-0-690" name="__codelineno-0-690" href="#__codelineno-0-690"></a><span class="w">    </span><span class="nx">ActiveSessions</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;activeSessions&quot;`</span>
+<a id="__codelineno-0-665" name="__codelineno-0-665" href="#__codelineno-0-665"></a><span class="w">    </span><span class="c1">//                         ResourceQuota cannot admit even one more worker pod.</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666" href="#__codelineno-0-666"></a><span class="w">    </span><span class="c1">//                         Supersedes the warning. While it holds, the admission</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667" href="#__codelineno-0-667"></a><span class="w">    </span><span class="c1">//                         gate declines new deliveries on the same live headroom</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668" href="#__codelineno-0-668"></a><span class="w">    </span><span class="c1">//                         check (#784), counted as</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669" href="#__codelineno-0-669"></a><span class="w">    </span><span class="c1">//                         jobs_admission_rejected_total{reason=&quot;quota&quot;} — so the</span>
+<a id="__codelineno-0-670" name="__codelineno-0-670" href="#__codelineno-0-670"></a><span class="w">    </span><span class="c1">//                         next job is left queued at GitHub rather than claimed</span>
+<a id="__codelineno-0-671" name="__codelineno-0-671" href="#__codelineno-0-671"></a><span class="w">    </span><span class="c1">//                         and then rejected at pod creation. Distinct from Q59&#39;s</span>
+<a id="__codelineno-0-672" name="__codelineno-0-672" href="#__codelineno-0-672"></a><span class="w">    </span><span class="c1">//                         configured-ceiling backpressure (reason=&quot;ceiling&quot;),</span>
+<a id="__codelineno-0-673" name="__codelineno-0-673" href="#__codelineno-0-673"></a><span class="w">    </span><span class="c1">//                         which is normal load-shedding to a sibling.</span>
+<a id="__codelineno-0-674" name="__codelineno-0-674" href="#__codelineno-0-674"></a><span class="w">    </span><span class="c1">//   WorkersUnschedulable — abnormal-is-true, impairing (Q157); true when worker</span>
+<a id="__codelineno-0-675" name="__codelineno-0-675" href="#__codelineno-0-675"></a><span class="w">    </span><span class="c1">//                         pods sit Pending past the scheduling grace (half</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676" href="#__codelineno-0-676"></a><span class="w">    </span><span class="c1">//                         pendingPodDeadline) because the scheduler cannot place</span>
+<a id="__codelineno-0-677" name="__codelineno-0-677" href="#__codelineno-0-677"></a><span class="w">    </span><span class="c1">//                         them — PodScheduled=False/Unschedulable: no matching</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678" href="#__codelineno-0-678"></a><span class="w">    </span><span class="c1">//                         node, affinity, or untolerated taints. Distinct from</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679" href="#__codelineno-0-679"></a><span class="w">    </span><span class="c1">//                         the WorkerQuota ladder: a quota rejection blocks pod</span>
+<a id="__codelineno-0-680" name="__codelineno-0-680" href="#__codelineno-0-680"></a><span class="w">    </span><span class="c1">//                         admission so no pod exists, so the two never both fire</span>
+<a id="__codelineno-0-681" name="__codelineno-0-681" href="#__codelineno-0-681"></a><span class="w">    </span><span class="c1">//                         for one cause. Rolls up into the gateway&#39;s</span>
+<a id="__codelineno-0-682" name="__codelineno-0-682" href="#__codelineno-0-682"></a><span class="w">    </span><span class="c1">//                         RunnerGroupsDegraded; exported as the gauge</span>
+<a id="__codelineno-0-683" name="__codelineno-0-683" href="#__codelineno-0-683"></a><span class="w">    </span><span class="c1">//                         actions_gateway_workers_unschedulable.</span>
+<a id="__codelineno-0-684" name="__codelineno-0-684" href="#__codelineno-0-684"></a><span class="w">    </span><span class="c1">// The listType=map / listMapKey=type markers let server-side apply merge</span>
+<a id="__codelineno-0-685" name="__codelineno-0-685" href="#__codelineno-0-685"></a><span class="w">    </span><span class="c1">// conditions by type instead of treating the slice as atomic.</span>
+<a id="__codelineno-0-686" name="__codelineno-0-686" href="#__codelineno-0-686"></a><span class="w">    </span><span class="c1">//</span>
+<a id="__codelineno-0-687" name="__codelineno-0-687" href="#__codelineno-0-687"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-688" name="__codelineno-0-688" href="#__codelineno-0-688"></a><span class="w">    </span><span class="c1">// +listType=map</span>
+<a id="__codelineno-0-689" name="__codelineno-0-689" href="#__codelineno-0-689"></a><span class="w">    </span><span class="c1">// +listMapKey=type</span>
+<a id="__codelineno-0-690" name="__codelineno-0-690" href="#__codelineno-0-690"></a><span class="w">    </span><span class="nx">Conditions</span><span class="w"> </span><span class="p">[]</span><span class="nx">metav1</span><span class="p">.</span><span class="nx">Condition</span><span class="w"> </span><span class="s">`json:&quot;conditions,omitempty&quot;`</span>
 <a id="__codelineno-0-691" name="__codelineno-0-691" href="#__codelineno-0-691"></a>
-<a id="__codelineno-0-692" name="__codelineno-0-692" href="#__codelineno-0-692"></a><span class="w">    </span><span class="c1">// ActiveJobs is the number of worker pods currently in the Running phase</span>
-<a id="__codelineno-0-693" name="__codelineno-0-693" href="#__codelineno-0-693"></a><span class="w">    </span><span class="c1">// (a job is actively executing). Derived from the worker pod phase count</span>
-<a id="__codelineno-0-694" name="__codelineno-0-694" href="#__codelineno-0-694"></a><span class="w">    </span><span class="c1">// during each reconcile; updated on pod phase-change events. The v2alpha1</span>
-<a id="__codelineno-0-695" name="__codelineno-0-695" href="#__codelineno-0-695"></a><span class="w">    </span><span class="c1">// RunnerSet carries the same field. See also PendingJobs.</span>
-<a id="__codelineno-0-696" name="__codelineno-0-696" href="#__codelineno-0-696"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-697" name="__codelineno-0-697" href="#__codelineno-0-697"></a><span class="w">    </span><span class="nx">ActiveJobs</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;activeJobs,omitempty&quot;`</span>
-<a id="__codelineno-0-698" name="__codelineno-0-698" href="#__codelineno-0-698"></a>
-<a id="__codelineno-0-699" name="__codelineno-0-699" href="#__codelineno-0-699"></a><span class="w">    </span><span class="c1">// PendingJobs is the number of worker pods currently in the Pending phase</span>
-<a id="__codelineno-0-700" name="__codelineno-0-700" href="#__codelineno-0-700"></a><span class="w">    </span><span class="c1">// (a job has been acquired and a pod spawned, but the pod is not yet</span>
-<a id="__codelineno-0-701" name="__codelineno-0-701" href="#__codelineno-0-701"></a><span class="w">    </span><span class="c1">// running). A sustained non-zero count signals scheduling pressure —</span>
-<a id="__codelineno-0-702" name="__codelineno-0-702" href="#__codelineno-0-702"></a><span class="w">    </span><span class="c1">// check WorkersUnschedulable, events, and node/image constraints. Pods</span>
-<a id="__codelineno-0-703" name="__codelineno-0-703" href="#__codelineno-0-703"></a><span class="w">    </span><span class="c1">// that remain Pending past pendingPodDeadline are reaped by the</span>
-<a id="__codelineno-0-704" name="__codelineno-0-704" href="#__codelineno-0-704"></a><span class="w">    </span><span class="c1">// controller. The v2alpha1 RunnerSet carries the same field.</span>
-<a id="__codelineno-0-705" name="__codelineno-0-705" href="#__codelineno-0-705"></a><span class="w">    </span><span class="c1">// +optional</span>
-<a id="__codelineno-0-706" name="__codelineno-0-706" href="#__codelineno-0-706"></a><span class="w">    </span><span class="nx">PendingJobs</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;pendingJobs,omitempty&quot;`</span>
-<a id="__codelineno-0-707" name="__codelineno-0-707" href="#__codelineno-0-707"></a>
-<a id="__codelineno-0-708" name="__codelineno-0-708" href="#__codelineno-0-708"></a><span class="w">    </span><span class="nx">ObservedGeneration</span><span class="w"> </span><span class="kt">int64</span><span class="w"> </span><span class="s">`json:&quot;observedGeneration,omitempty&quot;`</span>
-<a id="__codelineno-0-709" name="__codelineno-0-709" href="#__codelineno-0-709"></a><span class="p">}</span>
+<a id="__codelineno-0-692" name="__codelineno-0-692" href="#__codelineno-0-692"></a><span class="w">    </span><span class="c1">// ActiveSessions is the number of currently open long-poll sessions</span>
+<a id="__codelineno-0-693" name="__codelineno-0-693" href="#__codelineno-0-693"></a><span class="w">    </span><span class="c1">// managed by this RunnerGroup.</span>
+<a id="__codelineno-0-694" name="__codelineno-0-694" href="#__codelineno-0-694"></a><span class="w">    </span><span class="nx">ActiveSessions</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;activeSessions&quot;`</span>
+<a id="__codelineno-0-695" name="__codelineno-0-695" href="#__codelineno-0-695"></a>
+<a id="__codelineno-0-696" name="__codelineno-0-696" href="#__codelineno-0-696"></a><span class="w">    </span><span class="c1">// ActiveJobs is the number of worker pods currently in the Running phase</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697" href="#__codelineno-0-697"></a><span class="w">    </span><span class="c1">// (a job is actively executing). Derived from the worker pod phase count</span>
+<a id="__codelineno-0-698" name="__codelineno-0-698" href="#__codelineno-0-698"></a><span class="w">    </span><span class="c1">// during each reconcile; updated on pod phase-change events. The v2alpha1</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699" href="#__codelineno-0-699"></a><span class="w">    </span><span class="c1">// RunnerSet carries the same field. See also PendingJobs.</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700" href="#__codelineno-0-700"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-701" name="__codelineno-0-701" href="#__codelineno-0-701"></a><span class="w">    </span><span class="nx">ActiveJobs</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;activeJobs,omitempty&quot;`</span>
+<a id="__codelineno-0-702" name="__codelineno-0-702" href="#__codelineno-0-702"></a>
+<a id="__codelineno-0-703" name="__codelineno-0-703" href="#__codelineno-0-703"></a><span class="w">    </span><span class="c1">// PendingJobs is the number of worker pods currently in the Pending phase</span>
+<a id="__codelineno-0-704" name="__codelineno-0-704" href="#__codelineno-0-704"></a><span class="w">    </span><span class="c1">// (a job has been acquired and a pod spawned, but the pod is not yet</span>
+<a id="__codelineno-0-705" name="__codelineno-0-705" href="#__codelineno-0-705"></a><span class="w">    </span><span class="c1">// running). A sustained non-zero count signals scheduling pressure —</span>
+<a id="__codelineno-0-706" name="__codelineno-0-706" href="#__codelineno-0-706"></a><span class="w">    </span><span class="c1">// check WorkersUnschedulable, events, and node/image constraints. Pods</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707" href="#__codelineno-0-707"></a><span class="w">    </span><span class="c1">// that remain Pending past pendingPodDeadline are reaped by the</span>
+<a id="__codelineno-0-708" name="__codelineno-0-708" href="#__codelineno-0-708"></a><span class="w">    </span><span class="c1">// controller. The v2alpha1 RunnerSet carries the same field.</span>
+<a id="__codelineno-0-709" name="__codelineno-0-709" href="#__codelineno-0-709"></a><span class="w">    </span><span class="c1">// +optional</span>
+<a id="__codelineno-0-710" name="__codelineno-0-710" href="#__codelineno-0-710"></a><span class="w">    </span><span class="nx">PendingJobs</span><span class="w"> </span><span class="kt">int32</span><span class="w"> </span><span class="s">`json:&quot;pendingJobs,omitempty&quot;`</span>
+<a id="__codelineno-0-711" name="__codelineno-0-711" href="#__codelineno-0-711"></a>
+<a id="__codelineno-0-712" name="__codelineno-0-712" href="#__codelineno-0-712"></a><span class="w">    </span><span class="nx">ObservedGeneration</span><span class="w"> </span><span class="kt">int64</span><span class="w"> </span><span class="s">`json:&quot;observedGeneration,omitempty&quot;`</span>
+<a id="__codelineno-0-713" name="__codelineno-0-713" href="#__codelineno-0-713"></a><span class="p">}</span>
 </code></pre></div>
 <hr />
 <h2 id="32-github-app-credentials-secret-schema">3.2. GitHub App Credentials Secret Schema<a class="headerlink" href="#32-github-app-credentials-secret-schema" title="Permanent link">&para;</a></h2>
