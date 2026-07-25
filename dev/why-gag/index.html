@@ -2365,7 +2365,7 @@ letting tenants run their own runners.</p>
 <p>A quota-blocked or evicted job can't recover on its own:</p>
 <ul>
 <li>ARC retries the same runner (<a href="https://github.com/actions/actions-runner-controller/pull/4305">30 s loop</a>), then marks it <code>Failed</code></li>
-<li>the job sits in GitHub's queue up to its 24-hour timeout</li>
+<li>the job sits in GitHub's queue until GitHub's queue timeout cancels it (at least 24 h, up to 48 h)</li>
 <li>cleared and rerun by hand (<a href="https://github.com/actions/actions-runner-controller/issues/4155">#4155</a>, <a href="https://github.com/actions/actions-runner-controller/issues/4203">#4203</a>) — so teams avoid enforcing quotas</li>
 </ul>
 </li>
