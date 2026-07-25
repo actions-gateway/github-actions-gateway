@@ -165,22 +165,38 @@ per-gateway `<gateway>-agc-metrics-{tls,client}` bundle.
   per-tenant NetworkPolicy admits the scrape (the AGC and proxy policies admit
   the `:8443` metrics port only from `metrics=enabled` namespaces).
 
-**Ad-hoc verification** (mounting the published bundle locally):
+**Ad-hoc verification** (mounting the published bundle locally). The Service and
+Secret are named per **gateway** under v2 and with a fixed name under v1, so set
+`svc`/`secret` for the tenant you are scraping and the rest of the block is
+identical:
 
 ```sh
 ns=<tenant-namespace>
-kubectl get secret actions-gateway-metrics-client -n "$ns" \
+
+# v2 tenant (per ActionsGateway, e.g. gateway "dogfood" -> dogfood-agc):
+svc=<gateway>-agc
+secret=<gateway>-agc-metrics-client
+
+# v1 tenant, instead of the two lines above:
+# svc=actions-gateway-controller
+# secret=actions-gateway-metrics-client
+
+kubectl get secret "$secret" -n "$ns" \
   -o jsonpath='{.data.tls\.crt}' | base64 -d > client.crt
-kubectl get secret actions-gateway-metrics-client -n "$ns" \
+kubectl get secret "$secret" -n "$ns" \
   -o jsonpath='{.data.tls\.key}' | base64 -d > client.key
-kubectl get secret actions-gateway-metrics-client -n "$ns" \
+kubectl get secret "$secret" -n "$ns" \
   -o jsonpath='{.data.ca\.crt}'  | base64 -d > ca.crt
-kubectl port-forward -n "$ns" svc/actions-gateway-controller 8443:8443 &
+kubectl port-forward -n "$ns" "svc/$svc" 8443:8443 &
 curl --cert client.crt --key client.key --cacert ca.crt \
-  https://actions-gateway-controller.$ns.svc:8443/metrics --resolve \
-  "actions-gateway-controller.$ns.svc:8443:127.0.0.1"
+  "https://$svc.$ns.svc:8443/metrics" --resolve \
+  "$svc.$ns.svc:8443:127.0.0.1"
 rm -f client.crt client.key ca.crt   # delete the cert material when done
 ```
+
+The `--resolve` host must match `$svc.$ns.svc` exactly: that name is what the
+AGC's serving certificate is issued for, so substituting `localhost` fails the
+TLS handshake rather than the authorization check.
 
 (The bundle is a client *certificate*, not a long-lived account credential; still
 remove the files when finished.)
