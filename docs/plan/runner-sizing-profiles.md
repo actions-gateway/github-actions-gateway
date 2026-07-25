@@ -234,6 +234,45 @@ Two independent things worth recording:
   15s sample interval, and the counter makes that visible instead of silently
   biasing the histogram toward long jobs.
 
+### Phase 2 — recommendation in status: confirmed
+
+`status.sizingRecommendation` appeared on the `runner` container at exactly
+`sampleCount: 5` (`MinSamplesForRecommendation`), carrying `windowStart` and
+both raw statistics beside the derived values:
+
+```json
+{
+  "container": "runner",
+  "observedPeak":  { "cpu": "3745m", "memory": "2273Mi" },
+  "observedP95":   { "cpu": "3745m", "memory": "2273Mi" },
+  "requests":      { "cpu": "3750m", "memory": "2304Mi" },
+  "limits":        { "memory": "3200Mi" },
+  "sampleCount": 5,
+  "windowStart": "2026-07-25T02:12:25Z"
+}
+```
+
+Every derivation rule the docs state is reproduced by these numbers:
+
+- `requests` = p95 rounded **up** to the step: 3745m → 3750m (50m step),
+  2273Mi → 2304Mi (64Mi step, 36 × 64).
+- memory `limit` = max × 1.4 rounded up: 2273 × 1.4 = 3182.2 → 3200Mi (50 × 64).
+- **No CPU limit is recommended**, as designed.
+- `observedP95` equals `observedPeak` here because five samples is too few to
+  separate them — which is exactly why `sampleCount` is published alongside.
+
+`SizingDrift` was `False` with reason `InsufficientSamples` and a message
+naming the threshold, the documented behaviour below 20 samples.
+
+**The dogfood template is under-asking, not over-asking.** The measured
+recommendation (3750m CPU / 2304Mi) sits *above* the template's `cpu: 2` /
+`memory: 2Gi`. Drift only flags waste (ask ≥ 2× recommendation) or OOM risk
+(memory limit below the observed peak), so an under-provisioned CPU *request*
+is deliberately not flagged: CPU is compressible, and the job bursts into idle
+node capacity rather than failing. Worth stating plainly because it is easy to
+read a `SizingWithinRange` verdict as "the template is right-sized" when it
+means "the template is not wasteful and will not OOM".
+
 ### Phase 3 — below-confidence fallback: confirmed
 
 With `spec.sizing.profile: Binpack` set while no container had reached
