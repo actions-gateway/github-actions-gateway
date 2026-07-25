@@ -16,6 +16,13 @@ adds ≈$0.04/hr per spot worker node while jobs are running.
 > turn-up/start/stop/teardown reference, not open work. The chronological turn-up
 > history and per-finding root-cause write-ups live in
 > [archive/gke-dogfood-turnup-findings.md](archive/gke-dogfood-turnup-findings.md).
+>
+> **Updated 2026-07-25 (Q399).** The main CI tenant moved from the deprecated
+> Classic protocol to a single-label ScaleSet, the last Q264 P5 residual. Classic
+> orphaned 81% of the jobs it acquired on this tenant (85 acquired, 16 worker pods).
+> An existing pre-Q399 tenant needs its `ci` RunnerSet **recreated**, not patched:
+> see the migration note in Part B7. The runner label changed from `gag-ci` to
+> `gag-ci-scaleset`.
 
 **What runs where after setup**
 
@@ -586,19 +593,41 @@ spec:
     name: dogfood
   templateRef:
     name: default
-  # Classic (deprecated) pinned: this set matches multiple labels, which the ScaleSet
-  # default (Q264 P5) forbids (ScaleSet takes exactly one runnerLabel). Omitting the
-  # field would default to ScaleSet and be rejected at admission.
-  acquisitionProtocol: Classic
-  runnerLabels: ["self-hosted", "linux", "gag-ci"]
-  # maxListeners MODERATE (16), maxWorkers 8: the pd-standard disk right-size (Q248)
-  # lifted the worker-node ceiling off the SSD quota. A high maxListeners multiplies
-  # GitHub runner records and inflates registration/recycle churn without adding
-  # online idle listeners (Q224 re-route #7) — keep it moderate.
-  maxListeners: 16
+  # ScaleSet (the Q264 P5 default), stated explicitly so the tenant's protocol is
+  # readable here. The single runnerLabel is BOTH the scale set's name at GitHub and
+  # the workflows' runs-on target, so it must match vars.GAG_RUNNER exactly (Part C2).
+  acquisitionProtocol: ScaleSet
+  runnerLabels: ["gag-ci-scaleset"]
+  # maxWorkers 8: the pd-standard disk right-size (Q248) lifted the worker-node
+  # ceiling off the SSD quota, so the ~7-job dogfood CI matrix fits. On ScaleSet this
+  # is also the capacity advertised to GitHub (X-ScaleSetMaxCapacity). maxListeners is
+  # deliberately absent: a Classic-only knob that a scale set (ONE listener) ignores.
   maxWorkers: 8
 EOF
 ```
+
+> **Migrating a pre-Q399 Classic CI tenant (one-time).** `spec.acquisitionProtocol`
+> is **immutable**, so a `ci` RunnerSet created before Q399 cannot be patched or
+> re-`apply`ed onto ScaleSet; the write is rejected. Delete and recreate it:
+> `kubectl delete runnerset ci -n gag-dogfood`, then re-run `apply_cr` (or
+> `scripts/dogfood/setup.sh`). Recreating also clears the
+> `conversion.actions-gateway.com/acquisition-protocol: Classic` annotation the
+> conversion webhook stamped on the stored v2beta1 object, which `kubectl apply`
+> does **not** strip and which would otherwise keep the AGC on Classic. The label
+> changes at the same time (`gag-ci` to `gag-ci-scaleset`), so this is also a fresh
+> scale-set object with an empty message queue. That matters: reconnecting to a
+> label used by a previous scale set replays its old unacked `JobAssigned`
+> messages. Leftover
+> classic `ci-N` runner records under the old `gag-ci` label are inert once nothing
+> routes to it; delete them from the repo's runner list if they clutter.
+>
+> **Why (Q399).** Classic calls `AcquireJob`, which flips the job to `in_progress`
+> at GitHub and stamps the runner name, *before* it decides whether to provision a
+> worker. Every job it then declines to provision is orphaned at GitHub with zero
+> steps until the 10-minute lock-lapse or 15-minute unstarted-job timeout kills it.
+> Measured on this tenant 2026-07-25: **85 jobs acquired, 16 worker pods, 69
+> orphaned (81%)**. The ScaleSet listener is single-acquirer and cannot produce that
+> shape (Q264 P4: 7/7 vs Classic's 2/7).
 
 > **v2 prerequisites:** Kubernetes ≥ 1.31 (the `RunnerSet` field-selector
 > scoping, KEP-4358) and the `actions-gateway-crds-v2` chart from B3. The
@@ -695,9 +724,12 @@ runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && 
   `'ubuntu-latest'` — GitHub-hosted, exactly as before. `vars.GAG_RUNNER` is
   never consulted, so flipping it no longer affects these events.
 - On a **dispatch with `target_gag=true`**: the expression evaluates
-  `fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"')` — the array
-  `["self-hosted","linux","gag-ci"]` (routes to GAG) when the variable is set,
-  or the string `ubuntu-latest` when it is not.
+  `fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"')`, giving the string
+  `"gag-ci-scaleset"` (routes to GAG) when the variable is set, or
+  `ubuntu-latest` when it is not. Since Q399 this is a single JSON *string*, not
+  an array: the runner set is ScaleSet-protocol and matches exactly one label,
+  its own scale-set name. It must stay identical to `spec.runnerLabels[0]` in
+  B7. A mismatch leaves dispatched jobs queued at GitHub forever, unmatched.
 
 The gate jobs' `if` conditions also add `|| github.event_name ==
 'workflow_dispatch'` so a manual dispatch still creates the migrated jobs even
@@ -737,9 +769,10 @@ kubectl wait --for=condition=Ready pod \
   -n gag-dogfood --timeout=3m
 
 # 3. Set the GAG runner label (consulted only by opt-in dispatches below;
-#    does NOT route any push/PR CI on its own)
+#    does NOT route any push/PR CI on its own). A single JSON string: the
+#    ScaleSet runner set's one label (Q399); must match B7's runnerLabels[0].
 gh variable set GAG_RUNNER \
-  --body '["self-hosted","linux","gag-ci"]' \
+  --body '"gag-ci-scaleset"' \
   --repo "$REPO"
 
 # 4. Dispatch an isolated validation burst onto GAG (scoped — does not touch
@@ -785,7 +818,7 @@ on push/PR events. Reaching the end-state means editing the migrated jobs'
 runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
 ```
 
-with `GAG_RUNNER` set to `["self-hosted","linux","gag-ci"]`. Defer this until
+with `GAG_RUNNER` set to `"gag-ci-scaleset"`. Defer this until
 the milestone criteria in Q224/Q264 are met (P4-green, scale-set maturity,
 adoption signal).
 

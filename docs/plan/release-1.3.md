@@ -53,8 +53,18 @@ release-candidate validation from
 
 | Item | Why it gates |
 |---|---|
-| [Q399](../STATUS.md#Q399) | Most dispatched dogfood jobs never finalize. This blocks the mandatory dogfood RC gate *and* it capped the sample count that left Q359's remaining paths unexercised. Critical path for the whole release. |
-| [Q359](../STATUS.md#Q359) | The `SizingDrift` verdict and `Binpack` actuating are the two right-sizing paths never exercised live. Headlining a feature with untested actuation is the honesty problem [release-1.0.md](release-1.0.md) §E exists to prevent. |
+| [Q359](../STATUS.md#Q359) | The `SizingDrift` verdict and `Binpack` actuating are the two right-sizing paths never exercised live. Headlining a feature with untested actuation is the honesty problem [release-1.0.md](release-1.0.md) §E exists to prevent. Now also carries the mandatory dogfood RC gate, since both need the same live session (see below). |
+
+> **Q399 is closed (2026-07-25), and it moved risk rather than removing it.** The
+> dogfood tenant was running the deprecated Classic protocol, which orphaned 81% of
+> the jobs it acquired (85 acquired, 16 worker pods); it is now a single-label
+> ScaleSet. That fix is a configuration migration, validated only by the prior
+> side-by-side measurement of the two protocols, **not** by a live run of the
+> migrated tenant. So the mandatory dogfood RC gate is still genuinely a gate: the
+> next dogfood session must recreate the `ci` RunnerSet (`acquisitionProtocol` is
+> immutable, see [gke-dogfood B7](gke-dogfood.md#b7-create-the-v2-tenant-objects))
+> and confirm the completion rate before the RC can be called good. That session is
+> the same one Q359 needs, which is why the gate now rides on Q359.
 
 ### B. Deprecation notice — *gating*
 
@@ -95,21 +105,21 @@ Both are cheap, and both undermine the "`main` is green" precondition that
 
 ## Critical path & ordering
 
-1. **[Q399](../STATUS.md#Q399) first.** It is the only item that blocks two others
-   (the dogfood RC gate and Q359). Root cause is unmeasured today, so it is also the
-   least predictable. Starting anywhere else risks discovering late that the release
-   gate cannot pass.
-2. **[Q359](../STATUS.md#Q359)** follows immediately: once Q399 lifts the sample cap,
-   both remaining paths are exercisable via template edits with no soak.
-3. **[Q400](../STATUS.md#Q400) and [Q404](../STATUS.md#Q404)** can run in parallel
+1. **[Q359](../STATUS.md#Q359) first**, now that Q399 is closed and the sample cap is
+   lifted. It is the least predictable item left, because it needs a live dogfood
+   session that must first recreate the `ci` RunnerSet and confirm the migrated
+   tenant's completion rate. Both remaining right-sizing paths are then exercisable
+   via template edits with no soak. Starting anywhere else risks discovering late
+   that the dogfood RC gate cannot pass.
+2. **[Q400](../STATUS.md#Q400) and [Q404](../STATUS.md#Q404)** can run in parallel
    with the above by a different session. They touch CI configuration only.
-4. **[Q411](../STATUS.md#Q411) and [Q412](../STATUS.md#Q412)** are independent of all
+3. **[Q411](../STATUS.md#Q411) and [Q412](../STATUS.md#Q412)** are independent of all
    of the above and can land at any point before the tag. Q411 changes generated
    CRDs, so it should not race a session editing the same API packages. Neither can
    be dropped on the grounds that Q409 already aligned the docs: the deprecation has
    to reach the apiserver (Q411) and name its removal release (Q412), or it is a
    statement of taste rather than a notice operators can plan against.
-5. **[Q393](../STATUS.md#Q393) last**, immediately before tagging, so the banner names
+4. **[Q393](../STATUS.md#Q393) last**, immediately before tagging, so the banner names
    the version actually being cut.
 
 ## Guardrails

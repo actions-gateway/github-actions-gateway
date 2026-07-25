@@ -6,7 +6,9 @@
 > below-confidence fallback all behave as specified. The two behaviours gated on
 > 20 sampled jobs — the `SizingDrift` verdict and `Binpack` actuating — are
 > still unvalidated, because job completion on dogfood capped the sample count
-> at 10 ([Q399](../STATUS.md#Q399)). See
+> at 10. That cap was diagnosed and fixed under Q399: the tenant was running the
+> deprecated Classic protocol, which orphaned 81% of the jobs it acquired; it is
+> now a single-label ScaleSet. See
 > [Live validation](#live-validation-2026-07-25). This doc is the design sketch,
 > the phase record, and now the validation record.
 
@@ -351,7 +353,9 @@ kubectl patch runnersets.v2alpha1.actions-gateway.com ci -n gag-dogfood \
 
 This is not specific to sizing — it blocks *any* unqualified edit of a Classic
 multi-label RunnerSet, including `kubectl edit` and re-`apply`. Filed as
-[Q398](../STATUS.md#Q398).
+[Q398](../STATUS.md#Q398), which stays open: the shape is still reachable by any
+tenant that pins Classic. It no longer bites the dogfood tenant, which Q399 moved
+to a single-label ScaleSet.
 
 ### Not reached: the ≥20-sample paths
 
@@ -363,15 +367,53 @@ container, and the session topped out at **10**:
 - `Binpack` actuating — `sizingProfileState: Active` with derived
   `requests`==`limits` at Guaranteed QoS.
 
-The cap was **not** the sizing code. Roughly 10 of ~44 GAG jobs dispatched
-across nine `workflow_dispatch` rounds actually finalized; the rest report a
-`started_at` with no conclusion, and the AGC logged the Q254 teardown path
-(`RenewJob: job lock definitively lost … broker: job not found (HTTP 404)`),
-which is what a job disposed of GitHub-side looks like from the gateway. Since
-only finalized jobs become samples, sample accrual is bounded by that
-completion rate. Tracked separately as [Q399](../STATUS.md#Q399) — it is a
-dogfood reliability question, not a right-sizing one, and it will throttle any
-future validation that needs a job population.
+The cap was **not** the sizing code. Since only finalized jobs become samples,
+sample accrual was bounded by the tenant's job-completion rate, which was
+catastrophically low. Diagnosed and fixed under Q399: the tenant moved off the
+Classic protocol to a single-label ScaleSet ([gke-dogfood B7](gke-dogfood.md#b7-create-the-v2-tenant-objects)).
+The measurement is recorded here because it bounds what any future validation run
+on this cluster can expect.
+
+**Measured across the whole 2026-07-25 session** (GitHub jobs API for all 18
+dispatched runs, cross-checked against GKE Cloud Logging for the AGC and every
+worker container):
+
+| | |
+|---|---|
+| GAG-targeted job records | 85 |
+| Distinct worker pods that ever started | 16 |
+| Jobs with `steps > 0` (actually executed) | 16 |
+| Jobs with `started_at` + runner assigned + **zero steps** | 69 (81%) |
+| Q254 `job_not_found` teardowns, whole session | 2 |
+
+The two counts of 16 are independent and agree exactly.
+
+**The failure shape is acquire-without-provision, and it is Classic-only.**
+`AcquireJob` is what flips a job to `in_progress` at GitHub and stamps the runner
+name; it succeeded 85 times. Only 16 of those acquisitions ever got a worker pod.
+The other 69 sat with zero steps until GitHub's own timers ended them, visible
+as exact `+10:00` (lock lapse) and `+15:00` (unstarted-job) deltas, e.g. run
+`30146417937`'s `coverage` started 06:07:42 and "failed" at 06:17:42 having run
+nothing. The tenant's `RunnerSet` was `acquisitionProtocol: Classic` with three
+`runnerLabels`; the ScaleSet listener is single-acquirer and lives in a separate
+package (`cmd/agc/internal/scalesetlistener/`) that shares none of the classic
+acquire path, which is why Q264 P4 measured 7/7 there against Classic's 2/7.
+
+**The Q254 teardown was a red herring.** It appears in the original Q399 report
+because it is the loudest line in the AGC log, but it fired exactly twice in
+4.75 hours. It cannot account for 69 orphaned jobs.
+
+Two further Classic-only listener defects surfaced while measuring, both left in
+place because Classic is terminal (`docs/plan/v1-classic-sunset-review.md`):
+
+- [`session.go`](../../cmd/agc/internal/listener/session.go) `healSession` deletes
+  the old broker session *before* refreshing the token, so on the `unauthorized`
+  heal path the DELETE presents the already-expired token, returns 401, and leaks
+  the session server-side; the follow-up `CreateSession` then collides with it
+  (409) and the listener exits. Observed at 04:12 and 05:02.
+- [`multiplexer.go`](../../cmd/agc/internal/listener/multiplexer.go) restarts only
+  the permanent baseline goroutine, so both of those listener slots stayed dead
+  for the rest of the session.
 
 When picking this up again, note that the drift verdict is judged against the
 **template's** ask, not against new samples — so once a set is past 20 samples,

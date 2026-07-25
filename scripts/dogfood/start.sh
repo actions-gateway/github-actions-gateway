@@ -76,9 +76,14 @@ main() {
 	# Set the runner label the opt-in dispatches consume. This alone does NOT
 	# route any push/PR CI — the migrated jobs read GAG_RUNNER only on a
 	# workflow_dispatch run with target_gag=true.
+	#
+	# A single JSON *string*, not an array: the workflows evaluate
+	# fromJSON(vars.GAG_RUNNER) into runs-on, and the ScaleSet RunnerSet (Q399)
+	# matches exactly one label: the scale set's own name. Must stay identical to
+	# spec.runnerLabels[0] in setup.sh, or dispatches queue forever unmatched.
 	echo "Setting GAG runner label..."
 	gh variable set GAG_RUNNER \
-		--body '["self-hosted","linux","gag-ci"]' \
+		--body '"gag-ci-scaleset"' \
 		--repo "${REPO}"
 
 	# Dispatch isolated validation bursts onto GAG. Scoped to these runs only —

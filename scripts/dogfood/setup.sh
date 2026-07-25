@@ -649,25 +649,28 @@ spec:
     name: dogfood
   templateRef:
     name: default
-  # Classic (deprecated) pinned: this set matches multiple labels, which the
-  # ScaleSet default (Q264 P5) forbids — a ScaleSet runner set takes exactly one
-  # runnerLabel (its name is the single runs-on target). Omitting the field would
-  # default to ScaleSet and be rejected at admission. Kept on Classic so the
-  # 3-label routing (start.sh's GAG_RUNNER + the migrated workflows' runs-on) is
-  # unchanged; migrating dogfood main CI to a single-label ScaleSet is a separate
-  # Q264-residual decision. Matches the e2e pool (deploy/dogfood-e2e) and the
-  # gke-dogfood.md B7 manifest.
-  acquisitionProtocol: Classic
-  runnerLabels: ["self-hosted", "linux", "gag-ci"]
+  # ScaleSet (the Q264 P5 default), set explicitly rather than by omission so the
+  # protocol this tenant runs is readable here. The single runnerLabel is BOTH the
+  # scale set's name at GitHub and the workflows' runs-on target, so it must match
+  # start.sh's GAG_RUNNER exactly.
+  #
+  # Migrated off Classic by Q399. Classic acquires a job (AcquireJob flips it to
+  # in_progress at GitHub and stamps the runner name) and only then decides whether
+  # to provision a worker; every job it declines to provision is orphaned at GitHub
+  # with zero steps until the 10-minute lock-lapse / 15-minute unstarted-job timeout
+  # kills it. Measured on this tenant 2026-07-25: 85 jobs acquired, 16 worker pods,
+  # 69 orphaned (81%). ScaleSet's single-acquirer listener cannot produce that shape
+  # (Q264 P4 measured 7/7 vs Classic's 2/7). acquisitionProtocol is IMMUTABLE, so an
+  # existing Classic set must be deleted and recreated; see the migration note in
+  # docs/plan/gke-dogfood.md B7.
+  acquisitionProtocol: ScaleSet
+  runnerLabels: ["gag-ci-scaleset"]
   # maxWorkers 8: the pd-standard disk right-size (Q248) lifted the worker-node
-  # ceiling off the SSD quota, so the ~7-job dogfood CI matrix fits. maxListeners
-  # kept MODERATE (16): a high value multiplies GitHub runner records (one per
-  # listener index) which, when they go stale, inflate the registration/recycle
-  # churn that collapses the online pool — a wide maxListeners does NOT translate
-  # into more online idle listeners here (Q224 re-route #7 finding). Do not crank
-  # it up chasing fan-out concurrency without first solving the online-session
-  # seam and starting from a clean namespace.
-  maxListeners: 16
+  # ceiling off the SSD quota, so the ~7-job dogfood CI matrix fits. On the ScaleSet
+  # path this is also the capacity advertised to GitHub (X-ScaleSetMaxCapacity), so
+  # GitHub never assigns more jobs than the tenant can place. maxListeners is
+  # deliberately absent: it is a Classic-only knob (one listener goroutine per
+  # runner record) that the ScaleSet path ignores: a scale set has ONE listener.
   maxWorkers: 8
 EOF
 }

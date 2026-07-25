@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag) `1.3-gate` (blocks the [Release 1.3](plan/release-1.3.md) tag)  
-**Next ID:** Q416
+**Next ID:** Q417
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -52,8 +52,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q399"></a>Q399 | [Most dogfood GAG jobs start but never complete](plan/runner-sizing-profiles.md#live-validation-2026-07-25) | `bug` `infra` `1.3-gate` | 🔲 | M | ~10 of ~44 dispatched GAG jobs finalized; the rest report `started_at` with no conclusion, and the AGC logs a Q254 teardown on `broker: job not found (HTTP 404)`. Root cause unmeasured. Blocks the RC gate + [Q359](#Q359). |
-| <a id="Q359"></a>Q359 | [Worker right-sizing profiles (recommendations first)](plan/runner-sizing-profiles.md#not-reached-the-20-sample-paths) | `infra` `1.3-gate` | 🚫 | S | Phases 1–3 live-validated 07-25 except the two paths gated on 20 sampled jobs: the `SizingDrift` verdict and `Binpack` actuating. Blocked on [Q399](#Q399), which capped samples at 10; both are then exercisable via template edits, no soak. |
+| <a id="Q359"></a>Q359 | [Worker right-sizing profiles (recommendations first)](plan/runner-sizing-profiles.md#not-reached-the-20-sample-paths) | `infra` `1.3-gate` | 🔲 | S | Phases 1–3 live-validated 07-25 except the two paths gated on 20 sampled jobs: the `SizingDrift` verdict and `Binpack` actuating. Q399 unblocked the soak; both are exercisable via template edits. Recreate the `ci` RunnerSet first (gke-dogfood B7). |
 | <a id="Q411"></a>Q411 | [Deprecate `v2alpha1`](plan/release-1.3.md) | `infra` `1.3-gate` | 🔲 | S | `v2beta1` is storage on all five kinds, yet `v2alpha1` carries no `+kubebuilder:deprecatedversion` marker, so the apiserver warns nobody. Add markers + regen CRDs; the docs half shipped as Q409. |
 | <a id="Q412"></a>Q412 | [Name `v2.0.0` as the removal release](plan/release-1.3.md) | `docs` `1.3-gate` | 🔲 | S | Policy promises removals land one release ahead ([notice](operations/v1alpha1-deprecation.md)). Name `v2.0.0` for `v1alpha1`, `v2alpha1`, and classic. Miss it in 1.3 and `v2.0.0` may remove nothing. |
 | <a id="Q400"></a>Q400 | `scaleset/**` and `api/**` missing from three path gates | `infra` `1.3-gate` | 🔲 | S | `unit-test.yml` lists both; `integration-test.yml`, `security-scan.yml`, `e2e-test.yml` list neither, so a scaleset/api-only change skips integration (which imports `scalesettest`), vulncheck, e2e. |
@@ -88,6 +87,7 @@ Each trigger is tagged by source: **Demand:** an outside operator/user ask · **
 
 | ID | Item | Labels | Sz | Trigger to revive |
 |---|---|---|---|---|
+| <a id="Q416"></a>Q416 | [Classic listener: session heal leaks then self-collides](plan/runner-sizing-profiles.md#not-reached-the-20-sample-paths) | `bug` `infra` | S | **Demand:** a Classic operator reports listener slots going quiet, OR Classic removal slips. `healSession` DELETEs before refreshing the token → 401 → leak → `CreateSession` 409 → goroutine exits; only the baseline restarts. |
 | <a id="Q372"></a>Q372 | [Re-run the structural debt audit](plan/structural-debt-audit-2026-07.md) | `infra` | M | **Event:** the next minor release is cut, OR non-test Go LOC grows ≥20% over the 41,011-line baseline (2026-07-20) — whichever first. Growth, not calendar time, tracks drift; linters catch ~2 of 10 findings, so the sweep stays necessary. |
 | <a id="Q354"></a>Q354 | [Raise e2e/tested K8s floor 1.35 → 1.36](../.github/workflows/e2e-reusable.yml) | `infra` `tests` | S | **Event:** GKE regular channel reaches 1.36, OR we want a 1.36-only feature (explicit floor-raise), OR kind stops shipping 1.35 node images. Then bump KIND_NODE_IMAGE digest + refresh the "verified on k8s 1.35" operations-doc claims. |
 | <a id="Q298"></a>Q298 | [Infra PriorityClass allowlist ConfigMap watch (Q188 parity)](operations/security-operations.md#infra-pods-the-separate-allowed-infra-priority-classes-allowlist) | `infra` `security` | S | **Demand:** an operator wants to grow `--allowed-infra-priority-classes` without a GMC restart. Q284 shipped it flag-only; add the same additive, fail-safe watched-ConfigMap augmentation the worker allowlist has (Q188). |
