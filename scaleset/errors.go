@@ -2,20 +2,25 @@ package scaleset
 
 import (
 	"fmt"
-	"time"
+
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 )
+
+// errSource labels this package's shared typed errors, keeping their messages
+// prefixed "scaleset: " now that the types themselves are shared with the
+// classic broker protocol client (Q369).
+const errSource = httpx.SourceScaleSet
 
 // UnauthorizedError is returned when the Actions Service or the message queue
 // responds 401 Unauthorized or 403 Forbidden. For an admin-JWT call the caller
 // should re-mint the admin connection; for a queue call (GetMessage/AcquireJobs)
 // it should refresh the session token (RefreshSession) and retry (Q264 plan §2.5).
-type UnauthorizedError struct {
-	StatusCode int
-}
-
-func (e *UnauthorizedError) Error() string {
-	return fmt.Sprintf("scaleset: unauthorized (HTTP %d)", e.StatusCode)
-}
+//
+// It is an alias for httpx.UnauthorizedError, the one declaration shared with the
+// classic broker protocol client (Q369): a caller handling both protocols matches
+// a single type, and errors.As against this name also matches a broker auth
+// failure.
+type UnauthorizedError = httpx.UnauthorizedError
 
 // ConflictError is the generic 409 Conflict the Actions Service returns. Its meaning
 // is endpoint-specific, so the shared status-to-error mapping (statusError) yields
@@ -87,13 +92,7 @@ func (e *NotFoundError) Error() string {
 // the Retry-After header when present; -1 signals the caller should apply
 // exponential backoff. The live probe observed no rate-limit headers on the queue
 // (Q264 plan §2a-5), so -1 is the common case.
-type RateLimitError struct {
-	RetryAfter time.Duration // -1 if no Retry-After header was present
-}
-
-func (e *RateLimitError) Error() string {
-	if e.RetryAfter < 0 {
-		return "scaleset: rate limited (no Retry-After header)"
-	}
-	return fmt.Sprintf("scaleset: rate limited, retry after %s", e.RetryAfter)
-}
+//
+// It is an alias for httpx.RateLimitError, the one declaration shared with the
+// classic broker protocol client (Q369).
+type RateLimitError = httpx.RateLimitError

@@ -17,6 +17,7 @@ import (
 	"go.uber.org/goleak"
 
 	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 )
 
 func TestMain(m *testing.M) {
@@ -681,6 +682,60 @@ func TestGetMessage_Retry429_ExponentialFallback(t *testing.T) {
 	var rlErr *broker.RateLimitError
 	require.ErrorAs(t, err, &rlErr)
 	assert.Equal(t, time.Duration(-1), rlErr.RetryAfter, "RetryAfter -1 signals exponential fallback")
+}
+
+// TestBrokerErrors_ShareTheHTTPXTaxonomy covers this package's half of the unified
+// error taxonomy (Q369): broker.RateLimitError and broker.UnauthorizedError are the
+// githubapp/httpx declarations, so an error raised by this client matches the shared
+// type — while its message keeps the "broker: " prefix it carried when the types
+// were package-local.
+func TestBrokerErrors_ShareTheHTTPXTaxonomy(t *testing.T) {
+	t.Parallel()
+
+	t.Run("429", func(t *testing.T) {
+		t.Parallel()
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Retry-After", "30")
+			w.WriteHeader(http.StatusTooManyRequests)
+		}))
+		defer srv.Close()
+
+		_, err := newTestClient(srv).GetMessage(context.Background(), "sess-1")
+		require.Error(t, err)
+
+		var shared *httpx.RateLimitError
+		require.ErrorAs(t, err, &shared, "a broker rate limit must match the shared httpx type")
+		assert.Equal(t, httpx.SourceBroker, shared.Source)
+		assert.Equal(t, 30*time.Second, shared.RetryAfter)
+		assert.Equal(t, "broker: rate limited, retry after 30s", err.Error())
+
+		// The alias and the shared name are the same type, so the same pointer
+		// satisfies both targets.
+		var aliased *broker.RateLimitError
+		require.ErrorAs(t, err, &aliased)
+		assert.Same(t, shared, aliased)
+	})
+
+	t.Run("401", func(t *testing.T) {
+		t.Parallel()
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		defer srv.Close()
+
+		_, err := newTestClient(srv).GetMessage(context.Background(), "sess-1")
+		require.Error(t, err)
+
+		var shared *httpx.UnauthorizedError
+		require.ErrorAs(t, err, &shared, "a broker auth failure must match the shared httpx type")
+		assert.Equal(t, httpx.SourceBroker, shared.Source)
+		assert.Equal(t, http.StatusUnauthorized, shared.StatusCode)
+		assert.Equal(t, "broker: unauthorized (HTTP 401)", err.Error())
+
+		var aliased *broker.UnauthorizedError
+		require.ErrorAs(t, err, &aliased)
+		assert.Same(t, shared, aliased)
+	})
 }
 
 func TestGetMessage_Retry429_CounterIncremented(t *testing.T) {
