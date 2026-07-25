@@ -160,9 +160,12 @@ burst still stranded 5 jobs forever. This is not "needs more fixes" — it is a 
 
 ### 3.2 Performance / density — the story cuts both ways, and a common misread
 
-- **At rest, classic's density was a genuine GAG differentiator:** ~60 KiB per
-  listener goroutine vs ARC's ~256 MiB .NET listener pod per scale set (~4,000×)
-  ([appendix-d-alternatives-considered.md](../design/appendix-d-alternatives-considered.md) §D.3).
+- **At rest, classic's density was a genuine GAG differentiator:** a ~12 KiB
+  listener goroutine in one shared pod vs ARC's always-on listener pod (+ cluster
+  IP) per scale set
+  ([appendix-d-alternatives-considered.md](../design/appendix-d-alternatives-considered.md) §D.3;
+  the earlier "~256 MiB .NET / ~4,000×" framing was retired by #781 — ARC's
+  scale-set listener is Go, and the ratio's denominator was never measured).
 - **Correcting a tempting misread: scale-set does *not* serialize concurrency.** It
   is easy to conclude "one session per group ⇒ one job at a time." That is wrong.
   The scale-set listener **batch-acquires** and provisions **N workers in
@@ -172,7 +175,7 @@ burst still stranded 5 jobs forever. This is not "needs more fixes" — it is a 
   live-confirmed §2b-1). One session ≠ one concurrent job.
 - **Scale-set *improves* at-rest density** — one session/group instead of classic's
   reactive climb toward `maxListeners` sessions — while keeping the goroutine-listener
-  footprint (a Go goroutine, not ARC's .NET pod)
+  footprint (a goroutine in the shared AGC pod, not a per-scale-set listener pod)
   ([Q264 §4.7](archive/q264-scale-set-protocol-phases.md#4-honest-cost-list-delta-vs-the-q260-4e-estimate),
   §3 "Improves"). The "ARC's protocol, GAG's efficiency" pitch holds.
 - **Overhead machinery classic carries that scale-set deletes by construction:** the
@@ -262,8 +265,9 @@ Resisting hindsight bias:
   Building on it *then* would have meant reverse-engineering a **second**
   undocumented GitHub-internal protocol and betting the product on a moving,
   pre-1.0-adjacent target.
-- **The classic virtual-runner bet bought real, still-valid merits:** the ~4,000×
-  at-rest density advantage over ARC, per-tenant egress isolation, multi-tenant
+- **The classic virtual-runner bet bought real, still-valid merits:** the
+  goroutines-in-one-shared-pod at-rest density advantage over ARC's
+  pod-per-scale-set listeners, per-tenant egress isolation, multi-tenant
   self-service, and zero idle compute (appendix-d §D.3–D.4). None of that was free
   elsewhere.
 - **The specific failure was not cleanly foreseeable from source.** The topology
@@ -423,7 +427,8 @@ The go-to-market posture is **pre-adoption dogfooding**, and this is decision-lo
   ICP, not hedge with situational trade-offs (the maintainer's point: "better in
   certain circumstances" doesn't move anyone off ARC). Going ScaleSet-only *sharpens*
   it — one protocol, no "why two?" — so the claim becomes: **everything ARC's
-  scale-set model does, at ~4,000× lower control-plane footprint, plus per-tenant
+  scale-set model does, with one shared listener pod per tenant instead of an
+  always-on listener pod + cluster IP per scale set, plus per-tenant
   egress isolation, self-service multi-tenancy, and zero-idle that ARC lacks
   natively.** Be honest about the weaker flank — GAG's *maturity* (pre-1.0, a
   Public-Preview protocol dependency), not its capability. The `why-gag` / vs-ARC

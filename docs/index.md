@@ -110,9 +110,9 @@ Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-co
 
     Listeners are goroutines, not pods:
 
-    - ~60 KiB per runner group
+    - ~12 KiB per listener session
     - One shared pod per tenant
-    - 600 KiB vs 2.5 GiB for ten groups
+    - 1 pod vs 10 always-on pods for ten groups
 
 -   :material-chart-line:{ .lg .middle } __Per-tenant observability__
 
