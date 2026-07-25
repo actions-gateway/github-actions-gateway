@@ -290,11 +290,29 @@ Deleting the AGC pod mid-run (`dogfood-agc-…-227d6` → `…-fstfb`) left
 rail doing its job: a freshly-started sampler holds an empty aggregate, and the
 reconciler declines to overwrite the persisted store with it.
 
+**The re-seed is real, not just a preserved field.** The next job to finalize
+after the restart took `sampleCount` from 10 to **11**, rather than back to 1 —
+so `seedFromStatus` (`cmd/agc/internal/usage/sampler.go`) genuinely rebuilt the
+in-memory aggregate from the persisted statistics, and the reconciler was not
+merely declining to touch a stale field.
+
 **The Prometheus metrics do reset**, and should not be mistaken for data loss.
 The gauges and histograms are in-process and start empty on a new pod, which is
 why the metric is documented as "since the AGC last restarted" and the operator
 recipe reaches for `max_over_time` to bridge restarts. The *recommendation* is
 what survives, because status — not the metric — is the store.
+
+The practical consequence is that **the two views disagree immediately after a
+restart, and both are right**. Measured one job after the restart above:
+
+| View | Value |
+|---|---|
+| `status.sizingRecommendation[].sampleCount` (persisted store) | 11 |
+| `actions_gateway_worker_usage_jobs_sampled_total` (in-process) | 1 |
+
+Anyone cross-checking the sampler by comparing those two numbers will conclude
+it lost history. It did not — the counter is scoped to the current process
+while the recommendation carries the whole window.
 
 ### Phase 3 — below-confidence fallback: confirmed
 
