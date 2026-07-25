@@ -54,15 +54,15 @@ letting tenants run their own runners.
     - no primitive for "GPU always keeps N slots"
     - cheap CPU pods exhaust the quota; big tests stall
 
--   :material-memory:{ .lg .middle } __Listener memory piles up__
+-   :material-memory:{ .lg .middle } __Listener pods pile up__
 
     ---
 
-    One .NET listener pod per scale set, running 24/7:
+    One always-on listener pod per scale set, running 24/7:
 
-    - ~256 MiB resident + a cluster IP each
+    - a pod slot + a cluster IP each
     - held alive just to long-poll GitHub
-    - 10 scale sets ≈ 2.5 GiB before a job runs
+    - 10 scale sets ≈ 10 always-on pods before a job runs
 
 -   :material-ticket-confirmation:{ .lg .middle } __Platform team is the bottleneck__
 
@@ -80,8 +80,8 @@ letting tenants run their own runners.
 
 <div class="gag-stats" markdown="0">
   <div class="gag-stat">
-    <span class="gag-stat__num">600&nbsp;KiB</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener memory for 10 runner sets</strong> — one shared pod, versus ~2.5 GiB across 10 on ARC</span>
+    <span class="gag-stat__num">1&nbsp;pod</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener footprint for 10 runner sets</strong> — every listener is a ~12&nbsp;KiB goroutine in one shared pod, versus 10 always-on listener pods (and 10 cluster IPs) on ARC</span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">0</span>
@@ -117,7 +117,7 @@ footprint.
 | Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner set](design/02-architecture.md) |
 | Throttle the *rate* new workers start (anti-stampede) | :material-close-circle:{ .gag-no } only `maxRunners` caps the count — a burst starts all at once | :material-check-circle:{ .gag-yes } opt-in [`scaleUp` creation-rate limit per set](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)<br><span class="gag-cont">for shared-egress onset (NAT / firewall / VPN)</span> |
 | Per-tenant dedicated egress IPs | :material-close-circle:{ .gag-no } shared cluster egress | :material-check-circle:{ .gag-yes } [per-tenant proxy pool](design/network-architecture.md)<br><span class="gag-cont"><span class="gag-v2-badge">v2</span> proxy optional</span> |
-| Listener memory, 10 runner sets at rest | :material-close-circle:{ .gag-no } ~2.5 GiB across 10 pods | :material-check-circle:{ .gag-yes } ~600 KiB in 1 shared pod |
+| Listener footprint, 10 runner sets at rest | :material-close-circle:{ .gag-no } 10 always-on pods + 10 cluster IPs | :material-check-circle:{ .gag-yes } 1 shared pod — ~12 KiB per listener session |
 | Per-tenant utilization metrics | :material-close-circle:{ .gag-no } scale-set metrics, not tenant-scoped | :material-check-circle:{ .gag-yes } [Prometheus per tenant + group](operations/observability.md)<br><span class="gag-cont">job counts in `kubectl get`; ready-to-apply [tenant dashboard + alerts as code](operations/observability-dashboards.md#tenant-dashboard)</span> |
 | Right-size runner resources from measured usage | :material-close-circle:{ .gag-no } no feedback loop — runner `resources` stay a guess | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> [measured recommendations in `RunnerSet` status](operations/worker-rightsizing.md)<br><span class="gag-cont">+ opt-in profiles that auto-apply them at pod build (`Binpack`/`Throughput`/`NodeShare`), a `SizingDrift` condition, and per-job peak metrics</span> |
 | Cross-tenant fleet health view (platform admin) | :material-close-circle:{ .gag-no } controller + per-scale-set metrics, aggregated by hand; no bundled dashboard | :material-check-circle:{ .gag-yes } [single-pane GMC fleet rollups](operations/observability-metrics.md#full-metrics-reference)<br><span class="gag-cont">degraded / egress-stale / quota per gateway, + a [platform dashboard](operations/observability-dashboards.md#platform-dashboard)</span> |

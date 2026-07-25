@@ -26,14 +26,14 @@ diverges.
 ## The mental model
 
 In ARC scale-set mode, **each scale set is its own controller surface**: one
-`AutoscalingRunnerSet` CR, one long-running `.NET` listener pod, its own
+`AutoscalingRunnerSet` CR, one long-running listener pod, its own
 `maxRunners` cap, configured by its own Helm release. Ten runner types means ten
 scale sets, ten listener pods, ten Helm releases.
 
 In GAG, **one tenant declares one `ActionsGateway`** and lists its runner types as
 `runnerGroups[]` entries inside it. A single per-tenant controller — the Actions
 Gateway Controller (AGC) — multiplexes every group's listener as a goroutine
-(~60 KiB) in one shared pod, instead of one ~256 MiB listener pod per scale set.
+(~12 KiB) in one shared pod, instead of one always-on listener pod per scale set.
 The platform installs the Gateway Manager Controller (GMC) **once**; from there a
 tenant's whole gateway (controller, egress proxy pool, RBAC, NetworkPolicies) is
 provisioned from that single CR.
@@ -46,11 +46,11 @@ ARC (scale-set mode)                    GAG (v1 API)
 ─────────────────────                   ─────────────────────────────
 namespace: team-a                       namespace: team-a
   AutoscalingRunnerSet "cpu"              ActionsGateway "team-a-gateway"
-    └─ listener pod (~256 MiB)              runnerGroups:
+    └─ listener pod (always-on)             runnerGroups:
   AutoscalingRunnerSet "gpu"                 - name: cpu   (goroutine listener)
-    └─ listener pod (~256 MiB)               - name: gpu   (goroutine listener)
+    └─ listener pod (always-on)              - name: gpu   (goroutine listener)
   AutoscalingRunnerSet "arm"                 - name: arm   (goroutine listener)
-    └─ listener pod (~256 MiB)             └─ one AGC pod multiplexes all three
+    └─ listener pod (always-on)            └─ one AGC pod multiplexes all three
   (shared cluster egress)                  └─ per-tenant egress proxy pool
 ```
 
@@ -69,7 +69,7 @@ namespace: team-a                       namespace: team-a
 | `AutoscalingRunnerSet` (one per runner type) | one `runnerGroups[]` entry in the `ActionsGateway` CR | N scale sets collapse into one CR with N entries. |
 | `gha-runner-scale-set` Helm release per scale set | one `ActionsGateway` CR for the whole tenant | You stop managing a Helm release per runner type. The GMC is the only Helm install ([Install](install.md)). |
 | `gha-runner-scale-set-controller` (cluster controller) | Gateway Manager Controller (GMC) | Installed once by the platform; provisions every tenant's AGC. |
-| The `.NET` `AutoscalingListener` pod (one per scale set) | a goroutine inside the shared per-tenant AGC pod | ~256 MiB/pod → ~60 KiB/goroutine; no per-listener cluster IP. |
+| The `AutoscalingListener` pod (one per scale set) | a goroutine inside the shared per-tenant AGC pod | one always-on pod per scale set → ~12 KiB/goroutine in one shared pod; no per-listener cluster IP. |
 | `githubConfigUrl` | `spec.gitHubURL` | Same org / enterprise / repo URL form. |
 | `githubConfigSecret` (PAT **or** GitHub App) | `spec.gitHubAppRef.name` → a namespace `Secret` (`appId`, `installationId`, `privateKey`) | **GAG is GitHub-App-only — no Personal Access Token (PAT) path.** If your scale sets authenticate with a PAT, you create a GitHub App first; see [GitHub App setup](#1-create-the-github-app-secret). |
 | `runnerScaleSetName` / the install name you put in `runs-on` | `runnerGroups[].runnerLabels` (a label **set**) | The routing model differs — see [Job routing](#job-routing-the-one-that-bites). |
@@ -206,7 +206,7 @@ Differences and quirks an ARC operator should know:
 | **Evicted / quota-blocked job** | Runner marked `Failed`; job sits in GitHub's queue until a **manual rerun** | The job lock is fast-cancelled and the job **re-queued automatically**; it runs as soon as capacity frees | Nothing — this is the headline upgrade. You can stop the manual-rerun runbook. |
 | **Job routing** | `runs-on: <scale-set-name>` (single name) | `runs-on:` matched against a label **set** | [Add the old name as a label](#job-routing-the-one-that-bites). |
 | **Auth** | PAT or GitHub App | **GitHub App only** | Create a GitHub App if you were on a PAT. |
-| **Listener** | one ~256 MiB pod per scale set, 24/7 | one shared goroutine pod per tenant | No action; expect far fewer pods/IPs at rest. |
+| **Listener** | one always-on pod per scale set, 24/7 | one shared goroutine pod per tenant | No action; expect far fewer pods/IPs at rest. |
 | **Warm pool** | `minRunners > 0` to mask cold start | not needed; always scales to zero | Drop `minRunners`; this removes idle GPU/compute. |
 | **Per-runner-type cap** | `maxRunners` per scale set | `maxWorkers` per group **+ shared namespace `ResourceQuota`** | The quota is the real cap; size it for all groups ([Quotas](#quotas-and-scheduling)). |
 | **Critical-runner floor** | none (each scale set caps only itself) | `priorityTiers` per group | Optionally reserve preempting slots for expensive runner types. |

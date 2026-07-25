@@ -112,9 +112,9 @@ ARC's idle GPU footprint depends heavily on configuration. Compare against the c
 
 | Scenario (10 GPU runner sets, 0 jobs running) | GPU pods alive | Other always-on overhead |
 |----------|----------------|--------------------------|
-| **ARC scale sets, `minRunners: 0`** | 0 | 10 listener pods (~256 MiB / 1 cluster IP each) on CPU nodes |
+| **ARC scale sets, `minRunners: 0`** | 0 | 10 always-on listener pods (1 pod slot + 1 cluster IP each) on CPU nodes |
 | **ARC scale sets, `minRunners: 1`** (common, to mask cold-start latency) | 10 | 10 listener pods on CPU nodes |
-| **Legacy ARC `RunnerDeployment`** (per-pod listener) | ≥1 per scale set depending on HRA config | Each runner pod runs its own `Runner.Listener` (~256 MiB) |
+| **Legacy ARC `RunnerDeployment`** (per-pod listener) | ≥1 per scale set depending on HRA config | Each runner pod runs its own resident `Runner.Listener` process |
 | **This system** | 0 | 1 AGC pod (goroutine listener per group, ~60 KiB each) + 1 proxy pool |
 
 **Idle-state cost examples.**
@@ -123,8 +123,8 @@ For 10 GPU runner sets, each requiring a dedicated `p4d.24xlarge` (8× A100) nod
 
 *Against ARC scale sets with `minRunners: 0`:*
 - ARC GPU idle cost: `$0/hr` — GPU pods scale to zero between jobs, same as this system.
-- ARC always-on overhead: 10 listener pods × ~256 MiB on CPU nodes — small but real.
-- This system always-on overhead: 1 AGC pod with goroutine listeners + 1 proxy pool — typically lower than the listener-pod aggregate at 10+ groups.
+- ARC always-on overhead: 10 always-on listener pods (10 pod slots, 10 cluster IPs) on CPU nodes — small but real.
+- This system always-on overhead: 1 AGC pod with goroutine listeners + 1 proxy pool — a fixed pod count regardless of how many runner groups a tenant runs.
 - **GPU cost difference at idle: zero.** The advantage is listener footprint and the fact that this system does not need `minRunners > 0` tuning to avoid cold-start latency.
 
 *Against ARC scale sets with `minRunners: 1`:*

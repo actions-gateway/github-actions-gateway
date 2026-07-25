@@ -125,7 +125,7 @@ planning) and `docs/development/` (contributor docs) — see the decision below.
 
 - **Landing page.** Hero line + subhead, the one-command `helm install`, the
   four pillars as cards, and *one* hero stat that makes the value visceral — the
-  listener-overhead delta (~2.5 GiB / 10 pods for ARC vs ~600 KiB / 1 pod for
+  listener-overhead delta (10 always-on listener pods for ARC vs 1 shared pod for
   GAG, at 10 runner groups), or a cost curve from
   [appendix-f-cost-model.md](../design/appendix-f-cost-model.md). Footer CTAs.
 - **Why GAG / vs ARC** — the highest-leverage conversion page. A clean
