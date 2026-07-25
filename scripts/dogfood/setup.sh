@@ -95,6 +95,15 @@ create_cluster() {
 	echo "Creating GKE cluster ${CLUSTER} (system node pool)..."
 	# Standard zonal cluster — one free per billing account, no cluster fee.
 	# --enable-dataplane-v2: Cilium CNI that enforces NetworkPolicy (GAG needs it).
+	# --workload-pool: Workload Identity. Control-plane-only here (node pools opt
+	# in per-pool via --workload-metadata), but it is a HARD PREREQUISITE of the
+	# Part F e2e pool, whose --workload-metadata=GKE_METADATA is rejected with a
+	# 400 without it (found live under Q286). Omitting it here is invisible until
+	# e2e-setup.sh runs, and can then only be repaired by a separate control-plane
+	# update — so create the cluster right the first time. Q380: this flag was
+	# missing from the script while the runbook's Part A3 documented it, because
+	# every previous run took the "already exists" branch against a cluster that
+	# had had Workload Identity retrofitted by hand.
 	# No autoscaling on default-pool — it's manually scaled 0/1 to stop/start.
 	gcloud container clusters create "${CLUSTER}" \
 		--project="${PROJECT}" \
@@ -102,6 +111,7 @@ create_cluster() {
 		--release-channel=regular \
 		--enable-ip-alias \
 		--enable-dataplane-v2 \
+		--workload-pool="${PROJECT}.svc.id.goog" \
 		--machine-type=e2-standard-2 \
 		--num-nodes=1 \
 		--disk-size=50GB \
