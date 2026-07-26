@@ -35,6 +35,15 @@ sequenceDiagram
 7. **Signal:** The GMC watches both the proxy Deployment's `ReadyReplicas` and the AGC Deployment's `ReadyReplicas`, updating `ActionsGatewayStatus.ProxyReadyReplicas` and the `AGCAvailable` Condition as they become available.
 8. **Report:** The `ActionsGateway` status transitions to `Ready` once both the proxy pool has at least `minReplicas` ready and the AGC is healthy.
 
+### 4.1.1. Tenant Teardown and Child Reclamation
+
+Deleting the `ActionsGateway` reclaims every resource provisioned above through **two independent mechanisms, deliberately layered**:
+
+- **The cleanup finalizer is the primary path.** It is ordered and fail-closed (Q125): the GMC deletes the `RunnerGroup`s first and waits for them to be gone — so listeners and worker pods drain before the AGC `Deployment` and its credentials are removed — then deletes the remaining children, and only removes the finalizer once *every* delete is confirmed. A delete that keeps failing retains the finalizer and requeues rather than abandoning a live, credentialed AGC. It also reaches objects the current reconciler no longer applies (the pre-v0.X per-tenant `Role`, the legacy `actions-gateway` `NetworkPolicy`), which nothing else would reclaim.
+- **Owner-reference cascade garbage collection is the backstop.** Every namespaced child the GMC applies carries a controller `OwnerReference` to its `ActionsGateway` — in both `v1alpha1` and `v2alpha1` (Q394). Because a `ResourceQuota`-style platform-owned object is never a GMC child, and because both API versions place their children in the CR's own namespace, the reference is always valid. It costs nothing in the normal path (the CR is not removed from etcd until the finalizer clears, so the ordered drain always runs first) and it is what makes an operator force-removing the finalizer a recoverable mistake rather than a leak of credentialed `ServiceAccount`s, the AGC `RoleBinding`, the egress `NetworkPolicy`s, and the proxy `HPA`/`PDB`/`Service` into a namespace the tenant still controls.
+
+The one intentional exception is a **cluster-scoped** child: a namespaced `ActionsGateway` cannot own one (the apiserver rejects the cross-scope reference and never collects it), so `v2alpha1`'s per-gateway `ClusterRoleBinding` is un-owned and reclaimed by the finalizer alone. Any new cluster-scoped child inherits that constraint and must be deleted explicitly in `reconcileDelete`.
+
 ---
 
 ## 4.2. Job Execution Flow (AGC)

@@ -102,7 +102,7 @@ relocate classic surface into a package meant to outlive classic.
 
 ## Out of scope
 
-- No ownerRef or finalizer-GC policy change ([Q394](../../STATUS.md#Q394) owns that);
+- No ownerRef or finalizer-GC policy change (Q394 owns that);
   `apply_helpers_ownerref_test.go` must keep passing unmodified.
 - No renames of moved symbols, even where the name now reads oddly
   (`proxyQuotaChecks` is shared with the EgressProxy); renaming would churn the

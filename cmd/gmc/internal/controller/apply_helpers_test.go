@@ -62,14 +62,14 @@ func TestApplyServiceAccount_CreateThenPatch(t *testing.T) {
 	r := applyTestReconciler(t, c, scheme)
 	ag := applyTestAG()
 
-	require.NoError(t, r.applyServiceAccount(context.Background(), buildAGCServiceAccount(ag)))
+	require.NoError(t, r.applyServiceAccount(context.Background(), ag, buildAGCServiceAccount(ag)))
 
 	var sa corev1.ServiceAccount
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: agcSAName}, &sa))
 	assert.Equal(t, managedLabels(ag), sa.Labels)
 
 	// Second apply is a no-op patch and must not error.
-	require.NoError(t, r.applyServiceAccount(context.Background(), buildAGCServiceAccount(ag)))
+	require.NoError(t, r.applyServiceAccount(context.Background(), ag, buildAGCServiceAccount(ag)))
 }
 
 // TestApplyService_PreservesClusterIP is the key behavioural guarantee of the
@@ -93,7 +93,7 @@ func TestApplyService_PreservesClusterIP(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build()
 	r := applyTestReconciler(t, c, scheme)
 
-	require.NoError(t, r.applyService(context.Background(), buildProxyService(ag)))
+	require.NoError(t, r.applyService(context.Background(), ag, buildProxyService(ag)))
 
 	var svc corev1.Service
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceName}, &svc))
@@ -156,7 +156,7 @@ func TestApplyRoleBinding_RecreatesOnRoleRefChange(t *testing.T) {
 		}).Build()
 	r := applyTestReconciler(t, c, scheme)
 
-	require.NoError(t, r.applyRoleBinding(context.Background(), buildAGCRoleBinding(ag)))
+	require.NoError(t, r.applyRoleBinding(context.Background(), ag, buildAGCRoleBinding(ag)))
 	assert.Equal(t, 1, deletes, "roleRef change must delete+recreate")
 
 	var rb rbacv1.RoleBinding
@@ -165,7 +165,7 @@ func TestApplyRoleBinding_RecreatesOnRoleRefChange(t *testing.T) {
 	assert.Equal(t, agcTenantRoleName, rb.RoleRef.Name)
 
 	// Steady-state re-apply: roleRef unchanged, so no further delete.
-	require.NoError(t, r.applyRoleBinding(context.Background(), buildAGCRoleBinding(ag)))
+	require.NoError(t, r.applyRoleBinding(context.Background(), ag, buildAGCRoleBinding(ag)))
 	assert.Equal(t, 1, deletes, "unchanged roleRef must not trigger a delete")
 }
 

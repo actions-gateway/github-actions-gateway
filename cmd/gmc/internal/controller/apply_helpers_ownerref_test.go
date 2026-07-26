@@ -22,14 +22,13 @@ import (
 )
 
 // The apply* helpers collapsed onto the shared applyManagedChild path (Q366). The
-// owner-reference decision is per-call-site and load-bearing for garbage
-// collection: an un-owned child is reclaimed only by the reconcileDelete
-// finalizer, so if that finalizer is force-removed the un-owned children
-// (ServiceAccounts, RoleBindings, NetworkPolicies, HPAs, PDBs, Services) leak.
-// These tables pin the exact owner-reference contract per helper so the collapse
-// cannot silently add or drop an owner, and so a later deliberate change to the
-// policy (tracked as Q394) shows up here as an intended edit rather than a
-// regression that slips through review.
+// owner-reference decision is load-bearing for garbage collection: an un-owned
+// child is reclaimed only by the reconcileDelete finalizer, so if that finalizer
+// is force-removed the un-owned children leak. Q394 settled the policy uniformly
+// across both reconcilers — every namespaced child is owner-referenced, and the
+// only un-owned child is one a namespaced ActionsGateway cannot legally own (the
+// cluster-scoped ClusterRoleBinding). These tables pin that contract per helper so
+// a dropped owner shows up as a failure rather than a silent GC regression.
 
 type ownerRefCase struct {
 	name        string
@@ -50,16 +49,16 @@ func assertOwnerRefContract(t *testing.T, c client.Client, cases []ownerRefCase)
 				assert.True(t, *tc.into.GetOwnerReferences()[0].Controller)
 			} else {
 				assert.Empty(t, tc.into.GetOwnerReferences(),
-					"%s must stay un-owned (reclaimed by the reconcileDelete finalizer, Q394)", tc.name)
+					"%s must stay un-owned: a namespaced ActionsGateway cannot own a cluster-scoped child, so reconcileDelete reclaims it (Q394)", tc.name)
 			}
 		})
 	}
 }
 
-// TestV1ApplyHelpers_OwnerReferenceContract pins the v1 ActionsGateway reconciler's
-// deliberately-inconsistent owner-reference policy: exactly 4 of the 11
-// CreateOrPatch children carry an owner reference (Deployment, proxy Deployment,
-// owned Secret, ServiceMonitor); the other 7 rely on the finalizer.
+// TestV1ApplyHelpers_OwnerReferenceContract pins the v1 ActionsGateway
+// reconciler's owner-reference policy: all 11 CreateOrPatch children are
+// namespaced siblings of the CR, so all 11 carry a controller owner reference and
+// cascade GC backstops the reconcileDelete finalizer (Q394).
 func TestV1ApplyHelpers_OwnerReferenceContract(t *testing.T) {
 	scheme := serviceMonitorTestScheme(t) // extends applyTestScheme with the SM GVK
 	c := fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -78,20 +77,20 @@ func TestV1ApplyHelpers_OwnerReferenceContract(t *testing.T) {
 	sm.SetGroupVersionKind(serviceMonitorGVK)
 
 	cases := []ownerRefCase{
-		{"applyServiceAccount", func() error { return r.applyServiceAccount(ctx, buildAGCServiceAccount(ag)) },
-			&corev1.ServiceAccount{}, types.NamespacedName{Namespace: ag.Namespace, Name: agcSAName}, false},
-		{"applyRoleBinding", func() error { return r.applyRoleBinding(ctx, buildAGCRoleBinding(ag)) },
-			&rbacv1.RoleBinding{}, types.NamespacedName{Namespace: ag.Namespace, Name: agcSAName}, false},
-		{"applyNetworkPolicy", func() error { return r.applyNetworkPolicy(ctx, buildProxyNetworkPolicy(ag, nil)) },
-			&networkingv1.NetworkPolicy{}, types.NamespacedName{Namespace: ag.Namespace, Name: npProxyName}, false},
-		{"applyService", func() error { return r.applyService(ctx, buildProxyService(ag)) },
-			&corev1.Service{}, types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceName}, false},
-		{"applyPDB", func() error { return r.applyPDB(ctx, buildPDB(ag)) },
-			&policyv1.PodDisruptionBudget{}, types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceName}, false},
-		{"applyHPA", func() error { return r.applyHPA(ctx, buildHPA(ag)) },
-			&autoscalingv2.HorizontalPodAutoscaler{}, types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceName}, false},
-		{"applyRunnerGroup", func() error { return r.applyRunnerGroup(ctx, buildRunnerGroup(ag, rgSpec, rgName)) },
-			&agcv1alpha1.RunnerGroup{}, types.NamespacedName{Namespace: ag.Namespace, Name: rgName}, false},
+		{"applyServiceAccount", func() error { return r.applyServiceAccount(ctx, ag, buildAGCServiceAccount(ag)) },
+			&corev1.ServiceAccount{}, types.NamespacedName{Namespace: ag.Namespace, Name: agcSAName}, true},
+		{"applyRoleBinding", func() error { return r.applyRoleBinding(ctx, ag, buildAGCRoleBinding(ag)) },
+			&rbacv1.RoleBinding{}, types.NamespacedName{Namespace: ag.Namespace, Name: agcSAName}, true},
+		{"applyNetworkPolicy", func() error { return r.applyNetworkPolicy(ctx, ag, buildProxyNetworkPolicy(ag, nil)) },
+			&networkingv1.NetworkPolicy{}, types.NamespacedName{Namespace: ag.Namespace, Name: npProxyName}, true},
+		{"applyService", func() error { return r.applyService(ctx, ag, buildProxyService(ag)) },
+			&corev1.Service{}, types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceName}, true},
+		{"applyPDB", func() error { return r.applyPDB(ctx, ag, buildPDB(ag)) },
+			&policyv1.PodDisruptionBudget{}, types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceName}, true},
+		{"applyHPA", func() error { return r.applyHPA(ctx, ag, buildHPA(ag)) },
+			&autoscalingv2.HorizontalPodAutoscaler{}, types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceName}, true},
+		{"applyRunnerGroup", func() error { return r.applyRunnerGroup(ctx, ag, buildRunnerGroup(ag, rgSpec, rgName)) },
+			&agcv1alpha1.RunnerGroup{}, types.NamespacedName{Namespace: ag.Namespace, Name: rgName}, true},
 		{"applyDeployment", func() error { return r.applyDeployment(ctx, ag, buildAGCDeployment(ag, "agc:test", "addr", nil)) },
 			&appsv1.Deployment{}, types.NamespacedName{Namespace: ag.Namespace, Name: agcAppName}, true},
 		{"applyProxyDeployment", func() error { return r.applyProxyDeployment(ctx, ag, buildProxyDeployment(ag, "proxy:test")) },
@@ -103,7 +102,8 @@ func TestV1ApplyHelpers_OwnerReferenceContract(t *testing.T) {
 		}, sm, types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceMonitorName}, true},
 	}
 
-	// Guard the headline "4 of 11" invariant explicitly.
+	// Guard the headline "all 11 owned" invariant explicitly: every v1 child is a
+	// namespaced sibling of the CR, so none may opt out of cascade GC (Q394).
 	owned := 0
 	for _, tc := range cases {
 		if tc.expectOwner {
@@ -111,7 +111,7 @@ func TestV1ApplyHelpers_OwnerReferenceContract(t *testing.T) {
 		}
 	}
 	require.Len(t, cases, 11, "v1 has 11 CreateOrPatch apply helpers")
-	require.Equal(t, 4, owned, "exactly 4 of the 11 v1 apply helpers are owner-referenced (Q394)")
+	require.Equal(t, 11, owned, "all 11 v1 apply helpers must be owner-referenced (Q394)")
 
 	assertOwnerRefContract(t, c, cases)
 }
