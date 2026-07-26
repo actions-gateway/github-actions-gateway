@@ -63,8 +63,8 @@ per-object:
 `gmc/api/v1alpha1`.
 
 `metrics.go` is left alone: its collectors interleave v1 and v2 series inside a
-single `Collect`, so separating them is a redesign, not a move. Filed as
-[Q403](../../STATUS.md#Q403).
+single `Collect`, so separating them is a redesign, not a move. Filed as Q403 and
+shipped separately — the v1 passes now live in `metrics_v1.go`.
 
 ### AGC — `cmd/agc/internal/listener`
 

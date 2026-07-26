@@ -16,9 +16,9 @@ Classification follows [technical-debt.md](../development/technical-debt.md).
 > out to [Q394](../STATUS.md#Q394)), F8's god-function decomposition as Q367, F9's
 > error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the
 > §Prevention gates (nolintlint + a ratcheted funlen) as Q371, and F6's foundation
-> move as Q365 (which left the interleaved v1/v2 condition collectors to
-> [Q403](../STATUS.md#Q403)). [Q372](../STATUS.md#Q372) (Deferred) carries the
-> re-run trigger.
+> move as Q365 (which left the interleaved v1/v2 condition collectors to Q403,
+> since shipped: the GMC's v1 collector passes now live in `metrics_v1.go`).
+> [Q372](../STATUS.md#Q372) (Deferred) carries the re-run trigger.
 >
 > The ID range is not contiguous because concurrent branches allocated IDs while
 > this audit was in flight: Q361 went to a CI-latency item (#722) and Q363 to a

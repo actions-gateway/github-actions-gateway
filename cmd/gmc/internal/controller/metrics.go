@@ -5,13 +5,17 @@ import (
 	"time"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
+
+// collectorListTimeout bounds the CR lists a scrape-time collector issues, so a
+// wedged cache cannot hold a /metrics scrape open indefinitely. Shared by every
+// collector in this package, including the v1 passes in metrics_v1.go.
+const collectorListTimeout = 5 * time.Second
 
 // Metrics holds the GMC's custom Prometheus metrics. Construct it with
 // [NewMetrics], which also registers a scrape-time collector for
@@ -43,8 +47,10 @@ func NewMetrics(reader client.Reader, v2Enabled bool) *Metrics {
 		}, []string{"namespace"}),
 	}
 	metrics.Registry.MustRegister(m.IPRangeUpdates, newManagedGatewaysCollector(reader, v2Enabled),
-		newProxyQuotaCollector(reader, v2Enabled), newRunnerGroupsDegradedCollector(reader),
-		newEgressRulesStaleCollector(reader, v2Enabled))
+		newProxyQuotaCollector(reader, v2Enabled), newEgressRulesStaleCollector(reader, v2Enabled))
+	// The v1-only collectors (metrics_v1.go) register themselves through one call, so
+	// the v1 sunset (Q273) drops this line along with that file (Q403).
+	registerV1Collectors(reader)
 	// The v2 ActionsGateway condition gauges (Q321) are v2-only — no v1 series
 	// shares their metric families — so unlike the collectors above they are
 	// registered only when the v2 CRDs are installed. Registering them on a v1-only
@@ -85,24 +91,15 @@ func (c *egressRulesStaleCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.stale
 }
 
-// Collect implements prometheus.Collector. Each list is independent: a read failure
-// for one API version skips only that version's series rather than emitting a
-// misleading value.
+// Collect implements prometheus.Collector. Each version's pass is independent: a
+// read failure for one API version skips only that version's series rather than
+// emitting a misleading value.
 func (c *egressRulesStaleCollector) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), collectorListTimeout)
 	defer cancel()
 
-	var list gmcv1alpha1.ActionsGatewayList
-	if err := c.reader.List(ctx, &list); err == nil {
-		for i := range list.Items {
-			ag := &list.Items[i]
-			if !ag.DeletionTimestamp.IsZero() {
-				continue
-			}
-			ch <- prometheus.MustNewConstMetric(c.stale, prometheus.GaugeValue,
-				conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionEgressRulesStale), ag.Namespace, ag.Name)
-		}
-	}
+	// v1 pass (metrics_v1.go): deleted wholesale by the v1 sunset (Q273).
+	c.collectV1(ctx, ch)
 
 	if !c.v2Enabled {
 		return
@@ -117,53 +114,6 @@ func (c *egressRulesStaleCollector) Collect(ch chan<- prometheus.Metric) {
 			ch <- prometheus.MustNewConstMetric(c.stale, prometheus.GaugeValue,
 				conditionGaugeValue(ep.Status.Conditions, gmcv2alpha1.ConditionEgressRulesStale), ep.Namespace, ep.Name)
 		}
-	}
-}
-
-// runnerGroupsDegradedCollector exports the RunnerGroupsDegraded rollup condition
-// (Q158) as a gauge so operators can alert on impaired tenant RunnerGroups from
-// the gateway's single pane without kube-state-metrics. Like the other collectors
-// it reads at scrape time from the cached reader: a deleted ActionsGateway simply
-// stops being listed. The gauge mirrors the condition the reconciler already wrote
-// to .status.conditions (1 when True, 0 otherwise).
-type runnerGroupsDegradedCollector struct {
-	reader   client.Reader
-	degraded *prometheus.Desc
-}
-
-func newRunnerGroupsDegradedCollector(reader client.Reader) *runnerGroupsDegradedCollector {
-	return &runnerGroupsDegradedCollector{
-		reader: reader,
-		degraded: prometheus.NewDesc(
-			"actions_gateway_runnergroups_degraded",
-			"1 when the ActionsGateway RunnerGroupsDegraded condition is True (one or more owned RunnerGroups report an impairing condition), else 0.",
-			[]string{"namespace", "name"}, nil,
-		),
-	}
-}
-
-// Describe implements prometheus.Collector.
-func (c *runnerGroupsDegradedCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.degraded
-}
-
-// Collect implements prometheus.Collector. On a read failure it emits nothing
-// rather than a misleading value.
-func (c *runnerGroupsDegradedCollector) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var list gmcv1alpha1.ActionsGatewayList
-	if err := c.reader.List(ctx, &list); err != nil {
-		return
-	}
-	for i := range list.Items {
-		ag := &list.Items[i]
-		if !ag.DeletionTimestamp.IsZero() {
-			continue
-		}
-		ch <- prometheus.MustNewConstMetric(c.degraded, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionRunnerGroupsDegraded), ag.Namespace, ag.Name)
 	}
 }
 
@@ -223,7 +173,7 @@ func (c *actionsGatewayV2ConditionsCollector) Describe(ch chan<- *prometheus.Des
 // Collect implements prometheus.Collector. On a read failure it emits nothing
 // rather than a misleading value.
 func (c *actionsGatewayV2ConditionsCollector) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), collectorListTimeout)
 	defer cancel()
 
 	var list gmcv2alpha1.ActionsGatewayList
@@ -283,26 +233,15 @@ func (c *proxyQuotaCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.exceeded
 }
 
-// Collect implements prometheus.Collector. Each list is independent: a read failure
-// for one API version skips only that version's series rather than emitting a
-// misleading value.
+// Collect implements prometheus.Collector. Each version's pass is independent: a
+// read failure for one API version skips only that version's series rather than
+// emitting a misleading value.
 func (c *proxyQuotaCollector) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), collectorListTimeout)
 	defer cancel()
 
-	var list gmcv1alpha1.ActionsGatewayList
-	if err := c.reader.List(ctx, &list); err == nil {
-		for i := range list.Items {
-			ag := &list.Items[i]
-			if !ag.DeletionTimestamp.IsZero() {
-				continue
-			}
-			ch <- prometheus.MustNewConstMetric(c.pressure, prometheus.GaugeValue,
-				conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionProxyQuotaPressure), ag.Namespace, ag.Name)
-			ch <- prometheus.MustNewConstMetric(c.exceeded, prometheus.GaugeValue,
-				conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionProxyQuotaExceeded), ag.Namespace, ag.Name)
-		}
-	}
+	// v1 pass (metrics_v1.go): deleted wholesale by the v1 sunset (Q273).
+	c.collectV1(ctx, ch)
 
 	if !c.v2Enabled {
 		return
@@ -361,24 +300,21 @@ func (c *managedGatewaysCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect implements prometheus.Collector. It sums the non-deleting v1 and (when v2
-// is enabled) v2 ActionsGateways. Each list is independent: it emits the count from
-// whichever lists succeed, and only stays silent when every attempted list fails —
-// so the gauge is absent rather than misleading until the cache is readable.
+// is enabled) v2 ActionsGateways. Each version's pass is independent: it emits the
+// count from whichever lists succeed, and only stays silent when every attempted
+// list fails — so the gauge is absent rather than misleading until the cache is
+// readable.
 func (c *managedGatewaysCollector) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), collectorListTimeout)
 	defer cancel()
 
 	var managed float64
 	var read bool
 
-	var v1List gmcv1alpha1.ActionsGatewayList
-	if err := c.reader.List(ctx, &v1List); err == nil {
+	// v1 pass (metrics_v1.go): deleted wholesale by the v1 sunset (Q273).
+	if n, ok := c.countV1(ctx); ok {
 		read = true
-		for i := range v1List.Items {
-			if v1List.Items[i].DeletionTimestamp.IsZero() {
-				managed++
-			}
-		}
+		managed += n
 	}
 
 	if c.v2Enabled {
