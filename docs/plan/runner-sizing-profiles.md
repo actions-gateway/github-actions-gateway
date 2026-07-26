@@ -1,14 +1,18 @@
 # Worker Right-Sizing Profiles (Recommendations First)
 
-> **Status: ✅ Phases 1–3 shipped 2026-07-21/22 and fully live-validated
-> 2026-07-25.** Usage observability, the status recommendation and its
-> derivation, restart persistence, and the below-confidence fallback were
+> **Status: ✅ Complete — Phases 1–3 shipped 2026-07-21/22 and fully
+> live-validated 2026-07-25. The one residual is deferred as
+> [Q416](../STATUS.md#Q416).** Usage observability, the status recommendation and
+> its derivation, restart persistence, and the below-confidence fallback were
 > confirmed in the first dogfood session. The two behaviours gated on 20 sampled
 > jobs, the `SizingDrift` verdict and `Binpack` actuating, were confirmed in a
 > second session after Q399 migrated the tenant off the Classic protocol (which
 > had orphaned 81% of the jobs it acquired, capping samples at 10). See
 > [Live validation](#live-validation-2026-07-25) and
 > [Both ≥20-sample paths confirmed](#both-20-sample-paths-confirmed-2026-07-25-second-session).
+> Both bugs this validation surfaced are Classic-tier defects rather than sizing
+> gaps: [Q398](#editing-a-classic-runnerset-needed-an-explicit-version-fixed) is
+> fixed, and Q416 waits on a Classic operator report.
 > This doc is the design sketch, the phase record, and the validation record.
 
 ## Goal
