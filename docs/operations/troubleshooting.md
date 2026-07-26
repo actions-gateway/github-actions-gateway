@@ -1988,9 +1988,9 @@ sharing it would collide — pick a distinct label
   A workflow targets it with that one label in `runs-on`.
   - **Most common cause after the Q264 P5 default flip:** the set omits
     `acquisitionProtocol` (so it defaults to `ScaleSet`) but declares more than one
-    label. Either reduce it to a single label, or — to keep multi-label matching —
-    set `acquisitionProtocol: Classic` explicitly (deprecated; slated for removal one
-    minor release out).
+    label. Either reduce it to a single label, or, to keep multi-label matching,
+    set `acquisitionProtocol: Classic` explicitly (deprecated, and
+    [removed at `v2.0.0`](v1alpha1-deprecation.md) with `v1alpha1` and `v2alpha1`).
 - **Immutable (CRD CEL).** Switching a live set between `Classic` and `ScaleSet` is a
   full re-registration storm, so the field is frozen after creation. To change it,
   create a **new** `RunnerSet` (with a distinct name and label) and delete the old one.

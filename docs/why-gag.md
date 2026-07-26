@@ -147,7 +147,7 @@ Every capability above is available today.
     `RunnerTemplate`, with an optional standalone `EgressProxy`; the rows marked
     <span class="gag-v2-badge">v2</span> are v2-only. The single-CR `v1alpha1` shape
     shown below is still fully served but
-    **[deprecated](operations/v1alpha1-deprecation.md)** — see the
+    **[deprecated, and removed at `v2.0.0`](operations/v1alpha1-deprecation.md)** — see the
     [v1 → v2 migration guide](operations/migration-v1-to-v2.md) and the
     [getting-started walkthrough](getting-started.md) for the v2 object set.
 
@@ -384,7 +384,7 @@ spec:
 
 The legacy single-CR `v1alpha1` shape — which expresses this whole gateway in one
 `ActionsGateway` CR — is still fully served but
-**[deprecated](operations/v1alpha1-deprecation.md)**; see the
+**[deprecated, and removed at `v2.0.0`](operations/v1alpha1-deprecation.md)**; see the
 [getting-started walkthrough](getting-started.md#legacy-the-v1alpha1-api-deprecated)
 for it and the [v1 → v2 migration guide](operations/migration-v1-to-v2.md) to move
 across without changing how your jobs are acquired.

@@ -1,40 +1,59 @@
-# `v1alpha1` API deprecation notice
+# Deprecation and removal notice: `v1alpha1`, `v2alpha1`, and Classic
 
 > **Audience:** Platform engineer / tenant operator
 
-!!! warning "`v1alpha1` is deprecated — new tenants should start on v2"
-    Onboard new tenants on the **v2 API** at `actions-gateway.com/v2beta1` — see
-    [Getting Started](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
-    `v1alpha1` stays fully served until removal, so nothing is forced, but it is the
-    terminal API. Migrate existing tenants with [`gag-migrate`](migration-v1-to-v2.md)
-    at your convenience — the move changes the API objects, not how jobs are acquired.
+!!! warning "Three deprecations, one removal release: `v2.0.0`"
+    Onboard new tenants on the **v2 API** at `actions-gateway.com/v2beta1` (see
+    [Getting Started](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended)),
+    and author them as single-label `ScaleSet` runner sets. Everything named below
+    stays **fully served until `v2.0.0`**, so nothing is forced today. Migrate
+    existing tenants with [`gag-migrate`](migration-v1-to-v2.md) at your
+    convenience: the move changes the API objects, not how jobs are acquired.
 
-The `actions-gateway.github.com/v1alpha1` API group — the monolithic
-`ActionsGateway` (with an inline `proxy` and inline `runnerGroups[]`) and the
-standalone `RunnerGroup` kind — is **deprecated** in favor of the decomposed
-`actions-gateway.com` API (`v2beta1` for new tenants; `v2alpha1` as the migration
-on-ramp). This page records the deprecation, what stays working during the
-transition, and what changes at removal.
+This page is the project's standing deprecation notice. It records what `v2.0.0`
+removes, what keeps working until then, and what an operator has to do before
+upgrading past it.
+
+## What `v2.0.0` removes
+
+| Removed at `v2.0.0` | What it is today | What replaces it | How you move |
+|---|---|---|---|
+| **`actions-gateway.github.com/v1alpha1`** | the monolithic `ActionsGateway` (inline `proxy` and `runnerGroups[]`) plus the standalone `RunnerGroup` kind | the decomposed `actions-gateway.com` API at `v2beta1` | [`gag-migrate`](migration-v1-to-v2.md), a one-shot fan-out of one v1 object into several v2 objects |
+| **`actions-gateway.com/v2alpha1`** | v2's first served version, superseded as storage and hub version by the `v2beta1` graduation | `v2beta1`, the graduated, ScaleSet-only shape | read and re-apply your objects at `v2beta1`; the conversion webhook already round-trips them, so there is no re-author step except for the two `v2alpha1`-only fields below |
+| **Classic acquisition** (`RunnerSet.spec.acquisitionProtocol: Classic` and `spec.maxListeners`, both `v2alpha1`-only) | the many-acquirers protocol, and the only protocol `v1alpha1` speaks | `ScaleSet`, the single-acquirer protocol: the default since `v1.1.0`, and the only protocol `v2beta1` serves | create one fresh single-label `ScaleSet` `RunnerSet` per `runs-on` target. `acquisitionProtocol` is immutable, so this is a create-and-delete, not an edit |
+
+`v2beta1` itself is **not** affected. Beta's contract is that a version will not be
+removed, and `v2.0.0` adds the GA `v2` version beside it rather than taking it away.
+
+### Why the three are coupled
+
+`v2beta1` is already ScaleSet-only, so classic acquisition exists *only* to serve
+`v1alpha1` and `v2alpha1` objects. Removing those two versions removes classic's
+entire reason to exist. Splitting the three removals across separate releases would
+buy nothing and would cost every operator a second breaking migration, so they land
+together on one major tag.
 
 ## Status
 
-- **`v1alpha1` is deprecated but still served.** Both API groups are served side by
-  side. No release has removed v1 capability; existing v1 tenants keep running
-  unchanged.
-- **New tenants should onboard on v2.** See
+- **All three are deprecated and still fully served.** No release has removed any of
+  them. Existing tenants keep running unchanged until they upgrade past `v2.0.0`.
+- **New tenants should onboard on `v2beta1`.** See
   [tenant onboarding](tenant-onboarding.md) for the v2 object set.
-- **Existing tenants migrate with the tool** on their own schedule — see
+- **`v2alpha1` stays served as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp.**
+  It carries the `acquisitionProtocol` selector a migrating v1 tenant needs, which a
+  new tenant does not. Note that alpha's contract allows an alpha version to be
+  dropped without notice; naming `v2.0.0` for it is a stronger commitment than the
+  maturity level requires.
+- **Existing tenants migrate with the tool** on their own schedule: see
   [migration-v1-to-v2.md](migration-v1-to-v2.md). The migration is a one-shot
   fan-out, not an automatic conversion, because one v1 object becomes several v2
   objects.
 - **Migrating preserves how your jobs are acquired.** `gag-migrate` maps v1 runner
-  groups to v2 `RunnerSet`s that use the same job-acquisition path — it writes
+  groups to v2 `RunnerSet`s that use the same job-acquisition path: it writes
   `acquisitionProtocol: Classic` onto every emitted set, so the migration changes the
   API objects, not the runtime behaviour, and is safe to do ahead of any other change.
-  (The v2 default for *new* sets is now the runner-scale-set protocol, `ScaleSet`
-  (Q264 P5), and `Classic` is deprecated; adopting `ScaleSet` for a migrated group is a
-  distinct, later step — create a fresh single-label set — never a side effect of
-  migrating off `v1alpha1`.)
+  Adopting `ScaleSet` for a migrated group is a distinct, later step (create a fresh
+  single-label set), never a side effect of migrating off `v1alpha1`.
 
 ## Why v2 (what the decomposition buys)
 
@@ -48,6 +67,11 @@ transition, and what changes at removal.
 - **Namespace-scoped Pod Security profile.** `securityProfile` moves off the
   per-gateway spec onto the namespace, matching how Pod Security Admission actually
   works.
+- **Single-acquirer job acquisition.** `ScaleSet` holds one listener per runner set,
+  so GitHub never assigns beyond advertised capacity. Classic's many-acquirers model
+  can mark a job `in_progress` and then fail to provision a worker for it; measured
+  on this project's own dogfood tenant, that orphaned 81% of acquired jobs
+  ([troubleshooting](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition)).
 
 Full rationale: [Appendix H](../design/appendix-h-v2-api-decomposition.md).
 
@@ -55,9 +79,9 @@ Full rationale: [Appendix H](../design/appendix-h-v2-api-decomposition.md).
 
 The v2 cutover also aligns two grandfathered, boolean-looking label/annotation values
 and moves the project's domain-prefixed keys off `actions-gateway.github.com/` onto
-`actions-gateway.com/` (Q147 / the API-group rename). During coexistence every
-consumer — the `ValidatingAdmissionPolicy` objects and the GMC validating webhook —
-**dual-reads both spellings**:
+`actions-gateway.com/` (Q147 / the API-group rename). During coexistence both
+consumers of these values, the `ValidatingAdmissionPolicy` objects and the GMC
+validating webhook, **dual-read both spellings**:
 
 | Key | Legacy (v1) | Aligned (v2) |
 |---|---|---|
@@ -67,26 +91,45 @@ consumer — the `ValidatingAdmissionPolicy` objects and the GMC validating webh
 | downgrade opt-in | `actions-gateway.github.com/allow-profile-downgrade: "true"` | `actions-gateway.com/allow-profile-downgrade: allowed` |
 | finalizers | `actions-gateway.github.com/gmc-cleanup`, `…/agentpool-cleanup` | `actions-gateway.com/gmc-cleanup`, `…/agentpool-cleanup` |
 
-The migration tool relabels these in one pass (additively — it adds the v2 keys and
-keeps the v1 keys). The dual-read **only widens accepted spelling**: it never relaxes
-an invariant. The window **closes exactly when `v1alpha1` is removed**, at which point
-the legacy `"true"` arms and the `actions-gateway.github.com/*` keys are dropped from
-the policies and the webhook.
+The migration tool relabels these in one pass (additively: it adds the v2 keys and
+keeps the v1 keys). The dual-read **only widens accepted spelling**, it never relaxes
+an invariant. The window **closes at `v2.0.0`**, when `v1alpha1` is removed and the
+legacy `"true"` arms and the `actions-gateway.github.com/*` keys are dropped from the
+policies and the webhook.
 
-## Removal timeline
+## The removal release, and what it is gated on
 
-`v1alpha1` removal is gated on the **v2 API reaching beta** (the `v2beta1`
-graduation) — a *technical* readiness bar, not an adoption count — and will be
-announced as a **named release** with at least one release of notice. Gating on v2
-maturity is what lets the schedule be committed rather than open-ended: you are
-never asked to move onto an alpha, and there is no adopter census to wait on. At
-removal:
+**`v2.0.0` is the named removal release, announced with `v1.3.0`.** The project's
+policy is that a removal lands on a named release announced at least one release
+ahead ([roadmap](../roadmap.md)); `v1.3.0` carries that announcement for all three
+items above.
 
-- The `actions-gateway.github.com` CRDs (`ActionsGateway`, `RunnerGroup`) are
-  withdrawn; any remaining v1 objects must be migrated first.
-- The dual-read window closes — the legacy label/annotation spellings and the v1
-  finalizer names are no longer honored. Migrate (which relabels onto the v2 domain)
-  before upgrading past the removal release.
+`v2.0.0` is a **major** tag because removing a served API version is a breaking
+change, and it is gated on the **`v2` (General Availability) API being available and
+validated**, not on a date and not on an adopter census. Gating on v2 maturity is
+what lets the commitment be concrete: you are never asked to move onto an alpha to
+escape a removal, and there is no census to wait on. `v2beta1` is production-relyable
+today and converts to `v2` in place.
 
-Until that named release, no action is forced: run [`gag-migrate`](migration-v1-to-v2.md)
+There is deliberately **no date**. `v1.3.0` fixes *which* release removes these and
+*what* it removes; the GA soak that gates `v2.0.0` finishes when the evidence says
+the v2 shape is right.
+
+## Before you upgrade past `v2.0.0`
+
+1. **Migrate off `v1alpha1`.** Run [`gag-migrate`](migration-v1-to-v2.md), which also
+   relabels the namespace markers and annotations onto the `actions-gateway.com/`
+   spellings. Do this *before* upgrading: after removal the legacy spellings and the
+   v1 finalizer names are no longer honored, and any remaining `v1alpha1` objects
+   have no served version.
+2. **Move `v2alpha1` objects to `v2beta1`.** Re-apply them at `v2beta1` (or let the
+   conversion webhook serve them there and re-record your GitOps manifests at that
+   version) so nothing in Git still names a removed version.
+3. **Replace Classic runner sets with `ScaleSet` sets.** One single-label
+   `RunnerSet` per `runs-on` target, created fresh, since `acquisitionProtocol` is
+   immutable. Split any multi-label group into one set per label, and drop
+   `maxListeners`, which `ScaleSet` ignores. See
+   [tenant onboarding](tenant-onboarding.md#acquisition-protocol-v2alpha1-only).
+
+Until that release, no action is forced: run [`gag-migrate`](migration-v1-to-v2.md)
 when convenient, validate the v2 path, and decommission v1 at your own pace.

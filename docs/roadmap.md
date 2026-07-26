@@ -78,11 +78,11 @@ tagged chart. Check the release notes for the exact image digests to pin.
   control-plane sizing (`agcResources`, optionally handed to a Vertical Pod Autoscaler
   with `agcAutoscaling`), and a `v1 → v2` migration tool. It has reached its first
   stability contract: **`v2beta1`** is the graduated, ScaleSet-only storage and hub
-  version, `v2alpha1` stays served for coexistence and the `gag-migrate` on-ramp,
-  and the apiserver converts between them through a webhook the GMC hosts. The
-  single-CR `v1alpha1` API (and its classic acquisition protocol) is still fully served
-  but **[deprecated](operations/v1alpha1-deprecation.md)**; removing them is the
-  near-term work below. See the migration
+  version, `v2alpha1` stays served as the `gag-migrate` on-ramp, and the apiserver
+  converts between them through a webhook the GMC hosts. The single-CR `v1alpha1`
+  API, `v2alpha1`, and the classic acquisition protocol are all still fully served
+  but **[deprecated](operations/v1alpha1-deprecation.md)**, and all three are removed
+  at **`v2.0.0`**; that removal is the near-term work below. See the migration
   guide's [Why upgrade to v2](operations/migration-v1-to-v2.md#why-upgrade-to-v2)
   for the full list.
 - **Day-2 operations.** Helm upgrade and rollback paths, a backup/restore and
@@ -112,12 +112,16 @@ for how to run each of the above.
 Work that is scoped and actively being built — adoption-enabling polish and the
 last gaps an outside operator hits.
 
-- **Retiring `v1alpha1` and the classic acquisition protocol.** <!-- q:Q273 --> The graduation
-  that made this possible has shipped, so what remains is the removal itself:
-  the single-CR `v1alpha1` API and the classic (many-acquirers) protocol both
-  come out on a named release announced at least one release ahead. The
-  deprecation window opened at v1.1.0, and `gag-migrate` already moves a tenant
-  across without changing how jobs are acquired.
+- **Retiring `v1alpha1`, `v2alpha1`, and the classic acquisition protocol.** <!-- q:Q273 --> The
+  graduation that made this possible has shipped, so what remains is the removal
+  itself. Policy is that a removal lands on a named release announced at least one
+  release ahead: `v1.3.0` is that announcement, and **`v2.0.0` is the named release**
+  that removes all three. They are one bundle because `v2beta1` is already
+  ScaleSet-only, so classic acquisition exists solely to serve `v1alpha1` and
+  `v2alpha1` objects. `v2.0.0` is itself gated on the `v2` GA API being available and
+  validated, not on a date. The deprecation window opened at v1.1.0, and
+  `gag-migrate` already moves a tenant across without changing how jobs are acquired.
+  Detail: the [deprecation and removal notice](operations/v1alpha1-deprecation.md).
 - **Capacity-aware job intake.** <!-- q:Q405,Q406 --> Additional opt-in rungs on the pre-claim gate,
   so a job is not claimed when the cluster demonstrably cannot place its worker:
   one sourced from the scheduler's `Unschedulable` verdict (for fixed-size and

@@ -62,7 +62,7 @@ none of them is a calendar check.
 | M1, M2, M3a, M3b, M5 shipped | ✅ Satisfied — see [v2-api.md](v2-api.md) milestones |
 | Graduated `v2alpha1` → `v2beta1` (webhook + storage migration) | ✅ Satisfied — Q74 |
 | Graduated `v2beta1` → `v2` | ❌ This plan, Phase 2 |
-| `v1alpha1` deprecated **with a named removal release** | ⚠️ Deprecated, but the removal release is named by [Q412](../STATUS.md#Q412) in `v1.3.0`. **This is a GA precondition**, which is why the 1.3 notice is on the critical path to 2.0. |
+| `v1alpha1` deprecated **with a named removal release** | ✅ Satisfied: Q412 (2026-07-26) names `v2.0.0` across the operator and design docs, for `v1alpha1`, `v2alpha1`, and classic together. The notice ships with `v1.3.0`, one release ahead. |
 | ≥1 representative tenant migrated v1→v2 with the tool for real | ⚠️ **Unverified.** Dogfood runs v2, but whether a v1→v2 `gag-migrate` run was ever exercised end-to-end on a real tenant needs confirming before GA, not asserting. Phase 1 item. |
 | Operator docs updated | ❌ Phase 4 |
 | Cross-namespace sharing (M4), direct egress | Not GA gates, by the DoD |
