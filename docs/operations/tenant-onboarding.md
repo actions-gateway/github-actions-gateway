@@ -697,9 +697,14 @@ spec:
   the scale-set protocol later means creating a fresh single-label set, not editing
   the old one — the field is **immutable**, because switching a live set's protocol
   is a re-registration storm.
-- **Editing a Classic set needs an explicit version.** An unqualified
-  `kubectl edit/patch/apply` addresses the `v2beta1` storage version, which rejects
-  the multi-label shape; qualify it (`kubectl edit runnersets.v2alpha1.actions-gateway.com …`).
+- **Editing a Classic set works unqualified — except its labels.** An unqualified
+  `kubectl edit/patch/apply` addresses the `v2beta1` storage version, which is
+  ScaleSet-only and takes exactly one `runnerLabel`. That rule is *ratcheted*: it is
+  only enforced on the `runnerLabels` you actually write, so editing any other field
+  of a stored multi-label Classic set goes through untouched. To change the **labels**
+  of such a set, qualify the write to the version that admits the shape
+  (`kubectl edit runnersets.v2alpha1.actions-gateway.com …`). Ratcheting is on by
+  default from Kubernetes 1.30; the v2 floor is 1.31, so every supported cluster has it.
 
 ### Optional `templateRef` (a default worker pod shape)
 

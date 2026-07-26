@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -15,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -243,6 +245,79 @@ func TestV2_RunnerSet_ScaleSetRequiresSingleLabel(t *testing.T) {
 	single.Spec.RunnerLabels = []string{"scale-set-linux"}
 	require.NoError(t, k8sClient.Create(ctx, single))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, single) })
+}
+
+// TestV2_RunnerSet_ClassicMultiLabelEditableThroughHub covers Q398. A Classic
+// multi-label set can only be authored on v2alpha1, but it is STORED as a v2beta1
+// hub object that violates v2beta1's ScaleSet-only single-runnerLabel rule. While
+// that rule sat on the spec, every unqualified `kubectl edit/patch/apply` — which
+// addresses the storage version — was rejected on a field that has nothing to do
+// with labels. The rule now sits on runnerLabels, so CRD validation ratcheting
+// (KEP-4008) suppresses it exactly while the labels are untouched.
+func TestV2_RunnerSet_ClassicMultiLabelEditableThroughHub(t *testing.T) {
+	if m := serverMinor(t); m < 30 {
+		t.Skipf("CRD validation ratcheting (KEP-4008) is on by default only on k8s >= 1.30; apiserver is 1.%d", m)
+	}
+
+	const ns = "v2-runnerset-hub-edit"
+	createNSForAGC(t, ns)
+
+	// Author on v2alpha1 — the only version that admits the multi-label shape.
+	classic := newV2RunnerSet(ns, "ci", "acme", "default") // Classic; labels: self-hosted, linux
+	require.NoError(t, k8sClient.Create(ctx, classic))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, classic) })
+
+	key := types.NamespacedName{Namespace: ns, Name: "ci"}
+
+	// Read/modify/write through the hub, which is what an unqualified kubectl does.
+	var hub agcv2beta1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, key, &hub))
+	require.Equal(t, []string{"self-hosted", "linux"}, hub.Spec.RunnerLabels,
+		"the stored hub object carries the Classic set's multi-label shape")
+
+	hub.Spec.MaxWorkers = ptr.To(int32(7))
+	require.NoError(t, k8sClient.Update(ctx, &hub),
+		"an unqualified edit of an unrelated field must not trip the single-label rule (Q398)")
+
+	// Ratcheting forgives only an UNCHANGED value: editing the labels themselves
+	// through v2beta1 still has to satisfy the ScaleSet-only rule.
+	var again agcv2beta1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, key, &again))
+	require.NotNil(t, again.Spec.MaxWorkers)
+	assert.Equal(t, int32(7), *again.Spec.MaxWorkers, "the unrelated edit should have landed")
+	again.Spec.RunnerLabels = []string{"self-hosted", "linux", "arm64"}
+	err := k8sClient.Update(ctx, &again)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err),
+		"changing runnerLabels through v2beta1 should still be Invalid, got %v", err)
+
+	// The v2alpha1 view is unharmed: protocol and labels intact, the edit visible.
+	var spoke agcv2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, key, &spoke))
+	assert.Equal(t, agcv2alpha1.AcquisitionProtocolClassic, spoke.Spec.AcquisitionProtocol)
+	assert.Equal(t, []string{"self-hosted", "linux"}, spoke.Spec.RunnerLabels)
+	require.NotNil(t, spoke.Spec.MaxWorkers)
+	assert.Equal(t, int32(7), *spoke.Spec.MaxWorkers)
+}
+
+// TestV2beta1_RunnerSet_MultiLabelCreateRejected pins the other half of Q398: the
+// ratcheting relaxation must not become a way to author a multi-label set on
+// v2beta1. A create has no old value to ratchet against, so the rule applies.
+func TestV2beta1_RunnerSet_MultiLabelCreateRejected(t *testing.T) {
+	const ns = "v2beta1-runnerset-multi"
+	createNSForAGC(t, ns)
+
+	multi := &agcv2beta1.RunnerSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "multi", Namespace: ns},
+		Spec: agcv2beta1.RunnerSetSpec{
+			GatewayRef:   agcv2beta1.ObjectRef{Name: "acme"},
+			TemplateRef:  &agcv2beta1.ObjectRef{Name: "default"},
+			RunnerLabels: []string{"self-hosted", "linux"},
+		},
+	}
+	err := k8sClient.Create(ctx, multi)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err), "v2beta1 create with >1 label should be Invalid, got %v", err)
 }
 
 func TestV2_RunnerSet_AcquisitionProtocolImmutable(t *testing.T) {

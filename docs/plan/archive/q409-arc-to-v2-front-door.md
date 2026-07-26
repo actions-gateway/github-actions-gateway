@@ -118,6 +118,7 @@ Rewrite [`migration-from-arc.md`](../../operations/migration-from-arc.md) onto
   is *served*.
 - **`v2alpha1` doc removal.** It stays served and stays documented for the
   migration on-ramp.
-- **[Q398](../../STATUS.md#Q398)** (unqualified `kubectl` edits on a Classic
-  `RunnerSet` hit the `v2beta1` storage version). Orthogonal, and it only reaches
-  migrated Classic sets — a new tenant onboarded per this decision never hits it.
+- **Q398** (unqualified `kubectl` edits on a Classic `RunnerSet` hit the `v2beta1`
+  storage version). Orthogonal, and it only reaches migrated Classic sets — a new
+  tenant onboarded per this decision never hits it. Fixed separately by ratcheting
+  the single-label rule onto `runnerLabels` ([v2beta1.md](../v2beta1.md#6-q74--the-graduation-cut)).

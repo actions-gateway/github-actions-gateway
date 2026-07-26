@@ -2084,6 +2084,12 @@ admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: ScaleSet runne
 sharing it would collide — pick a distinct label
 ```
 
+```
+The RunnerSet "linux" is invalid: spec.runnerLabels: Invalid value: "array": a v2beta1
+runner set must declare exactly one runnerLabel: v2beta1 is ScaleSet-only and the scale
+set's name is its single runs-on match target (Q264)
+```
+
 **Likely cause & resolution.**
 
 - **Exactly one label (CRD CEL).** A `ScaleSet` set registers one scale-set object at
@@ -2095,6 +2101,15 @@ sharing it would collide — pick a distinct label
     label. Either reduce it to a single label, or, to keep multi-label matching,
     set `acquisitionProtocol: Classic` explicitly (deprecated, and
     [removed at `v2.0.0`](v1alpha1-deprecation.md) with `v1alpha1` and `v2alpha1`).
+- **Exactly one label on the `v2beta1` storage version (CRD CEL).** The
+  `spec.runnerLabels` variant of the message comes from `v2beta1`, which is
+  ScaleSet-only and has no `acquisitionProtocol` field at all. You see it when the
+  write addressed `v2beta1` — either you authored a multi-label `v2beta1` set (fix:
+  one label per set), or you edited the **labels** of a stored multi-label `Classic`
+  set through an unqualified `kubectl edit/patch` (fix: qualify the write,
+  `kubectl edit runnersets.v2alpha1.actions-gateway.com <name>`). Editing any *other*
+  field of such a set unqualified is fine: the rule is ratcheted, so it is enforced
+  only against `runnerLabels` you actually change.
 - **Immutable (CRD CEL).** Switching a live set between `Classic` and `ScaleSet` is a
   full re-registration storm, so the field is frozen after creation. To change it,
   create a **new** `RunnerSet` (with a distinct name and label) and delete the old one.

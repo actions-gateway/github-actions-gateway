@@ -17,7 +17,6 @@ import (
 // +kubebuilder:validation:XValidation:rule="!has(self.quotaRetryDelay) || duration(self.quotaRetryDelay) >= duration('1s')",message="quotaRetryDelay must be at least 1s"
 // +kubebuilder:validation:XValidation:rule="!has(self.completedPodTTL) || duration(self.completedPodTTL) >= duration('0s')",message="completedPodTTL must not be negative"
 // +kubebuilder:validation:XValidation:rule="!has(self.pendingPodDeadline) || duration(self.pendingPodDeadline) >= duration('1s')",message="pendingPodDeadline must be at least 1s"
-// +kubebuilder:validation:XValidation:rule="size(self.runnerLabels) == 1",message="a v2beta1 runner set must declare exactly one runnerLabel: v2beta1 is ScaleSet-only and the scale set's name is its single runs-on match target (Q264)"
 type RunnerSetSpec struct {
 	// GatewayRef names the ActionsGateway that supplies this runner set's GitHub
 	// binding and control plane. Under multi-gateway-per-namespace each AGC
@@ -63,16 +62,26 @@ type RunnerSetSpec struct {
 	MaxWorkers *int32 `json:"maxWorkers,omitempty"`
 
 	// RunnerLabels is the label set matched against workflow runs-on values. v2beta1
-	// is ScaleSet-only, so exactly one label is required (enforced by the spec-level
-	// CEL rule above): the scale set's single runnerLabel is its runs-on match target,
+	// is ScaleSet-only, so exactly one label is required (enforced by the CEL rule on
+	// this field): the scale set's single runnerLabel is its runs-on match target,
 	// and the label doubles as the scale-set name registered at GitHub. Each label
 	// must be non-empty and contain no whitespace or commas (comma is the runs-on list
 	// separator). A workload needing multi-label matching must stay on a v2alpha1
 	// Classic RunnerSet during the deprecation window (Q264 §5a-U7).
 	//
+	// The single-label rule lives on THIS FIELD rather than on the spec, so CRD
+	// validation ratcheting (KEP-4008; on by default since Kubernetes 1.30, and the
+	// v2 floor is 1.31) suppresses it on an update that leaves runnerLabels
+	// untouched. A Classic multi-label set authored through v2alpha1 is STORED as a
+	// hub object that violates this rule, so a spec-level rule made every unqualified
+	// `kubectl edit/patch` of such a set fail on a field unrelated to labels (Q398).
+	// Ratcheting only forgives an unchanged value: creating a multi-label set through
+	// v2beta1, or editing a stored set's labels through v2beta1, is still rejected.
+	//
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:items:MaxLength=256
 	// +kubebuilder:validation:items:Pattern=`^[^,\s]+$`
+	// +kubebuilder:validation:XValidation:rule="size(self) == 1",message="a v2beta1 runner set must declare exactly one runnerLabel: v2beta1 is ScaleSet-only and the scale set's name is its single runs-on match target (Q264)"
 	RunnerLabels []string `json:"runnerLabels"`
 
 	// PriorityTiers defines PriorityClass assignments and cumulative pod-count
