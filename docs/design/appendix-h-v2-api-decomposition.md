@@ -776,7 +776,12 @@ The v1→v2 fan-out is one-time. Once on `v2alpha1`, the API graduates **in plac
 `v2alpha1 → v2beta1 → v2` via a conversion webhook (a thing a conversion webhook
 *can* do, since the kinds no longer change shape) — see the
 [graduation path](../plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2)
-in the implementation plan for the per-hop mechanics.
+in the implementation plan for the per-hop mechanics. The superseded versions do not
+linger indefinitely: `v2alpha1` is dropped at **`v2.0.0`**, the same release that
+removes `v1alpha1` and the classic acquisition machinery, announced one release ahead
+in `v1.3.0`. That coupling and the operator-facing contract are the
+[deprecation and removal notice](../operations/v1alpha1-deprecation.md); the release
+sequencing is [v2-ga.md](../plan/v2-ga.md).
 
 ## H.12. Folding in the grandfathered label-value alignment (Q147)
 
@@ -825,7 +830,7 @@ dual-read migration so live namespaces are not broken mid-cutover:
 2. The migration tool ([§H.11](#h11-migration-v2-tool-assisted)) relabels the namespace
    marker and rewrites the annotation to the new keyword as part of the same one-shot
    pass that emits the v2 object set, so no separate operator action is required.
-3. When `v1alpha1` is deprecated and removed, drop the `"true"` arm from the VAPs and
+3. When `v1alpha1` is removed at `v2.0.0`, drop the `"true"` arm from the VAPs and
    webhook. The dual-read window closes exactly when `v1alpha1` serving does.
 
 This stays **fail-closed** throughout: the CEL/webhook checks already treat any
@@ -966,8 +971,10 @@ stores at **~1.26 MiB** — over the limit before a single controller is added, 
 exactly why the v2 CRDs live in their own chart today. So the clean fold-back sequence
 is two removals, both required: retire `v1alpha1`, **and** drop `v2alpha1` (retiring
 the conversion webhook), leaving one served version — then the now single-version v2
-CRDs fold into the main chart with headroom to spare. Until both land, the opt-in chart
-plus apply-render stands.
+CRDs fold into the main chart with headroom to spare. Both of those removals land at
+**`v2.0.0`** ([notice](../operations/v1alpha1-deprecation.md)), which is therefore the
+earliest the fold-back can be reconsidered, and only once v2 is genuinely down to one
+served version. Until then, the opt-in chart plus apply-render stands.
 
 ## H.14. Admin policy layer — deferred until tiering is real
 

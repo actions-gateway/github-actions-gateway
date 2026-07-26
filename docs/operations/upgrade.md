@@ -100,10 +100,13 @@ helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actio
 ```
 
 The v2 controllers now reconcile these kinds, so a v2 object set provisions a working
-tenant. You can stay on the `v1alpha1` (`actions-gateway.github.com`) API
-indefinitely — both groups are served side by side — or migrate a tenant to v2 with
-the one-shot fan-out tool: see [migration-v1-to-v2.md](migration-v1-to-v2.md) and the
-[`v1alpha1` deprecation notice](v1alpha1-deprecation.md). Note: v2's `ActionsGateway`
+tenant. Both groups are served side by side, so you can stay on the `v1alpha1`
+(`actions-gateway.github.com`) API until the **`v2.0.0`** release removes it, or
+migrate a tenant to v2 now with the one-shot fan-out tool: see
+[migration-v1-to-v2.md](migration-v1-to-v2.md) and the
+[deprecation and removal notice](v1alpha1-deprecation.md), which lists everything
+`v2.0.0` removes (`v1alpha1`, `v2alpha1`, and the Classic acquisition protocol) and
+the pre-upgrade checklist for it. Note: v2's `ActionsGateway`
 reuses the `ag` short name, so once both groups are installed `kubectl get ag` is
 ambiguous — qualify it as `kubectl get actionsgateways.actions-gateway.github.com`
 (or `.com`) to disambiguate.

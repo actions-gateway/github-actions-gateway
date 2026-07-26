@@ -80,7 +80,21 @@ No open gating row: Q359 closed 2026-07-25.
 | Item | Why it gates |
 |---|---|
 | [Q411](../STATUS.md#Q411) | Deprecate `v2alpha1` in the API itself: `+kubebuilder:deprecatedversion` markers and regenerated Custom Resource Definitions (CRDs). Without the marker the apiserver warns nobody, so the notice reaches only readers of the docs. |
-| [Q412](../STATUS.md#Q412) | Name `v2.0.0` as the removal release for all three items in the table above. This is the "one release ahead" the policy promises; miss it in 1.3 and `v2.0.0` cannot legally remove anything under the project's own rules. Also updates the docs that currently describe `v2alpha1` as merely "still served" to say deprecated, removed at `v2.0.0`. |
+
+> **Q412 is closed (2026-07-26): `v2.0.0` is named.**
+> [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md) is now the
+> standing notice for all three removals rather than for `v1alpha1` alone: it leads
+> with a what-`v2.0.0`-removes table (each row with its replacement and the move),
+> states the coupling, and ends with a pre-upgrade checklist. The name is repeated
+> wherever an operator forms a plan from the docs (README, roadmap, getting-started,
+> install, upgrade, tenant-onboarding, migration-v1-to-v2, migration-from-arc,
+> troubleshooting, why-gag) and in the design half (Appendix H, 03-api-contracts).
+> Two stale statements were corrected in passing: "you can stay on `v1alpha1`
+> indefinitely" (upgrade.md) and "Classic is slated for removal one *minor* release
+> out" (tenant-onboarding, troubleshooting), which understated a major-tag removal.
+> The `CiliumFQDN`/`CalicoFQDN` enum values still say "a future release (on the
+> classic/`v1alpha1` deprecation clock)"; naming a release for them is a separate
+> decision, filed as [Q428](../STATUS.md#Q428).
 
 The docs half of the notice already shipped as **Q409**: the ARC migration guide,
 getting-started, tenant onboarding, install, and the positioning pages were all
@@ -116,12 +130,12 @@ Both are cheap, and both undermine the "`main` is green" precondition that
 
 1. **[Q400](../STATUS.md#Q400) and [Q404](../STATUS.md#Q404)** are independent and
    can run in parallel by different sessions. They touch CI configuration only.
-2. **[Q411](../STATUS.md#Q411) and [Q412](../STATUS.md#Q412)** are independent of all
-   of the above and can land at any point before the tag. Q411 changes generated
-   CRDs, so it should not race a session editing the same API packages. Neither can
-   be dropped on the grounds that Q409 already aligned the docs: the deprecation has
-   to reach the apiserver (Q411) and name its removal release (Q412), or it is a
-   statement of taste rather than a notice operators can plan against.
+2. **[Q411](../STATUS.md#Q411)** is independent of all of the above and can land at
+   any point before the tag. It changes generated CRDs, so it should not race a
+   session editing the same API packages. It cannot be dropped on the grounds that
+   Q409 aligned the docs and Q412 named the release: the deprecation still has to
+   reach the apiserver, or an operator who never reads the docs gets no warning at
+   all. (Q412, the other half, is done.)
 3. **[Q393](../STATUS.md#Q393) last**, immediately before tagging, so the banner names
    the version actually being cut.
 

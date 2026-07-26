@@ -17,13 +17,16 @@ coexistence/rollback story, and the post-migration teardown.
 ## Why upgrade to v2
 
 v2 is **opt-in**. It is served at two versions: **`v2beta1`** (the graduated,
-ScaleSet-only storage/hub version) and **`v2alpha1`** (still served for coexistence).
+ScaleSet-only storage/hub version) and **`v2alpha1`** (served as this tool's on-ramp).
 `gag-migrate` lands v1 RunnerGroups on **`v2alpha1`** so a migrated set keeps its
 Classic protocol and multi-label matching during the deprecation window; a tenant then
 moves to `v2beta1` (a lossless, apiserver-side conversion) once it no longer needs
 Classic. v2 is **not a drop-in replacement** (new API group `actions-gateway.com`, one
 CR decomposed into several kinds, a tool-assisted fan-out). `v1alpha1` stays fully
-supported. Migrate a tenant when one of these is worth that trade-off.
+supported until it is [removed at `v2.0.0`](v1alpha1-deprecation.md), which also
+removes `v2alpha1` and Classic, so treat the `v2alpha1` landing spot as a way station
+and `v2beta1` as the destination. Migrate a tenant when one of these is worth that
+trade-off.
 
 **New capabilities — no v1 equivalent:**
 
@@ -231,9 +234,9 @@ kubectl -n team-a delete actionsgateways.actions-gateway.github.com --all
 ```
 
 The legacy `actions-gateway.github.com/*` namespace markers and finalizers are
-retired cluster-wide when `v1alpha1` is removed (see the
-[deprecation notice](v1alpha1-deprecation.md)); until then the dual-read window keeps
-both spellings working.
+retired cluster-wide when `v1alpha1` is removed at **`v2.0.0`** (see the
+[deprecation and removal notice](v1alpha1-deprecation.md)); until then the dual-read
+window keeps both spellings working.
 
 ## Troubleshooting
 

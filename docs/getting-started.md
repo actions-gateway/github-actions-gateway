@@ -10,14 +10,17 @@
     `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in
     [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below.
     `v2beta1` is the graduated, ScaleSet-only storage and hub version, v2's first
-    stability contract, and where new capabilities land. `v2alpha1` stays served
-    for coexistence and as the [`gag-migrate`](operations/migration-v1-to-v2.md)
-    on-ramp — it carries the deprecated `acquisitionProtocol` selector a migrating
-    v1 tenant needs, which a new tenant does not — and the apiserver converts
-    between the two. The older single-CR **`v1alpha1`** API is still fully served
-    but **[deprecated](operations/v1alpha1-deprecation.md)** — reach for it only if
-    you have a specific reason to, and see the
-    [legacy v1 path](#legacy-the-v1alpha1-api-deprecated). Already on v1?
+    stability contract, and where new capabilities land. `v2alpha1` stays served as
+    the [`gag-migrate`](operations/migration-v1-to-v2.md) on-ramp, carrying the
+    `acquisitionProtocol` selector a migrating v1 tenant needs and a new tenant does
+    not, and the apiserver converts between the two. The older single-CR
+    **`v1alpha1`** API is still fully served but
+    **[deprecated](operations/v1alpha1-deprecation.md)**: reach for it only if you
+    have a specific reason to, and see the
+    [legacy v1 path](#legacy-the-v1alpha1-api-deprecated). `v1alpha1`, `v2alpha1`,
+    and the classic acquisition protocol are all
+    [removed at `v2.0.0`](operations/v1alpha1-deprecation.md); `v2beta1` is not.
+    Already on v1?
     [`gag-migrate`](operations/migration-v1-to-v2.md) moves you across without
     changing how your jobs are acquired.
 
@@ -251,9 +254,9 @@ Tenants requiring more than 250 concurrent sessions should shard across multiple
 !!! warning "`v1alpha1` is deprecated — new tenants should use v2 above"
     The `actions-gateway.github.com/v1alpha1` single-CR API is still fully served
     and supported, but it is **[deprecated](operations/v1alpha1-deprecation.md)**
-    in favor of the decomposed v2 API. It will be removed on a schedule tied to the
-    v2 API reaching beta, announced as a named release with at least one release of
-    notice. Use it only if you have a specific reason not to adopt v2 yet; if you
+    in favor of the decomposed v2 API, and it is **removed at `v2.0.0`** (announced
+    with `v1.3.0`, one release ahead, per the project's removal policy). Use it only
+    if you have a specific reason not to adopt v2 yet; if you
     are already on v1, [`gag-migrate`](operations/migration-v1-to-v2.md) moves you
     to v2 without changing how your jobs are acquired.
 

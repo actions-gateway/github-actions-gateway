@@ -250,8 +250,9 @@ Helm release Secret stays under the 1 MiB limit. Install it alongside the main c
 unless you are running v1-only.
 
 Each v2 CRD is served at **two versions**: **`v2beta1`** (the served **and** storage
-version — the graduated, ScaleSet-only shape) and **`v2alpha1`** (still served for
-coexistence and the `gag-migrate` on-ramp). The apiserver converts between them
+version — the graduated, ScaleSet-only shape) and **`v2alpha1`** (served as the
+`gag-migrate` on-ramp, deprecated, and
+[removed at `v2.0.0`](v1alpha1-deprecation.md)). The apiserver converts between them
 through a **conversion webhook hosted by the GMC** (the `/convert` endpoint on the
 same `webhook-service` that fronts the validating webhooks). Two consequences for an
 operator:

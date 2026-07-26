@@ -10,7 +10,8 @@ This checklist walks from pre-conditions through first successful job. For the f
     at `actions-gateway.com/v2beta1` — see [v2 API](#v2-api-multiple-gateways-per-namespace)
     below and the [getting-started v2 walkthrough](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
     The single-CR `v1alpha1` flow in [Step 2](#step-2-create-the-actionsgateway-resource)
-    is still fully supported but **[deprecated](v1alpha1-deprecation.md)**; already on
+    is still fully supported but **[deprecated and removed at `v2.0.0`](v1alpha1-deprecation.md)**,
+    along with `v2alpha1` and the Classic protocol; already on
     v1? [`gag-migrate`](migration-v1-to-v2.md) moves you across.
 
 ---
@@ -588,7 +589,7 @@ Onboarding is complete when:
 
 ## v2 API: multiple gateways per namespace
 
-> **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2beta1`** — the graduated, ScaleSet-only storage and hub version, and the version every **new** tenant should use. It is served *beside* `v1alpha1`, so everything above (the deprecated `actions-gateway.github.com/v1alpha1` flow) keeps working while you adopt it. `v2alpha1` is also still served, but only as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants moving off v1 — it carries the deprecated [`acquisitionProtocol`](#acquisition-protocol-v2alpha1-only) selector, which a new tenant does not need. Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Deploy the GMC](../getting-started.md#1-deploy-the-gmc).
+> **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2beta1`** — the graduated, ScaleSet-only storage and hub version, and the version every **new** tenant should use. It is served *beside* `v1alpha1`, so everything above (the deprecated `actions-gateway.github.com/v1alpha1` flow) keeps working while you adopt it. `v2alpha1` is also still served, but only as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants moving off v1: it carries the deprecated [`acquisitionProtocol`](#acquisition-protocol-v2alpha1-only) selector, which a new tenant does not need. `v2alpha1` is itself deprecated and [removed at `v2.0.0`](v1alpha1-deprecation.md); `v2beta1` is not. Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Deploy the GMC](../getting-started.md#1-deploy-the-gmc).
 
 The biggest onboarding change in v2 is that a single namespace may hold **multiple `ActionsGateway`s**, lifting the v1 one-gateway-per-namespace rule ([Step 2](#step-2-create-the-actionsgateway-resource)). What that changes when onboarding a v2 tenant:
 
@@ -687,8 +688,8 @@ spec:
 ```
 
 - **A new tenant should never need this.** Author on `v2beta1` with one label per
-  set; `Classic` is deprecated and scheduled for removal one minor release out
-  (Q264).
+  set. `Classic` is deprecated and, together with `v2alpha1` and `v1alpha1`,
+  [removed at `v2.0.0`](v1alpha1-deprecation.md); `spec.maxListeners` goes with it.
 - **`gag-migrate` writes `acquisitionProtocol: Classic`** onto every set it emits,
   so a migrated tenant's multi-label groups keep working unchanged. Opting one into
   the scale-set protocol later means creating a fresh single-label set, not editing

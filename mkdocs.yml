@@ -156,7 +156,7 @@ nav:
       - Upgrade: operations/upgrade.md
       - "Migrate from ARC": operations/migration-from-arc.md
       - "Migrate v1 → v2": operations/migration-v1-to-v2.md
-      - "v1alpha1 deprecation": operations/v1alpha1-deprecation.md
+      - "Deprecations & the v2.0.0 removal": operations/v1alpha1-deprecation.md
       - Tenant onboarding: operations/tenant-onboarding.md
       - In-runner image builds: operations/in-runner-image-builds.md
       - "Kata DinD / image-build workloads": operations/kata-dind-workloads.md

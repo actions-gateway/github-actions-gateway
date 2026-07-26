@@ -410,5 +410,6 @@ there is no split-brain to untangle.
 - [Network architecture](../design/network-architecture.md) — egress proxy and
   NetworkPolicy detail, with isolation-validation probes.
 - [Troubleshooting](troubleshooting.md) — common first-day failures.
-- [`v1alpha1` deprecation notice](v1alpha1-deprecation.md) — only if you are
+- [Deprecation and removal notice](v1alpha1-deprecation.md), covering what `v2.0.0`
+  removes (`v1alpha1`, `v2alpha1`, Classic acquisition). Relevant only if you are
   *already* on GAG's v1 API; new migrations should not start there.
