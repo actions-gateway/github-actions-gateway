@@ -90,8 +90,28 @@ all: generate build test ## Generate, build, and test all modules
 # race gate with `make test-race` when a change touches concurrency. The slower
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
+#
+# The cheap gates below take no heavy-build slot and are independent of each
+# other, so they run concurrently (~50s serial -> ~15s) and report first: a
+# STATUS.md format slip should not wait out the unit suite to tell you. They go
+# through scripts/run-parallel.sh rather than `make -j` because macOS ships GNU
+# make 3.81, which has no `-O` output sync — `-j` would interleave two failing
+# gates' output unreadably, while run-parallel.sh labels every line with its
+# gate. The heavy phases (build-tags-check, lint, cover-check) stay sequential
+# after them: each takes a machine-wide slot of its own (serialize_heavy_build),
+# so overlapping them would just queue on the semaphore. build-tags-check runs
+# first of the three — a compile break should not wait out lint and the suite.
+CHECK_FAST_GATES := lint-backlog roadmap-check plan-index-check no-plan-refs-check \
+                    go-version-check license-header-check conflict-markers-check \
+                    v2-api-sync-check shellcheck chart-crds-check chart-rbac-check \
+                    chart-webhook-check scripts-test doc-links
+
 .PHONY: check
-check: lint lint-backlog roadmap-check plan-index-check no-plan-refs-check go-version-check license-header-check conflict-markers-check v2-api-sync-check build-tags-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+	scripts/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")
+	$(MAKE) build-tags-check
+	$(MAKE) lint
+	$(MAKE) cover-check
 	@# Advisory, not a gate: the fast check deliberately omits the dependency-drift
 	@# gates (vendor-check/tidy-check/license-notices run in CI). This reminds you to
 	@# run `make vendor-sync` when a change touches dep files. Never fails the build.
@@ -155,22 +175,19 @@ build-tags-check: ## Fail if a build-tagged (integration/e2e/load) Go file does 
 # coverage guard (a new tag must fail the gate, not silently skip files), and
 # that a pinned download never writes bytes it did not verify (Q433).
 # Lightweight pure-bash checks; part of `check` and the CI shellcheck job.
+#
+# The suites are independent and each isolates its own scratch state (mktemp -d,
+# or a $$-suffixed dir under tmp/), so they run concurrently — labeled output via
+# run-parallel.sh keeps a failure attributable to its suite.
+SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-test \
+                 lint-backlog-test check-dep-advisory-test claude-go-throttle-hook-test \
+                 dogfood/validate-release-test dogfood/pool-test go-lint-scope-test \
+                 check-roadmap-test check-conflict-markers-test check-v2-api-sync-test \
+                 dependabot-rebase-stale-test go-vet-tags-test local-throttle-test
+
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity)
-	scripts/verify-release-test.sh
-	scripts/download-verified-test.sh
-	scripts/validate-cluster-test.sh
-	scripts/lint-backlog-test.sh
-	scripts/check-dep-advisory-test.sh
-	scripts/claude-go-throttle-hook-test.sh
-	scripts/dogfood/validate-release-test.sh
-	scripts/dogfood/pool-test.sh
-	scripts/go-lint-scope-test.sh
-	scripts/check-roadmap-test.sh
-	scripts/check-conflict-markers-test.sh
-	scripts/check-v2-api-sync-test.sh
-	scripts/dependabot-rebase-stale-test.sh
-	scripts/go-vet-tags-test.sh
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing)
+	scripts/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in
