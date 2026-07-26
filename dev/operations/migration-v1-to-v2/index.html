@@ -2489,11 +2489,15 @@ create</strong>, not an automatic conversion — see the
 coexistence/rollback story, and the post-migration teardown.</p>
 <h2 id="why-upgrade-to-v2">Why upgrade to v2<a class="headerlink" href="#why-upgrade-to-v2" title="Permanent link">&para;</a></h2>
 <p>v2 is <strong>opt-in</strong>. It is served at two versions: <strong><code>v2beta1</code></strong> (the graduated,
-ScaleSet-only storage/hub version) and <strong><code>v2alpha1</code></strong> (served as this tool's on-ramp).
-<code>gag-migrate</code> lands v1 RunnerGroups on <strong><code>v2alpha1</code></strong> so a migrated set keeps its
-Classic protocol and multi-label matching during the deprecation window; a tenant then
-moves to <code>v2beta1</code> (a lossless, apiserver-side conversion) once it no longer needs
-Classic. v2 is <strong>not a drop-in replacement</strong> (new API group <code>actions-gateway.com</code>, one
+ScaleSet-only storage/hub version) and <strong><code>v2alpha1</code></strong> (deprecated, served as this
+tool's on-ramp). <code>gag-migrate</code> lands v1 RunnerGroups on <strong><code>v2alpha1</code></strong> so a migrated
+set keeps its Classic protocol and multi-label matching during the deprecation window;
+a tenant then moves to <code>v2beta1</code> (a lossless, apiserver-side conversion) once it no
+longer needs Classic. Because <code>v2alpha1</code> is deprecated, the apiserver warns on every
+<code>v2alpha1</code> read or write, including the objects <code>gag-migrate</code> applies. The warning is
+advisory and blocks nothing; it clears when the tenant moves to <code>v2beta1</code>. Detail:
+<a href="../upgrade/#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns">upgrade.md</a>.
+v2 is <strong>not a drop-in replacement</strong> (new API group <code>actions-gateway.com</code>, one
 CR decomposed into several kinds, a tool-assisted fan-out). <code>v1alpha1</code> stays fully
 supported until it is <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>, which also
 removes <code>v2alpha1</code> and Classic, so treat the <code>v2alpha1</code> landing spot as a way station
