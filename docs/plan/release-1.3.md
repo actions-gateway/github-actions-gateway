@@ -1,5 +1,14 @@
 # Release 1.3 Milestone Definition
 
+> **Status: every gating Queue row is closed (2026-07-26).** Q359, Q400, Q404,
+> Q411, Q412, and Q393 all landed, so no `1.3-gate` row remains in
+> [docs/STATUS.md](../STATUS.md). **The tag is not cut**: the Definition of Done
+> also requires the release-candidate dogfood validation in
+> [operations/release.md](../operations/release.md), which can only run against
+> the actual RC image and is not tracked as a Queue row. Residuals deliberately
+> deferred out of 1.3 are listed under
+> [Explicitly out of scope](#explicitly-out-of-scope).
+
 The scope and Definition of Done for the `v1.3.0` tag. Queue rows that block this
 tag carry the `1.3-gate` label in [docs/STATUS.md](../STATUS.md); this file is what
 that label points at, per the "scope the release in a plan doc first, then add the
@@ -114,11 +123,16 @@ re-routed onto `v2beta1`, leaving `v2alpha1` described only as the `gag-migrate`
 on-ramp. That settles which version new tenants onboard on, which was the open
 question this release's deprecation decision needed answered.
 
-### C. Release mechanics — *gating*
+### C. Release mechanics (*satisfied*)
 
-| Item | Why it gates |
-|---|---|
-| [Q393](../STATUS.md#Q393) | The docs-site announce bar still reads "v1.2.0 is here". `publish.yml`'s `announce-bar` job fails any stable tag whose banner does not name it, before any image is pushed. A miss costs a re-cut tag. |
+No open gating row: Q393 closed 2026-07-26.
+
+> The docs-site announce bar's version is now derived from the git tags at build
+> time rather than hand-edited per release, so `v1.3.0` names itself with no
+> pre-flight step and cannot ship the stale banner every prior stable tag did.
+> `publish.yml`'s `announce-bar` job still gates the release, but now by building
+> the site at the tag and asserting the *rendered* banner names it. Details:
+> [website.md § The announce bar](../development/website.md#the-announce-bar).
 
 ### D. Gate integrity (*satisfied*)
 
@@ -162,14 +176,21 @@ tooling rather than a correctness fix.
 
 ## Critical path & ordering
 
-Both gate-integrity items (Q400, Q404) closed 2026-07-26, and both halves of the
-deprecation notice (Q411, Q412) landed the same day. Neither half could stand alone:
-Q412 named `v2.0.0` where operators plan from the docs, and Q411 put the same release
-into the apiserver warning, so an operator who never reads the docs still gets told.
-What remains is the announce bar.
+**Nothing is left to order.** Every gating item closed 2026-07-26: both
+gate-integrity items (Q400, Q404), both halves of the deprecation notice (Q411,
+Q412), and the announce bar (Q393). Neither half of the notice could stand alone:
+Q412 named `v2.0.0` where operators plan from the docs, and Q411 put the same
+release into the apiserver warning, so an operator who never reads the docs still
+gets told.
 
-1. **[Q393](../STATUS.md#Q393) last**, immediately before tagging, so the banner names
-   the version actually being cut.
+The announce bar used to sit at the end of this list, to be landed "last,
+immediately before tagging" so it named the version being cut. Q393 made its
+version derive from the tag list at build time, so it no longer needs a place in
+the ordering at all.
+
+What remains before the tag is not a Queue item: the release-candidate dogfood
+validation in [§ A](#a-headline-feature-complete-satisfied), which can only be run
+against the actual RC image.
 
 ## Guardrails
 

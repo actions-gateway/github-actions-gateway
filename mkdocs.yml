@@ -95,6 +95,13 @@ extra:
       link: https://github.com/actions-gateway/github-actions-gateway/issues
       name: Questions & issues
 
+# The docs-site announce bar advertises the newest stable release. Deriving that
+# version from the git tags (Q393) keeps it out of overrides/main.html, where it
+# was a hand-edited release step every stable tag missed. See
+# docs/development/website.md § The announce bar.
+hooks:
+  - hooks/release_version.py
+
 plugins:
   - search
 

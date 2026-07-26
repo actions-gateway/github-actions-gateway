@@ -185,10 +185,10 @@ SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-tes
                  dogfood/validate-release-test dogfood/pool-test go-lint-scope-test \
                  check-roadmap-test check-conflict-markers-test check-v2-api-sync-test \
                  dependabot-rebase-stale-test go-vet-tags-test local-throttle-test \
-                 shellcheck-scripts-test
+                 shellcheck-scripts-test release-version-hook-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook)
 	scripts/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the

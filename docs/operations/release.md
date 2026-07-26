@@ -121,27 +121,35 @@ The maintainer's job is to cut the tag and verify the result.
   it to *Exploring*), and a Deferred row describing a capability an adopter would
   ask about belongs in *Exploring*. A 2026-07-25 audit found six of seven
   near-term items already shipped.
-- **Bump the docs-site announce bar to this release, and land it before you tag.**
-  The banner in [`overrides/main.html`](../../overrides/main.html) is the
-  "vX.Y.Z is here" strip at the top of every page on the site. A stable tag push
-  deploys that tag's docs wholesale, so whatever the banner says at tag time is
-  what the released version advertises, permanently. Every stable tag to date has
-  missed this: `v1.0.0` shipped saying *"Alpha, pre-1.0"*, and `v1.1.0` and
-  `v1.2.0` both said *"v1.0.0 is here"*. Verify with:
+- **Optional: refresh the docs-site announce bar's highlight.** The banner in
+  [`overrides/main.html`](../../overrides/main.html) is the "vX.Y.Z is here" strip
+  at the top of every page on the site. Its **version needs no action**: it is
+  derived from the git tags at build time, so a stable tag names itself
+  automatically ([website.md § The announce bar](../development/website.md#the-announce-bar)).
+  What you may want to update is the one-line highlight after it, and the
+  `highlight_for` version that guards it. Leave both alone and the banner reads
+  *"vX.Y.Z is here. Read the release notes."*, which is correct but plainer;
+  update them together and it leads with this release's headline. Land the change
+  before you tag either way.
+
+  This used to be a manual version bump, and every stable tag to date missed it:
+  `v1.0.0` shipped saying *"Alpha, pre-1.0"*, and `v1.1.0` and `v1.2.0` both said
+  *"v1.0.0 is here"*. Preview what the tag will render, standing in the version
+  you are about to cut (without it the local build resolves the *current* newest
+  tag, which is still the previous release):
 
   ```bash
-  awk '/block announce/,/endblock/' overrides/main.html
+  GAG_DOCS_RELEASE=vX.Y.Z make docs-build && awk '/md-banner/,/<\/aside>/' site/index.html
   ```
 
-  **`publish.yml` now enforces this** via its `announce-bar` job, which every
-  publishing job depends on. A stable tag whose banner does not name it fails the
-  release before any image is pushed, so a miss costs you a re-cut tag rather than
-  a wrong release. Prereleases are exempt: they publish no docs, and the banner
-  should name the GA version rather than churn through every RC.
+  **`publish.yml` enforces the result** via its `announce-bar` job, which every
+  publishing job depends on: it builds the site at the tag and fails the release
+  if the *rendered* banner does not name it, before any image is pushed.
+  Prereleases are exempt (they publish no docs), as is a backport tag cut after a
+  newer minor, since the banner advertises the newest release by design.
 
   (A `docs_ref` seed of an already-cut release pins `overrides/` to the current
-  checkout instead, so re-seeding repairs past tags. That safety net does **not**
-  apply to a fresh tag push. See
+  checkout, so re-seeding refreshes the highlight on past tags too. See
   [website.md § Seeding](../development/website.md#seeding-already-released-versions).)
 
 #### Validate the release candidate on dogfood
@@ -471,9 +479,10 @@ exercised on a real `v*` tag, which is why step 3 verification matters on every
 release.
 
 `publish.yml` also runs one **pre-publish gate**, `announce-bar`, that every
-publishing job depends on. It is deliberately cheap and runs first, so a stale
-docs-site banner (see [Pre-flight](#1-pre-flight)) stops the release before an
-image, chart, or GitHub Release exists, rather than after.
+publishing job depends on. It builds the docs site at the tag and asserts the
+rendered banner names it (see [Pre-flight](#1-pre-flight)), so a docs-site banner
+advertising the wrong version stops the release before an image, chart, or GitHub
+Release exists, rather than after.
 
 ## Supply-chain integrity of the pipeline itself
 

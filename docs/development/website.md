@@ -38,6 +38,55 @@ hardening — not yet done.**
 (The original build plan and decision log is `docs/plan/website.md`; this doc is
 the durable how-to-maintain reference.)
 
+## The announce bar
+
+The strip at the top of every page ("vX.Y.Z is here…") is the `announce` block in
+[`overrides/main.html`](../../overrides/main.html). Its **version is derived, not
+hand-written**: the MkDocs hook
+[`hooks/release_version.py`](../../hooks/release_version.py) resolves it at build
+time and exposes it to the template as `config.extra.release.version`.
+
+| Source | When it applies |
+|---|---|
+| `$GAG_DOCS_RELEASE` | Set explicitly. An escape hatch for builds with no git history (a source tarball) and for exercising the template by hand. |
+| Highest stable `vX.Y.Z` git tag | The normal path. "Stable" is the same test `publish.yml` and `pages.yml` share: a SemVer core of `0.x`, or any `-` suffix (`-rc`/`-alpha`/`-beta`), is a prerelease. |
+| Nothing resolvable | The banner drops the version claim and links to the releases page, rather than guessing. |
+
+It names the **newest** release, not the version being built, because the bar is
+site chrome: a visitor reading older docs wants to know what the current release
+is. That is also why `pages.yml` pins `overrides/` to the current checkout when
+seeding (see [§ Seeding](#seeding-already-released-versions)).
+
+The one hand-written part is the optional per-release **highlight** prose, and it
+is guarded by a `highlight_for` version in the same template. The highlight renders
+only while `highlight_for` names the resolved release, so forgetting to refresh it
+degrades the bar to a release-notes link instead of pairing a new version with the
+previous release's headline. Refreshing it is an optional pre-flight step in
+[release.md](../operations/release.md#1-pre-flight).
+
+Why this is derived at all: a stable tag deploys that tag's docs wholesale, so a
+banner that is wrong at tag time is published permanently under that version and no
+later fix to `main` reaches it. Every stable tag missed the manual bump: `v1.0.0`
+shipped saying *"Alpha, pre-1.0"*, and `v1.1.0` and `v1.2.0` both said *"v1.0.0 is
+here"* (Q393). `publish.yml`'s `announce-bar` gate now builds the site at the tag
+and asserts the **rendered** bar names it, so a broken hook or template fails the
+release before any image is pushed.
+
+Both workflows check out with `fetch-depth: 0` for this reason: a default depth-1
+checkout fetches no tags, and the bar would render the version-free fallback.
+Locally, `make docs-serve` and `make docs-build` resolve tags from your checkout, so
+run `git fetch --tags` if the bar looks stale. To see what the bar will name
+without building the site:
+
+```bash
+python3 hooks/release_version.py
+```
+
+The tag-selection rules (numeric ordering, prerelease exclusion, the
+`$GAG_DOCS_RELEASE` override, degrading to `""` outside a repository) are asserted
+by `scripts/release-version-hook-test.sh`, which `make check` runs via
+`make scripts-test`.
+
 ## Versioned deploy (mike)
 
 The published site is a **versioned tree** managed by
@@ -136,12 +185,15 @@ things are deliberately **not** taken from the tag:
 |---|---|
 | `requirements-docs.txt` | An old pin predates `mike` and version-selector support. |
 | `site_url` and `docs/CNAME` | Where the site lives is a property of the site, not of the release. `v1.0.0` predates the custom domain: it has no `docs/CNAME`, and its `site_url` still points at the retired `actions-gateway.github.io/github-actions-gateway/` subpath, which would give that version dead canonical URLs, sitemap, and announce-bar links. |
-| `overrides/` | Site chrome, not release documentation. The announce bar advertises the newest release site-wide, which is the signal a visitor reading older docs wants. Taking it from the tag pins each version to whatever the banner said the day it was cut, and the banner has lagged: `v1.1.0` and `v1.2.0` both shipped saying *"v1.0.0 is here"*. |
+| `overrides/` | Site chrome, not release documentation. The [announce bar](#the-announce-bar) advertises the newest release site-wide, which is the signal a visitor reading older docs wants. Taking it from the tag pins each version to the highlight prose written the day it was cut. |
 | `extra.version` | A pre-versioning tag has no version block, so its pages would render with no selector and strand a visitor on an old release. |
+| `hooks` | A tag cut before Q393 does not wire `hooks/release_version.py`, so its announce bar would render the version-free fallback instead of naming the newest release. |
 
 **That safety net covers seeds only.** A stable tag push has a blank `docs_ref` and
-builds the tag wholesale, `overrides/` included, so the announce bar must still be
-correct **in the tag**. Bumping it is a pre-flight step in
+builds the tag wholesale, `overrides/` included. That is safe for the announce
+bar's *version*, which the hook derives from the tag list at build time rather than
+from a string in the checkout; only the optional highlight prose is pinned to the
+tag. Refreshing it is an optional pre-flight step in
 [release.md](../operations/release.md#1-pre-flight).
 
 The `mkdocs.yml` overrides ride in an
