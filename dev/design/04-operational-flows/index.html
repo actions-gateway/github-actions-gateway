@@ -2625,6 +2625,19 @@
 <p><strong>What the tenant observes (pre-fix versions):</strong> runner list emptying after each job, <code>ActiveSessions</code> decaying, jobs queueing forever once ~<code>maxListeners</code> jobs have run. See <a href="../../operations/troubleshooting/#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero">Troubleshooting — Sessions stuck in 401/EOF GetMessage loops</a>.</p>
 <hr />
 <h3 id="worker-pod-eviction-and-auto-retry">Worker Pod Eviction and Auto-Retry<a class="headerlink" href="#worker-pod-eviction-and-auto-retry" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p><strong>Classic acquisition tier only, today.</strong> This flow is reached from exactly one
+call site: the classic <code>provision()</code> path, which blocks on the worker pod's
+terminal phase. <code>ProvisionScaleSetWorker</code> is fire-and-forget by design — the
+runner pulls and completes its own job through its own session, so the AGC never
+observes <code>PodFailed</code>/<code>Evicted</code> and never calls the rerun API. An evicted
+<strong><code>ScaleSet</code>-protocol</strong> worker therefore gets no automatic rerun and needs a
+manual one. That matters because <code>ScaleSet</code> is the default protocol (Q264 P5) and
+the only one <code>v2beta1</code> offers, so this recovery covers the <em>deprecated</em> tier only.
+<a href="../../STATUS/#Q417">Q417</a> ports it
+(<a href="../../plan/scaleset-eviction-recovery/">plan</a>); it gates the <code>v2.0.0</code> classic
+removal, which would otherwise delete the capability outright.</p>
+</blockquote>
 <pre class="mermaid"><code>sequenceDiagram
     participant A as AGC goroutine
     participant W as Worker Pod

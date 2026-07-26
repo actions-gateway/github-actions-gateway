@@ -2348,7 +2348,7 @@
 <div class="gag-vs-hero__proof">
 <p class="gag-vs-hero__proof-cap">When a worker is evicted or blocked by a full <code>ResourceQuota</code></p>
 <div class="gag-vs-row gag-vs-row--arc"><span class="gag-vs-row__tag">ARC</span><span class="gag-vs-row__text">the runner is marked <code>Failed</code> and the job sits in GitHub's queue until someone reruns it by hand</span></div>
-<div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">the job is cancelled when its lock lapses (~10 min at worst) and re-queued automatically: no manual rerun, and it runs as soon as capacity frees up</span></div>
+<div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">the job is cancelled when its lock lapses (~10 min at worst) and re-queued automatically: no manual rerun, and it runs as soon as capacity frees up <em>— eviction recovery runs on the classic acquisition tier today; the <a href="../roadmap/#in-progress--near-term">port to scale-set</a> is in progress</em></span></div>
 </div>
 </div>
 <h2 id="the-problem-arc-leaves-you-with">The problem ARC leaves you with<a class="headerlink" href="#the-problem-arc-leaves-you-with" title="Permanent link">&para;</a></h2>
@@ -2412,7 +2412,7 @@ letting tenants run their own runners.</p>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">Auto</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Handling for quota-blocked and evicted jobs</strong> — a job the quota has no room for is never claimed, so it stays queued for a sibling with capacity; anything that slips through is lock-cancelled and re-queued, no manual rerun</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Handling for quota-blocked and evicted jobs</strong> — a job the quota has no room for is never claimed, so it stays queued for a sibling with capacity; anything that slips through is lock-cancelled and re-queued, no manual rerun. Eviction recovery is <a href="../roadmap/#in-progress--near-term">classic-acquisition-tier only so far</a></span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">1</span>

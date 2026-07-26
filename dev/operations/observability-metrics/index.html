@@ -2572,13 +2572,13 @@
 <td><code>actions_gateway_eviction_retries_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code></td>
-<td>Jobs automatically re-queued after worker pod eviction.</td>
+<td>Jobs automatically re-queued after worker pod eviction. <strong>Classic acquisition only</strong> — see the note below the table.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code></td>
-<td>Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an <code>EvictionRetriesExhausted</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170).</td>
+<td>Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an <code>EvictionRetriesExhausted</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170). <strong>Classic acquisition only</strong>, as above.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_quota_retries_total</code></td>
@@ -2733,6 +2733,17 @@
 </tbody>
 </table>
 <blockquote>
+<p><strong>Eviction-retry metrics are classic-acquisition only.</strong> Both
+<code>eviction_retries_total</code> and <code>eviction_retries_exhausted_total</code> are emitted from the
+classic provisioning path, which blocks on the worker pod's terminal phase. A
+<code>RunnerSet</code> with <code>spec.acquisitionProtocol: ScaleSet</code> — the default since Q264 P5,
+and the only protocol <code>v2beta1</code> offers — provisions its worker fire-and-forget, so
+the AGC never observes the eviction, never issues a rerun, and <strong>never increments
+either counter</strong>. On that tier an evicted worker's job fails and needs a manual
+rerun; <code>maxEvictionRetries</code> and <code>evictionRetryDelay</code> are inert. A flat zero here is
+therefore not evidence that no worker was evicted — check
+<code>kubectl get pods --field-selector=status.phase=Failed</code> for <code>Evicted</code> pods instead.
+Porting the recovery is tracked as Q417.</p>
 <p><strong>Proxy conditions on a v2 deploy.</strong> On a v2 install (the opt-in
 <code>actions-gateway-crds-v2</code> CRDs), the GMC also counts v2 <code>ActionsGateway</code>s in
 <code>managed_gateways</code> and reflects each <code>EgressProxy</code>'s proxy conditions in

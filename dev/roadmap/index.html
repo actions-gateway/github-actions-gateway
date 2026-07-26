@@ -2338,7 +2338,9 @@ tagged chart. Check the release notes for the exact image digests to pin.</p>
 <li><strong>Automatic recovery for blocked and evicted jobs.</strong> A quota-blocked job is
   never claimed, so it stays queued for a sibling with capacity; an evicted job
   is cancelled at GitHub when its lock lapses (~10 min at worst) and re-queued,
-  with a per-job retry budget. No manual rerun either way.</li>
+  with a per-job retry budget. No manual rerun either way. The eviction half
+  ships on the <strong>classic acquisition tier</strong> only so far — see <em>Eviction recovery
+  on the scale-set tier</em> under <a href="#in-progress--near-term">In progress</a>.</li>
 <li><strong>Priority tiers per runner group.</strong> Reserve a guaranteed floor of slots for
   expensive runner types so cheap CPU jobs can't starve critical GPU work.</li>
 <li><strong>Worker scale-up rate limiting (opt-in).</strong> An optional per-runner-group token
@@ -2427,6 +2429,13 @@ last gaps an outside operator hits.</p>
   validated, not on a date. The deprecation window opened at v1.1.0, and
   <code>gag-migrate</code> already moves a tenant across without changing how jobs are acquired.
   Detail: the <a href="../operations/v1alpha1-deprecation/">deprecation and removal notice</a>.</li>
+<li><strong>Eviction recovery on the scale-set tier.</strong> <!-- q:Q417 --> Automatic re-queue of an
+  evicted worker's job runs on the classic acquisition path, which blocks on the
+  worker pod's terminal phase. A scale-set worker is provisioned fire-and-forget —
+  the runner pulls its own job — so no eviction is observed and no rerun fires;
+  an evicted job there still needs a manual rerun. Since scale-set is the default
+  protocol and the only one the <code>v2beta1</code> API offers, this port is what carries
+  the capability past the classic removal in <code>v2.0.0</code>.</li>
 <li><strong>Capacity-aware job intake.</strong> <!-- q:Q405,Q406 --> Additional opt-in rungs on the pre-claim gate,
   so a job is not claimed when the cluster demonstrably cannot place its worker:
   one sourced from the scheduler's <code>Unschedulable</code> verdict (for fixed-size and
