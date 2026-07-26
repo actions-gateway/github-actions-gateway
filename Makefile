@@ -151,12 +151,14 @@ build-tags-check: ## Fail if a build-tagged (integration/e2e/load) Go file does 
 # validate-cluster preflight decision helpers (CNI classification + K8s version
 # parsing, Q184), the dogfood gate's e2e run resolution (an in-flight run must
 # not abort the gate after the billable scale-up), the go-lint change-scoping
-# decision (which modules a diff makes golangci-lint cover), and the build-tag
-# coverage guard (a new tag must fail the gate, not silently skip files).
+# decision (which modules a diff makes golangci-lint cover), the build-tag
+# coverage guard (a new tag must fail the gate, not silently skip files), and
+# that a pinned download never writes bytes it did not verify (Q433).
 # Lightweight pure-bash checks; part of `check` and the CI shellcheck job.
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity)
 	scripts/verify-release-test.sh
+	scripts/download-verified-test.sh
 	scripts/validate-cluster-test.sh
 	scripts/lint-backlog-test.sh
 	scripts/check-dep-advisory-test.sh

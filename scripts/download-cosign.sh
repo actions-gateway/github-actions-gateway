@@ -46,16 +46,6 @@ expected_sha256() {
 	esac
 }
 
-# Portable SHA256: coreutils sha256sum on Linux/CI, shasum -a 256 on macOS.
-sha256_of() {
-	local f="$1"
-	if command -v sha256sum > /dev/null 2>&1; then
-		sha256sum "$f" | awk '{print $1}'
-	else
-		shasum -a 256 "$f" | awk '{print $1}'
-	fi
-}
-
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch="$(uname -m)"
 case "$arch" in
@@ -74,23 +64,11 @@ fi
 url="https://github.com/sigstore/cosign/releases/download/$version/cosign-$platform"
 echo "downloading cosign $version ($platform)"
 
-# Download to a temp file and verify before moving into place, so a failed
+# download-verified.sh owns the retry-and-verify half: it retries a transient
+# releases-CDN denial (including a 403, which curl's plain --retry does not
+# cover — Q433), and only writes $out once the bytes match $want, so a failed
 # integrity check never leaves an unverified binary at the output path.
-tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
-curl -fsSL --retry 3 --retry-delay 2 -o "$tmp" "$url"
+"$(dirname "$0")/download-verified.sh" "$url" "$want" "$out"
 
-got="$(sha256_of "$tmp")"
-if [[ "$got" != "$want" ]]; then
-	echo "cosign $version ($platform) SHA256 mismatch:" >&2
-	echo "  expected $want" >&2
-	echo "  got      $got" >&2
-	echo "refusing to install an unverified cosign binary" >&2
-	exit 1
-fi
-
-mkdir -p "$(dirname "$out")"
-mv "$tmp" "$out"
-trap - EXIT
 chmod +x "$out"
 echo "verified cosign $version ($platform) against pinned SHA256"

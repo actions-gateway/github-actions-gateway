@@ -262,9 +262,9 @@ jobs:
           # tag v10.2.0 -> polaris_10.2.0_linux_amd64.tar.gz. Strip the "v" to
           # build the asset filename from the tag.
           asset="polaris_${POLARIS_VERSION#v}_linux_amd64.tar.gz"
-          curl -sSLf --retry 3 --retry-delay 2 -o "${RUNNER_TEMP}/polaris.tar.gz" \
-            "https://github.com/FairwindsOps/polaris/releases/download/${POLARIS_VERSION}/${asset}"
-          echo "${POLARIS_SHA256}  ${RUNNER_TEMP}/polaris.tar.gz" | sha256sum -c -
+          scripts/download-verified.sh \
+            "https://github.com/FairwindsOps/polaris/releases/download/${POLARIS_VERSION}/${asset}" \
+            "${POLARIS_SHA256}" "${RUNNER_TEMP}/polaris.tar.gz"
           tar -xzf "${RUNNER_TEMP}/polaris.tar.gz" -C "${RUNNER_TEMP}" polaris
           sudo install "${RUNNER_TEMP}/polaris" /usr/local/bin/polaris
           polaris version
