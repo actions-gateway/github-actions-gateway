@@ -103,11 +103,11 @@ all: generate build test ## Generate, build, and test all modules
 # first of the three — a compile break should not wait out lint and the suite.
 CHECK_FAST_GATES := lint-backlog roadmap-check plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
-                    v2-api-sync-check shellcheck chart-crds-check chart-rbac-check \
-                    chart-webhook-check scripts-test doc-links
+                    v2-api-sync-check path-filters-check shellcheck chart-crds-check \
+                    chart-rbac-check chart-webhook-check scripts-test doc-links
 
 .PHONY: check
-check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
 	scripts/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")
 	$(MAKE) build-tags-check
 	$(MAKE) lint
@@ -166,6 +166,17 @@ v2-api-sync-check: ## Fail if a shared api/v2alpha1 + api/v2beta1 file diverges 
 build-tags-check: ## Fail if a build-tagged (integration/e2e/load) Go file does not compile or vet clean
 	scripts/go-vet-tags.sh
 
+# Reconcile CI's hand-maintained `dorny/paths-filter` lists with `go.work` and
+# with the paths they name (Q429). A filter that omits a directory makes its gate
+# report green by SKIPPING rather than passing, which is how api- and
+# scaleset-only changes reached main without meeting the envtest, e2e, or security
+# tiers (Q400). Fails if a workspace module is missing from a filter that gates
+# whole-workspace work, if a filter is not classified as workspace-covering or
+# narrow-by-design, or if a pattern points at a path that no longer exists.
+.PHONY: path-filters-check
+path-filters-check: ## Fail if a CI path filter misses a go.work module or names a path that no longer exists
+	scripts/check-path-filters.sh
+
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — the tags-only release signing-identity regexp (Q124), the
 # validate-cluster preflight decision helpers (CNI classification + K8s version
@@ -175,9 +186,11 @@ build-tags-check: ## Fail if a build-tagged (integration/e2e/load) Go file does 
 # coverage guard (a new tag must fail the gate, not silently skip files), that a
 # pinned download never writes bytes it did not verify (Q433), the shellcheck
 # gate's own file selection (an untracked-but-present script must be linted,
-# Q432), and the dogfood worker-drain gate (an unreadable cluster must never read
-# as idle and let a teardown strand worker nodes, Q434). Lightweight pure-bash
-# checks; part of `check` and the CI shellcheck job.
+# Q432), the dogfood worker-drain gate (an unreadable cluster must never read
+# as idle and let a teardown strand worker nodes, Q434), and the CI path-filter
+# gate (a workspace module missing from a filter must fail, since the gate it
+# would skip reports green either way, Q429). Lightweight pure-bash checks; part
+# of `check` and the CI shellcheck job.
 #
 # The suites are independent and each isolates its own scratch state (mktemp -d,
 # or a $$-suffixed dir under tmp/), so they run concurrently — labeled output via
@@ -188,10 +201,10 @@ SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-tes
                  go-lint-scope-test \
                  check-roadmap-test check-conflict-markers-test check-v2-api-sync-test \
                  dependabot-rebase-stale-test go-vet-tags-test local-throttle-test \
-                 shellcheck-scripts-test release-version-hook-test
+                 shellcheck-scripts-test release-version-hook-test check-path-filters-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, CI path-filter coverage)
 	scripts/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the

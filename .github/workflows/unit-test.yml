@@ -50,6 +50,7 @@ jobs:
       scripts: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.scripts || 'true' }}
       vendor: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.vendor || 'true' }}
       modules: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.modules || 'true' }}
+      workflows: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.workflows || 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
@@ -126,6 +127,15 @@ jobs:
               - 'scripts/go-work-tidy.sh'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
+            # Path-filter coherence gate scope (Q429): the filter lists this gate
+            # reads, plus the module list it reads them against. Deliberately the
+            # only filter that watches ALL of .github/workflows/ — editing any
+            # workflow's `filters:` block must re-run the gate that lints it.
+            workflows:
+              - '.github/workflows/**'
+              - 'go.work'
+              - 'scripts/check-path-filters.sh'
+              - 'Makefile'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
       # after `Invoking listFiles` with no error anywhere (Q363). Say it plainly.
@@ -316,6 +326,28 @@ jobs:
       - name: coverage ratchet (make cover-check)
         run: make cover-check
 
+  # Reconcile every workflow's `dorny/paths-filter` lists with `go.work` and with
+  # the paths they name (Q429). The filters are hand-maintained, and a filter that
+  # omits a directory makes its gate report green by SKIPPING — which is how an
+  # api-only and a scaleset-only change reached main without ever meeting the
+  # envtest, e2e, or security tiers (Q400). Its own job rather than a step in
+  # `lint`, because the trigger set is different: a workflow-only change must
+  # re-run this and nothing else. Parses YAML and stats paths, so it needs no Go
+  # build and finishes in seconds.
+  path-filters:
+    needs: [changes]
+    if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # `go work edit -json` reads the module list; no build, no module download.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: path filters cover go.work (make path-filters-check)
+        run: make path-filters-check
+
   # Aggregate required-status gate. Mark THIS job's check context
   # (`unit-test-gate`) required in the branch ruleset — never the individual
   # path-gated jobs above, because a path-skip leaves them Pending and blocks the
@@ -323,7 +355,7 @@ jobs:
   # and passes only when every needed job succeeded or was legitimately skipped.
   # See docs/plan/required-status-checks.md.
   unit-test-gate:
-    needs: [changes, lint, shellcheck, vendor-check, tidy-check, unit-test, coverage]
+    needs: [changes, lint, shellcheck, vendor-check, tidy-check, unit-test, coverage, path-filters]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
