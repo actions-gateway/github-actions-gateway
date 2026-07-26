@@ -21,6 +21,30 @@ Git-derived series are **recomputed from scratch** each run — git history is
 durable, and counts like test totals or lines of Go can legitimately go down
 (code gets deleted), so taking a max would be wrong for them.
 
+### Multiple machines
+
+Transcripts are local, so a machine only ever sees its own sessions. Every
+token/message row therefore carries the `host` that measured it, and a day's
+total is the **sum across machines**. The upward-only merge applies *within* a
+machine — it guards the archived-session case above — and never across them: a
+max across machines would silently keep only the busier one's share of a day
+worked on both.
+
+Each machine names itself once, in a local-only file. Hostnames aren't used:
+they're neither stable over a machine's life nor distinct between two similar
+laptops, and ids land in the committed CSVs.
+
+```bash
+mkdir -p ~/.config/claude-usage && echo mac-2 > ~/.config/claude-usage/host
+```
+
+`$CLAUDE_METRICS_HOST` overrides the file. There is no fallback — an
+unconfigured machine aborts rather than invent an id. For the same reason ids
+are **write-once**: renaming a machine makes it re-measure its whole history
+under the new id, on top of the rows still filed under the old one, and the two
+copies are summed. The machine that produced every row predating the `host`
+column is `mac-1`.
+
 ### Backfilled (estimated) days
 
 The project's first commits (2026-05-16 to -18) predate the earliest surviving
@@ -37,10 +61,13 @@ deterministically each run; measured rows are never overwritten by estimates.
 ## Quick start
 
 ```bash
-# 1. Snapshot the latest data (stdlib only — no venv needed):
+# 1. Once per machine — name it (see "Multiple machines" above):
+mkdir -p ~/.config/claude-usage && echo mac-2 > ~/.config/claude-usage/host
+
+# 2. Snapshot the latest data (stdlib only — no venv needed):
 python3 claude-usage/compute_metrics.py
 
-# 2. Render the charts (needs matplotlib + numpy):
+# 3. Render the charts (needs matplotlib + numpy):
 python3 -m venv .venv && .venv/bin/pip install -r claude-usage/requirements.txt
 .venv/bin/python claude-usage/make_charts.py
 ```
@@ -49,6 +76,12 @@ python3 -m venv .venv && .venv/bin/pip install -r claude-usage/requirements.txt
 project. Override the lookup with `CLAUDE_PROJECTS_GLOB` if your transcripts live
 elsewhere. `make_charts.py` reads **only** the committed CSVs, so the charts
 reproduce identically on any machine, even with no transcripts present.
+
+The merge semantics are covered by [`test_compute_metrics.py`](test_compute_metrics.py):
+
+```bash
+python3 -m unittest discover -s claude-usage
+```
 
 ## Results
 
@@ -144,6 +177,7 @@ All under [`data/`](data/).
 | column | meaning |
 |---|---|
 | `date` | UTC date of the message timestamp |
+| `host` | machine that measured the row (`-` for estimated); sum a date's rows for the day's total |
 | `input` / `output` | non-cached input and output tokens |
 | `cache_creation` / `cache_read` | cache write and cache read tokens |
 | `assistant_msgs` | assistant API responses (deduped on `message.id`+`requestId`) |
@@ -151,9 +185,10 @@ All under [`data/`](data/).
 | `estimated` | `1` for backfilled (archived) days, `0` for measured |
 
 ### `model_daily.csv` — merge-preserved
-Per-day, per-model `headline` (input+output+cache_creation), `output`,
-`messages`, and an `estimated` flag. Backfilled archived days are attributed to
-the Pro-era model (Sonnet 4.6). Drives the token-usage-by-model chart.
+Per-day, per-model, per-`host` `headline` (input+output+cache_creation),
+`output`, `messages`, and an `estimated` flag. Backfilled archived days are
+attributed to the Pro-era model (Sonnet 4.6). Drives the token-usage-by-model
+chart, which sums each (day, model) across machines.
 
 ### `git_metrics.csv` — recomputed each run
 Per-day (last commit of each day) cumulative `commits`, `tests` (count of
@@ -166,14 +201,20 @@ All exclude `vendor/`.
 ### `summary.json`
 Totals split into `measured` / `estimated` / `combined` (summed from the
 persisted rows, so archival-safe), an `estimation` block documenting the
-per-commit method, per-model split, an accurate HEAD working-tree snapshot, and
-full provenance.
+per-commit method, per-model and per-machine (`by_host`) splits, an accurate HEAD
+working-tree snapshot, and full provenance — including which machine took the
+snapshot and which machines are on record.
 
 ## Methodology & caveats
 
 - **Dedup.** Resumed/compacted sessions replay earlier records verbatim. Token
   usage is deduped on `(message.id, requestId)`; without it cache-read totals
   roughly double. Message counts dedup on record `uuid`.
+- **A day is only as complete as the machines that have reported it.** Rows are
+  per `(date, machine)` and summed, so a day worked on two machines is only
+  whole once both have run the script and their rows are committed. Until then
+  the day reads low rather than wrong — nothing is lost, and a later run from
+  the missing machine fills it in.
 - **Archived early days are estimated, not measured.** The project's first
   commits (2026-05-16 to -18) predate the earliest surviving transcript
   (2026-05-19), so their token usage is gone from the logs. Those days are

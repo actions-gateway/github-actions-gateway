@@ -12,13 +12,23 @@ erase data already recorded. Git-derived series (commits / tests / lines of Go)
 are recomputed from scratch each run, because git history is durable and those
 counts represent the state at a date (which can legitimately go down).
 
+Transcripts are per-machine, so every token/message row carries the ``host`` that
+measured it. A machine only ever sees its own sessions: the upward-only merge
+applies *within* a machine, and a day's true total is the SUM across machines.
+Each machine must declare a stable id (see ``resolve_host``) — without one the
+run aborts rather than guess, because an id that drifts between runs re-counts
+every day whose transcripts that machine can still read.
+
 Run from anywhere:
 
     python3 claude-usage/compute_metrics.py
 
 Environment:
-    CLAUDE_PROJECTS_GLOB  Override the transcript glob. Default:
-                          ~/.claude/projects/*github-actions-gateway*
+    CLAUDE_PROJECTS_GLOB    Override the transcript glob. Default:
+                            ~/.claude/projects/*github-actions-gateway*
+    CLAUDE_METRICS_HOST     This machine's id. Default: first line of HOST_FILE.
+    CLAUDE_METRICS_HOST_FILE  Override where that id is stored. Default:
+                            ~/.config/claude-usage/host
 
 Outputs (all under claude-usage/data/):
     token_metrics.csv   daily input/output/cache tokens + message counts (merge-preserved)
@@ -45,6 +55,21 @@ REPO = subprocess.run(
 DEFAULT_GLOB = os.path.join(os.path.expanduser("~/.claude/projects"), "*github-actions-gateway*")
 PROJECTS_GLOB = os.environ.get("CLAUDE_PROJECTS_GLOB", DEFAULT_GLOB)
 
+# Where this machine's id lives when it isn't passed in the environment. Local
+# only — never committed, and deliberately not derived from the hostname, which
+# is neither stable across a machine's life nor distinct between two similar
+# laptops.
+HOST_FILE = os.path.expanduser(
+    os.environ.get("CLAUDE_METRICS_HOST_FILE", "~/.config/claude-usage/host"))
+
+# Machine id for rows written before the host column existed — all of which came
+# from one machine. That machine's config must name it, so its next run merges
+# into those rows instead of adding a second, duplicate set.
+LEGACY_HOST = "mac-1"
+
+# Host column for backfilled rows: estimated from git history, measured nowhere.
+EST_HOST = "-"
+
 # Date the plan upgraded Pro -> Max. Used both as a chart annotation and to bound
 # the "Pro-era" window from which the archived-day backfill rate is derived.
 PRO_TO_MAX = "2026-05-23"
@@ -69,6 +94,42 @@ SCRIPT_PATHS = [
 ]
 
 
+def resolve_host():
+    """This machine's id, from ``$CLAUDE_METRICS_HOST`` or ``HOST_FILE``.
+
+    Aborts when neither is set instead of falling back to a guess. Rows are keyed
+    by ``(date, host)`` and summed across hosts, so a machine that silently
+    adopted a *fresh* id would re-measure every day it still holds transcripts
+    for and have those totals added to the originals — a doubling that looks
+    like real growth. Refusing to run is the cheap failure.
+    """
+    host = (os.environ.get("CLAUDE_METRICS_HOST") or "").strip()
+    source = "$CLAUDE_METRICS_HOST"
+    if not host:
+        source = HOST_FILE
+        try:
+            with open(HOST_FILE) as fh:
+                host = fh.readline().strip()
+        except OSError:
+            host = ""
+    if not host:
+        raise SystemExit(
+            "No machine id configured — refusing to guess (see resolve_host).\n"
+            "\nName this machine once. Any short stable label works; ids land in the\n"
+            "committed CSVs, so prefer 'mac-2' over a real hostname:\n"
+            f"\n    mkdir -p {os.path.dirname(HOST_FILE)} && echo mac-2 > {HOST_FILE}\n"
+            "\nUse the SAME id on every run from this machine. The machine that produced\n"
+            f"the pre-existing rows must be named {LEGACY_HOST!r}, or its next run will\n"
+            "add a duplicate copy of that history."
+        )
+    if host == EST_HOST or any(c.isspace() for c in host) or set(host) & set(",\"'"):
+        raise SystemExit(
+            f"Invalid machine id {host!r} from {source}: no whitespace, commas or "
+            f"quotes, and {EST_HOST!r} is reserved for estimated rows."
+        )
+    return host
+
+
 def model_family(m):
     """Map a raw model id to a stable display family."""
     if not m:
@@ -86,8 +147,13 @@ def model_family(m):
     return "Other"
 
 
-def aggregate_logs():
-    """Aggregate per-day token + message metrics from the session transcripts."""
+def aggregate_logs(host):
+    """Aggregate per-day token + message metrics from this machine's transcripts.
+
+    Rows are keyed by ``(date, host)`` (and ``(date, model, host)``): the glob
+    only ever reaches the local machine's sessions, so what this returns is one
+    machine's share of each day, not the day's total.
+    """
     files = []
     for d in glob.glob(PROJECTS_GLOB):
         files += glob.glob(os.path.join(d, "*.jsonl"))
@@ -163,8 +229,9 @@ def aggregate_logs():
     token_rows = {}
     for dk in set(tok) | set(user_msgs):
         fields = tok.get(dk, {})
-        token_rows[dk] = {
+        token_rows[(dk, host)] = {
             "date": dk,
+            "host": host,
             "input": fields.get("input", 0),
             "output": fields.get("output", 0),
             "cache_creation": fields.get("cache_creation", 0),
@@ -173,8 +240,8 @@ def aggregate_logs():
             "user_msgs": user_msgs.get(dk, 0),
         }
     model_rows = {
-        (dk, fam): {
-            "date": dk, "model": fam,
+        (dk, fam, host): {
+            "date": dk, "model": fam, "host": host,
             "headline": v["headline"], "output": v["output"], "messages": v["messages"],
         }
         for (dk, fam), v in model.items()
@@ -333,12 +400,20 @@ def head_snapshot():
     }
 
 
-def load_csv(path, key_cols):
+def load_csv(path, key_cols, defaults=None):
+    """Read a CSV into ``{key tuple: row}``.
+
+    ``defaults`` fills key columns a file predates: rows written before ``host``
+    existed carry no machine, and all came from ``LEGACY_HOST``.
+    """
     rows = {}
     if not os.path.exists(path):
         return rows
     with open(path) as fh:
         for r in csv.DictReader(fh):
+            for c, v in (defaults or {}).items():
+                if not r.get(c):
+                    r[c] = v
             rows[tuple(r[c] for c in key_cols)] = r
     return rows
 
@@ -355,10 +430,10 @@ def is_estimated(row):
     return str(row.get("estimated", "0")) in ("1", "true", "True")
 
 
-def load_measured(path, key_cols, num_cols):
+def load_measured(path, key_cols, num_cols, defaults=None):
     """Load existing rows, keeping only the *measured* ones (drops old estimates)."""
     merged = {}
-    for k, r in load_csv(path, key_cols).items():
+    for k, r in load_csv(path, key_cols, defaults).items():
         if is_estimated(r):
             continue
         merged[k] = {c: int(float(r.get(c) or 0)) for c in num_cols}
@@ -372,6 +447,13 @@ def merge_max_into(merged, new_rows, key_cols, num_cols):
 
     Preserves keys present in ``merged`` but absent from ``new_rows`` (dates whose
     source sessions were archived), and only ever revises a value upward.
+
+    Keys carry the machine id, so the MAX is *within* one machine — it guards a
+    re-run after that machine's sessions were archived, which must never revise a
+    value downward. Two machines hold disjoint sessions and land on different
+    keys, so their shares of the same day stay as separate rows and are summed by
+    consumers (``sum_by_date``); taking a MAX across machines would silently keep
+    only the busier one.
     """
     for k, r in new_rows.items():
         kk = k if isinstance(k, tuple) else (k,)
@@ -383,6 +465,15 @@ def merge_max_into(merged, new_rows, key_cols, num_cols):
             for kc, kv in zip(key_cols, kk):
                 merged[kk][kc] = kv
     return merged
+
+
+def sum_by_date(rows, num_cols):
+    """Collapse per-machine rows into one total per date."""
+    daily = defaultdict(lambda: defaultdict(int))
+    for r in rows:
+        for c in num_cols:
+            daily[r["date"]][c] += int(r[c])
+    return daily
 
 
 def commit_deltas(git_rows):
@@ -398,7 +489,8 @@ def commit_deltas(git_rows):
 
 def main():
     os.makedirs(DATA, exist_ok=True)
-    token_rows, model_rows, n_files = aggregate_logs()
+    host = resolve_host()
+    token_rows, model_rows, n_files = aggregate_logs(host)
 
     token_csv = os.path.join(DATA, "token_metrics.csv")
     model_csv = os.path.join(DATA, "model_daily.csv")
@@ -411,38 +503,40 @@ def main():
 
     # --- tokens: preserve measured days, then backfill archived days as estimated ---
     tnum = ["input", "output", "cache_creation", "cache_read", "assistant_msgs", "user_msgs"]
-    measured = load_measured(token_csv, ["date"], tnum)
-    merge_max_into(measured, token_rows, ["date"], tnum)
-    measured = {k[0]: v for k, v in measured.items()}  # tuple key -> date string
-    measured_dates = sorted(measured)
+    tkey = ["date", "host"]
+    measured = load_measured(token_csv, tkey, tnum, {"host": LEGACY_HOST})
+    merge_max_into(measured, token_rows, tkey, tnum)
+    daily = sum_by_date(measured.values(), tnum)  # per-machine rows -> day totals
+    measured_dates = sorted(daily)
 
     # Per-commit rate from the Pro-era window (measured days before the Max upgrade)
     # — the archived days were that same Pro/Sonnet era, so the rate transfers.
     window = [d for d in measured_dates if d < PRO_TO_MAX] or measured_dates[:4]
     win_commits = sum(deltas.get(d, 0) for d in window) or 1
-    rates = {c: sum(measured[d][c] for d in window) / win_commits for c in tnum}
+    rates = {c: sum(daily[d][c] for d in window) / win_commits for c in tnum}
 
     # Archived = project days (from durable git history) before the first measured day.
     first_measured = measured_dates[0] if measured_dates else None
     archived = [d for d in sorted(git_rows) if first_measured and d < first_measured]
     est_rows = []
     for d in archived:
-        row = {"date": d, "estimated": 1}
+        row = {"date": d, "host": EST_HOST, "estimated": 1}
         for c in tnum:
             row[c] = int(round(rates[c] * deltas.get(d, 0)))
         est_rows.append(row)
 
-    out_rows = est_rows + [{**measured[d], "estimated": 0} for d in measured_dates]
-    out_rows.sort(key=lambda r: r["date"])
-    write_csv(token_csv, ["date"] + tnum + ["estimated"], out_rows)
+    out_rows = est_rows + [{**measured[k], "estimated": 0} for k in sorted(measured)]
+    out_rows.sort(key=lambda r: (r["date"], r["host"]))
+    write_csv(token_csv, tkey + tnum + ["estimated"], out_rows)
 
     # --- model_daily: preserve measured, backfill archived as Pro-era Sonnet 4.6 ---
     mnum = ["headline", "output", "messages"]
-    m_measured = load_measured(model_csv, ["date", "model"], mnum)
-    merge_max_into(m_measured, model_rows, ["date", "model"], mnum)
+    mkey = ["date", "model", "host"]
+    m_measured = load_measured(model_csv, mkey, mnum, {"host": LEGACY_HOST})
+    merge_max_into(m_measured, model_rows, mkey, mnum)
     head_rate = rates["input"] + rates["output"] + rates["cache_creation"]
     est_model = [
-        {"date": d, "model": "Sonnet 4.6",
+        {"date": d, "model": "Sonnet 4.6", "host": EST_HOST,
          "headline": int(round(head_rate * deltas.get(d, 0))),
          "output": int(round(rates["output"] * deltas.get(d, 0))),
          "messages": int(round(rates["assistant_msgs"] * deltas.get(d, 0))),
@@ -450,8 +544,8 @@ def main():
         for d in archived
     ]
     m_out = est_model + [{**m_measured[k], "estimated": 0} for k in sorted(m_measured)]
-    m_out.sort(key=lambda r: (r["date"], r["model"]))
-    write_csv(model_csv, ["date", "model"] + mnum + ["estimated"], m_out)
+    m_out.sort(key=lambda r: (r["date"], r["model"], r["host"]))
+    write_csv(model_csv, mkey + mnum + ["estimated"], m_out)
 
     # --- totals: measured vs estimated, summed from the persisted rows ---
     def total(rows, cols):
@@ -464,6 +558,11 @@ def main():
     def headline(t):
         return t["input"] + t["output"] + t["cache_creation"]
 
+    host_tot = defaultdict(lambda: defaultdict(int))
+    for r in out_rows:
+        for c in tnum:
+            host_tot[r["host"]][c] += int(r[c])
+
     model_tot = defaultdict(lambda: defaultdict(int))
     for r in m_out:
         model_tot[r["model"]]["headline"] += int(r["headline"])
@@ -475,6 +574,11 @@ def main():
             "snapshot_date": datetime.now().date().isoformat(),
             "projects_glob": PROJECTS_GLOB,
             "transcript_files_read": n_files,
+            "snapshot_host": host,
+            "hosts": sorted({r["host"] for r in out_rows if r["host"] != EST_HOST}),
+            "host_basis": ("token/message rows are per (date, machine); a day's total is "
+                           "the sum across machines, and the upward-only merge applies "
+                           "within a machine"),
             "token_date_basis": "UTC date of message timestamp",
             "git_date_basis": "author date (local), --date=short",
             "token_dedup": "(message.id, requestId)",
@@ -509,13 +613,19 @@ def main():
             },
         },
         "by_model": {m: dict(v) for m, v in model_tot.items()},
+        "by_host": {
+            h: {**dict(v), "headline_input_output_cachecreation": headline(v)}
+            for h, v in sorted(host_tot.items())
+        },
         "head_snapshot": head_snapshot(),
     }
     with open(os.path.join(DATA, "summary.json"), "w") as fh:
         json.dump(summary, fh, indent=2)
         fh.write("\n")
 
+    print(f"machine            : {host}")
     print(f"transcripts read   : {n_files}")
+    print(f"machines on record : {', '.join(summary['provenance']['hosts']) or '(none)'}")
     print(f"measured span      : {first_measured} -> {summary['provenance']['last_measured_date']}")
     print(f"backfilled (est.)  : {archived} ({summary['estimation']['archived_commits']} commits)")
     print(f"headline measured  : {headline(meas):,}")

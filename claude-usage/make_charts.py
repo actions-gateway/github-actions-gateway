@@ -113,9 +113,13 @@ def shade_estimated(ax, est_dates, dts):
 def chart_tokens_by_model():
     rows = load("model_daily.csv")
     days = sorted({r["date"] for r in rows})
-    est_dates = {r["date"] for r in rows if is_est(r)}
+    # a day is estimated only if every row for it is (rows are per machine)
+    est_dates = {r["date"] for r in rows if is_est(r)} - {r["date"] for r in rows if not is_est(r)}
     models = ["Sonnet 4.6", "Opus 4.7", "Opus 4.8", "Fable 5", "Haiku 4.5", "Other", "Unknown"]
-    by = {(r["date"], r["model"]): int(r["headline"]) for r in rows}
+    by = {}
+    for r in rows:  # sum each (day, model) across machines
+        k = (r["date"], r["model"])
+        by[k] = by.get(k, 0) + int(r["headline"])
     xs = list(range(len(days)))
     fig, ax = plt.subplots(figsize=(11, 5.2))
     bottom = [0.0] * len(days)
@@ -162,7 +166,19 @@ def chart_tokens_by_model():
 
 
 def _token_rows():
-    rows = {r["date"]: r for r in load("token_metrics.csv")}
+    """Token rows summed across machines — one total per date.
+
+    The CSV carries one row per (date, machine); every chart wants the day.
+    """
+    num = ["input", "output", "cache_creation", "cache_read", "assistant_msgs", "user_msgs"]
+    rows = {}
+    for r in load("token_metrics.csv"):
+        cur = rows.setdefault(r["date"], {"date": r["date"], "estimated": "1",
+                                          **{c: 0 for c in num}})
+        for c in num:
+            cur[c] += int(r[c])
+        if not is_est(r):
+            cur["estimated"] = "0"  # a day is estimated only if every row is
     return rows, sorted(rows)
 
 
