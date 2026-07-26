@@ -2579,10 +2579,21 @@ restart. The template stays authoritative unless you opt in.</p>
   <code>ResourceQuota</code> and any <code>LimitRange</code>: derived values are still subject to
   both at admission, and the existing <code>WorkerQuota*</code> conditions and quota
   retries surface a conflict at runtime.</li>
-<li><strong>Drift reporting steps aside</strong> — while a profile is <code>Active</code>, the
-  <code>SizingDrift</code> condition reports <code>False/SizingProfileActive</code> (pods no longer
-  run the template ask, so judging it would mislead).</li>
 </ul>
+<blockquote>
+<p><strong>Set <code>maxRequests</code> before enabling <code>Binpack</code> on a shape whose measured peak
+approaches node allocatable.</strong> <code>Binpack</code> derives <code>requests</code> = <code>limits</code> from
+the observed history, and a derived request above a node's allocatable CPU is
+simply unschedulable: every worker pod sits <code>Pending</code> and no job runs. This is
+not hypothetical: on the project's own dogfood tenant the measured CPU peak
+was 3750m against an <code>e2-standard-4</code>'s ~3.4 vCPU allocatable, so enabling
+<code>Binpack</code> without <code>maxRequests: {cpu: "3"}</code> would have wedged the pool. The
+failure is silent until pods stop scheduling, so clamp first, then enable.
+<code>WorkersUnschedulable</code> is the condition that fires if you get it wrong.
+- <strong>Drift reporting steps aside</strong> — while a profile is <code>Active</code>, the
+  <code>SizingDrift</code> condition reports <code>False/SizingProfileActive</code> (pods no longer
+  run the template ask, so judging it would mislead).</p>
+</blockquote>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <p><strong><code>actions_gateway_worker_usage_poll_errors_total</code> rising steadily</strong> — the AGC
 cannot list <code>PodMetrics</code>. Either metrics-server is not installed (the
