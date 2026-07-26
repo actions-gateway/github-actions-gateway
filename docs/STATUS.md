@@ -52,6 +52,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q431"></a>Q431 | [PodTemplateEdit integration test races the reconciler](../cmd/agc/internal/controller/integration/pod_provisioning_test.go) | `tests` `flake` | 🔲 | S | Line 223 Gets then Updates the RunnerGroup with no conflict retry while the AGC reconciler writes status to it, so an interleaved status write fails the Update. Wrap in `retry.RetryOnConflict`. |
 | <a id="Q411"></a>Q411 | [Deprecate `v2alpha1`](plan/release-1.3.md) | `infra` `1.3-gate` | 🔲 | S | `v2beta1` is storage on all five kinds, yet `v2alpha1` carries no `+kubebuilder:deprecatedversion` marker, so the apiserver warns nobody. Add markers + regen CRDs; the docs half shipped as Q409. |
 | <a id="Q400"></a>Q400 | `scaleset/**` and `api/**` missing from three path gates | `infra` `1.3-gate` | 🔲 | S | `unit-test.yml` lists both; `integration-test.yml`, `security-scan.yml`, `e2e-test.yml` list neither, so a scaleset/api-only change skips integration (which imports `scalesettest`), vulncheck, e2e. |
 | <a id="Q404"></a>Q404 | [`make check` compiles no build-tagged file](development/testing.md) | `infra` `tests` `1.3-gate` | 🔲 | S | A refactor left an unused import in an `integration`-tagged test; `make check` passed and CI's integration leg failed on the build. A `go vet -tags integration,e2e,load` sweep per module is cheap and needs no envtest assets. |
