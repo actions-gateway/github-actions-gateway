@@ -41,7 +41,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [Release 1.3](plan/release-1.3.md) | `milestone` | ✅ |
 | [v2 GA graduation](plan/v2-ga.md) | `milestone` `infra` | ⚠️ |
 | [v1 sunset → v2-only](plan/v1-classic-sunset-review.md) | `infra` | ⚠️ |
-| [Worker right-sizing profiles](plan/runner-sizing-profiles.md) | `infra` | ⚠️ |
+| [Worker right-sizing profiles](plan/runner-sizing-profiles.md) | `infra` | ✅ |
 | [Capacity-aware job intake](plan/capacity-aware-intake.md) | `infra` | ⚠️ |
 
 ---
