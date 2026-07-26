@@ -164,6 +164,14 @@ are cheap to run.
   reporting. Q385's SIGTERM relay already covers every case where something in
   the pod gets to run. The 404/410 no-op covers the race, but make the intent
   explicit rather than relying on it.
+- **Cover deletion, not only terminal phase.** Classic's branch fires on
+  `PodFailed`/`Evicted`, which is the kubelet's node-pressure signal.
+  API-initiated eviction (`kubectl drain`) deletes the pod instead, and
+  `waitForPodCompletion` reads a vanished pod as `PodSucceeded`, so the drain
+  path appears to reach no recovery at all. Unmeasured as of 2026-07-26;
+  [Q421](../STATUS.md#Q421) settles it
+  ([experiment 2](eviction-oversubscription-validation.md#experiment-2-the-node-drain-path-q421)).
+  Whatever it finds, the pod watch this phase adds should not inherit the gap.
 - **Ordering and budget.** Report the terminal result, then rerun, consuming
   exactly one slot from the per-run budget.
 - **Observability.** A distinct metric or Event so a fast release is
