@@ -122,8 +122,8 @@ that satisfied them disappeared. With the port in, the claims survive the cut.
 One residual is worth knowing about but does not gate the removal, because classic
 shares it: a worker pod force-deleted with no grace period (or lost with its node)
 leaves no `Failed`/`Evicted` object and no chance for the runner to report, so neither
-tier recovers it. [Q435](../STATUS.md#Q435) covers the adjacent orphan-reclaim
-question.
+tier recovers it. Q435 measured the adjacent orphan-reclaim question and
+[Q438](../STATUS.md#Q438) carries its residual.
 
 Any further capability found to be classic-only before the cut joins this table and
 gates the same removal.
