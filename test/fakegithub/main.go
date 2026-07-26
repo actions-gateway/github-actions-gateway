@@ -41,6 +41,16 @@
 // Investigation C/D). This keeps the post-job re-registration of single-use
 // agents (Q114) from stranding jobs that race a session's recycle window.
 //
+// That carry rides the session's DELETE, which is best-effort: an AGC whose
+// DeleteSession times out logs the session as leaked and moves on, leaving a
+// session that is registered but polled by nobody. A job addressed to one
+// session therefore also ages out on its own — after defaultSessionQueueGrace
+// undelivered it moves to the owner pool, from where any live session of that
+// owner picks it up (Q436). A session that is actually polling drains its queue
+// within one longPollTick, so a healthy targeted delivery is never diverted.
+// Together the two paths hold the invariant the real broker has by
+// construction: an enqueued job is always reachable by *some* session.
+//
 // # Lease / acquire-vs-redeliver fidelity (Q154)
 //
 // Opt-in via /control/redelivery?enabled=true. When on for an in-scope owner,
@@ -150,7 +160,9 @@ type server struct {
 	// already dead. handleMessage drains a session's own queue first, then the
 	// owner pool. Without it, a job stranded on a recycled session's queue
 	// would be lost — fakegithub's per-session queue would otherwise be a
-	// fidelity gap relative to GitHub's pool-wide delivery (Q114).
+	// fidelity gap relative to GitHub's pool-wide delivery (Q114). A job whose
+	// target session simply stops polling — without ever being deleted — ages
+	// into the pool on sessionQueueGrace instead (Q436).
 	ownerPending    map[string][]message // owner ("<group>-…" prefix-keyed) → jobs
 	acquireResponse any                  // nil = default
 	acquireCount    atomic.Int64
@@ -199,12 +211,29 @@ type server struct {
 	// (Q148). The real broker holds ~50s, so in production those 50 empty polls
 	// span ~40min and never fire mid-job. Set once at startup; read without mu.
 	longPollHold time.Duration
+
+	// sessionQueueGrace is how long a job may sit undelivered on a specific
+	// session's queue before it ages into the owner's pending pool (Q436). Set
+	// once at startup; read without mu. See sweepStaleQueuesLocked.
+	sessionQueueGrace time.Duration
 }
 
 // longPollTick is how often a held GET /message rechecks for a freshly enqueued
 // job, bounding job-delivery latency under the long-poll to one tick. Cheap at
 // the handful of concurrent idle pollers a test cluster holds.
 const longPollTick = 50 * time.Millisecond
+
+// defaultSessionQueueGrace bounds how long a job enqueued onto one specific
+// session may stay reachable only through that session (Q436).
+//
+// A session that is polling drains its own queue within one longPollTick, so a
+// job only ages if its target session has stopped polling — it is running a
+// job, or it was recycled but its DELETE never landed. GitHub has no such
+// state: work sits in the pool until some session polls for it, so the queue a
+// spec addresses must not be able to hold a job hostage. The window is well
+// above a poll cycle (a healthy targeted delivery is never stolen) and well
+// below any spec's Eventually budget.
+const defaultSessionQueueGrace = 30 * time.Second
 
 // defaultRedeliveryLease is the unclaimed-lease window used when redelivery mode
 // is enabled without an explicit leaseMs. Short so a skipped job is redelivered
@@ -230,23 +259,29 @@ type message struct {
 	// references the job by jobMessageId == runner_request_id). Unexported, so it
 	// is never serialised to the broker client.
 	reqID string
+	// queuedAt is when the job was placed on a specific session's queue, so an
+	// undelivered job can age into the owner pool (Q436). Zero once the job is
+	// in the owner pool — pooled jobs are already deliverable to any session.
+	// Unexported, so it is never serialised to the broker client.
+	queuedAt time.Time
 }
 
 func newServer() *server {
 	return &server{
-		sessions:        brokerstub.NewSessions(),
-		jobQueues:       make(map[string][]message),
-		ownerPending:    make(map[string][]message),
-		runners:         make(map[int64]*runnerRecord),
-		runnerNames:     make(map[string]int64),
-		clientRunners:   make(map[string]int64),
-		consumedAgents:  make(map[int64]bool),
-		deadPolls:       make(map[string]int),
-		requestSessions: make(map[string]string),
-		jobTokens:       make(map[string]string),
-		leased:          make(map[string]*leasedJob),
-		acquiredReqs:    make(map[string]bool),
-		deliveryCount:   make(map[string]int),
+		sessions:          brokerstub.NewSessions(),
+		jobQueues:         make(map[string][]message),
+		ownerPending:      make(map[string][]message),
+		runners:           make(map[int64]*runnerRecord),
+		runnerNames:       make(map[string]int64),
+		clientRunners:     make(map[string]int64),
+		consumedAgents:    make(map[int64]bool),
+		deadPolls:         make(map[string]int),
+		requestSessions:   make(map[string]string),
+		jobTokens:         make(map[string]string),
+		leased:            make(map[string]*leasedJob),
+		acquiredReqs:      make(map[string]bool),
+		deliveryCount:     make(map[string]int),
+		sessionQueueGrace: defaultSessionQueueGrace,
 	}
 }
 
@@ -602,6 +637,9 @@ func (s *server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		if inRedeliver {
 			s.expireLeasesLocked(owner)
 		}
+		// Likewise pool any of this owner's jobs left undelivered on a session
+		// that stopped polling (Q436), so this poll can carry them.
+		s.sweepStaleQueuesLocked(owner, time.Now())
 		// Deliver from the session's own queue first, then fall back to the owner's
 		// pending pool (a job whose original session was recycled away, or one
 		// redelivered after an expired lease). Returning the message under the lock
@@ -609,6 +647,7 @@ func (s *server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		var msg *message
 		if q := s.jobQueues[id]; len(q) > 0 {
 			m := q[0]
+			m.queuedAt = time.Time{} // delivered: no longer queued on a session
 			s.jobQueues[id] = q[1:]
 			msg = &m
 		} else if owner != "" {
@@ -813,8 +852,66 @@ func (s *server) requeueLocked(sessionID, owner string) {
 	if len(q) == 0 {
 		return
 	}
-	s.ownerPending[owner] = append(s.ownerPending[owner], q...)
+	s.ownerPending[owner] = append(s.ownerPending[owner], pooled(q)...)
 	delete(s.jobQueues, sessionID)
+}
+
+// pooled clears the per-session queuedAt stamp on jobs moving into an owner
+// pool: a pooled job is deliverable to any of the owner's sessions, so it has
+// no queue to age out of.
+func pooled(msgs []message) []message {
+	out := make([]message, len(msgs))
+	for i, m := range msgs {
+		m.queuedAt = time.Time{}
+		out[i] = m
+	}
+	return out
+}
+
+// sweepStaleQueuesLocked moves owner's jobs that have sat undelivered on one
+// session's queue for longer than sessionQueueGrace into the owner's pending
+// pool, where any live session of that owner can pick them up. Caller must hold
+// s.mu.
+//
+// This is what keeps a job reachable when its target session stops polling
+// without being deleted (Q436): a listener recycling a single-use agent deletes
+// the old session first, and requeueLocked hands the jobs over — but that
+// DELETE is best-effort. When it fails (three timed-out attempts against a
+// loaded broker), the AGC logs the session as leaked and moves on, and before
+// this sweep the job queued on it was unreachable for the rest of the run: the
+// session was still Active so nothing requeued it, and nothing was polling it.
+// The real broker cannot reach that state — a job is dispatched pool-wide and
+// redelivered until some session acquires it — so the strand was purely an
+// artifact of the session-targeted /control/enqueue.
+//
+// Scoped to one owner so a shared fakegithub never moves another tenant's work,
+// and because an owner's own sessions are the only ones that can deliver it:
+// ownerName is "<group>-<agentIndex>", stable across recycles, so the session
+// that replaced the stranded one sweeps its predecessor's queue on its
+// next poll.
+func (s *server) sweepStaleQueuesLocked(owner string, now time.Time) {
+	if owner == "" || s.sessionQueueGrace <= 0 {
+		return
+	}
+	for sid, q := range s.jobQueues {
+		if sess, ok := s.sessions.Get(sid); !ok || sess.Owner != owner {
+			continue
+		}
+		kept := q[:0:0]
+		for _, m := range q {
+			if !m.queuedAt.IsZero() && now.Sub(m.queuedAt) >= s.sessionQueueGrace {
+				m.queuedAt = time.Time{}
+				s.ownerPending[owner] = append(s.ownerPending[owner], m)
+				continue
+			}
+			kept = append(kept, m)
+		}
+		if len(kept) == 0 {
+			delete(s.jobQueues, sid)
+		} else {
+			s.jobQueues[sid] = kept
+		}
+	}
 }
 
 // handleEnqueue is the control API: POST /control/enqueue?sessionId=<id>
@@ -865,6 +962,10 @@ func (s *server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 	if sess.Active {
 		// Target session is live: queue it there so a specific session can be
 		// addressed (the single-use spec relies on this to consume one session).
+		// Stamped so the job ages into the owner pool if that session turns out
+		// to be registered-but-not-polling (Q436) — "Active" only means the
+		// broker still holds the session, not that anyone is polling it.
+		msg.queuedAt = time.Now()
 		s.jobQueues[id] = append(s.jobQueues[id], msg)
 	} else {
 		// Target session is already gone (recycled between the test's session

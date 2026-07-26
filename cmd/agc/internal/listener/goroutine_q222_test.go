@@ -22,6 +22,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -136,6 +137,51 @@ func TestListener_ExitDeleteRetriesTransientFailure(t *testing.T) {
 
 	assert.GreaterOrEqual(t, deleteAttempts.Load(), int32(2),
 		"a transient DELETE failure must be retried, not swallowed as best-effort")
+
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+}
+
+// TestListener_ExhaustedDeleteCountsSessionLeak pins the Q436 observability
+// half: when every DELETE attempt fails the session survives until GitHub
+// expires it server-side, and the listener recovers into a fresh session as if
+// nothing happened. That silence is the problem — the leak was reported only by
+// a per-session log line, so a broker slow enough to leak sessions on every
+// recycle looked exactly like a healthy gateway on the dashboards.
+func TestListener_ExhaustedDeleteCountsSessionLeak(t *testing.T) {
+	oauthSrv := oauthStub()
+
+	mux := &brokerMux{
+		onDelete: func(w http.ResponseWriter, _ *http.Request) {
+			// Every attempt fails, as against a broker that is up but unable to
+			// answer the control-plane call.
+			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+		},
+	}
+	brokerSrv := httptest.NewServer(mux)
+
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	m := newTestMetrics()
+	cfg.Metrics = m
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	done := runAndWait(ctx, cfg)
+
+	// Let the goroutine reach the poll loop, then shut it down so the exit
+	// defer runs its DELETE.
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	select {
+	case err := <-done:
+		require.NoError(t, err, "an exhausted DELETE is not a listener error")
+	case <-time.After(20 * time.Second):
+		t.Fatal("listener goroutine did not exit after cancellation")
+	}
+
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.BrokerSessionLeaksTotal.WithLabelValues(cfg.Namespace, cfg.Group)),
+		"a session abandoned after every DELETE attempt failed must be counted, not just logged")
 
 	closeHTTP(oauthSrv)
 	closeHTTP(brokerSrv)

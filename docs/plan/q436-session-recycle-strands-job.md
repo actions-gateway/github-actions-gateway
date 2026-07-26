@@ -53,20 +53,71 @@ above shows the leak also **strands any message queued on that session**. In
 production that is a job which no runner will ever acquire until server-side
 expiry, with no condition, event, or metric announcing it.
 
-## What to investigate
+## Findings
 
-1. **Does the leak strand messages in the real broker too, or only in fakegithub?**
-   The e2e harness is the only place this has been observed. Confirm against the
-   real GitHub broker semantics before treating it as a product bug — fakegithub
-   may simply not implement the redelivery-on-expiry that GitHub does.
-2. **Should a failed `DeleteSession` escalate past a log line?** Options: retry
-   on a longer backoff beyond the current 3 attempts, surface a condition on the
-   RunnerGroup, or emit a metric so a leaked session is observable.
-3. **Should the spec stop racing the recycle?** Independently of the product
-   question, the spec picks a live session and enqueues without pinning it, so it
-   is inherently racing the AGC's single-use recycle. Enqueuing onto a session
-   the harness has reserved would remove the e2e symptom regardless of how (1)
-   resolves — but should not be done *before* (1), or it hides the signal.
+Investigated 2026-07-26 against the attempt-1 logs and the two implementations.
+
+### 1. The strand is fakegithub-only — the product analogue does not exist ✅
+
+The timeline is confirmed verbatim in the attempt-1 log, including the AGC's
+silence afterwards: no further listener activity for `agentIndex 0` until the
+suite tore down. Two listeners were up (`session-14` at agentIndex 0,
+`session-17` at agentIndex 1), and `session-17` polled throughout — it simply
+had no way to see a job sitting on `session-14`'s queue.
+
+That per-session queue is the artifact. fakegithub's `/control/enqueue?sessionId=`
+addresses a job to **one** session (`jobQueues[sessionID]`), and only two paths
+move it back to the deliverable pool: `DELETE /session` and the single-use
+consumption hook, both of which call `requeueLocked`. The real broker has no
+such state — a job stays in the pool until some session polls for it, and a
+delivery that is not acquired within ~2 min is redelivered pool-wide
+([02-architecture §2.2](../design/02-architecture.md), live-confirmed in the
+Q260 dogfood, where GitHub redelivered one job repeatedly over ~12 min).
+`DeleteSession` *accelerates* that redelivery; it is not what makes the work
+reachable. So in production a failed `DeleteSession` costs a session record and
+a delayed redelivery, not a stranded job.
+
+Corollary worth keeping: `/control/sessions` reports **registered**, not
+**polling**. `session-14` was already mid-job when the spec picked it at
+16:24:36 — nine seconds before the recycle — so the enqueue was betting on the
+DELETE from the start. All seven `fakegithubEnqueueJob` call sites take that bet.
+
+### 2. The leak deserved a metric, not more retries ✅
+
+The AGC's behaviour is already right: `deleteSessionDetached` retries three
+times on a detached context (Q222) and the listener recycles into a fresh
+session either way. What was missing is that the leak is *silent* — no
+condition, no event, and the listener recovers as if nothing happened, so a
+broker slow enough to leak a session on every recycle looks like a healthy
+gateway. A counter (`actions_gateway_broker_session_leaks_total`) closes that
+gap; a longer retry budget would only hold a shutdown open longer, and a
+RunnerGroup condition would alarm on something the gateway self-heals.
+
+### 3. The spec did not need to change ✅
+
+Fixing the harness invariant covers the race for every spec rather than pinning
+one. A job addressed to a session now ages into the owner pool after 30 s
+undelivered, so reachability no longer depends on a DELETE landing or on the
+target session ever polling again. A session that *is* polling drains its queue
+within one `longPollTick`, so targeted delivery — which the single-use specs
+rely on — is unaffected.
+
+## What shipped
+
+| Change | Where |
+|---|---|
+| Undelivered per-session jobs age into the owner pool after `defaultSessionQueueGrace` (30 s) | [`test/fakegithub/main.go`](../../test/fakegithub/main.go) (`sweepStaleQueuesLocked`) |
+| Regression test: stranded job reaches a sibling session; a polling session is not diverted; the sweep is owner-scoped | [`test/fakegithub/main_test.go`](../../test/fakegithub/main_test.go) |
+| `actions_gateway_broker_session_leaks_total{namespace, runner_group}` | [`cmd/agc/internal/runnercore/metrics.go`](../../cmd/agc/internal/runnercore/metrics.go), incremented in `deleteSessionDetached` |
+| Docs: metric in the design + operator metric references; fakegithub fidelity note | `docs/design/02-architecture.md`, `docs/design/07-test-plan.md`, `docs/operations/observability-metrics.md` |
+
+Not addressed: **why** three 3 s DELETE attempts all timed out. The AGC's broker
+client clones `http.DefaultTransport` (no `MaxConnsPerHost` cap), so connection
+starvation behind the long-polls is ruled out; fakegithub logs no requests, so
+there is no server-side record of whether the DELETE arrived. A loaded kindnet
+node stalling a 3 s control-plane call is the remaining hypothesis and is not
+worth chasing — the harness no longer depends on the answer, and the metric now
+makes the same event visible in production if it recurs.
 
 ## Evidence
 
