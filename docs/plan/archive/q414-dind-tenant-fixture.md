@@ -2,7 +2,7 @@
 
 > **Status:** ✅ Complete (2026-07-26). Every deliverable below shipped in one change.
 
-[Q414](../../STATUS.md#Q414) asked for one reusable v1 tenant fixture carrying a
+Q414 asked for one reusable v1 tenant fixture carrying a
 Docker-in-Docker (DinD) worker shape, and for `gag-migrate`'s v1→v2 fan-out to be
 covered in e2e rather than only in unit tests. [Q415](../../STATUS.md#Q415) — migrate a
 representative tenant on the dogfood cluster for real — is blocked on it, because
