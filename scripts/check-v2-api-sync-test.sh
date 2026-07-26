@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
 # Unit tests for scripts/check-v2-api-sync.sh (Q374): a body divergence in any shared
-# file fails, the two entitled differences (the package clause and a
-# +kubebuilder:storageversion marker) do not, an exempt file may diverge freely, a
-# stale exemption fails, and a file present in one version only is reported without
-# failing. Also runs the real check against the tracked tree.
+# file fails, the entitled differences (the package clause, a
+# +kubebuilder:storageversion marker, a +kubebuilder:deprecatedversion marker) do not,
+# an exempt file may diverge freely, a stale exemption fails, and a file present in one
+# version only is reported without failing. Also runs the real check against the
+# tracked tree.
 #
 # The gate is only worth having if it fails when it should, so these assertions are
 # the permanent form of the invert-the-fix verification
@@ -74,6 +75,27 @@ root="$(fixture storageversion-marker)"
 printf '\n// +kubebuilder:storageversion\ntype Thing struct{}\n' >>"$root/v2beta1/shared_types.go"
 printf '\ntype Thing struct{}\n' >>"$root/v2alpha1/shared_types.go"
 expect storageversion-marker-ignored 0 "$root"
+
+# A one-sided +kubebuilder:deprecatedversion marker is the deprecated version's badge
+# (Q411), with or without warning text. The text names the version and Kind, so it can
+# never be mirrored into the other package.
+root="$(fixture deprecatedversion-marker)"
+printf '\n// +kubebuilder:deprecatedversion:warning="v2alpha1 Thing is deprecated; use v2beta1."\ntype Thing struct{}\n' >>"$root/v2alpha1/shared_types.go"
+printf '\ntype Thing struct{}\n' >>"$root/v2beta1/shared_types.go"
+expect deprecatedversion-marker-ignored 0 "$root"
+
+# The bare form (no warning text) is normalised too.
+root="$(fixture deprecatedversion-bare)"
+printf '\n// +kubebuilder:deprecatedversion\ntype Thing struct{}\n' >>"$root/v2alpha1/shared_types.go"
+printf '\ntype Thing struct{}\n' >>"$root/v2beta1/shared_types.go"
+expect deprecatedversion-bare-ignored 0 "$root"
+
+# Normalising the marker must not blind the gate to the line it sits above: a real
+# divergence in the deprecated type's body still fails.
+root="$(fixture deprecatedversion-hides-nothing)"
+printf '\n// +kubebuilder:deprecatedversion:warning="v2alpha1 Thing is deprecated."\ntype Thing struct{ A string }\n' >>"$root/v2alpha1/shared_types.go"
+printf '\ntype Thing struct{ B string }\n' >>"$root/v2beta1/shared_types.go"
+expect deprecatedversion-hides-nothing 1 "$root"
 
 # An exempt file may diverge freely, and the run says which files it skipped.
 root="$(fixture exempt-drift)"

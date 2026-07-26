@@ -503,6 +503,7 @@ type ContainerSizingRecommendation struct {
 // v1alpha1. Worker pods are provisioned per acquired job and released on completion.
 //
 // +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="actions-gateway.com/v2alpha1 RunnerSet is deprecated; use actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it."
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=rs,categories=actions-gateway
 // +kubebuilder:selectablefield:JSONPath=`.spec.gatewayRef.name`

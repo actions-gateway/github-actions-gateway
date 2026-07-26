@@ -30,7 +30,7 @@ Three removals are coupled and all land at `v2.0.0`:
 | Removed at `v2.0.0` | Currently | Why it is coupled |
 |---|---|---|
 | `v1alpha1` (`actions-gateway.github.com`) | deprecated, served | already on the removal track |
-| `v2alpha1` (`actions-gateway.com`) | served, **not yet deprecated** | superseded by `v2beta1` as storage version |
+| `v2alpha1` (`actions-gateway.com`) | deprecated, served | superseded by `v2beta1` as storage version |
 | classic acquisition machinery | served | `v2beta1` is ScaleSet-only, so classic exists *only* to serve the two alpha versions |
 
 The coupling is the load-bearing fact: because `v2beta1` is already ScaleSet-only,
@@ -75,11 +75,23 @@ No open gating row: Q359 closed 2026-07-25.
 > `e0acd60`, a pre-release build, so it establishes the tenant and the feature are
 > sound; it does not stand in for validating the tagged artifact.
 
-### B. Deprecation notice — *gating*
+### B. Deprecation notice (*satisfied*)
 
-| Item | Why it gates |
-|---|---|
-| [Q411](../STATUS.md#Q411) | Deprecate `v2alpha1` in the API itself: `+kubebuilder:deprecatedversion` markers and regenerated Custom Resource Definitions (CRDs). Without the marker the apiserver warns nobody, so the notice reaches only readers of the docs. |
+No open gating row: Q411 and Q412 both closed 2026-07-26. The notice now exists in
+both halves the policy needs, the API surface and the docs.
+
+> **Q411 is closed (2026-07-26): the deprecation reaches the apiserver.** All five
+> `actions-gateway.com` kinds carry `+kubebuilder:deprecatedversion` on `v2alpha1`, so
+> the regenerated CRDs (and their chart copies) set `deprecated: true` plus a
+> `deprecationWarning` naming `v2beta1` as the replacement and `v2.0.0` as the removal
+> release. Verified against a real apiserver, not just the generated YAML: on a kind
+> cluster carrying `api/config/crd`, a `v2alpha1` read *and* write each emit
+> `Warning: actions-gateway.com/v2alpha1 RunnerTemplate is deprecated; use
+> actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it.`,
+> the write still succeeds, and the same object read at `v2beta1` emits nothing. The
+> warning names `v2.0.0` itself, so the API surface and the docs state one removal
+> release rather than two half-answers. `check-v2-api-sync.sh` now normalises the
+> marker as an entitled per-version difference, alongside `+kubebuilder:storageversion`.
 
 > **Q412 is closed (2026-07-26): `v2.0.0` is named.**
 > [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md) is now the
@@ -150,16 +162,13 @@ tooling rather than a correctness fix.
 
 ## Critical path & ordering
 
-Both gate-integrity items (Q400, Q404) closed 2026-07-26, so what remains is the
-deprecation marker and the announce bar.
+Both gate-integrity items (Q400, Q404) closed 2026-07-26, and both halves of the
+deprecation notice (Q411, Q412) landed the same day. Neither half could stand alone:
+Q412 named `v2.0.0` where operators plan from the docs, and Q411 put the same release
+into the apiserver warning, so an operator who never reads the docs still gets told.
+What remains is the announce bar.
 
-1. **[Q411](../STATUS.md#Q411)** can land at any point before the tag. It changes
-   generated CRDs, so it should not race a session editing the same API packages.
-   It cannot be dropped on the grounds that Q409 aligned the docs and Q412 named
-   the release: the deprecation still has to reach the apiserver, or an operator
-   who never reads the docs gets no warning at all. (Q412, the other half, is
-   done.)
-2. **[Q393](../STATUS.md#Q393) last**, immediately before tagging, so the banner names
+1. **[Q393](../STATUS.md#Q393) last**, immediately before tagging, so the banner names
    the version actually being cut.
 
 ## Guardrails
