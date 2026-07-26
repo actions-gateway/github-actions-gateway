@@ -23,6 +23,18 @@ compounds this. Tighter memory limits raise OOM-kill probability, which is one o
 the two ways a worker pod gets evicted. The 1.3 headline feature increases
 exposure to a gap that only the deprecated tier covers.
 
+## Status
+
+| Phase | State |
+|---|---|
+| 1 — measure the real baseline | ❌ Open, tracked by [Q396](../STATUS.md#Q396). Gates Phase 3 only. |
+| 2 — port eviction recovery to scale-set | ✅ **Shipped 2026-07-26** (Q417). See [Phase 2 as built](#phase-2-as-built). |
+| 3 — fast release | ❌ Open, tracked by [Q418](../STATUS.md#Q418), still gated on Phase 1. |
+
+Phase 2 did not wait on Phase 1, as planned: it closes a functional regression
+rather than an optimization gap, so it was correct to land regardless of what the
+baseline measurement says.
+
 ## What exists today
 
 ### Classic: full recovery, no fast release
@@ -57,19 +69,44 @@ eviction retry under "Reworked, carried over"
 ([archive/q264-scale-set-protocol-phases.md](archive/q264-scale-set-protocol-phases.md)
 §3); that port was designed, not implemented.
 
-### The rerun target is unidentified on scale-set
+### The rerun target was unidentified on scale-set — resolved 2026-07-26
 
 `rerun-failed-jobs` needs `owner`, `repo`, and `run_id`. Classic extracts all
 three from the acquire payload via `jobMetaFrom`. Scale-set has no payload, and
-the provisioner passes an empty `jobMeta{}` when building the worker pod.
+the provisioner passed an empty `jobMeta{}` when building the worker pod.
 
-The modeled [`JobMessage`](../../scaleset/types.go) carries `messageType`,
+The modeled [`JobMessage`](../../scaleset/types.go) carried `messageType`,
 `runnerRequestId`, `acquireJobUrl`, `jobId`, `runnerId`, `runnerName`, and
-`result`. No run ID, no repository. There is no recorded observation anywhere in
-the repo of GitHub sending either field on a scale-set queue message.
+`result` — no run ID, no repository. That was a gap in **GAG's model**, not in the
+wire.
 
-This is a hard prerequisite: without run identity there is nothing to rerun, no
-matter how fast the lock is released.
+**What settled it.** The official Public-Preview `actions/scaleset` client — whose
+wire types this package deliberately mirrors — embeds `JobMessageBase` in
+`JobAvailable`, `JobAssigned`, `JobStarted`, and `JobCompleted` alike, and that base
+carries `ownerName`, `repositoryName`, `workflowRunId`, `jobWorkflowRef`,
+`jobDisplayName`, and `eventName`
+([types.go](https://github.com/actions/scaleset/blob/main/types.go)). The identity was
+always on the wire; GAG simply did not decode it.
+
+Corroborating evidence from GAG's own live probe: Investigation E observed
+`scaleSetAssignTime` on a real `JobAssigned` from the dotcom broker-host backend
+([archive/q264-scale-set-protocol-phases.md](archive/q264-scale-set-protocol-phases.md)
+§2a-3). That is another `JobMessageBase` field this client did not model, so the raw
+body demonstrably *is* a `JobMessageBase` and not a narrower shape.
+
+**What is still not directly measured.** No GAG probe has dumped those three specific
+fields off a live `JobAssigned`. The evidence is wire parity with the official client
+plus the base-shape observation above — strong, but not the same thing as reading
+`workflowRunId` out of a live message.
+
+Phase 2 was therefore built **identity-optional** rather than assuming presence:
+`JobMessage.RunIdentity` returns an `ok` flag, an incomplete identity is refused
+rather than defaulted, and the absence is counted
+(`actions_gateway_eviction_recovery_identity_unknown_total`) and surfaced as a
+Warning Event. The cost is one branch; the benefit is that if the fields ever do not
+arrive, the failure is loud and localized instead of a rerun posted against run `0`.
+That also demotes the live confirmation from a **gate** to a **verification**: it is
+worth doing on the next dogfood session, and nothing waits on it.
 
 ## The baseline number is confounded
 
@@ -137,6 +174,49 @@ it closes a functional regression rather than an optimization gap.
    protocol-agnostic. Keep the Q106 sharded-reservation invariant authoritative:
    at most `maxEvictionRetries` reruns per run, across both tiers.
 
+### Phase 2 as built
+
+Shipped 2026-07-26 (Q417). Each planned step and what it became:
+
+1. **Establish run identity** — resolved above. `scaleset.JobMessage` now models
+   `ownerName`, `repositoryName`, `workflowRunId`, and `jobDisplayName`, with
+   `RunIdentity()` returning the `(owner, repo, run_id, ok)` triple. The listener
+   passes it through `scalesetlistener.Job`; `ProvisionScaleSetWorker` stamps it as the
+   existing `actions-gateway.com/run-id` / `/repository` annotations, so both tiers
+   share one worker-pod annotation vocabulary. The `scalesettest` fake now delivers the
+   fields too, because the real backend does — a fake that answered with them empty
+   would have hidden the gap until a live run.
+2. **Detect the eviction** — pod watch, not the terminal `JobCompleted`, and via the
+   **owning reconciler** rather than a per-job goroutine. The reconciler already
+   watches worker pods for phase changes and already lists them every reconcile to
+   reap them, so detection costs one cached List. Choosing the reconciler over a
+   goroutine is the same call Q420 made and for the same reason: a fire-and-forget tier
+   has no process-scoped place to keep the state, so the pod has to carry it, and
+   recovery then survives an AGC restart between the eviction and the rerun.
+   `RecoverEvictedScaleSetWorkers` runs **before** the reaper, since the reaper would
+   otherwise delete the evidence.
+3. **Reuse the retry budget** — unchanged. `handleEviction`, `reserveEvictionRetry`,
+   the sharded per-`run_id` lock, and the sweeper are all shared; the only addition is
+   a `tier` argument that labels the metrics. The Q106 invariant now holds *across*
+   tiers, which the concurrency regression test exercises by driving half its
+   evictions down each path.
+
+Against the design constraints listed below:
+
+| Constraint | How it was met |
+|---|---|
+| Do not double-report | `PodFailed` + `reason == "Evicted"` only — the kubelet's node-pressure kill, the one case where nothing in the pod ran. Made explicit in `evictedAwaitingRecovery` rather than left to the rerun call's benign 404/410 handling. Classic pods are excluded by the `acquisition-protocol` label, so one eviction never spends two budget slots. |
+| Cover deletion, not only terminal phase | Deliberately **not** covered, with the reasoning recorded rather than inherited: a graceful deletion (drain, reaper) is exactly the case Q385's SIGTERM relay owns, and re-running it would double-report. The gap that remains is a *force* delete with no grace, which classic shares — see the residual note in [v2-ga.md](v2-ga.md#phase-3--the-coupled-removals). [Q421](../STATUS.md#Q421) still measures the drain path and can revise this. |
+| Ordering and budget | Claim first (`eviction-handled-at`, optimistic lock), then rerun, consuming exactly one slot. Claiming before the GitHub call makes recovery at-most-once per evicted pod across reconciles, restarts, and replicas — the safe direction, since a duplicate rerun silently spends budget while a missed one is visible in the metric. |
+| Observability | `tier` label on both eviction counters; a dedicated `eviction_recovery_identity_unknown_total` plus `EvictionRecoveryIdentityUnknown` Event for the one mode that makes the mechanism inert. |
+| Which `TaskResult` | Not applicable to Phase 2 — that question belongs to the Phase 3 fast release, which is what posts a terminal result. Phase 2 posts nothing to the run service. |
+
+Coverage: unit tests for the wire decode, the pod stamping, the detection predicate,
+the set-once claim (including a deterministic stale-writer race), and the
+identity-unknown path; an envtest that drives a worker pod provisioned by the real
+path to `Failed`/`Evicted` against a real apiserver and asserts the rerun fires once
+for the run the pod recorded.
+
 ### Phase 3: fast release, if Phase 1 justifies it
 
 Probe order, per #811, cheapest first:
@@ -184,11 +264,12 @@ are cheap to run.
 
 Phase 2 is the shippable unit:
 
-- An evicted scale-set worker triggers `rerun-failed-jobs` for the correct run.
-- The per-run retry budget is shared with classic and holds under concurrent
+- ✅ An evicted scale-set worker triggers `rerun-failed-jobs` for the correct run.
+- ✅ The per-run retry budget is shared with classic and holds under concurrent
   evictions of the same run (the Q106 invariant, envtest-covered as classic is).
-- Operator docs describe eviction recovery on both tiers, with the measured
-  latency from Phase 1 rather than an inferred one.
+- ⚠️ Operator docs describe eviction recovery on both tiers — done — but with the
+  latency still *inferred* rather than measured, because Phase 1 has not run. The docs
+  say so where they discuss latency; [Q396](../STATUS.md#Q396) closes it.
 
 Phase 3 additionally requires a measured before/after latency on dogfood, and a
 metric that distinguishes the two paths.

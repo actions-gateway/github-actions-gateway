@@ -21,8 +21,9 @@ Part of the [Observability](observability.md) guide. To scrape these metrics, se
 | `actions_gateway_token_refresh_errors_total` | Counter | `namespace` | Failed token refresh attempts. See SLO threshold below. |
 | `actions_gateway_renew_job_errors_total` | Counter | `namespace` | Failed `renewjob` calls. Leading indicator for cancelled jobs. (Renamed from `…_renewjob_errors_total` in Q205 — see [Breaking observability changes](#breaking-observability-changes-q205).) |
 | `actions_gateway_renew_job_teardowns_total` | Counter | `namespace`, `reason` | Workers self-cancelled because the job's lock was definitively lost (Q254), avoiding an orphan pod. `reason="job_not_found"` is a definitive 404/410 from the run service (job recycled/reassigned); `reason="consecutive_failures"` is 5 consecutive renewal failures (~5 min). See the [runbook](troubleshooting.md#renewjob-failures-rising). |
-| `actions_gateway_eviction_retries_total` | Counter | `namespace`, `runner_group` | Jobs automatically re-queued after worker pod eviction. **Classic acquisition only** — see the note below the table. |
-| `actions_gateway_eviction_retries_exhausted_total` | Counter | `namespace`, `runner_group` | Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an `EvictionRetriesExhausted` Warning Event on the owning `RunnerGroup`/`RunnerSet` (Q170). **Classic acquisition only**, as above. |
+| `actions_gateway_eviction_retries_total` | Counter | `namespace`, `runner_group`, `tier` | Jobs automatically re-queued after worker pod eviction. `tier="classic"` is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; `tier="scaleset"` is the scale-set path, where the owning reconciler detects the eviction from the worker pod itself (Q417). The retry budget is **shared** — it is keyed by run ID alone, so `maxEvictionRetries` bounds re-runs per run across both tiers together, not once per tier. The `tier` label was added in Q417; see [Breaking observability changes](#breaking-observability-changes-q417). |
+| `actions_gateway_eviction_retries_exhausted_total` | Counter | `namespace`, `runner_group`, `tier` | Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an `EvictionRetriesExhausted` Warning Event on the owning `RunnerGroup`/`RunnerSet` (Q170). `tier` as above. |
+| `actions_gateway_eviction_recovery_identity_unknown_total` | Counter | `namespace`, `runner_group` | Evicted **scale-set** worker pods that carried no workflow-run identity, so no automatic re-run could be attempted and the job stays failed until a human re-runs it (Q417). Each occurrence also emits an `EvictionRecoveryIdentityUnknown` Warning Event on the owning `RunnerSet`. This is the one failure mode that makes scale-set eviction recovery silently inert, which is why it is counted separately from an exhausted budget: an exhausted budget means a tenant is evicting more than `maxEvictionRetries` allows, while this means GitHub did not send the assignment fields (`ownerName`, `repositoryName`, `workflowRunId`) the mechanism reads. **Expected to be zero.** A sustained rate is a protocol-level regression, not a capacity problem — see the [runbook](troubleshooting.md#evicted-scale-set-jobs-are-not-re-run-automatically). |
 | `actions_gateway_quota_retries_total` | Counter | `namespace`, `runner_group` | Pod creation attempts retried after the namespace `ResourceQuota` rejected the worker pod. A brief non-zero rate under burst is normal (the listener backs off and retries); a sustained rate means quota headroom is tight — raise the quota or lower `maxWorkers`. |
 | `actions_gateway_quota_retries_exhausted_total` | Counter | `namespace`, `runner_group` | Quota retries exhausted; the job was abandoned after the quota retry budget ran out and requires a manual re-run. |
 | `actions_gateway_worker_pods_reaped_total` | Counter | `namespace`, `runner_group`, `reason` | Worker pods deleted by the lifecycle reaper. `reason="completed_ttl"` is routine cleanup after `completedPodTTL`; `reason="pending_deadline"` means a pod was stuck Pending past `pendingPodDeadline` and its job was cancelled — each such reap also emits a `WorkerPodStuckPending` Warning Event on the RunnerGroup. `reason="orphaned_running"` means a pod was still Running five minutes after GitHub reported its job terminal — a ScaleSet worker that registered but never received its job, or a pod held open by a container that outlived the runner — and emits a `WorkerPodOrphanedRunning` Warning Event; see the [runbook](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning). |
@@ -49,17 +50,18 @@ Part of the [Observability](observability.md) guide. To scrape these metrics, se
 | `actions_gateway_agc_autoscaling_unavailable` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `AGCAutoscalingUnavailable=True` (Q360, §E.11): the gateway opted into managed AGC right-sizing (`agcAutoscaling`) but it cannot be satisfied — the `VerticalPodAutoscaler` CRDs are not installed (`VPACRDNotInstalled`) or a precedence conflict blocks the managed VPA. Advisory — the AGC still runs on its stamped `agcResources` sizing and `Ready` is unaffected; the opt-in is simply inert until the blocker clears. `0` when satisfied or not opted in. Without this gauge the unsatisfiable opt-in is visible only via `kubectl describe` (Q390). v2 only, emitted only on a v2 install (Q321). |
 | `actions_gateway_build_info` | Gauge | `component`, `version` | Constant `1` per running control-plane binary, following the Prometheus `*_build_info` convention (Q318). Emitted by the GMC, AGC, and proxy — `component` is `gmc`/`agc`/`proxy` and `version` is the build tag stamped into the binary (`dev` for un-stamped local builds). Not load-bearing for alerting; join it into other series to correlate the running version during an incident (worker pods carry `app.kubernetes.io/version`, but the control plane otherwise does not expose its version in metrics). |
 
-> **Eviction-retry metrics are classic-acquisition only.** Both
-> `eviction_retries_total` and `eviction_retries_exhausted_total` are emitted from the
-> classic provisioning path, which blocks on the worker pod's terminal phase. A
-> `RunnerSet` with `spec.acquisitionProtocol: ScaleSet` — the default since Q264 P5,
-> and the only protocol `v2beta1` offers — provisions its worker fire-and-forget, so
-> the AGC never observes the eviction, never issues a rerun, and **never increments
-> either counter**. On that tier an evicted worker's job fails and needs a manual
-> rerun; `maxEvictionRetries` and `evictionRetryDelay` are inert. A flat zero here is
-> therefore not evidence that no worker was evicted — check
-> `kubectl get pods --field-selector=status.phase=Failed` for `Evicted` pods instead.
-> Porting the recovery is tracked as Q417.
+> **Reading the eviction metrics across tiers.** Both `eviction_retries_total` and
+> `eviction_retries_exhausted_total` are emitted on **both** acquisition tiers, split
+> by the `tier` label (Q417). The two are detected by different machinery — an inline
+> pod wait on classic, the owning reconciler's recovery pass on scale-set — but they
+> share one budget, keyed by workflow run alone, so `maxEvictionRetries` caps re-runs
+> per run across the pair rather than once each.
+>
+> A flat zero on `tier="scaleset"` while workers are visibly being evicted means the
+> recovery is not firing, not that nothing was evicted. Check
+> `kubectl get pods --field-selector=status.phase=Failed` for `Evicted` pods, then
+> `actions_gateway_eviction_recovery_identity_unknown_total` and the
+> [runbook](troubleshooting.md#evicted-scale-set-jobs-are-not-re-run-automatically).
 
 > **Proxy conditions on a v2 deploy.** On a v2 install (the opt-in
 > `actions-gateway-crds-v2` CRDs), the GMC also counts v2 `ActionsGateway`s in
@@ -210,15 +212,33 @@ kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<name>
 
 Add `-o wide` for node placement or `-w` to watch phase transitions live.
 
-**Correlating a pod with its GitHub Actions job:** the AGC stamps four
-annotations on every worker pod at creation time from the AcquireJob payload:
+**Correlating a pod with its GitHub Actions job:** the AGC stamps these
+annotations on every worker pod at creation time:
 
 | Annotation | Example | Notes |
 | --- | --- | --- |
 | `actions-gateway.com/run-id` | `12345678` | GitHub workflow run ID |
 | `actions-gateway.com/repository` | `myorg/myrepo` | Repository the job belongs to |
 | `actions-gateway.com/job-name` | `build` | Job name as defined in the workflow YAML |
-| `actions-gateway.com/workflow` | `CI` | Workflow name |
+| `actions-gateway.com/workflow` | `CI` | Workflow name. Classic only — the scale-set protocol delivers no workflow name |
+
+On the scale-set tier these are more than diagnostics: `run-id` and `repository`
+are the **only** record of which workflow run a worker was serving, because that
+tier provisions fire-and-forget with no in-process job state. Eviction recovery
+reads them back off the pod to name the run to re-run (Q417), so a worker missing
+them cannot be recovered automatically — that case is counted by
+`actions_gateway_eviction_recovery_identity_unknown_total`. Do not remove or
+overwrite them.
+
+Scale-set worker pods additionally carry:
+
+| Metadata | Example | Notes |
+| --- | --- | --- |
+| `actions-gateway.com/acquisition-protocol` (label) | `ScaleSet` | Marks the pod as provisioned by the scale-set tier. Present only on that tier, so `-l actions-gateway.com/acquisition-protocol=ScaleSet` selects exactly the scale-set workers |
+| `actions-gateway.com/job-completed-at` (annotation) | `2026-07-26T12:00:00Z` | When GitHub reported the pod's job terminal. Gives a still-Running worker a reap deadline (Q420) |
+| `actions-gateway.com/eviction-handled-at` (annotation) | `2026-07-26T12:04:00Z` | When the AGC adjudicated this pod's eviction. Its presence is what makes automatic recovery at-most-once per evicted pod across reconciles, restarts, and replicas (Q417) |
+
+All three are controller-set: never set them by hand.
 
 To see them in a table:
 
@@ -233,7 +253,10 @@ Or inspect a single pod in full:
 kubectl describe pod <pod-name> -n <namespace>
 ```
 
-The annotations are absent if the AcquireJob payload did not include the corresponding `system.github.*` variables (older GitHub runners or stub/test jobs).
+The annotations are absent if the job's identity did not reach the AGC: on the
+classic tier, an AcquireJob payload without the corresponding `system.github.*`
+variables (older GitHub runners or stub/test jobs); on the scale-set tier, an
+assignment message without `ownerName`/`repositoryName`/`workflowRunId`.
 
 ### Selecting GAG objects with the recommended labels
 
@@ -292,6 +315,25 @@ Metric labels are scoped to `namespace` and `runner_group`. To avoid label cardi
 - **Do not use dynamically generated `runner_group` names** (e.g. names incorporating PR numbers or commit SHAs). Each unique combination of `namespace` + `runner_group` creates a distinct time series; thousands of unique names will cause memory pressure in Prometheus.
 - **Stable, human-meaningful names** like `gpu-2x`, `cpu-standard`, `gpu-a100` are correct. These are configured in the `ActionsGateway` spec and should not change after initial setup.
 - If you need per-workflow or per-repo attribution, use Prometheus recording rules or labels from job metadata, not from RunnerGroup names.
+
+## Breaking observability changes (Q417)
+
+Q417 ported eviction recovery to the scale-set acquisition tier and added a `tier`
+label to the two eviction counters so the two tiers' recoveries are distinguishable:
+
+| Metric | Labels before | Labels after |
+| --- | --- | --- |
+| `actions_gateway_eviction_retries_total` | `namespace`, `runner_group` | `namespace`, `runner_group`, `tier` |
+| `actions_gateway_eviction_retries_exhausted_total` | `namespace`, `runner_group` | `namespace`, `runner_group`, `tier` |
+
+**What breaks.** Only queries that match the full label set exactly, or that render
+one series per metric and now render two. Aggregations are unaffected: `sum(...)`,
+`increase(...) > 0`, and `sum by (namespace, runner_group) (...)` keep working
+unchanged, which covers the shipped dashboards and alert rules. Add `tier` to a
+`by (...)` clause where you want the split.
+
+**Continuity.** Both counters keep their names, so history is preserved; series
+recorded before the upgrade simply carry no `tier` label.
 
 ## Breaking observability changes (Q205)
 

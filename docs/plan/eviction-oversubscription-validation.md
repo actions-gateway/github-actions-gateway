@@ -30,8 +30,8 @@ clean run with no `timeout-minutes` set.
 | Row | Relationship to these experiments |
 |---|---|
 | [Q396](../STATUS.md#Q396) | **Is** experiment 1. Already covers both tiers as of #815; only the retry-budget assertion is additive. |
-| [Q417](../STATUS.md#Q417) | Hard prerequisite for the scale-set half of 1, and for 3 and 5. `ProvisionScaleSetWorker` is fire-and-forget, so scale-set evictions are never detected. |
-| Q419 | **Shipped 2026-07-26.** The docs half of the same gap: every eviction-recovery claim now names the classic tier. Independent of these experiments, but it means the docs these experiments measure against no longer overstate the scale-set tier. |
+| Q417 | **Shipped 2026-07-26.** Was the hard prerequisite for the scale-set half of 1, and for 3 and 5: `ProvisionScaleSetWorker` is fire-and-forget, so scale-set evictions were never detected. Detection now runs from the owning reconciler off the worker pod ([scaleset-eviction-recovery.md § Phase 2 as built](scaleset-eviction-recovery.md#phase-2-as-built)). All three are unblocked. |
+| Q419 | **Shipped 2026-07-26** with Q417 — the docs half of the same gap. The tier-agnostic claims in the exec summary, README, and why-gag are now true of both tiers rather than needing a qualification. Independent of these experiments. |
 | Q420 | **Shipped 2026-07-26**, ahead of Q417 and independently of it — the reap deadline came from a pod annotation, not a pod watch. Orphaned Running workers would otherwise have contaminated 3 and 5 by holding quota, which is exactly the idle-capacity signature those experiments measure. |
 | [Q418](../STATUS.md#Q418) | Deferred, event-gated on experiment 1 attributing the delay. |
 
@@ -52,7 +52,7 @@ Phase 1 records the same. The genuinely additive assertion is the retry budget
 - **Proves:** the real eviction-to-conclusion latency, attributed to a mechanism.
 - **Unlocks:** a defensible number in place of the confounded one, and the
   [Q418](../STATUS.md#Q418) trigger.
-- **Blocked on** [Q417](../STATUS.md#Q417) for the scale-set tier only.
+- **Unblocked** — Q417 shipped 2026-07-26, so the scale-set tier now detects evictions and fires the rerun this experiment measures.
 
 ## Experiment 2: the node-drain path ([Q421](../STATUS.md#Q421))
 
@@ -74,23 +74,27 @@ not reach eviction recovery at all:
   `handleEviction` only on `phase == PodFailed && reason == "Evicted"`.
 
 So on classic, a drained worker most likely reports its own terminal result via
-the relay, the provisioner records success, and nothing reruns. On scale-set
-there is no detection at all until [Q417](../STATUS.md#Q417).
+the relay, the provisioner records success, and nothing reruns. Q417's scale-set
+detection (shipped 2026-07-26) reaches the same conclusion by construction: it fires
+only on `PodFailed`/`Evicted`, and deliberately excludes deletion on the grounds that
+the SIGTERM relay already owns that case. This experiment is what tests that
+reasoning.
 
 This is a code reading, not a measurement, and
 [testing.md](../development/testing.md#diagnosing-failures-measure-before-asserting-a-root-cause)
 is explicit that a
 symptom match is a hypothesis until the failing system is measured. The
 experiment is what settles it. If it holds, the outcome is a recovery gap on the *graceful*
-path, which is worth more than confirming a zero, and it feeds Q417's design:
-the pod watch must cover deletion, not only terminal phase.
+path, which is worth more than confirming a zero. Q417 shipped without covering
+deletion, on the reasoning above; a finding here that a drained worker does **not**
+report its own result is the evidence that would reopen that decision on both tiers.
 
 Assertions:
 
 1. The wrapper relays SIGTERM and the runner reports its own terminal result
    ([relayTerminationSignals](../../cmd/worker/main.go)). The relay is
    tier-independent; the scale-set `run.sh` branch has the same PID-1 handling,
-   so this experiment runs on both tiers today without Q417.
+   so this experiment runs on both tiers.
 2. The report completes inside the grace period. The provisioner sets no
    `terminationGracePeriodSeconds`, so worker pods get the Kubernetes default
    of 30s unless a tenant overrides it in `podTemplate`. A runner that needs
@@ -114,7 +118,7 @@ no human action.
   automatic.
 - **Unlocks:** turns the payoff section of the write-up from an argument into a
   result.
-- **Blocked on** [Q417](../STATUS.md#Q417). (Q420, the other contaminant, shipped 2026-07-26.)
+- **Unblocked** — both contaminants cleared: Q420 and Q417 shipped 2026-07-26.
 - Preemption is kubelet-initiated, so unlike experiment 2 it does produce
   `PodFailed`/`Evicted` and does exercise `handleEviction` on classic.
 
@@ -148,28 +152,29 @@ fixed window.
 
 - **Proves:** the packing-density thesis directly, and it is the one number the
   whole argument is missing.
-- **Deferred rather than queued.** It is blocked on Q417, and it additionally
-  needs a dogfood workload stable enough for a fixed-window comparison to mean
-  anything. With no owner-actionable next step today, a Queue position would be
-  fiction.
+- **Deferred rather than queued.** Q417 shipped 2026-07-26, but this still needs a
+  dogfood workload stable enough for a fixed-window comparison to mean anything. With
+  no owner-actionable next step today, a Queue position would be fiction.
 
 ## Sequencing
 
+Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
+
 1. [Q421](../STATUS.md#Q421) (experiment 2) and [Q422](../STATUS.md#Q422)
-   (experiment 4) are unblocked today. Q421 first: its result feeds Q417's
-   detection design.
-2. [Q417](../STATUS.md#Q417), the prerequisite for everything scale-set.
-3. [Q396](../STATUS.md#Q396) (experiment 1), which then gates
+   (experiment 4). Q421 first: it now *tests* Q417's decision to leave deletion to
+   the SIGTERM relay rather than feeding a design still being written.
+2. [Q396](../STATUS.md#Q396) (experiment 1), which then gates
    [Q418](../STATUS.md#Q418).
-4. [Q423](../STATUS.md#Q423) (experiment 3), then revive
+3. [Q423](../STATUS.md#Q423) (experiment 3), then revive
    [Q424](../STATUS.md#Q424) (experiment 5).
 
 ## Acceptance criteria
 
 - A published eviction-recovery latency figure with the mechanism attributed,
   replacing the confounded U5 number everywhere it is cited.
-- A recorded answer for the drain path: either it recovers, or the gap is filed
-  and Q417's design covers deletion.
+- A recorded answer for the drain path: either it recovers via the SIGTERM relay, as
+  Q417 assumed when it scoped detection to `PodFailed`/`Evicted`, or the gap is filed
+  and both tiers are extended to cover deletion.
 - The quota gate demonstrated under contention, with the rejection counter as
   the observable.
 - Preemption recovery demonstrated end to end before the oversubscription claim

@@ -29,6 +29,40 @@ const LabelRunnerSet = "actions-gateway.com/runner-set"
 // owns the pod through to a terminal phase), so it is scale-set-only in practice.
 const AnnotationJobCompletedAt = "actions-gateway.com/job-completed-at"
 
+// LabelAcquisitionProtocol records which acquisition tier provisioned a worker pod.
+// Only the scale-set tier stamps it (AcquisitionProtocolScaleSet); a classic worker
+// carries no such label, so presence is the tier test.
+//
+// It exists because the two tiers own a worker pod's lifecycle differently, and
+// something outside the pod has to be able to tell them apart. A classic worker is
+// watched to a terminal phase by the provision() goroutine that created it, which
+// handles its own eviction; a scale-set worker is fire-and-forget, so the owning
+// reconciler adopts eviction recovery for it (Q417). Firing both on the same pod
+// would spend two slots of one run's retry budget for one eviction, so the
+// reconciler's pass filters on this label.
+const LabelAcquisitionProtocol = "actions-gateway.com/acquisition-protocol"
+
+// AcquisitionProtocolScaleSet is the LabelAcquisitionProtocol value for a worker pod
+// provisioned by the scale-set tier. It matches the RunnerSet spec.acquisitionProtocol
+// enum value of the same name.
+const AcquisitionProtocolScaleSet = "ScaleSet"
+
+// AnnotationEvictionHandledAt is stamped on a scale-set worker pod, with an RFC 3339
+// UTC timestamp as its value, when the owning reconciler has adjudicated that pod's
+// eviction — whether it went on to trigger a re-run, found no run identity to re-run,
+// or found the retry budget exhausted (Q417).
+//
+// It is a claim, not a log line: the reconciler sets it under an optimistic lock
+// BEFORE calling GitHub, so an evicted pod re-observed by a later reconcile (or by a
+// second AGC replica) is skipped rather than re-run. That ordering makes automatic
+// recovery at-most-once per evicted pod, which is the safe direction — a duplicate
+// re-run would silently spend another slot of the run's budget, while a missed one is
+// visible in the metric and the pod's own absence of this annotation.
+//
+// It is controller-set and informational: never set it by hand and never use it for
+// security enforcement.
+const AnnotationEvictionHandledAt = "actions-gateway.com/eviction-handled-at"
+
 // WorkerContainerName is the name of the runner container in every worker pod
 // template — the container the runner engine executes in, and the one the
 // NodeShare sizing profile targets (Q359 Phase 3).

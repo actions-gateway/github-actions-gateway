@@ -53,12 +53,24 @@ type Metrics struct {
 	RenewJobTeardownsTotal *prometheus.CounterVec
 	MessagePollErrorsTotal *prometheus.CounterVec
 	// M3: pod lifecycle metrics (emitted by provisioner package)
-	PodCreationLatency       *prometheus.HistogramVec
-	JobDuration              *prometheus.HistogramVec
+	PodCreationLatency *prometheus.HistogramVec
+	JobDuration        *prometheus.HistogramVec
+	// EvictionRetries / EvictionRetriesExhausted carry a `tier` label (classic,
+	// scaleset) because the two acquisition tiers detect an eviction by entirely
+	// different machinery — an inline pod wait on classic, the owning reconciler's
+	// recovery pass on scale-set (Q417). Without the split, "eviction recovery is
+	// working" cannot be asserted for the tier a v2beta1 tenant actually runs on.
 	EvictionRetries          *prometheus.CounterVec
 	EvictionRetriesExhausted *prometheus.CounterVec
-	QuotaRetries             *prometheus.CounterVec
-	QuotaRetriesExhausted    *prometheus.CounterVec
+	// EvictionRecoveryIdentityUnknown counts scale-set workers found evicted that
+	// carried no workflow-run identity, so no automatic re-run could be attempted.
+	// It is the one failure mode that makes scale-set eviction recovery silently
+	// inert, so it is counted separately from an exhausted budget rather than folded
+	// into it: a sustained non-zero rate means GitHub is not sending the assignment
+	// fields the mechanism depends on, not that a tenant is evicting too often.
+	EvictionRecoveryIdentityUnknown *prometheus.CounterVec
+	QuotaRetries                    *prometheus.CounterVec
+	QuotaRetriesExhausted           *prometheus.CounterVec
 	// Q223: worker-pod creation-rate limit (anti-stampede). Incremented when the
 	// opt-in per-RunnerGroup scale-up token bucket makes a pod creation wait for a
 	// token (the burst was spent). Only non-zero when a group sets spec.scaleUp; a
@@ -169,12 +181,17 @@ func NewMetrics() *Metrics {
 
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_retries_total",
-			Help: "Jobs automatically re-queued after worker pod eviction.",
-		}, []string{"namespace", "runner_group"}),
+			Help: "Jobs automatically re-queued after worker pod eviction, by acquisition tier (classic, scaleset).",
+		}, []string{"namespace", "runner_group", "tier"}),
 
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_retries_exhausted_total",
-			Help: "Evicted jobs where retry budget was exhausted.",
+			Help: "Evicted jobs where retry budget was exhausted, by acquisition tier (classic, scaleset).",
+		}, []string{"namespace", "runner_group", "tier"}),
+
+		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_eviction_recovery_identity_unknown_total",
+			Help: "Evicted scale-set worker pods carrying no workflow-run identity, so no automatic re-run could be attempted.",
 		}, []string{"namespace", "runner_group"}),
 
 		QuotaRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -240,6 +257,7 @@ func NewMetrics() *Metrics {
 		m.JobDuration,
 		m.EvictionRetries,
 		m.EvictionRetriesExhausted,
+		m.EvictionRecoveryIdentityUnknown,
 		m.QuotaRetries,
 		m.QuotaRetriesExhausted,
 		m.ScaleUpThrottled,

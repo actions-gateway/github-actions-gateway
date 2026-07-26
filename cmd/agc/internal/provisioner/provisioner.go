@@ -524,9 +524,11 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		p.Metrics.JobDuration.WithLabelValues(key.Namespace, key.Name).Observe(duration.Seconds())
 	}
 
-	// 7. Eviction handling.
-	if phase == corev1.PodFailed && reason == "Evicted" {
-		p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay)
+	// 7. Eviction handling. Inline here because this goroutine owns the pod and still
+	// holds the payload's identity; the scale-set tier, which has neither, recovers
+	// from the owning reconciler instead (RecoverEvictedScaleSetWorkers).
+	if phase == corev1.PodFailed && reason == podReasonEvicted {
+		p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic)
 	}
 
 	// 8. Cleanup. The job Secret is always deleted here. The pod is deleted
@@ -538,6 +540,41 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	}
 	_ = p.deleteSecret(ctx, key.Namespace, secretName)
 	return result, nil
+}
+
+// ScaleSetJob is one scale-set-assigned job to provision a worker for: the identity
+// the scale-set listener minted (JobID, JITConfig) plus the workflow-run identity the
+// assignment message carried.
+//
+// The run identity is what makes eviction recovery possible on this tier. The classic
+// tier reads owner/repo/run_id out of the AcquireJob payload it holds in memory for
+// the life of the job; a scale-set worker has no payload and no owning goroutine, so
+// the identity is stamped onto the worker pod at creation and read back off the pod
+// when the pod turns up evicted (Q417).
+//
+// Owner, Repository, and RunID are empty together when the assignment carried no
+// complete identity — the worker provisions and runs normally, and only automatic
+// eviction recovery degrades. JobName is cosmetic.
+type ScaleSetJob struct {
+	JobID     string
+	JITConfig string
+
+	Owner      string
+	Repository string
+	RunID      string
+	JobName    string
+}
+
+// jobMeta converts the job's run identity into the annotation set shared with the
+// classic path, so both tiers stamp one vocabulary of worker-pod annotations
+// (actions-gateway.com/run-id, /repository, /job-name). The classic path derives the
+// same shape from the acquire payload via jobMetaFrom.
+func (j ScaleSetJob) jobMeta() jobMeta {
+	m := jobMeta{runID: j.RunID, jobName: j.JobName}
+	if j.Owner != "" && j.Repository != "" {
+		m.repository = j.Owner + "/" + j.Repository
+	}
+	return m
 }
 
 // ProvisionScaleSetWorker stages a JIT-config Secret and creates a
@@ -560,7 +597,8 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 // terminal JobCompleted for the job. The Secret and pod also carry the RunnerSet
 // OwnerRef, so both cascade-GC when the set is deleted; the reconciler's reaper deletes
 // the terminal pod per spec.completedPodTTL.
-func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target, jobID, jitConfig string) error {
+func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target, job ScaleSetJob) error {
+	jobID, jitConfig := job.JobID, job.JITConfig
 	if jitConfig == "" {
 		return fmt.Errorf("provisioner: scale-set worker for job %q has no JIT config", jobID)
 	}
@@ -639,7 +677,13 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	}
 
 	// 4. Build the pod and switch the wrapper into scale-set mode (run.sh --jitconfig).
-	pod := p.buildPod(target, spec, podName, secretName, priorityClass, jobMeta{})
+	//    The pod carries the assignment's run identity as annotations and the tier
+	//    marker as a label: fire-and-forget provisioning keeps no process state about
+	//    this job, so the pod itself has to be the durable, restart-safe record of
+	//    which run to re-run if it is evicted (Q417) — the same reason Q420 put the
+	//    reap deadline on the pod rather than in memory.
+	pod := p.buildPod(target, spec, podName, secretName, priorityClass, job.jobMeta())
+	pod.Labels[LabelAcquisitionProtocol] = AcquisitionProtocolScaleSet
 	setScaleSetWorkerMode(pod)
 
 	if err := p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log); err != nil {

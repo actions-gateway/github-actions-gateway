@@ -40,6 +40,9 @@ type stubTarget struct {
 	// quotaExhausted/quotaDetail drive the admission gate's quota rung (#784).
 	quotaExhausted bool
 	quotaDetail    string
+	// events records every RecordEvent reason, so a test can assert an owner-visible
+	// incident was surfaced and not merely logged.
+	events []string
 }
 
 func (s *stubTarget) Key() client.ObjectKey { return s.key }
@@ -53,7 +56,7 @@ func (s *stubTarget) Ceiling(context.Context) (int32, bool) { return 0, false }
 func (s *stubTarget) QuotaExhausted(context.Context) (bool, string) {
 	return s.quotaExhausted, s.quotaDetail
 }
-func (s *stubTarget) RecordEvent(_, _, _, _ string) {}
+func (s *stubTarget) RecordEvent(_, reason, _, _ string) { s.events = append(s.events, reason) }
 func (s *stubTarget) Resolve(context.Context) (*ResolvedSpec, error) {
 	return s.spec, nil
 }
@@ -94,11 +97,11 @@ func TestProvisioner_ScaleUpRateLimitDelaysPodCreation(t *testing.T) {
 	const jit = "eyJydW5uZXIiOnt9fQ=="
 
 	// First creation drains the single burst token — no throttle.
-	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, "job-1", jit))
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{JobID: "job-1", JITConfig: jit}))
 	assert.Empty(t, delays, "the first pod (within burst) must not be throttled")
 
 	// Second creation in the same instant must wait ~1s for a token.
-	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, "job-2", jit))
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{JobID: "job-2", JITConfig: jit}))
 	require.Len(t, delays, 1, "the second pod must be throttled exactly once")
 	assert.InDelta(t, float64(time.Second), float64(delays[0]), float64(150*time.Millisecond),
 		"the throttled wait should be ~1s at 1 pod/s")
@@ -136,7 +139,7 @@ func TestProvisioner_ScaleUpDisabledCreatesImmediately(t *testing.T) {
 		spec: &ResolvedSpec{WorkerImage: "runner:test"}, // ScaleUp nil = off
 	}
 	for _, job := range []string{"j1", "j2", "j3"} {
-		require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, job, "eyJ4IjoxfQ=="))
+		require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{JobID: job, JITConfig: "eyJ4IjoxfQ=="}))
 	}
 	assert.False(t, slept, "default-off scaleUp must never throttle")
 	assert.Equal(t, 0.0, testutil.ToFloat64(metrics.ScaleUpThrottled.WithLabelValues("team-a", "cpu")))
