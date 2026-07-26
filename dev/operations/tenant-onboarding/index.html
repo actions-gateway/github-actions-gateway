@@ -1450,7 +1450,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -2861,7 +2861,8 @@ At the gateway step, the recommended shape for a <strong>new</strong> tenant is 
 at <code>actions-gateway.com/v2beta1</code> — see <a href="#v2-api-multiple-gateways-per-namespace">v2 API</a>
 below and the <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">getting-started v2 walkthrough</a>.
 The single-CR <code>v1alpha1</code> flow in <a href="#step-2-create-the-actionsgateway-resource">Step 2</a>
-is still fully supported but <strong><a href="../v1alpha1-deprecation/">deprecated</a></strong>; already on
+is still fully supported but <strong><a href="../v1alpha1-deprecation/">deprecated and removed at <code>v2.0.0</code></a></strong>,
+along with <code>v2alpha1</code> and the Classic protocol; already on
 v1? <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> moves you across.</p>
 </div>
 <hr />
@@ -3523,7 +3524,7 @@ gateway will not fight it.</p>
 <hr />
 <h2 id="v2-api-multiple-gateways-per-namespace">v2 API: multiple gateways per namespace<a class="headerlink" href="#v2-api-multiple-gateways-per-namespace" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Audience:</strong> Platform engineer onboarding a tenant on the <strong><code>actions-gateway.com</code></strong> API, at <strong><code>v2beta1</code></strong> — the graduated, ScaleSet-only storage and hub version, and the version every <strong>new</strong> tenant should use. It is served <em>beside</em> <code>v1alpha1</code>, so everything above (the deprecated <code>actions-gateway.github.com/v1alpha1</code> flow) keeps working while you adopt it. <code>v2alpha1</code> is also still served, but only as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp for tenants moving off v1 — it carries the deprecated <a href="#acquisition-protocol-v2alpha1-only"><code>acquisitionProtocol</code></a> selector, which a new tenant does not need. Install the opt-in <code>actions-gateway-crds-v2</code> chart first; see <a href="../../getting-started/#1-deploy-the-gmc">Getting Started — Deploy the GMC</a>.</p>
+<p><strong>Audience:</strong> Platform engineer onboarding a tenant on the <strong><code>actions-gateway.com</code></strong> API, at <strong><code>v2beta1</code></strong> — the graduated, ScaleSet-only storage and hub version, and the version every <strong>new</strong> tenant should use. It is served <em>beside</em> <code>v1alpha1</code>, so everything above (the deprecated <code>actions-gateway.github.com/v1alpha1</code> flow) keeps working while you adopt it. <code>v2alpha1</code> is also still served, but only as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp for tenants moving off v1: it carries the deprecated <a href="#acquisition-protocol-v2alpha1-only"><code>acquisitionProtocol</code></a> selector, which a new tenant does not need. <code>v2alpha1</code> is itself deprecated and <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>v2beta1</code> is not. Install the opt-in <code>actions-gateway-crds-v2</code> chart first; see <a href="../../getting-started/#1-deploy-the-gmc">Getting Started — Deploy the GMC</a>.</p>
 </blockquote>
 <p>The biggest onboarding change in v2 is that a single namespace may hold <strong>multiple <code>ActionsGateway</code>s</strong>, lifting the v1 one-gateway-per-namespace rule (<a href="#step-2-create-the-actionsgateway-resource">Step 2</a>). What that changes when onboarding a v2 tenant:</p>
 <ul>
@@ -3610,8 +3611,8 @@ the scale-set model cannot express, until it is ready to split those groups up.<
 </code></pre></div>
 <ul>
 <li><strong>A new tenant should never need this.</strong> Author on <code>v2beta1</code> with one label per
-  set; <code>Classic</code> is deprecated and scheduled for removal one minor release out
-  (Q264).</li>
+  set. <code>Classic</code> is deprecated and, together with <code>v2alpha1</code> and <code>v1alpha1</code>,
+  <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>spec.maxListeners</code> goes with it.</li>
 <li><strong><code>gag-migrate</code> writes <code>acquisitionProtocol: Classic</code></strong> onto every set it emits,
   so a migrated tenant's multi-label groups keep working unchanged. Opting one into
   the scale-set protocol later means creating a fresh single-label set, not editing
@@ -3824,7 +3825,7 @@ the scale-set model cannot express, until it is ready to split those groups up.<
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../v1alpha1-deprecation/" class="md-footer__link md-footer__link--prev" aria-label="Previous: v1alpha1 deprecation">
+          <a href="../v1alpha1-deprecation/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Deprecations &amp; the v2.0.0 removal">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3834,7 +3835,7 @@ the scale-set model cannot express, until it is ready to split those groups up.<
                 Previous
               </span>
               <div class="md-ellipsis">
-                v1alpha1 deprecation
+                Deprecations & the v2.0.0 removal
               </div>
             </div>
           </a>

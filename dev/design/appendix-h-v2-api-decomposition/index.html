@@ -1439,7 +1439,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -3382,7 +3382,12 @@ migration is a tool, not a webhook.</p>
 <code>v2alpha1 → v2beta1 → v2</code> via a conversion webhook (a thing a conversion webhook
 <em>can</em> do, since the kinds no longer change shape) — see the
 <a href="../../plan/v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a>
-in the implementation plan for the per-hop mechanics.</p>
+in the implementation plan for the per-hop mechanics. The superseded versions do not
+linger indefinitely: <code>v2alpha1</code> is dropped at <strong><code>v2.0.0</code></strong>, the same release that
+removes <code>v1alpha1</code> and the classic acquisition machinery, announced one release ahead
+in <code>v1.3.0</code>. That coupling and the operator-facing contract are the
+<a href="../../operations/v1alpha1-deprecation/">deprecation and removal notice</a>; the release
+sequencing is <a href="../../plan/v2-ga/">v2-ga.md</a>.</p>
 <h2 id="h12-folding-in-the-grandfathered-label-value-alignment-q147">H.12. Folding in the grandfathered label-value alignment (Q147)<a class="headerlink" href="#h12-folding-in-the-grandfathered-label-value-alignment-q147" title="Permanent link">&para;</a></h2>
 <p>Two shipped keys still carry boolean-looking <code>"true"</code> values that predate the
 <a href="../../development/kubernetes-conventions/">no-boolean label convention</a> and are
@@ -3426,7 +3431,7 @@ dual-read migration so live namespaces are not broken mid-cutover:</p>
 <li>The migration tool (<a href="#h11-migration-v2-tool-assisted">§H.11</a>) relabels the namespace
    marker and rewrites the annotation to the new keyword as part of the same one-shot
    pass that emits the v2 object set, so no separate operator action is required.</li>
-<li>When <code>v1alpha1</code> is deprecated and removed, drop the <code>"true"</code> arm from the VAPs and
+<li>When <code>v1alpha1</code> is removed at <code>v2.0.0</code>, drop the <code>"true"</code> arm from the VAPs and
    webhook. The dual-read window closes exactly when <code>v1alpha1</code> serving does.</li>
 </ol>
 <p>This stays <strong>fail-closed</strong> throughout: the CEL/webhook checks already treat any
@@ -3592,8 +3597,10 @@ stores at <strong>~1.26 MiB</strong> — over the limit before a single controll
 exactly why the v2 CRDs live in their own chart today. So the clean fold-back sequence
 is two removals, both required: retire <code>v1alpha1</code>, <strong>and</strong> drop <code>v2alpha1</code> (retiring
 the conversion webhook), leaving one served version — then the now single-version v2
-CRDs fold into the main chart with headroom to spare. Until both land, the opt-in chart
-plus apply-render stands.</p>
+CRDs fold into the main chart with headroom to spare. Both of those removals land at
+<strong><code>v2.0.0</code></strong> (<a href="../../operations/v1alpha1-deprecation/">notice</a>), which is therefore the
+earliest the fold-back can be reconsidered, and only once v2 is genuinely down to one
+served version. Until then, the opt-in chart plus apply-render stands.</p>
 <h2 id="h14-admin-policy-layer--deferred-until-tiering-is-real">H.14. Admin policy layer — deferred until tiering is real<a class="headerlink" href="#h14-admin-policy-layer--deferred-until-tiering-is-real" title="Permanent link">&para;</a></h2>
 <p>The decomposition above mirrors Gateway API's <code>Gateway → route attachment</code> but
 stops one level short: there is no cluster-scoped, <strong>admin-owned</strong> object — no

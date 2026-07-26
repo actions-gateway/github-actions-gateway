@@ -1619,7 +1619,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -2489,13 +2489,16 @@ create</strong>, not an automatic conversion — see the
 coexistence/rollback story, and the post-migration teardown.</p>
 <h2 id="why-upgrade-to-v2">Why upgrade to v2<a class="headerlink" href="#why-upgrade-to-v2" title="Permanent link">&para;</a></h2>
 <p>v2 is <strong>opt-in</strong>. It is served at two versions: <strong><code>v2beta1</code></strong> (the graduated,
-ScaleSet-only storage/hub version) and <strong><code>v2alpha1</code></strong> (still served for coexistence).
+ScaleSet-only storage/hub version) and <strong><code>v2alpha1</code></strong> (served as this tool's on-ramp).
 <code>gag-migrate</code> lands v1 RunnerGroups on <strong><code>v2alpha1</code></strong> so a migrated set keeps its
 Classic protocol and multi-label matching during the deprecation window; a tenant then
 moves to <code>v2beta1</code> (a lossless, apiserver-side conversion) once it no longer needs
 Classic. v2 is <strong>not a drop-in replacement</strong> (new API group <code>actions-gateway.com</code>, one
 CR decomposed into several kinds, a tool-assisted fan-out). <code>v1alpha1</code> stays fully
-supported. Migrate a tenant when one of these is worth that trade-off.</p>
+supported until it is <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>, which also
+removes <code>v2alpha1</code> and Classic, so treat the <code>v2alpha1</code> landing spot as a way station
+and <code>v2beta1</code> as the destination. Migrate a tenant when one of these is worth that
+trade-off.</p>
 <p><strong>New capabilities — no v1 equivalent:</strong></p>
 <ul>
 <li><strong>Multiple gateways per namespace.</strong> Run several GitHub orgs, or rebalance
@@ -2690,9 +2693,9 @@ normally — nothing is stranded:</p>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Confirm the v1 RunnerGroups and the singleton AGC/proxy children are gone.</span>
 </code></pre></div>
 <p>The legacy <code>actions-gateway.github.com/*</code> namespace markers and finalizers are
-retired cluster-wide when <code>v1alpha1</code> is removed (see the
-<a href="../v1alpha1-deprecation/">deprecation notice</a>); until then the dual-read window keeps
-both spellings working.</p>
+retired cluster-wide when <code>v1alpha1</code> is removed at <strong><code>v2.0.0</code></strong> (see the
+<a href="../v1alpha1-deprecation/">deprecation and removal notice</a>); until then the dual-read
+window keeps both spellings working.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>A <code>RunnerSet</code> sits <code>Ready=False</code>/<code>TemplateNotFound</code>.</strong> Its <code>templateRef</code> names a
@@ -2760,13 +2763,13 @@ both spellings working.</p>
         
         
           
-          <a href="../v1alpha1-deprecation/" class="md-footer__link md-footer__link--next" aria-label="Next: v1alpha1 deprecation">
+          <a href="../v1alpha1-deprecation/" class="md-footer__link md-footer__link--next" aria-label="Next: Deprecations &amp; the v2.0.0 removal">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                v1alpha1 deprecation
+                Deprecations & the v2.0.0 removal
               </div>
             </div>
             <div class="md-footer__button md-icon">

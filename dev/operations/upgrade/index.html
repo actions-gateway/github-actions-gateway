@@ -1857,7 +1857,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -3033,10 +3033,13 @@ overrides:</p>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>
 <p>The v2 controllers now reconcile these kinds, so a v2 object set provisions a working
-tenant. You can stay on the <code>v1alpha1</code> (<code>actions-gateway.github.com</code>) API
-indefinitely — both groups are served side by side — or migrate a tenant to v2 with
-the one-shot fan-out tool: see <a href="../migration-v1-to-v2/">migration-v1-to-v2.md</a> and the
-<a href="../v1alpha1-deprecation/"><code>v1alpha1</code> deprecation notice</a>. Note: v2's <code>ActionsGateway</code>
+tenant. Both groups are served side by side, so you can stay on the <code>v1alpha1</code>
+(<code>actions-gateway.github.com</code>) API until the <strong><code>v2.0.0</code></strong> release removes it, or
+migrate a tenant to v2 now with the one-shot fan-out tool: see
+<a href="../migration-v1-to-v2/">migration-v1-to-v2.md</a> and the
+<a href="../v1alpha1-deprecation/">deprecation and removal notice</a>, which lists everything
+<code>v2.0.0</code> removes (<code>v1alpha1</code>, <code>v2alpha1</code>, and the Classic acquisition protocol) and
+the pre-upgrade checklist for it. Note: v2's <code>ActionsGateway</code>
 reuses the <code>ag</code> short name, so once both groups are installed <code>kubectl get ag</code> is
 ambiguous — qualify it as <code>kubectl get actionsgateways.actions-gateway.github.com</code>
 (or <code>.com</code>) to disambiguate.</p>

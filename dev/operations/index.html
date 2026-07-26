@@ -1450,7 +1450,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -2279,6 +2279,16 @@
 <td><a href="gitops/">gitops.md</a></td>
 <td>Platform engineer</td>
 <td>Install the OCI chart declaratively via Argo CD or Flux — <code>Application</code> / <code>HelmRelease</code> examples with the CRD-pruning gotcha handled, plus sourcing the GitHub App credential Secret with External Secrets Operator or Sealed Secrets (raw key never committed).</td>
+</tr>
+<tr>
+<td><a href="v1alpha1-deprecation/">v1alpha1-deprecation.md</a></td>
+<td>Platform engineer, Tenant operator</td>
+<td>Standing deprecation notice: what the <code>v2.0.0</code> release removes (<code>v1alpha1</code>, <code>v2alpha1</code>, Classic acquisition), what keeps working until then, and the pre-upgrade checklist.</td>
+</tr>
+<tr>
+<td><a href="migration-v1-to-v2/">migration-v1-to-v2.md</a></td>
+<td>Platform engineer</td>
+<td>Move a tenant off the deprecated <code>v1alpha1</code> API with the <code>gag-migrate</code> one-shot fan-out: dry-run → review → <code>--apply</code>, coexistence, rollback, teardown.</td>
 </tr>
 <tr>
 <td><a href="upgrade/">upgrade.md</a></td>

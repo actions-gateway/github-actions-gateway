@@ -1569,7 +1569,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -2388,14 +2388,17 @@ exact commands to reproduce it.</p>
 <code>RunnerSet</code> + <code>RunnerTemplate</code> (+ optional <code>EgressProxy</code>), shown in
 <a href="#4-create-your-gateway-and-runner-set-v2-recommended">Step 4</a> below.
 <code>v2beta1</code> is the graduated, ScaleSet-only storage and hub version, v2's first
-stability contract, and where new capabilities land. <code>v2alpha1</code> stays served
-for coexistence and as the <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a>
-on-ramp — it carries the deprecated <code>acquisitionProtocol</code> selector a migrating
-v1 tenant needs, which a new tenant does not — and the apiserver converts
-between the two. The older single-CR <strong><code>v1alpha1</code></strong> API is still fully served
-but <strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong> — reach for it only if
-you have a specific reason to, and see the
-<a href="#legacy-the-v1alpha1-api-deprecated">legacy v1 path</a>. Already on v1?
+stability contract, and where new capabilities land. <code>v2alpha1</code> stays served as
+the <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp, carrying the
+<code>acquisitionProtocol</code> selector a migrating v1 tenant needs and a new tenant does
+not, and the apiserver converts between the two. The older single-CR
+<strong><code>v1alpha1</code></strong> API is still fully served but
+<strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong>: reach for it only if you
+have a specific reason to, and see the
+<a href="#legacy-the-v1alpha1-api-deprecated">legacy v1 path</a>. <code>v1alpha1</code>, <code>v2alpha1</code>,
+and the classic acquisition protocol are all
+<a href="../operations/v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>v2beta1</code> is not.
+Already on v1?
 <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> moves you across without
 changing how your jobs are acquired.</p>
 </div>
@@ -2599,9 +2602,9 @@ and <a href="../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API d
 <p class="admonition-title"><code>v1alpha1</code> is deprecated — new tenants should use v2 above</p>
 <p>The <code>actions-gateway.github.com/v1alpha1</code> single-CR API is still fully served
 and supported, but it is <strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong>
-in favor of the decomposed v2 API. It will be removed on a schedule tied to the
-v2 API reaching beta, announced as a named release with at least one release of
-notice. Use it only if you have a specific reason not to adopt v2 yet; if you
+in favor of the decomposed v2 API, and it is <strong>removed at <code>v2.0.0</code></strong> (announced
+with <code>v1.3.0</code>, one release ahead, per the project's removal policy). Use it only
+if you have a specific reason not to adopt v2 yet; if you
 are already on v1, <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> moves you
 to v2 without changing how your jobs are acquired.</p>
 </div>

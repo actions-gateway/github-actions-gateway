@@ -1646,7 +1646,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -2763,8 +2763,9 @@ fully served, but <a href="../v1alpha1-deprecation/">deprecated</a>. The v2
 Helm release Secret stays under the 1 MiB limit. Install it alongside the main chart
 unless you are running v1-only.</p>
 <p>Each v2 CRD is served at <strong>two versions</strong>: <strong><code>v2beta1</code></strong> (the served <strong>and</strong> storage
-version — the graduated, ScaleSet-only shape) and <strong><code>v2alpha1</code></strong> (still served for
-coexistence and the <code>gag-migrate</code> on-ramp). The apiserver converts between them
+version — the graduated, ScaleSet-only shape) and <strong><code>v2alpha1</code></strong> (served as the
+<code>gag-migrate</code> on-ramp, deprecated, and
+<a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>). The apiserver converts between them
 through a <strong>conversion webhook hosted by the GMC</strong> (the <code>/convert</code> endpoint on the
 same <code>webhook-service</code> that fronts the validating webhooks). Two consequences for an
 operator:</p>

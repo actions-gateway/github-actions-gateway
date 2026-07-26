@@ -1538,7 +1538,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -2386,11 +2386,11 @@ tagged chart. Check the release notes for the exact image digests to pin.</p>
   control-plane sizing (<code>agcResources</code>, optionally handed to a Vertical Pod Autoscaler
   with <code>agcAutoscaling</code>), and a <code>v1 → v2</code> migration tool. It has reached its first
   stability contract: <strong><code>v2beta1</code></strong> is the graduated, ScaleSet-only storage and hub
-  version, <code>v2alpha1</code> stays served for coexistence and the <code>gag-migrate</code> on-ramp,
-  and the apiserver converts between them through a webhook the GMC hosts. The
-  single-CR <code>v1alpha1</code> API (and its classic acquisition protocol) is still fully served
-  but <strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong>; removing them is the
-  near-term work below. See the migration
+  version, <code>v2alpha1</code> stays served as the <code>gag-migrate</code> on-ramp, and the apiserver
+  converts between them through a webhook the GMC hosts. The single-CR <code>v1alpha1</code>
+  API, <code>v2alpha1</code>, and the classic acquisition protocol are all still fully served
+  but <strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong>, and all three are removed
+  at <strong><code>v2.0.0</code></strong>; that removal is the near-term work below. See the migration
   guide's <a href="../operations/migration-v1-to-v2/#why-upgrade-to-v2">Why upgrade to v2</a>
   for the full list.</li>
 <li><strong>Day-2 operations.</strong> Helm upgrade and rollback paths, a backup/restore and
@@ -2418,12 +2418,16 @@ for how to run each of the above.</p>
 <p>Work that is scoped and actively being built — adoption-enabling polish and the
 last gaps an outside operator hits.</p>
 <ul>
-<li><strong>Retiring <code>v1alpha1</code> and the classic acquisition protocol.</strong> <!-- q:Q273 --> The graduation
-  that made this possible has shipped, so what remains is the removal itself:
-  the single-CR <code>v1alpha1</code> API and the classic (many-acquirers) protocol both
-  come out on a named release announced at least one release ahead. The
-  deprecation window opened at v1.1.0, and <code>gag-migrate</code> already moves a tenant
-  across without changing how jobs are acquired.</li>
+<li><strong>Retiring <code>v1alpha1</code>, <code>v2alpha1</code>, and the classic acquisition protocol.</strong> <!-- q:Q273 --> The
+  graduation that made this possible has shipped, so what remains is the removal
+  itself. Policy is that a removal lands on a named release announced at least one
+  release ahead: <code>v1.3.0</code> is that announcement, and <strong><code>v2.0.0</code> is the named release</strong>
+  that removes all three. They are one bundle because <code>v2beta1</code> is already
+  ScaleSet-only, so classic acquisition exists solely to serve <code>v1alpha1</code> and
+  <code>v2alpha1</code> objects. <code>v2.0.0</code> is itself gated on the <code>v2</code> GA API being available and
+  validated, not on a date. The deprecation window opened at v1.1.0, and
+  <code>gag-migrate</code> already moves a tenant across without changing how jobs are acquired.
+  Detail: the <a href="../operations/v1alpha1-deprecation/">deprecation and removal notice</a>.</li>
 <li><strong>Capacity-aware job intake.</strong> <!-- q:Q405,Q406 --> Additional opt-in rungs on the pre-claim gate,
   so a job is not claimed when the cluster demonstrably cannot place its worker:
   one sourced from the scheduler's <code>Unschedulable</code> verdict (for fixed-size and
