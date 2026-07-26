@@ -50,9 +50,10 @@
 # addresses the actual binding constraint.
 #
 # Usage (consumed by the root Makefile):
-#   scripts/local-throttle.sh jobs     # parallelism cap, or empty when off
-#   scripts/local-throttle.sh prefix   # command priority wrapper, or empty when off
-#   scripts/local-throttle.sh lockfile # shared cross-session lock path, or empty when off
+#   scripts/local-throttle.sh jobs       # parallelism cap, or empty when off
+#   scripts/local-throttle.sh prefix     # command priority wrapper, or empty when off
+#   scripts/local-throttle.sh lockfile [N] # Nth cross-session lock path (default 1)
+#   scripts/local-throttle.sh slots      # how many concurrent heavy runs are allowed
 #
 # Capping parallelism (jobs) bounds ONE run's fan-out, but nothing stops three
 # concurrent worktree/session `make check` runs from each launching that many
@@ -62,10 +63,26 @@
 # shared advisory lock the heavy phases hold (see serialize_heavy_build in
 # scripts/lib/common.sh) so sibling runs queue and each runs at full throttle in
 # turn instead of trampling each other.
+#
+# That lock started out EXCLUSIVE — one heavy run machine-wide. On a box running
+# several worktree sessions that made the gate, not the work, set the pace: one
+# run used `jobs` of the machine's threads while every sibling blocked for its
+# whole duration (waits up to 5 h were observed). It is now an N-slot semaphore
+# (`slots`): N runs proceed at once, the rest queue. N holders at `jobs` each can
+# oversubscribe the physical cores, deliberately — the desktop-safety property is
+# the QoS demotion (CPU *and* I/O below the compositor), which every holder still
+# carries; the parallelism cap is a secondary bound. Set GAG_HEAVY_BUILD_SLOTS=1
+# to restore strict serialization.
 set -euo pipefail
 
 # Physical cores left for the GUI/foreground apps when throttling.
 readonly GUI_CORE_HEADROOM=2
+
+# Concurrent heavy runs allowed on a machine with enough cores to overlap two of
+# them. Below that there is nothing to overlap: 3 physical cores means jobs=1,
+# and a second holder would just thrash the one core the UI is not using.
+readonly DEFAULT_HEAVY_BUILD_SLOTS=2
+readonly MIN_CORES_FOR_MULTIPLE_SLOTS=4
 
 # os_kind prints a normalized platform tag: darwin | linux | other.
 os_kind() {
@@ -150,13 +167,35 @@ qos_prefix() {
 	esac
 }
 
-# lock_file prints the path of the shared advisory lock that serializes the
+# compute_slots prints how many heavy runs may proceed concurrently.
+# GAG_HEAVY_BUILD_SLOTS overrides it (1 restores the old strict serialization);
+# a non-numeric or zero override is ignored rather than breaking a build.
+compute_slots() {
+	local override="${GAG_HEAVY_BUILD_SLOTS:-}"
+	if [[ "$override" =~ ^[0-9]+$ ]] && (( override >= 1 )); then
+		printf '%s\n' "$override"
+		return
+	fi
+	if (( $(physical_cores) >= MIN_CORES_FOR_MULTIPLE_SLOTS )); then
+		printf '%s\n' "$DEFAULT_HEAVY_BUILD_SLOTS"
+	else
+		printf '1\n'
+	fi
+}
+
+# lock_file [N] prints the path of the Nth advisory lock (default 1) bounding the
 # heavy local build phases across concurrent worktrees/sessions on one machine.
-# It lives in the per-user cache dir — OUTSIDE any worktree — so every checkout
+# They live in the per-user cache dir — OUTSIDE any worktree — so every checkout
 # of this repo (the main tree and each .claude/worktrees/* clone) coordinates on
-# the SAME file. Printed only when throttling is active (the same GUI-dev-shell
+# the SAME files. Printed only when throttling is active (the same GUI-dev-shell
 # gate as jobs/prefix); empty on CI/headless so those runs stay fully parallel.
+#
+# Slot 1 keeps the original single-lock filename on purpose: a worktree still on
+# the pre-semaphore code takes exactly that path, so it contends with slot 1 here
+# rather than running unbounded alongside us until every checkout has this change.
 lock_file() {
+	local index="${1:-1}"
+	[[ "$index" =~ ^[0-9]+$ ]] && (( index >= 1 )) || index=1
 	local base
 	case "$(os_kind)" in
 		darwin) base="$HOME/Library/Caches" ;;
@@ -167,7 +206,11 @@ lock_file() {
 	# A missing cache dir or unwritable home should never break a build — fall
 	# back to no lock (unserialized) rather than failing.
 	mkdir -p "$dir" 2>/dev/null || return 0
-	printf '%s\n' "$dir/local-heavy-build.lock"
+	if (( index == 1 )); then
+		printf '%s\n' "$dir/local-heavy-build.lock"
+	else
+		printf '%s\n' "$dir/local-heavy-build.$index.lock"
+	fi
 }
 
 main() {
@@ -181,12 +224,17 @@ main() {
 	case "$want" in
 		jobs) compute_jobs ;;
 		prefix) qos_prefix ;;
-		lockfile) lock_file ;;
+		lockfile) lock_file "${2:-1}" ;;
+		slots) compute_slots ;;
 		*)
-			printf 'usage: %s {jobs|prefix|lockfile}\n' "$0" >&2
+			printf 'usage: %s {jobs|prefix|lockfile [N]|slots}\n' "$0" >&2
 			return 2
 			;;
 	esac
 }
 
-main "$@"
+# Run main only when executed directly, so local-throttle-test.sh can source
+# this file to exercise the pure sizing helpers without shelling out per case.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	main "$@"
+fi

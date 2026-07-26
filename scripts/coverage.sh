@@ -130,8 +130,13 @@ measure_module() {
 	(
 		cd "$dir"
 		[[ -n "$THROTTLE_JOBS" ]] && export GOMAXPROCS="$THROTTLE_JOBS"
+		# -trimpath makes the test-result cache key path-independent so a fresh
+		# worktree inherits an already-measured module instead of re-running it
+		# (see scripts/go-test.sh's header and docs/plan/local-gate-throughput.md).
+		# A cached run still emits a byte-identical coverage profile, so the
+		# ratchet reads the same number either way.
 		# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
-		$THROTTLE_PREFIX go test -timeout 2m $p_flag $verbose_flag -coverprofile="$profile" ./... >&2
+		$THROTTLE_PREFIX go test -trimpath -timeout 2m $p_flag $verbose_flag -coverprofile="$profile" ./... >&2
 	) || {
 		echo "coverage: 'go test' failed in $dir (output above)" >&2
 		exit 1

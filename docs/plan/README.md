@@ -62,6 +62,7 @@ markers per item.
 |---|---|---|
 | [docker-image-speed.md](docker-image-speed.md) | Image build + load-into-kind time | ✅ Done — every item shipped (§1/2/4/5/8/9/13) or explicitly 🚫 not pursued (§7/12); §3/6/10/11 obsoleted by vendoring + in-cluster registry |
 | [e2e-tests-speed.md](e2e-tests-speed.md) | E2E suite + CI-pipeline speed improvements | ✅ Done — Round 1 (§1–§14) and Round 2 (§15–§18) all shipped (the top-of-file TOC ✓ markers lag the authoritative status tables) |
+| [local-gate-throughput.md](local-gate-throughput.md) | Cost of one `make check` run and queue depth across concurrent worktree sessions | ⚠️ Cross-worktree test-cache sharing (`-trimpath`), the N-slot heavy-build semaphore, and the parallel cheap gates all shipped; the sequential coverage loop remains open |
 
 ## Deployment
 
