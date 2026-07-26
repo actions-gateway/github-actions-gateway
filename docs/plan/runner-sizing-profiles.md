@@ -516,13 +516,22 @@ condition reports `SizingProfileActive` instead of a verdict.
   The quota conditions reported it precisely (`WorkerQuotaExceeded=True`,
   `QuotaExhausted`, with `WorkerQuotaPressure` correctly `Superseded`), which is
   the capacity observability doing its job on a real fault.
-- **Orphaned scale-set workers hold quota indefinitely.** After that churn, 8
-  worker pods remained alive with **zero** jobs outstanding, occupying 10 of 12
-  quota slots and all 6 worker nodes until deleted by hand. Neither reaper rule
-  applies to them (`completedTTL` needs a finished pod, `pendingDeadline` needs a
-  Pending one), so a worker whose assignment is lost is invisible to both. Filed
-  as [Q420](../STATUS.md#Q420); related to but distinct from
-  [Q417](../STATUS.md#Q417), which covers eviction detection rather than reaping.
+- **A Running scale-set worker has no reap deadline, so an idle one is
+  immortal.** After that churn, 8 worker pods remained alive with **zero** jobs
+  outstanding, occupying 10 of 12 quota slots and all 6 worker nodes until
+  deleted by hand. The reaper
+  ([`runner_shared.go`](../../cmd/agc/internal/controller/runner_shared.go))
+  switches on pod phase: terminal phases get `completedTTL`, `Pending` gets
+  `pendingDeadline`, and `PodRunning` is counted as active and `continue`d with
+  **no deadline of any kind**. So the Pending orphans in that same window *were*
+  reaped (`reason=pending_deadline` in the AGC log); the ones that survived were
+  the workers that had reached Running, registered, and then sat at
+  `Listening for Jobs` forever because their assignment was gone. On classic this
+  cannot happen: `provision()` blocks on the pod's terminal state, so a Running
+  worker is always owned by a goroutine. It is specific to the scale-set tier's
+  fire-and-forget provisioning. Filed as [Q420](../STATUS.md#Q420), whose fix
+  most naturally rides the pod watch [Q417](../STATUS.md#Q417) Phase 2 introduces
+  rather than a second, standalone mechanism.
 
 ## Non-goals
 
