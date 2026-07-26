@@ -55,10 +55,10 @@ This flow runs per-job inside the tenant namespace, entirely managed by the AGC.
 > does not run steps 2a–5 as written: the runner pulls and completes its own job
 > through its own session, and the AGC advertises a single capacity integer
 > (`X-ScaleSetMaxCapacity`) instead of deciding per delivered job. Two consequences
-> are called out where they arise — the quota rung of step 2a
-> ([Q443](../STATUS.md#Q443)) and eviction auto-retry
-> ([Q417](../STATUS.md#Q417)) — and both are `2.0-gate` items, because the classic
-> removal in `v2.0.0` deletes the only implementation unless they land first.
+> are called out where they arise. Eviction auto-retry is now ported to this tier
+> (Q417, [below](#on-the-scale-set-tier-q417)). The quota rung of step 2a is not
+> ([Q443](../STATUS.md#Q443)) — a `2.0-gate` item, because the classic removal in
+> `v2.0.0` deletes the only implementation unless it lands first.
 
 ```mermaid
 sequenceDiagram
