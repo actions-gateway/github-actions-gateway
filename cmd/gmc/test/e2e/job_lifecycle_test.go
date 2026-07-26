@@ -154,6 +154,12 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		// that *each* job yields its own pod, deliver each onto a freshly
 		// queried live session and count the distinct worker pods that appear
 		// beyond the ones an earlier spec in this Ordered container created.
+		//
+		// "Live" here means registered, not polling: this enqueue can land on a
+		// session that is mid-job, or one the AGC recycled away but failed to
+		// delete. Both are covered by fakegithub ageing an undelivered job into
+		// the owner pool (Q436) — before that, the failed-delete case stranded
+		// the job outright and this spec failed at its full budget.
 		baseline := map[string]bool{}
 		Eventually(func(g Gomega) {
 			for _, name := range workerPodNames(g, tenantNS) {
@@ -180,8 +186,10 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 			By(fmt.Sprintf("job %d: waiting for a new worker pod (%d total)", i, i))
 			// 6-min window: a recycled single-use session redelivers pool-wide, so
 			// the worker pod for this job can lag behind the enqueue by a full
-			// re-register + acquire cycle; on a loaded kindnet runner that has
-			// exceeded the old 4-min budget while calico passed (Q179).
+			// re-register + acquire cycle — plus the pool ageing window (Q436)
+			// when the enqueue landed on a session that never polls again; on a
+			// loaded kindnet runner that has exceeded the old 4-min budget while
+			// calico passed (Q179).
 			Eventually(func(g Gomega) {
 				for _, name := range workerPodNames(g, tenantNS) {
 					if !baseline[name] {

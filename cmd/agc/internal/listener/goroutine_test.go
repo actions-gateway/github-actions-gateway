@@ -1655,6 +1655,9 @@ func newTestMetrics() *runnercore.Metrics {
 		AgentRecycleErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_agent_recycle_errors_total",
 		}, []string{"namespace", "runner_group"}),
+		BrokerSessionLeaksTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_broker_session_leaks_total",
+		}, []string{"namespace", "runner_group"}),
 	}
 }
 

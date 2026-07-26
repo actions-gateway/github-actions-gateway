@@ -659,3 +659,102 @@ func TestLongPollHoldsIdlePollAndDeliversPromptly(t *testing.T) {
 		t.Fatal("job poll did not return after enqueue")
 	}
 }
+
+// TestStrandedSessionQueueAgesIntoPool is the Q436 regression: a job enqueued
+// onto a session that never polls again must still reach the owner's pool, even
+// though that session is never deleted.
+//
+// The e2e failure this reproduces: the AGC finished a job, recycled its
+// single-use agent, and its best-effort DeleteSession timed out three times.
+// The session stayed registered (so nothing requeued its jobs) with nobody
+// polling it (the listener had moved to a fresh session), and the job a spec
+// had enqueued onto it moments earlier was unreachable for the rest of the run
+// — a liveness failure no Eventually budget can wait out. Ageing an undelivered
+// job into the owner pool restores the invariant the real broker has by
+// construction: an enqueued job is always reachable by some session.
+func TestStrandedSessionQueueAgesIntoPool(t *testing.T) {
+	// Both sessions carry the same ownerName (createSession derives it from the
+	// agent id), as an AGC's recycled sessions do — ownerName is
+	// "<group>-<agentIndex>" and the index survives a recycle.
+	newPair := func(t *testing.T, grace time.Duration) (s *server, mainURL, controlURL, sessA, sessB string) {
+		t.Helper()
+		s = newServer()
+		s.sessionQueueGrace = grace
+		main := httptest.NewServer(s.mainMux())
+		t.Cleanup(main.Close)
+		control := httptest.NewServer(s.controlMux())
+		t.Cleanup(control.Close)
+
+		var st int
+		if sessA, st = createSession(t, main.URL, 9, "bearer-a"); st != http.StatusOK {
+			t.Fatalf("create session A: %d", st)
+		}
+		if sessB, st = createSession(t, main.URL, 9, "bearer-b"); st != http.StatusOK {
+			t.Fatalf("create session B: %d", st)
+		}
+		return s, main.URL, control.URL, sessA, sessB
+	}
+
+	t.Run("a job on a session nobody polls ages into the owner pool", func(t *testing.T) {
+		// Grace of one nanosecond: any elapsed time is "stale", so the sweep is
+		// asserted without a sleep. A never polls and is never deleted — exactly
+		// the leaked-session state a failed DeleteSession leaves behind.
+		_, mainURL, controlURL, sessA, sessB := newPair(t, time.Nanosecond)
+		if st := enqueueJob(t, controlURL, sessA, "stranded-job"); st != http.StatusOK {
+			t.Fatalf("enqueue onto A: %d", st)
+		}
+
+		status, body := getMessage(t, mainURL, sessB)
+		if status != http.StatusOK || !strings.Contains(string(body), "stranded-job") {
+			t.Fatalf("poll on B: got %d %q, want 200 carrying the stranded job", status, body)
+		}
+
+		// Delivered exactly once: neither B nor the still-registered A sees it again.
+		if status, _ := getMessage(t, mainURL, sessB); status != http.StatusAccepted {
+			t.Fatalf("second poll on B: got %d, want 202 (job already delivered)", status)
+		}
+		if status, _ := getMessage(t, mainURL, sessA); status != http.StatusAccepted {
+			t.Fatalf("poll on A after the sweep: got %d, want 202 (job moved to the pool)", status)
+		}
+	})
+
+	t.Run("a job on a polling session is not diverted", func(t *testing.T) {
+		// With a grace no test can outrun, the targeted delivery the single-use
+		// specs rely on is unaffected: B does not steal A's job, and A gets it.
+		_, mainURL, controlURL, sessA, sessB := newPair(t, time.Hour)
+		if st := enqueueJob(t, controlURL, sessA, "targeted-job"); st != http.StatusOK {
+			t.Fatalf("enqueue onto A: %d", st)
+		}
+
+		if status, _ := getMessage(t, mainURL, sessB); status != http.StatusAccepted {
+			t.Fatalf("poll on B: got %d, want 202 (A's job must not be diverted)", status)
+		}
+		status, body := getMessage(t, mainURL, sessA)
+		if status != http.StatusOK || !strings.Contains(string(body), "targeted-job") {
+			t.Fatalf("poll on A: got %d %q, want 200 carrying its own job", status, body)
+		}
+	})
+
+	t.Run("the sweep is owner-scoped", func(t *testing.T) {
+		// fakegithub is shared across parallel specs and tenants: one owner's poll
+		// must never move another owner's work, however stale.
+		s, mainURL, controlURL, sessA, _ := newPair(t, time.Nanosecond)
+		other, st := createSessionWithOwner(t, mainURL, 11, "other-owner-0", "bearer-o")
+		if st != http.StatusOK {
+			t.Fatalf("create other-owner session: %d", st)
+		}
+		if st := enqueueJob(t, controlURL, sessA, "owner-a-job"); st != http.StatusOK {
+			t.Fatalf("enqueue onto A: %d", st)
+		}
+
+		if status, _ := getMessage(t, mainURL, other); status != http.StatusAccepted {
+			t.Fatalf("poll on the other owner's session: got %d, want 202", status)
+		}
+		s.mu.Lock()
+		queued := len(s.jobQueues[sessA])
+		s.mu.Unlock()
+		if queued != 1 {
+			t.Fatalf("A's queue holds %d jobs after a foreign poll, want 1 (untouched)", queued)
+		}
+	})
+}

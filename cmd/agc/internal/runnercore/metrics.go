@@ -75,6 +75,12 @@ type Metrics struct {
 	// "not found" (the generate-jitconfig → OAuth-service propagation window). A
 	// sustained non-zero rate signals wide-pool recycle churn feeding this seam.
 	BrokerTokenPropagationRetriesTotal *prometheus.CounterVec
+	// Q436: broker sessions the AGC gave up deleting — every DELETE attempt
+	// failed, so the session survives until GitHub expires it server-side. Each
+	// one holds a slice of the tenant's server-side session budget and delays
+	// redelivery of any job delivered to it, and until now it was visible only as
+	// a log line.
+	BrokerSessionLeaksTotal *prometheus.CounterVec
 	// Q249: number of regular (non-native) sidecar containers in a RunnerSet's
 	// resolved worker template that may block pod reaping (emitted by the RunnerSet
 	// reconciler). A non-zero value warns of the Q247 stranding class; native
@@ -206,6 +212,11 @@ func NewMetrics() *Metrics {
 			Help: "Broker OAuth token-exchange retries a freshly recycled agent made while GitHub's token endpoint still returned a transient \"Registration … was not found\" 400 for its just-created runner record (the generate-jitconfig → OAuth-service propagation window). The listener rides these out instead of exiting and churning a new record; a sustained non-zero rate signals wide-pool recycle churn feeding this seam (Q267, the Q259/Q114 family).",
 		}, []string{"namespace", "runner_group"}),
 
+		BrokerSessionLeaksTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_broker_session_leaks_total",
+			Help: "Broker sessions abandoned because every DELETE attempt failed, leaving the session registered until GitHub expires it server-side (Q436). The listener recovers — it recycles into a fresh session either way — so this is not an availability alarm on its own; a sustained rate means the tenant is accumulating server-side sessions it no longer polls, and points at a slow or unreachable broker on the control-plane path.",
+		}, []string{"namespace", "runner_group"}),
+
 		ReapBlockingSidecarTemplates: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "actions_gateway_reap_blocking_sidecar_templates",
 			Help: "Number of regular (non-native) sidecar containers in a RunnerSet's resolved worker template that may block pod reaping (Q249); native sidecars or the self-exiting-sidecars acknowledgment annotation clear it.",
@@ -236,6 +247,7 @@ func NewMetrics() *Metrics {
 		m.AgentRecyclesTotal,
 		m.AgentRecycleErrorsTotal,
 		m.BrokerTokenPropagationRetriesTotal,
+		m.BrokerSessionLeaksTotal,
 		m.ReapBlockingSidecarTemplates,
 	)
 	return m

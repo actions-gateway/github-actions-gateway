@@ -136,6 +136,12 @@ func deleteSessionDetached(cfg *Config, sessionID string, log *slog.Logger) bool
 		log.Warn("DeleteSession failed; the broker session is leaked until it expires server-side",
 			"sessionId", sessionID, "attempts", sessionDeleteAttempts, "error", lastErr)
 	}
+	// Count it too: the log line is per-session and easy to miss, while the leak
+	// itself is silent — no condition, no event, and the listener recovers into a
+	// fresh session as if nothing happened (Q436).
+	if cfg.Metrics != nil {
+		cfg.Metrics.BrokerSessionLeaksTotal.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
+	}
 	return false
 }
 
