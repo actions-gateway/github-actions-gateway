@@ -109,6 +109,22 @@ type Job struct {
 	RunnerRequestID int64
 	// JITConfig is the base64 run.sh --jitconfig blob for this one job.
 	JITConfig string
+
+	// Owner, Repository, and RunID identify the workflow run this job belongs to,
+	// from the assignment message's JobMessageBase fields (scaleset.JobMessage.RunIdentity).
+	// The provisioner stamps them onto the worker pod, which is what lets eviction
+	// recovery name a run to re-run after the pod dies — the scale-set tier has no
+	// acquired payload to read identity from the way the classic tier does (Q417).
+	//
+	// All three are empty together when the assignment carried no complete identity.
+	// A worker still provisions and still runs its job; only automatic eviction
+	// recovery degrades, observably (see provisioner.RecoverEvictedScaleSetWorkers).
+	Owner      string
+	Repository string
+	RunID      string
+	// JobName is the job's display name from the workflow YAML, stamped on the pod
+	// for operator legibility. Best-effort like the identity triple.
+	JobName string
 }
 
 // ProvisionFunc provisions one worker pod for an assigned job. It must be idempotent
@@ -234,6 +250,11 @@ type Listener struct {
 	rateLimitedSince time.Time // first 429 of the current episode; zero while polling is healthy
 	rateLimitedCond  bool      // RateLimited=True has been pushed for the current episode
 	unauthorizedCond bool      // Degraded=True/Unauthorized has been pushed
+
+	// identityWarnOnce bounds the "assignment carried no run identity" warning to one
+	// line per listener (Q417). Unlike the condition flags above it is touched from the
+	// per-job provision path, so it is a sync.Once rather than a plain bool.
+	identityWarnOnce sync.Once
 
 	mu            sync.Mutex
 	scaleSetID    int
@@ -683,11 +704,32 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 	if outcome != provisionAcked {
 		return outcome
 	}
+	// Run identity travels with the assignment, not with a payload: it is the only
+	// point at which the AGC learns which workflow run this job belongs to, so it is
+	// handed to the provisioner to stamp durably on the worker pod (Q417). An
+	// assignment with no complete identity provisions exactly as before, with the
+	// triple left empty.
+	owner, repo, runID, haveIdentity := aj.RunIdentity()
+	if !haveIdentity {
+		// Warned once per listener, not once per job: a backend that omits the identity
+		// omits it for every assignment, and this is a per-job hot path (Q87 Theme D).
+		// The per-eviction signal is the one that matters operationally, and the
+		// provisioner owns it (a counter plus an owner Event, on the evictions that
+		// actually could not be recovered).
+		l.identityWarnOnce.Do(func() {
+			l.log.Warn("scaleset: assigned job carries no run identity; automatic eviction recovery will not fire for this scale set",
+				"scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID)
+		})
+	}
 	if err := l.cfg.Provision(ctx, Job{
 		JobID:           aj.JobID,
 		RunnerName:      runnerName,
 		RunnerRequestID: aj.RunnerRequestID,
 		JITConfig:       jit.EncodedJITConfig,
+		Owner:           owner,
+		Repository:      repo,
+		RunID:           runID,
+		JobName:         aj.JobDisplayName,
 	}); err != nil {
 		l.log.Warn("scaleset: provision worker", "scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID, "err", err)
 		l.metricsIncProvisionError()

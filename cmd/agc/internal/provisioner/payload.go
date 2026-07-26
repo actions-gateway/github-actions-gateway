@@ -73,22 +73,35 @@ func jobMetaFrom(ap acquirePayload) jobMeta {
 	return m
 }
 
+// Worker-pod annotation keys for the GitHub Actions context of the job a pod runs.
+// Informational for an operator reading `kubectl describe pod` — with one exception:
+// on the scale-set tier AnnotationRunID and AnnotationRepository are also the durable
+// record eviction recovery reads back to name the run to re-run, since that tier keeps
+// no in-process job state (Q417). Exported for that reason; the two cosmetic keys are
+// not read by anything.
+const (
+	AnnotationRunID      = "actions-gateway.com/run-id"
+	AnnotationRepository = "actions-gateway.com/repository"
+	annotationJobName    = "actions-gateway.com/job-name"
+	annotationWorkflow   = "actions-gateway.com/workflow"
+)
+
 // podAnnotations returns the actions-gateway.com/* annotations to stamp on
 // worker pods. Only non-empty fields are included so pods created from
 // minimal/stub payloads don't carry zero-value keys.
 func (m jobMeta) podAnnotations() map[string]string {
 	a := make(map[string]string, 4)
 	if m.runID != "" {
-		a["actions-gateway.com/run-id"] = m.runID
+		a[AnnotationRunID] = m.runID
 	}
 	if m.repository != "" {
-		a["actions-gateway.com/repository"] = m.repository
+		a[AnnotationRepository] = m.repository
 	}
 	if m.jobName != "" {
-		a["actions-gateway.com/job-name"] = m.jobName
+		a[annotationJobName] = m.jobName
 	}
 	if m.workflow != "" {
-		a["actions-gateway.com/workflow"] = m.workflow
+		a[annotationWorkflow] = m.workflow
 	}
 	if len(a) == 0 {
 		return nil

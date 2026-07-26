@@ -5,8 +5,11 @@ package integration_test
 import (
 	"context"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -58,7 +61,10 @@ var scaleSetTestMetrics = scalesetlistener.NewMetrics(prometheus.NewRegistry())
 // drained — how a test models an AGC process going away mid-flight (Q435). Callers
 // that only need one long-lived manager ignore it; the same shutdown is registered
 // as a t.Cleanup either way, and calling stop twice is a no-op.
-func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server) func() {
+//
+// Optional tweaks mutate the Provisioner before the manager starts (e.g. to point the
+// GitHub REST base at a fake for the eviction-recovery rerun call).
+func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server, tweaks ...func(*provisioner.Provisioner)) func() {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 
@@ -85,6 +91,9 @@ func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server
 	p.DefaultWorkerImage = "runner:test"
 	p.HTTPClient = brokerStub.HTTPClient()
 	p.TokenFunc = stubProvider{}.Token
+	for _, tweak := range tweaks {
+		tweak(p)
+	}
 
 	r := &controller.RunnerSetReconciler{
 		Client:          mgr.GetClient(),
@@ -345,6 +354,134 @@ func TestV2_RunnerSet_ScaleSet_SessionFailureConditionsReachStatus(t *testing.T)
 		c := setCondition(v2alpha1.ConditionDegraded)
 		return c != nil && c.Status == metav1.ConditionFalse && c.Reason == v2alpha1.ReasonSessionAuthorized
 	}, 20*time.Second, 200*time.Millisecond, "recovery must clear Degraded back to False/SessionAuthorized")
+}
+
+// TestV2_RunnerSet_ScaleSet_EvictedWorkerTriggersRerun is the Q417 proof at the tier the
+// unit tests cannot reach. The unit tests pin that the provisioner stamps identity when
+// asked and re-runs when handed an evicted pod; only this one shows the reconciler
+// actually connects the two on a pod that came out of the real provisioning path — which
+// is exactly what was missing before, the same gap Q373 had (a wired Provision closure
+// and no second half at all).
+//
+// envtest runs no kubelet, so the test plays that role and drives the worker pod to
+// PodFailed/Evicted through the status subresource.
+func TestV2_RunnerSet_ScaleSet_EvictedWorkerTriggersRerun(t *testing.T) {
+	const ns = "v2-rs-ss-evict"
+	const label = "linux-evict"
+	createNSForAGC(t, ns)
+
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	// Stand-in for the GitHub REST API, counting rerun-failed-jobs calls and recording
+	// the run each one addressed.
+	var rerunCalls atomic.Int64
+	rerunPaths := make(chan string, 8)
+	fakeGitHub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "rerun-failed-jobs") {
+			rerunCalls.Add(1)
+			select {
+			case rerunPaths <- r.URL.Path:
+			default:
+			}
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(fakeGitHub.Close)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newScaleSetRunnerSet("ss-evict", ns, "gw", label, 3)
+	// The CRD floors evictionRetryDelay at 1s, so take the floor: the delay's own
+	// behaviour is handleEviction's and already covered by the unit tests. Keep
+	// completedPodTTL long so the reaper cannot delete the evicted pod before recovery
+	// reads it — the ordering this wiring depends on.
+	rs.Spec.EvictionRetryDelay = &metav1.Duration{Duration: time.Second}
+	rs.Spec.MaxEvictionRetries = ptr.To(int32(2))
+	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		bg := context.Background()
+		_ = k8sClient.Delete(bg, rs)
+		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconcilerWithScaleSet(t, srv, func(p *provisioner.Provisioner) {
+		p.GitHubAPIURL = fakeGitHub.URL
+		p.HTTPClient = fakeGitHub.Client()
+	})
+
+	var ssID int
+	require.Eventually(t, func() bool {
+		id, ok := srv.ScaleSetIDByName(label)
+		ssID = id
+		return ok
+	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
+	waitForSetReadyReason(t, ns, "ss-evict", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	srv.EnqueueJob(ssID)
+
+	// The worker pod comes out of the real provisioning path, so its identity annotations
+	// and tier label are the ones production would write — not fixtures.
+	var pod corev1.Pod
+	require.Eventually(t, func() bool {
+		var pods corev1.PodList
+		if err := k8sClient.List(ctx, &pods, client.InNamespace(ns),
+			client.MatchingLabels{provisioner.LabelRunnerSet: "ss-evict"}); err != nil {
+			return false
+		}
+		for i := range pods.Items {
+			if strings.HasPrefix(pods.Items[i].Name, "runner-") {
+				pod = pods.Items[i]
+				return true
+			}
+		}
+		return false
+	}, 20*time.Second, 50*time.Millisecond, "a worker pod must be provisioned for the assigned job")
+
+	require.Equal(t, provisioner.AcquisitionProtocolScaleSet, pod.Labels[provisioner.LabelAcquisitionProtocol],
+		"the provisioned worker must be marked as a scale-set worker, or recovery will not consider it")
+	wantRepo := scalesettest.DefaultJobOwner + "/" + scalesettest.DefaultJobRepository
+	require.Equal(t, wantRepo, pod.Annotations[provisioner.AnnotationRepository],
+		"the assignment's owner/repository must have reached the pod")
+	runID := pod.Annotations[provisioner.AnnotationRunID]
+	require.NotEmpty(t, runID, "the assignment's workflowRunId must have reached the pod")
+
+	// The kubelet evicts the worker mid-job under node pressure: nothing in the pod runs,
+	// so the job would sit failed until a human re-ran it.
+	pod.Status.Phase = corev1.PodFailed
+	pod.Status.Reason = "Evicted"
+	require.NoError(t, k8sClient.Status().Update(ctx, &pod))
+
+	require.Eventually(t, func() bool { return rerunCalls.Load() >= 1 },
+		20*time.Second, 50*time.Millisecond,
+		"an evicted scale-set worker must trigger rerun-failed-jobs without human action")
+
+	select {
+	case path := <-rerunPaths:
+		assert.Equal(t, "/repos/"+wantRepo+"/actions/runs/"+runID+"/rerun-failed-jobs", path,
+			"the re-run must address the run the evicted pod recorded")
+	default:
+		t.Fatal("no rerun path recorded")
+	}
+
+	// The pod is claimed, so the reconcile loop — which keeps seeing this terminal pod for
+	// the whole completedPodTTL — cannot re-run the same eviction again.
+	require.Eventually(t, func() bool {
+		var got corev1.Pod
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: pod.Name}, &got); err != nil {
+			return false
+		}
+		_, ok := got.Annotations[provisioner.AnnotationEvictionHandledAt]
+		return ok
+	}, 20*time.Second, 50*time.Millisecond, "the evicted pod must be stamped as handled")
+
+	// Several more reconciles' worth of time: still exactly one re-run.
+	time.Sleep(2 * time.Second)
+	assert.Equal(t, int64(1), rerunCalls.Load(),
+		"repeated reconciles of one evicted pod must not spend more of the run's retry budget")
 }
 
 // TestV2_RunnerSet_Classic_DoesNotRegisterScaleSet proves the default path is

@@ -44,7 +44,14 @@ const (
 	defaultEvictionSweepInterval = time.Hour
 )
 
-func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration) {
+// handleEviction reserves a slot from the run's retry budget and, if one remains,
+// waits out retryDelay and asks GitHub to re-run the run's failed jobs. It is shared
+// by both acquisition tiers: the classic path calls it inline from provision() once the
+// worker pod it is watching turns up evicted, and the scale-set path from the owning
+// reconciler's RecoverEvictedScaleSetWorkers pass. tier only labels the metrics — the
+// budget is deliberately one budget, keyed by run_id alone, so the Q106 cap of
+// maxRetries re-runs per run holds across both tiers together rather than once each.
+func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration, tier string) {
 	key := target.Key()
 	if runID == "0" || runID == "" {
 		log.Warn("pod evicted but run_id unknown; skipping auto-retry")
@@ -61,16 +68,16 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 		log.Warn("eviction retry budget exhausted; manual rerun required",
 			"runID", runID, "maxRetries", maxRetries)
 		if p.Metrics != nil {
-			p.Metrics.EvictionRetriesExhausted.WithLabelValues(key.Namespace, key.Name).Inc()
+			p.Metrics.EvictionRetriesExhausted.WithLabelValues(key.Namespace, key.Name, tier).Inc()
 		}
 		target.RecordEvent(corev1.EventTypeWarning, "EvictionRetriesExhausted", "RetryEvictedJob",
 			fmt.Sprintf("worker pod for run %s was evicted and the auto-retry budget (%d) is exhausted; a manual re-run is required", runID, maxRetries))
 		return
 	}
 
-	log.Info("pod evicted; scheduling auto-retry", "runID", runID, "attempt", attempt)
+	log.Info("pod evicted; scheduling auto-retry", "runID", runID, "attempt", attempt, "tier", tier)
 	if p.Metrics != nil {
-		p.Metrics.EvictionRetries.WithLabelValues(key.Namespace, key.Name).Inc()
+		p.Metrics.EvictionRetries.WithLabelValues(key.Namespace, key.Name, tier).Inc()
 	}
 
 	// Brief delay before calling GitHub so any in-flight state settles.

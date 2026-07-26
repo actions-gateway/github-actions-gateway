@@ -554,10 +554,11 @@ type RunnerGroupSpec struct {
     // the metric actions_gateway_eviction_retries_exhausted_total is
     // incremented but no further rerun attempt is made.
     //
-    // Classic acquisition only. A RunnerGroup is always classic, so this field
-    // is live here — but the same field on a ScaleSet-protocol RunnerSet has no
-    // effect: that tier provisions its worker fire-and-forget and never observes
-    // the eviction. See §4 Worker Pod Eviction and Auto-Retry.
+    // Live on both acquisition tiers as of Q417. A RunnerGroup is always classic;
+    // the same field on a ScaleSet-protocol RunnerSet is honored too, with the
+    // eviction detected by the owning reconciler from the worker pod rather than
+    // by a goroutine watching it. The budget is keyed by run ID alone, so the cap
+    // is shared across tiers. See §4 Worker Pod Eviction and Auto-Retry.
     //
     // Defaults to 2 when omitted. This default is applied in-code by the AGC,
     // not via a CRD +kubebuilder:default marker.

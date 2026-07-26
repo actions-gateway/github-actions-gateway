@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
@@ -139,13 +140,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 	// The Target seam own-refs the real RunnerSet and re-resolves its template/proxy
 	// per job — identical to the classic path, so worker pods GC and egress-proxy
 	// wiring carry over unchanged (the App token never reaches the worker; §4 security).
-	target := &runnerSetTarget{
-		client: r.Client,
-		prov:   r.Provisioner,
-		key:    key,
-		uid:    rs.UID,
-		events: r.eventRecorder(),
-	}
+	target := r.provisionerTarget(rs)
 
 	// The scale set's single runs-on label is its name (CEL guarantees exactly one
 	// runnerLabel for a ScaleSet set).
@@ -167,7 +162,18 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		ScaleSetName: scaleSetName,
 		OwnerName:    key.Namespace + "/" + key.Name,
 		Provision: func(ctx context.Context, job scalesetlistener.Job) error {
-			return r.Provisioner.ProvisionScaleSetWorker(ctx, target, job.JobID, job.JITConfig)
+			return r.Provisioner.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{
+				JobID:     job.JobID,
+				JITConfig: job.JITConfig,
+				// The assignment message is the only place this tier learns which
+				// workflow run a job belongs to, and the listener does not retain it —
+				// so it goes onto the worker pod, where eviction recovery reads it back
+				// after the pod is gone (Q417).
+				Owner:      job.Owner,
+				Repository: job.Repository,
+				RunID:      job.RunID,
+				JobName:    job.JobName,
+			})
 		},
 		Cleanup: func(ctx context.Context, jobID string) error {
 			return r.Provisioner.CleanupScaleSetJob(ctx, target, jobID)

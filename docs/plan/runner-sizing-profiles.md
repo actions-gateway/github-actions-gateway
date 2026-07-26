@@ -530,7 +530,7 @@ condition reports `SizingProfileActive` instead of a verdict.
   cannot happen: `provision()` blocks on the pod's terminal state, so a Running
   worker is always owned by a goroutine. It is specific to the scale-set tier's
   fire-and-forget provisioning. Filed as Q420 and **fixed 2026-07-26**,
-  independently of [Q417](../STATUS.md#Q417): the fix needed a durable deadline
+  independently of Q417 (which shipped later the same day): the fix needed a durable deadline
   rather than a pod watch, so it did not have to wait for one. The scale-set
   listener's completion path stamps `actions-gateway.com/job-completed-at` on the
   job's worker pod, and the reaper deletes a pod still Running five minutes later

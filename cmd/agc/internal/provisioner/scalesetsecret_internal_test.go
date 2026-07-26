@@ -69,7 +69,7 @@ func TestProvisionScaleSetWorker_UnstagesSecretWhenCeilingHolds(t *testing.T) {
 
 	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test", MaxWorkers: int32Ptr(1)})
 
-	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, "job-held", "eyJ4IjoxfQ=="),
+	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{JobID: "job-held", JITConfig: "eyJ4IjoxfQ=="}),
 		"the ceiling must hold with MaxWorkers=1 and one running worker")
 	assert.False(t, secretExists(ctx, t, fc, "team-a", "job-held"),
 		"a job held by the ceiling never gets a pod, so its Secret must not survive")
@@ -93,7 +93,7 @@ func TestProvisionScaleSetWorker_UnstagesSecretOnPodCreateError(t *testing.T) {
 
 	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
 
-	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, "job-nopod", "eyJ4IjoxfQ=="))
+	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{JobID: "job-nopod", JITConfig: "eyJ4IjoxfQ=="}))
 	assert.False(t, secretExists(ctx, t, fc, "team-a", "job-nopod"),
 		"a Secret whose pod creation failed must be unstaged")
 }
@@ -118,8 +118,8 @@ func TestProvisionScaleSetWorker_UnstagesSecretOnThrottleError(t *testing.T) {
 		ScaleUp:     &ScaleUpConfig{MaxPerSecond: 1, Burst: 1}, // one now, then throttle
 	})
 
-	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, "job-first", "eyJ4IjoxfQ=="))
-	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, "job-throttled", "eyJ4IjoxfQ=="),
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{JobID: "job-first", JITConfig: "eyJ4IjoxfQ=="}))
+	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{JobID: "job-throttled", JITConfig: "eyJ4IjoxfQ=="}),
 		"the second job in the same instant must be throttled, and the wait errors")
 
 	assert.False(t, secretExists(ctx, t, fc, "team-a", "job-throttled"),
@@ -146,7 +146,7 @@ func TestProvisionScaleSetWorker_ReplayKeepsAnotherDeliverysSecret(t *testing.T)
 
 	// The replay re-stages (AlreadyExists, tolerated) and then hits the ceiling. The
 	// Secret it found is not its to reclaim — the earlier delivery's pod mounts it.
-	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, "job-replay", "eyJ4IjoxfQ=="))
+	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{JobID: "job-replay", JITConfig: "eyJ4IjoxfQ=="}))
 	assert.True(t, secretExists(ctx, t, fc, "team-a", "job-replay"),
 		"a replay must not delete a Secret an earlier delivery's pod is mounting")
 }
@@ -162,7 +162,7 @@ func TestCleanupScaleSetJob_ReclaimsAndIsIdempotent(t *testing.T) {
 
 	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
 
-	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, "job-done", "eyJ4IjoxfQ=="))
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{JobID: "job-done", JITConfig: "eyJ4IjoxfQ=="}))
 	require.True(t, secretExists(ctx, t, fc, "team-a", "job-done"),
 		"the Secret must outlive provisioning — the worker pod mounts it")
 
@@ -189,7 +189,7 @@ func TestCleanupScaleSetJob_StampsJobCompletion(t *testing.T) {
 	p.now = func() time.Time { return completedAt }
 
 	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
-	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, "job-done", "eyJ4IjoxfQ=="))
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{JobID: "job-done", JITConfig: "eyJ4IjoxfQ=="}))
 
 	podKey := client.ObjectKey{Namespace: "team-a", Name: scaleSetPodName("gpu", "job-done")}
 	var pod corev1.Pod

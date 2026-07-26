@@ -30,6 +30,12 @@ import (
 // the rerun API and asserts the invariant: the rerun API is called at most
 // maxRetries times. Run under -race (make test-race) — this is the data-race
 // class -race exists to catch.
+//
+// Half the evictions arrive on the classic tier and half on the scale-set tier, which
+// is the Q417 half of the invariant: the budget is keyed by run_id alone, so one run's
+// worth of concurrent evictions can never collectively exceed maxRetries even when the
+// two tiers detect them by different machinery. A budget that were per-tier would
+// silently allow 2×maxRetries re-runs for a run whose workers span both.
 func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	const (
 		maxRetries  = 2
@@ -46,10 +52,10 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	m := &runnercore.Metrics{
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "test_q106_eviction_retries_total",
-		}, []string{"namespace", "runner_group"}),
+		}, []string{"namespace", "runner_group", "tier"}),
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "test_q106_eviction_retries_exhausted_total",
-		}, []string{"namespace", "runner_group"}),
+		}, []string{"namespace", "runner_group", "tier"}),
 	}
 
 	p := &Provisioner{
@@ -68,24 +74,31 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	// the fix must defend against. retryDelay=0 keeps the test fast.
 	var wg sync.WaitGroup
 	for i := 0; i < concurrency; i++ {
+		tier := evictionTierClassic
+		if i%2 == 1 {
+			tier = evictionTierScaleSet
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "12345", log, maxRetries, 0)
+			p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "12345", log, maxRetries, 0, tier)
 		}()
 	}
 	wg.Wait()
 
 	got := rerunCount.Load()
 	require.LessOrEqualf(t, got, int64(maxRetries),
-		"rerun API must be called at most maxRetries (%d) times, got %d", maxRetries, got)
+		"rerun API must be called at most maxRetries (%d) times across BOTH tiers, got %d", maxRetries, got)
 	// With concurrency far above the budget the budget should be fully consumed.
 	require.Equal(t, int64(maxRetries), got,
 		"budget should be fully used when evictions far exceed it")
 
-	// The EvictionRetries metric is incremented exactly once per reserved slot,
-	// so it must match the number of rerun calls.
-	assert.Equal(t, float64(got), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup")))
+	// The EvictionRetries metric is incremented exactly once per reserved slot, so the
+	// two tiers' series must SUM to the number of rerun calls — the tier label splits
+	// the reporting without splitting the budget.
+	classic := testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", evictionTierClassic))
+	scaleset := testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", evictionTierScaleSet))
+	assert.Equal(t, float64(got), classic+scaleset)
 }
 
 // TestHandleEviction_BudgetIsHardCap verifies that the eviction-retry budget is
@@ -114,7 +127,7 @@ func TestHandleEviction_BudgetIsHardCap(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	for i := 0; i < evictions; i++ {
-		p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "999", log, maxRetries, 0)
+		p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "999", log, maxRetries, 0, evictionTierClassic)
 	}
 
 	assert.Equal(t, int64(maxRetries), rerunCount.Load(),
