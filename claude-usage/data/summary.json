@@ -3,6 +3,11 @@
     "snapshot_date": "2026-07-24",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
     "transcript_files_read": 307,
+    "snapshot_host": "mac-1",
+    "hosts": [
+      "mac-1"
+    ],
+    "host_basis": "token/message rows are per (date, machine); a day's total is the sum across machines, and the upward-only merge applies within a machine",
     "token_date_basis": "UTC date of message timestamp",
     "git_date_basis": "author date (local), --date=short",
     "token_dedup": "(message.id, requestId)",
@@ -108,5 +113,25 @@
     "yaml_generated": 130245,
     "tests": 1394,
     "commits": 1221
+  },
+  "by_host": {
+    "-": {
+      "input": 6559,
+      "output": 478936,
+      "cache_creation": 2009425,
+      "cache_read": 67518843,
+      "assistant_msgs": 742,
+      "user_msgs": 861,
+      "headline_input_output_cachecreation": 2494920
+    },
+    "mac-1": {
+      "input": 8046510,
+      "output": 48688637,
+      "cache_creation": 224729451,
+      "cache_read": 10140003803,
+      "assistant_msgs": 61407,
+      "user_msgs": 68534,
+      "headline_input_output_cachecreation": 281464598
+    }
   }
 }
