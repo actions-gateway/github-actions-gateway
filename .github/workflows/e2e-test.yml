@@ -46,9 +46,15 @@ jobs:
         with:
           filters: |
             e2e:
+              # api/** and scaleset/** are go.work modules compiled into the AGC and
+              # GMC images this tier bakes and deploys (cmd/{agc,gmc} import both).
+              # Both were missing until Q400, so a change confined to either module
+              # shipped to main without any e2e run against it.
+              - 'api/**'
               - 'cmd/**'
               - 'broker/**'
               - 'githubapp/**'
+              - 'scaleset/**'
               - 'test/**'
               - 'vendor/**'
               - 'go.work'

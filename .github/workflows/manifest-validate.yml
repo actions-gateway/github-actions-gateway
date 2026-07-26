@@ -59,6 +59,14 @@ jobs:
         with:
           filters: |
             manifests:
+              # The five v2 CRDs under api/config/crd/ are in
+              # scripts/manifest-validate.sh's standalone_manifests list, but this
+              # filter only knew about cmd/*/config — so a regenerated v2 CRD
+              # skipped its own kubeconform+yamllint run until Q400. Scoped to
+              # api/config/** (not all of api/**) to match cmd/*/config/**: a Go
+              # type change that does not regenerate the YAML cannot break this
+              # gate, and unit-test.yml's `code` filter already covers api/**.
+              - 'api/config/**'
               - 'cmd/agc/config/**'
               - 'cmd/gmc/config/**'
               - 'charts/**'

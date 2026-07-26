@@ -57,9 +57,16 @@ jobs:
         with:
           filters: |
             code:
+              # api/** and scaleset/** are go.work modules the envtest suites
+              # compile against — cmd/{agc,gmc} import api/{apilabels,v2alpha1,
+              # v2beta1} and the AGC ScaleSet suite imports scaleset +
+              # scaleset/scalesettest directly. Both were missing until Q400, so
+              # a change confined to either module skipped this whole tier.
+              - 'api/**'
               - 'broker/**'
               - 'cmd/**'
               - 'githubapp/**'
+              - 'scaleset/**'
               - 'test/**'
               - 'vendor/**'
               - 'go.work'
