@@ -51,6 +51,7 @@ jobs:
       vendor: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.vendor || 'true' }}
       modules: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.modules || 'true' }}
       workflows: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.workflows || 'true' }}
+      claude_usage: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.claude_usage || 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
@@ -136,6 +137,15 @@ jobs:
               - 'go.work'
               - 'scripts/check-path-filters.sh'
               - 'Makefile'
+            # The claude-usage/ Python module (Q437). It matched no filter in this
+            # repo — it is neither Go code nor a shell script — so its unittest
+            # suite ran only when someone remembered to run it by hand, and PR
+            # #841 shipped a model-mapping fix that no gate would have caught.
+            claude_usage:
+              - 'claude-usage/**'
+              - 'scripts/claude-usage-test.sh'
+              - 'Makefile'
+              - '.github/workflows/unit-test.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
       # after `Invoking listFiles` with no error anywhere (Q363). Say it plainly.
@@ -348,6 +358,36 @@ jobs:
       - name: path filters cover go.work (make path-filters-check)
         run: make path-filters-check
 
+  # Run the claude-usage/ Python suite (Q437). That module holds the committed
+  # record of the project's Claude Code usage — for days whose session transcripts
+  # have since been archived, the CSVs under claude-usage/data/ are the only
+  # surviving copy — and compute_metrics.py's merge rule is what keeps a re-run
+  # from revising a recorded day downward or collapsing two machines' shares of
+  # one day. test_compute_metrics.py pins that, but the module fell outside every
+  # filter above (neither Go code nor a shell script), so the suite ran only when
+  # someone remembered; PR #841 shipped a model-mapping fix that no gate would
+  # have caught. Its own job because its trigger set and its toolchain are
+  # different: Python, no Go, no build. Finishes in seconds.
+  #
+  # Stays on ubuntu-latest even under a target_gag dispatch: the dogfood runner
+  # image is provisioned for the Go/e2e jobs, and this gate has no reason to take
+  # cluster capacity.
+  claude-usage-test:
+    needs: [changes]
+    if: needs.changes.outputs.claude_usage == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.x'
+      # `make claude-usage-test` (scripts/claude-usage-test.sh) is the single
+      # source of truth so the local and CI verdicts match. The suite is
+      # stdlib-only, so there is nothing to pip install here.
+      - name: claude-usage unit tests (make claude-usage-test)
+        run: make claude-usage-test
+
   # Aggregate required-status gate. Mark THIS job's check context
   # (`unit-test-gate`) required in the branch ruleset — never the individual
   # path-gated jobs above, because a path-skip leaves them Pending and blocks the
@@ -355,7 +395,7 @@ jobs:
   # and passes only when every needed job succeeded or was legitimately skipped.
   # See docs/plan/required-status-checks.md.
   unit-test-gate:
-    needs: [changes, lint, shellcheck, vendor-check, tidy-check, unit-test, coverage, path-filters]
+    needs: [changes, lint, shellcheck, vendor-check, tidy-check, unit-test, coverage, path-filters, claude-usage-test]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

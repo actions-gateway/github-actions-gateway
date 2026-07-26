@@ -71,6 +71,7 @@ NARROW_FILTERS=(
 	'unit-test.yml:vendor'            # only what determines committed vendor/ contents
 	'unit-test.yml:modules'           # only what determines the tidy-canonical go.mod/go.sum shape
 	'unit-test.yml:workflows'         # the workflow filters this gate itself lints
+	'unit-test.yml:claude_usage'      # the claude-usage/ Python module and its stdlib-only suite
 	'security-scan.yml:chart'         # the Helm chart the Polaris posture scan renders
 	'e2e-calico.yml:calico'           # NetworkPolicy/proxy code only; other PRs stay on the kindnet leg
 	'manifest-validate.yml:manifests' # generated YAML, not the Go types behind it

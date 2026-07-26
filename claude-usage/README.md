@@ -83,6 +83,12 @@ The merge semantics are covered by [`test_compute_metrics.py`](test_compute_metr
 python3 -m unittest discover -s claude-usage
 ```
 
+That suite is a gate, not a convention: `make claude-usage-test` runs it as part of
+`make check`, and the `claude-usage-test` job in `.github/workflows/unit-test.yml`
+runs the same target on every pull request touching this directory. It is
+stdlib-only, so it needs no venv — the `requirements.txt` install in Quick start
+above is for the charts alone.
+
 ## Results
 
 Latest snapshot **2026-07-26** (project day 72; first commit 2026-05-16). "Day 7"
