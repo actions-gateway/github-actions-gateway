@@ -102,6 +102,72 @@ GNU make 3.81 ships on macOS and has no `-O` output sync, so `make -j` would
 interleave failures unreadably). `scripts-test`'s 11 assertion scripts are
 parallelized the same way.
 
+## Finding: on Apple Silicon the QoS clamp confines builds to one CPU cluster
+
+Measured 2026-07-26 on the replacement dev machine: Apple M5 Max, **18 physical /
+18 logical cores** (two performance levels — "Super" ×6, "Performance" ×12),
+128 GB. Here `local-throttle.sh` sizes `jobs` at `physical - 2 = 16` and `slots`
+stays at its hardcoded default of 2.
+
+The question was how far those two numbers could be raised. Neither turns out to
+be the binding constraint. `tmp/qos-cluster-probe.sh` saturates one thread per
+logical CPU under a candidate prefix and samples per-cluster HW active residency
+and clock with `powermetrics`, reporting effective compute as
+`sum(residency x cores x clock)`:
+
+| Prefix | Per-cluster residency | GHz-cores | % of max |
+|---|---|---:|---:|
+| `<none>` | P0=100% P1=100% S=100% | 68.0 | 100 % |
+| `taskpolicy -c utility` (current) | P0=100% P1=2% S=9% | 14.3 | **21 %** |
+| `taskpolicy -d throttle` | P0=100% P1=100% S=100% | 65.5 | 96 % |
+| `nice -n 10 taskpolicy -d throttle` | P0=100% P1=100% S=100% | 60.3 | 89 % |
+| `taskpolicy -c background` | P0=1% P1=100% S=11% | 11.0 | 16 % |
+
+`taskpolicy -c utility` packs every thread onto a **single 6-core performance
+cluster** and pins it to ~2.65 GHz against a 4.38 GHz ceiling — about a fifth of
+the machine, with 12 cores idle. Two separate runs pegged *different* clusters
+(P1, then P0) and neither touched the Super cluster, which rules out incidental
+scheduler packing. The clamp is machine-wide and per-QoS-band, so **every**
+concurrent session's heavy phases land on that same cluster.
+
+Three consequences for the two knobs:
+
+1. **Raising `slots` adds no hardware.** All holders share one cluster, so more
+   slots divide a fixed ~14 GHz-cores further: per-run latency degrades roughly
+   linearly while aggregate throughput stays flat.
+2. **`jobs = 16` is already fictional.** Sixteen workers on six cores is 2.7×
+   oversubscription, costing memory and context switches for no throughput.
+3. **The prefix is the only lever that moves the ceiling**, and it is worth
+   ~4.7× — far more than any value of either knob could have returned.
+
+`-c` is a *clamp*: it only ratchets QoS down, so there is no higher tier to
+select. The alternative is `taskpolicy -d throttle`, which sets the disk I/O
+policy (`IOPOL_TYPE_DISK`) **without** a QoS clamp. That preserves the property
+this design identifies as load-bearing — the I/O demotion `nice` cannot express
+on macOS — while returning the idle cores.
+
+This does not contradict the Intel baseline above. The 4-core i7 had no
+heterogeneous clusters for a QoS band to confine work to, so `physical - 2` was
+an honest estimate there; it stops being one on Apple Silicon.
+
+**Not yet validated, and required before any prefix change ships:** spin threads
+generate no I/O, no memory pressure, and no process churn, so the sweep cannot
+show whether the faster prefix keeps the desktop responsive under a real build —
+and `-d throttle` gives up CPU priority, which is exactly the protection being
+traded away. The validation is a real `go test -race` run under each candidate
+while a probe samples scheduling latency at `QOS_CLASS_USER_INTERACTIVE` (where
+the compositor runs), reporting wall-clock against jitter percentiles, swapins,
+and any new WindowServer report. Idle floor on this machine is p50 2.10 ms /
+p99 4.14 ms; a candidate that holds p99 near it is invisible to the desktop
+however much CPU it burns.
+
+Both instruments were written for this measurement but live in the gitignored
+`tmp/` (the cluster probe, the jitter probe, and the harness), so they do not
+survive as repo artifacts. Promoting them to `scripts/` is part of the tracked
+work and needs a decision first: the jitter probe is C and needs `clang`, which
+`scripts/check-tools.sh` does not currently register. Tracked as
+[Q441](../STATUS.md#Q441).
+
 ## Follow-ups (not in this change)
 
 - **The coverage loop is sequential.** `scripts/coverage.sh` runs its 10 modules
