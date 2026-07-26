@@ -87,7 +87,10 @@ That suite is a gate, not a convention: `make claude-usage-test` runs it as part
 `make check`, and the `claude-usage-test` job in `.github/workflows/unit-test.yml`
 runs the same target on every pull request touching this directory. It is
 stdlib-only, so it needs no venv — the `requirements.txt` install in Quick start
-above is for the charts alone.
+above is for the charts alone. The same target byte-compiles every `.py` here,
+which is the only check [`make_charts.py`](make_charts.py) gets: it has no tests
+and importing it needs matplotlib, so compiling is what catches a syntax error
+in it.
 
 ## Results
 
