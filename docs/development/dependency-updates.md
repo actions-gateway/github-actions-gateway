@@ -10,7 +10,7 @@ is automated, by what, and where the manual edges are.
 
 | Surface | Where it's pinned | Update channel |
 |---|---|---|
-| Go module deps (10 modules) | `*/go.mod`, vendored in `vendor/` + `tools/vendor/` | **Dependabot** (`gomod`, weekly, grouped) → auto-repaired by [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml) |
+| Go module deps (10 modules) | `*/go.mod`, vendored in `vendor/` + `tools/vendor/` | **Dependabot** (`gomod`, weekly, grouped) → auto-repaired by [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml), and auto-rebased when stale by [`dependabot-rebase-stale.yml`](../../.github/workflows/dependabot-rebase-stale.yml) |
 | GitHub Actions (`uses:` SHAs) | `.github/workflows/*.yml` | **Dependabot** (`github-actions`, weekly, grouped) |
 | Docker base images (`FROM` digests) | `cmd/*/Dockerfile`, `test/fakegithub/Dockerfile` | **Dependabot** (`docker`, weekly, grouped) |
 | kind version + binary checksum | `KIND_VERSION` / `KIND_BINARY_SHA256` in [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) | **updatecli** ([`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml), weekly) |
@@ -116,6 +116,13 @@ with `dry_run: true` runs `diff`.
   rationale.
 - **Triage cadence.** updatecli is scheduled just after Dependabot so all
   dependency PRs land together and are reviewed in one weekly pass.
+- **A stale Go bump PR rebases itself, but never merge one by hand.** The vendor
+  sync commit makes Dependabot disown the branch, so a Go bump PR left unmerged
+  while `main` moves goes conflicting and cannot self-rebase.
+  [`dependabot-rebase-stale.yml`](../../.github/workflows/dependabot-rebase-stale.yml)
+  replays its bumps onto current `main` instead (Q427). Resolving that conflict
+  by hand can silently downgrade a module; see
+  [go-workspaces.md](go-workspaces.md#a-synced-branch-stops-auto-rebasing-and-is-rebased-for-you).
 - **Manifest rot.** A manifest is bespoke: if an upstream renames a release asset
   or changes its checksum-file layout, the run fails or no-ops. Watch the
   scheduled run's status; a silent green with no PR for a long-stale pin is the
