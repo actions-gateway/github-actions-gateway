@@ -62,6 +62,7 @@ kubeconform|extended|kubeconform||https://github.com/yannh/kubeconform#installat
 trivy|extended|trivy||https://trivy.dev/latest/getting-started/installation/|
 polaris|extended|FairwindsOps/tap/polaris||https://polaris.docs.fairwinds.com/infrastructure-as-code/#installation|
 python3|extended|python|python3|https://www.python.org/downloads/|
+clang|extended||clang|https://clang.llvm.org/get_started.html (macOS: xcode-select --install)|
 gcloud|extended|||https://cloud.google.com/sdk/docs/install|
 gke-gcloud-auth-plugin|extended|||https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl|gcloud components install gke-gcloud-auth-plugin
 EOF
