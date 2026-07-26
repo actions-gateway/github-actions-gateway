@@ -2848,7 +2848,12 @@ needs an extra <code>skip-outbound-ports</code> annotation to restore it (see
   <a href="../../design/03-api-contracts/"><code>completedPodTTL</code></a> elapses. A pod that never
   reaches a terminal phase is never reaped by the completed-pod path and holds
   its slot indefinitely. (The <code>pendingPodDeadline</code> reaper only covers pods stuck
-  in <code>Pending</code>, not a pod stuck in <code>Running</code>.)</p>
+  in <code>Pending</code>, not a pod stuck in <code>Running</code>. On the ScaleSet protocol a pod
+  still <code>Running</code> five minutes after GitHub reports its job terminal is reaped
+  as a backstop — see
+  <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">WorkerPodOrphanedRunning</a>
+  — but the pod is killed rather than completing, so the sidecar still has to be
+  fixed.)</p>
 </li>
 <li>
 <p><strong>All GitHub-bound egress is funnelled through the per-tenant proxy.</strong> The GMC
@@ -3045,7 +3050,12 @@ hit. (Reproduced on Istio 1.30.2 with <code>ENABLE_NATIVE_SIDECARS=false</code> 
 <p><strong>Why the reaper does not save you.</strong> <code>completedPodTTL</code> only deletes pods that
 reached a <em>terminal</em> phase, and <code>pendingPodDeadline</code> only deletes pods stuck
 <code>Pending</code>. A sidecar-pinned pod is neither — it is <code>Running</code> — so it falls
-through both reaper paths. The fix has to make the pod actually terminate.</p>
+through both phase-based reaper paths. ScaleSet sets get a backstop
+(<a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning"><code>WorkerPodOrphanedRunning</code></a>:
+a pod still <code>Running</code> five minutes after GitHub reports the job terminal is
+deleted), which stops the slots leaking — but it kills the pod instead of
+letting it complete, and Classic sets have no equivalent. The fix still has to
+make the pod actually terminate.</p>
 </blockquote>
 <h3 id="fix-a--opt-out-recommended">Fix A — opt out (recommended)<a class="headerlink" href="#fix-a--opt-out-recommended" title="Permanent link">&para;</a></h3>
 <p><a href="#the-one-label-answer">The one-label answer</a>. No sidecar, no stranding. Stop

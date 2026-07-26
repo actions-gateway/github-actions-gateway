@@ -968,6 +968,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#orphaned-running-worker-pod-scaleset-tier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Orphaned Running Worker Pod (ScaleSet tier)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#agc-crash-mid-job" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2401,6 +2412,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#orphaned-running-worker-pod-scaleset-tier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Orphaned Running Worker Pod (ScaleSet tier)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#agc-crash-mid-job" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2596,6 +2618,32 @@
     Note over A: deletion wakes the goroutine — Secret deleted, listener + slot freed
     Note over GH: job lock lapses, GitHub cancels the run</code></pre>
 <p>A worker pod that never leaves <code>Pending</code> — unpullable <code>workerImage</code>, unschedulable <code>podTemplate</code> constraints, or an exhausted node pool — would otherwise hold a concurrency-ceiling slot forever: the ceiling counts Pending pods and the session goroutine blocks until the pod terminates or disappears. The RunnerGroup reconciler's worker-pod reaper deletes any worker pod that has been Pending longer than <code>pendingPodDeadline</code> (default 10m, per-RunnerGroup). Deletion is treated as completion by the Pod-informer handler, so the session goroutine wakes, deletes the job Secret, and releases its listener and slot. The job itself was never started, so its lock lapses and GitHub cancels the run — the deadline is a capacity-protection mechanism, not a retry mechanism. Operators on clusters with slow legitimate scheduling (e.g. autoscaled GPU node pools) should raise <code>pendingPodDeadline</code> above their worst-case node-provisioning time. See the <a href="../../operations/troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">troubleshooting runbook</a> for diagnosis.</p>
+<hr />
+<h3 id="orphaned-running-worker-pod-scaleset-tier">Orphaned Running Worker Pod (ScaleSet tier)<a class="headerlink" href="#orphaned-running-worker-pod-scaleset-tier" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>  GitHub                AGC (ScaleSet)            K8s API            Worker Pod
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    │                        │                       │                    │
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    ├─ JobAssigned ─────────&gt;│                       │                    │
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    │                        ├─ create pod ─────────&gt;├─ schedule ────────&gt;│
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    │                        │  (fire-and-forget)    │                    │ Running:
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    │                        │                       │                    │ registered,
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    │                        │                       │                    │ &quot;Listening
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    │  assignment lapses /   │                       │                    │  for Jobs&quot;
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    │  cancelled / completed │                       │                    │
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    │  elsewhere             │                       │                    │
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    ├─ JobCompleted ────────&gt;│                       │                    │
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    │  (terminal)            ├─ stamp ──────────────&gt;│  job-completed-at  │
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    │                        │                       │                    │ still Running:
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    │                        │  · 5m grace ·         │                    │ never gets
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    │                        │                       │                    │ its job
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    │                        ├─ delete pod ─────────&gt;├───────────────────&gt;✗
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    │                        │
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    │                        └─ Warning WorkerPodOrphanedRunning
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    │                           worker_pods_reaped_total{reason=&quot;orphaned_running&quot;}++
+</code></pre></div>
+<p>The ScaleSet tier provisions fire-and-forget — the runner pulls its own job through its own broker session, so no AGC goroutine owns the pod the way the classic path's <code>provision()</code> does. A worker that registers but never receives its job therefore waits at <code>Listening for Jobs</code> indefinitely, and because the reaper counts <code>Running</code> as active with no deadline, it held a concurrency slot and a node until an operator deleted it by hand (Q420; observed on the dogfood cluster, where eight such pods occupied ten of twelve quota slots and all six worker nodes with zero jobs outstanding).</p>
+<p>The fix makes GitHub's own verdict the deadline. When the listener sees the terminal <code>JobCompleted</code> for a job, it stamps <code>actions-gateway.com/job-completed-at</code> on that job's worker pod (the same reclaim point that deletes the job's JIT-config Secret), and the reaper deletes any pod still <code>Running</code> five minutes later. The grace is a constant, not a tunable: it measures runner shutdown — a runner that actually ran the job reports completion and exits within seconds — and the job is already over at GitHub either way, so the only thing a premature reap costs is the terminal pod's <code>completedPodTTL</code> inspection window. The stamp is set once, so a completion replayed to a re-created session cannot push the deadline back, and it lives on the pod rather than in AGC memory, so the deadline survives an AGC restart.</p>
+<p>The deadline is only as good as the completion message: a pod whose job GitHub never reports terminal is never stamped, and keeps the old no-deadline treatment. That is deliberate — an unstamped <code>Running</code> pod is indistinguishable from one executing a live job, and reaping those would kill real builds. The replay property covers the process-crash case (a re-created session polls from cursor 0, so a completion handled just before a crash is redelivered and stamps the pod then); what it does not cover is a job that completes <em>before</em> its worker pod exists, whose pod is left to stall <code>Pending</code> on the deleted Secret and be collected by <code>pendingPodDeadline</code>.</p>
+<p>The same arm collects a pod held open past the runner's exit by a container that never terminates — the injected-mesh-sidecar case the <a href="../../operations/troubleshooting/#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar"><code>PossibleReapBlockingSidecar</code></a> condition warns about — on the ScaleSet tier. Classic worker pods are never stamped (their <code>provision()</code> goroutine owns them through to a terminal phase), so nothing changes for them.</p>
 <hr />
 <h3 id="agc-crash-mid-job">AGC Crash Mid-Job<a class="headerlink" href="#agc-crash-mid-job" title="Permanent link">&para;</a></h3>
 <pre class="mermaid"><code>sequenceDiagram

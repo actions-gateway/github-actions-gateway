@@ -2363,6 +2363,11 @@
 <td>Worker pod stuck Pending past the deadline — fix the image/scheduling cause; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">runbook</a></td>
 </tr>
 <tr>
+<td>Workers idling after their job is over</td>
+<td><code>worker_pods_reaped_total{reason="orphaned_running"}</code></td>
+<td>ScaleSet worker still Running five minutes after GitHub reported its job terminal — it never received the job, or a sidecar outlived the runner; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a></td>
+</tr>
+<tr>
 <td>Jobs running but <code>ACTIVEJOBS</code> shows 0</td>
 <td>Check pod phase with <code>kubectl get pods -l actions-gateway/runner-group=&lt;name&gt;</code> (v1) or <code>-l actions-gateway.com/runner-set=&lt;name&gt;</code> (v2)</td>
 <td><code>ACTIVEJOBS</code> is updated on pod phase-change events; the column reflects the last reconcile snapshot — not a real-time gauge. A pod that changed phase after the last reconcile will show up after the next event fires.</td>
