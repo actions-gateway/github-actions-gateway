@@ -31,6 +31,17 @@ func newV2MetricsScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
+// newV2OnlyMetricsScheme returns a scheme with only the v2alpha1 kinds registered,
+// so the fake client fails every v1 ActionsGateway list. It drives the cross-version
+// isolation tests: a v1 pass (metrics_v1.go) that cannot read must not suppress the
+// v2 series of the same metric family (Q403).
+func newV2OnlyMetricsScheme(t *testing.T) *runtime.Scheme {
+	t.Helper()
+	s := runtime.NewScheme()
+	require.NoError(t, gmcv2alpha1.AddToScheme(s))
+	return s
+}
+
 // v2ManagedGateway builds a v2alpha1 ActionsGateway for the managed-gateways
 // collector's v2 count.
 func v2ManagedGateway(name string, deleting bool) *gmcv2alpha1.ActionsGateway {
@@ -134,86 +145,6 @@ func TestIPRangeReconciler_NoUpdateWhenNetworkPolicyMissing(t *testing.T) {
 		"a missing NetworkPolicy must not record an update")
 }
 
-func managedGateway(name string, deleting bool) *gmcv1alpha1.ActionsGateway {
-	ag := &gmcv1alpha1.ActionsGateway{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name},
-		Spec: gmcv1alpha1.ActionsGatewaySpec{
-			GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"},
-		},
-	}
-	if deleting {
-		now := metav1.Now()
-		ag.DeletionTimestamp = &now
-		// A deletion timestamp only persists in the fake client with a finalizer.
-		ag.Finalizers = []string{"actions-gateway/test"}
-	}
-	return ag
-}
-
-// The managed-gateways collector must report the count of non-deleting CRs.
-func TestManagedGatewaysCollector(t *testing.T) {
-	scheme := newIPRangeScheme(t)
-
-	t.Run("none", func(t *testing.T) {
-		fc := fake.NewClientBuilder().WithScheme(scheme).Build()
-		c := newManagedGatewaysCollector(fc, false)
-		assert.Equal(t, 0.0, testutil.ToFloat64(c))
-	})
-
-	t.Run("counts active, excludes deleting", func(t *testing.T) {
-		fc := fake.NewClientBuilder().WithScheme(scheme).
-			WithObjects(
-				managedGateway("a", false),
-				managedGateway("b", false),
-				managedGateway("c", true),
-			).Build()
-		c := newManagedGatewaysCollector(fc, false)
-		assert.Equal(t, 2.0, testutil.ToFloat64(c),
-			"two active gateways; the deleting one is excluded")
-	})
-}
-
-// gatewayWithCondition builds an ActionsGateway carrying a single status
-// condition of the given type/status, for driving the condition-mirroring
-// collectors (runnerGroupsDegradedCollector, proxyQuotaCollector,
-// egressRulesStaleCollector).
-func gatewayWithCondition(name, condType string, status metav1.ConditionStatus) *gmcv1alpha1.ActionsGateway {
-	ag := &gmcv1alpha1.ActionsGateway{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name},
-		Spec: gmcv1alpha1.ActionsGatewaySpec{
-			GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"},
-		},
-	}
-	meta.SetStatusCondition(&ag.Status.Conditions, metav1.Condition{
-		Type: condType, Status: status, Reason: "Test", Message: "test",
-	})
-	return ag
-}
-
-// TestRunnerGroupsDegradedCollector_MirrorsCondition asserts the collector
-// exports a 1/0 gauge per ActionsGateway that mirrors the RunnerGroupsDegraded
-// condition, and that a deleting gateway is skipped entirely.
-func TestRunnerGroupsDegradedCollector_MirrorsCondition(t *testing.T) {
-	scheme := newIPRangeScheme(t)
-
-	degraded := gatewayWithCondition("degraded", gmcv1alpha1.ConditionRunnerGroupsDegraded, metav1.ConditionTrue)
-	healthy := gatewayWithCondition("healthy", gmcv1alpha1.ConditionRunnerGroupsDegraded, metav1.ConditionFalse)
-	deleting := managedGateway("deleting", true)
-
-	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(degraded, healthy, deleting).Build()
-	c := newRunnerGroupsDegradedCollector(fc)
-
-	const expected = `
-# HELP actions_gateway_runnergroups_degraded 1 when the ActionsGateway RunnerGroupsDegraded condition is True (one or more owned RunnerGroups report an impairing condition), else 0.
-# TYPE actions_gateway_runnergroups_degraded gauge
-actions_gateway_runnergroups_degraded{name="degraded",namespace="degraded"} 1
-actions_gateway_runnergroups_degraded{name="healthy",namespace="healthy"} 0
-`
-	// The deleting gateway must not appear as a series at all — CollectAndCompare
-	// fails if the collected exposition contains anything beyond the two lines above.
-	assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
-}
-
 // TestActionsGatewayV2ConditionsCollector_MirrorsConditions asserts the v2
 // ActionsGateway condition collector (Q321) exports the runnersets_degraded,
 // agc_available, egress_unattributed, and agc_autoscaling_unavailable (Q390)
@@ -285,31 +216,6 @@ func TestActionsGatewayV2ConditionsCollector_NoGateways(t *testing.T) {
 	assert.Equal(t, 0, testutil.CollectAndCount(c))
 }
 
-// TestProxyQuotaCollector_MirrorsBothConditions asserts the collector exports
-// both the ProxyQuotaPressure and ProxyQuotaExceeded gauges per gateway,
-// independently mirroring each condition's True/False state.
-func TestProxyQuotaCollector_MirrorsBothConditions(t *testing.T) {
-	scheme := newIPRangeScheme(t)
-
-	ag := gatewayWithCondition("gw", gmcv1alpha1.ConditionProxyQuotaPressure, metav1.ConditionTrue)
-	meta.SetStatusCondition(&ag.Status.Conditions, metav1.Condition{
-		Type: gmcv1alpha1.ConditionProxyQuotaExceeded, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
-	})
-
-	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag).Build()
-	c := newProxyQuotaCollector(fc, false)
-
-	const expected = `
-# HELP actions_gateway_proxy_quota_exceeded 1 when the ProxyQuotaExceeded condition is True (proxy replica creation is being rejected by the namespace ResourceQuota), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy owning the pool.
-# TYPE actions_gateway_proxy_quota_exceeded gauge
-actions_gateway_proxy_quota_exceeded{name="gw",namespace="gw"} 0
-# HELP actions_gateway_proxy_quota_pressure 1 when the ProxyQuotaPressure condition is True (the proxy pool cannot scale to maxReplicas within the namespace ResourceQuota headroom), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy owning the pool.
-# TYPE actions_gateway_proxy_quota_pressure gauge
-actions_gateway_proxy_quota_pressure{name="gw",namespace="gw"} 1
-`
-	assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
-}
-
 // TestProxyQuotaCollector_NoGateways asserts the collector emits nothing when
 // there are no ActionsGateway CRs — no phantom zero-value series.
 func TestProxyQuotaCollector_NoGateways(t *testing.T) {
@@ -317,28 +223,6 @@ func TestProxyQuotaCollector_NoGateways(t *testing.T) {
 	fc := fake.NewClientBuilder().WithScheme(scheme).Build()
 	c := newProxyQuotaCollector(fc, false)
 	assert.Equal(t, 0, testutil.CollectAndCount(c))
-}
-
-// TestEgressRulesStaleCollector_MirrorsCondition asserts the collector exports
-// a 1/0 gauge mirroring the EgressRulesStale condition, and excludes a
-// deleting gateway.
-func TestEgressRulesStaleCollector_MirrorsCondition(t *testing.T) {
-	scheme := newIPRangeScheme(t)
-
-	stale := gatewayWithCondition("stale", gmcv1alpha1.ConditionEgressRulesStale, metav1.ConditionTrue)
-	fresh := gatewayWithCondition("fresh", gmcv1alpha1.ConditionEgressRulesStale, metav1.ConditionFalse)
-	deleting := managedGateway("deleting", true)
-
-	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(stale, fresh, deleting).Build()
-	c := newEgressRulesStaleCollector(fc, false)
-
-	const expected = `
-# HELP actions_gateway_egress_rules_stale 1 when the EgressRulesStale condition is True (the GitHub egress IP-range allowlist has not been refreshed within the staleness window), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy carrying the condition.
-# TYPE actions_gateway_egress_rules_stale gauge
-actions_gateway_egress_rules_stale{name="fresh",namespace="fresh"} 0
-actions_gateway_egress_rules_stale{name="stale",namespace="stale"} 1
-`
-	assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
 }
 
 // TestNewMetrics_RegistersCounterAndCollectors asserts NewMetrics returns a
@@ -450,4 +334,44 @@ actions_gateway_egress_rules_stale{name="v2fresh",namespace="v2fresh"} 0
 actions_gateway_egress_rules_stale{name="v2stale",namespace="v2stale"} 1
 `
 	assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
+}
+
+// TestEgressRulesStaleCollector_V1ReadFailureKeepsV2Series pins the isolation
+// between the per-version passes: with the v1 kind unregistered, the v1 pass in
+// metrics_v1.go cannot list, and the v2 EgressProxy series must still be exported
+// rather than the whole family going silent.
+func TestEgressRulesStaleCollector_V1ReadFailureKeepsV2Series(t *testing.T) {
+	scheme := newV2OnlyMetricsScheme(t)
+
+	stale := v2EgressProxyWithCondition("v2stale", gmcv2alpha1.ConditionEgressRulesStale, metav1.ConditionTrue)
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(stale).Build()
+	c := newEgressRulesStaleCollector(fc, true)
+
+	const expected = `
+# HELP actions_gateway_egress_rules_stale 1 when the EgressRulesStale condition is True (the GitHub egress IP-range allowlist has not been refreshed within the staleness window), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy carrying the condition.
+# TYPE actions_gateway_egress_rules_stale gauge
+actions_gateway_egress_rules_stale{name="v2stale",namespace="v2stale"} 1
+`
+	assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
+}
+
+// TestManagedGatewaysCollector_ReadFailures pins the managed-gateways gauge's
+// partial-read contract across the version split: an unreadable v1 pass still
+// yields the v2 count, and the gauge is absent only when no version could be read
+// at all (absent beats a misleading zero).
+func TestManagedGatewaysCollector_ReadFailures(t *testing.T) {
+	t.Run("v1 unreadable still counts v2", func(t *testing.T) {
+		fc := fake.NewClientBuilder().WithScheme(newV2OnlyMetricsScheme(t)).
+			WithObjects(v2ManagedGateway("v2a", false), v2ManagedGateway("v2del", true)).Build()
+		c := newManagedGatewaysCollector(fc, true)
+		assert.Equal(t, 1.0, testutil.ToFloat64(c),
+			"the v1 list failure must not suppress the v2 count")
+	})
+
+	t.Run("no version readable emits nothing", func(t *testing.T) {
+		fc := fake.NewClientBuilder().WithScheme(runtime.NewScheme()).Build()
+		c := newManagedGatewaysCollector(fc, true)
+		assert.Equal(t, 0, testutil.CollectAndCount(c),
+			"with neither version readable the gauge must be absent, not zero")
+	})
 }
