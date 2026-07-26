@@ -144,7 +144,7 @@ v2-api-sync-check: ## Fail if a shared api/v2alpha1 + api/v2beta1 file diverges 
 # decision (which modules a diff makes golangci-lint cover). Lightweight
 # pure-bash checks; part of `check` and the CI shellcheck job.
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction)
 	scripts/verify-release-test.sh
 	scripts/validate-cluster-test.sh
 	scripts/lint-backlog-test.sh
@@ -156,6 +156,7 @@ scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, v
 	scripts/check-roadmap-test.sh
 	scripts/check-conflict-markers-test.sh
 	scripts/check-v2-api-sync-test.sh
+	scripts/dependabot-rebase-stale-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in

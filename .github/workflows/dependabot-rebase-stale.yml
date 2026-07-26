@@ -1,0 +1,84 @@
+name: dependabot-rebase-stale
+
+# Rescue Dependabot Go-module PRs that can no longer rebase themselves (Q427).
+#
+# dependabot-go-sync.yml (Q111) pushes a `chore(deps): sync ...` commit onto the
+# bot's branch, which makes Dependabot disown it. From then on the bot never
+# rebases the branch again, so the PR goes permanently conflicting the moment
+# main moves under it and never self-heals.
+#
+# The documented manual remedy, a maintainer commenting `@dependabot recreate`,
+# cannot be automated: Dependabot accepts comment commands only from *users*
+# with push access and rejects GitHub Apps / bots ("Sorry, only users with push
+# access can use that command", dependabot/dependabot-core#9147, still open),
+# and this repo deliberately stores no Personal Access Token. So this workflow
+# does the rebase itself: scripts/dependabot-rebase-stale.sh discards the
+# conflicted tree, replays the PR's version bumps on current main with `go get`
+# (refusing any that Go reports as a downgrade), regenerates everything with
+# `make vendor-sync`, and force-pushes the result.
+#
+# It does NOT re-run the PR's checks: the force-push uses GITHUB_TOKEN, and
+# GitHub never re-triggers workflows from a GITHUB_TOKEN push. That is the same
+# one-click maintainer step (close + reopen) every synced Dependabot PR already
+# needs; the workflow leaves a PR comment saying so. See
+# docs/development/go-workspaces.md § Dependabot Go bumps are auto-synced.
+on:
+  push:
+    # Every main push can strand a synced branch: a go.mod, go.sum, vendor/, or
+    # THIRD-PARTY-NOTICES change conflicts with the sync commit. Not path-gated:
+    # the eligibility check is cheap and missing a strand costs a stuck PR.
+    branches: [main]
+  schedule:
+    # Daily safety net at 07:47 UTC, offset from the Monday 06:17 updatecli run.
+    # Catches a PR born conflicted (main moved between Dependabot creating the
+    # branch and the sync commit landing, so no later main push covers it) and
+    # one whose mergeable state never settled inside a run's poll window.
+    - cron: '47 7 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Analyse and rebase locally only: push and comment nothing.'
+        type: boolean
+        default: false
+
+# Read-only by default; the job elevates to exactly the writes it needs.
+permissions:
+  contents: read
+
+# One rebase run at a time; two concurrent runs would race each other's
+# force-pushes. Never cancel a run mid-replay; GitHub keeps at most one pending
+# run per group, so a burst of main pushes collapses to a single follow-up.
+concurrency:
+  group: dependabot-rebase-stale
+  cancel-in-progress: false
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    # A replay is a full `make vendor-sync` (tidy every workspace module,
+    # re-vendor, regenerate notices) per PR, and the script caps itself at
+    # MAX_PRS per run.
+    timeout-minutes: 45
+    permissions:
+      contents: write       # force-push the replayed branch
+      pull-requests: write  # explain the rebase, and the check re-trigger it needs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the replay needs the merge base of each Dependabot
+          # branch against main to work out which bumps the PR introduced.
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - name: rebase stranded Dependabot Go PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ "${DRY_RUN:-false}" == "true" ]]; then
+            args+=(--dry-run)
+          fi
+          scripts/dependabot-rebase-stale.sh "${args[@]}"
