@@ -886,6 +886,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="4.1. Tenant Provisioning Flow (GMC)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#411-tenant-teardown-and-child-reclamation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1.1. Tenant Teardown and Child Reclamation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2330,6 +2347,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="4.1. Tenant Provisioning Flow (GMC)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#411-tenant-teardown-and-child-reclamation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1.1. Tenant Teardown and Child Reclamation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2486,6 +2520,13 @@
 <li><strong>Signal:</strong> The GMC watches both the proxy Deployment's <code>ReadyReplicas</code> and the AGC Deployment's <code>ReadyReplicas</code>, updating <code>ActionsGatewayStatus.ProxyReadyReplicas</code> and the <code>AGCAvailable</code> Condition as they become available.</li>
 <li><strong>Report:</strong> The <code>ActionsGateway</code> status transitions to <code>Ready</code> once both the proxy pool has at least <code>minReplicas</code> ready and the AGC is healthy.</li>
 </ol>
+<h3 id="411-tenant-teardown-and-child-reclamation">4.1.1. Tenant Teardown and Child Reclamation<a class="headerlink" href="#411-tenant-teardown-and-child-reclamation" title="Permanent link">&para;</a></h3>
+<p>Deleting the <code>ActionsGateway</code> reclaims every resource provisioned above through <strong>two independent mechanisms, deliberately layered</strong>:</p>
+<ul>
+<li><strong>The cleanup finalizer is the primary path.</strong> It is ordered and fail-closed (Q125): the GMC deletes the <code>RunnerGroup</code>s first and waits for them to be gone — so listeners and worker pods drain before the AGC <code>Deployment</code> and its credentials are removed — then deletes the remaining children, and only removes the finalizer once <em>every</em> delete is confirmed. A delete that keeps failing retains the finalizer and requeues rather than abandoning a live, credentialed AGC. It also reaches objects the current reconciler no longer applies (the pre-v0.X per-tenant <code>Role</code>, the legacy <code>actions-gateway</code> <code>NetworkPolicy</code>), which nothing else would reclaim.</li>
+<li><strong>Owner-reference cascade garbage collection is the backstop.</strong> Every namespaced child the GMC applies carries a controller <code>OwnerReference</code> to its <code>ActionsGateway</code> — in both <code>v1alpha1</code> and <code>v2alpha1</code> (Q394). Because a <code>ResourceQuota</code>-style platform-owned object is never a GMC child, and because both API versions place their children in the CR's own namespace, the reference is always valid. It costs nothing in the normal path (the CR is not removed from etcd until the finalizer clears, so the ordered drain always runs first) and it is what makes an operator force-removing the finalizer a recoverable mistake rather than a leak of credentialed <code>ServiceAccount</code>s, the AGC <code>RoleBinding</code>, the egress <code>NetworkPolicy</code>s, and the proxy <code>HPA</code>/<code>PDB</code>/<code>Service</code> into a namespace the tenant still controls.</li>
+</ul>
+<p>The one intentional exception is a <strong>cluster-scoped</strong> child: a namespaced <code>ActionsGateway</code> cannot own one (the apiserver rejects the cross-scope reference and never collects it), so <code>v2alpha1</code>'s per-gateway <code>ClusterRoleBinding</code> is un-owned and reclaimed by the finalizer alone. Any new cluster-scoped child inherits that constraint and must be deleted explicitly in <code>reconcileDelete</code>.</p>
 <hr />
 <h2 id="42-job-execution-flow-agc">4.2. Job Execution Flow (AGC)<a class="headerlink" href="#42-job-execution-flow-agc" title="Permanent link">&para;</a></h2>
 <p>This flow runs per-job inside the tenant namespace, entirely managed by the AGC.</p>
