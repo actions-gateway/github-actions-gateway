@@ -314,7 +314,7 @@ func withDinD(pod *corev1.PodSpec) {
 		Resources: corev1.ResourceRequirements{
 			// Deliberately small: an e2e fixture tenant never runs a real build. The
 			// production sizing is measured per job class and lives in the dogfood
-			// overlay (docs/plan/dogfood-runner-rightsizing.md), not here.
+			// overlay (deploy/dogfood-e2e/overlays/dind, Q248), not here.
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("100m"),
 				corev1.ResourceMemory: resource.MustParse("128Mi"),
