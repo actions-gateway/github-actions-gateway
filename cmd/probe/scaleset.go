@@ -55,7 +55,12 @@
 //	PROBE_SCALESET_JOB_TEST    - "true" to keep polling the queue for a
 //	                             JobAvailable (dispatch a workflow with
 //	                             runs-on: <scale set name> while it waits) and
-//	                             acquire it, observing JobAssigned.
+//	                             acquire it, observing JobAssigned. This is also
+//	                             the Q417 verification run: each JobAssigned is
+//	                             reported with an explicit verdict on whether it
+//	                             carried the run identity scale-set eviction
+//	                             recovery depends on (reportRunIdentity). Grep the
+//	                             output for "run identity present" or "GAP".
 //	PROBE_SCALESET_NAME        - Scale set name (default gag-probe-scaleset).
 //
 // Everything the probe creates is deleted on exit. Tokens and the JIT config
@@ -785,6 +790,7 @@ func (p *scalesetProbe) jobTest(ctx context.Context, scaleSetID int, sess *scale
 			for _, a := range assigned {
 				p.log.Info("INVESTIGATION-E: JobAssigned observed — batch acquire confirmed",
 					"runnerRequestId", a.RunnerRequestID, "jobId", a.JobID)
+				p.reportRunIdentity(a)
 			}
 			return
 		}
@@ -800,6 +806,42 @@ func (p *scalesetProbe) jobTest(ctx context.Context, scaleSetID int, sess *scale
 		}
 		p.acquireOffered(deadline, scaleSetID, sess, ids, acquireURL)
 	}
+}
+
+// reportRunIdentity states, as a finding rather than as something to be read out of
+// a body dump, whether the live assignment carried the workflow-run identity that
+// scale-set eviction recovery depends on (Q417).
+//
+// Why the probe asserts this at all: recovery on this tier has no acquire payload to
+// read identity from, so it reads back `ownerName`/`repositoryName`/`workflowRunId`
+// off the assignment message and stamps them on the worker pod. Those fields are
+// modelled from the official actions/scaleset client's JobMessageBase and
+// corroborated by §2a-3's live `scaleSetAssignTime` observation, but GAG has never
+// dumped these three specific fields off a live JobAssigned — so this is the
+// verification the plan doc names as outstanding.
+//
+// The raw body is already logged one line above, which is the primary evidence. This
+// exists because a truncated, redacted body blob is exactly the kind of evidence a
+// reader has to squint at and then forgets to write down: the GAP verdict names the
+// consequence, so a live run answers the question instead of merely containing the
+// answer.
+func (p *scalesetProbe) reportRunIdentity(a scaleset.JobMessage) {
+	owner, repo, runID, ok := a.RunIdentity()
+	if !ok {
+		p.log.Warn("INVESTIGATION-E: GAP — JobAssigned carries no complete run identity; "+
+			"scale-set eviction recovery cannot name a run to re-run for this job (Q417)",
+			"jobId", a.JobID,
+			"ownerName", a.OwnerName,
+			"repositoryName", a.RepositoryName,
+			"workflowRunId", a.WorkflowRunID)
+		return
+	}
+	p.log.Info("INVESTIGATION-E: run identity present on JobAssigned — scale-set eviction recovery has a rerun target (Q417)",
+		"jobId", a.JobID,
+		"owner", owner,
+		"repo", repo,
+		"runId", runID,
+		"jobDisplayName", a.JobDisplayName)
 }
 
 // deliveredAcquireURL returns the acquireJobUrl a JobAvailable entry carried, or

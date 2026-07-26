@@ -99,6 +99,24 @@ fields off a live `JobAssigned`. The evidence is wire parity with the official c
 plus the base-shape observation above — strong, but not the same thing as reading
 `workflowRunId` out of a live message.
 
+**How to close it.** The probe reports the verdict itself, so the run answers the
+question rather than merely containing the answer — grep the output for
+`run identity present` or `GAP`. Requires live GitHub App credentials for the
+`actions-gateway` org and a workflow dispatched while the probe polls; the private key
+stays in the Keychain and reaches the probe as a file path, never as an env-var value
+or a process argument ([github-app-credentials.md](../development/github-app-credentials.md)):
+
+```bash
+KEY_FILE=$(mktemp -t gag-probe-key.XXXXXX) && trap 'rm -f "$KEY_FILE"' EXIT INT TERM && security find-generic-password -a actions-gateway-test -s github-app-private-key -w | xxd -r -p > "$KEY_FILE" && GITHUB_APP_ID=3752347 GITHUB_APP_INSTALLATION_ID=135739122 GITHUB_ORG_URL=https://github.com/actions-gateway GITHUB_APP_PRIVATE_KEY="$KEY_FILE" PROBE_SCALESET_TEST=true PROBE_SCALESET_JOB_TEST=true go run -C cmd/probe . 2>&1 | grep -E 'run identity present|GAP|job test message'
+```
+
+The probe prints `job test — dispatch a workflow with runs-on: <scale set name> NOW`
+and then polls for three minutes; dispatch a workflow with that `runs-on` label inside
+that window. It cleans up its throwaway scale set and session on the way out.
+
+Record the result here when it runs — a `GAP` verdict means GitHub is not sending the
+fields and the identity-optional design is load-bearing rather than belt-and-braces.
+
 Phase 2 was therefore built **identity-optional** rather than assuming presence:
 `JobMessage.RunIdentity` returns an `ok` flag, an incomplete identity is refused
 rather than defaulted, and the absence is counted

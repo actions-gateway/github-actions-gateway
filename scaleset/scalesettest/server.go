@@ -414,16 +414,36 @@ func (s *Server) PrequeueJobs(n int) []int64 {
 	defer s.mu.Unlock()
 	ids := make([]int64, 0, n)
 	for range n {
-		s.nextReqID++
-		s.nextJobSeq++
-		s.pendingJobs = append(s.pendingJobs, &job{
-			reqID: s.nextReqID,
-			jobID: fmt.Sprintf("job-%d", s.nextJobSeq),
-			state: jobQueued,
-		})
-		ids = append(ids, s.nextReqID)
+		j := s.newQueuedJobLocked()
+		s.pendingJobs = append(s.pendingJobs, j)
+		ids = append(ids, j.reqID)
 	}
 	return ids
+}
+
+// newQueuedJobLocked mints one queued job with a fresh request id, job id, and run
+// identity. It is the SINGLE construction site for a job, shared by EnqueueJob (a job
+// queued against a live scale set) and PrequeueJobs (a job queued before the scale set
+// exists). Caller holds s.mu.
+//
+// One site, not two, because the two drifted the first time run identity was added:
+// EnqueueJob gained the fields and PrequeueJobs did not, so every test that pre-queues
+// — which is most of the probe's — was served assignments with the identity empty. That
+// is precisely the divergence the fake exists to prevent, since the real backend sends
+// these fields on every assignment.
+func (s *Server) newQueuedJobLocked() *job {
+	s.nextReqID++
+	s.nextJobSeq++
+	return &job{
+		reqID: s.nextReqID,
+		jobID: fmt.Sprintf("job-%d", s.nextJobSeq),
+		state: jobQueued,
+		owner: DefaultJobOwner,
+		repo:  DefaultJobRepository,
+		// One run per job, derived from the sequence so it is deterministic and
+		// distinct — a shared run id would hide any per-run bookkeeping bug.
+		runID: int64(900000 + s.nextJobSeq),
+	}
 }
 
 // SeedMessage appends one message to every newly created scale set's queue log,
@@ -478,16 +498,7 @@ func (s *Server) EnqueueJob(scaleSetID int) (reqID int64, jobID string) {
 	}
 	s.nextReqID++
 	s.nextJobSeq++
-	j := &job{
-		reqID: s.nextReqID,
-		jobID: fmt.Sprintf("job-%d", s.nextJobSeq),
-		state: jobQueued,
-		owner: DefaultJobOwner,
-		repo:  DefaultJobRepository,
-		// One run per enqueued job, derived from the sequence so it is deterministic
-		// and distinct — a shared run id would hide any per-run bookkeeping bug.
-		runID: int64(900000 + s.nextJobSeq),
-	}
+	j := s.newQueuedJobLocked()
 	ss.jobs = append(ss.jobs, j)
 	// A queued job produces no message until a poll re-evaluates it against the
 	// advertised capacity, so wake the parked polls to do exactly that.
