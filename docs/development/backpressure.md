@@ -21,7 +21,7 @@ could have told you.
 | Tier | What runs | When | Typical cost | Source of truth |
 |---|---|---|---|---|
 | **Pre-commit hook** | `gofmt` on staged `.go` files; `docs/STATUS.md` format lint when that file is staged | every `git commit` | ~0.5s | [`.githooks/pre-commit`](../../.githooks/pre-commit) |
-| **`make check`** | `gofmt` + `golangci-lint` + `STATUS.md` lint + plan-index/no-plan-refs drift + single-Go-version + v2 API package sync + `shellcheck` + chart CRD/RBAC/webhook drift + `scripts-test` + doc link/anchor check + unit tests (with the coverage ratchet), all modules | manual, before requesting review | minutes cold / seconds warm | [`Makefile`](../../Makefile) `check` target |
+| **`make check`** | `gofmt` + `golangci-lint` + `STATUS.md` lint + plan-index/no-plan-refs drift + single-Go-version + v2 API package sync + `shellcheck` + chart CRD/RBAC/webhook drift + `scripts-test` + the [`claude-usage/` Python suite](testing.md#the-claude-usage-snapshot-gate) + doc link/anchor check + unit tests (with the coverage ratchet), all modules | manual, before requesting review | minutes cold / seconds warm | [`Makefile`](../../Makefile) `check` target |
 | **CI** | the above **plus** integration (envtest), end-to-end (e2e, `kind`), `govulncheck`, and `trivy` image scans | on every pull request and push to `main` | full | [`.github/workflows/`](../../.github/workflows/) |
 
 Installation: `make hooks` (or [`scripts/setup.sh`](../../scripts/setup.sh), which
@@ -35,6 +35,7 @@ linked worktree. Bypass the hook for a single commit with `git commit --no-verif
 |---|---|---|
 | Type checking | Go compiler (`go build`, and `go vet` via `golangci-lint`) | `make build`; `make check`; CI |
 | Unit tests | per-module `go test` (Go workspace — no root-level `./...`) | `make check` → `make test`; [`unit-test.yml`](../../.github/workflows/unit-test.yml) |
+| Python unit tests | `claude-usage/` usage-snapshot merge semantics (stdlib `unittest`) | `make check` → `make claude-usage-test`; `unit-test.yml` (`claude-usage-test` job) |
 | Integration tests | envtest, `integration` build tag, `cmd/agc` + `cmd/gmc` `internal/controller/integration/` | `make test-integration`; [`integration-test.yml`](../../.github/workflows/integration-test.yml) |
 | End-to-end tests | `kind` cluster, `e2e` build tag, Tier A/B/C (see [07-test-plan.md](../design/07-test-plan.md) §7.3) | `make e2e`; [`e2e-test.yml`](../../.github/workflows/e2e-test.yml) |
 | Linting / formatting | `gofmt -s`, `golangci-lint` (govet, staticcheck, ineffassign, unused) | `.githooks/pre-commit` (gofmt); `make check`; `unit-test.yml` |

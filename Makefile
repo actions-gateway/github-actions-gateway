@@ -104,10 +104,11 @@ all: generate build test ## Generate, build, and test all modules
 CHECK_FAST_GATES := lint-backlog roadmap-check plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
                     v2-api-sync-check path-filters-check shellcheck chart-crds-check \
-                    chart-rbac-check chart-webhook-check scripts-test doc-links
+                    chart-rbac-check chart-webhook-check scripts-test claude-usage-test \
+                    doc-links
 
 .PHONY: check
-check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + claude-usage tests + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
 	scripts/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")
 	$(MAKE) build-tags-check
 	$(MAKE) lint
@@ -206,6 +207,18 @@ SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-tes
 .PHONY: scripts-test
 scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, CI path-filter coverage)
 	scripts/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
+
+# The claude-usage/ Python suite (Q437). That module is the committed record of
+# the project's Claude Code usage, and its merge rule is what guarantees a re-run
+# can never revise an already-recorded day downward (the transcripts it reads
+# get archived) or collapse two machines' shares of one day. The module matches
+# no other path filter in .github/workflows/ — not Go code, not a shell script —
+# so until this gate existed the suite ran only when someone remembered.
+# stdlib-only: no venv, no pip install (those are for make_charts.py's
+# matplotlib/numpy). Part of `check` and the CI `claude-usage-test` job.
+.PHONY: claude-usage-test
+claude-usage-test: ## Run the claude-usage/ Python unit tests (usage-snapshot merge semantics)
+	scripts/claude-usage-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in
