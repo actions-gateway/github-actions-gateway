@@ -2379,7 +2379,7 @@
 </tr>
 </tbody>
 </table>
-<p>Tier A and Tier B run on a local <code>kind</code> cluster — fast enough for CI on every merge and for the inner dev loop. Tier C runs against a real GitHub App and a dedicated test repository; it requires <code>E2E_GITHUB_APP_ID</code>, <code>E2E_GITHUB_APP_INSTALLATION_ID</code>, <code>E2E_GITHUB_APP_PRIVATE_KEY</code>, <code>E2E_GITHUB_ORG</code>, and <code>E2E_GITHUB_REPO</code> to be set, and is skipped at runtime when any are missing.</p>
+<p>Tier A and Tier B run on a local <code>kind</code> cluster — fast enough for CI on every merge and for the inner dev loop. Tier C runs against a real GitHub App and a dedicated test repository; it requires <code>GITHUB_E2E_APP_ID</code>, <code>GITHUB_E2E_INSTALLATION_ID</code>, <code>GITHUB_E2E_PRIVATE_KEY</code>, <code>GITHUB_E2E_ORG</code>, and <code>GITHUB_E2E_REPO</code> to be set, and is skipped at runtime when any are missing.</p>
 <p><strong>What kind adds over envtest integration tests:</strong></p>
 <table>
 <thead>
