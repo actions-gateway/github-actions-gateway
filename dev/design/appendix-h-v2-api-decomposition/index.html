@@ -3361,6 +3361,24 @@ standalone <code>RunnerGroup</code> CRs win over inline bootstrap entries; and t
 <code>securityProfile</code> relocates onto the namespace label (most-restrictive-wins). The
 operator runbook is <a href="../../operations/migration-v1-to-v2/">migration-v1-to-v2.md</a> and
 the <a href="../../operations/v1alpha1-deprecation/"><code>v1alpha1</code> deprecation notice</a>.</p>
+<p><strong>Privileged worker shapes fan out to the cluster-scoped kind (Q414).</strong> The sketch
+above says "extracting each inline <code>podTemplate</code> into a <code>RunnerTemplate</code>", which is
+under-specified for a privileged (DinD/sysbox) tenant: a <em>namespaced</em> <code>RunnerTemplate</code>
+may not declare a privileged container (<a href="#h7-reference-integrity--runtime-conditions-not-admission">§H.7</a>
+— a tenant must not self-author one), so
+that mapping emits an object the apiserver refuses, failing <code>--apply</code> after the
+<code>EgressProxy</code> is already created. The fan-out therefore chooses the kind from the pod
+shape: a group whose <code>podTemplate</code> carries a privileged container or init container
+becomes a <code>ClusterRunnerTemplate</code> — the kind that exists for exactly these golden
+shapes (§H.6) — and its <code>RunnerSet</code> gets <code>templateRef.kind: ClusterRunnerTemplate</code>.
+The choice is sound because <code>gag-migrate</code> is run by a platform administrator, the same
+role that hand-authors a <code>ClusterRunnerTemplate</code>, and it weakens nothing: PSA stamped
+from the namespace <code>securityProfile</code> is the runtime backstop for both kinds, and the
+<code>privileged-profile</code> grant it depends on is carried forward from v1, never invented.
+Emitted cluster-template names are namespace-qualified (<code>crt-&lt;ns&gt;-&lt;hash&gt;</code>) so two
+tenants sharing a worker shape do not silently share one cluster-scoped object, and
+each carries an <code>actions-gateway.com/migrated-from-namespace</code> provenance label — the
+one migration output namespace deletion does not garbage-collect.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>       v1alpha1 (one monolith)            one-shot tool         v2alpha1 (fan-out)
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>  ┌──────────────────────────────┐                       ┌──────────────────────────────┐
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  │ ActionsGateway               │                  ┌──► │ ActionsGateway · identity    │
