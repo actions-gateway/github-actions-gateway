@@ -173,22 +173,25 @@ build-tags-check: ## Fail if a build-tagged (integration/e2e/load) Go file does 
 # not abort the gate after the billable scale-up), the go-lint change-scoping
 # decision (which modules a diff makes golangci-lint cover), the build-tag
 # coverage guard (a new tag must fail the gate, not silently skip files), that a
-# pinned download never writes bytes it did not verify (Q433), and the shellcheck
+# pinned download never writes bytes it did not verify (Q433), the shellcheck
 # gate's own file selection (an untracked-but-present script must be linted,
-# Q432). Lightweight pure-bash checks; part of `check` and the CI shellcheck job.
+# Q432), and the dogfood worker-drain gate (an unreadable cluster must never read
+# as idle and let a teardown strand worker nodes, Q434). Lightweight pure-bash
+# checks; part of `check` and the CI shellcheck job.
 #
 # The suites are independent and each isolates its own scratch state (mktemp -d,
 # or a $$-suffixed dir under tmp/), so they run concurrently — labeled output via
 # run-parallel.sh keeps a failure attributable to its suite.
 SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-test \
                  lint-backlog-test check-dep-advisory-test claude-go-throttle-hook-test \
-                 dogfood/validate-release-test dogfood/pool-test go-lint-scope-test \
+                 dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
+                 go-lint-scope-test \
                  check-roadmap-test check-conflict-markers-test check-v2-api-sync-test \
                  dependabot-rebase-stale-test go-vet-tags-test local-throttle-test \
                  shellcheck-scripts-test release-version-hook-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook)
 	scripts/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
