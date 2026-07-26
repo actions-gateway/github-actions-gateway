@@ -31,9 +31,11 @@ tagged chart. Check the release notes for the exact image digests to pin.
 - **Automatic recovery for blocked and evicted jobs.** A quota-blocked job is
   never claimed, so it stays queued for a sibling with capacity; an evicted job
   is cancelled at GitHub when its lock lapses (~10 min at worst) and re-queued,
-  with a per-job retry budget. No manual rerun either way. The eviction half
-  ships on the **classic acquisition tier** only so far — see *Eviction recovery
-  on the scale-set tier* under [In progress](#in-progress--near-term).
+  with a per-job retry budget. No manual rerun either way. **Both halves ship on
+  the classic acquisition tier only so far** — a runner set on the default
+  scale-set protocol advertises its configured ceiling to GitHub but not live
+  quota headroom, and never observes an eviction. See *Eviction recovery* and
+  *the pre-claim quota gate* under [In progress](#in-progress--near-term).
 - **Priority tiers per runner group.** Reserve a guaranteed floor of slots for
   expensive runner types so cheap CPU jobs can't starve critical GPU work.
 - **Worker scale-up rate limiting (opt-in).** An optional per-runner-group token
@@ -131,6 +133,14 @@ last gaps an outside operator hits.
   an evicted job there still needs a manual rerun. Since scale-set is the default
   protocol and the only one the `v2beta1` API offers, this port is what carries
   the capability past the classic removal in `v2.0.0`.
+- **The pre-claim quota gate on the scale-set tier.** <!-- q:Q443 --> Declining to claim a
+  job the namespace `ResourceQuota` cannot place — so it stays queued at GitHub
+  for a sibling with capacity — runs on the classic acquisition path. A
+  scale-set set advertises a single capacity integer to GitHub, today its
+  configured worker ceiling only, so a quota-blocked job is assigned and then
+  retried in place against the quota while the job lock is held. Deriving that
+  integer from live headroom as well carries the capability past the classic
+  removal in `v2.0.0`.
 - **Capacity-aware job intake.** <!-- q:Q405,Q406 --> Additional opt-in rungs on the pre-claim gate,
   so a job is not claimed when the cluster demonstrably cannot place its worker:
   one sourced from the scheduler's `Unschedulable` verdict (for fixed-size and

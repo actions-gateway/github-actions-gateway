@@ -388,12 +388,13 @@ ScaleSet. The counters above come from the admission path rather than from
 completions, so they were never blocked by it either way. Detail:
 [gke-dogfood B7](gke-dogfood.md#b7-create-the-v2-tenant-objects).
 
-## 9a. The shipped quota rung is classic-only, and the docs don't say so (Q439)
+## 9a. The shipped quota rung is classic-only (Q443)
 
 Found while qualifying the eviction-recovery claims for Q419 (shipped
 2026-07-26) — same defect class, same public sentences, other half. Recorded here
 rather than fixed there, because the two capabilities have different owners and
-different remedies.
+different remedies. The copy correction shipped 2026-07-26 (Q439); the port it
+revealed is [Q443](../STATUS.md#Q443), specified below.
 
 The rung this plan builds on — rung 1, live namespace-`ResourceQuota` headroom
 checked *before* the claim — is wired into `Provisioner.Admit`, and `Admit` is
@@ -411,25 +412,70 @@ out as the failure mode the gate exists to prevent: the job lock is held across
 up to `maxQuotaRetries × quotaRetryDelay`, and on exhaustion the pod is abandoned
 with the lock held.
 
-Two doc claims are wrong as a result, both in public copy:
+Two doc claims were wrong as a result, both in public copy. Both are corrected as
+of 2026-07-26; recorded here because the second was a fabricated mechanism, not a
+scope error, and that distinction should survive:
 
 * *"won't claim a job it can't place … live quota headroom checked before the
   claim"* ([why-gag](../why-gag.md) comparison table; [README](../../README.md)
-  "The Solution") — true on classic, not on the default tier.
+  "The Solution") — true on classic, not on the default tier. **Scoped**, not
+  removed.
 * *"if headroom is lost after the claim, auto lock-cancel + re-queue"*
-  (why-gag, same row) — no code path does this. `createPodWithQuotaRetry`
-  abandons the pod and returns the error; there is no rerun call. The
-  lock-cancel-and-re-queue mechanism it borrows its language from is the
-  eviction path, which is itself classic-only.
+  (why-gag, same row; also [runbook.md](../operations/runbook.md)) — no code path
+  did this, on any tier. `createPodWithQuotaRetry` retries in place and abandons
+  the pod on budget exhaustion; there is no rerun call. The
+  lock-cancel-and-re-queue language was borrowed from the eviction path, which is
+  itself classic-only. **Replaced** with what the code does.
 
-**Remedy is a choice, not a given.** Qualifying the copy is the cheap half.
-Whether the rung should be *ported* to the scale-set tier is a real design
-question this plan should answer: the scale-set protocol's capacity
-advertisement is a single integer computed before GitHub picks a job, so a
-headroom-derived ceiling is expressible — but it is a coarser instrument than
-classic's per-delivery decline, and it interacts with the ceiling the same
-integer already carries. Settle that before writing the doc fix, so the copy
-describes a decision rather than a gap.
+`actions_gateway_jobs_admission_rejected_total` is emitted from the same classic
+call site ([listener/job.go](../../cmd/agc/internal/listener/job.go)), so both its
+`reason="quota"` and `reason="ceiling"` series read a flat zero on the default
+tier — the same "healthy dashboard, lost jobs" shape Q419 found on the eviction
+counters.
+
+### The decision: port the rung, and treat it as a 2.0 gate (Q443)
+
+Settled 2026-07-26, because the copy fix could not be written honestly without
+it.
+
+**Port it.** The mechanism is expressible on the scale-set tier and the cost of
+not porting is losing a headline capability at `v2.0.0`.
+
+Expressible, because `X-ScaleSetMaxCapacity` is not a free-slot delta but a
+*total* ceiling — GitHub holds `totalAssignedJobs` at or below the advertised
+value — so a quota-derived bound composes with the Q59 ceiling as a `min()` on
+the integer `scaleSetCapacityFunc` already returns. Jobs beyond it stay queued
+server-side, which is precisely the classic rung's outcome.
+
+Three things make it more than a one-line change, and they are the design work
+this phase owns:
+
+* **Delta-to-total conversion.** Headroom answers "how many *more* pods fit";
+  the advertisement wants a total. That is roughly `activeWorkers + headroom`,
+  and the AGC's count of its own in-flight pods is not GitHub's
+  `totalAssignedJobs` — the two diverge across an assignment the AGC has not yet
+  provisioned. Under-advertising merely delays jobs; over-advertising reproduces
+  today's claim-and-stall. Bias low, and measure the divergence.
+* **Granularity loss.** Classic re-decides per delivered job. Scale-set decides
+  once per long-poll, for the whole set. Recovery from a stale read is a poll
+  interval, not a job.
+* **Interaction with §6/§7.** The `SchedulerVerdict` and `AutoscalerVerdict`
+  rungs are specified as per-delivery `Admit` rungs. If the scale-set tier gets
+  a capacity-integer expression of rung 1, those two need the same treatment or
+  they ship classic-only and inherit this exact defect on arrival. Design the
+  integer path once, for all three rungs.
+
+**Why it is a 2.0 gate.** Classic acquisition is removed in `v2.0.0`
+([v2-ga.md](v2-ga.md#phase-3--the-coupled-removals)). Rung 1 exists only on
+classic. So the removal deletes the pre-claim quota gate outright unless this
+lands first — structurally identical to [Q417](../STATUS.md#Q417) for eviction
+recovery, and until now undeclared. Two of the four capabilities the README
+leads with are in this position. Tracked as [Q443](../STATUS.md#Q443), labelled
+`2.0-gate` to match.
+
+**What ships without waiting:** the copy correction. Every claim above is now
+scoped to the classic tier, and the "auto lock-cancel + re-queue" sentence is
+removed rather than qualified, since no code path implements it on any tier.
 
 ## 10. Non-goals
 
