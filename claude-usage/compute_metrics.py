@@ -136,6 +136,8 @@ def model_family(m):
         return "Unknown"
     if "sonnet" in m:
         return "Sonnet 4.6"
+    if "opus-5" in m:
+        return "Opus 5"
     if "opus-4-8" in m:
         return "Opus 4.8"
     if "opus-4-7" in m:
