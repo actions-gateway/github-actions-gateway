@@ -92,6 +92,11 @@ jobs:
               - '.github/workflows/unit-test.yml'
             scripts:
               - 'scripts/**'
+              # The MkDocs hooks are Python, not shell, so shellcheck skips them —
+              # but `make scripts-test` asserts their behaviour (Q393), and that
+              # runs in this job. Without this the announce-bar hook could change
+              # with its own test never running.
+              - 'hooks/**'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
             # Vendor-integrity gate scope: anything that determines what the

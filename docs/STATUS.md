@@ -38,7 +38,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [Per-module coverage ≥75%](plan/coverage-to-75-per-module.md) | `tests` | ✅ |
 | [GKE dogfood](plan/gke-dogfood.md) | `infra` `docs` | ✅ |
 | <a id="Q248"></a>[Dogfood runner right-sizing](plan/dogfood-runner-rightsizing.md) | `infra` | ✅ |
-| [Release 1.3](plan/release-1.3.md) | `milestone` | ⚠️ |
+| [Release 1.3](plan/release-1.3.md) | `milestone` | ✅ |
 | [v2 GA graduation](plan/v2-ga.md) | `milestone` `infra` | ⚠️ |
 | [v1 sunset → v2-only](plan/v1-classic-sunset-review.md) | `infra` | ⚠️ |
 | [Worker right-sizing profiles](plan/runner-sizing-profiles.md) | `infra` | ⚠️ |
@@ -57,7 +57,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q434"></a>Q434 | [`stop.sh` strands workers when it scales the system pool to 0](../scripts/dogfood/stop.sh) | `bug` `infra` | 🔲 | S | `stop.sh:32` scales `default-pool` to 0 mid-flight; the AGC goes Pending and never reaps worker pods, so their nodes can't drain. One incident stranded 82 spot node-hours. Drain workers first. |
 | <a id="Q435"></a>Q435 | [Does a restarted AGC reclaim orphaned workers?](../cmd/agc/internal/controller/runnergroup_reaper.go) | `bug` `tests` | 🔲 | M | With the AGC down 16h, 5 worker pods survived and pinned their nodes. Whether a restarted AGC reclaims workers orphaned while it was down is untested. Measure first; cf. [Q417](#Q417). |
 | <a id="Q429"></a>Q429 | [Lint path filters against `go.work`](development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran) | `infra` `tests` | 🔲 | S | Nothing reconciles the hand-kept `filters:` lists with the module list, so a module added later is silently absent and its gate goes green by skipping — Q400 fixed four workflows by hand. Assert the coverage in `make check`. |
-| <a id="Q393"></a>Q393 | [Derive the docs announce bar from the release version](../overrides/main.html) | `docs` `infra` `1.3-gate` | 🔲 | S | Announce bar ('vX.Y.Z is here') in `overrides/main.html` is hand-edited per release; `publish.yml` fails a tag whose banner misses it. Derive it from the version, or list it in release.md. |
 | <a id="Q417"></a>Q417 | [Port eviction recovery to the scale-set tier](plan/scaleset-eviction-recovery.md) | `bug` `infra` `2.0-gate` | 🔲 | M | `ProvisionScaleSetWorker` is fire-and-forget, so no scale-set eviction is detected and no rerun fires. Recovery is classic-only, so the `v2.0.0` removal deletes it unless this lands first ([gate](plan/v2-ga.md#phase-3--the-coupled-removals)). |
 | <a id="Q419"></a>Q419 | [Docs claim eviction auto-retry as a system property](design/01-executive-summary.md) | `docs` `bug` | 🔲 | S | README, exec summary, and why-gag describe it tier-agnostically, but it runs only on classic ([Q417](#Q417)) and v2beta1 tenants get ScaleSet only. #812 polished the prose without qualifying the tier. Qualify until Q417 lands. |
 | <a id="Q421"></a>Q421 | [Does a node drain reach eviction recovery?](plan/eviction-oversubscription-validation.md#experiment-2-the-node-drain-path-q421) | `tests` `infra` | 🔲 | M | Drain deletes the pod via the Eviction API, so it never reaches `PodFailed`/`Evicted` and `waitForPodCompletion` reads it as `PodSucceeded`: predicted no rerun. Measure both tiers; the answer shapes [Q417](#Q417)'s pod watch. |

@@ -5,6 +5,10 @@ on:
       - 'docs/**'
       - 'mkdocs.yml'
       - 'overrides/**'
+      # MkDocs hooks run during the build and feed the templates (Q393), so a
+      # hook-only change can break the site; build-validate it like any other
+      # docs source.
+      - 'hooks/**'
       - 'requirements-docs.txt'
       - '.github/workflows/pages.yml'
   # Versioned docs deploy (Q238). The public site is a mike-managed versioned
@@ -70,6 +74,12 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The announce bar's version is derived from the tag list at build time
+          # (Q393, hooks/release_version.py). A default depth-1 checkout fetches no
+          # tags, so the PR preview would render the version-free fallback banner
+          # instead of what the site actually publishes.
+          fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.x'
@@ -125,10 +135,16 @@ jobs:
         #   - mkdocs.yml's `extra.version` block: a pre-versioning tag has none,
         #     so its pages would render with no version selector, stranding a
         #     visitor on an old release.
+        #   - mkdocs.yml's `hooks:` block: a tag cut before Q393 does not wire
+        #     hooks/release_version.py, so its announce bar would render the
+        #     version-free fallback instead of naming the newest release.
         #
         # NOTE this only covers seeds. A stable tag push has a blank `docs_ref`
-        # and builds the tag wholesale, overrides included, so the banner must
-        # still be correct IN the tag: see docs/operations/release.md, Pre-flight.
+        # and builds the tag wholesale, overrides included. That is safe for the
+        # banner's VERSION, which the hook derives from the tag list at build time
+        # rather than from a string in the checkout (Q393); only the optional
+        # highlight prose is pinned to the tag. See docs/operations/release.md,
+        # Pre-flight.
         #
         # The overrides ride in an INHERIT overlay rather than a YAML rewrite, so
         # the tag's own nav and config stay byte-for-byte intact (mkdocs deep-merges
@@ -150,6 +166,8 @@ jobs:
             {
               echo 'INHERIT: ./mkdocs.yml'
               echo "site_url: ${site_url}"
+              echo 'hooks:'
+              echo '  - hooks/release_version.py'
               echo 'extra:'
               echo '  version:'
               echo '    provider: mike'

@@ -1,7 +1,33 @@
 {% extends "base.html" %}
 
 {% block announce %}
-  <strong>v1.2.0 is here.</strong> Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
+  {#- The VERSION is derived, never hand-edited: hooks/release_version.py resolves
+      the newest stable git tag into config.extra.release.version. Bumping a
+      hard-coded string here was a release step every stable tag missed, and a
+      stable tag deploys its own docs wholesale, so the wrong banner shipped
+      permanently under that version (Q393).
+
+      The HIGHLIGHT is the one hand-written part, and it is opt-in: it renders only
+      while `highlight_for` names the release the hook resolved. Forgetting to
+      refresh it therefore degrades the banner to a release-notes link, rather than
+      pairing a new version with the previous release's headline. Refreshing it is
+      an optional pre-flight step in docs/operations/release.md.
+
+      With no version available (a build with no git history), the banner drops the
+      version claim entirely rather than guessing. -#}
+  {%- set release = config.extra.release | default({}, true) -%}
+  {%- set highlight_for = "v1.2.0" -%}
+  {%- if release.version -%}
+    <strong>{{ release.version }} is here.</strong>
+    {%- if release.version == highlight_for %}
+      Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
+    {%- else %}
+      <a href="{{ config.repo_url }}/releases/tag/{{ release.version }}">Read the release notes.</a>
+    {%- endif %}
+  {%- else -%}
+    <strong>Actions Gateway:</strong> zero-idle self-hosted GitHub Actions runners for multi-tenant Kubernetes.
+    <a href="{{ config.repo_url }}/releases/latest">See the latest release.</a>
+  {%- endif -%}
 {% endblock %}
 
 {% block extrahead %}
