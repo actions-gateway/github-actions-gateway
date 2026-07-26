@@ -172,9 +172,10 @@ build-tags-check: ## Fail if a build-tagged (integration/e2e/load) Go file does 
 # parsing, Q184), the dogfood gate's e2e run resolution (an in-flight run must
 # not abort the gate after the billable scale-up), the go-lint change-scoping
 # decision (which modules a diff makes golangci-lint cover), the build-tag
-# coverage guard (a new tag must fail the gate, not silently skip files), and
-# that a pinned download never writes bytes it did not verify (Q433).
-# Lightweight pure-bash checks; part of `check` and the CI shellcheck job.
+# coverage guard (a new tag must fail the gate, not silently skip files), that a
+# pinned download never writes bytes it did not verify (Q433), and the shellcheck
+# gate's own file selection (an untracked-but-present script must be linted,
+# Q432). Lightweight pure-bash checks; part of `check` and the CI shellcheck job.
 #
 # The suites are independent and each isolates its own scratch state (mktemp -d,
 # or a $$-suffixed dir under tmp/), so they run concurrently — labeled output via
@@ -183,10 +184,11 @@ SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-tes
                  lint-backlog-test check-dep-advisory-test claude-go-throttle-hook-test \
                  dogfood/validate-release-test dogfood/pool-test go-lint-scope-test \
                  check-roadmap-test check-conflict-markers-test check-v2-api-sync-test \
-                 dependabot-rebase-stale-test go-vet-tags-test local-throttle-test
+                 dependabot-rebase-stale-test go-vet-tags-test local-throttle-test \
+                 shellcheck-scripts-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing)
 	scripts/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
@@ -361,7 +363,7 @@ no-plan-refs-check: ## Assert Go code doesn't reference docs/plan/ paths (cite d
 # covers inline workflow `run:` blocks. Glob, version pin, and rationale live
 # in the script header.
 .PHONY: shellcheck
-shellcheck: ## Shellcheck all tracked scripts/*.sh (recursive; matches the CI shellcheck gate)
+shellcheck: ## Shellcheck every present scripts/*.sh — tracked or untracked-and-not-gitignored (recursive; matches the CI shellcheck gate)
 	scripts/shellcheck-scripts.sh
 
 .PHONY: queue-unblock

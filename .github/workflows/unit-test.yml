@@ -175,11 +175,11 @@ jobs:
       - name: build-tagged files compile + vet (make build-tags-check)
         run: make build-tags-check
   # Shellcheck the standalone helper scripts under scripts/. actionlint already
-  # covers inline workflow `run:` blocks, but the tracked scripts/*.sh files ship
-  # unlinted otherwise. Isolated from the `lint` job so a scripts-only change does
-  # not also trigger the full Go lint. `make shellcheck` (scripts/
-  # shellcheck-scripts.sh) is the single source of truth for the glob (tracked
-  # scripts/*.sh, recursive).
+  # covers inline workflow `run:` blocks, but the scripts/*.sh files ship unlinted
+  # otherwise. Isolated from the `lint` job so a scripts-only change does not also
+  # trigger the full Go lint. `make shellcheck` (scripts/shellcheck-scripts.sh) is
+  # the single source of truth for the file set (every present scripts/*.sh,
+  # recursive — tracked or untracked-and-not-gitignored).
   shellcheck:
     needs: [changes]
     if: needs.changes.outputs.scripts == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
