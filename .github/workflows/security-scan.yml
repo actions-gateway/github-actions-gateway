@@ -52,9 +52,15 @@ jobs:
         with:
           filters: |
             code:
+              # api/** and scaleset/** are go.work modules, so scripts/go-vulncheck.sh
+              # (which loops `workspace_modules`) scans them and the baked images
+              # link them in via cmd/{agc,gmc}. Both were missing until Q400, so a
+              # change confined to either module skipped govulncheck and trivy.
+              - 'api/**'
               - 'broker/**'
               - 'cmd/**'
               - 'githubapp/**'
+              - 'scaleset/**'
               - 'test/**'
               - 'vendor/**'
               - 'go.work'

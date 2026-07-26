@@ -110,13 +110,25 @@ question this release's deprecation decision needed answered.
 
 ### D. Gate integrity — *gating*
 
-Both are cheap, and both undermine the "`main` is green" precondition that
-[release.md](../operations/release.md) pre-flight assumes.
+Cheap to fix, and undermines the "`main` is green" precondition that
+[release.md](../operations/release.md) pre-flight assumes: a gate that never ran
+leaves `main` green on evidence it never gathered.
 
 | Item | Why it gates |
 |---|---|
-| [Q400](../STATUS.md#Q400) | `scaleset/**` and `api/**` are absent from the integration, security-scan, and e2e path gates. Several scaleset/api-only changes merged since `v1.2.0` were never tested by those tiers. |
 | [Q404](../STATUS.md#Q404) | `make check` compiles no build-tagged file, so a tagged-test build break reaches CI rather than the local gate. |
+
+Q400 closed 2026-07-26: `api/**` and `scaleset/**` were added to the
+integration, security-scan, and e2e filters, and `api/config/**` to
+manifest-validate — a fourth instance of the same gap, found while fixing the
+first three, where the workflow validates the five v2 CRDs by name but never
+gated on the directory holding them. The residual risk that motivated the gate
+is unchanged and not retroactively addressed: the scaleset/api-only changes that
+merged since `v1.2.0` were never seen by those tiers, and this fix only stops
+new ones from slipping through. The recurrence guard — linting the filters
+against `go.work` rather than maintaining them by hand — is
+[Q429](../STATUS.md#Q429), deliberately left out of the gate because it is new
+tooling rather than a correctness fix.
 
 ## Explicitly out of scope
 
@@ -128,8 +140,9 @@ Both are cheap, and both undermine the "`main` is green" precondition that
 
 ## Critical path & ordering
 
-1. **[Q400](../STATUS.md#Q400) and [Q404](../STATUS.md#Q404)** are independent and
-   can run in parallel by different sessions. They touch CI configuration only.
+1. **[Q404](../STATUS.md#Q404)** touches CI configuration only and is independent of
+   everything below it, so it can run in parallel with any of them. (Q400, its
+   former partner here, closed 2026-07-26.)
 2. **[Q411](../STATUS.md#Q411)** is independent of all of the above and can land at
    any point before the tag. It changes generated CRDs, so it should not race a
    session editing the same API packages. It cannot be dropped on the grounds that
