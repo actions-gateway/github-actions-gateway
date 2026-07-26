@@ -26,6 +26,8 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
+- [Worker Pod Reaped While Running (WorkerPodOrphanedRunning)](#worker-pod-reaped-while-running-workerpodorphanedrunning)
+- [Workers Left Behind by an AGC That Was Down](#workers-left-behind-by-an-agc-that-was-down)
 - [Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409)
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
 - [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
@@ -807,6 +809,40 @@ kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<set> \
 - Orphans on a set whose pods show `READY 1/2` are the sidecar cases — fix those at the source (next two sections).
 
 The five-minute grace is a fixed constant, not a CRD field: it measures runner shutdown (a runner that actually ran its job reports completion and exits within seconds), and the job is already over at GitHub, so the only thing the reap costs is the terminal pod's `completedPodTTL` inspection window.
+
+---
+
+## Workers Left Behind by an AGC That Was Down
+
+**Symptoms.** Worker pods sit `Running` for hours with no job executing, their nodes never scale down, and — unlike the section above — **no** `WorkerPodOrphanedRunning` Event ever fires and `actions_gateway_worker_pods_reaped_total` does not move. The AGC for that tenant is `Pending`, `CrashLoopBackOff`, or gone.
+
+**What happened.** The reap above needs a *live* AGC. If the AGC itself was down when a job ended — evicted, `Pending` with nowhere to schedule, `CrashLoopBackOff` — nothing stamped its workers, and those pods have no reap deadline at all. They keep `Running`, hold their concurrency and quota slots, and because every worker carries `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` (deliberately — a worker mid-job has no replacement) the autoscaler will not reclaim their nodes either. One dogfood incident stranded five workers and 82 spot node-hours this way.
+
+Restarting the AGC clears most of this on its own. Workers that already reached a terminal phase, workers stuck `Pending`, and workers stamped before the AGC died are all reclaimed within their normal deadlines with no action from you. A still-`Running` worker whose job ended during the outage is reclaimed only if GitHub redelivers that job's completion to the restarted AGC — usually it does, and the pod is stamped and then reaped five minutes later.
+
+So: **bring the AGC back first, then wait for one reap cycle before deleting anything by hand.**
+
+```sh
+# 1. Is the AGC actually running? A Pending/CrashLoop AGC reaps nothing.
+kubectl get pods -n <namespace> -l app.kubernetes.io/component=controller
+```
+
+```sh
+# 2. After it is Ready, list Running workers that still have no completion stamp.
+#    A JOB-DONE of <none> a few minutes after the AGC is healthy is the stuck shape.
+kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<set> \
+  --field-selector status.phase=Running \
+  -o custom-columns='NAME:.metadata.name,NODE:.spec.nodeName,AGE:.metadata.creationTimestamp,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at'
+```
+
+Before deleting any of those, confirm the job really is over at GitHub — check the run in the Actions UI, or `kubectl logs <pod> -c runner` and look for a worker sitting at `Listening for Jobs` with nothing after it. **A pod whose job is genuinely still executing looks identical in cluster state**, and deleting it strands that job with no replacement.
+
+```sh
+# 3. Only once confirmed abandoned:
+kubectl delete pod <pod> -n <namespace>
+```
+
+Prevention is on the teardown side: never scale down the pool carrying the AGCs while jobs are in flight. For the dogfood cluster, `scripts/dogfood/stop.sh` drains in-flight workers before resizing and fails the stop rather than stranding them.
 
 ---
 

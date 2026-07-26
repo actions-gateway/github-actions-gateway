@@ -6,6 +6,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,7 +53,12 @@ var scaleSetTestMetrics = scalesetlistener.NewMetrics(prometheus.NewRegistry())
 // ScaleSet-protocol set's client at the given scalesettest fake, so the scale-set
 // acquisition tier is exercised offline. It wires the scale-set metrics so a test can
 // assert the reconciler → listener recorder path increments end-to-end.
-func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server) {
+//
+// It returns a stop function that shuts the manager down and blocks until it has
+// drained — how a test models an AGC process going away mid-flight (Q435). Callers
+// that only need one long-lived manager ignore it; the same shutdown is registered
+// as a t.Cleanup either way, and calling stop twice is a no-op.
+func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server) func() {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 
@@ -111,7 +117,10 @@ func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server
 
 	mgrDone := make(chan struct{})
 	go func() { defer close(mgrDone); _ = mgr.Start(mgrCtx) }()
-	t.Cleanup(func() { mgrCancel(); <-mgrDone })
+	var once sync.Once
+	stop := func() { once.Do(func() { mgrCancel(); <-mgrDone }) }
+	t.Cleanup(stop)
+	return stop
 }
 
 // newScaleSetRunnerSet builds a ScaleSet-protocol RunnerSet whose single runnerLabel
