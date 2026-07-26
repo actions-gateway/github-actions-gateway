@@ -22,7 +22,7 @@ fails=0
 status() {
     local queue="$1" deferred="$2" file="$WORKDIR/STATUS.md" id
     {
-        printf '# Project Status\n\n**Next ID:** Q999\n\n## Queue\n\n'
+        printf '# Project Status\n\n## Queue\n\n'
         printf '| ID | Item | Labels | St | Sz | Notes |\n|---|---|---|---|---|---|\n'
         for id in $queue; do
             printf '| <a id="%s"></a>%s | Thing | infra | 🔲 | S | note |\n' "$id" "$id"

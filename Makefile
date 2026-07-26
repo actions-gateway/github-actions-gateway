@@ -64,7 +64,7 @@ WRAPPER_IMG    ?= $(IMAGE_REGISTRY)/wrapper:e2e-$(GIT_SHA)
         cover cover-update cover-check tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo golangci-lint lint lint-backlog plan-index-check no-plan-refs-check shellcheck queue-unblock \
+        ginkgo golangci-lint lint lint-backlog plan-index-check no-plan-refs-check shellcheck queue-unblock queue-id \
         third-party-notices third-party-notices-check vendor-check tidy-check \
         vulncheck govulncheck trivy-scan polaris-scan manifest-validate
 
@@ -295,6 +295,13 @@ lint: $(GOLANGCI_LINT) ## Run gofmt (all modules) + golangci-lint, change-scoped
 .PHONY: lint-backlog
 lint-backlog: ## Enforce backlog format rules on docs/STATUS.md (vendored from the backlog skill)
 	scripts/lint-backlog.sh
+
+# IDs come from a ref claim, not from a counter line in STATUS.md: a shared
+# mutable counter conflicted by construction whenever two sessions filed a row
+# (Q382). N=<n> claims several at once; PEEK=1 shows the next without claiming.
+.PHONY: queue-id
+queue-id: ## Allocate the next backlog Q-ID (make queue-id [N=3] [PEEK=1])
+	@scripts/alloc-queue-id.sh $(if $(PEEK),--peek,) $(if $(N),-n $(N),)
 
 # The public roadmap and the backlog drift apart silently — a 2026-07-25 audit
 # found six of seven "near-term" items already shipped. Because done Queue rows

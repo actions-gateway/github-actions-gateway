@@ -4,8 +4,10 @@
 # events and summary flow metrics.
 #
 # The backlog process makes this possible without any recording step: every
-# mutation is an isolated commit to one file, IDs are stable, and the
-# **Next ID:** counter counts cumulative arrivals. This script only reads.
+# mutation is an isolated commit to one file and IDs are stable, so cumulative
+# arrivals fall out of the highest ID ever seen. This script only reads, and
+# stays offline; the authoritative allocation count is the ref namespace
+# (`git ls-remote origin 'refs/queue-ids/*' | wc -l`).
 #
 # Usage:
 #   backlog-metrics.sh [--events] [path/to/STATUS.md]
@@ -115,11 +117,14 @@ function flush_commit(    id, n) {
     id = row_id($0)
     if (id != "") cdel[id] = 1
 }
-/^\+\*\*Next ID:\*\* Q[0-9]+$/ { t = $0; gsub(/[^0-9]/, "", t); counter = t+0 }
 
 END {
     flush_commit()
-    if (!counter) counter = maxid + 1   # old-format file: derive from history
+    # Cumulative arrivals. This used to read the **Next ID:** counter line,
+    # but that line is gone (IDs are allocated from refs/queue-ids/*), and
+    # parsing it from history would freeze at its final value. The highest ID
+    # ever seen in the replay tracks arrivals on its own.
+    counter = maxid + 1
 
     if (mode == "events") {
         print "id\tfiled\tremoved\tdays_open\treason\tsize\ttitle"
@@ -142,7 +147,7 @@ END {
         else n_other++
     }
 
-    print "backlog metrics — " (counter ? "counter Q" counter ", " : "") n_filed " items ever filed"
+    print "backlog metrics — high-water Q" counter ", " n_filed " items ever filed"
     print ""
     printf "  open now:        %d\n", n_open
     printf "  completed:       %d\n", n_done
