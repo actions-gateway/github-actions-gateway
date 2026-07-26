@@ -18,6 +18,7 @@ import (
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -216,12 +217,22 @@ func TestAGC_PodProvisioning_PodTemplateEditTakesEffectWithoutRestart(t *testing
 	assert.Equal(t, "original", pod1.Spec.NodeSelector["q117-template"],
 		"first pod should use the original PodTemplate")
 
-	// Edit the PodTemplate while the AGC keeps running.
-	var fetched v1alpha1.RunnerGroup
-	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(rg), &fetched))
-	fetched.Spec.PodTemplate.Spec.NodeSelector = map[string]string{"q117-template": "edited"}
-	require.NoError(t, k8sClient.Update(ctx, &fetched))
-	editedGen := fetched.Generation
+	// Edit the PodTemplate while the AGC keeps running. The reconciler writes
+	// status to this same RunnerGroup concurrently, so a status write landing
+	// between the Get and the Update would reject it — retry on conflict.
+	var editedGen int64
+	require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var fetched v1alpha1.RunnerGroup
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rg), &fetched); err != nil {
+			return err
+		}
+		fetched.Spec.PodTemplate.Spec.NodeSelector = map[string]string{"q117-template": "edited"}
+		if err := k8sClient.Update(ctx, &fetched); err != nil {
+			return err
+		}
+		editedGen = fetched.Generation
+		return nil
+	}))
 
 	// Wait until the reconciler has observed the edit (observedGeneration catches
 	// up). The reconciler and the provisioner share the same manager cache, so
