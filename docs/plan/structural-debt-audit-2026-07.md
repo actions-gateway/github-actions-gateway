@@ -13,7 +13,7 @@ Classification follows [technical-debt.md](../development/technical-debt.md).
 > rewrite) shipped as Q362, F3's share-and-gate split as Q374, F4's CIDR-rule
 > consolidation as Q364, F5's broker-double consolidation as Q368, F7's
 > CreateOrPatch collapse as Q366 (which spun the owner-reference-policy question
-> out to [Q394](../STATUS.md#Q394)), F8's god-function decomposition as Q367, F9's
+> out to Q394), F8's god-function decomposition as Q367, F9's
 > error-taxonomy unification as Q369, F10's script-sprawl cleanup as Q370, the
 > §Prevention gates (nolintlint + a ratcheted funlen) as Q371, and F6's foundation
 > move as Q365 (which left the interleaved v1/v2 condition collectors to Q403,
@@ -344,8 +344,24 @@ an owner.
 
 The ownerRef-policy inconsistency itself was **deliberately not resolved here** — a
 force-removed-finalizer leak is a security-relevant behaviour question that must be
-decided on its own, not smuggled into a cleanup. It is filed as
-[Q394](../STATUS.md#Q394) for a separate, signed-off decision.
+decided on its own, not smuggled into a cleanup. It was filed as
+Q394 for a separate, signed-off decision.
+
+**Q394 resolved it (2026-07-26): defence in depth, not either/or.** All 11 v1
+children are namespaced siblings of the CR, so all 11 now stamp a controller owner
+reference — matching v2 and the EgressProxy reconciler — while `reconcileDelete`
+stays exactly as it was. The finalizer remains the primary path (ordered: drain
+`RunnerGroup`s first; fail-closed: no finalizer removal until every delete is
+confirmed; and the only thing that reaches legacy objects the reconciler no longer
+applies), and cascade GC is purely a backstop for a force-removed finalizer. The
+ordered drain is unaffected because the CR does not leave etcd — and so GC does not
+fire — until the finalizer clears. The single remaining un-owned child is v2's
+cluster-scoped `ClusterRoleBinding`, which a namespaced gateway *cannot* legally
+own. The `4 of 11` assertion became `11 of 11`, and an envtest sweep
+(`TestGMC_V1Provisioning_EveryManagedChildIsOwnerReferenced`) now drives the
+assertion from what is on the cluster, so a twelfth child added through a new code
+path cannot ship un-owned without appearing in any table. Policy documented at
+[design §4.1.1](../design/04-operational-flows.md#411-tenant-teardown-and-child-reclamation).
 
 **F8 — Two god wiring functions with the linter switched off.** ✅ **Shipped** (Q367)
 

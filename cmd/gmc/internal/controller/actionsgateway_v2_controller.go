@@ -402,10 +402,10 @@ func boolConditionStatus(b bool) metav1.ConditionStatus {
 // --- apply helpers ---
 //
 // All delegate to applyManagedChild (apply_helpers.go), the one shared
-// CreateOrPatch code path. Unlike v1, the v2 reconciler stamps a controller owner
-// reference on every namespaced child; the sole exception is the cluster-scoped
-// applyClusterRunnerTemplateReaderBinding, which cannot be owned by a namespaced
-// ActionsGateway (see the per-child ownerRef policy, Q394).
+// CreateOrPatch code path. Like v1 (since Q394), the v2 reconciler stamps a
+// controller owner reference on every namespaced child; the sole exception is the
+// cluster-scoped applyClusterRunnerTemplateReaderBinding, which cannot be owned by
+// a namespaced ActionsGateway (see the ownerRef policy on applyManagedChild).
 
 func (r *ActionsGatewayV2Reconciler) applyServiceAccount(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *corev1.ServiceAccount) error {
 	return applyManagedChild(ctx, r.Client, r.Scheme, ag, &corev1.ServiceAccount{}, desired, nil)
@@ -426,7 +426,9 @@ func (r *ActionsGatewayV2Reconciler) applyRoleBinding(ctx context.Context, ag *g
 		if delErr := r.Delete(ctx, obj); delErr != nil && !apierrors.IsNotFound(delErr) {
 			return delErr
 		}
-		_ = controllerutil.SetControllerReference(ag, desired, r.Scheme)
+		if refErr := controllerutil.SetControllerReference(ag, desired, r.Scheme); refErr != nil {
+			return refErr
+		}
 		return r.Create(ctx, desired)
 	}
 	return err

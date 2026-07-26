@@ -207,17 +207,17 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 
 	// 1 & 2. ServiceAccounts.
 	step("ServiceAccounts")
-	if err := r.applyServiceAccount(ctx, buildAGCServiceAccount(ag)); err != nil {
+	if err := r.applyServiceAccount(ctx, ag, buildAGCServiceAccount(ag)); err != nil {
 		return fmt.Errorf("AGC ServiceAccount: %w", err)
 	}
-	if err := r.applyServiceAccount(ctx, buildWorkerServiceAccount(ag)); err != nil {
+	if err := r.applyServiceAccount(ctx, ag, buildWorkerServiceAccount(ag)); err != nil {
 		return fmt.Errorf("worker ServiceAccount: %w", err)
 	}
 
 	// 3 & 4. RoleBinding — binds the AGC SA to the shipped agc-tenant-role ClusterRole.
 	// (Pre-v0.X installs created a per-tenant Role here; reconcileDelete still GCs it.)
 	step("AGC RoleBinding")
-	if err := r.applyRoleBinding(ctx, buildAGCRoleBinding(ag)); err != nil {
+	if err := r.applyRoleBinding(ctx, ag, buildAGCRoleBinding(ag)); err != nil {
 		return fmt.Errorf("AGC RoleBinding: %w", err)
 	}
 
@@ -243,12 +243,12 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	if err := r.applyProxyDeployment(ctx, ag, buildProxyDeployment(ag, r.ProxyImage)); err != nil {
 		return fmt.Errorf("proxy Deployment: %w", err)
 	}
-	if err := r.applyService(ctx, buildProxyService(ag)); err != nil {
+	if err := r.applyService(ctx, ag, buildProxyService(ag)); err != nil {
 		return fmt.Errorf("proxy Service: %w", err)
 	}
 	// AGC metrics Service — the AGC has no other Service; this exposes its mTLS
 	// metrics port (:8443) so a ServiceMonitor can scrape it (Q72).
-	if err := r.applyService(ctx, buildAGCService(ag)); err != nil {
+	if err := r.applyService(ctx, ag, buildAGCService(ag)); err != nil {
 		return fmt.Errorf("AGC Service: %w", err)
 	}
 
@@ -256,13 +256,13 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	// (kube-proxy rewrites ClusterIP → PodIP before NetworkPolicy enforcement,
 	// so an ipBlock on the ClusterIP would silently drop all proxy-bound traffic).
 	step("NetworkPolicies")
-	if err := r.applyNetworkPolicy(ctx, buildProxyNetworkPolicy(ag, githubCIDRs)); err != nil {
+	if err := r.applyNetworkPolicy(ctx, ag, buildProxyNetworkPolicy(ag, githubCIDRs)); err != nil {
 		return fmt.Errorf("proxy NetworkPolicy: %w", err)
 	}
-	if err := r.applyNetworkPolicy(ctx, buildWorkloadNetworkPolicy(ag)); err != nil {
+	if err := r.applyNetworkPolicy(ctx, ag, buildWorkloadNetworkPolicy(ag)); err != nil {
 		return fmt.Errorf("workload NetworkPolicy: %w", err)
 	}
-	if err := r.applyNetworkPolicy(ctx, buildAGCNetworkPolicy(ag, r.APIServerCIDRs)); err != nil {
+	if err := r.applyNetworkPolicy(ctx, ag, buildAGCNetworkPolicy(ag, r.APIServerCIDRs)); err != nil {
 		return fmt.Errorf("AGC NetworkPolicy: %w", err)
 	}
 	// Delete the legacy single-policy "actions-gateway" NetworkPolicy left by previous
@@ -272,13 +272,13 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 
 	// 9. PDB.
 	step("PodDisruptionBudget")
-	if err := r.applyPDB(ctx, buildPDB(ag)); err != nil {
+	if err := r.applyPDB(ctx, ag, buildPDB(ag)); err != nil {
 		return fmt.Errorf("PodDisruptionBudget: %w", err)
 	}
 
 	// 10. HPA.
 	step("HorizontalPodAutoscaler")
-	if err := r.applyHPA(ctx, buildHPA(ag)); err != nil {
+	if err := r.applyHPA(ctx, ag, buildHPA(ag)); err != nil {
 		return fmt.Errorf("HorizontalPodAutoscaler: %w", err)
 	}
 
@@ -302,7 +302,7 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	for i, spec := range ag.Spec.RunnerGroups {
 		name := runnerGroupName(ag, spec, i)
 		desired[name] = struct{}{}
-		if err := r.applyRunnerGroup(ctx, buildRunnerGroup(ag, spec, name)); err != nil {
+		if err := r.applyRunnerGroup(ctx, ag, buildRunnerGroup(ag, spec, name)); err != nil {
 			return fmt.Errorf("RunnerGroup %s: %w", name, err)
 		}
 	}
@@ -383,6 +383,14 @@ func (r *ActionsGatewayReconciler) reconcileDelete(ctx context.Context, ag *gmcv
 	// requeues, so a transient API failure cannot orphan a live, credentialed
 	// AGC Deployment + RoleBinding after offboarding. Each pass is idempotent:
 	// already-deleted resources return NotFound and converge to clean.
+	//
+	// Every child applied by reconcileResources also carries a controller owner
+	// reference (Q394), so cascade GC reclaims anything this pass misses once the
+	// CR leaves etcd. That is a backstop, not a replacement: GC is unordered and
+	// gives no confirmation, so the explicit ordered deletes below stay the primary
+	// path. The deletes here still cover more than the owned set — legacy objects
+	// no longer applied (the pre-v0.X per-tenant Role, the legacy "actions-gateway"
+	// NetworkPolicy) have no owner reference and are reclaimed only here.
 	var errs []error
 	del := func(obj client.Object, name string) {
 		if err := r.deleteIfExists(ctx, obj, ns, name); err != nil {
@@ -932,30 +940,35 @@ func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // set) nor forces an avoidable IsConflict on this reconcile, which the previous
 // full-object Update could.
 //
-// Whether a helper stamps a controller owner reference is per-child and
-// deliberate: only applyDeployment, applyProxyDeployment, applyOwnedSecret, and
-// applyServiceMonitor pass a non-nil owner (4 of the 11 v1 CreateOrPatch
-// children). The rest are un-owned and reclaimed solely by the reconcileDelete
-// finalizer. That inconsistency is intentional-but-undocumented and tracked for a
-// separate decision (Q394) — do not add or drop an owner here without it.
-// applyNamespacePSA stays on Server-Side Apply (it already detects and reports
-// out-of-band PSA-label edits via field-manager conflicts).
+// Every helper stamps a controller owner reference on its child (Q394). All 11
+// v1 CreateOrPatch children live in the ActionsGateway's own namespace, so the
+// reference is always valid, and garbage collection becomes a backstop to the
+// reconcileDelete finalizer rather than an alternative to it: the finalizer still
+// drives ordered, fail-closed teardown while the CR lives, and cascade GC
+// reclaims anything left if the finalizer is force-removed. Before Q394 only 4 of
+// the 11 were owned and a stripped finalizer leaked the other 7 (ServiceAccounts,
+// RoleBinding, NetworkPolicies, Services, PDB, HPA, RunnerGroups). Pass ag as the
+// owner in any new helper here; apply_helpers_ownerref_test.go pins the contract.
+// applyNamespacePSA is the one exception and stays on Server-Side Apply: the
+// tenant namespace is platform-owned, not a GMC child (it already detects and
+// reports out-of-band PSA-label edits via field-manager conflicts).
 
 // applyServiceAccount creates the ServiceAccount or patches its managed labels.
-// Un-owned: reclaimed by the reconcileDelete finalizer (Q394).
-func (r *ActionsGatewayReconciler) applyServiceAccount(ctx context.Context, desired *corev1.ServiceAccount) error {
-	return applyManagedChild(ctx, r.Client, r.Scheme, nil, &corev1.ServiceAccount{}, desired, nil)
+func (r *ActionsGatewayReconciler) applyServiceAccount(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *corev1.ServiceAccount) error {
+	return applyManagedChild(ctx, r.Client, r.Scheme, ag, &corev1.ServiceAccount{}, desired, nil)
 }
 
 // applyRoleBinding creates or patches the AGC RoleBinding. roleRef is immutable:
 // on upgrade (pre-v0.X bindings reference the per-tenant Role; new bindings
 // reference the agc-tenant-role ClusterRole) the binding must be deleted and
 // recreated — a patch would be rejected. A non-empty ResourceVersion means obj
-// already existed (CreateOrPatch populated it from the live object). Un-owned:
-// reclaimed by the reconcileDelete finalizer (Q394).
-func (r *ActionsGatewayReconciler) applyRoleBinding(ctx context.Context, desired *rbacv1.RoleBinding) error {
+// already existed (CreateOrPatch populated it from the live object).
+//
+// The recreate path re-stamps the owner reference on desired before Create, so
+// the replacement binding is owned just like the patched one (Q394).
+func (r *ActionsGatewayReconciler) applyRoleBinding(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *rbacv1.RoleBinding) error {
 	obj := &rbacv1.RoleBinding{}
-	err := applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
+	err := applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		if obj.ResourceVersion != "" && obj.RoleRef != desired.RoleRef {
 			return errRoleRefImmutable
 		}
@@ -967,16 +980,18 @@ func (r *ActionsGatewayReconciler) applyRoleBinding(ctx context.Context, desired
 		if delErr := r.Delete(ctx, obj); delErr != nil && !apierrors.IsNotFound(delErr) {
 			return delErr
 		}
+		if refErr := controllerutil.SetControllerReference(ag, desired, r.Scheme); refErr != nil {
+			return refErr
+		}
 		return r.Create(ctx, desired)
 	}
 	return err
 }
 
-// applyNetworkPolicy creates or patches a NetworkPolicy. Un-owned: reclaimed by
-// the reconcileDelete finalizer (Q394).
-func (r *ActionsGatewayReconciler) applyNetworkPolicy(ctx context.Context, desired *networkingv1.NetworkPolicy) error {
+// applyNetworkPolicy creates or patches a NetworkPolicy.
+func (r *ActionsGatewayReconciler) applyNetworkPolicy(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *networkingv1.NetworkPolicy) error {
 	obj := &networkingv1.NetworkPolicy{}
-	return applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
+	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		obj.Spec = desired.Spec
 		return nil
 	})
@@ -1010,10 +1025,10 @@ func (r *ActionsGatewayReconciler) applyProxyDeployment(ctx context.Context, ag 
 
 // applyService creates or patches a Service, setting only controller-managed Spec
 // fields: ClusterIP and other server-assigned fields on an existing Service must
-// be preserved. Un-owned: reclaimed by the reconcileDelete finalizer (Q394).
-func (r *ActionsGatewayReconciler) applyService(ctx context.Context, desired *corev1.Service) error {
+// be preserved.
+func (r *ActionsGatewayReconciler) applyService(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *corev1.Service) error {
 	obj := &corev1.Service{}
-	return applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
+	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		obj.Spec.Type = desired.Spec.Type
 		obj.Spec.Selector = desired.Spec.Selector
 		obj.Spec.Ports = desired.Spec.Ports
@@ -1021,31 +1036,32 @@ func (r *ActionsGatewayReconciler) applyService(ctx context.Context, desired *co
 	})
 }
 
-// applyPDB creates or patches a PodDisruptionBudget. Un-owned: reclaimed by the
-// reconcileDelete finalizer (Q394).
-func (r *ActionsGatewayReconciler) applyPDB(ctx context.Context, desired *policyv1.PodDisruptionBudget) error {
+// applyPDB creates or patches a PodDisruptionBudget.
+func (r *ActionsGatewayReconciler) applyPDB(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *policyv1.PodDisruptionBudget) error {
 	obj := &policyv1.PodDisruptionBudget{}
-	return applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
+	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		obj.Spec = desired.Spec
 		return nil
 	})
 }
 
-// applyHPA creates or patches a HorizontalPodAutoscaler. Un-owned: reclaimed by
-// the reconcileDelete finalizer (Q394).
-func (r *ActionsGatewayReconciler) applyHPA(ctx context.Context, desired *autoscalingv2.HorizontalPodAutoscaler) error {
+// applyHPA creates or patches a HorizontalPodAutoscaler.
+func (r *ActionsGatewayReconciler) applyHPA(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *autoscalingv2.HorizontalPodAutoscaler) error {
 	obj := &autoscalingv2.HorizontalPodAutoscaler{}
-	return applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
+	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		obj.Spec = desired.Spec
 		return nil
 	})
 }
 
-// applyRunnerGroup creates or patches a RunnerGroup CR. Un-owned: reclaimed by the
-// reconcileDelete finalizer, which deletes RunnerGroups explicitly (Q394).
-func (r *ActionsGatewayReconciler) applyRunnerGroup(ctx context.Context, desired *agcv1alpha1.RunnerGroup) error {
+// applyRunnerGroup creates or patches a RunnerGroup CR. The owner reference is a
+// teardown backstop only: reconcileDelete still deletes RunnerGroups explicitly
+// and waits for them to be gone before touching the AGC Deployment, so the
+// ordered drain is unchanged — cascade GC never runs first, because the CR is not
+// removed from etcd until the finalizer clears (Q394).
+func (r *ActionsGatewayReconciler) applyRunnerGroup(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *agcv1alpha1.RunnerGroup) error {
 	obj := &agcv1alpha1.RunnerGroup{}
-	return applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
+	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		obj.Spec = desired.Spec
 		return nil
 	})

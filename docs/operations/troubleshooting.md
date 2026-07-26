@@ -554,6 +554,33 @@ own backoff and removes the finalizer automatically once every delete is confirm
 orphaned-AGC failure mode the fail-closed behaviour exists to prevent; clear the real
 delete error instead.
 
+**If the finalizer was already stripped.** Every namespaced child the GMC applies
+carries a controller `OwnerReference` to its `ActionsGateway`, in both API versions,
+so once the CR leaves etcd the Kubernetes garbage collector reclaims the AGC and
+proxy `Deployment`s, both `ServiceAccount`s, the AGC `RoleBinding`, the egress
+`NetworkPolicy`s, the `Service`s, the `PodDisruptionBudget`, the `HorizontalPodAutoscaler`,
+the TLS `Secret`s, and the `RunnerGroup`s — asynchronously and unordered, so worker
+pods are not drained first. Give it a few seconds, then confirm the namespace is
+clean and delete anything left by hand:
+
+```sh
+kubectl get all,sa,rolebinding,networkpolicy,pdb,hpa,secret,runnergroup -n <namespace> -l app.kubernetes.io/managed-by=actions-gateway-gmc
+```
+
+Two categories are **not** covered by that cascade and must be checked explicitly
+after a stripped finalizer: the `v2alpha1` per-gateway `ClusterRoleBinding` (cluster-scoped,
+so a namespaced gateway cannot own it) and any object left over from a pre-v0.X install
+(the per-tenant `Role`, the legacy `actions-gateway` `NetworkPolicy`), which only the
+finalizer's explicit deletes reach.
+
+```sh
+kubectl get clusterrolebinding -l app.kubernetes.io/managed-by=actions-gateway-gmc
+```
+
+```sh
+kubectl get role,networkpolicy -n <namespace>
+```
+
 ---
 
 ## AGC CrashLoopBackOff or Not Acquiring Jobs

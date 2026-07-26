@@ -22,17 +22,17 @@ import (
 // concrete type (its namespace/name/labels are overwritten from desired); for an
 // unstructured child the caller sets the GVK on the shell before calling.
 //
-// The owner argument is load-bearing and per-call-site: it selects whether the
-// child is reclaimed by Kubernetes cascade garbage collection (owner set) or only
-// by the reconciler's reconcileDelete finalizer (owner nil). The v1 ActionsGateway
-// reconciler deliberately leaves several children un-owned and relies on the
-// finalizer; passing a non-nil owner there — or dropping the owner on a currently
-// owned child — silently changes garbage-collection semantics and, for the
-// un-owned children, would let a force-removed finalizer leak them. The current
-// per-child policy is intentionally NOT normalised here; it is documented and
-// tracked for a separate, deliberately-reviewed decision (Q394). Preserve each
-// call site's owner argument exactly; the apply_helpers ownerRef-contract tests
-// pin it.
+// The owner argument is load-bearing: it selects whether the child is also
+// reclaimed by Kubernetes cascade garbage collection (owner set) or only by the
+// reconciler's reconcileDelete finalizer (owner nil). The policy across all three
+// reconcilers is now uniform (Q394): **every namespaced child passes a non-nil
+// owner**, so GC backstops the finalizer and a force-removed finalizer cannot
+// leak children. Only a cluster-scoped child passes nil — a namespaced
+// ActionsGateway cannot own one (the apiserver rejects the cross-scope reference
+// and never collects it), so reconcileDelete removes it explicitly. Today that is
+// exactly one call site, applyClusterRunnerTemplateReaderBinding. Dropping the
+// owner on a namespaced child re-opens the leak; the apply_helpers
+// ownerRef-contract tests pin the per-helper contract.
 func applyManagedChild[T client.Object](
 	ctx context.Context,
 	c client.Client,
