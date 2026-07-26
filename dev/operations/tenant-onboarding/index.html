@@ -3617,9 +3617,14 @@ the scale-set model cannot express, until it is ready to split those groups up.<
   the scale-set protocol later means creating a fresh single-label set, not editing
   the old one — the field is <strong>immutable</strong>, because switching a live set's protocol
   is a re-registration storm.</li>
-<li><strong>Editing a Classic set needs an explicit version.</strong> An unqualified
-  <code>kubectl edit/patch/apply</code> addresses the <code>v2beta1</code> storage version, which rejects
-  the multi-label shape; qualify it (<code>kubectl edit runnersets.v2alpha1.actions-gateway.com …</code>).</li>
+<li><strong>Editing a Classic set works unqualified — except its labels.</strong> An unqualified
+  <code>kubectl edit/patch/apply</code> addresses the <code>v2beta1</code> storage version, which is
+  ScaleSet-only and takes exactly one <code>runnerLabel</code>. That rule is <em>ratcheted</em>: it is
+  only enforced on the <code>runnerLabels</code> you actually write, so editing any other field
+  of a stored multi-label Classic set goes through untouched. To change the <strong>labels</strong>
+  of such a set, qualify the write to the version that admits the shape
+  (<code>kubectl edit runnersets.v2alpha1.actions-gateway.com …</code>). Ratcheting is on by
+  default from Kubernetes 1.30; the v2 floor is 1.31, so every supported cluster has it.</li>
 </ul>
 <h3 id="optional-templateref-a-default-worker-pod-shape">Optional <code>templateRef</code> (a default worker pod shape)<a class="headerlink" href="#optional-templateref-a-default-worker-pod-shape" title="Permanent link">&para;</a></h3>
 <p><code>RunnerSet.spec.templateRef</code> is <strong>optional</strong>. A <code>RunnerSet</code> that omits it resolves a worker pod shape through a fallback chain, so a tenant does not have to name a template in every runner set. The chain (resolved at runtime, fail-closed):</p>
