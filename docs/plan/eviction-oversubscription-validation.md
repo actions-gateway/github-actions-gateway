@@ -31,7 +31,7 @@ clean run with no `timeout-minutes` set.
 |---|---|
 | [Q396](../STATUS.md#Q396) | **Is** experiment 1. Already covers both tiers as of #815; only the retry-budget assertion is additive. |
 | [Q417](../STATUS.md#Q417) | Hard prerequisite for the scale-set half of 1, and for 3 and 5. `ProvisionScaleSetWorker` is fire-and-forget, so scale-set evictions are never detected. |
-| [Q419](../STATUS.md#Q419) | The docs half of the same gap. Independent of these experiments. |
+| Q419 | **Shipped 2026-07-26.** The docs half of the same gap: every eviction-recovery claim now names the classic tier. Independent of these experiments, but it means the docs these experiments measure against no longer overstate the scale-set tier. |
 | Q420 | **Shipped 2026-07-26**, ahead of Q417 and independently of it — the reap deadline came from a pod annotation, not a pod watch. Orphaned Running workers would otherwise have contaminated 3 and 5 by holding quota, which is exactly the idle-capacity signature those experiments measure. |
 | [Q418](../STATUS.md#Q418) | Deferred, event-gated on experiment 1 attributing the delay. |
 

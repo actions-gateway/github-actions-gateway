@@ -139,6 +139,9 @@ spec:
                 description: |-
                   EvictionRetryDelay is the minimum time to wait before re-queuing an evicted
                   job. Must be at least 1s. Defaults to "5s" when omitted.
+
+                  Honored only when acquisitionProtocol is Classic, for the reason given on
+                  MaxEvictionRetries.
                 type: string
               gatewayRef:
                 description: |-
@@ -175,6 +178,12 @@ spec:
                   MaxEvictionRetries controls how many times the AGC automatically re-queues a
                   job whose worker pod was evicted. Set to 0 to disable auto-retry entirely.
                   Defaults to 2 when omitted.
+
+                  Honored only when acquisitionProtocol is Classic. Eviction recovery runs off
+                  the classic provisioning path, which blocks on the worker pod's terminal
+                  phase; a ScaleSet worker is provisioned fire-and-forget, so no eviction is
+                  observed and no rerun is issued. On a ScaleSet set an evicted worker's job
+                  needs a manual rerun until Q417 ports the recovery.
                 format: int32
                 maximum: 10
                 minimum: 0
@@ -824,6 +833,9 @@ spec:
                 description: |-
                   EvictionRetryDelay is the minimum time to wait before re-queuing an evicted
                   job. Must be at least 1s. Defaults to "5s" when omitted.
+
+                  Not yet honored on this API version, for the reason given on
+                  MaxEvictionRetries.
                 type: string
               gatewayRef:
                 description: |-
@@ -860,6 +872,12 @@ spec:
                   MaxEvictionRetries controls how many times the AGC automatically re-queues a
                   job whose worker pod was evicted. Set to 0 to disable auto-retry entirely.
                   Defaults to 2 when omitted.
+
+                  Not yet honored on this API version. Eviction recovery is implemented on the
+                  classic acquisition path only, which blocks on the worker pod's terminal
+                  phase; v2beta1 is ScaleSet-only, and a ScaleSet worker is provisioned
+                  fire-and-forget, so no eviction is observed and no rerun is issued. An
+                  evicted worker's job needs a manual rerun until Q417 ports the recovery.
                 format: int32
                 maximum: 10
                 minimum: 0
