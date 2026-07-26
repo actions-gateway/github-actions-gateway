@@ -127,5 +127,27 @@ class HostResolution(unittest.TestCase):
                 cm.resolve_host()
 
 
+class ModelFamilies(unittest.TestCase):
+    """An unmapped id lands in ``Other``, and ``model_daily.csv`` is
+    merge-preserved — so the mislabelled rows survive every later run. These pin
+    the ids actually seen in the transcripts to their display families."""
+
+    def test_known_ids_map_to_their_family(self):
+        for raw, want in (
+            ("claude-sonnet-4-6", "Sonnet 4.6"),
+            ("claude-opus-4-7", "Opus 4.7"),
+            ("claude-opus-4-8", "Opus 4.8"),
+            ("claude-opus-5", "Opus 5"),
+            ("claude-fable-5", "Fable 5"),
+            ("claude-haiku-4-5-20251001", "Haiku 4.5"),
+        ):
+            self.assertEqual(cm.model_family(raw), want, raw)
+
+    def test_unmapped_and_missing_ids(self):
+        self.assertEqual(cm.model_family("<synthetic>"), "Other")
+        self.assertEqual(cm.model_family(""), "Unknown")
+        self.assertEqual(cm.model_family(None), "Unknown")
+
+
 if __name__ == "__main__":
     unittest.main()

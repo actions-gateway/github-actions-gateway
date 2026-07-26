@@ -53,12 +53,12 @@ GOLD = "#9A6E1E"  # single-series "cost / line" accent (no CB clash — used alo
 
 MODEL_COLORS = {
     "Sonnet 4.6": OI["orange"], "Opus 4.7": OI["purple"],
-    "Opus 4.8": OI["blue"], "Fable 5": OI["green"], "Haiku 4.5": OI["skyblue"],
-    "Other": OI["grey"], "Unknown": "#CCCCCC",
+    "Opus 4.8": OI["blue"], "Opus 5": OI["vermillion"], "Fable 5": OI["green"],
+    "Haiku 4.5": OI["skyblue"], "Other": OI["grey"], "Unknown": "#CCCCCC",
 }
 # A distinct hatch per model so stacked bars are separable without colour.
 MODEL_HATCH = {
-    "Sonnet 4.6": "", "Opus 4.7": "..", "Opus 4.8": "xx",
+    "Sonnet 4.6": "", "Opus 4.7": "..", "Opus 4.8": "xx", "Opus 5": "--",
     "Fable 5": "\\\\", "Haiku 4.5": "++", "Other": "oo", "Unknown": "",
 }
 # The lines-authored breakdown: (label, colour, hatch, extractor). Maximally
@@ -115,7 +115,8 @@ def chart_tokens_by_model():
     days = sorted({r["date"] for r in rows})
     # a day is estimated only if every row for it is (rows are per machine)
     est_dates = {r["date"] for r in rows if is_est(r)} - {r["date"] for r in rows if not is_est(r)}
-    models = ["Sonnet 4.6", "Opus 4.7", "Opus 4.8", "Fable 5", "Haiku 4.5", "Other", "Unknown"]
+    models = ["Sonnet 4.6", "Opus 4.7", "Opus 4.8", "Opus 5", "Fable 5", "Haiku 4.5",
+              "Other", "Unknown"]
     by = {}
     for r in rows:  # sum each (day, model) across machines
         k = (r["date"], r["model"])

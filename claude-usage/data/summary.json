@@ -1,8 +1,8 @@
 {
   "provenance": {
-    "snapshot_date": "2026-07-24",
+    "snapshot_date": "2026-07-26",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
-    "transcript_files_read": 307,
+    "transcript_files_read": 328,
     "snapshot_host": "mac-1",
     "hosts": [
       "mac-1"
@@ -13,7 +13,7 @@
     "token_dedup": "(message.id, requestId)",
     "message_dedup": "record uuid (user) / (message.id, requestId) (assistant)",
     "first_measured_date": "2026-05-19",
-    "last_measured_date": "2026-07-24",
+    "last_measured_date": "2026-07-26",
     "first_project_date": "2026-05-16",
     "growth_chart_baseline": {
       "tokens": 10000000,
@@ -22,7 +22,8 @@
       "go_code": 15500,
       "note": "published day-7 Bluesky post values; the growth chart plots growth vs these"
     },
-    "pro_to_max_date": "2026-05-23"
+    "pro_to_max_date": "2026-05-23",
+    "max_5x_to_20x_date": "2026-07-05"
   },
   "estimation": {
     "method": "per-commit Pro-era rate x commits authored that day",
@@ -44,13 +45,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8046510,
-      "output": 48688637,
-      "cache_creation": 224729451,
-      "cache_read": 10140003803,
-      "assistant_msgs": 61407,
-      "user_msgs": 68534,
-      "headline_input_output_cachecreation": 281464598
+      "input": 8064022,
+      "output": 51962163,
+      "cache_creation": 240736341,
+      "cache_read": 11136391285,
+      "assistant_msgs": 66591,
+      "user_msgs": 74303,
+      "headline_input_output_cachecreation": 300762526
     },
     "estimated": {
       "input": 6559,
@@ -62,15 +63,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8053069,
-      "output": 49167573,
-      "cache_creation": 226738876,
-      "cache_read": 10207522646,
-      "assistant_msgs": 62149,
-      "user_msgs": 69395,
-      "headline_input_output_cachecreation": 283959518,
-      "grand_total_incl_cache_read": 10491482164,
-      "cache_reuse_ratio": 45.02
+      "input": 8070581,
+      "output": 52441099,
+      "cache_creation": 242745766,
+      "cache_read": 11203910128,
+      "assistant_msgs": 67333,
+      "user_msgs": 75164,
+      "headline_input_output_cachecreation": 303257446,
+      "grand_total_incl_cache_read": 11507167574,
+      "cache_reuse_ratio": 46.15
     }
   },
   "by_model": {
@@ -82,7 +83,7 @@
     "Other": {
       "headline": 0,
       "output": 0,
-      "messages": 134
+      "messages": 142
     },
     "Opus 4.7": {
       "headline": 16947491,
@@ -95,24 +96,20 @@
       "messages": 128
     },
     "Opus 4.8": {
-      "headline": 217259573,
-      "output": 37765226,
-      "messages": 44077
+      "headline": 220848729,
+      "output": 38330769,
+      "messages": 44636
     },
     "Fable 5": {
-      "headline": 24664542,
-      "output": 3370560,
-      "messages": 4452
+      "headline": 25611173,
+      "output": 3519346,
+      "messages": 4657
+    },
+    "Opus 5": {
+      "headline": 14762141,
+      "output": 2559197,
+      "messages": 4412
     }
-  },
-  "head_snapshot": {
-    "go_code": 71943,
-    "go_comments": 23429,
-    "markdown_nonblank": 42093,
-    "yaml_handwritten": 8788,
-    "yaml_generated": 130245,
-    "tests": 1394,
-    "commits": 1221
   },
   "by_host": {
     "-": {
@@ -125,13 +122,22 @@
       "headline_input_output_cachecreation": 2494920
     },
     "mac-1": {
-      "input": 8046510,
-      "output": 48688637,
-      "cache_creation": 224729451,
-      "cache_read": 10140003803,
-      "assistant_msgs": 61407,
-      "user_msgs": 68534,
-      "headline_input_output_cachecreation": 281464598
+      "input": 8064022,
+      "output": 51962163,
+      "cache_creation": 240736341,
+      "cache_read": 11136391285,
+      "assistant_msgs": 66591,
+      "user_msgs": 74303,
+      "headline_input_output_cachecreation": 300762526
     }
+  },
+  "head_snapshot": {
+    "go_code": 73314,
+    "go_comments": 24382,
+    "markdown_nonblank": 44834,
+    "yaml_handwritten": 9324,
+    "yaml_generated": 130318,
+    "tests": 1429,
+    "commits": 1286
   }
 }
