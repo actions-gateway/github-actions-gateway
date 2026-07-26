@@ -81,7 +81,7 @@ Testing is structured in three layers. Each layer has a distinct scope, speed co
 | **B — Lifecycle (fake broker)** | AGC session polling, job acquisition, pod creation, eviction retry, SIGTERM cleanup | No | every merge to `main` |
 | **C — Real GitHub** | Actual workflow dispatch, log streaming, RenewJob across renewal cycles, proxy egress IP routing | Yes (GitHub App credentials) | nightly + on-demand |
 
-Tier A and Tier B run on a local `kind` cluster — fast enough for CI on every merge and for the inner dev loop. Tier C runs against a real GitHub App and a dedicated test repository; it requires `E2E_GITHUB_APP_ID`, `E2E_GITHUB_APP_INSTALLATION_ID`, `E2E_GITHUB_APP_PRIVATE_KEY`, `E2E_GITHUB_ORG`, and `E2E_GITHUB_REPO` to be set, and is skipped at runtime when any are missing.
+Tier A and Tier B run on a local `kind` cluster — fast enough for CI on every merge and for the inner dev loop. Tier C runs against a real GitHub App and a dedicated test repository; it requires `GITHUB_E2E_APP_ID`, `GITHUB_E2E_INSTALLATION_ID`, `GITHUB_E2E_PRIVATE_KEY`, `GITHUB_E2E_ORG`, and `GITHUB_E2E_REPO` to be set, and is skipped at runtime when any are missing.
 
 **What kind adds over envtest integration tests:**
 
