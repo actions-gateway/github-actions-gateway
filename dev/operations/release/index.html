@@ -132,9 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            
-  <strong>v1.2.0 is here.</strong> Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
-
+            <strong>v1.2.0 is here.</strong>
+      Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
           </div>
           
         </aside>
@@ -2804,24 +2803,31 @@ the signing and chart-publish paths work.</p>
   it to <em>Exploring</em>), and a Deferred row describing a capability an adopter would
   ask about belongs in <em>Exploring</em>. A 2026-07-25 audit found six of seven
   near-term items already shipped.</li>
-<li><strong>Bump the docs-site announce bar to this release, and land it before you tag.</strong>
-  The banner in <a href="../../overrides/main.html"><code>overrides/main.html</code></a> is the
-  "vX.Y.Z is here" strip at the top of every page on the site. A stable tag push
-  deploys that tag's docs wholesale, so whatever the banner says at tag time is
-  what the released version advertises, permanently. Every stable tag to date has
-  missed this: <code>v1.0.0</code> shipped saying <em>"Alpha, pre-1.0"</em>, and <code>v1.1.0</code> and
-  <code>v1.2.0</code> both said <em>"v1.0.0 is here"</em>. Verify with:</li>
+<li><strong>Optional: refresh the docs-site announce bar's highlight.</strong> The banner in
+  <a href="../../overrides/main.html"><code>overrides/main.html</code></a> is the "vX.Y.Z is here" strip
+  at the top of every page on the site. Its <strong>version needs no action</strong>: it is
+  derived from the git tags at build time, so a stable tag names itself
+  automatically (<a href="../../development/website/#the-announce-bar">website.md § The announce bar</a>).
+  What you may want to update is the one-line highlight after it, and the
+  <code>highlight_for</code> version that guards it. Leave both alone and the banner reads
+  <em>"vX.Y.Z is here. Read the release notes."</em>, which is correct but plainer;
+  update them together and it leads with this release's headline. Land the change
+  before you tag either way.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>awk<span class="w"> </span><span class="s1">&#39;/block announce/,/endblock/&#39;</span><span class="w"> </span>overrides/main.html
+<p>This used to be a manual version bump, and every stable tag to date missed it:
+  <code>v1.0.0</code> shipped saying <em>"Alpha, pre-1.0"</em>, and <code>v1.1.0</code> and <code>v1.2.0</code> both said
+  <em>"v1.0.0 is here"</em>. Preview what the tag will render, standing in the version
+  you are about to cut (without it the local build resolves the <em>current</em> newest
+  tag, which is still the previous release):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">GAG_DOCS_RELEASE</span><span class="o">=</span>vX.Y.Z<span class="w"> </span>make<span class="w"> </span>docs-build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">&#39;/md-banner/,/&lt;\/aside&gt;/&#39;</span><span class="w"> </span>site/index.html
 </code></pre></div>
-<p><strong><code>publish.yml</code> now enforces this</strong> via its <code>announce-bar</code> job, which every
-  publishing job depends on. A stable tag whose banner does not name it fails the
-  release before any image is pushed, so a miss costs you a re-cut tag rather than
-  a wrong release. Prereleases are exempt: they publish no docs, and the banner
-  should name the GA version rather than churn through every RC.</p>
+<p><strong><code>publish.yml</code> enforces the result</strong> via its <code>announce-bar</code> job, which every
+  publishing job depends on: it builds the site at the tag and fails the release
+  if the <em>rendered</em> banner does not name it, before any image is pushed.
+  Prereleases are exempt (they publish no docs), as is a backport tag cut after a
+  newer minor, since the banner advertises the newest release by design.</p>
 <p>(A <code>docs_ref</code> seed of an already-cut release pins <code>overrides/</code> to the current
-  checkout instead, so re-seeding repairs past tags. That safety net does <strong>not</strong>
-  apply to a fresh tag push. See
+  checkout, so re-seeding refreshes the highlight on past tags too. See
   <a href="../../development/website/#seeding-already-released-versions">website.md § Seeding</a>.)</p>
 <h4 id="validate-the-release-candidate-on-dogfood">Validate the release candidate on dogfood<a class="headerlink" href="#validate-the-release-candidate-on-dogfood" title="Permanent link">&para;</a></h4>
 <p>Before promoting a release-candidate line to a <strong>stable</strong> <code>vX.Y.Z</code> tag, validate
@@ -3123,9 +3129,10 @@ break; signing, SBOM attestation, and build-provenance attestation are all first
 exercised on a real <code>v*</code> tag, which is why step 3 verification matters on every
 release.</p>
 <p><code>publish.yml</code> also runs one <strong>pre-publish gate</strong>, <code>announce-bar</code>, that every
-publishing job depends on. It is deliberately cheap and runs first, so a stale
-docs-site banner (see <a href="#1-pre-flight">Pre-flight</a>) stops the release before an
-image, chart, or GitHub Release exists, rather than after.</p>
+publishing job depends on. It builds the docs site at the tag and asserts the
+rendered banner names it (see <a href="#1-pre-flight">Pre-flight</a>), so a docs-site banner
+advertising the wrong version stops the release before an image, chart, or GitHub
+Release exists, rather than after.</p>
 <h2 id="supply-chain-integrity-of-the-pipeline-itself">Supply-chain integrity of the pipeline itself<a class="headerlink" href="#supply-chain-integrity-of-the-pipeline-itself" title="Permanent link">&para;</a></h2>
 <p>The publish job holds <code>packages: write</code> + <code>id-token: write</code> + <code>attestations:
 write</code>: its ambient OIDC identity <em>is</em> the release trust root. A hijacked upstream action tag executing in
