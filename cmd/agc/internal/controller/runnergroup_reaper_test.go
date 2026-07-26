@@ -88,7 +88,9 @@ func TestReconcile_ReapsExpiredWorkerPods(t *testing.T) {
 			workerPod("default", "reap-rg", "pending-old", corev1.PodPending, now.Add(-6*time.Minute), time.Time{}),
 			// Pending for 1m → kept, due in ~4m.
 			workerPod("default", "reap-rg", "pending-fresh", corev1.PodPending, now.Add(-time.Minute), time.Time{}),
-			// Running since 8h ago → never reaped (bounded by GitHub's job timeout).
+			// Running since 8h ago, no job-completion stamp → never reaped (bounded by
+			// GitHub's job timeout). Classic pods are never stamped, so this is the
+			// only Running behaviour the v1 path can see.
 			workerPod("default", "reap-rg", "running-long", corev1.PodRunning, now.Add(-8*time.Hour), time.Time{}),
 			// Same-namespace pod without the worker label → untouched.
 			&corev1.Pod{
@@ -121,7 +123,7 @@ func TestReconcile_ReapsExpiredWorkerPods(t *testing.T) {
 	assert.True(t, gone("pending-old"), "Pending pod past deadline must be reaped")
 	assert.False(t, gone("failed-fresh"), "terminal pod within TTL must be retained")
 	assert.False(t, gone("pending-fresh"), "Pending pod within deadline must be retained")
-	assert.False(t, gone("running-long"), "Running pods must never be reaped")
+	assert.False(t, gone("running-long"), "Running pods with no job-completion stamp must never be reaped")
 	assert.False(t, gone("bystander"), "pods without the worker label must be untouched")
 
 	// Earliest retained due time is failed-fresh: 1m TTL − 30s elapsed ≈ 30s.

@@ -362,6 +362,8 @@ kubectl apply -f actionsgateway.yaml
       pendingPodDeadline: "30m"   # GPU node provisioning can exceed the 10m default
 ```
 
+A third cleanup arm has no knob: on the ScaleSet protocol, a worker pod still `Running` five minutes after GitHub reports its job terminal is deleted, because it is a worker that never received its job (or one held open by a container that outlived the runner) and it is holding a slot for nothing. It emits a `WorkerPodOrphanedRunning` Warning Event — see the [runbook](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning). A pod whose job is still assigned is never touched, however long it runs.
+
 A reaped Pending pod emits a `WorkerPodStuckPending` Warning Event on the RunnerGroup and cancels the job (it never started); see [troubleshooting: worker pod reaped while Pending](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending).
 
 **Per-job Secrets are reclaimed on job completion, not on `completedPodTTL`.** Alongside each worker pod the AGC stages one short-lived Secret holding that job's credentials. It is deleted as soon as the job finishes — independent of `completedPodTTL`, which retains only the pod — so `kubectl get secrets -n <tenant-ns>` shows Secrets for in-flight jobs only, never a backlog proportional to jobs run. Both objects also carry an `OwnerReference` to their RunnerGroup/RunnerSet as a backstop, so deleting the owner cascade-deletes anything still present. If you do see `job-` or `job-ss-` Secrets outliving their pods, check the AGC log for `reclaim completed job's worker Secret` warnings — a persistently failing delete (usually an RBAC regression on `secrets`) falls back to that cascade-GC and leaves credentials in the namespace until the owner is deleted.

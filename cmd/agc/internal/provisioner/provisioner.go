@@ -573,12 +573,8 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 		return fmt.Errorf("provisioner: resolve provisioning spec: %w", err)
 	}
 
-	safeJob := safeName(jobID)
 	secretName := scaleSetSecretName(jobID)
-	podName := fmt.Sprintf("runner-%s-%s", safeName(key.Name), safeJob)
-	if len(podName) > 63 { // Kubernetes DNS label limit
-		podName = podName[:63]
-	}
+	podName := scaleSetPodName(key.Name, jobID)
 	log = log.With("podName", podName, "jobID", jobID)
 
 	workerVersion := imageVersion(p.resolveWorkerImage(spec))
@@ -669,6 +665,19 @@ const secretCleanupTimeout = 10 * time.Second
 // (CleanupScaleSetJob) derive the name here so they can never drift apart.
 func scaleSetSecretName(jobID string) string { return "job-ss-" + safeName(jobID) }
 
+// scaleSetPodName is the deterministic per-job worker-pod name for the scale-set
+// path, derived from the owning set's name and the job ID (truncated to the 63-char
+// Kubernetes DNS label limit). Like scaleSetSecretName it is the single derivation
+// site, so the creating side (ProvisionScaleSetWorker) and the completion-stamping
+// side (CleanupScaleSetJob) cannot drift apart.
+func scaleSetPodName(ownerName, jobID string) string {
+	name := fmt.Sprintf("runner-%s-%s", safeName(ownerName), safeName(jobID))
+	if len(name) > 63 {
+		name = name[:63]
+	}
+	return name
+}
+
 // CleanupScaleSetJob deletes the per-job JIT-config Secret staged for jobID by
 // ProvisionScaleSetWorker. It is the steady-state reclaim point for the scale-set path
 // (Q373): the Secret cannot be deleted when the worker pod is created (the pod mounts
@@ -684,6 +693,9 @@ func scaleSetSecretName(jobID string) string { return "job-ss-" + safeName(jobID
 //
 // It is idempotent (a NotFound is success), so a replayed completion message, or a
 // completion for a job whose Secret a failure path already unstaged, is a no-op.
+//
+// It also stamps AnnotationJobCompletedAt on the job's worker pod, which is what gives
+// a still-Running scale-set worker a reap deadline (Q420) — see markJobCompleted.
 func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, jobID string) error {
 	key := target.Key()
 	name := scaleSetSecretName(jobID)
@@ -691,6 +703,56 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 		return fmt.Errorf("provisioner: delete scale-set Secret %s: %w", name, err)
 	}
 	p.logForKey(key).Debug("scale-set job Secret reclaimed", "secret", name, "jobID", jobID)
+	return p.markJobCompleted(ctx, key.Namespace, scaleSetPodName(key.Name, jobID), jobID)
+}
+
+// markJobCompleted stamps AnnotationJobCompletedAt on a scale-set worker pod, recording
+// when GitHub declared the pod's job terminal. It is the only writer of that annotation.
+//
+// Why it exists: the scale-set tier provisions fire-and-forget, so no goroutine owns a
+// Running worker the way the classic path's provision() does. A worker that registers
+// but never receives its job — its assignment lapsed, was cancelled, or completed
+// elsewhere — sits at "Listening for Jobs" forever, and the reaper counted PodRunning as
+// active with no deadline of any kind, so it held a concurrency slot and a node until an
+// operator deleted it by hand (Q420). The annotation converts "GitHub says this job is
+// over" into a durable, restart-safe deadline the reaper can act on, rather than the
+// process-scoped state a fire-and-forget provisioner has no way to keep.
+//
+// It is set-once: a replayed completion (a re-created session polls from cursor 0) must
+// not push the deadline back, so an already-stamped pod is left alone. A pod that does
+// not exist yet — a job cancelled before its worker was created — is not an error: that
+// pod stalls Pending on the deleted Secret and the pending-deadline reaper collects it.
+//
+// A pod that has already reached a terminal phase — the ordinary case, where the runner
+// ran the job and exited — is left unstamped: completedPodTTL already owns it, so the
+// stamp would buy nothing and cost one write per job.
+func (p *Provisioner) markJobCompleted(ctx context.Context, namespace, podName, jobID string) error {
+	var pod corev1.Pod
+	if err := p.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: podName}, &pod); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("provisioner: get scale-set worker pod %s: %w", podName, err)
+	}
+	switch pod.Status.Phase {
+	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
+		return nil
+	}
+	if _, ok := pod.Annotations[AnnotationJobCompletedAt]; ok {
+		return nil
+	}
+	patch := client.MergeFrom(pod.DeepCopy())
+	if pod.Annotations == nil {
+		pod.Annotations = map[string]string{}
+	}
+	pod.Annotations[AnnotationJobCompletedAt] = p.nowFn().UTC().Format(time.RFC3339)
+	if err := p.Client.Patch(ctx, &pod, patch); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("provisioner: stamp job completion on worker pod %s: %w", podName, err)
+	}
+	p.logFor().Debug("stamped job completion on worker pod", "pod", podName, "jobID", jobID)
 	return nil
 }
 

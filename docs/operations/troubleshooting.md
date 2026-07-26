@@ -776,6 +776,40 @@ kubectl describe pod -n <namespace> <worker-pod-name>
 
 ---
 
+## Worker Pod Reaped While Running (WorkerPodOrphanedRunning)
+
+**Symptoms.** A `Warning` Event with reason `WorkerPodOrphanedRunning` appears on the `RunnerSet` (`kubectl describe runnerset <name> -n <namespace>`) and `actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}` increments. Before the reap fires, the shape is a set that looks busy and is not: `status.activeJobs` sits at some non-zero number, worker pods are `Running`, but no job is executing — `kubectl logs` on the pod ends at `Listening for Jobs`, and GitHub shows nothing in progress for the set.
+
+**What happened.** The pod was still `Running` five minutes after GitHub reported its job terminal, so the AGC deleted it. Two causes produce that:
+
+- **A ScaleSet worker that never received its job** (the common one). The ScaleSet tier provisions fire-and-forget: the worker registers and pulls its own job. If the assignment lapsed, was cancelled, or completed elsewhere before the runner got to it, the runner waits at `Listening for Jobs` forever. It holds a concurrency slot, a namespace-quota slot, and a node while doing nothing.
+- **A container that outlived the runner** — an injected mesh sidecar, or a regular (non-native) build/DinD sidecar. See the two runbook sections below for fixing the root cause; on the ScaleSet tier this reap is now the backstop that stops those pods accumulating.
+
+Classic-protocol worker pods are never affected: their provisioning goroutine owns the pod through to a terminal phase, so a Running classic pod always has a live job behind it and is never given this deadline.
+
+**Diagnostics.**
+
+```sh
+# The reap event names the deleted pod and the grace that elapsed
+kubectl get events -n <namespace> --field-selector reason=WorkerPodOrphanedRunning
+
+# Which Running workers already have a completion stamp (they are on the clock)
+kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<set> \
+  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at'
+
+# Rate of orphan reaps per set
+# PromQL: rate(actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}[1h])
+```
+
+**Resolution.** The reap itself needs no action — it returns the slot and the node. Treat a *sustained* rate as the signal:
+
+- Recurring orphans with no sidecar in the template mean jobs are being assigned and then lost before the worker can pull them. Check for a provisioning stall upstream — namespace `ResourceQuota` denials (`WorkerQuotaExceeded`), scheduling pressure (`WorkersUnschedulable`), or a `maxWorkers` set above what the quota can hold, which puts the AGC into a provision/deny/retry loop while GitHub's 10-minute lock lapses under it.
+- Orphans on a set whose pods show `READY 1/2` are the sidecar cases — fix those at the source (next two sections).
+
+The five-minute grace is a fixed constant, not a CRD field: it measures runner shutdown (a runner that actually ran its job reports completion and exits within seconds), and the job is already over at GitHub, so the only thing the reap costs is the terminal pod's `completedPodTTL` inspection window.
+
+---
+
 ## Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)
 
 **Symptoms.** On the scale-set path (`acquisitionProtocol: ScaleSet`), one job is never picked up while others in the same `RunnerSet` run fine. The AGC logs repeat `scaleset: runner name conflict` for a single `jobID`, and — on versions before the fix — end in `scaleset: runner name conflict persists, skipping job`. Restarting the AGC clears it. In the repo/org runner list, offline records named `<scaleSet>-<jobID>` (and `<scaleSet>-<jobID>-1`, `-2`, `-3`) accumulate over time.
@@ -803,7 +837,9 @@ Only delete records that are `offline` and not `busy`; an `online` record is a l
 
 **Symptoms.** Worker pods sit `Running` with a not-ready container count (`READY 1/2`) long after their job completed; `completedPodTTL` never deletes them; over time the RunnerGroup wedges at `maxWorkers` and new jobs stop being picked up even though no job is actually executing. `kubectl get pod -o jsonpath='{.spec.containers[*].name}'` shows a second container such as `istio-proxy` or `linkerd-proxy`.
 
-**What happened.** A service-mesh sidecar was injected into the worker pod. GAG worker pods run to completion: the slot is freed and the pod reaped only when the pod reaches a *terminal* phase (`Succeeded`/`Failed`), which requires every container to exit. A classic mesh sidecar never exits on its own, so the pod stays `Running` forever and falls through both reaper paths (`completedPodTTL` covers terminal pods; `pendingPodDeadline` covers `Pending` pods — neither covers a stuck `Running` pod).
+**What happened.** A service-mesh sidecar was injected into the worker pod. GAG worker pods run to completion: the slot is freed and the pod reaped only when the pod reaches a *terminal* phase (`Succeeded`/`Failed`), which requires every container to exit. A classic mesh sidecar never exits on its own, so the pod stays `Running` forever and falls through the two phase-based reaper paths (`completedPodTTL` covers terminal pods; `pendingPodDeadline` covers `Pending` pods — neither covers a stuck `Running` pod).
+
+On the **ScaleSet** protocol there is a backstop: once GitHub reports the job terminal, a pod still `Running` five minutes later is reaped as [`WorkerPodOrphanedRunning`](#worker-pod-reaped-while-running-workerpodorphanedrunning), so the slot comes back instead of wedging the set. It is a backstop, not a fix — the pod is still killed rather than completing, so resolve the sidecar as below. On the **Classic** protocol there is no such backstop and the pods accumulate until deleted by hand.
 
 **Resolution.** Opt the GAG tenant namespace out of the mesh, or — if mesh membership is mandatory — switch to native sidecars (Kubernetes 1.28+) or a sidecar-less/ambient data plane. The full per-mesh configuration (Istio sidecar + ambient, Linkerd, Cilium, generic) is in [Running GAG Alongside a Service Mesh](service-mesh-coexistence.md). Note that mesh opt-out/exclusion annotations set on the RunnerGroup `podTemplate` are **not** honored — GAG strips arbitrary worker-pod-template metadata; configure the mesh at the namespace level instead.
 

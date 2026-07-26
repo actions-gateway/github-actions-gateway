@@ -17,6 +17,18 @@ import (
 // watches and reapers never cross-wire during v1/v2 coexistence.
 const LabelRunnerSet = "actions-gateway.com/runner-set"
 
+// AnnotationJobCompletedAt is stamped on a scale-set worker pod, with an RFC 3339
+// UTC timestamp as its value, when the scale-set listener observes the terminal
+// JobCompleted for the job that pod was created for (markJobCompleted). It is the
+// reap deadline for a worker that is still Running after its job is over — a worker
+// that registered but never received its job would otherwise hold a concurrency slot
+// and a node forever, because the reaper counts PodRunning as active (Q420).
+//
+// It is controller-set and informational: never set it by hand and never use it for
+// security enforcement. The classic tier never stamps it (its provision() goroutine
+// owns the pod through to a terminal phase), so it is scale-set-only in practice.
+const AnnotationJobCompletedAt = "actions-gateway.com/job-completed-at"
+
 // WorkerContainerName is the name of the runner container in every worker pod
 // template — the container the runner engine executes in, and the one the
 // NodeShare sizing profile targets (Q359 Phase 3).

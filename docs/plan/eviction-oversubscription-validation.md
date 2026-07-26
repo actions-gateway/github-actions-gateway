@@ -32,7 +32,7 @@ clean run with no `timeout-minutes` set.
 | [Q396](../STATUS.md#Q396) | **Is** experiment 1. Already covers both tiers as of #815; only the retry-budget assertion is additive. |
 | [Q417](../STATUS.md#Q417) | Hard prerequisite for the scale-set half of 1, and for 3 and 5. `ProvisionScaleSetWorker` is fire-and-forget, so scale-set evictions are never detected. |
 | [Q419](../STATUS.md#Q419) | The docs half of the same gap. Independent of these experiments. |
-| [Q420](../STATUS.md#Q420) | Would contaminate 3 and 5 (orphaned Running workers hold quota, which is the idle-capacity signature those experiments measure), but its row folds it into Q417's pod watch. One gate, not two. |
+| Q420 | **Shipped 2026-07-26**, ahead of Q417 and independently of it — the reap deadline came from a pod annotation, not a pod watch. Orphaned Running workers would otherwise have contaminated 3 and 5 by holding quota, which is exactly the idle-capacity signature those experiments measure. |
 | [Q418](../STATUS.md#Q418) | Deferred, event-gated on experiment 1 attributing the delay. |
 
 ## Experiment 1: mid-job eviction latency, both tiers ([Q396](../STATUS.md#Q396))
@@ -114,7 +114,7 @@ no human action.
   automatic.
 - **Unlocks:** turns the payoff section of the write-up from an argument into a
   result.
-- **Blocked on** [Q417](../STATUS.md#Q417) (which subsumes Q420).
+- **Blocked on** [Q417](../STATUS.md#Q417). (Q420, the other contaminant, shipped 2026-07-26.)
 - Preemption is kubelet-initiated, so unlike experiment 2 it does produce
   `PodFailed`/`Evicted` and does exercise `handleEviction` on classic.
 
