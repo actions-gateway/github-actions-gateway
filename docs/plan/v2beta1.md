@@ -129,6 +129,20 @@ the graduation **drops `RunnerSet.spec.acquisitionProtocol`** (v2alpha1-only) **
 preserves a coexistence-era spoke's values via an annotation round-trip so no `v2alpha1`
 set is silently re-protocol'd.
 
+**Corollary: a hub-only constraint must be ratcheted, never spec-wide.** The hub is the
+storage version, so it *holds* every shape any served spoke admits — including a Classic
+multi-label set that `v2beta1`'s own single-`runnerLabel` rule forbids. A spec-level CEL
+rule re-evaluates on every write, so it turned each such stored object into an
+un-editable one: any unqualified `kubectl edit/patch` (which addresses the storage
+version) was rejected on a field unrelated to labels (Q398). The
+rule therefore lives on `runnerLabels` itself, where CRD validation ratcheting
+([KEP-4008](https://github.com/kubernetes/enhancements/issues/4008); default-on from
+1.30, and the v2 floor is 1.31) suppresses it while the value is unchanged. The
+constraint is undiminished where it matters — a `v2beta1`-authored create, or a label
+edit through `v2beta1`, is still rejected. Generalized: **a constraint the hub cannot
+satisfy for every stored spoke shape belongs on the narrowest field that expresses it**,
+so ratcheting can scope it to writers who actually touch that field.
+
 **Sequencing — Q74 is the last rung, not independent.** Per the
 [U8 ladder](archive/q264-scale-set-protocol-phases.md#u8--support-matrix-policy) the ScaleSet-only cut
 **follows Q264 P5** (the `ScaleSet` default flip + positioning rewrite) and a one-minor

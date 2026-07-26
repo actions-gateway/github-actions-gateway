@@ -335,9 +335,9 @@ With `spec.sizing.profile: Binpack` set while no container had reached
 - No `SizingDrift` condition was set, matching the deliberate "no data, no
   noise" branch rather than a `False/InsufficientSamples` on every set.
 
-### Editing a Classic RunnerSet needs an explicit version
+### Editing a Classic RunnerSet needed an explicit version (fixed)
 
-Enabling the profile the obvious way fails:
+Enabling the profile the obvious way failed:
 
 ```console
 $ kubectl patch runnerset ci -n gag-dogfood --type=merge \
@@ -349,19 +349,21 @@ name is its single runs-on match target (Q264)
 
 The object is a `Classic` set with three `runnerLabels` — a shape v2alpha1
 allows and v2beta1 does not. Unqualified `kubectl` addresses the storage
-version (v2beta1), so the write is rejected even though the field being set has
-nothing to do with labels or protocol. Qualifying the resource works:
+version (v2beta1), so the write was rejected even though the field being set had
+nothing to do with labels or protocol. Qualifying the resource worked:
 
 ```bash
 kubectl patch runnersets.v2alpha1.actions-gateway.com ci -n gag-dogfood \
   --type=merge -p '{"spec":{"sizing":{"profile":"Binpack"}}}'
 ```
 
-This is not specific to sizing — it blocks *any* unqualified edit of a Classic
-multi-label RunnerSet, including `kubectl edit` and re-`apply`. Filed as
-[Q398](../STATUS.md#Q398), which stays open: the shape is still reachable by any
-tenant that pins Classic. It no longer bites the dogfood tenant, which Q399 moved
-to a single-label ScaleSet.
+This was not specific to sizing — it blocked *any* unqualified edit of a Classic
+multi-label RunnerSet, including `kubectl edit` and re-`apply`. Filed as Q398 and
+**since fixed**: the single-label rule moved from `v2beta1`'s `spec` onto its
+`runnerLabels` field, so CRD validation ratcheting suppresses it while the labels
+are unchanged. The first `kubectl patch` above now succeeds; qualifying to
+`v2alpha1` is still required to edit such a set's **labels**. Rationale and the
+general rule for hub-only constraints: [v2beta1.md](v2beta1.md#6-q74--the-graduation-cut).
 
 ### The ≥20-sample paths (reached 2026-07-25, second session)
 
