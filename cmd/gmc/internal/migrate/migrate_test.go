@@ -210,7 +210,10 @@ func TestFanOut_SecurityProfileRelocation(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "privileged", res.NamespacePatch.Labels[v2alpha1.SecurityProfileLabel])
 		assert.Equal(t, v2alpha1.PrivilegedProfileAllowed, res.NamespacePatch.Labels[v2alpha1.PrivilegedProfileLabel])
-		assert.Empty(t, res.Warnings)
+		// No ELIGIBILITY warning — the grant is present, so there is nothing to flag.
+		// (The downgrade-guard warning is separate and expected here; it is asserted by
+		// TestFanOut_PrivilegedRelocationWarnsAboutTheDowngradeGuard.)
+		assert.NotContains(t, strings.Join(res.Warnings, "\n"), "holds no "+v2alpha1.PrivilegedProfileLabel)
 	})
 
 	t.Run("privileged without grant warns and never invents the grant", func(t *testing.T) {
@@ -339,6 +342,15 @@ func TestMostRestrictiveProfile(t *testing.T) {
 	assert.Equal(t, "restricted", MostRestrictiveProfile("restricted", "privileged"), "restricted outranks privileged")
 	// privileged is the LEAST restrictive level (rank 0), so baseline wins over it.
 	assert.Equal(t, "baseline", MostRestrictiveProfile("privileged", "baseline"), "baseline outranks privileged")
+
+	// A LONE privileged gateway keeps privileged (Q414). There is nothing to be more
+	// restrictive than, so most-restrictive-wins must return the tenant's own profile;
+	// downgrading it to baseline is safe-but-wrong — Pod Security Admission would then
+	// refuse the very DinD worker pods the tenant migrated in order to keep running.
+	assert.Equal(t, "privileged", MostRestrictiveProfile("privileged"),
+		"a single privileged gateway must not be silently downgraded")
+	assert.Equal(t, "privileged", MostRestrictiveProfile("privileged", "privileged"),
+		"agreeing privileged gateways stay privileged")
 }
 
 // TestGoldenRepresentativeTenant snapshots the full rendered manifest for the

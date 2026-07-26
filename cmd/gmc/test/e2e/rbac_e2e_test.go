@@ -23,7 +23,7 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 11111, 99999, testRSAKeyPEM)
-		utils.ApplyActionsGatewayCR(tenantNS, agName, secretName)
+		utils.BaseTenant(tenantNS, agName, secretName).Apply()
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
 	})
 

@@ -395,8 +395,17 @@ func emitDryRun(res *migrate.Result, ns, gwName, outputDir string, stdout io.Wri
 // re-run never clobbers operator edits), and the namespace patch only adds the v2
 // keys (the v1 keys stay for coexistence). Children are applied before referrers for
 // readability; reference integrity is a runtime condition, so order is not required.
+//
+// A privileged (DinD/sysbox) tenant additionally yields cluster-scoped
+// ClusterRunnerTemplates (Q414), so this may need cluster-scoped create permission —
+// which the run already requires for the namespace patch. They are NOT reclaimed by
+// deleting the tenant namespace; the dry-run warning says so and names the
+// migrated-from-namespace label to find them by.
 func applyResult(ctx context.Context, c client.Client, res *migrate.Result, stderr io.Writer) error {
 	objs := []client.Object{res.Proxy}
+	for _, t := range res.ClusterTemplates {
+		objs = append(objs, t)
+	}
 	for _, t := range res.Templates {
 		objs = append(objs, t)
 	}

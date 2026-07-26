@@ -295,3 +295,70 @@ func TestGroupsForGateway(t *testing.T) {
 	require.Len(t, aGroups, 1)
 	assert.Equal(t, "unowned", aGroups[0].Name)
 }
+
+// TestMigrateAll_ApplyPrivilegedDinDTenant covers the representative Docker-in-Docker
+// tenant end to end through the CLI's apply path (Q414). Two things broke here and
+// only a whole-flow test catches either, because each lives in a different layer:
+//
+//   - The privileged worker shape must land on a CLUSTER-SCOPED ClusterRunnerTemplate
+//     (FanOut's kind choice) — a namespaced RunnerTemplate carrying a privileged
+//     container is refused by admission, so `--apply` used to abort after creating the
+//     EgressProxy, leaving the namespace half-migrated.
+//   - The namespace must end up `security-profile: privileged` (the CLI's
+//     namespace-wide most-restrictive override). `privileged` ranks BELOW `baseline`,
+//     so a lone privileged tenant used to be silently downgraded — safe in direction,
+//     but it leaves a tenant whose own DinD pods Pod Security Admission then refuses.
+func TestMigrateAll_ApplyPrivilegedDinDTenant(t *testing.T) {
+	ctx := context.Background()
+	privileged := true
+	always := corev1.ContainerRestartPolicyAlways
+
+	dind := v1RunnerGroup("dogfood-e2e", "dogfood", "runner:1", []string{"gag-ci-e2e"})
+	dind.Spec.PodTemplate.Spec.InitContainers = []corev1.Container{{
+		Name:            "dind",
+		Image:           "docker:27-dind",
+		RestartPolicy:   &always,
+		SecurityContext: &corev1.SecurityContext{Privileged: &privileged},
+	}}
+
+	c := fakeClient(
+		v1Namespace("dogfood", map[string]string{
+			"actions-gateway.github.com/tenant": "true",
+			gmcv1alpha1.PrivilegedProfileLabel:  gmcv1alpha1.PrivilegedProfileAllowed,
+		}, nil),
+		v1Gateway("dogfood-e2e", "dogfood", "privileged"),
+		dind,
+	)
+	var stdout, stderr bytes.Buffer
+	require.NoError(t, migrateAll(ctx, c, options{namespace: "dogfood", apply: true}, &stdout, &stderr))
+
+	// The privileged shape is on the cluster-scoped kind, and nothing namespaced.
+	var clusterTemplates v2alpha1.ClusterRunnerTemplateList
+	require.NoError(t, c.List(ctx, &clusterTemplates))
+	require.Len(t, clusterTemplates.Items, 1)
+	assert.Equal(t, "dogfood", clusterTemplates.Items[0].Labels[v2alpha1.MigratedFromNamespaceLabel])
+
+	var templates v2alpha1.RunnerTemplateList
+	require.NoError(t, c.List(ctx, &templates, client.InNamespace("dogfood")))
+	assert.Empty(t, templates.Items, "a privileged shape must not be emitted as a namespaced RunnerTemplate")
+
+	// The set points at it BY KIND — without the discriminator the referent resolves
+	// as a namespaced RunnerTemplate and the set sits Ready=False/TemplateNotFound.
+	var sets v2alpha1.RunnerSetList
+	require.NoError(t, c.List(ctx, &sets, client.InNamespace("dogfood")))
+	require.Len(t, sets.Items, 1)
+	require.NotNil(t, sets.Items[0].Spec.TemplateRef)
+	assert.Equal(t, "ClusterRunnerTemplate", sets.Items[0].Spec.TemplateRef.Kind)
+	assert.Equal(t, clusterTemplates.Items[0].Name, sets.Items[0].Spec.TemplateRef.Name)
+
+	// The tenant keeps the posture its workload needs, plus the grant it already held.
+	var ns corev1.Namespace
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Name: "dogfood"}, &ns))
+	assert.Equal(t, "privileged", ns.Labels[v2alpha1.SecurityProfileLabel],
+		"a lone privileged tenant must not be downgraded to baseline")
+	assert.Equal(t, v2alpha1.PrivilegedProfileAllowed, ns.Labels[v2alpha1.PrivilegedProfileLabel],
+		"the platform grant is carried onto the v2 domain, never invented")
+
+	// And the operator was told a cluster-scoped object was created.
+	assert.Contains(t, stderr.String(), "CLUSTER-SCOPED")
+}

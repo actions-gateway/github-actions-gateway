@@ -99,7 +99,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		utils.CreateGitHubAppSecret(tenantNS, secretName, creds.appID, creds.installationID, creds.privateKeyPEM)
 
 		By("applying ActionsGateway CR with a RunnerGroup pointing at the worker image")
-		utils.ApplyActionsGatewayCRWithRunnerGroup(tenantNS, agName, secretName, workerImage)
+		utils.RunnerTenant(tenantNS, agName, secretName, workerImage).Apply()
 
 		By("waiting for AGC Deployment to be ready")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 5*time.Minute)

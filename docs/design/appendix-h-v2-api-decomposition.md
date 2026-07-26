@@ -753,6 +753,25 @@ standalone `RunnerGroup` CRs win over inline bootstrap entries; and the
 operator runbook is [migration-v1-to-v2.md](../operations/migration-v1-to-v2.md) and
 the [`v1alpha1` deprecation notice](../operations/v1alpha1-deprecation.md).
 
+**Privileged worker shapes fan out to the cluster-scoped kind (Q414).** The sketch
+above says "extracting each inline `podTemplate` into a `RunnerTemplate`", which is
+under-specified for a privileged (DinD/sysbox) tenant: a *namespaced* `RunnerTemplate`
+may not declare a privileged container ([§H.7](#h7-reference-integrity--runtime-conditions-not-admission)
+— a tenant must not self-author one), so
+that mapping emits an object the apiserver refuses, failing `--apply` after the
+`EgressProxy` is already created. The fan-out therefore chooses the kind from the pod
+shape: a group whose `podTemplate` carries a privileged container or init container
+becomes a `ClusterRunnerTemplate` — the kind that exists for exactly these golden
+shapes (§H.6) — and its `RunnerSet` gets `templateRef.kind: ClusterRunnerTemplate`.
+The choice is sound because `gag-migrate` is run by a platform administrator, the same
+role that hand-authors a `ClusterRunnerTemplate`, and it weakens nothing: PSA stamped
+from the namespace `securityProfile` is the runtime backstop for both kinds, and the
+`privileged-profile` grant it depends on is carried forward from v1, never invented.
+Emitted cluster-template names are namespace-qualified (`crt-<ns>-<hash>`) so two
+tenants sharing a worker shape do not silently share one cluster-scoped object, and
+each carries an `actions-gateway.com/migrated-from-namespace` provenance label — the
+one migration output namespace deletion does not garbage-collect.
+
 ```
        v1alpha1 (one monolith)            one-shot tool         v2alpha1 (fan-out)
   ┌──────────────────────────────┐                       ┌──────────────────────────────┐

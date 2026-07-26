@@ -23,7 +23,7 @@ var _ = Describe("E2E_GMC_Teardown", Ordered, func() {
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 55555, 66666, testRSAKeyPEM)
-		utils.ApplyActionsGatewayCR(tenantNS, agName, secretName)
+		utils.BaseTenant(tenantNS, agName, secretName).Apply()
 
 		By("waiting for provisioning to complete before testing teardown")
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
