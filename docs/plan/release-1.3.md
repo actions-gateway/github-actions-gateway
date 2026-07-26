@@ -162,9 +162,20 @@ gated on the directory holding them. The residual risk that motivated the gate
 is unchanged and not retroactively addressed: the scaleset/api-only changes that
 merged since `v1.2.0` were never seen by those tiers, and this fix only stops
 new ones from slipping through. The recurrence guard — linting the filters
-against `go.work` rather than maintaining them by hand — is
-[Q429](../STATUS.md#Q429), deliberately left out of the gate because it is new
-tooling rather than a correctness fix.
+against `go.work` rather than maintaining them by hand — was Q429, deliberately
+left out of the gate because it is new tooling rather than a correctness fix.
+
+Q429 closed 2026-07-26 anyway, inside the release: `make path-filters-check`
+(`scripts/check-path-filters.sh`, also CI's `path-filters` job) now fails when a
+`go.work` module is missing from a filter whose jobs exercise the whole
+workspace, when a `filters:` block declares a filter the gate has not been told
+to treat as workspace-covering or narrow-by-design, or when a pattern names a
+path that no longer exists. It reproduces the Q400 gap end-to-end: dropping
+`scaleset/**` from `integration-test.yml` fails the gate naming the module and
+the pattern to add. What it deliberately does NOT decide is whether a narrow
+filter should have been widened — that judgement is still the reviewer's, and
+the Q400 residual risk above is unaffected. Detail:
+[testing.md § The path-filter gate](../development/testing.md#the-path-filter-gate).
 
 ## Explicitly out of scope
 
