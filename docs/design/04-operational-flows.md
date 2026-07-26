@@ -50,6 +50,16 @@ The one intentional exception is a **cluster-scoped** child: a namespaced `Actio
 
 This flow runs per-job inside the tenant namespace, entirely managed by the AGC.
 
+> **This is the classic acquisition flow.** A `RunnerSet` with
+> `spec.acquisitionProtocol: ScaleSet` — the default, and `v2beta1`'s only option —
+> does not run steps 2a–5 as written: the runner pulls and completes its own job
+> through its own session, and the AGC advertises a single capacity integer
+> (`X-ScaleSetMaxCapacity`) instead of deciding per delivered job. Two consequences
+> are called out where they arise — the quota rung of step 2a
+> ([Q443](../STATUS.md#Q443)) and eviction auto-retry
+> ([Q417](../STATUS.md#Q417)) — and both are `2.0-gate` items, because the classic
+> removal in `v2.0.0` deletes the only implementation unless they land first.
+
 ```mermaid
 sequenceDiagram
     participant A as AGC goroutine
@@ -76,6 +86,8 @@ sequenceDiagram
 1. **Poll:** A dedicated AGC goroutine fires a `GetMessage` request via the proxy pool. GitHub holds the connection for up to 50 seconds; returns `202 Accepted` if no job is queued.
 2. **Intercept:** GitHub responds with a `RunnerJobRequest` message containing `run_service_url`, `runner_request_id`, and `billing_owner_id` in the decoded body.
 2a. **Admit (Q59, #784):** Before claiming the job, the goroutine consults the pre-acquisition admission gate, which asks two questions in order. **Quota:** can the namespace `ResourceQuota` admit one more worker pod right now (`hard − used` against this owner's worker footprint)? **Ceiling:** is the in-memory, per-RunnerGroup reservation counter below the worker ceiling (`maxWorkers` / the maximum `priorityTiers` threshold)? A no from either **skips `acquirejob`**, increments `actions_gateway_jobs_admission_rejected_total{reason}` (`quota` or `ceiling`), and resumes polling at step 1 — the job stays queued at GitHub and is redelivered to a sibling session with capacity, rather than acquired-then-dropped. When the gate admits, it reserves a slot held until the job completes (step 11), then proceeds to step 3. The quota read fails open and reserves nothing; the reservation is fail-safe soft state (reset on AGC restart). The provisioner's post-acquire ceiling check and quota-retry loop (step 6) remain the authoritative backstops.
+
+   **Tier scope.** This gate is wired from `AdmitFor` (v1 `RunnerGroup`) and the classic branch of the v2 `RunnerSet` reconciler; `reconcileScaleSetListener` returns before it. A `ScaleSet` set expresses the *ceiling* rung as `X-ScaleSetMaxCapacity` (GitHub holds `totalAssignedJobs` at or below the advertised value), but has **no quota rung** — a quota-blocked job is assigned, and step 6's in-place retry is the only thing between it and abandonment, which is the failure mode this gate exists to prevent. `actions_gateway_jobs_admission_rejected_total` is likewise classic-only and reads zero there. Deriving the advertised integer from live headroom as well is [Q443](../STATUS.md#Q443).
 
    Only the quota rung gates acquisition — not the scheduler's `WorkersUnschedulable` verdict, which looks symmetrical but is not. A `ResourceQuota` rejection is never an autoscaler input, so declining to claim forfeits no capacity and self-clears as in-flight jobs release headroom. A Pending unschedulable pod, by contrast, *is* the request for a node: gating on it would suppress the signal cluster-autoscaler needs and starve the tenant exactly when scale-up would have rescued it.
 3. **Lock:** The AGC immediately calls `POST {run_service_url}/acquirejob` via the proxy — before creating any Kubernetes resources — to claim the job within the 2-minute delivery window.

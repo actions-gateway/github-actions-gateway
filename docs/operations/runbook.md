@@ -33,7 +33,7 @@ kubectl edit resourcequota -n <namespace> <quota-name>
 # Update spec.hard values, save and exit
 ```
 
-The change takes effect immediately. Running jobs are not interrupted; the new quota applies on the next pod creation attempt. The gateway reads remaining quota and reacts to exhaustion (it won't claim a job the quota can't place, and lock-cancels then reruns any job that loses headroom after the claim) but never writes the quota itself.
+The change takes effect immediately. Running jobs are not interrupted; the new quota applies on the next pod creation attempt. The gateway reads remaining quota and reacts to exhaustion but never writes the quota itself. On the **classic** acquisition tier it declines to claim a job the quota can't place, leaving it queued at GitHub for a sibling with capacity; if headroom is lost after the claim, the pod create is retried in place (`maxQuotaRetries` × `quotaRetryDelay`) and the job is abandoned if the budget runs out. On a `ScaleSet` set — the default — there is no pre-claim quota rung: the set advertises its configured worker ceiling to GitHub, so a quota-blocked job is assigned and goes straight to that same in-place retry. Either way, watch `actions_gateway_quota_retries_exhausted_total`.
 
 ---
 
