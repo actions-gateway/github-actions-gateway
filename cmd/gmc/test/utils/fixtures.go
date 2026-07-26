@@ -226,7 +226,17 @@ func (f TenantFixture) Object() *gmcv1alpha1.ActionsGateway {
 	for _, g := range f.RunnerGroups {
 		groups = append(groups, g.spec())
 	}
-	minReplicas, maxReplicas := f.ProxyMinReplicas, f.ProxyMaxReplicas
+	// Zero means "not set" for both proxy bounds, so leave the pointer nil and let the
+	// CRD default apply rather than applying a literal 0 replicas.
+	proxy := gmcv1alpha1.ProxyConfig{NoProxyCIDRs: f.NoProxyCIDRs}
+	if f.ProxyMinReplicas > 0 {
+		minReplicas := f.ProxyMinReplicas
+		proxy.MinReplicas = &minReplicas
+	}
+	if f.ProxyMaxReplicas > 0 {
+		maxReplicas := f.ProxyMaxReplicas
+		proxy.MaxReplicas = &maxReplicas
+	}
 	return &gmcv1alpha1.ActionsGateway{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: gmcv1alpha1.GroupVersion.String(),
@@ -238,12 +248,8 @@ func (f TenantFixture) Object() *gmcv1alpha1.ActionsGateway {
 			GitHubURL:       e2eGitHubURL,
 			SecurityProfile: f.SecurityProfile,
 			LogLevel:        f.LogLevel,
-			Proxy: gmcv1alpha1.ProxyConfig{
-				MinReplicas:  &minReplicas,
-				MaxReplicas:  &maxReplicas,
-				NoProxyCIDRs: f.NoProxyCIDRs,
-			},
-			RunnerGroups: groups,
+			Proxy:           proxy,
+			RunnerGroups:    groups,
 		},
 	}
 }

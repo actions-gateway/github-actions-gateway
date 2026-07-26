@@ -259,13 +259,26 @@ func hasPrivilegedContainer(spec *v2alpha1.RunnerTemplateSpec) bool {
 // tenant's posture — so the strictest wins. v1's one-gateway-per-namespace rule means
 // this normally collapses to a single profile, but the tool handles it safely
 // regardless (the task's explicit requirement). An empty input returns baseline.
+//
+// The seed is the FIRST profile, not an unconditional baseline, and that distinction
+// is load-bearing (Q414). `privileged` ranks BELOW `baseline` — it is the least
+// restrictive level — so seeding at baseline meant a lone privileged tenant could
+// never beat the seed and silently migrated to `baseline`. That direction is safe but
+// wrong: the tenant's own DinD worker pods are then refused by Pod Security Admission,
+// so the migration produced a tenant that could not run its workload. Seeding from the
+// input leaves every genuine multi-gateway comparison unchanged — the strictest still
+// wins — while a single gateway now migrates to exactly its own profile.
 func MostRestrictiveProfile(profiles ...string) string {
 	best := v2alpha1.SecurityProfileBaseline
-	bestRank := v2alpha1.SecurityProfileRank[best]
+	bestRank, seeded := v2alpha1.SecurityProfileRank[best], false
 	for _, p := range profiles {
 		eff := v2alpha1.EffectiveSecurityProfile(p)
-		if r, ok := v2alpha1.SecurityProfileRank[eff]; ok && r > bestRank {
-			best, bestRank = eff, r
+		r, ok := v2alpha1.SecurityProfileRank[eff]
+		if !ok {
+			continue
+		}
+		if !seeded || r > bestRank {
+			best, bestRank, seeded = eff, r, true
 		}
 	}
 	return best
@@ -388,10 +401,54 @@ func buildNamespacePatch(in Input, gw *gmcv1alpha1.ActionsGateway, warnings *[]s
 		patch.Annotations[v2alpha1.AllowProfileDowngradeAnnotation] = v2alpha1.AllowProfileDowngradeAllowed
 	}
 
+	warnIfDowngradeGuardWillReject(in, profile, patch, warnings)
+
 	if len(patch.Annotations) == 0 {
 		patch.Annotations = nil
 	}
 	return patch
+}
+
+// warnIfDowngradeGuardWillReject warns when the namespace-security-profile-guard
+// ValidatingAdmissionPolicy will reject the relocation patch as a profile downgrade.
+//
+// This is not hypothetical, and it hits the DinD case every time (Q414). The guard
+// compares the incoming securityProfile label against the namespace's current one, and
+// an ABSENT label reads as the baseline default. A tenant migrating from v1 has never
+// carried the v2 label, so relocating `privileged` — which ranks BELOW baseline, being
+// the least restrictive level — always presents as baseline→privileged, i.e. a
+// downgrade, and is denied without the opt-in annotation.
+//
+// The apparent downgrade is an artifact of the label being new, not a real weakening:
+// the namespace's Pod Security Admission enforcement was ALREADY privileged under v1,
+// stamped there by the GMC from the gateway's spec. But the guard cannot see that, and
+// it must not: it is the control that stops a stray re-apply from silently relaxing a
+// tenant's isolation.
+//
+// So the tool warns rather than self-granting. Writing the opt-in annotation here would
+// be the tool inventing a security decision on the operator's behalf — the same thing
+// the privileged-eligibility grant is deliberately never invented for. The operator adds
+// the annotation, migrates, and removes it; the runbook spells out that sequence.
+func warnIfDowngradeGuardWillReject(in Input, profile string, patch *NamespacePatch, warnings *[]string) {
+	current := v2alpha1.EffectiveSecurityProfile(in.NamespaceLabels[v2alpha1.SecurityProfileLabel])
+	if v2alpha1.SecurityProfileRank[profile] >= v2alpha1.SecurityProfileRank[current] {
+		return // not a downgrade — the guard has nothing to object to
+	}
+	// The opt-in may already be on the namespace, or be arriving in this same patch
+	// (carried forward from the v1 annotation). Either satisfies the guard, because the
+	// patch sets labels and annotations in ONE write that the policy evaluates whole.
+	if patch.Annotations[v2alpha1.AllowProfileDowngradeAnnotation] == v2alpha1.AllowProfileDowngradeAllowed ||
+		in.NamespaceAnnotations[v2alpha1.AllowProfileDowngradeAnnotation] == v2alpha1.AllowProfileDowngradeAllowed {
+		return
+	}
+	*warnings = append(*warnings, fmt.Sprintf(
+		"relocating securityProfile %q onto namespace %q reads as a downgrade from %q (an absent %s label "+
+			"defaults to baseline, and %q is less restrictive), so the namespace-security-profile-guard policy "+
+			"will REJECT the namespace patch. This does not weaken the tenant — its Pod Security Admission level "+
+			"is already %q under v1 — but the opt-in is the operator's to give, not this tool's. Before --apply, run: "+
+			"kubectl annotate namespace %s %s=%s   (remove it once the migration is verified)",
+		profile, in.Namespace, current, v2alpha1.SecurityProfileLabel, profile, profile,
+		in.Namespace, v2alpha1.AllowProfileDowngradeAnnotation, v2alpha1.AllowProfileDowngradeAllowed))
 }
 
 // buildGateway assembles the v2 ActionsGateway: identity only (the inline proxy and

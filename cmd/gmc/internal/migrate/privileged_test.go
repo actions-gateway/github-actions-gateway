@@ -107,9 +107,47 @@ func TestFanOut_PrivilegedShapeBecomesClusterTemplate(t *testing.T) {
 		"templateRef must name the kind explicitly; the default referent is the namespaced RunnerTemplate")
 
 	// The operator must see the blast-radius change in the dry-run, before --apply.
-	require.Len(t, res.Warnings, 1)
-	assert.Contains(t, res.Warnings[0], "CLUSTER-SCOPED")
-	assert.Contains(t, res.Warnings[0], v2alpha1.MigratedFromNamespaceLabel)
+	all := strings.Join(res.Warnings, "\n")
+	assert.Contains(t, all, "CLUSTER-SCOPED")
+	assert.Contains(t, all, v2alpha1.MigratedFromNamespaceLabel)
+	// …and the second thing that blocks a privileged migration: the namespace patch is
+	// refused as an apparent downgrade until the operator opts in.
+	assert.Contains(t, all, v2alpha1.AllowProfileDowngradeAnnotation)
+}
+
+// TestFanOut_PrivilegedRelocationWarnsAboutTheDowngradeGuard covers the third thing
+// that blocks a DinD migration (Q414): relocating `privileged` onto a namespace that
+// has never carried the v2 label presents as baseline→privileged — a downgrade, since
+// privileged is the LEAST restrictive level — so namespace-security-profile-guard
+// rejects the patch. The tool warns with the exact remediation rather than writing the
+// opt-in annotation itself, which would be inventing a security decision that is the
+// operator's to make.
+func TestFanOut_PrivilegedRelocationWarnsAboutTheDowngradeGuard(t *testing.T) {
+	t.Run("warns when the namespace holds no downgrade opt-in", func(t *testing.T) {
+		res, err := FanOut(newPrivilegedTenant("dind", newDinDRunnerGroup("g", "dind", "runner:1", []string{"e2e"})))
+		require.NoError(t, err)
+		joined := strings.Join(res.Warnings, "\n")
+		assert.Contains(t, joined, "will REJECT the namespace patch")
+		assert.Contains(t, joined, "kubectl annotate namespace dind "+v2alpha1.AllowProfileDowngradeAnnotation)
+	})
+
+	t.Run("silent when the v1 downgrade opt-in carries forward", func(t *testing.T) {
+		// The patch sets labels and annotations in ONE write the policy evaluates whole,
+		// so an opt-in arriving in the same patch already satisfies the guard.
+		in := newPrivilegedTenant("dind", newDinDRunnerGroup("g", "dind", "runner:1", []string{"e2e"}))
+		in.NamespaceAnnotations = map[string]string{gmcv1alpha1.AllowProfileDowngradeAnnotation: "true"}
+		res, err := FanOut(in)
+		require.NoError(t, err)
+		assert.NotContains(t, strings.Join(res.Warnings, "\n"), "will REJECT the namespace patch")
+	})
+
+	t.Run("silent for a non-downgrading profile", func(t *testing.T) {
+		gw := newGateway("t", "t")
+		gw.Spec.SecurityProfile = "restricted"
+		res, err := FanOut(Input{Namespace: "t", Gateway: gw})
+		require.NoError(t, err)
+		assert.NotContains(t, strings.Join(res.Warnings, "\n"), "will REJECT the namespace patch")
+	})
 }
 
 // TestFanOut_EmittedTemplatesAreAdmissible is the decisive regression test: it runs
@@ -201,7 +239,13 @@ func TestFanOut_PrivilegedReuseCollapsesWithinANamespace(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.ClusterTemplates, 1, "three identical privileged templates collapse to one")
 	assert.Len(t, res.Sets, 3)
-	assert.Len(t, res.Warnings, 1, "one warning per emitted cluster template, not one per group")
+	clusterWarnings := 0
+	for _, w := range res.Warnings {
+		if strings.Contains(w, "CLUSTER-SCOPED") {
+			clusterWarnings++
+		}
+	}
+	assert.Equal(t, 1, clusterWarnings, "one warning per emitted cluster template, not one per group")
 	for _, s := range res.Sets {
 		assert.Equal(t, res.ClusterTemplates[0].Name, s.Spec.TemplateRef.Name)
 	}

@@ -155,6 +155,33 @@ the namespaced kind: a privileged worker pod is only admitted in a namespace who
 platform `privileged-profile=allowed` grant the migration carries forward and never
 invents. A privileged tenant therefore migrates under exactly the grant it already had.
 
+#### A privileged tenant needs the downgrade opt-in for the duration of the migration
+
+Relocating `securityProfile: privileged` onto the namespace is **rejected by default**,
+and every privileged tenant hits this. The `namespace-security-profile-guard` policy
+compares the incoming `actions-gateway.com/security-profile` label against the current
+one, and an **absent** label reads as the `baseline` default. A tenant coming from v1
+has never carried the v2 label, and `privileged` is the *least* restrictive level — so
+the relocation always presents as `baseline` → `privileged`, i.e. a downgrade, and is
+denied without the opt-in annotation.
+
+The downgrade is only apparent: the namespace's PSA enforcement is *already*
+`privileged` under v1, stamped there by the GMC from the gateway's spec. But the policy
+cannot see that, and it must not — it is the control that stops a stray re-apply from
+silently relaxing a tenant's isolation. `gag-migrate` therefore warns in the dry-run
+instead of writing the annotation itself, for the same reason it never invents the
+eligibility grant: opting into a downgrade is the operator's decision.
+
+Add it before `--apply`, and remove it once the migration is verified:
+
+```bash
+kubectl annotate namespace team-a actions-gateway.com/allow-profile-downgrade=allowed
+gag-migrate --namespace team-a --context my-cluster --apply
+kubectl annotate namespace team-a actions-gateway.com/allow-profile-downgrade-
+```
+
+Tenants migrating to `baseline` or `restricted` need none of this.
+
 ## Prerequisites
 
 - The **v2 CRDs are installed** and the GMC is serving the v2 reconcilers — install
@@ -308,6 +335,11 @@ window keeps both spellings working.
   label is guarded by the `namespace-security-profile-guard` admission policy — a
   downgrade needs the `allow-profile-downgrade=allowed` annotation, and `privileged`
   needs the platform `privileged-profile=allowed` grant. The dry-run warnings call
-  these out.
+  these out. Migrating a **privileged** tenant always trips the downgrade rule; see
+  [the downgrade opt-in](#a-privileged-tenant-needs-the-downgrade-opt-in-for-the-duration-of-the-migration).
+  Note the ordering cost of discovering this at `--apply` time rather than in the
+  dry-run: the namespace patch is the **last** step, so the v2 objects are already
+  created when it fails. Re-running after adding the annotation is safe — apply is
+  idempotent and skips what exists.
 - **`gag-migrate` reports no namespaces.** With `--all-namespaces` it only targets
   namespaces holding a v1 `ActionsGateway`; pass `--namespace` explicitly otherwise.

@@ -125,6 +125,14 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 		Expect(out).To(ContainSubstring(v2alpha1.MigratedFromNamespaceLabel),
 			"the warning must name the label an operator finds the object by:\n%s", out)
 
+		By("verifying the operator is warned that the namespace patch needs a downgrade opt-in")
+		// Without this warning the operator only discovers the blocker when --apply
+		// fails partway, after the cluster-scoped template is already created.
+		Expect(out).To(ContainSubstring("will REJECT the namespace patch"),
+			"dry-run must warn that namespace-security-profile-guard blocks the relocation:\n%s", out)
+		Expect(out).To(ContainSubstring(v2alpha1.AllowProfileDowngradeAnnotation),
+			"the warning must name the annotation that unblocks it:\n%s", out)
+
 		By("verifying the dry-run wrote nothing")
 		// Dry-run is the default precisely so review comes before mutation; a dry-run
 		// that created objects would make the review meaningless.
@@ -137,6 +145,17 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 	})
 
 	It("E2E_Migration_ApplyCreatesAnAdmissibleV2ObjectSet", func() {
+		By("granting the profile-downgrade opt-in the dry-run asked for")
+		// The operator step the previous spec's warning prescribes, performed here
+		// verbatim. Relocating `privileged` onto a namespace that has never carried the
+		// v2 security-profile label presents as baseline→privileged — a downgrade, since
+		// privileged is the LEAST restrictive level — so namespace-security-profile-guard
+		// refuses the patch without this annotation. The tool deliberately does not write
+		// it: opting into a downgrade is the operator's decision, not the tool's.
+		_, err := utils.Run(exec.Command("kubectl", "annotate", "namespace", tenantNS,
+			v2alpha1.AllowProfileDowngradeAnnotation+"="+v2alpha1.AllowProfileDowngradeAllowed, "--overwrite"))
+		Expect(err).NotTo(HaveOccurred(), "annotate namespace with the downgrade opt-in")
+
 		By("running gag-migrate --apply")
 		out, err := runMigrate(tenantNS, "--apply", "--assume-yes")
 		Expect(err).NotTo(HaveOccurred(), "gag-migrate --apply failed:\n%s", out)
@@ -162,15 +181,10 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 		// The version is qualified explicitly: templateRef.kind and maxListeners are
 		// v2alpha1 fields the ScaleSet-only v2beta1 storage version strips, so an
 		// unqualified read would not see them (cf. Q398).
-		kind, err := utils.Run(exec.Command("kubectl", "get", "runnersets.v2alpha1.actions-gateway.com",
-			setName, "-n", tenantNS, "-o", "jsonpath={.spec.templateRef.kind}"))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(strings.TrimSpace(kind)).To(Equal("ClusterRunnerTemplate"))
-
-		refName, err := utils.Run(exec.Command("kubectl", "get", "runnersets.v2alpha1.actions-gateway.com",
-			setName, "-n", tenantNS, "-o", "jsonpath={.spec.templateRef.name}"))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(strings.TrimSpace(refName)).To(Equal(names[0]), "templateRef resolves to the emitted template")
+		Expect(jsonpathValue("runnersets.v2alpha1.actions-gateway.com", setName, tenantNS,
+			"{.spec.templateRef.kind}")).To(Equal("ClusterRunnerTemplate"))
+		Expect(jsonpathValue("runnersets.v2alpha1.actions-gateway.com", setName, tenantNS,
+			"{.spec.templateRef.name}")).To(Equal(names[0]), "templateRef resolves to the emitted template")
 
 		By("verifying the namespace metadata patch relocated the security profile")
 		labels := namespaceLabels(tenantNS)
@@ -231,12 +245,39 @@ func currentKubeContext() string {
 	return strings.TrimSpace(out)
 }
 
+// jsonpathValue reads a single jsonpath expression off a named resource.
+//
+// It strips apiserver deprecation warnings, which is not optional here: utils.Run
+// merges stderr into stdout, and EVERY read of a `v2alpha1`-qualified object emits
+// `Warning: actions-gateway.com/v2alpha1 … is deprecated` on stderr (v2alpha1 is
+// served-but-deprecated until v2.0.0). Without stripping, that line is concatenated
+// onto the value and every comparison fails on a string that merely looks right.
+func jsonpathValue(resource, name, ns, jsonpath string) string {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("kubectl", "get", resource, name, "-n", ns, "-o", "jsonpath="+jsonpath))
+	Expect(err).NotTo(HaveOccurred(), "read %s on %s/%s", jsonpath, ns, name)
+	return stripAPIServerWarnings(out)
+}
+
+// stripAPIServerWarnings drops the `Warning:` lines kubectl writes to stderr — which
+// utils.Run merges into its returned output — and trims the remainder.
+func stripAPIServerWarnings(s string) string {
+	var kept []string
+	for _, line := range strings.Split(s, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "Warning:") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.TrimSpace(strings.Join(kept, "\n"))
+}
+
 // clusterTemplateNames lists the ClusterRunnerTemplates matching a label selector.
 func clusterTemplateNames(selector string) []string {
 	out, err := utils.Run(exec.Command("kubectl", "get", "clusterrunnertemplates.actions-gateway.com",
 		"-l", selector, "-o", `jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}`))
 	Expect(err).NotTo(HaveOccurred(), "list ClusterRunnerTemplates")
-	return utils.GetNonEmptyLines(out)
+	return utils.GetNonEmptyLines(stripAPIServerWarnings(out))
 }
 
 // resourceNames lists the names of a namespaced resource.
@@ -244,7 +285,7 @@ func resourceNames(resource, ns string) []string {
 	out, err := utils.Run(exec.Command("kubectl", "get", resource, "-n", ns,
 		"-o", `jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}`))
 	Expect(err).NotTo(HaveOccurred(), "list %s in %s", resource, ns)
-	return utils.GetNonEmptyLines(out)
+	return utils.GetNonEmptyLines(stripAPIServerWarnings(out))
 }
 
 // namespaceLabels reads a namespace's labels as a map, for asserting on the additive
@@ -253,7 +294,7 @@ func namespaceLabels(ns string) map[string]string {
 	out, err := utils.Run(exec.Command("kubectl", "get", "namespace", ns, "-o", "jsonpath={.metadata.labels}"))
 	Expect(err).NotTo(HaveOccurred(), "read labels on namespace %s", ns)
 	labels := map[string]string{}
-	Expect(json.Unmarshal([]byte(strings.TrimSpace(out)), &labels)).To(Succeed(),
+	Expect(json.Unmarshal([]byte(stripAPIServerWarnings(out)), &labels)).To(Succeed(),
 		"decode labels on namespace %s: %q", ns, out)
 	return labels
 }
