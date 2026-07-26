@@ -2623,6 +2623,12 @@
 <td>Failed agent re-registration attempts. Sustained growth shrinks listener capacity — see the <a href="../troubleshooting/#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero">runbook</a>.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_broker_session_leaks_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Broker sessions the AGC gave up deleting: every <code>DELETE /sessions</code> attempt failed (3 tries inside a 10 s budget), so the session stays registered at GitHub until it expires server-side (Q436). The listener recovers either way — it opens a fresh session and keeps its polling slot — so this is <strong>not</strong> an availability alarm on its own. A one-off during a GitHub blip or a fleet-wide teardown is expected. A <strong>sustained</strong> rate means the tenant is accumulating server-side sessions nobody polls, and points at a slow or unreachable broker on the control-plane path: check <code>actions_gateway_message_poll_errors_total{reason="timeout"}</code> and the egress proxy for the same tenant.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_broker_token_propagation_retries_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code></td>
