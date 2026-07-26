@@ -47,7 +47,7 @@ jobs:
     outputs:
       manifests: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.manifests || 'true' }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         # paths-filter resolves the changed-file list through ONE un-retried
@@ -98,7 +98,7 @@ jobs:
       # does not re-fetch the schema set from GitHub (a rate-limit flake source).
       KUBECONFORM_CACHE: ${{ github.workspace }}/.kubeconform-cache
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - name: install yamllint
         run: python3 -m pip install --user "yamllint==${YAMLLINT_VERSION}"

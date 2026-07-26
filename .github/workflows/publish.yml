@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: The announce bar names this release
         env:
           INPUT_TAG: ${{ github.event.inputs.tag }}
@@ -130,7 +130,7 @@ jobs:
           - name: wrapper
             dockerfile: cmd/worker/Dockerfile.wrapper
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Resolve publish tag
         id: tag
         # On a tag push GITHUB_REF_NAME is the tag; workflow_dispatch may override
@@ -165,7 +165,7 @@ jobs:
         with:
           driver-opts: image=${{ env.BUILDKIT_IMAGE }}
       - name: Log in to GHCR
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4.5.1
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -337,7 +337,7 @@ jobs:
       packages: write # push the chart + its signature to GHCR
       id-token: write # KEYLESS cosign — same Fulcio/Rekor flow as the images
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Resolve publish tag
         id: tag
         # Same guard as the image job: refuse to publish from a non-tag ref with
@@ -375,7 +375,7 @@ jobs:
             prerelease=false
           fi
           echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           # Cross-compiles the gag-migrate release binaries (Q306). Same Go version
           # source as the other workflows so the CLI is built with the toolchain the
@@ -395,7 +395,7 @@ jobs:
         # own login to read the manifest and push the signature. Without this,
         # `cosign sign` fails with "UNAUTHORIZED: authentication required" even
         # though `helm push` (which uses the helm login below) succeeds.
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4.5.1
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
