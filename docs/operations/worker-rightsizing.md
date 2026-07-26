@@ -172,6 +172,16 @@ Safety rails, in all profiles:
   `ResourceQuota` and any `LimitRange`: derived values are still subject to
   both at admission, and the existing `WorkerQuota*` conditions and quota
   retries surface a conflict at runtime.
+
+  > **Set `maxRequests` before enabling `Binpack` on a shape whose measured peak
+  > approaches node allocatable.** `Binpack` derives `requests` = `limits` from
+  > the observed history, and a derived request above a node's allocatable CPU is
+  > simply unschedulable: every worker pod sits `Pending` and no job runs. This is
+  > not hypothetical: on the project's own dogfood tenant the measured CPU peak
+  > was 3750m against an `e2-standard-4`'s ~3.4 vCPU allocatable, so enabling
+  > `Binpack` without `maxRequests: {cpu: "3"}` would have wedged the pool. The
+  > failure is silent until pods stop scheduling, so clamp first, then enable.
+  > `WorkersUnschedulable` is the condition that fires if you get it wrong.
 - **Drift reporting steps aside** — while a profile is `Active`, the
   `SizingDrift` condition reports `False/SizingProfileActive` (pods no longer
   run the template ask, so judging it would mislead).
