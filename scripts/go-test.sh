@@ -28,6 +28,17 @@
 # Applies the local throttle (GOMAXPROCS + `go test -p` cap and a low-priority
 # QoS prefix) on a GUI dev shell; a no-op on CI/headless — see
 # scripts/local-throttle.sh.
+#
+# -trimpath is load-bearing for parallel worktree sessions, not a build-hygiene
+# nicety: it removes the absolute worktree path from the test binary, which
+# makes go's test-RESULT cache key identical across checkouts of the same
+# content. Without it every .claude/worktrees/* clone re-runs the whole unit
+# suite once (measured: cmd/agc coverage 226s cold vs 5s in a second worktree
+# with the flag, byte-identical profile). See
+# docs/plan/local-gate-throughput.md. It is deliberately NOT set globally via
+# GOFLAGS: cmd/gmc/test/e2e resolves the v2 CRD chart dir from
+# runtime.Caller(0), which a trimmed path breaks. The unit tier does not do
+# that, and the release images already build with -trimpath.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -65,4 +76,4 @@ done
 [[ -n "$THROTTLE_JOBS" ]] && export GOMAXPROCS="$THROTTLE_JOBS"
 echo "==> go test ${race_flag:+$race_flag }${patterns[*]}"
 # shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
-$THROTTLE_PREFIX go test $race_flag -timeout "$timeout" $p_flag $verbose_flag "${patterns[@]}"
+$THROTTLE_PREFIX go test -trimpath $race_flag -timeout "$timeout" $p_flag $verbose_flag "${patterns[@]}"
