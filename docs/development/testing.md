@@ -233,6 +233,8 @@ Wired into `make check` and CI's `lint` job.
 
 Wired into `make check` and the `claude-usage-test` job in [`unit-test.yml`](../../.github/workflows/unit-test.yml), gated on a `claude_usage` filter (`claude-usage/**`, the gate script, the `Makefile`, the workflow). The suite is stdlib-only — no venv, no `pip install`; that is only needed for `make_charts.py`'s matplotlib/numpy — so the job is a checkout, `setup-python`, and one `make` target, in seconds.
 
+It **byte-compiles the module first** (`python3 -m compileall`, venvs and stale caches excluded). That is the only coverage `make_charts.py` gets: it has no tests of its own and imports matplotlib/numpy, so nothing else parses it and a syntax error in it would reach `main` untouched. Compiling does not import the file, so the unpinned chart dependencies are not needed — and equally, it proves only that the source parses, not that the charts render. Bytecode goes to a throwaway tree via `PYTHONPYCACHEPREFIX`, so the gate writes nothing into the worktree it is checking.
+
 Two things it refuses to let pass quietly, both instances of the green-by-skipping class above:
 
 - **`python3` missing.** `python3` is an [extended-tier prerequisite](../../CONTRIBUTING.md), so a local run without it *skips* (like `scripts/release-version-hook-test.sh`). On CI (`$CI` set) the same condition is a hard failure — a gate that reports green having run nothing is exactly what this gate exists to remove. The documented `CI=1 make check` throttle opt-out therefore fails on a python3-less machine; drop the `CI=1`.

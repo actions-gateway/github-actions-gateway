@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Run the claude-usage/ Python unit tests (Q437).
+# Byte-compile claude-usage/ and run its Python unit tests (Q437).
 #
 # claude-usage/ is the committed record of the project's Claude Code usage: the
 # CSVs under data/ are the only surviving copy of days whose session transcripts
@@ -16,13 +16,20 @@
 # verdicts come from one implementation.
 #
 # The suite is stdlib-only — no venv, no requirements.txt install (that is only
-# needed for make_charts.py's matplotlib/numpy).
+# needed for make_charts.py's matplotlib/numpy). make_charts.py itself has no
+# tests, so this gate byte-compiles the module first: parsing it is coverage no
+# other gate provides, and it needs none of those unpinned dependencies.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
 readonly SUITE_DIR="claude-usage"
+# Directories that may sit under the module but are not its source: a venv a
+# contributor created in place (the README's flow puts it at the repo root, but
+# not everyone follows that) and any previous bytecode cache. Matched as a regex
+# against each path by `compileall -x`.
+readonly NON_SOURCE_RE='(^|/)(\.venv|venv|__pycache__)/'
 
 # python3 is an extended-tier prerequisite (scripts/check-tools.sh), not a
 # required one, so a machine without it skips rather than fails — same contract
@@ -41,9 +48,30 @@ if ! command -v python3 >/dev/null 2>&1; then
 	exit 0
 fi
 
+# Keep the gate's bytecode out of the worktree: PYTHONPYCACHEPREFIX (3.8+)
+# redirects every __pycache__ this run would write into a throwaway tree. The
+# caches are gitignored, so this is tidiness rather than correctness — but a gate
+# that leaves build output in the tree it is checking invites the next reader to
+# wonder whether it matters.
+PYTHONPYCACHEPREFIX="$(mktemp -d)"
+export PYTHONPYCACHEPREFIX
+trap 'rm -rf "$PYTHONPYCACHEPREFIX"' EXIT
+
+output=""
+
+# Byte-compile the whole module before running the suite. make_charts.py has no
+# tests of its own and imports matplotlib/numpy, so nothing else here would even
+# parse it — a syntax error in it would reach main untouched by any gate. This
+# does not import the file, so the unpinned matplotlib/numpy are not needed;
+# equally, it proves only that the source parses, not that the charts render.
+if ! output="$(python3 -m compileall -q -x "$NON_SOURCE_RE" "$SUITE_DIR" 2>&1)"; then
+	printf '%s\n' "$output"
+	echo "claude-usage-test: $SUITE_DIR/ does not byte-compile" >&2
+	exit 1
+fi
+
 # unittest writes its progress and summary to stderr, so capture both streams
 # and print them either way — the test count is the evidence this gate ran.
-output=""
 if ! output="$(python3 -m unittest discover -s "$SUITE_DIR" 2>&1)"; then
 	printf '%s\n' "$output"
 	echo "claude-usage-test: $SUITE_DIR tests failed" >&2

@@ -215,9 +215,12 @@ scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, v
 # no other path filter in .github/workflows/ — not Go code, not a shell script —
 # so until this gate existed the suite ran only when someone remembered.
 # stdlib-only: no venv, no pip install (those are for make_charts.py's
-# matplotlib/numpy). Part of `check` and the CI `claude-usage-test` job.
+# matplotlib/numpy). It also byte-compiles the module, which is the only gate
+# covering make_charts.py — that script has no tests and imports matplotlib, so
+# nothing else here even parses it. Part of `check` and the CI
+# `claude-usage-test` job.
 .PHONY: claude-usage-test
-claude-usage-test: ## Run the claude-usage/ Python unit tests (usage-snapshot merge semantics)
+claude-usage-test: ## Byte-compile claude-usage/ and run its Python unit tests (usage-snapshot merge semantics)
 	scripts/claude-usage-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
