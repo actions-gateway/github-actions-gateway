@@ -8,6 +8,7 @@ Make-target backends — the root `Makefile` keeps recipes as thin target→scri
 |---|---|
 | [go-test.sh](go-test.sh) | Workspace unit tests in one multi-module `go test` invocation; `--race` for the race-detector gate. Backs `make test` / `make test-race`. |
 | [go-lint.sh](go-lint.sh) | gofmt check (all modules) + per-module golangci-lint, change-scoped locally to the modules affected vs the origin/main merge-base (`LINT_ALL=1` or CI = full sweep; scoping decision asserted by `go-lint-scope-test.sh` under `make scripts-test`). Backs `make lint` and the CI `lint` job. |
+| [go-vet-tags.sh](go-vet-tags.sh) | Compile + vet the build-tagged (`integration`/`e2e`/`load`) Go files no other fast gate builds, and fail if a new tag appears that its list does not cover (Q404: a tagged-file compile break used to reach only CI's path-gated heavy tiers; both properties asserted by `go-vet-tags-test.sh` under `make scripts-test`). Backs `make build-tags-check` and the CI `lint` job. |
 | [go-vulncheck.sh](go-vulncheck.sh) | Per-module govulncheck. Backs `make vulncheck` and the CI `govulncheck` job. |
 | [shellcheck-scripts.sh](shellcheck-scripts.sh) | Shellcheck every tracked `scripts/*.sh` (recursive). Backs `make shellcheck`. |
 | [coverage.sh](coverage.sh) | Per-module unit-test coverage + the no-regression ratchet gate. Backs `make cover`/`cover-update`/`cover-check`. |
