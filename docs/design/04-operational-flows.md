@@ -172,6 +172,18 @@ GitHub deletes a JIT runner record once it acquires a job, so a session can go s
 
 ### Worker Pod Eviction and Auto-Retry
 
+> **Classic acquisition tier only, today.** This flow is reached from exactly one
+> call site: the classic `provision()` path, which blocks on the worker pod's
+> terminal phase. `ProvisionScaleSetWorker` is fire-and-forget by design — the
+> runner pulls and completes its own job through its own session, so the AGC never
+> observes `PodFailed`/`Evicted` and never calls the rerun API. An evicted
+> **`ScaleSet`-protocol** worker therefore gets no automatic rerun and needs a
+> manual one. That matters because `ScaleSet` is the default protocol (Q264 P5) and
+> the only one `v2beta1` offers, so this recovery covers the *deprecated* tier only.
+> [Q417](../STATUS.md#Q417) ports it
+> ([plan](../plan/scaleset-eviction-recovery.md)); it gates the `v2.0.0` classic
+> removal, which would otherwise delete the capability outright.
+
 ```mermaid
 sequenceDiagram
     participant A as AGC goroutine

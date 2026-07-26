@@ -388,6 +388,49 @@ ScaleSet. The counters above come from the admission path rather than from
 completions, so they were never blocked by it either way. Detail:
 [gke-dogfood B7](gke-dogfood.md#b7-create-the-v2-tenant-objects).
 
+## 9a. The shipped quota rung is classic-only, and the docs don't say so (Q439)
+
+Found while qualifying the eviction-recovery claims for Q419 (shipped
+2026-07-26) — same defect class, same public sentences, other half. Recorded here
+rather than fixed there, because the two capabilities have different owners and
+different remedies.
+
+The rung this plan builds on — rung 1, live namespace-`ResourceQuota` headroom
+checked *before* the claim — is wired into `Provisioner.Admit`, and `Admit` is
+reached from two call sites: `AdmitFor` (v1 `RunnerGroup`) and the classic branch
+of the v2 `RunnerSet` reconciler. `reconcileScaleSetListener` returns before that
+wiring. What a `ScaleSet` set advertises instead is
+`scaleSetCapacityFunc` → `X-ScaleSetMaxCapacity` → `target.Ceiling`: the set's
+configured worker ceiling (max tier threshold, else `maxWorkers`, else the
+default). That is the Q59 concurrency rung, not the quota rung. Nothing on that
+tier consults quota headroom before a job is assigned.
+
+So on the default acquisition tier a quota-blocked job **is** claimed. It then
+falls to `createPodWithQuotaRetry`, the in-place backstop this plan's §1 calls
+out as the failure mode the gate exists to prevent: the job lock is held across
+up to `maxQuotaRetries × quotaRetryDelay`, and on exhaustion the pod is abandoned
+with the lock held.
+
+Two doc claims are wrong as a result, both in public copy:
+
+* *"won't claim a job it can't place … live quota headroom checked before the
+  claim"* ([why-gag](../why-gag.md) comparison table; [README](../../README.md)
+  "The Solution") — true on classic, not on the default tier.
+* *"if headroom is lost after the claim, auto lock-cancel + re-queue"*
+  (why-gag, same row) — no code path does this. `createPodWithQuotaRetry`
+  abandons the pod and returns the error; there is no rerun call. The
+  lock-cancel-and-re-queue mechanism it borrows its language from is the
+  eviction path, which is itself classic-only.
+
+**Remedy is a choice, not a given.** Qualifying the copy is the cheap half.
+Whether the rung should be *ported* to the scale-set tier is a real design
+question this plan should answer: the scale-set protocol's capacity
+advertisement is a single integer computed before GitHub picks a job, so a
+headroom-derived ceiling is expressible — but it is a coarser instrument than
+classic's per-delivery decline, and it interacts with the ceiling the same
+integer already carries. Settle that before writing the doc fix, so the copy
+describes a decision rather than a gap.
+
 ## 10. Non-goals
 
 * Predicting schedulability in-process from node allocatable. Rejected: it

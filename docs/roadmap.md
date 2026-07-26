@@ -31,7 +31,9 @@ tagged chart. Check the release notes for the exact image digests to pin.
 - **Automatic recovery for blocked and evicted jobs.** A quota-blocked job is
   never claimed, so it stays queued for a sibling with capacity; an evicted job
   is cancelled at GitHub when its lock lapses (~10 min at worst) and re-queued,
-  with a per-job retry budget. No manual rerun either way.
+  with a per-job retry budget. No manual rerun either way. The eviction half
+  ships on the **classic acquisition tier** only so far — see *Eviction recovery
+  on the scale-set tier* under [In progress](#in-progress--near-term).
 - **Priority tiers per runner group.** Reserve a guaranteed floor of slots for
   expensive runner types so cheap CPU jobs can't starve critical GPU work.
 - **Worker scale-up rate limiting (opt-in).** An optional per-runner-group token
@@ -122,6 +124,13 @@ last gaps an outside operator hits.
   validated, not on a date. The deprecation window opened at v1.1.0, and
   `gag-migrate` already moves a tenant across without changing how jobs are acquired.
   Detail: the [deprecation and removal notice](operations/v1alpha1-deprecation.md).
+- **Eviction recovery on the scale-set tier.** <!-- q:Q417 --> Automatic re-queue of an
+  evicted worker's job runs on the classic acquisition path, which blocks on the
+  worker pod's terminal phase. A scale-set worker is provisioned fire-and-forget —
+  the runner pulls its own job — so no eviction is observed and no rerun fires;
+  an evicted job there still needs a manual rerun. Since scale-set is the default
+  protocol and the only one the `v2beta1` API offers, this port is what carries
+  the capability past the classic removal in `v2.0.0`.
 - **Capacity-aware job intake.** <!-- q:Q405,Q406 --> Additional opt-in rungs on the pre-claim gate,
   so a job is not claimed when the cluster demonstrably cannot place its worker:
   one sourced from the scheduler's `Unschedulable` verdict (for fixed-size and
