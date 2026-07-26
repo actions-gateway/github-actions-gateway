@@ -1,16 +1,15 @@
 # Worker Right-Sizing Profiles (Recommendations First)
 
-> **Status: 🔄 Phases 1–3 shipped 2026-07-21/22 — tracked as [Q359](../STATUS.md#Q359).**
-> Live-validated on dogfood 2026-07-25: usage observability, the status
-> recommendation and its derivation, restart persistence, and the profile's
-> below-confidence fallback all behave as specified. The two behaviours gated on
-> 20 sampled jobs — the `SizingDrift` verdict and `Binpack` actuating — are
-> still unvalidated, because job completion on dogfood capped the sample count
-> at 10. That cap was diagnosed and fixed under Q399: the tenant was running the
-> deprecated Classic protocol, which orphaned 81% of the jobs it acquired; it is
-> now a single-label ScaleSet. See
-> [Live validation](#live-validation-2026-07-25). This doc is the design sketch,
-> the phase record, and now the validation record.
+> **Status: ✅ Phases 1–3 shipped 2026-07-21/22 and fully live-validated
+> 2026-07-25.** Usage observability, the status recommendation and its
+> derivation, restart persistence, and the below-confidence fallback were
+> confirmed in the first dogfood session. The two behaviours gated on 20 sampled
+> jobs, the `SizingDrift` verdict and `Binpack` actuating, were confirmed in a
+> second session after Q399 migrated the tenant off the Classic protocol (which
+> had orphaned 81% of the jobs it acquired, capping samples at 10). See
+> [Live validation](#live-validation-2026-07-25) and
+> [Both ≥20-sample paths confirmed](#both-20-sample-paths-confirmed-2026-07-25-second-session).
+> This doc is the design sketch, the phase record, and the validation record.
 
 ## Goal
 
@@ -200,8 +199,15 @@ Run against the dogfood cluster rebuilt from zero the same session (see the
 [GKE dogfood runbook](gke-dogfood.md)), on a control-plane image built from
 `e0acd60`.
 Every published image predated these phases, so the validation image had to be
-built by hand — worth knowing before the next attempt, since neither the pinned
-`GAG_IMAGE_TAG` default nor the newest release carries this code.
+built by hand.
+
+> **That hand-build does not need repeating.** The `e0acd60` image is still in
+> GHCR (`ghcr.io/actions-gateway/agc:e0acd60d49fb7fb956b0f5380acdb6d69cac65ec`)
+> and the dogfood cluster's GMC is already pinned to it, so a follow-up session
+> reuses it as-is. Still true that no *cut release* carries this code: `v1.2.0`
+> and `v1.2.0-rc.1` both predate Phase 2 (2026-07-21), as does `setup.sh`'s
+> default `GAG_IMAGE_TAG`. Check with
+> `git merge-base --is-ancestor <sizing-commit> <ref>` before assuming a tag has it.
 
 Tenant: `gag-dogfood`, `RunnerSet` `ci`, runner container asking `cpu: 2` /
 `memory: 2Gi` with a `3Gi` memory limit. Load was the repo's own CI, dispatched
@@ -357,10 +363,13 @@ multi-label RunnerSet, including `kubectl edit` and re-`apply`. Filed as
 tenant that pins Classic. It no longer bites the dogfood tenant, which Q399 moved
 to a single-label ScaleSet.
 
-### Not reached: the ≥20-sample paths
+### The ≥20-sample paths (reached 2026-07-25, second session)
 
 Two behaviours need `MinSamplesForDrift` (20) sampled jobs on a template
-container, and the session topped out at **10**:
+container. The first session topped out at **10**; the follow-up session, run on
+the ScaleSet-migrated tenant, reached **36** and validated both. Results are in
+[Both ≥20-sample paths confirmed](#both-20-sample-paths-confirmed-2026-07-25-second-session)
+below; the account of why the first session could not reach them follows.
 
 - the actual `SizingDrift` verdict (`SizingWithinRange` vs `SizingDriftDetected`),
   as opposed to the `InsufficientSamples` state that was confirmed;
@@ -426,6 +435,94 @@ resources, with no further soak:
   node allocatable and would leave worker pods `Pending` instead.
 - `SizingDriftDetected` (OOM risk) needs a memory *limit* below the observed
   peak, which will genuinely OOM-kill jobs — do it on a throwaway set.
+
+> Both predictions above held, with one correction: the OOM-risk branch does
+> **not** need a throwaway set. The verdict is a pure reconciler computation over
+> `status.sizingRecommendation` and the template, so with an empty job queue the
+> condition can be produced and reverted without a single pod being built from
+> the bad limit. See below.
+
+## Both ≥20-sample paths confirmed (2026-07-25, second session)
+
+Run on the same tenant after [Q399](gke-dogfood.md#b7-create-the-v2-tenant-objects)
+migrated it to a single-label ScaleSet, on the same `e0acd60` control-plane image.
+The soak reached `sampleCount: 36`; the recommendation stabilised at:
+
+```json
+{ "container": "runner",
+  "observedPeak": { "cpu": "3740m", "memory": "2399Mi" },
+  "requests":     { "cpu": "3750m", "memory": "2432Mi" },
+  "limits":       { "memory": "3392Mi" },
+  "sampleCount": 36 }
+```
+
+**The measurement reproduced independently.** The first session measured a 3745m
+CPU peak on a Classic tenant; this one measured **3740m** on a ScaleSet tenant,
+from a fresh window with a rebuilt aggregate. Two independent runs, five
+milli-cores apart, agreeing with the ~3.8 vCPU hand-derivation the feature was
+built to replace.
+
+### The `SizingDrift` verdict: all three states
+
+Judged against the template's ask, so each state is one `RunnerTemplate` edit:
+
+| Template ask | `SizingDrift` | Message |
+|---|---|---|
+| `cpu 2 / mem 2Gi`, limit `3Gi` (baseline) | `False` / `SizingWithinRange` | template container resources are within the drift thresholds of the measured recommendation |
+| memory request → `6Gi` | `True` / `SizingDriftDetected` | container runner: memory request 6Gi is >=2x the recommended 2432Mi (waste) |
+| memory limit → `2Gi` | `True` / `SizingDriftDetected` | container runner: memory limit 2Gi is below the observed per-job peak 2399Mi (OOM risk) |
+
+Both `SizingDriftDetected` messages name the measured numbers rather than
+emitting a generic warning, so an operator can act on the condition alone.
+
+### `Binpack` actuating
+
+With `spec.sizing: {profile: Binpack, maxRequests: {cpu: "3"}}` and every template
+container past 20 samples:
+
+- `status.sizingProfileState` → **`Active`** (previously only `AwaitingSamples`
+  had been observed).
+- `SizingDrift` → `False` / **`SizingProfileActive`**, the documented supersession:
+  pods run derived values, so comparing the static ask would mislead.
+- The next worker pod provisioned at **Guaranteed QoS** with
+  `requests == limits == {cpu: 3, memory: 3392Mi}`, while pods created before the
+  flip stayed `Burstable` on the template's static values, so the transform
+  applies at pod build, not retroactively.
+
+**The `maxRequests` clamp is not optional on this shape.** The raw CPU
+recommendation (3750m) exceeds an `e2-standard-4`'s ~3.4 vCPU allocatable, so
+unclamped `Binpack` would derive an unschedulable pod and leave every worker
+`Pending`. Clamping to `cpu: "3"` kept pods schedulable and exercised the safety
+rail in the same step. Any tenant whose measured peak approaches node allocatable
+needs the same clamp. Worth stating in the operator doc, because the failure is
+silent until pods stop scheduling.
+
+### Ordering constraint
+
+`SizingProfileState: Active` short-circuits the drift judgment
+([`runnerset_sizing.go`](../../cmd/agc/internal/controller/runnerset_sizing.go)),
+so the drift branches must be exercised **before** enabling a profile, or the
+condition reports `SizingProfileActive` instead of a verdict.
+
+### Session artifacts worth not repeating
+
+- **Size the system pool from `required_system_nodes`, not by hand.** A manual
+  resize to 1 node left the AGC unschedulable (one `e2-standard-2` cannot hold
+  GMC + Athens + AGC), and the tenant ran with no controller for 16 minutes.
+  `scripts/dogfood/start.sh` derives the count and warns on a low pin.
+- **`maxWorkers` is bounded by the namespace `ResourceQuota`, not just nodes.**
+  Raising it 8 → 16 against a `pods: 12` quota put the AGC into a
+  provision/quota-deny/retry/abandon loop and stalled sample accrual entirely.
+  The quota conditions reported it precisely (`WorkerQuotaExceeded=True`,
+  `QuotaExhausted`, with `WorkerQuotaPressure` correctly `Superseded`), which is
+  the capacity observability doing its job on a real fault.
+- **Orphaned scale-set workers hold quota indefinitely.** After that churn, 8
+  worker pods remained alive with **zero** jobs outstanding, occupying 10 of 12
+  quota slots and all 6 worker nodes until deleted by hand. Neither reaper rule
+  applies to them (`completedTTL` needs a finished pod, `pendingDeadline` needs a
+  Pending one), so a worker whose assignment is lost is invisible to both. Filed
+  as [Q420](../STATUS.md#Q420); related to but distinct from
+  [Q417](../STATUS.md#Q417), which covers eviction detection rather than reaping.
 
 ## Non-goals
 

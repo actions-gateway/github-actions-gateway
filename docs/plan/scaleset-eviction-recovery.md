@@ -191,8 +191,9 @@ Not a 1.3 gate. [release-1.3.md](release-1.3.md) is scoped to the right-sizing
 headline, the `v2.0.0` deprecation notice, and release mechanics, and every
 gating row is S-sized with a known outcome. This work is probe-first with an
 unknown outcome, and its live-GitHub probes would contend for the same dogfood
-session the release's least predictable item ([Q359](../STATUS.md#Q359)) already
-depends on.
+session the release's headline validation needed. That validation is now done
+(Q359 closed 2026-07-25), so the contention argument no longer applies; the
+probe-first/unknown-outcome argument still does.
 
 Per
 [maintaining-backlog.md](../development/maintaining-backlog.md#dont-pre-assign-release-versions-to-backlog-items),
