@@ -70,6 +70,31 @@ func templateName(spec v2alpha1.RunnerTemplateSpec) (string, error) {
 	return "rt-" + shortHash(key, 12), nil
 }
 
+// clusterTemplateName is the ClusterRunnerTemplate name emitted for a privileged
+// (DinD/sysbox) v1 worker shape: "crt-<namespace>-<12 hex of the canonical-JSON
+// SHA-256 of the built spec>", bounded to the 52-char cap.
+//
+// It is namespace-QUALIFIED where templateName is not, and that difference is
+// load-bearing. ClusterRunnerTemplate is cluster-scoped, so a bare content address
+// would make two tenants with an identical privileged worker shape share ONE object:
+// the second migration would silently adopt the first tenant's template, and a later
+// edit by either tenant's operator would change the other's worker pods. v1 gave each
+// namespace its own inline podTemplate, so per-namespace names are what preserves the
+// v1 property. Within one namespace the content address still collapses K identical
+// groups to one object, exactly as the namespaced kind does.
+//
+// The boolean reports truncation so the caller can warn that a name changed: a long
+// namespace can push the joined name past the cap, and cap52's hash-suffixed
+// truncation keeps the result deterministic and unique but no longer readable.
+func clusterTemplateName(namespace string, spec v2alpha1.RunnerTemplateSpec) (string, bool, error) {
+	key, err := canonicalKey(spec)
+	if err != nil {
+		return "", false, err
+	}
+	name, truncated := cap52("crt-" + namespace + "-" + shortHash(key, 12))
+	return name, truncated, nil
+}
+
 // canonicalKey serializes a RunnerTemplateSpec to a stable string used both as the
 // reuse-dedup key and as the input to the content-addressed template name. Go's
 // encoding/json emits struct fields in declaration order and map keys sorted, so

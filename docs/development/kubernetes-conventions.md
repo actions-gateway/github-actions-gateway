@@ -109,6 +109,16 @@ package. Controller-set v2 labels:
   and reaper filter on it. Distinct from the v1 `actions-gateway/runner-group` key so
   the v1 and v2 controllers' Pod watches never cross-wire during coexistence.
 
+One further v2 label is set by the **migration tool**, not by a controller:
+
+- `actions-gateway.com/migrated-from-namespace: <ns>` — stamped by `gag-migrate` on the
+  `ClusterRunnerTemplate` it emits for a privileged (DinD/sysbox) v1 worker shape. That
+  is the one migration output which is cluster-scoped, so deleting the tenant namespace
+  does not garbage-collect it; the label is how an operator finds and tears it down
+  ([migration runbook](../operations/migration-v1-to-v2.md#privileged-worker-shapes-dind-become-cluster-scoped-templates)).
+  Informational provenance only — nothing selects on it for enforcement, and a
+  platform-authored `ClusterRunnerTemplate` never carries it.
+
 The shared `actions-gateway/component: workload` selector label is carried by both
 v1 and v2 worker/AGC pods (it backs the workload NetworkPolicy selector), so the
 egress-lockdown posture is identical across the two APIs.

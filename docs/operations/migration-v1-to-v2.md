@@ -90,6 +90,7 @@ metadata patch:
 | `ActionsGateway` identity (`gitHubAppRef.name`, `gitHubURL`, `logLevel`, `tracing`) | v2 `ActionsGateway` (same name) |
 | `ActionsGateway.spec.proxy` (inline) | a standalone `EgressProxy` (`<gateway>-egress`), wired as the gateway's `defaultProxyRef`; inherits the v1 gateway-level `logLevel` (which governed both workloads) as its own `spec.logLevel` |
 | each `RunnerGroup.spec.podTemplate` + `workerImage` | a `RunnerTemplate` — **identical templates collapse to one** |
+| a `RunnerGroup.spec.podTemplate` with a **privileged** container (Docker-in-Docker, sysbox) | a cluster-scoped **`ClusterRunnerTemplate`** instead, referenced as `templateRef.kind: ClusterRunnerTemplate` — see [privileged worker shapes](#privileged-worker-shapes-dind-become-cluster-scoped-templates) |
 | each `RunnerGroup` | a `RunnerSet` (`gatewayRef` + `templateRef`; `proxyRef` left unset so it inherits the gateway's `defaultProxyRef`) |
 | `ActionsGateway.spec.securityProfile` | the namespace label `actions-gateway.com/security-profile` |
 
@@ -118,13 +119,52 @@ The fan-out preserves v1 behavior and weakens no security property:
   `securityProfile: privileged` keeps the *existing* platform grant (domain-migrated);
   if the namespace holds no grant, the tool warns rather than self-granting one.
 
+### Privileged worker shapes (DinD) become cluster-scoped templates
+
+v2 refuses a privileged container in a **namespaced** `RunnerTemplate` — a tenant must
+not be able to self-author a privileged worker shape. Privileged shapes live on the
+platform-owned, cluster-scoped `ClusterRunnerTemplate`, which exists precisely to hold
+golden Docker-in-Docker / sysbox templates
+([§H.6](../design/appendix-h-v2-api-decomposition.md)).
+
+So when a v1 `RunnerGroup`'s `podTemplate` declares a privileged container or init
+container, `gag-migrate` emits a `ClusterRunnerTemplate` rather than a
+`RunnerTemplate`, and sets the set's `templateRef.kind: ClusterRunnerTemplate`.
+Non-privileged groups are unaffected. **This changes what a migration touches**, so it
+is called out in the dry-run with a warning, and there are three things to know:
+
+- **It needs cluster-scoped create permission.** `--apply` already requires permission
+  to patch the tenant namespace; this adds `create` on
+  `clusterrunnertemplates.actions-gateway.com`.
+- **Deleting the tenant namespace does not reclaim it.** Cluster-scoped objects have no
+  owning namespace. Every emitted template is labelled with the namespace it came from,
+  so you can always find them again:
+
+  ```bash
+  kubectl get clusterrunnertemplates -l actions-gateway.com/migrated-from-namespace=team-a
+  ```
+
+- **Templates are not shared between tenants.** The emitted name is namespace-qualified
+  (`crt-<namespace>-<hash>`), so two tenants with a byte-identical DinD worker shape
+  still get their own object — editing one never changes the other's worker pods. Within
+  one namespace, identical groups still collapse to a single template as usual.
+
+Pod Security Admission remains the runtime enforcement backstop, exactly as it is for
+the namespaced kind: a privileged worker pod is only admitted in a namespace whose
+`actions-gateway.com/security-profile` is `privileged`, which in turn requires the
+platform `privileged-profile=allowed` grant the migration carries forward and never
+invents. A privileged tenant therefore migrates under exactly the grant it already had.
+
 ## Prerequisites
 
 - The **v2 CRDs are installed** and the GMC is serving the v2 reconcilers — install
   the opt-in `actions-gateway-crds-v2` chart and restart the GMC if it was already
   running (see [Getting Started — the v2 CRDs](../getting-started.md#1-deploy-the-gmc)).
 - `kubectl` access to the cluster with permission to read the tenant's v1 objects and
-  (for `--apply`) create v2 objects and patch the namespace.
+  (for `--apply`) create v2 objects and patch the namespace. A tenant with a privileged
+  (DinD/sysbox) worker shape additionally needs `create` on cluster-scoped
+  `clusterrunnertemplates.actions-gateway.com` — see
+  [privileged worker shapes](#privileged-worker-shapes-dind-become-cluster-scoped-templates).
 - Get the tool. Either **download the signed release binary** for your platform from
   the [GitHub Release](https://github.com/actions-gateway/github-actions-gateway/releases)
   (`gag-migrate-<version>-<os>-<arch>`), or **build from source**: from `cmd/gmc`,
@@ -168,6 +208,9 @@ Review the output:
   `RunnerGroup` count if templates are shared — that is the object-size win), and one
   `RunnerSet` per group.
 - Confirm `defaultProxyRef` is set on the `ActionsGateway`.
+- If any `ClusterRunnerTemplate` appears, confirm you expected a privileged worker
+  shape there — that object is cluster-scoped and outlives the tenant namespace
+  ([detail](#privileged-worker-shapes-dind-become-cluster-scoped-templates)).
 - Read the trailing **namespace patch** comment block — it lists the exact
   `kubectl label`/`kubectl annotate` commands the `--apply` path will run.
 - Resolve any **warnings** (e.g. a name truncated under the 52-char cap, or a
@@ -220,6 +263,8 @@ kubectl -n team-a delete actionsgateways.actions-gateway.com --all
 kubectl -n team-a delete runnersets.actions-gateway.com --all
 kubectl -n team-a delete egressproxies.actions-gateway.com --all
 kubectl -n team-a delete runnertemplates.actions-gateway.com --all
+# Cluster-scoped, so NOT covered by the -n team-a deletes above:
+kubectl delete clusterrunnertemplates -l actions-gateway.com/migrated-from-namespace=team-a
 ```
 
 The additive namespace labels are harmless to leave in place (the v1 markers are
@@ -237,6 +282,11 @@ kubectl -n team-a delete actionsgateways.actions-gateway.github.com --all
 # Confirm the v1 RunnerGroups and the singleton AGC/proxy children are gone.
 ```
 
+If you later retire the tenant entirely, remember that any `ClusterRunnerTemplate` the
+migration emitted is cluster-scoped and survives deleting the namespace — reclaim it by
+its provenance label
+([detail](#privileged-worker-shapes-dind-become-cluster-scoped-templates)).
+
 The legacy `actions-gateway.github.com/*` namespace markers and finalizers are
 retired cluster-wide when `v1alpha1` is removed at **`v2.0.0`** (see the
 [deprecation and removal notice](v1alpha1-deprecation.md)); until then the dual-read
@@ -246,7 +296,14 @@ window keeps both spellings working.
 
 - **A `RunnerSet` sits `Ready=False`/`TemplateNotFound`.** Its `templateRef` names a
   template that has not been applied (or was hand-deleted). Re-run the dry-run and
-  apply the missing `RunnerTemplate`.
+  apply the missing `RunnerTemplate`. For a privileged set, check `templateRef.kind` is
+  `ClusterRunnerTemplate` — with no explicit kind the referent resolves as a namespaced
+  `RunnerTemplate`, which will never be found.
+- **`--apply` fails creating a `ClusterRunnerTemplate` with a permissions error.** The
+  tenant has a privileged worker shape, which migrates to a cluster-scoped object; the
+  account running the tool needs `create` on
+  `clusterrunnertemplates.actions-gateway.com`
+  ([detail](#privileged-worker-shapes-dind-become-cluster-scoped-templates)).
 - **The namespace patch is rejected.** The `actions-gateway.com/security-profile`
   label is guarded by the `namespace-security-profile-guard` admission policy — a
   downgrade needs the `allow-profile-downgrade=allowed` annotation, and `privileged`

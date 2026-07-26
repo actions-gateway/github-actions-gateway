@@ -34,7 +34,7 @@ var _ = Describe("E2E_AGC_SingleUseSelfHeal", Ordered, func() {
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
-		utils.ApplyActionsGatewayCRWithRunnerGroup(tenantNS, agName, secretName, agcImage)
+		utils.RunnerTenant(tenantNS, agName, secretName, agcImage).Apply()
 
 		By("granting workload pods egress to fakegithub in e2e-infra")
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)

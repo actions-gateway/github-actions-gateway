@@ -1,0 +1,83 @@
+apiVersion: actions-gateway.com/v2alpha1
+kind: ActionsGateway
+metadata:
+  name: gag-dogfood-e2e
+  namespace: gag-dogfood-e2e
+spec:
+  credentials:
+    githubApp:
+      name: github-app
+    type: GitHubApp
+  defaultProxyRef:
+    name: gag-dogfood-e2e-egress
+  githubURL: https://github.com/gag-dogfood-e2e
+  logLevel: info
+  tracing: {}
+status: {}
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: EgressProxy
+metadata:
+  name: gag-dogfood-e2e-egress
+  namespace: gag-dogfood-e2e
+spec:
+  logLevel: info
+  minReplicas: 2
+  resources: {}
+status: {}
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: ClusterRunnerTemplate
+metadata:
+  labels:
+    actions-gateway.com/migrated-from-namespace: gag-dogfood-e2e
+  name: crt-gag-dogfood-e2e-0e37afd96d50
+spec:
+  podTemplate:
+    metadata: {}
+    spec:
+      containers:
+      - env:
+        - name: DOCKER_HOST
+          value: tcp://localhost:2375
+        image: runner:1
+        name: runner
+        resources: {}
+      initContainers:
+      - args:
+        - --host=tcp://0.0.0.0:2375
+        - --tls=false
+        image: docker:27-dind
+        name: dind
+        resources: {}
+        restartPolicy: Always
+        securityContext:
+          privileged: true
+  workerImage: runner:1
+status: {}
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata:
+  name: ci-e2e
+  namespace: gag-dogfood-e2e
+spec:
+  acquisitionProtocol: Classic
+  gatewayRef:
+    name: gag-dogfood-e2e
+  maxListeners: 1
+  runnerLabels:
+  - gag-ci-e2e
+  templateRef:
+    kind: ClusterRunnerTemplate
+    name: crt-gag-dogfood-e2e-0e37afd96d50
+status: {}
+# ----------------------------------------------------------------------
+# Namespace metadata patch (applied to the existing namespace, additively).
+# Equivalent kubectl commands for namespace "gag-dogfood-e2e":
+#   kubectl label   namespace gag-dogfood-e2e actions-gateway.com/privileged-profile=allowed --overwrite
+#   kubectl label   namespace gag-dogfood-e2e actions-gateway.com/security-profile=privileged --overwrite
+#   kubectl label   namespace gag-dogfood-e2e actions-gateway.com/tenant=managed --overwrite
+# ----------------------------------------------------------------------
+# Warnings:
+#   - RunnerGroup "ci-e2e" has a privileged worker pod shape, so it migrates to the CLUSTER-SCOPED ClusterRunnerTemplate "crt-gag-dogfood-e2e-0e37afd96d50" rather than a namespaced RunnerTemplate (a namespaced template may not declare privileged containers). Applying it requires cluster-scoped create permission, and deleting namespace "gag-dogfood-e2e" will NOT remove it — tear it down explicitly, or find it again with `kubectl get clusterrunnertemplates -l actions-gateway.com/migrated-from-namespace=gag-dogfood-e2e`

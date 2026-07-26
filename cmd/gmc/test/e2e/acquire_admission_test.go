@@ -104,7 +104,7 @@ var _ = Describe("E2E_AGC_AcquireAdmissionControl", Ordered, func() {
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
-		utils.ApplyActionsGatewayCRWithWorkerCeiling(tenantNS, agName, secretName, agcImage, 1)
+		utils.RunnerTenant(tenantNS, agName, secretName, agcImage).WithWorkerCeiling(1).Apply()
 
 		By("granting workload pods egress to fakegithub in e2e-infra")
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)

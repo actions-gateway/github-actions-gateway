@@ -10,10 +10,15 @@ import (
 
 // RenderManifests serializes a fan-out Result to a multi-document YAML manifest
 // stream — the dry-run output an operator reviews before `--apply`. Objects are
-// emitted in dependency order (EgressProxy and RunnerTemplates before the
-// RunnerSets that reference them, ActionsGateway first) so a `kubectl apply -f -`
-// of the stream applies cleanly; reference integrity is a runtime condition, not an
-// apply-order gate (§H.7), so the order is for readability, not correctness.
+// emitted in dependency order (EgressProxy and templates before the RunnerSets that
+// reference them, ActionsGateway first) so a `kubectl apply -f -` of the stream
+// applies cleanly; reference integrity is a runtime condition, not an apply-order
+// gate (§H.7), so the order is for readability, not correctness.
+//
+// Any ClusterRunnerTemplate is emitted ahead of the namespaced templates so the one
+// cluster-scoped, cluster-wide-visible object a migration can produce is the first
+// thing the operator reads in the diff (Q414); the accompanying warning block spells
+// out that namespace deletion will not reclaim it.
 //
 // The namespace metadata patch is rendered as a trailing comment block with the
 // equivalent `kubectl label`/`kubectl annotate` commands rather than as a bare
@@ -40,6 +45,11 @@ func RenderManifests(res *Result) (string, error) {
 	}
 	if res.Proxy != nil {
 		if err := add("EgressProxy", res.Proxy); err != nil {
+			return "", err
+		}
+	}
+	for _, t := range res.ClusterTemplates {
+		if err := add("ClusterRunnerTemplate "+t.Name, t); err != nil {
 			return "", err
 		}
 	}

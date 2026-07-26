@@ -55,6 +55,16 @@ const (
 	// the cluster default (matched exactly; any other value leaves the template unmarked).
 	IsDefaultTemplateValue = "true"
 
+	// MigratedFromNamespaceLabel records the tenant namespace a migrated object was
+	// fanned out from. It is stamped by `gag-migrate` on the ClusterRunnerTemplate it
+	// emits for a privileged (DinD/sysbox) v1 worker shape — the one migration output
+	// that is cluster-scoped, and therefore the one that namespace deletion does NOT
+	// garbage-collect. Without it an operator tearing a migrated tenant down has no way
+	// to find the cluster-scoped objects that migration left behind. Informational
+	// provenance only: nothing selects on it for enforcement, and a platform-authored
+	// ClusterRunnerTemplate (the ordinary case) never carries it.
+	MigratedFromNamespaceLabel = "actions-gateway.com/migrated-from-namespace"
+
 	// SecurityProfileLabel is the namespace label that selects the Pod Security
 	// Admission enforcement level the GMC stamps on the tenant namespace. v2 moves the
 	// security profile off the per-gateway ActionsGateway.spec (where v1 hung it) and

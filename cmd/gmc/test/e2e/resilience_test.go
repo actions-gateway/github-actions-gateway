@@ -23,7 +23,7 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 77777, 88888, testRSAKeyPEM)
-		utils.ApplyActionsGatewayCR(tenantNS, agName, secretName)
+		utils.BaseTenant(tenantNS, agName, secretName).Apply()
 
 		By("waiting for initial provisioning")
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)

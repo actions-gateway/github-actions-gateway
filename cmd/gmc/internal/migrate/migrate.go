@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
@@ -75,12 +76,17 @@ type NamespacePatch struct {
 // grant). Every emitted object name satisfies the v2 52-char cap so `--apply` is
 // admitted.
 type Result struct {
-	Gateway        *v2alpha1.ActionsGateway
-	Proxy          *v2alpha1.EgressProxy
-	Templates      []*v2alpha1.RunnerTemplate
-	Sets           []*v2alpha1.RunnerSet
-	NamespacePatch *NamespacePatch
-	Warnings       []string
+	Gateway   *v2alpha1.ActionsGateway
+	Proxy     *v2alpha1.EgressProxy
+	Templates []*v2alpha1.RunnerTemplate
+	// ClusterTemplates are the cluster-scoped templates emitted for privileged
+	// (DinD/sysbox) worker shapes, which the namespaced kind's admission webhook
+	// refuses (§H.6). Empty for every tenant without a privileged podTemplate — the
+	// ordinary case — so a non-privileged migration is unchanged.
+	ClusterTemplates []*v2alpha1.ClusterRunnerTemplate
+	Sets             []*v2alpha1.RunnerSet
+	NamespacePatch   *NamespacePatch
+	Warnings         []string
 }
 
 // FanOut maps a v1 tenant object set to the v2 object set + namespace patch. It is
@@ -120,22 +126,21 @@ func FanOut(in Input) (*Result, error) {
 	// bootstrap entry not yet materialized to a standalone CR (standalone wins).
 	groups := authoritativeGroups(gw, in.RunnerGroups)
 
-	// 4. RunnerTemplates (reuse-deduped) + RunnerSets. The template name is a pure
-	// function of (podTemplate, workerImage), so K identical templates collapse to
-	// one object by construction (§H.17 invariant 2).
+	// 4. Templates (reuse-deduped) + RunnerSets. The template name is a pure function
+	// of (podTemplate, workerImage), so K identical templates collapse to one object
+	// by construction (§H.17 invariant 2). A privileged worker shape lands on the
+	// cluster-scoped kind instead — see templateRefFor.
 	seenTemplate := map[string]*v2alpha1.RunnerTemplate{}
+	seenClusterTemplate := map[string]*v2alpha1.ClusterRunnerTemplate{}
 	for i := range groups {
 		rg := &groups[i]
 		tmplSpec := v2alpha1.RunnerTemplateSpec{
 			PodTemplate: rg.Spec.PodTemplate,
 			WorkerImage: rg.Spec.WorkerImage,
 		}
-		tmplName, err := templateName(tmplSpec)
+		ref, err := templateRefFor(ns, rg, tmplSpec, seenTemplate, seenClusterTemplate, &res.Warnings)
 		if err != nil {
-			return nil, fmt.Errorf("RunnerGroup %q: %w", rg.Name, err)
-		}
-		if _, ok := seenTemplate[tmplName]; !ok {
-			seenTemplate[tmplName] = buildRunnerTemplate(ns, tmplName, tmplSpec)
+			return nil, err
 		}
 
 		setName, setTrunc := cap52(rg.Name)
@@ -143,19 +148,107 @@ func FanOut(in Input) (*Result, error) {
 			res.Warnings = append(res.Warnings, fmt.Sprintf(
 				"RunnerGroup name %q exceeds the v2 52-char cap; emitted RunnerSet as %q", rg.Name, setName))
 		}
-		res.Sets = append(res.Sets, buildRunnerSet(ns, setName, gatewayName, tmplName, rg.Spec))
+		res.Sets = append(res.Sets, buildRunnerSet(ns, setName, gatewayName, ref, rg.Spec))
 	}
 	for _, t := range seenTemplate {
 		res.Templates = append(res.Templates, t)
 	}
+	for _, t := range seenClusterTemplate {
+		res.ClusterTemplates = append(res.ClusterTemplates, t)
+	}
 	// Deterministic ordering for stable (golden-testable) output.
 	sort.Slice(res.Templates, func(i, j int) bool { return res.Templates[i].Name < res.Templates[j].Name })
+	sort.Slice(res.ClusterTemplates, func(i, j int) bool { return res.ClusterTemplates[i].Name < res.ClusterTemplates[j].Name })
 	sort.Slice(res.Sets, func(i, j int) bool { return res.Sets[i].Name < res.Sets[j].Name })
 
 	// 5. Namespace patch: securityProfile relocation + Q147/domain alignment.
 	res.NamespacePatch = buildNamespacePatch(in, gw, &res.Warnings)
 
 	return res, nil
+}
+
+// templateRefFor emits the template object for one runner group — into the caller's
+// dedup maps — and returns the RunnerSet templateRef that points at it.
+//
+// The kind is chosen by the pod shape, not by the operator. A v1 podTemplate carrying
+// a privileged container cannot become a namespaced RunnerTemplate: that kind's
+// admission webhook rejects privileged containers outright, because a TENANT must not
+// self-author a privileged worker shape. The cluster-scoped ClusterRunnerTemplate is
+// the kind that exists to hold exactly these golden DinD/sysbox shapes (§H.4/§H.6),
+// and it is the right destination here because `gag-migrate` is run by a platform
+// administrator — the same role that authors a ClusterRunnerTemplate by hand — not by
+// a tenant. Without this split the tool emits a template the apiserver refuses,
+// failing `--apply` after the EgressProxy is already created and leaving the namespace
+// half-migrated (Q414).
+//
+// This weakens nothing. Pod Security Admission, stamped from the namespace's
+// securityProfile, is the runtime backstop for BOTH template kinds (§H.4), and the
+// privileged profile it enforces is gated by the platform's privileged-profile grant —
+// which buildNamespacePatch carries forward from v1 and never invents. A privileged
+// tenant therefore migrates under exactly the grant it already held.
+//
+// Every emitted cluster template produces a warning: a namespace-scoped migration
+// creating a cluster-scoped object is a blast-radius change the operator must see in
+// the dry-run before approving --apply, and namespace deletion will not clean it up.
+func templateRefFor(
+	ns string,
+	rg *agcv1alpha1.RunnerGroup,
+	spec v2alpha1.RunnerTemplateSpec,
+	seen map[string]*v2alpha1.RunnerTemplate,
+	seenCluster map[string]*v2alpha1.ClusterRunnerTemplate,
+	warnings *[]string,
+) (*v2alpha1.ObjectRef, error) {
+	if !hasPrivilegedContainer(&spec) {
+		name, err := templateName(spec)
+		if err != nil {
+			return nil, fmt.Errorf("RunnerGroup %q: %w", rg.Name, err)
+		}
+		if _, ok := seen[name]; !ok {
+			seen[name] = buildRunnerTemplate(ns, name, spec)
+		}
+		return &v2alpha1.ObjectRef{Name: name}, nil
+	}
+
+	name, truncated, err := clusterTemplateName(ns, spec)
+	if err != nil {
+		return nil, fmt.Errorf("RunnerGroup %q: %w", rg.Name, err)
+	}
+	if truncated {
+		*warnings = append(*warnings, fmt.Sprintf(
+			"ClusterRunnerTemplate name derived from namespace %q exceeds the v2 52-char cap; emitted as %q", ns, name))
+	}
+	if _, ok := seenCluster[name]; !ok {
+		seenCluster[name] = buildClusterRunnerTemplate(ns, name, spec)
+		*warnings = append(*warnings, fmt.Sprintf(
+			"RunnerGroup %q has a privileged worker pod shape, so it migrates to the CLUSTER-SCOPED "+
+				"ClusterRunnerTemplate %q rather than a namespaced RunnerTemplate (a namespaced template may not "+
+				"declare privileged containers). Applying it requires cluster-scoped create permission, and deleting "+
+				"namespace %q will NOT remove it — tear it down explicitly, or find it again with "+
+				"`kubectl get clusterrunnertemplates -l %s=%s`",
+			rg.Name, name, ns, v2alpha1.MigratedFromNamespaceLabel, ns))
+	}
+	return &v2alpha1.ObjectRef{Name: name, Kind: "ClusterRunnerTemplate"}, nil
+}
+
+// hasPrivilegedContainer reports whether any container or init container in the
+// worker pod shape explicitly requests privileged. It mirrors the predicate the v2
+// RunnerTemplate webhook rejects on (webhook/v2alpha1.validateReservedPodFields), so
+// the migration's kind choice and admission's verdict cannot disagree. Init containers
+// count: a DinD sidecar is declared as a native sidecar — a restartPolicy: Always init
+// container — and that is where the privileged flag sits.
+func hasPrivilegedContainer(spec *v2alpha1.RunnerTemplateSpec) bool {
+	for _, list := range [][]corev1.Container{
+		spec.PodTemplate.Spec.Containers,
+		spec.PodTemplate.Spec.InitContainers,
+	} {
+		for i := range list {
+			sc := list[i].SecurityContext
+			if sc != nil && sc.Privileged != nil && *sc.Privileged {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // MostRestrictiveProfile returns the most-restrictive of the given securityProfile
@@ -364,13 +457,37 @@ func buildRunnerTemplate(ns, name string, spec v2alpha1.RunnerTemplateSpec) *v2a
 	}
 }
 
+// buildClusterRunnerTemplate wraps a RunnerTemplateSpec into a named, cluster-scoped
+// ClusterRunnerTemplate — the destination for a privileged (DinD/sysbox) v1 worker
+// shape (see templateRefFor). Identical to buildRunnerTemplate but for the kind, the
+// absent namespace (the kind is cluster-scoped), and the provenance label recording
+// which tenant namespace the shape came from: this is the one migration output that
+// namespace deletion does not garbage-collect, so an operator needs a way to find it.
+func buildClusterRunnerTemplate(sourceNS, name string, spec v2alpha1.RunnerTemplateSpec) *v2alpha1.ClusterRunnerTemplate {
+	return &v2alpha1.ClusterRunnerTemplate{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: v2alpha1.GroupVersion.String(),
+			Kind:       "ClusterRunnerTemplate",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: map[string]string{v2alpha1.MigratedFromNamespaceLabel: sourceNS},
+		},
+		Spec: spec,
+	}
+}
+
 // buildRunnerSet assembles a v2 RunnerSet from a v1 RunnerGroup. The scheduling and
 // lifecycle knobs carry across unchanged; the pod shape moves to templateRef and the
 // gateway binding to gatewayRef. proxyRef is left unset so the set inherits the
 // gateway's defaultProxyRef (proxied, never direct — §H.17 invariant 1). maxListeners
 // is pinned to the v1 effective value (1 when v1 omitted it) so the migration
 // preserves the v1 concurrency ceiling rather than inheriting v2's default of 10.
-func buildRunnerSet(ns, name, gatewayName, templateName string, spec agcv1alpha1.RunnerGroupSpec) *v2alpha1.RunnerSet {
+//
+// templateRef is supplied by templateRefFor, which also picks its kind: a namespaced
+// RunnerTemplate for an ordinary shape, or a cluster-scoped ClusterRunnerTemplate for
+// a privileged one.
+func buildRunnerSet(ns, name, gatewayName string, templateRef *v2alpha1.ObjectRef, spec agcv1alpha1.RunnerGroupSpec) *v2alpha1.RunnerSet {
 	maxListeners := spec.MaxListeners
 	if maxListeners == 0 {
 		// v1 unset defaults to 1; preserve that ceiling explicitly.
@@ -384,7 +501,7 @@ func buildRunnerSet(ns, name, gatewayName, templateName string, spec agcv1alpha1
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: v2alpha1.RunnerSetSpec{
 			GatewayRef:  v2alpha1.ObjectRef{Name: gatewayName},
-			TemplateRef: &v2alpha1.ObjectRef{Name: templateName},
+			TemplateRef: templateRef,
 			// Pin Classic explicitly: the v2alpha1 default is ScaleSet (Q264 P5), but a
 			// migrated v1 group carries classic-protocol semantics and may declare
 			// multiple runnerLabels — which ScaleSet forbids (one label == the scale-set
