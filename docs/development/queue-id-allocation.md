@@ -1,0 +1,73 @@
+# Agent reference: Allocating backlog Q-IDs
+
+Backlog IDs are allocated by claiming a git ref on the remote, not by a counter line in [`docs/STATUS.md`](../STATUS.md).
+
+```bash
+make queue-id
+```
+
+That prints one ID (`Q423`) and claims it. `make queue-id N=3` claims three; `make queue-id PEEK=1` shows what the next one would be without claiming it. The script is [`scripts/alloc-queue-id.sh`](../../scripts/alloc-queue-id.sh).
+
+Claim an ID when you file the row, use it, and move on. There is nothing to release and nothing to clean up.
+
+## Why a ref
+
+Creating a ref that already exists fails server-side, atomically. That makes a ref name a compare-and-swap register, so two sessions asking for an ID at the same instant get different ones without any lock, lease, or coordination.
+
+The mechanism is a single API call:
+
+```bash
+gh api -X POST "repos/$REPO/git/refs" -f ref=refs/queue-ids/Q423 -f sha="$SENTINEL"
+```
+
+`201` means you won. `422 Reference already exists` means someone beat you, so advance and retry.
+
+## Why the counter had to go
+
+`**Next ID:** QN` was one mutable line. Two sessions filing a row concurrently always read the same value, always took the same ID, and always conflicted on the same line. Not occasionally: by construction.
+
+The conflict itself was cheap. The resolution was not, because it meant renumbering: the row, its `<a id="QN"></a>` anchor, every `(#QN)` cross-reference in sibling rows, the plan doc, the PR body, and the commit subject. Q382 recorded three such renumberings across a single PR's rebases.
+
+## What this fixes, and what it does not
+
+Measured on a 10-row table, resolving two branches against a common base:
+
+| Concurrent edit | Result |
+|---|---|
+| Delete two rows 5 apart | clean |
+| Delete two rows 2 apart | clean |
+| Delete two **adjacent** rows | **conflict** |
+| Both insert at the top | **conflict** |
+| Insert at top vs delete row 8 | clean |
+| Insert at top vs delete row 1 | **conflict** |
+| Both delete the **same** row | clean |
+
+Adjacency is the whole story: one untouched row of separation is enough to merge cleanly.
+
+**Row conflicts are unchanged by this.** They are also concentrated where the process puts them, because picking from the top means deletions cluster at the top, and priority-on-entry plus flakes-first means insertions cluster there too. A four-worker dispatch batch takes rows 1 through 4 and every pair is adjacent.
+
+What the ref allocator removes is the *expensive* class (duplicate IDs and the renumbering cascade) and the one conflict that was guaranteed rather than incidental. Row conflicts remain, are two lines, and resolve obviously. Their real danger is a botched resolution, which is [Q395](../STATUS.md#Q395), not the conflict itself.
+
+## Alternatives considered
+
+**Move the backlog to GitHub issues.** Rejected. Issues would give free IDs, no backlog conflicts, and a native in-flight signal, but they cannot express *position is priority*: a single total ordering, readable in one file read and changeable in one reviewable diff. Projects v2 has a position field, but it lives outside the repo and cannot be diffed. Issues would also cost the lintable write path that keeps Notes under the cap and pushes rationale into a doc, and the atomicity of deleting the row in the same diff as the work. Revisit if outside contributors need to see and claim work; that is the one thing issues clearly win.
+
+**A custom merge driver for `STATUS.md`.** Not rejected, deferred. A driver that resolves table conflicts by ID set-semantics would work during rebase, which is where the pain is, and would keep the whole existing tooling stack. It needs a one-time `git config` per clone (git will not let `.gitattributes` configure a driver, since that would be remote code execution on clone) and degrades safely to conflict markers when unconfigured. It does not help GitHub's server-side squash-merge. Tracked as a Queue item.
+
+**One file per item** (`docs/queue/Q423.md`). The permanent answer to row conflicts, since adds and removes become file creates and deletes, which cannot conflict. Held in reserve: it rewrites `lint-backlog.sh`, this process, the shared backlog skill, and costs the single-file read of the prioritized queue.
+
+**Dispatcher-owned row removal.** Rejected. It only works when a dispatcher session exists, and items are also spawned by ID directly or as "start the next one", which have no serialization point.
+
+## Operational notes
+
+- **Claims point at the repository's root commit**, never at a branch tip. A ref is a GC root, so claims anchored to `claude/*` tips would pin every squash-orphaned branch history forever. Anchored to one already-permanent object, they retain nothing new.
+- **No garbage collection.** Each ref is ~64 bytes in `packed-refs`. The remote already carries ~800 `refs/pull/*` refs that GitHub never prunes, so the namespace is noise against what is already there. Deleting a claim would also let a retired ID be reissued, which the "IDs are never reused" rule forbids.
+- **Clones never fetch them.** The default refspec is `+refs/heads/*:refs/remotes/origin/*`, and GitHub serves git protocol v2, which filters refs server-side. There is no fetch or clone cost.
+- **IDs are sparse.** A session that claims an ID and never files a row leaves a hole. That is expected, not a leak.
+- **Never claim with `git push <sha>:<ref>`.** When the ref already exists and points at the same object, push reports `Everything up-to-date` and exits 0, so the caller concludes it won a race it lost. Every claim shares one sentinel object, so this failure mode is the default, not an edge case.
+
+To see what has been allocated:
+
+```bash
+git ls-remote origin 'refs/queue-ids/*'
+```

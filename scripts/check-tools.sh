@@ -50,6 +50,7 @@ tools_registry() {
 go|required|go||https://go.dev/dl/|
 make|required|make|make|https://www.gnu.org/software/make/|
 git|required|git|git|https://git-scm.com/downloads|
+gh|required|gh|gh|https://cli.github.com/|
 jq|required|jq|jq|https://jqlang.github.io/jq/download/|
 shellcheck|required|shellcheck|shellcheck|https://github.com/koalaman/shellcheck#installing|
 docker|e2e|||https://docs.docker.com/get-docker/|

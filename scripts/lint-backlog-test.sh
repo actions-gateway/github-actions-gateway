@@ -30,7 +30,7 @@ repeat() {
 fixture() {
 	local file="$WORKDIR/STATUS.md" in_deferred=0
 	{
-		printf '# Project Status\n\n**Next ID:** Q100\n\n'
+		printf '# Project Status\n\n'
 		printf '## Queue\n\n'
 		printf '| ID | Item | Labels | St | Sz | Notes |\n'
 		printf '|---|---|---|---|---|---|\n'
@@ -142,18 +142,17 @@ expect 'ids: duplicate ID               -> fail' 1 \
 expect 'defer: untagged trigger         -> fail' 1 --deferred "$(drow Q1 "$PLAIN_ITEM" 'when someone asks')"
 expect 'defer: **Event:** trigger       -> clean' 0 --deferred "$(drow Q1 "$PLAIN_ITEM" '**Event:** upstream ships the fix.')"
 
-# The counter must exist and exceed every used ID; Last touched is old format.
+# The Next ID counter is old format: IDs now come from alloc-queue-id.sh, which
+# claims a refs/queue-ids/QN ref. A file-local counter conflicts by construction
+# under concurrent sessions (Q382), so its presence is a lint failure.
 counter_file="$WORKDIR/counter.md"
-sed 's/\*\*Next ID:\*\* Q100/**Next ID:** Q1/' "$(fixture "$(qrow Q1 "$PLAIN_ITEM" 🔲 'notes')")" >"$counter_file"
+{ printf '**Next ID:** Q101\n'; cat "$(fixture "$(qrow Q1 "$PLAIN_ITEM" 🔲 'notes')")"; } >"$counter_file"
 rc=0; "$LINT" "$counter_file" >/dev/null 2>&1 || rc=$?
-if [[ "$rc" == 1 ]]; then printf 'ok   counter: not above max ID      -> fail\n'; else
-	printf 'FAIL counter: Next ID Q1 with row Q1 should fail (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+if [[ "$rc" == 1 ]]; then printf 'ok   old-format: Next ID counter     -> fail\n'; else
+	printf 'FAIL old-format: a Next ID line should fail (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
 
-no_counter_file="$WORKDIR/nocounter.md"
-grep -v '^\*\*Next ID:' "$(fixture "$(qrow Q1 "$PLAIN_ITEM" 🔲 'notes')")" >"$no_counter_file"
-rc=0; "$LINT" "$no_counter_file" >/dev/null 2>&1 || rc=$?
-if [[ "$rc" == 1 ]]; then printf 'ok   counter: missing Next ID line   -> fail\n'; else
-	printf 'FAIL counter: missing Next ID line should fail (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+# A file with no counter at all is the current format.
+expect 'counter: absent (current format) -> clean' 0 "$(qrow Q1 "$PLAIN_ITEM" 🔲 'notes')"
 
 lt_file="$WORKDIR/lasttouched.md"
 { cat "$(fixture "$(qrow Q1 "$PLAIN_ITEM" 🔲 'notes')")"; printf '\nLast touched: 2026-07-08\n'; } >"$lt_file"

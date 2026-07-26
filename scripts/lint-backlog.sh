@@ -3,9 +3,11 @@
 # lint-backlog.sh — format checks for a repo-local backlog file (docs/STATUS.md).
 #
 # Content rules (see the backlog skill's SKILL.md):
-#   1. Exactly one `**Next ID:** QN` line, and N is strictly greater than every
-#      ID used anywhere in the file (IDs are never reused; the counter is the
-#      allocator).
+#   1. No `**Next ID:** QN` line. IDs come from `scripts/alloc-queue-id.sh`,
+#      which claims a `refs/queue-ids/QN` ref on the remote — an atomic
+#      server-side test-and-set. A file-local counter is a single mutable line,
+#      so concurrent sessions always took the same ID and always conflicted on
+#      the same line, forcing a renumber (Q382). Flagged as old format.
 #   2. IDs are unique across the Queue and Deferred tables, and each row's
 #      `<a id="QN"></a>QN` anchor matches its visible ID (cross-references
 #      resolve through the anchor).
@@ -184,11 +186,9 @@ function parse_id(cell,    anchor, visible, tmp) {
     return visible
 }
 
-function register_id(id, section,    n) {
+function register_id(id, section) {
     if (id in ids) fail("duplicate ID " id " (in " ids[id] " and " section ")")
     ids[id] = section
-    n = substr(id, 2) + 0
-    if (n > max_id) max_id = n
 }
 
 # Cross-document link: "](x" where x is not "#" (sibling anchors are capped too).
@@ -205,12 +205,7 @@ function collect_refs(id, cell,    rest, tgt) {
 }
 
 /^\*\*Next ID:\*\*/ {
-    next_id_lines++
-    if ($0 ~ /^\*\*Next ID:\*\* Q[0-9]+$/) {
-        tmp = $0; gsub(/[^0-9]/, "", tmp); next_id = tmp + 0
-    } else {
-        fail("malformed Next ID line (want: **Next ID:** QN): " $0)
-    }
+    fail("old format: drop the Next ID counter; allocate with scripts/alloc-queue-id.sh (a file-local counter conflicts by construction under concurrent sessions)")
 }
 
 /^Last touched:/ {
@@ -257,12 +252,6 @@ section == "Deferred" && /^\|/ {
 
 END {
     if (!seen_queue) fail("no ## Queue section found")
-    if (next_id_lines == 0)
-        fail("missing **Next ID:** QN line in the conventions block")
-    else if (next_id_lines > 1)
-        fail("found " next_id_lines " Next ID lines; expected exactly 1")
-    else if (next_id != "" && next_id <= max_id)
-        fail("**Next ID:** Q" next_id " is not greater than the highest ID in the file (Q" max_id "); IDs are never reused")
     for (i = 1; i <= nrefs; i++) {
         split(refs[i], r, "\t")
         if (!(r[2] in ids))
