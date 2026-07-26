@@ -12,7 +12,10 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: v2alpha1 is deprecated and the apiserver now warns](#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns)
+  - [Non-breaking: v2alpha1 CRDs ship in a separate, opt-in chart](#non-breaking-v2alpha1-crds-ship-in-a-separate-opt-in-chart)
   - [BREAKING: spec.namespaceQuota removed — the ResourceQuota is now platform-owned](#breaking-specnamespacequota-removed--the-resourcequota-is-now-platform-owned)
+  - [BREAKING: priorityTiers PriorityClasses now require a platform allowlist; per-tier preemptionPolicy removed](#breaking-prioritytiers-priorityclasses-now-require-a-platform-allowlist-per-tier-preemptionpolicy-removed)
   - [Tenant namespaces now require the actions-gateway.github.com/tenant marker label](#tenant-namespaces-now-require-the-actions-gatewaygithubcomtenant-marker-label)
   - [Worker pods are now cleaned up automatically (one-time sweep recommended)](#worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended)
   - [AGC Deployment renamed from actions-gateway-agc to actions-gateway-controller](#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller)
@@ -66,6 +69,34 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: `v2alpha1` is deprecated and the apiserver now warns
+
+All five `actions-gateway.com` kinds carry `deprecated: true` on their `v2alpha1`
+version, so `kubectl` prints a warning on any `v2alpha1` read or write:
+
+```text
+Warning: actions-gateway.com/v2alpha1 RunnerSet is deprecated; use actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it.
+```
+
+**Nothing breaks, and the upgrade needs no action.** Deprecation marks intent and
+removes nothing: `v2alpha1` stays fully served, the conversion webhook still
+round-trips it against the `v2beta1` storage version, and existing objects keep
+reconciling untouched. The warning is advisory client-side output; it does not fail an
+`apply`, and controllers or CI that ignore warnings are unaffected.
+
+**What to do about it.** Onboard new tenants on `v2beta1` (see
+[tenant onboarding](tenant-onboarding.md)), and move existing `v2alpha1` objects to
+`v2beta1` at your convenience by re-applying the same object with the `apiVersion`
+changed, since the two versions convert both ways. `v2alpha1` remains the
+[`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants coming off `v1alpha1`, so a
+freshly migrated tenant emits these warnings until it is moved onto `v2beta1`. Note
+that `v2beta1` is ScaleSet-only: a `RunnerSet` still on `acquisitionProtocol: Classic`
+must adopt the runner-scale-set protocol as part of that move (see
+["`RunnerSet` Rejected: `acquisitionProtocol`"](troubleshooting.md#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)).
+`v2alpha1` is one of three things `v2.0.0` removes; the standing notice for all three,
+with a pre-upgrade checklist, is the
+[deprecation and removal notice](v1alpha1-deprecation.md).
 
 ### Non-breaking: `v2alpha1` CRDs ship in a separate, opt-in chart
 

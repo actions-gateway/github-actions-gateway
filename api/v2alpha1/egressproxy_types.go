@@ -225,6 +225,7 @@ type EgressProxyStatus struct {
 // (defaultProxyRef) by name; referrers never own it (§H.8).
 //
 // +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="actions-gateway.com/v2alpha1 EgressProxy is deprecated; use actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it."
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=ep,categories=actions-gateway
 // +kubebuilder:printcolumn:name="Min",type=integer,JSONPath=`.spec.minReplicas`

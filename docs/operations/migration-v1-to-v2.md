@@ -17,11 +17,15 @@ coexistence/rollback story, and the post-migration teardown.
 ## Why upgrade to v2
 
 v2 is **opt-in**. It is served at two versions: **`v2beta1`** (the graduated,
-ScaleSet-only storage/hub version) and **`v2alpha1`** (served as this tool's on-ramp).
-`gag-migrate` lands v1 RunnerGroups on **`v2alpha1`** so a migrated set keeps its
-Classic protocol and multi-label matching during the deprecation window; a tenant then
-moves to `v2beta1` (a lossless, apiserver-side conversion) once it no longer needs
-Classic. v2 is **not a drop-in replacement** (new API group `actions-gateway.com`, one
+ScaleSet-only storage/hub version) and **`v2alpha1`** (deprecated, served as this
+tool's on-ramp). `gag-migrate` lands v1 RunnerGroups on **`v2alpha1`** so a migrated
+set keeps its Classic protocol and multi-label matching during the deprecation window;
+a tenant then moves to `v2beta1` (a lossless, apiserver-side conversion) once it no
+longer needs Classic. Because `v2alpha1` is deprecated, the apiserver warns on every
+`v2alpha1` read or write, including the objects `gag-migrate` applies. The warning is
+advisory and blocks nothing; it clears when the tenant moves to `v2beta1`. Detail:
+[upgrade.md](upgrade.md#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns).
+v2 is **not a drop-in replacement** (new API group `actions-gateway.com`, one
 CR decomposed into several kinds, a tool-assisted fan-out). `v1alpha1` stays fully
 supported until it is [removed at `v2.0.0`](v1alpha1-deprecation.md), which also
 removes `v2alpha1` and Classic, so treat the `v2alpha1` landing spot as a way station

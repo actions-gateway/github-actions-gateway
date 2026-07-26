@@ -486,6 +486,7 @@ type ActionsGatewayStatus struct {
 // namespace (multi-gateway support lands in M3b).
 //
 // +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="actions-gateway.com/v2alpha1 ActionsGateway is deprecated; use actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it."
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=ag,categories=actions-gateway
 // +kubebuilder:printcolumn:name="URL",type=string,JSONPath=`.spec.githubURL`

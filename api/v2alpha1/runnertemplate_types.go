@@ -67,6 +67,7 @@ type RunnerTemplateStatus struct {
 // RunnerSets via templateRef. Pure data: nothing owns it and it owns nothing (§H.8).
 //
 // +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="actions-gateway.com/v2alpha1 RunnerTemplate is deprecated; use actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it."
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=rt,categories=actions-gateway
 // +kubebuilder:printcolumn:name="WorkerImage",type=string,JSONPath=`.spec.workerImage`
@@ -95,6 +96,7 @@ type RunnerTemplateList struct {
 // ClusterRunnerTemplate (§H.4). Pure data: nothing owns it and it owns nothing.
 //
 // +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="actions-gateway.com/v2alpha1 ClusterRunnerTemplate is deprecated; use actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it."
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,shortName=crt,categories=actions-gateway
 // +kubebuilder:printcolumn:name="WorkerImage",type=string,JSONPath=`.spec.workerImage`

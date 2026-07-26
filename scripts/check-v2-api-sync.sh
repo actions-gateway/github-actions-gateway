@@ -18,6 +18,9 @@
 #   - the `package v2alphaN` / `package v2betaN` clause
 #   - a `// +kubebuilder:storageversion` marker (by definition only one version
 #     carries it)
+#   - a `// +kubebuilder:deprecatedversion` marker, with or without its
+#     `:warning="..."` text (Q411: v2alpha1 is deprecated, v2beta1 is not, and the
+#     warning text names the deprecated version and Kind, so it cannot be mirrored)
 # Everything else must match byte for byte.
 #
 # Files present in only one version (a version-specific test, say) are reported but
@@ -70,12 +73,13 @@ for dir in "$alpha_dir" "$beta_dir"; do
     fi
 done
 
-# Normalise the two entitled differences so the diff sees only real divergence. awk
+# Normalise the entitled differences so the diff sees only real divergence. awk
 # (not sed) per docs/development/bash-style.md.
 normalize() {
     awk '
         /^package v2[a-z0-9]+$/            { print "package v2SYNC"; next }
         /^[[:space:]]*\/\/ \+kubebuilder:storageversion[[:space:]]*$/ { next }
+        /^[[:space:]]*\/\/ \+kubebuilder:deprecatedversion(:warning=.*)?[[:space:]]*$/ { next }
                                            { print }
     ' "$1"
 }
