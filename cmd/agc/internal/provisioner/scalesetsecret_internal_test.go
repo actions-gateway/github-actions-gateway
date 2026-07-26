@@ -176,6 +176,60 @@ func TestCleanupScaleSetJob_ReclaimsAndIsIdempotent(t *testing.T) {
 		"a completion for a job this process never provisioned must be a no-op")
 }
 
+// TestCleanupScaleSetJob_StampsJobCompletion covers Q420: the reclaim point is also
+// where a worker pod learns its job is over, which is the only thing that gives a
+// still-Running scale-set worker a reap deadline. The stamp is set once — a replayed
+// completion (a re-created session polls from cursor 0) must not push the deadline
+// back — and a job with no pod is not an error.
+func TestCleanupScaleSetJob_StampsJobCompletion(t *testing.T) {
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).Build()
+	p := NewProvisioner(fc, nil, nil)
+	completedAt := time.Date(2026, 7, 26, 10, 0, 0, 0, time.UTC)
+	p.now = func() time.Time { return completedAt }
+
+	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, "job-done", "eyJ4IjoxfQ=="))
+
+	podKey := client.ObjectKey{Namespace: "team-a", Name: scaleSetPodName("gpu", "job-done")}
+	var pod corev1.Pod
+	require.NoError(t, fc.Get(ctx, podKey, &pod))
+	assert.NotContains(t, pod.Annotations, AnnotationJobCompletedAt,
+		"a freshly provisioned worker has no completion stamp — its job is still assigned")
+
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-done"))
+	require.NoError(t, fc.Get(ctx, podKey, &pod))
+	assert.Equal(t, completedAt.Format(time.RFC3339), pod.Annotations[AnnotationJobCompletedAt],
+		"the terminal completion must stamp the worker pod with the time the job ended")
+
+	// A replay lands later; the original stamp must survive it.
+	p.now = func() time.Time { return completedAt.Add(time.Hour) }
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-done"))
+	require.NoError(t, fc.Get(ctx, podKey, &pod))
+	assert.Equal(t, completedAt.Format(time.RFC3339), pod.Annotations[AnnotationJobCompletedAt],
+		"a replayed completion must not push the reap deadline back")
+
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-with-no-pod"),
+		"a completion for a job whose pod was never created must be a no-op")
+}
+
+// TestCleanupScaleSetJob_SurfacesStampErrors pins that a failure to stamp the pod is
+// reported rather than swallowed: an unstamped Running worker has no reap deadline, so
+// a persistent failure is the Q420 leak returning silently.
+func TestCleanupScaleSetJob_SurfacesStampErrors(t *testing.T) {
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).
+		WithObjects(runningWorkerPod(scaleSetPodName("gpu", "job-x"))).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Patch: func(context.Context, client.WithWatch, client.Object, client.Patch, ...client.PatchOption) error {
+				return apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "runner-gpu-job-x", errors.New("nope"))
+			},
+		}).Build()
+	p := NewProvisioner(fc, nil, nil)
+
+	require.Error(t, p.CleanupScaleSetJob(ctx, scaleSetSecretTestTarget(&ResolvedSpec{}), "job-x"))
+}
+
 // TestCleanupScaleSetJob_SurfacesDeleteErrors pins that a genuine API failure is
 // reported to the listener (which logs it) rather than silently swallowed, so a
 // persistent reclaim failure is diagnosable.

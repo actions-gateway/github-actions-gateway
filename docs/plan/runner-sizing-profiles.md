@@ -529,9 +529,16 @@ condition reports `SizingProfileActive` instead of a verdict.
   `Listening for Jobs` forever because their assignment was gone. On classic this
   cannot happen: `provision()` blocks on the pod's terminal state, so a Running
   worker is always owned by a goroutine. It is specific to the scale-set tier's
-  fire-and-forget provisioning. Filed as [Q420](../STATUS.md#Q420), whose fix
-  most naturally rides the pod watch [Q417](../STATUS.md#Q417) Phase 2 introduces
-  rather than a second, standalone mechanism.
+  fire-and-forget provisioning. Filed as Q420 and **fixed 2026-07-26**,
+  independently of [Q417](../STATUS.md#Q417): the fix needed a durable deadline
+  rather than a pod watch, so it did not have to wait for one. The scale-set
+  listener's completion path stamps `actions-gateway.com/job-completed-at` on the
+  job's worker pod, and the reaper deletes a pod still Running five minutes later
+  (`reason=orphaned_running`, `WorkerPodOrphanedRunning` Warning Event). Putting
+  the deadline on the pod rather than in AGC memory is what makes it survive an
+  AGC restart, and set-once semantics keep a completion replayed to a re-created
+  session from pushing it back. Flow:
+  [04-operational-flows.md](../design/04-operational-flows.md#orphaned-running-worker-pod-scaleset-tier).
 
 ## Non-goals
 

@@ -52,7 +52,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q420"></a>Q420 | [A Running scale-set worker has no reap deadline](plan/runner-sizing-profiles.md#both-20-sample-paths-confirmed-2026-07-25-second-session) | `bug` `infra` | 🔲 | S | The reaper `continue`s on `PodRunning`, so a worker that registers and never gets a job holds a quota slot and node forever (Pending ones *are* reaped). Scale-set only: classic blocks on terminal phase. Fold into [Q417](#Q417)'s pod watch. |
 | <a id="Q411"></a>Q411 | [Deprecate `v2alpha1`](plan/release-1.3.md) | `infra` `1.3-gate` | 🔲 | S | `v2beta1` is storage on all five kinds, yet `v2alpha1` carries no `+kubebuilder:deprecatedversion` marker, so the apiserver warns nobody. Add markers + regen CRDs; the docs half shipped as Q409. |
 | <a id="Q412"></a>Q412 | [Name `v2.0.0` as the removal release](plan/release-1.3.md) | `docs` `1.3-gate` | 🔲 | S | Policy promises removals land one release ahead ([notice](operations/v1alpha1-deprecation.md)). Name `v2.0.0` for `v1alpha1`, `v2alpha1`, and classic. Miss it in 1.3 and `v2.0.0` may remove nothing. |
 | <a id="Q400"></a>Q400 | `scaleset/**` and `api/**` missing from three path gates | `infra` `1.3-gate` | 🔲 | S | `unit-test.yml` lists both; `integration-test.yml`, `security-scan.yml`, `e2e-test.yml` list neither, so a scaleset/api-only change skips integration (which imports `scalesettest`), vulncheck, e2e. |

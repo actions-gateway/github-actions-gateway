@@ -210,6 +210,40 @@ A worker pod that never leaves `Pending` — unpullable `workerImage`, unschedul
 
 ---
 
+### Orphaned Running Worker Pod (ScaleSet tier)
+
+```text
+  GitHub                AGC (ScaleSet)            K8s API            Worker Pod
+    │                        │                       │                    │
+    ├─ JobAssigned ─────────>│                       │                    │
+    │                        ├─ create pod ─────────>├─ schedule ────────>│
+    │                        │  (fire-and-forget)    │                    │ Running:
+    │                        │                       │                    │ registered,
+    │                        │                       │                    │ "Listening
+    │  assignment lapses /   │                       │                    │  for Jobs"
+    │  cancelled / completed │                       │                    │
+    │  elsewhere             │                       │                    │
+    ├─ JobCompleted ────────>│                       │                    │
+    │  (terminal)            ├─ stamp ──────────────>│  job-completed-at  │
+    │                        │                       │                    │ still Running:
+    │                        │  · 5m grace ·         │                    │ never gets
+    │                        │                       │                    │ its job
+    │                        ├─ delete pod ─────────>├───────────────────>✗
+    │                        │
+    │                        └─ Warning WorkerPodOrphanedRunning
+    │                           worker_pods_reaped_total{reason="orphaned_running"}++
+```
+
+The ScaleSet tier provisions fire-and-forget — the runner pulls its own job through its own broker session, so no AGC goroutine owns the pod the way the classic path's `provision()` does. A worker that registers but never receives its job therefore waits at `Listening for Jobs` indefinitely, and because the reaper counts `Running` as active with no deadline, it held a concurrency slot and a node until an operator deleted it by hand (Q420; observed on the dogfood cluster, where eight such pods occupied ten of twelve quota slots and all six worker nodes with zero jobs outstanding).
+
+The fix makes GitHub's own verdict the deadline. When the listener sees the terminal `JobCompleted` for a job, it stamps `actions-gateway.com/job-completed-at` on that job's worker pod (the same reclaim point that deletes the job's JIT-config Secret), and the reaper deletes any pod still `Running` five minutes later. The grace is a constant, not a tunable: it measures runner shutdown — a runner that actually ran the job reports completion and exits within seconds — and the job is already over at GitHub either way, so the only thing a premature reap costs is the terminal pod's `completedPodTTL` inspection window. The stamp is set once, so a completion replayed to a re-created session cannot push the deadline back, and it lives on the pod rather than in AGC memory, so the deadline survives an AGC restart.
+
+The deadline is only as good as the completion message: a pod whose job GitHub never reports terminal is never stamped, and keeps the old no-deadline treatment. That is deliberate — an unstamped `Running` pod is indistinguishable from one executing a live job, and reaping those would kill real builds. The replay property covers the process-crash case (a re-created session polls from cursor 0, so a completion handled just before a crash is redelivered and stamps the pod then); what it does not cover is a job that completes *before* its worker pod exists, whose pod is left to stall `Pending` on the deleted Secret and be collected by `pendingPodDeadline`.
+
+The same arm collects a pod held open past the runner's exit by a container that never terminates — the injected-mesh-sidecar case the [`PossibleReapBlockingSidecar`](../operations/troubleshooting.md#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar) condition warns about — on the ScaleSet tier. Classic worker pods are never stamped (their `provision()` goroutine owns them through to a terminal phase), so nothing changes for them.
+
+---
+
 ### AGC Crash Mid-Job
 
 ```mermaid

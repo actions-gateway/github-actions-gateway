@@ -4,10 +4,15 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -454,6 +459,90 @@ func TestRunnerSetReaper_DeletesExpiredPods(t *testing.T) {
 	// Running pod counted as active; no pending pods.
 	assert.Equal(t, int32(1), counts.active, "Running pod must be counted in activeJobs")
 	assert.Equal(t, int32(0), counts.pending, "no Pending pods")
+}
+
+// reapTestMetrics builds a Metrics carrying only the reaper counter, unregistered
+// (kept off the global Prometheus registry) for per-test isolation.
+func reapTestMetrics() *runnercore.Metrics {
+	return &runnercore.Metrics{
+		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_runnerset_worker_pods_reaped_total",
+		}, []string{"namespace", "runner_group", "reason"}),
+	}
+}
+
+// TestRunnerSetReaper_ReapsOrphanedRunningPods covers Q420: a scale-set worker that
+// is still Running after its job went terminal at GitHub gets a reap deadline from
+// the completion annotation, while every other Running pod keeps the old no-deadline
+// treatment.
+func TestRunnerSetReaper_ReapsOrphanedRunningPods(t *testing.T) {
+	scheme := runnerSetTestScheme(t)
+	ns := "team-a"
+	now := time.Now()
+	rs := rsObj("set", ns, nil)
+
+	runningPod := func(name string, completedAt string) *corev1.Pod {
+		pod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name,
+				Labels: map[string]string{provisioner.LabelRunnerSet: "set"}},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		}
+		if completedAt != "" {
+			pod.Annotations = map[string]string{provisioner.AnnotationJobCompletedAt: completedAt}
+		}
+		return pod
+	}
+	stamp := func(d time.Duration) string { return now.Add(d).UTC().Format(time.RFC3339) }
+
+	// Job over 6m ago, grace 5m → reaped.
+	stuck := runningPod("runner-stuck", stamp(-6*time.Minute))
+	// Job over 1m ago → retained, due in ~4m (the only pending deadline).
+	finishing := runningPod("runner-finishing", stamp(-time.Minute))
+	// Job still assigned: no stamp → no deadline, as before.
+	live := runningPod("runner-live", "")
+	// An unparseable stamp must never be read as "completed long ago".
+	garbled := runningPod("runner-garbled", "yesterday")
+
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(rs, stuck, finishing, live, garbled).Build()
+	rec := events.NewFakeRecorder(8)
+	r := &RunnerSetReconciler{
+		Client:   c,
+		Log:      slog.Default(),
+		Now:      func() time.Time { return now },
+		Metrics:  reapTestMetrics(),
+		Recorder: rec,
+	}
+
+	next, counts, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	get := func(name string) error {
+		return c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &corev1.Pod{})
+	}
+	assert.Error(t, get("runner-stuck"), "a Running pod past its job's completion grace must be reaped")
+	assert.NoError(t, get("runner-finishing"), "a Running pod within the grace must be retained")
+	assert.NoError(t, get("runner-live"), "a Running pod with no completion stamp must never be reaped")
+	assert.NoError(t, get("runner-garbled"), "an unparseable completion stamp must not reap the pod")
+
+	assert.InDelta(t, (4 * time.Minute).Seconds(), next.Seconds(), 1.0,
+		"the next due time must come from the retained within-grace pod")
+	assert.Equal(t, int32(4), counts.active,
+		"every Running pod counts as active, including the one reaped this pass")
+
+	assert.Equal(t, 1.0, testutil.ToFloat64(
+		r.Metrics.WorkerPodsReaped.WithLabelValues(ns, "set", "orphaned_running")))
+
+	var orphanEvent string
+	for len(rec.Events) > 0 {
+		if e := <-rec.Events; strings.Contains(e, "WorkerPodOrphanedRunning") {
+			orphanEvent = e
+		}
+	}
+	require.NotEmpty(t, orphanEvent, "reaping an orphaned Running pod must emit a WorkerPodOrphanedRunning event")
+	assert.Contains(t, orphanEvent, "runner-stuck")
+	assert.Contains(t, orphanEvent, "Warning")
 }
 
 func TestRunnerSetDrainConditions_MergesOwnSkipsOthers(t *testing.T) {

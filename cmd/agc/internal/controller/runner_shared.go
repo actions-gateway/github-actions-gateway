@@ -9,6 +9,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/broker"
@@ -193,13 +194,28 @@ type workerPodCounts struct {
 	pending int32 // PodPending: pod spawned but not yet running
 }
 
+// completedJobRunningGrace is how long a worker pod may still be Running after
+// GitHub declared its job terminal (provisioner.AnnotationJobCompletedAt) before the
+// reaper deletes it. A runner that actually ran the job reports completion and then
+// exits within seconds, so anything still Running well past the grace is stuck: a
+// scale-set worker that registered but never received its job, or a pod held open by
+// a container that outlives the runner (see the reap-blocking-sidecar condition).
+//
+// It is a constant rather than a CRD knob because it measures runner shutdown, not
+// tenant workload: the job is already over at GitHub either way, so the only thing a
+// premature reap costs is the terminal pod's completedPodTTL inspection window. Five
+// minutes is far above observed runner shutdown and still bounds the leak.
+const completedJobRunningGrace = 5 * time.Minute
+
 // reapWorkerPodsByLabel deletes worker pods (selected by labelKey == name in
-// namespace) that the owning CR no longer needs: terminal pods older than ttl, and
-// Pending pods older than deadline. It returns the time until the earliest
-// retained pod becomes due (0 = none), pod counts by phase (for status), and any
-// error. metrics may be nil; emitStuckPending (may be nil) records the owning-CR
-// typed Event on a pending-deadline reap. Shared by both reconcilers' reapers so
-// the reap logic is defined once.
+// namespace) that the owning CR no longer needs: terminal pods older than ttl,
+// Pending pods older than deadline, and Running pods still alive more than
+// completedJobRunningGrace after their job completed. It returns the time until the
+// earliest retained pod becomes due (0 = none), pod counts by phase (for status), and
+// any error. metrics may be nil; emitStuckPending and emitOrphanedRunning (both may be
+// nil) record the owning-CR typed Event on a pending-deadline and an orphaned-running
+// reap respectively. Shared by both reconcilers' reapers so the reap logic is defined
+// once.
 func reapWorkerPodsByLabel(
 	ctx context.Context,
 	c client.Client,
@@ -209,6 +225,7 @@ func reapWorkerPodsByLabel(
 	log *slog.Logger,
 	metrics *runnercore.Metrics,
 	emitStuckPending func(podName string, deadline time.Duration),
+	emitOrphanedRunning func(podName string, grace time.Duration),
 ) (time.Duration, workerPodCounts, error) {
 	var pods corev1.PodList
 	if err := c.List(ctx, &pods,
@@ -230,8 +247,18 @@ func reapWorkerPodsByLabel(
 		var reason string
 		switch pod.Status.Phase {
 		case corev1.PodRunning:
+			// Running is normally a job executing, and counts as active either way —
+			// the pod holds its concurrency slot until it is actually gone. It gets a
+			// deadline only once its job is over at GitHub: an unstamped pod (every
+			// classic pod, and every scale-set pod whose job is still assigned) is
+			// retained with no deadline, exactly as before (Q420).
 			counts.active++
-			continue
+			completedAt, ok := jobCompletedAt(pod)
+			if !ok {
+				continue
+			}
+			due = completedAt.Add(completedJobRunningGrace)
+			reason = reapReasonOrphanedRunning
 		case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
 			due = podTerminalTime(pod).Add(ttl)
 			reason = reapReasonCompletedTTL
@@ -263,8 +290,27 @@ func reapWorkerPodsByLabel(
 		if reason == reapReasonPendingDeadline && emitStuckPending != nil {
 			emitStuckPending(pod.Name, deadline)
 		}
+		if reason == reapReasonOrphanedRunning && emitOrphanedRunning != nil {
+			emitOrphanedRunning(pod.Name, completedJobRunningGrace)
+		}
 	}
 	return next, counts, nil
+}
+
+// jobCompletedAt reads the completion timestamp the provisioner stamps on a worker
+// pod when its job goes terminal at GitHub. It reports false when the annotation is
+// absent or unparseable — an unreadable value must never be treated as "completed
+// long ago", which would reap a pod running a live job.
+func jobCompletedAt(pod *corev1.Pod) (time.Time, bool) {
+	v, ok := pod.Annotations[provisioner.AnnotationJobCompletedAt]
+	if !ok {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 // assembleListenerConfig builds the listener.Config for a single goroutine bound

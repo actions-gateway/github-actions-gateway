@@ -15,6 +15,10 @@ import (
 const (
 	reapReasonCompletedTTL    = "completed_ttl"
 	reapReasonPendingDeadline = "pending_deadline"
+	// reapReasonOrphanedRunning labels a pod deleted because it was still Running
+	// long after its job went terminal at GitHub — a worker that never received its
+	// job, or one held open past the runner's exit (Q420).
+	reapReasonOrphanedRunning = "orphaned_running"
 )
 
 // reapWorkerPods deletes worker pods the RunnerGroup no longer needs:
@@ -27,7 +31,11 @@ const (
 //     concurrency-ceiling slot forever (activePodCount counts Pending).
 //     Deleting it resolves the waiting session goroutine (the
 //     InformerPodWaiter treats deletion as completion), which releases the
-//     listener and the slot; that goroutine's cleanup deletes the job Secret.
+//     listener and the slot; that goroutine's cleanup deletes the job Secret;
+//   - Running pods still alive completedJobRunningGrace after their job went
+//     terminal at GitHub. Classic pods are never stamped with the completion
+//     annotation this arm reads (provision() owns them through to a terminal
+//     phase), so in practice this arm only fires on the scale-set tier (Q420).
 //
 // Running this from the reconciler rather than the provision goroutine makes
 // cleanup restart-safe: the goroutine dies with the AGC process, while the
@@ -46,6 +54,13 @@ func (r *RunnerGroupReconciler) reapWorkerPods(ctx context.Context, log *slog.Lo
 			r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodStuckPending", "ReapWorkerPods",
 				"worker pod %s was Pending for more than %s and has been deleted; "+
 					"check the pod template image and scheduling constraints", podName, deadline)
+		},
+		func(podName string, grace time.Duration) {
+			// Operator-visible: the pod outlived its own job, so it was holding a
+			// concurrency slot and a node for nothing.
+			r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodOrphanedRunning", "ReapWorkerPods",
+				"worker pod %s was still Running %s after its job completed and has been deleted; "+
+					"the runner never received its job, or a container in the pod outlived it", podName, grace)
 		})
 }
 

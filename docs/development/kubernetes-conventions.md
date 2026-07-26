@@ -139,6 +139,17 @@ These are best-effort: absent if the GitHub payload omitted the corresponding
 `system.github.*` variable. Never use them for security enforcement — they are
 informational annotations for operator visibility.
 
+One further controller-set annotation is stamped *after* pod creation, on the
+ScaleSet tier only (`provisioner.AnnotationJobCompletedAt`):
+
+- `actions-gateway.com/job-completed-at` — RFC 3339 UTC time at which the
+  scale-set listener saw the terminal `JobCompleted` for the job this pod was
+  created for. It is the reap deadline for a pod still `Running` after its own
+  job is over (Q420): the reaper deletes such a pod five minutes later. Set once
+  — a completion replayed to a re-created session must not push the deadline
+  back — and never set on the classic path, whose `provision()` goroutine owns
+  its pod through to a terminal phase.
+
 The provisioner also gap-fills three **node-disruption-safety** annotations on
 every worker pod, so a node autoscaler or the descheduler does not evict a pod
 mid-job and strand the CI run (these are third-party well-known keys, not our

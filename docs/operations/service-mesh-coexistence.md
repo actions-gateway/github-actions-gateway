@@ -65,7 +65,12 @@ Two design facts drive everything below. Both are covered in depth in the
   [`completedPodTTL`](../design/03-api-contracts.md) elapses. A pod that never
   reaches a terminal phase is never reaped by the completed-pod path and holds
   its slot indefinitely. (The `pendingPodDeadline` reaper only covers pods stuck
-  in `Pending`, not a pod stuck in `Running`.)
+  in `Pending`, not a pod stuck in `Running`. On the ScaleSet protocol a pod
+  still `Running` five minutes after GitHub reports its job terminal is reaped
+  as a backstop — see
+  [WorkerPodOrphanedRunning](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning)
+  — but the pod is killed rather than completing, so the sidecar still has to be
+  fixed.)
 
 - **All GitHub-bound egress is funnelled through the per-tenant proxy.** The GMC
   injects `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` into the AGC and every
@@ -255,7 +260,12 @@ hit. (Reproduced on Istio 1.30.2 with `ENABLE_NATIVE_SIDECARS=false` — Q220: t
 > **Why the reaper does not save you.** `completedPodTTL` only deletes pods that
 > reached a *terminal* phase, and `pendingPodDeadline` only deletes pods stuck
 > `Pending`. A sidecar-pinned pod is neither — it is `Running` — so it falls
-> through both reaper paths. The fix has to make the pod actually terminate.
+> through both phase-based reaper paths. ScaleSet sets get a backstop
+> ([`WorkerPodOrphanedRunning`](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning):
+> a pod still `Running` five minutes after GitHub reports the job terminal is
+> deleted), which stops the slots leaking — but it kills the pod instead of
+> letting it complete, and Classic sets have no equivalent. The fix still has to
+> make the pod actually terminate.
 
 ### Fix A — opt out (recommended)
 

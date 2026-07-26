@@ -772,10 +772,10 @@ func (r *RunnerSetReconciler) nowFunc() func() time.Time {
 }
 
 // reapWorkerPods deletes worker pods this RunnerSet no longer needs (terminal past
-// completedPodTTL, Pending past pendingPodDeadline), mirroring the RunnerGroup
-// reaper but filtering on LabelRunnerSet and reading the RunnerSet's tunables. It
-// returns the time until the earliest retained pod becomes due (0 = none) and a
-// pod phase count for status.activeJobs/pendingJobs.
+// completedPodTTL, Pending past pendingPodDeadline, Running past its own job's
+// completion), mirroring the RunnerGroup reaper but filtering on LabelRunnerSet and
+// reading the RunnerSet's tunables. It returns the time until the earliest retained
+// pod becomes due (0 = none) and a pod phase count for status.activeJobs/pendingJobs.
 func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) (time.Duration, workerPodCounts, error) {
 	return reapWorkerPodsByLabel(ctx, r.Client, r.nowFunc()(), rs.Namespace, rs.Name,
 		provisioner.LabelRunnerSet,
@@ -786,6 +786,14 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 			r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodStuckPending", "ReapWorkerPods",
 				"worker pod %s was Pending for more than %s and has been deleted; "+
 					"check the template image and scheduling constraints", podName, deadline)
+		},
+		func(podName string, grace time.Duration) {
+			// Operator-visible: on the scale-set tier this is the "registered but
+			// never got its job" worker, which held a concurrency slot and a node
+			// for nothing until this reap (Q420).
+			r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodOrphanedRunning", "ReapWorkerPods",
+				"worker pod %s was still Running %s after its job completed and has been deleted; "+
+					"the runner never received its job, or a container in the pod outlived it", podName, grace)
 		})
 }
 
