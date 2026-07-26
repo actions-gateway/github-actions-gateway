@@ -788,22 +788,52 @@ day-to-day turn-up), see "Route all CI to GAG" below.
 ### Stop dogfooding
 
 Opt-in dispatches are one-shot, so there is no standing CI route to revert —
-just wait for any in-flight dispatched run to finish (or cancel it), then scale
-down. Only the end-state global routing below needs the `GAG_RUNNER` reset.
+only the end-state global routing below needs the `GAG_RUNNER` reset.
 
 ```bash
-# 1. Reset the runner label so a later dispatch is a no-op, and undo any
-#    end-state global routing if it was enabled (see below)
-gh variable set GAG_RUNNER \
-  --body '"ubuntu-latest"' \
-  --repo "$REPO"
-
-# 2. Scale system pool to 0 (GAG goes offline)
-gcloud container clusters resize "$CLUSTER" \
-  --node-pool=default-pool --num-nodes=0 --zone="$ZONE" --quiet
-
-# Worker nodes drain and autoscale to 0 automatically within ~10 min.
+export PROJECT CLUSTER ZONE REPO   # from the Variables section
+scripts/dogfood/stop.sh
 ```
+
+The script resets `GAG_RUNNER`, **waits for in-flight worker pods to drain**,
+and only then scales the system pool to 0. Worker nodes autoscale to 0 on their
+own within ~10 min after that.
+
+#### Why the drain wait is not optional (Q434)
+
+The system pool carries the tenant AGCs, and **an AGC is the only thing that
+reaps its worker pods.** Scaling that pool to 0 with a job in flight evicts the
+AGC with nowhere to reschedule, so:
+
+- its worker pods keep running on the `workers` pool, with no controller left
+  to delete them;
+- the pods carry `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`
+  (deliberately — see [observability-metrics.md](../operations/observability-metrics.md),
+  a worker mid-job has no replacement), so the autoscaler will not reclaim
+  their nodes either;
+- the nodes bill until a human notices. One incident stranded 82 spot
+  node-hours this way.
+
+Resetting `GAG_RUNNER` first stops *new* dispatches routing at the cluster, but
+dispatches already queued at GitHub are still assigned to the scale set — which
+is exactly why the wait exists rather than a "looks idle to me" glance.
+
+Knobs, all optional:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `DRAIN_TIMEOUT` | `1500` | Seconds to wait for the drain. Covers the longest dispatched job (`timeout-minutes: 20`) plus reap time. |
+| `DRAIN_INTERVAL` | `15` | Seconds between drain polls. |
+| `SKIP_DRAIN` | unset | `1` scales down without waiting. Strands anything in flight. |
+
+A drain that does not finish inside `DRAIN_TIMEOUT` **fails the stop and leaves
+the pool up** — two `e2-standard-2` nodes cost far less than stranded worker
+nodes, and keeping the AGC alive is what lets it finish reaping. The error names
+the pods still in flight and the three ways out: wait and re-run, bounce a
+wedged AGC (`scripts/dogfood/ops.sh agc-bounce ci`) and re-run, or delete
+genuine orphans by hand. `SKIP_DRAIN=1` is the deliberate override — reach for
+it when the AGC is already down, since an AGC that cannot reap will never let
+the drain finish.
 
 ### Route all CI to GAG (milestone end-state)
 
@@ -835,6 +865,7 @@ operation with different urgency.
 | GAG install, tenant CRs, cert-manager CA, App secret | **Kept** | **Destroyed** |
 | Cost at rest | $0.00/hr | $0.00/hr |
 | Coming back | `start.sh`, ~5 min | `setup.sh` (+ `e2e-setup.sh`), ~20 min |
+| In-flight jobs | Waited out — the stop fails rather than strand them ([why](#why-the-drain-wait-is-not-optional-q434)) | Quoted back in the confirmation; deleting is your call |
 | Use when | Between CI sessions — the normal at-rest state | Done for the foreseeable future, or converging a drifted cluster |
 
 **Deleting is not a cost optimisation.** The cluster is a zonal Standard
@@ -854,8 +885,10 @@ cluster that is mid-deletion; deletes the cluster; prunes the now-dead
 kubeconfig context so a later `kubectl` fails loudly instead of timing out
 against a cluster that no longer exists; and reports any disk or reserved
 address that outlived the cluster, since those keep billing. It quotes the live
-node and worker-pod counts back at you in the confirmation, so deleting a
-cluster that is actually busy is a decision rather than an accident.
+node and in-flight worker-pod counts back at you in the confirmation, so
+deleting a cluster that is actually busy is a decision rather than an accident.
+Unlike `stop.sh` it does not wait for the drain — deleting the cluster takes the
+worker nodes with it, so there is nothing left to strand.
 
 `ASSUME_YES=1` skips the prompt for automation. A missing cluster is a no-op,
 so the script is safe to re-run.
@@ -1142,7 +1175,7 @@ target the `e2e` pool, which autoscales from 0 — scale a node up first
 |---|---|
 | One-time bootstrap **and** full recreate after a delete: cluster + node pools + GAG install + tenant | `scripts/dogfood/setup.sh` |
 | Start cluster + dispatch opt-in validation runs onto GAG | `scripts/dogfood/start.sh` |
-| Stop cluster + reset GAG runner label (normal at-rest state) | `scripts/dogfood/stop.sh` |
+| Stop cluster + reset GAG runner label, after draining in-flight workers (normal at-rest state) | `scripts/dogfood/stop.sh` |
 | Delete the cluster entirely (see [Part E](#part-e--teardown) — destroys the GAG install and all tenant state) | `scripts/dogfood/delete.sh` |
 | Enable e2e on GAG | `scripts/dogfood/e2e-start.sh` |
 | Disable e2e on GAG | `scripts/dogfood/e2e-stop.sh` |

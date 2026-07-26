@@ -306,6 +306,12 @@ dump_diagnostics() {
 # both success and failure, so a failed gate never strands billable nodes. Each
 # step is guarded so one failure does not skip the rest. On failure, diagnostics
 # are captured FIRST — the scale-down below destroys the evidence.
+#
+# stop.sh waits for in-flight workers before scaling down and fails rather than
+# stranding them (Q434), so the guard below can leave the system pool up. That
+# is the cheaper failure: two e2-standard-2 nodes still billing beats worker
+# nodes pinned by pods no AGC is left alive to reap. Its error names the
+# remedy — re-run stop.sh once the drain finishes.
 teardown() {
 	local rc="$?"
 	echo ""

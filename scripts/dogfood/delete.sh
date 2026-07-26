@@ -49,6 +49,8 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
+# shellcheck source=scripts/dogfood/lib/workers.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/workers.sh"
 
 # ---------------------------------------------------------------------------
 # Existence + occupancy probes. The confirmation below quotes these back, so an
@@ -71,14 +73,18 @@ current_node_count() {
 	echo "${count:-0}"
 }
 
-# running_worker_count — worker pods currently Running, best-effort. Requires
-# working credentials; a failure is reported as "unknown" rather than assumed
-# to be zero, so an unreachable cluster never reads as "safe to delete".
-running_worker_count() {
-	local out
-	out="$(kubectl --context="gke_${PROJECT}_${ZONE}_${CLUSTER}" get pods -A \
-		--field-selector=status.phase=Running --no-headers 2>/dev/null)" || { echo "unknown"; return; }
-	echo "${out}" | awk '$2 ~ /^runner-/ {c++} END {print c+0}'
+# inflight_worker_count — worker pods in a non-terminal phase, best-effort, via
+# the shared label-selector probe (lib/workers.sh). The context is pinned rather
+# than made active: this read only feeds the confirmation below, so it should
+# not mutate kubeconfig state on a path that may abort. A failure is reported as
+# "unknown" rather than assumed to be zero, so an unreachable cluster never
+# reads as "safe to delete".
+inflight_worker_count() {
+	# Dynamically scoped for the callee: `local` here, read by the probe, gone
+	# when this returns — no assignment leaks into the rest of the script.
+	# shellcheck disable=SC2034  # read by count_inflight_workers via lib/workers.sh
+	local WORKER_KUBECTL_CONTEXT="gke_${PROJECT}_${ZONE}_${CLUSTER}"
+	count_inflight_workers
 }
 
 # ---------------------------------------------------------------------------
@@ -141,8 +147,8 @@ report_orphans() {
 confirm_target() {
 	local nodes workers
 	nodes="$(current_node_count)"
-	workers="$(running_worker_count)"
-	confirm_or_exit "$(printf 'About to DELETE the dogfood cluster:\n  Project: %s\n  Cluster: %s  (zone %s)\n  Repo:    %s\n\n  Nodes currently up:      %s\n  Worker pods Running:     %s\n\nThis destroys the GAG install, every tenant namespace and CR, the\ncert-manager CA, and the in-cluster GitHub App secret. Recreate is a full\nsetup.sh bootstrap, NOT a resume. To merely take the cluster offline and\nkeep all of it, run stop.sh instead.' \
+	workers="$(inflight_worker_count)"
+	confirm_or_exit "$(printf 'About to DELETE the dogfood cluster:\n  Project: %s\n  Cluster: %s  (zone %s)\n  Repo:    %s\n\n  Nodes currently up:      %s\n  Worker pods in flight:   %s\n\nThis destroys the GAG install, every tenant namespace and CR, the\ncert-manager CA, and the in-cluster GitHub App secret. Recreate is a full\nsetup.sh bootstrap, NOT a resume. To merely take the cluster offline and\nkeep all of it, run stop.sh instead.' \
 		"${PROJECT}" "${CLUSTER}" "${ZONE}" "${REPO}" "${nodes}" "${workers}")"
 }
 
