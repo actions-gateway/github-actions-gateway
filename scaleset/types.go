@@ -223,11 +223,14 @@ type JobMessage struct {
 // JobMessageBase: it observed scaleSetAssignTime, another base field this client
 // does not model (Q264 plan §2a-3).
 //
-// Why ok is still a return value rather than an assumption: GAG has no recorded
-// observation of these three specific fields on a live JobAssigned, only of the
-// base shape that carries them. Treating identity as optional costs one branch and
-// makes the absence observable (a logged warning and an Event) instead of producing
-// a rerun against run 0.
+// A live probe against the dotcom broker-host backend confirmed all three on a real
+// JobAssigned on 2026-07-26, with workflowRunId matching the dispatched run exactly
+// (see the plan doc's "Measured live" section).
+//
+// Why ok is still a return value rather than an assumption: that is one observation on
+// one backend, and it says nothing about GHES, another event type, or a future protocol
+// revision. Treating identity as optional costs one branch and makes an absence
+// observable (a logged warning and an Event) instead of producing a rerun against run 0.
 func (j JobMessage) RunIdentity() (owner, repo, runID string, ok bool) {
 	if j.OwnerName == "" || j.RepositoryName == "" || j.WorkflowRunID == 0 {
 		return "", "", "", false

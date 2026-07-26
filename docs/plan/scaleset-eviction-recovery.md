@@ -94,28 +94,71 @@ Corroborating evidence from GAG's own live probe: Investigation E observed
 §2a-3). That is another `JobMessageBase` field this client did not model, so the raw
 body demonstrably *is* a `JobMessageBase` and not a narrower shape.
 
-**What is still not directly measured.** No GAG probe has dumped those three specific
-fields off a live `JobAssigned`. The evidence is wire parity with the official client
-plus the base-shape observation above — strong, but not the same thing as reading
-`workflowRunId` out of a live message.
+**Measured live 2026-07-26 — the fields are on the wire.** A repo-scoped probe run
+against `actions-gateway/github-actions-gateway` observed a real `JobAssigned` from the
+dotcom broker-host backend carrying every field the port depends on:
 
-**How to close it.** The probe reports the verdict itself, so the run answers the
-question rather than merely containing the answer — grep the output for
-`run identity present` or `GAP`. Requires live GitHub App credentials for the
-`actions-gateway` org and a workflow dispatched while the probe polls; the private key
-stays in the Keychain and reaches the probe as a file path, never as an env-var value
-or a process argument ([github-app-credentials.md](../development/github-app-credentials.md)):
-
-```bash
-KEY_FILE=$(mktemp -t gag-probe-key.XXXXXX) && trap 'rm -f "$KEY_FILE"' EXIT INT TERM && security find-generic-password -a actions-gateway-test -s github-app-private-key -w | xxd -r -p > "$KEY_FILE" && GITHUB_APP_ID=3752347 GITHUB_APP_INSTALLATION_ID=135739122 GITHUB_ORG_URL=https://github.com/actions-gateway GITHUB_APP_PRIVATE_KEY="$KEY_FILE" PROBE_SCALESET_TEST=true PROBE_SCALESET_JOB_TEST=true go run -C cmd/probe . 2>&1 | grep -E 'run identity present|GAP|job test message'
+```json
+{"messageType":"JobAssigned","repositoryName":"github-actions-gateway",
+ "ownerName":"actions-gateway","workflowRunId":30225287326,
+ "jobDisplayName":"probe-fast","eventName":"workflow_dispatch",
+ "jobWorkflowRef":"actions-gateway/github-actions-gateway/.github/workflows/scaleset-probe.yml@refs/heads/main",
+ "requestLabels":["gag-probe-scaleset"],"scaleSetAssignTime":"2026-07-26T23:29:36Z",
+ "jobId":"bd59f43d-2e1a-567a-b5a4-c147b94d0766","runnerRequestId":0}
 ```
 
-The probe prints `job test — dispatch a workflow with runs-on: <scale set name> NOW`
-and then polls for three minutes; dispatch a workflow with that `runs-on` label inside
-that window. It cleans up its throwaway scale set and session on the way out.
+The probe's verdict line read `run identity present on JobAssigned — scale-set eviction
+recovery has a rerun target (Q417)`, resolving to
+`owner=actions-gateway repo=github-actions-gateway runId=30225287326`.
 
-Record the result here when it runs — a `GAP` verdict means GitHub is not sending the
-fields and the identity-optional design is load-bearing rather than belt-and-braces.
+The decisive detail is that `workflowRunId` is **exactly** the run id of the workflow
+dispatched to produce the job
+([run 30225287326](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30225287326)).
+That is not merely "a number arrived in the field" — it is the same run
+`rerun-failed-jobs` addresses, which was the whole question. The wider `JobMessageBase`
+shape came with it (`eventName`, `jobWorkflowRef`, `requestLabels`, `queueTime`,
+`runnerAssignTime`, `finishTime`), so the parity argument above held.
+
+**What this does and does not change.** The identity-optional design stays exactly as
+built. One observation, on one backend, is not a guarantee for GHES, for a different
+event type, or for a future protocol revision — and the `ok` branch costs one `if`.
+What it changes is the confidence ordering: the fields are measured rather than
+inferred, so `actions_gateway_eviction_recovery_identity_unknown_total` should read
+zero in practice, and a non-zero value is a real regression signal rather than an
+expected state.
+
+### Reproducing the run
+
+The probe reports the verdict itself, so a run answers the question rather than merely
+containing the answer — grep the output for `run identity present` or `GAP`. It needs
+live GitHub App credentials; the private key stays in the Keychain and reaches the
+probe as a file path, never as an env-var value or a process argument
+([github-app-credentials.md](../development/github-app-credentials.md)).
+
+Two corrections to the obvious recipe, both learned the hard way:
+
+- **Register repo-scoped, not org-scoped.** This repo is public and the org's `Default`
+  runner group has `allows_public_repositories: false`, so an org-scoped scale set never
+  receives the job — §2a-6 burned two three-minute windows on exactly this. A repo
+  config URL bypasses runner groups entirely. Do **not** "fix" it by enabling public
+  repositories on the runner group: that exposes self-hosted runners to fork pull
+  requests.
+- **Dispatch first, then start the probe.** A job queued against a not-yet-existing
+  scale-set label waits server-side and is assigned the moment the scale set registers
+  (~1 s in this run), which removes the three-minute-window race the probe's own
+  `dispatch … NOW` prompt implies.
+
+```bash
+gh workflow run scaleset-probe.yml --repo actions-gateway/github-actions-gateway
+```
+
+```bash
+KEY_FILE=$(mktemp -t gag-probe-key.XXXXXX) && trap 'rm -f "$KEY_FILE"' EXIT INT TERM && security find-generic-password -a actions-gateway-test -s github-app-private-key -w | xxd -r -p > "$KEY_FILE" && GITHUB_APP_ID=3752347 GITHUB_APP_INSTALLATION_ID=135739122 GITHUB_ORG_URL=https://github.com/actions-gateway/github-actions-gateway GITHUB_APP_PRIVATE_KEY="$KEY_FILE" PROBE_SCALESET_TEST=true PROBE_SCALESET_JOB_TEST=true go run -C cmd/probe . 2>&1 | grep -E 'run identity present|GAP|job test message'
+```
+
+**Cancel the dispatched run afterwards** (`gh run cancel <id>`). The probe deletes its
+throwaway scale set on exit, so any job still queued against that label is stranded
+until GitHub times it out — the fixture queues two jobs and the probe consumes neither.
 
 Phase 2 was therefore built **identity-optional** rather than assuming presence:
 `JobMessage.RunIdentity` returns an `ok` flag, an incomplete identity is refused
