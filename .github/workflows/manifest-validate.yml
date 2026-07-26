@@ -113,9 +113,9 @@ jobs:
       - name: install kubeconform
         run: |
           set -euo pipefail
-          curl -sSLf --retry 3 --retry-delay 2 -o "${RUNNER_TEMP}/kubeconform.tar.gz" \
-            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
-          echo "${KUBECONFORM_SHA256}  ${RUNNER_TEMP}/kubeconform.tar.gz" | sha256sum -c -
+          scripts/download-verified.sh \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            "${KUBECONFORM_SHA256}" "${RUNNER_TEMP}/kubeconform.tar.gz"
           tar -xzf "${RUNNER_TEMP}/kubeconform.tar.gz" -C "${RUNNER_TEMP}" kubeconform
           sudo install "${RUNNER_TEMP}/kubeconform" /usr/local/bin/kubeconform
           kubeconform -v

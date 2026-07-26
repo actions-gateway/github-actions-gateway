@@ -154,13 +154,13 @@ jobs:
         # Pinned release binary + checksum instead of `go install ...@latest`:
         # ~20-40s faster (no compile), reproducible, and integrity-checked.
         run: |
-          # --retry/--retry-all-errors so a transient GitHub releases CDN
-          # gateway error (observed: curl 22 / HTTP 504) is retried in-step
-          # instead of failing the run and needing a manual re-run. The
-          # sha256sum check below still gates on content integrity.
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o /tmp/kind \
-            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
-          echo "${KIND_BINARY_SHA256}  /tmp/kind" | sha256sum -c -
+          # download-verified.sh retries a transient GitHub releases CDN error
+          # (observed: curl 22 / HTTP 504, HTTP 403) in-step instead of failing
+          # the run, and gates on KIND_BINARY_SHA256 before anything lands at
+          # the output path.
+          scripts/download-verified.sh \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64" \
+            "${KIND_BINARY_SHA256}" /tmp/kind
           sudo install -m 0755 /tmp/kind /usr/local/bin/kind
           kind version
 
