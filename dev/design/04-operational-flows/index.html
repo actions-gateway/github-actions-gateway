@@ -2530,6 +2530,17 @@
 <hr />
 <h2 id="42-job-execution-flow-agc">4.2. Job Execution Flow (AGC)<a class="headerlink" href="#42-job-execution-flow-agc" title="Permanent link">&para;</a></h2>
 <p>This flow runs per-job inside the tenant namespace, entirely managed by the AGC.</p>
+<blockquote>
+<p><strong>This is the classic acquisition flow.</strong> A <code>RunnerSet</code> with
+<code>spec.acquisitionProtocol: ScaleSet</code> — the default, and <code>v2beta1</code>'s only option —
+does not run steps 2a–5 as written: the runner pulls and completes its own job
+through its own session, and the AGC advertises a single capacity integer
+(<code>X-ScaleSetMaxCapacity</code>) instead of deciding per delivered job. Two consequences
+are called out where they arise — the quota rung of step 2a
+(<a href="../../STATUS/#Q443">Q443</a>) and eviction auto-retry
+(<a href="../../STATUS/#Q417">Q417</a>) — and both are <code>2.0-gate</code> items, because the classic
+removal in <code>v2.0.0</code> deletes the only implementation unless they land first.</p>
+</blockquote>
 <pre class="mermaid"><code>sequenceDiagram
     participant A as AGC goroutine
     participant K as K8s API server
@@ -2555,6 +2566,7 @@
 <li><strong>Intercept:</strong> GitHub responds with a <code>RunnerJobRequest</code> message containing <code>run_service_url</code>, <code>runner_request_id</code>, and <code>billing_owner_id</code> in the decoded body.
 2a. <strong>Admit (Q59, #784):</strong> Before claiming the job, the goroutine consults the pre-acquisition admission gate, which asks two questions in order. <strong>Quota:</strong> can the namespace <code>ResourceQuota</code> admit one more worker pod right now (<code>hard − used</code> against this owner's worker footprint)? <strong>Ceiling:</strong> is the in-memory, per-RunnerGroup reservation counter below the worker ceiling (<code>maxWorkers</code> / the maximum <code>priorityTiers</code> threshold)? A no from either <strong>skips <code>acquirejob</code></strong>, increments <code>actions_gateway_jobs_admission_rejected_total{reason}</code> (<code>quota</code> or <code>ceiling</code>), and resumes polling at step 1 — the job stays queued at GitHub and is redelivered to a sibling session with capacity, rather than acquired-then-dropped. When the gate admits, it reserves a slot held until the job completes (step 11), then proceeds to step 3. The quota read fails open and reserves nothing; the reservation is fail-safe soft state (reset on AGC restart). The provisioner's post-acquire ceiling check and quota-retry loop (step 6) remain the authoritative backstops.</li>
 </ol>
+<p><strong>Tier scope.</strong> This gate is wired from <code>AdmitFor</code> (v1 <code>RunnerGroup</code>) and the classic branch of the v2 <code>RunnerSet</code> reconciler; <code>reconcileScaleSetListener</code> returns before it. A <code>ScaleSet</code> set expresses the <em>ceiling</em> rung as <code>X-ScaleSetMaxCapacity</code> (GitHub holds <code>totalAssignedJobs</code> at or below the advertised value), but has <strong>no quota rung</strong> — a quota-blocked job is assigned, and step 6's in-place retry is the only thing between it and abandonment, which is the failure mode this gate exists to prevent. <code>actions_gateway_jobs_admission_rejected_total</code> is likewise classic-only and reads zero there. Deriving the advertised integer from live headroom as well is <a href="../../STATUS/#Q443">Q443</a>.</p>
 <p>Only the quota rung gates acquisition — not the scheduler's <code>WorkersUnschedulable</code> verdict, which looks symmetrical but is not. A <code>ResourceQuota</code> rejection is never an autoscaler input, so declining to claim forfeits no capacity and self-clears as in-flight jobs release headroom. A Pending unschedulable pod, by contrast, <em>is</em> the request for a node: gating on it would suppress the signal cluster-autoscaler needs and starve the tenant exactly when scale-up would have rescued it.
 3. <strong>Lock:</strong> The AGC immediately calls <code>POST {run_service_url}/acquirejob</code> via the proxy — before creating any Kubernetes resources — to claim the job within the 2-minute delivery window.
 4. <strong>Payload:</strong> <code>acquirejob</code> returns the full job instructions and <code>planId</code>. The AGC decrypts the payload and extracts the single-use <code>ACTIONS_RUNTIME_TOKEN</code>.
