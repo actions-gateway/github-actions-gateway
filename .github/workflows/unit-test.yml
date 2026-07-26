@@ -166,6 +166,14 @@ jobs:
       # drift it guards could reach main unnoticed.
       - name: v2 API package sync (make v2-api-sync-check)
         run: make v2-api-sync-check
+      # Compile + vet the build-tagged (integration/e2e/load) Go files (Q404).
+      # `make lint` above and the unit-test job both build with the DEFAULT tag
+      # set, so a compile break in an envtest/e2e/load package used to reach only
+      # the path-gated integration and e2e workflows, which may not even run on
+      # the PR that introduced it. This catches it in the fast leg, on every PR
+      # touching code, without envtest assets or a cluster.
+      - name: build-tagged files compile + vet (make build-tags-check)
+        run: make build-tags-check
   # Shellcheck the standalone helper scripts under scripts/. actionlint already
   # covers inline workflow `run:` blocks, but the tracked scripts/*.sh files ship
   # unlinted otherwise. Isolated from the `lint` job so a scripts-only change does

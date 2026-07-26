@@ -91,7 +91,7 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-backlog roadmap-check plan-index-check no-plan-refs-check go-version-check license-header-check conflict-markers-check v2-api-sync-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: lint lint-backlog roadmap-check plan-index-check no-plan-refs-check go-version-check license-header-check conflict-markers-check v2-api-sync-check build-tags-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
 	@# Advisory, not a gate: the fast check deliberately omits the dependency-drift
 	@# gates (vendor-check/tidy-check/license-notices run in CI). This reminds you to
 	@# run `make vendor-sync` when a change touches dep files. Never fails the build.
@@ -136,15 +136,26 @@ conflict-markers-check: ## Fail if any tracked, non-vendored file contains a lef
 v2-api-sync-check: ## Fail if a shared api/v2alpha1 + api/v2beta1 file diverges (beyond the package/storageversion lines)
 	scripts/check-v2-api-sync.sh
 
+# Compile and vet the build-tagged Go files no other fast gate builds (Q404).
+# `make lint` and `make test` both use the DEFAULT tag set, so the integration
+# (envtest), e2e, and load packages are invisible to them and a compile break
+# there only surfaces on CI's path-gated heavy tiers. This vets the workspace
+# with every first-party tag enabled (no envtest assets, no cluster, no test
+# execution) and fails if a NEW tag appears that its list does not cover.
+.PHONY: build-tags-check
+build-tags-check: ## Fail if a build-tagged (integration/e2e/load) Go file does not compile or vet clean
+	scripts/go-vet-tags.sh
+
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — the tags-only release signing-identity regexp (Q124), the
 # validate-cluster preflight decision helpers (CNI classification + K8s version
 # parsing, Q184), the dogfood gate's e2e run resolution (an in-flight run must
-# not abort the gate after the billable scale-up), and the go-lint change-scoping
-# decision (which modules a diff makes golangci-lint cover). Lightweight
-# pure-bash checks; part of `check` and the CI shellcheck job.
+# not abort the gate after the billable scale-up), the go-lint change-scoping
+# decision (which modules a diff makes golangci-lint cover), and the build-tag
+# coverage guard (a new tag must fail the gate, not silently skip files).
+# Lightweight pure-bash checks; part of `check` and the CI shellcheck job.
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, go-lint scoping, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard)
 	scripts/verify-release-test.sh
 	scripts/validate-cluster-test.sh
 	scripts/lint-backlog-test.sh
@@ -157,6 +168,7 @@ scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, v
 	scripts/check-conflict-markers-test.sh
 	scripts/check-v2-api-sync-test.sh
 	scripts/dependabot-rebase-stale-test.sh
+	scripts/go-vet-tags-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in

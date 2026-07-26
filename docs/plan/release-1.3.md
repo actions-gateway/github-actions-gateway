@@ -108,15 +108,25 @@ question this release's deprecation decision needed answered.
 |---|---|
 | [Q393](../STATUS.md#Q393) | The docs-site announce bar still reads "v1.2.0 is here". `publish.yml`'s `announce-bar` job fails any stable tag whose banner does not name it, before any image is pushed. A miss costs a re-cut tag. |
 
-### D. Gate integrity — *gating*
+### D. Gate integrity (*satisfied*)
 
-Cheap to fix, and undermines the "`main` is green" precondition that
-[release.md](../operations/release.md) pre-flight assumes: a gate that never ran
-leaves `main` green on evidence it never gathered.
+No open gating row: Q400 and Q404 both closed 2026-07-26.
 
-| Item | Why it gates |
-|---|---|
-| [Q404](../STATUS.md#Q404) | `make check` compiles no build-tagged file, so a tagged-test build break reaches CI rather than the local gate. |
+Both mattered for the same reason, which is why they were scoped together: a gate
+that never ran leaves `main` green on evidence it never gathered, and that
+undermines the "`main` is green" precondition that
+[release.md](../operations/release.md) pre-flight assumes.
+
+Q404 closed 2026-07-26: `make check` compiled no build-tagged file, so a compile
+break in an `integration`/`e2e`/`load` package reached only CI's path-gated heavy
+tiers, which may not even run on the PR that introduced it. `make
+build-tags-check` now vets the workspace with every first-party tag enabled, in
+both the local gate and CI's `lint` job, and a coverage assertion fails the gate
+if a *new* build tag appears that its list does not cover, so the hole cannot
+reopen in a new shape. Deliberately out of the fix: widening `golangci-lint`
+itself to the tagged trees, a one-line change that surfaces 21 pre-existing
+findings needing individual triage, filed as [Q430](../STATUS.md#Q430). Detail:
+[testing.md § The build-tag gate](../development/testing.md#the-build-tag-gate).
 
 Q400 closed 2026-07-26: `api/**` and `scaleset/**` were added to the
 integration, security-scan, and e2e filters, and `api/config/**` to
@@ -140,16 +150,16 @@ tooling rather than a correctness fix.
 
 ## Critical path & ordering
 
-1. **[Q404](../STATUS.md#Q404)** touches CI configuration only and is independent of
-   everything below it, so it can run in parallel with any of them. (Q400, its
-   former partner here, closed 2026-07-26.)
-2. **[Q411](../STATUS.md#Q411)** is independent of all of the above and can land at
-   any point before the tag. It changes generated CRDs, so it should not race a
-   session editing the same API packages. It cannot be dropped on the grounds that
-   Q409 aligned the docs and Q412 named the release: the deprecation still has to
-   reach the apiserver, or an operator who never reads the docs gets no warning at
-   all. (Q412, the other half, is done.)
-3. **[Q393](../STATUS.md#Q393) last**, immediately before tagging, so the banner names
+Both gate-integrity items (Q400, Q404) closed 2026-07-26, so what remains is the
+deprecation marker and the announce bar.
+
+1. **[Q411](../STATUS.md#Q411)** can land at any point before the tag. It changes
+   generated CRDs, so it should not race a session editing the same API packages.
+   It cannot be dropped on the grounds that Q409 aligned the docs and Q412 named
+   the release: the deprecation still has to reach the apiserver, or an operator
+   who never reads the docs gets no warning at all. (Q412, the other half, is
+   done.)
+2. **[Q393](../STATUS.md#Q393) last**, immediately before tagging, so the banner names
    the version actually being cut.
 
 ## Guardrails
