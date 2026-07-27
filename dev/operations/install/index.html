@@ -1355,6 +1355,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Preflight the cluster (required first step)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#preflighting-a-freshly-created-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preflighting a freshly created cluster
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2407,6 +2424,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Preflight the cluster (required first step)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#preflighting-a-freshly-created-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preflighting a freshly created cluster
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2651,7 +2685,7 @@ remediation hint for each:</p>
 <tr>
 <td><strong>metrics-server present</strong></td>
 <td>WARN</td>
-<td>The resource metrics the GMC/AGC HorizontalPodAutoscalers consume, and the source for the AGC's <a href="../worker-rightsizing/">worker usage sampling</a>. Install succeeds without it; autoscaling and usage sampling stay degraded until it is present.</td>
+<td>The resource metrics the GMC/AGC HorizontalPodAutoscalers consume, and the source for the AGC's <a href="../worker-rightsizing/">worker usage sampling</a>. Install succeeds without it; autoscaling and usage sampling stay degraded until it is present. Checked with a <a href="#preflighting-a-freshly-created-cluster">bounded retry</a> — on a brand-new cluster the addon is often still starting.</td>
 </tr>
 </tbody>
 </table>
@@ -2662,6 +2696,25 @@ it schedules no workloads and needs no extra permissions, so it is safe to run
 against a fresh cluster. Resolve every <strong>FAIL</strong> before proceeding; for CNI
 enforcement specifically, install on a cluster whose CNI enforces
 <code>NetworkPolicy</code> (see <a href="#prerequisites">Prerequisites</a>).</p>
+<h3 id="preflighting-a-freshly-created-cluster">Preflighting a freshly created cluster<a class="headerlink" href="#preflighting-a-freshly-created-cluster" title="Permanent link">&para;</a></h3>
+<p>A cluster that was created minutes ago is still converging, so a one-shot check
+can report a prerequisite absent that is merely slow to start. The
+metrics-server check therefore retries, bounded in wall clock:</p>
+<ul>
+<li>If the <code>metrics.k8s.io</code> APIService is registered but not yet <code>Available</code>, the
+  preflight prints a <code>[WAIT]</code> line and retries for up to <strong>150 s</strong> (a managed
+  addon typically needs ~2 min from cluster creation). It reports <code>PASS</code> as soon
+  as the API serves, so <code>VALIDATE_STRICT=1</code> does not fail a from-zero bootstrap
+  on an addon that is still coming up.</li>
+<li>If no <code>metrics.k8s.io</code> APIService is registered at all, metrics-server is not
+  installed: the preflight warns after a short <strong>15 s</strong> grace rather than paying
+  the full budget.</li>
+</ul>
+<p>Both budgets are env-overridable — <code>VALIDATE_METRICS_TIMEOUT</code>,
+<code>VALIDATE_METRICS_GRACE</code>, and the <code>VALIDATE_METRICS_INTERVAL</code> poll interval, all
+in whole seconds. Set <code>VALIDATE_METRICS_TIMEOUT=0 VALIDATE_METRICS_GRACE=0</code> to
+restore the previous single-shot behaviour (useful in a scripted preflight
+against a long-running cluster, where a converging addon is not expected).</p>
 <hr />
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
 <blockquote>
