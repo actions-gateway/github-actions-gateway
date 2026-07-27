@@ -17,7 +17,7 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 	const (
 		tenantNS   = "tenant-rbac"
 		agName     = "test-ag"
-		secretName = "github-app-secret"
+		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 	)
 
 	BeforeAll(func() {

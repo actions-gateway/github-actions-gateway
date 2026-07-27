@@ -244,7 +244,14 @@ Three assertions, cheapest first:
 
 Wired into `make check` and CI's `lint` job.
 
-**What it deliberately does not cover: the rest of the linters.** `golangci-lint` still runs with the default tag set, so `gosec`, `errcheck`, `staticcheck`, `unused`, `dupl`, and `funlen` see none of the tagged packages. Closing that is a one-line `run.build-tags` addition to `.golangci.yml`, but it surfaces 21 pre-existing findings in the envtest/e2e/load trees (`gosec` `G204`/`G301` in the e2e `kubectl` harness, unchecked returns, a dot import, two dead helpers) that each need a fix or a justified inline accept. That triage is its own change, tracked as [Q430](../STATUS.md#Q430), and was kept out of Q404 so the compile gate could land without a lint sweep attached to it. `go vet` was the right first rung: a compile break is unambiguous and blocks a whole tier, where the rest is code quality in test scaffolding.
+**The rest of the linters see the tagged trees too.** `.golangci.yml` sets `run.build-tags: [integration, e2e, load]`, so `gosec`, `errcheck`, `staticcheck`, `unused`, `dupl`, and `funlen` cover the envtest suites, the e2e harness, and the load harness — the same 102 files this gate compiles — rather than skipping them the way `go vet` did before Q404 (Q430). That list must stay in step with `BUILD_TAGS` in `scripts/go-vet-tags.sh`; the coverage assertion above is what catches a new tag, since it fails before either gate can silently skip a file.
+
+Two things to know when a finding lands in a tagged package:
+
+- **`gosec` `G204` is narrowed by *source*, not by path.** A repo-wide exclusion rule drops `G204` only where the launched binary is a string literal (`exec.Command("kubectl"|"gh"|"make", …)`). `os/exec` does not go through a shell, so a variable *argument* to a fixed binary cannot inject a command, and the e2e harness does exactly that ~60 times with generated namespace, pod, and selector names. The two forms that can actually go wrong — a shell (`exec.Command("bash", "-c", script)`) and a variable binary name (`exec.Command(somePath(), …)`) — still fail the gate everywhere, including in production code, and the two that exist today carry audited inline accepts. Adding a binary to that list means making the same argument for it.
+- **Everything else is per-occurrence.** Test scaffolding gets no blanket pass: the `_test.go` exclusions are limited to `dupl`, `funlen`, and `forbidigo` (see the rules in `.golangci.yml`), so a `gosec`, `errcheck`, `staticcheck`, or `unused` finding in a tagged file is fixed or annotated with a justified `//nolint:<linter> // <rule>: <reason>`. `nolintlint` (`allow-unused: false`) then fails the build if that annotation ever stops suppressing anything.
+
+Widening the tag set costs about 4% of lint wall-clock — measured over the full per-module sweep, 3.00s → 3.13s warm and 34.9s → 36.6s cold — so it does not move [the inner loop](#the-inner-loop-cheap-checks-while-iterating-make-check-once-pre-pr) or the CI critical path.
 
 ### The codegen drift gate
 

@@ -28,7 +28,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 	const (
 		tenantNS   = "tenant-job-lifecycle"
 		agName     = "test-ag"
-		secretName = "github-app-secret"
+		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 	)
 
 	BeforeAll(func() {
@@ -72,7 +72,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 			if err != nil {
 				return err
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil
 		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 	})
@@ -203,11 +203,6 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 	})
 })
 
-// fakegithubActiveSessions queries the fakegithub control API for active sessions.
-func fakegithubActiveSessions(g Gomega) []string {
-	return fakegithubActiveSessionsForOwner(g, "")
-}
-
 // fakegithubActiveSessionsForOwner queries active sessions whose ownerName has
 // the given prefix. Session ownerName is "<runnerGroup>-<agentIndex>" and the
 // RunnerGroup name is "<agName>-<first runner label>", so passing "<agName>-"
@@ -275,13 +270,13 @@ func fakegithubControlRequest(g interface {
 
 	if g != nil {
 		Expect(err).NotTo(HaveOccurred(), "HTTP %s %s", method, path)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		Expect(resp.StatusCode).To(BeNumerically("<", 300),
 			"unexpected status %d for %s %s", resp.StatusCode, method, path)
 	} else if err != nil {
 		return ""
 	} else {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 	}
 	if resp == nil {
 		return ""

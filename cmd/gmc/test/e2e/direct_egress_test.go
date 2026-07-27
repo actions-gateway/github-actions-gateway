@@ -42,7 +42,7 @@ import (
 var _ = Describe("E2E_V2_DirectEgress", Ordered, func() {
 	const (
 		tenantNS   = "tenant-v2-direct"
-		secretName = "github-app-secret"
+		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 		gwName     = "direct"
 		// Per-gateway derived names (§H.16 #1): "<gw>-agc" Deployment, "<gw>-workload"
 		// workload NetworkPolicy.

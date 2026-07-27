@@ -40,7 +40,7 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 	const (
 		tenantNS   = "tenant-migrate-dind"
 		agName     = "dind-tenant"
-		secretName = "github-app-secret"
+		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 
 		// v2 per-gateway derived names (§H.16 #1): the migrated gateway keeps the v1
 		// name, its AGC control plane is <gateway>-agc, and the EgressProxy the fan-out
@@ -224,7 +224,11 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 // assert on both the manifest stream and the warning block.
 func runMigrate(namespace string, extraArgs ...string) (string, error) {
 	args := append([]string{"--namespace", namespace, "--context", currentKubeContext()}, extraArgs...)
-	return utils.Run(exec.Command(migrateBinaryPath(), args...))
+	// G204: the binary NAME is variable here, so this is outside the
+	// constant-binary gosec exclusion in .golangci.yml and is accepted by hand.
+	// migrateBinaryPath() joins <this file's compile-time dir>/../../../../.build/
+	// gag-migrate — a fixed path with no external input — and args are test-local.
+	return utils.Run(exec.Command(migrateBinaryPath(), args...)) //nolint:gosec // G204: binary path is derived from runtime.Caller, not from input.
 }
 
 // migrateBinaryPath resolves <repo-root>/.build/gag-migrate — where cmd/gmc's

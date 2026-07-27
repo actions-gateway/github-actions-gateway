@@ -154,8 +154,10 @@ build-tags-check` now vets the workspace with every first-party tag enabled, in
 both the local gate and CI's `lint` job, and a coverage assertion fails the gate
 if a *new* build tag appears that its list does not cover, so the hole cannot
 reopen in a new shape. Deliberately out of the fix: widening `golangci-lint`
-itself to the tagged trees, a one-line change that surfaces 21 pre-existing
-findings needing individual triage, filed as [Q430](../STATUS.md#Q430). Detail:
+itself to the tagged trees, which needed its own triage pass and landed
+separately as Q430 (closed 2026-07-27) — `run.build-tags` now covers the same
+102 files, and the 21 findings estimated here turned out to be 100 once
+golangci-lint's default `max-same-issues: 3` cap was lifted. Detail:
 [testing.md § The build-tag gate](../development/testing.md#the-build-tag-gate).
 
 Q400 closed 2026-07-26: `api/**` and `scaleset/**` were added to the

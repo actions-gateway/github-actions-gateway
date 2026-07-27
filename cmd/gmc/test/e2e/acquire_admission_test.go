@@ -40,7 +40,7 @@ var _ = Describe("E2E_AGC_AcquireAdmissionControl", Ordered, func() {
 	const (
 		tenantNS   = "tenant-acquire-admit"
 		agName     = "acquire-admit-ag"
-		secretName = "github-app-secret"
+		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 		// leaseMs is short so a skipped job is redelivered several times within a
 		// tight assert window, but comfortably longer than the gap between a
 		// delivery and the AcquireJob the gate issues when it admits.
@@ -138,7 +138,7 @@ var _ = Describe("E2E_AGC_AcquireAdmissionControl", Ordered, func() {
 			if err != nil {
 				return err
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil
 		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 

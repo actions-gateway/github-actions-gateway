@@ -11,7 +11,11 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/gomega" //nolint:revive
+	// ST1001: the gomega dot-import is the sanctioned ginkgo/gomega idiom — the
+	// matcher DSL (Expect/Succeed/HaveOccurred) is designed to read unqualified,
+	// and every other e2e file in this tree imports it the same way. Accepted
+	// here rather than repo-wide so a dot-import of anything else still fails.
+	. "github.com/onsi/gomega" //nolint:revive,staticcheck
 )
 
 // ApplyManifest applies a raw YAML manifest by writing it to a temp file and
@@ -22,11 +26,16 @@ func ApplyManifest(yaml string) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 	if _, err := f.WriteString(yaml); err != nil {
 		return err
 	}
-	f.Close()
+	// Close before apply, and CHECK it: a failed Close means the manifest was
+	// never fully flushed, so kubectl would apply a truncated document and the
+	// spec would fail somewhere far from the real cause.
+	if err := f.Close(); err != nil {
+		return err
+	}
 	cmd := exec.Command("kubectl", "apply", "-f", f.Name())
 	_, err = Run(cmd)
 	return err
@@ -43,11 +52,15 @@ func ApplyManifestOutput(yaml string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 	if _, err := f.WriteString(yaml); err != nil {
 		return "", err
 	}
-	f.Close()
+	// Checked for the same reason as ApplyManifest: an unflushed manifest would
+	// surface as a bogus kubectl parse error rather than the real I/O failure.
+	if err := f.Close(); err != nil {
+		return "", err
+	}
 	cmd := exec.Command("kubectl", "apply", "-f", f.Name())
 	return Run(cmd)
 }

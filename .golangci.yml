@@ -15,6 +15,22 @@ run:
   # uncontended and never approaches it.
   timeout: 10m
   allow-parallel-runners: true
+  # Lint the build-tagged trees too (Q430). With the default tag set,
+  # golangci-lint compiles none of the `//go:build integration|e2e|load` files,
+  # so gosec/errcheck/staticcheck/unused never see the envtest suites, the e2e
+  # harness, or the load harness — the same blind spot `go vet` had before Q404
+  # closed it (see docs/development/testing.md#the-build-tag-gate).
+  #
+  # Enabling all three at once is sound because they select DISJOINT package
+  # trees rather than alternative implementations of one package: no first-party
+  # file is constrained on the negation of another's tag. Keep it that way — the
+  # same invariant scripts/go-vet-tags.sh depends on, and that script's coverage
+  # assertion is what fails when a new tag appears, so this list stays in sync
+  # with its BUILD_TAGS by way of that gate.
+  build-tags:
+    - integration
+    - e2e
+    - load
 linters:
   default: none
   enable:
@@ -172,6 +188,33 @@ linters:
         linters:
           - staticcheck
         text: "SA1019.*Subjects"
+      # gosec G204, narrowed to the ONE syntactic form that is a false positive
+      # here: exec.Command with a CONSTANT, literal binary name (Q430).
+      #
+      # G204's threat model is command injection. os/exec does not go through a
+      # shell, so a variable *argument* to a fixed binary cannot inject a
+      # command — it can only ever be one more argv entry. The e2e harness
+      # launches `kubectl`/`gh`/`make` ~60 times with generated namespace, pod,
+      # and selector names, and every one of those is that shape. Per-site
+      # //nolint on all of them would be rubber-stamp ceremony that hides the
+      # forms which DO deserve thought.
+      #
+      # Matching on `source` rather than a path or the whole rule is what keeps
+      # the signal: the two forms that actually matter still fail the gate,
+      # everywhere in the repo, including in production code.
+      #   - a shell is invoked      — exec.Command("bash"/"sh", "-c", script)
+      #   - the BINARY is variable  — exec.Command(somePath(), args...)
+      # Both occur once in the e2e tree today; each was audited and carries its
+      # own inline //nolint:gosec explaining why its input is trusted.
+      #
+      # In scope and accepted: `kubectl exec … -- sh -c <script>` runs a shell
+      # inside a throwaway kind-cluster pod from a test-local script, not on the
+      # host. Adding a fourth binary to the list means making the same argument
+      # for it.
+      - linters:
+          - gosec
+        text: "^G204"
+        source: 'exec\.Command\("(kubectl|gh|make)"'
     paths:
       - vendor
       - third_party$

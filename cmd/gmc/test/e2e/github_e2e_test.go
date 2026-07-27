@@ -35,7 +35,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 	const (
 		tenantNS   = "tenant-github-real"
 		agName     = "real-ag"
-		secretName = "real-github-app-secret"
+		secretName = "real-github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 	)
 
 	var creds struct {
