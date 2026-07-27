@@ -522,6 +522,9 @@ func (r *RunnerSetReconciler) cleanupLocalState(key types.NamespacedName) {
 	if r.Metrics != nil {
 		r.Metrics.ReapBlockingSidecarTemplates.DeleteLabelValues(key.Namespace, key.Name)
 	}
+	// Same for the scale-set tier's capacity gauges (Q443): a deleted set that stopped
+	// polling would otherwise report its last advertised capacity forever.
+	r.ScaleSetMetrics.DeleteRunnerSet(key.Namespace, key.Name)
 }
 
 func (r *RunnerSetReconciler) recordEvent(rs *v2alpha1.RunnerSet, eventtype, reason, action, note string, args ...any) {

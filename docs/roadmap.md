@@ -28,14 +28,13 @@ tagged chart. Check the release notes for the exact image digests to pin.
 - **One resource per tenant.** A single `ActionsGateway` custom resource
   provisions an isolated gateway — controller, egress proxy pool, role-based
   access control (RBAC), and network policies — inside the platform-owned quota.
-- **Automatic recovery for blocked and evicted jobs.** A quota-blocked job is
-  never claimed, so it stays queued for a sibling with capacity; an evicted job
-  is cancelled at GitHub when its lock lapses (~10 min at worst) and re-queued,
-  with a per-run retry budget shared across both acquisition tiers. No manual
-  rerun either way. The **pre-claim quota gate** half still ships on the classic
-  acquisition tier only — a runner set on the default scale-set protocol
-  advertises its configured ceiling to GitHub but not live quota headroom. See
-  *the pre-claim quota gate* under [In progress](#in-progress--near-term).
+- **Automatic recovery for blocked and evicted jobs.** A job the namespace
+  `ResourceQuota` has no room for is never taken on, so it stays queued at GitHub
+  until there is capacity; an evicted job is cancelled at GitHub when its lock
+  lapses (~10 min at worst) and re-queued, with a per-run retry budget. No manual
+  rerun either way. Both run on **both acquisition tiers**: the default scale-set
+  protocol folds live quota headroom into the capacity it advertises to GitHub,
+  and the classic tier declines the claim per delivered job.
 - **Priority tiers per runner group.** Reserve a guaranteed floor of slots for
   expensive runner types so cheap CPU jobs can't starve critical GPU work.
 - **Worker scale-up rate limiting (opt-in).** An optional per-runner-group token
@@ -126,14 +125,6 @@ last gaps an outside operator hits.
   validated, not on a date. The deprecation window opened at v1.1.0, and
   `gag-migrate` already moves a tenant across without changing how jobs are acquired.
   Detail: the [deprecation and removal notice](operations/v1alpha1-deprecation.md).
-- **The pre-claim quota gate on the scale-set tier.** <!-- q:Q443 --> Declining to claim a
-  job the namespace `ResourceQuota` cannot place — so it stays queued at GitHub
-  for a sibling with capacity — runs on the classic acquisition path. A
-  scale-set set advertises a single capacity integer to GitHub, today its
-  configured worker ceiling only, so a quota-blocked job is assigned and then
-  retried in place against the quota while the job lock is held. Deriving that
-  integer from live headroom as well carries the capability past the classic
-  removal in `v2.0.0`.
 - **Capacity-aware job intake.** <!-- q:Q405,Q406 --> Additional opt-in rungs on the pre-claim gate,
   so a job is not claimed when the cluster demonstrably cannot place its worker:
   one sourced from the scheduler's `Unschedulable` verdict (for fixed-size and

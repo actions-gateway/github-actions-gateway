@@ -55,10 +55,11 @@ This flow runs per-job inside the tenant namespace, entirely managed by the AGC.
 > does not run steps 2a–5 as written: the runner pulls and completes its own job
 > through its own session, and the AGC advertises a single capacity integer
 > (`X-ScaleSetMaxCapacity`) instead of deciding per delivered job. Two consequences
-> are called out where they arise. Eviction auto-retry is now ported to this tier
-> (Q417, [below](#on-the-scale-set-tier-q417)). The quota rung of step 2a is not
-> ([Q443](../STATUS.md#Q443)) — a `2.0-gate` item, because the classic removal in
-> `v2.0.0` deletes the only implementation unless it lands first.
+> are called out where they arise. Eviction auto-retry is ported to this tier
+> (Q417, [below](#on-the-scale-set-tier-q417)), as is the admission ladder of step 2a
+> (Q443, [below](#the-ladder-as-an-integer-scale-set-tier-q443)) — both were
+> classic-only, which the `v2.0.0` removal of classic acquisition would have turned
+> into a silent capability deletion.
 
 ```mermaid
 sequenceDiagram
@@ -87,7 +88,7 @@ sequenceDiagram
 2. **Intercept:** GitHub responds with a `RunnerJobRequest` message containing `run_service_url`, `runner_request_id`, and `billing_owner_id` in the decoded body.
 2a. **Admit (Q59, #784):** Before claiming the job, the goroutine consults the pre-acquisition admission gate, which asks two questions in order. **Quota:** can the namespace `ResourceQuota` admit one more worker pod right now (`hard − used` against this owner's worker footprint)? **Ceiling:** is the in-memory, per-RunnerGroup reservation counter below the worker ceiling (`maxWorkers` / the maximum `priorityTiers` threshold)? A no from either **skips `acquirejob`**, increments `actions_gateway_jobs_admission_rejected_total{reason}` (`quota` or `ceiling`), and resumes polling at step 1 — the job stays queued at GitHub and is redelivered to a sibling session with capacity, rather than acquired-then-dropped. When the gate admits, it reserves a slot held until the job completes (step 11), then proceeds to step 3. The quota read fails open and reserves nothing; the reservation is fail-safe soft state (reset on AGC restart). The provisioner's post-acquire ceiling check and quota-retry loop (step 6) remain the authoritative backstops.
 
-   **Tier scope.** This gate is wired from `AdmitFor` (v1 `RunnerGroup`) and the classic branch of the v2 `RunnerSet` reconciler; `reconcileScaleSetListener` returns before it. A `ScaleSet` set expresses the *ceiling* rung as `X-ScaleSetMaxCapacity` (GitHub holds `totalAssignedJobs` at or below the advertised value), but has **no quota rung** — a quota-blocked job is assigned, and step 6's in-place retry is the only thing between it and abandonment, which is the failure mode this gate exists to prevent. `actions_gateway_jobs_admission_rejected_total` is likewise classic-only and reads zero there. Deriving the advertised integer from live headroom as well is [Q443](../STATUS.md#Q443).
+   **Tier scope.** This *per-delivered-job* form of the gate is wired from `AdmitFor` (v1 `RunnerGroup`) and the classic branch of the v2 `RunnerSet` reconciler; `reconcileScaleSetListener` returns before it. A `ScaleSet` set walks the same ladder once per long-poll and states the result as one integer — see [The ladder as an integer](#the-ladder-as-an-integer-scale-set-tier-q443). Every rung must exist in both forms; a rung added to only one ships to only one tier, which is how the quota rung came to be classic-only until Q443.
 
    Only the quota rung gates acquisition — not the scheduler's `WorkersUnschedulable` verdict, which looks symmetrical but is not. A `ResourceQuota` rejection is never an autoscaler input, so declining to claim forfeits no capacity and self-clears as in-flight jobs release headroom. A Pending unschedulable pod, by contrast, *is* the request for a node: gating on it would suppress the signal cluster-autoscaler needs and starve the tenant exactly when scale-up would have rescued it.
 3. **Lock:** The AGC immediately calls `POST {run_service_url}/acquirejob` via the proxy — before creating any Kubernetes resources — to claim the job within the 2-minute delivery window.
@@ -103,6 +104,27 @@ sequenceDiagram
     On the **ScaleSet** protocol the same invariant holds — a credential-bearing per-job Secret never outlives its job — but the reclaim point differs, because the AGC does not wait on the worker there. The provisioner is fire-and-forget: any exit that fails *before* the worker pod exists deletes the Secret it just staged (a replay whose Secret an earlier delivery staged leaves it alone — that delivery's pod may be mounting it), and in steady state the Secret is deleted when the scale-set listener sees the job's terminal `JobCompleted` on its queue. Because the queue replays unacked messages to a re-created session, an AGC that crashes between a job's completion and its Secret delete reclaims it on restart. A reclaim that fails outright is logged and falls back to the `OwnerReference` cascade-GC.
 12. **Recycle (Q114):** The acquisition in step 3 consumed the agent's single-use JIT runner record, so the session is dead. The goroutine deletes it (best-effort) and re-registers the agent under its stable `<group>-<index>` name — deregister-then-recreate, resolving a `409` from a surviving record by ID lookup.
 13. **Resume:** The agent Secret is rewritten with the fresh credentials and a new session opens; the same goroutine resumes polling at step 1, so listener capacity never dips.
+
+### The ladder as an integer (scale-set tier, Q443)
+
+A `ScaleSet` set never reaches step 2a, because it is never offered a job to decline: it states, once per long-poll, how many jobs GitHub may keep assigned to it, as the `X-ScaleSetMaxCapacity` header. GitHub then holds `totalAssignedJobs` at or below that value, so the *same* ladder produces the *same* outcome — a job that would have been declined is simply left queued — through an integer rather than a per-job boolean.
+
+The advertised number is the **minimum** of the ladder's rungs, recomputed every poll (so a spec edit or a quota change takes effect without an AGC restart):
+
+| Rung | Contribution | Fail-open value |
+|---|---|---|
+| Ceiling (Q59) | the max `priorityTiers` threshold, else `maxWorkers`, else `10` | — (the `10` default *is* the fallback) |
+| Quota (#784, Q443) | this set's non-terminal worker pods **+** how many more the namespace `ResourceQuota` can admit | no bound (the ceiling stands) |
+
+Three properties follow, and they are why this is not merely the classic gate in different clothing:
+
+* **Nothing is spent to discover the limit.** The classic gate declines a job that was already delivered; here the job is never assigned, so no single-use JIT runner record is consumed and no GitHub job lock is taken out on a pod that cannot be created.
+* **The quota rung is a total, not a delta.** Headroom answers "how many *more* fit"; the header wants "how many at once", so the set's own in-flight worker pods — already inside the quota's `used` — are added back. Deliberately the pod count and not GitHub's `totalAssignedJobs`: the two diverge across an assignment the AGC has not provisioned yet, and biasing low only delays a job where biasing high would reproduce the claim-and-stall.
+* **Recovery is a poll, not a job.** Classic re-decides per delivered job; this decides once per poll for the whole set, so restored headroom reopens assignment within one long-poll interval (~50s) rather than immediately.
+
+Because every rung can only *lower* the number, a rung that cannot read what it needs (no quota, an unreadable quota, an unresolved template) contributes no bound and the set advertises its declared ceiling — exactly the behavior that predates this rung. The provisioner's post-create ceiling check and quota-retry loop remain the backstops for the races an advertised integer cannot close (a sibling AGC, a stale `.status.used`).
+
+**What an operator sees.** `actions_gateway_scaleset_advertised_capacity` is the number most recently advertised, and `actions_gateway_scaleset_capacity_withheld{reason}` attributes the gap to the rung that took it (`quota`). The per-job `actions_gateway_jobs_admission_rejected_total` is structurally unreachable on this tier — there is no rejected job to count — so these two gauges are its counterpart, alongside the `WorkerQuotaPressure`/`WorkerQuotaExceeded` conditions the set already publishes.
 
 ---
 

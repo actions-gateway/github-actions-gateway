@@ -16,6 +16,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
@@ -29,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -608,4 +610,94 @@ func TestV2_RunnerSet_ScaleSet_ReclaimsJobSecretOnCompletion(t *testing.T) {
 	var stillThere v2alpha1.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "ss-reclaim"}, &stillThere),
 		"the RunnerSet must still exist — the reclaim is steady-state, not teardown")
+}
+
+// TestV2_RunnerSet_ScaleSet_QuotaHeadroomBoundsAdvertisedCapacity is the Q443 proof at
+// the tier that matters: the pre-claim quota rung was wired into Provisioner.Admit,
+// which reconcileScaleSetListener never reaches, so a quota-blocked job on the default
+// acquisition tier was assigned anyway and left to createPodWithQuotaRetry — holding
+// the GitHub job lock across the retry budget and abandoning the pod on exhaustion.
+//
+// The assertion is deliberately server-side (AssignedJobCount on the fake, which
+// assigns strictly under the advertised X-ScaleSetMaxCapacity). "No worker pod was
+// created" would also pass if the AGC had claimed the job and merely failed to place
+// it, which is exactly the failure being fixed; "GitHub never assigned it" can only
+// pass if the capacity header carried the quota bound.
+func TestV2_RunnerSet_ScaleSet_QuotaHeadroomBoundsAdvertisedCapacity(t *testing.T) {
+	const ns = "v2-rs-scaleset-quota"
+	const label = "linux-quota"
+	createNSForAGC(t, ns)
+
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplateWithCPURequest("tmpl", ns, "500m")))
+	rs := newScaleSetRunnerSet("ss-quota", ns, "gw", label, 4)
+	require.NoError(t, k8sClient.Create(ctx, rs))
+
+	// 100m of headroom cannot admit a single 500m worker, so the set must advertise
+	// zero capacity however high its maxWorkers is.
+	quota := &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{Name: "tight", Namespace: ns},
+		Spec:       corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourceRequestsCPU: resource.MustParse("100m")}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, quota))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), quota)
+		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconcilerWithScaleSet(t, srv)
+
+	var ssID int
+	require.Eventually(t, func() bool {
+		id, ok := srv.ScaleSetIDByName(label)
+		ssID = id
+		return ok
+	}, 20*time.Second, 100*time.Millisecond, "the listener must register one scale set named %q", label)
+	waitForSetReadyReason(t, ns, "ss-quota", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	// The advertised capacity reaches zero, and the withheld gauge names the rung that
+	// took it — this tier's answer to "why did assignments stop", since the classic
+	// per-job admission counter is structurally unreachable here.
+	require.Eventually(t, func() bool {
+		return testutil.ToFloat64(scaleSetTestMetrics.AdvertisedCapacity.WithLabelValues(ns, "ss-quota")) == 0 &&
+			testutil.ToFloat64(scaleSetTestMetrics.CapacityWithheld.WithLabelValues(ns, "ss-quota", runnercore.AdmitReasonQuota)) == 4
+	}, 20*time.Second, 100*time.Millisecond,
+		"an exhausted namespace ResourceQuota must withhold the whole declared ceiling from X-ScaleSetMaxCapacity")
+
+	// A queued job stays queued at GitHub: never assigned, so no JIT runner record is
+	// spent and no job lock is taken out on a pod that cannot be created.
+	srv.EnqueueJob(ssID)
+	require.Never(t, func() bool {
+		return srv.AssignedJobCount(ssID) > 0
+	}, 3*time.Second, 100*time.Millisecond,
+		"a quota-blocked job must be left queued at GitHub, not assigned and then stalled in createPodWithQuotaRetry")
+
+	var pods corev1.PodList
+	require.NoError(t, k8sClient.List(ctx, &pods, client.InNamespace(ns), client.MatchingLabels{provisioner.LabelRunnerSet: "ss-quota"}))
+	require.Empty(t, pods.Items, "no worker pod should exist for a job that was never assigned")
+
+	// Headroom returns (an admin raises the quota): the gate is self-clearing, and the
+	// still-queued job is assigned on a later poll with nothing having been wasted.
+	var live corev1.ResourceQuota
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "tight"}, &live))
+	live.Spec.Hard = corev1.ResourceList{corev1.ResourceRequestsCPU: resource.MustParse("4")}
+	require.NoError(t, k8sClient.Update(ctx, &live))
+
+	require.Eventually(t, func() bool {
+		return srv.AssignedJobCount(ssID) > 0
+	}, 30*time.Second, 100*time.Millisecond,
+		"restored quota headroom must reopen assignment without an AGC restart")
+
+	require.Eventually(t, func() bool {
+		var got corev1.PodList
+		if err := k8sClient.List(ctx, &got, client.InNamespace(ns), client.MatchingLabels{provisioner.LabelRunnerSet: "ss-quota"}); err != nil {
+			return false
+		}
+		return len(got.Items) > 0
+	}, 20*time.Second, 50*time.Millisecond, "the job that waited for headroom must provision its worker once assigned")
 }

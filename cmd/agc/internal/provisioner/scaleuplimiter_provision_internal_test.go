@@ -56,7 +56,8 @@ func (s *stubTarget) Ceiling(context.Context) (int32, bool) { return 0, false }
 func (s *stubTarget) QuotaExhausted(context.Context) (bool, string) {
 	return s.quotaExhausted, s.quotaDetail
 }
-func (s *stubTarget) RecordEvent(_, reason, _, _ string) { s.events = append(s.events, reason) }
+func (s *stubTarget) QuotaCapacity(context.Context, int32) (int32, bool) { return 0, false }
+func (s *stubTarget) RecordEvent(_, reason, _, _ string)                 { s.events = append(s.events, reason) }
 func (s *stubTarget) Resolve(context.Context) (*ResolvedSpec, error) {
 	return s.spec, nil
 }

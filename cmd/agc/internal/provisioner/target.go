@@ -117,6 +117,19 @@ type Target interface {
 	// per-delivery cache read, not the full Resolve path.
 	QuotaExhausted(ctx context.Context) (exhausted bool, detail string)
 
+	// QuotaCapacity returns the same observed quota signal as an integer instead of a
+	// boolean: the total number of worker pods this owner may have in flight given
+	// live namespace-ResourceQuota headroom, never above max. It is what the
+	// scale-set tier advertises the quota rung with, because that tier states a
+	// number of jobs per poll rather than deciding per delivered job (Q443) — see
+	// AdvertiseCapacity.
+	//
+	// Fail-open by contract, exactly like QuotaExhausted: bounded=false means "no
+	// quota-derived bound applies" (no quota, or nothing readable), and the caller
+	// keeps the declared ceiling. An owner whose tier has no integer form returns
+	// (0, false).
+	QuotaCapacity(ctx context.Context, max int32) (limit int32, bounded bool)
+
 	// Resolve returns the current, fully-resolved provisioning inputs, re-read on
 	// every acquired job. A non-nil error means a required reference no longer
 	// resolves (v2: missing RunnerTemplate/EgressProxy); the provisioner fails the

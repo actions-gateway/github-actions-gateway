@@ -27,6 +27,18 @@ type Metrics struct {
 	// JobsCompletedTotal counts terminal JobCompleted messages by result — the
 	// completion signal the classic many-acquirers protocol never delivered (§2b-6).
 	JobsCompletedTotal *prometheus.CounterVec
+	// AdvertisedCapacity is the X-ScaleSetMaxCapacity most recently advertised for the
+	// set — the total jobs GitHub may keep assigned to it. It is this tier's answer to
+	// "why did assignments stop": the classic tier's per-job
+	// actions_gateway_jobs_admission_rejected_total is structurally unreachable here,
+	// because a job the ladder declines is never assigned rather than being claimed and
+	// rejected (Q443).
+	AdvertisedCapacity *prometheus.GaugeVec
+	// CapacityWithheld is how many slots each admission rung removed from the declared
+	// ceiling on that same poll, labelled by the rung's AdmitReason*. Every evaluated
+	// rung publishes a value each poll — zero when it did not bind — so a series never
+	// goes stale at its last non-zero reading.
+	CapacityWithheld *prometheus.GaugeVec
 }
 
 // NewMetrics creates the scale-set tier's metrics and registers them with reg, which
@@ -62,14 +74,63 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "actions_gateway_scaleset_jobs_completed_total",
 			Help: "Total terminal JobCompleted messages the scale set's queue delivered, by result (the completion signal the classic protocol never delivered).",
 		}, []string{"namespace", "runner_set", "result"}),
+
+		AdvertisedCapacity: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "actions_gateway_scaleset_advertised_capacity",
+			Help: "X-ScaleSetMaxCapacity most recently advertised for the scale set: the total jobs GitHub may keep assigned to it at once.",
+		}, []string{"namespace", "runner_set"}),
+
+		CapacityWithheld: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "actions_gateway_scaleset_capacity_withheld",
+			Help: "Slots each admission rung removed from the declared worker ceiling on the most recent poll, by rung (reason).",
+		}, []string{"namespace", "runner_set", "reason"}),
 	}
 	reg.MustRegister(
 		m.JobsAssignedTotal,
 		m.JobsProvisionedTotal,
 		m.ProvisionErrorsTotal,
 		m.JobsCompletedTotal,
+		m.AdvertisedCapacity,
+		m.CapacityWithheld,
 	)
 	return m
+}
+
+// SetAdvertisedCapacity publishes the capacity advertised for one RunnerSet on its most
+// recent poll. Nil-receiver-safe, so a caller that never wired NewMetrics needs no
+// guard — matching RecorderFor's nil handling.
+//
+// It is set by the reconciler that computes the number rather than by the Listener that
+// sends it, because the accompanying CapacityWithheld breakdown only exists where the
+// admission ladder is walked (provisioner.AdvertiseCapacity).
+func (m *Metrics) SetAdvertisedCapacity(namespace, runnerSet string, capacity int32) {
+	if m == nil {
+		return
+	}
+	m.AdvertisedCapacity.WithLabelValues(namespace, runnerSet).Set(float64(capacity))
+}
+
+// SetCapacityWithheld publishes how many slots one admission rung withheld from a
+// RunnerSet's declared ceiling on its most recent poll. Nil-receiver-safe.
+func (m *Metrics) SetCapacityWithheld(namespace, runnerSet, reason string, slots int32) {
+	if m == nil {
+		return
+	}
+	m.CapacityWithheld.WithLabelValues(namespace, runnerSet, reason).Set(float64(slots))
+}
+
+// DeleteRunnerSet drops every series carrying a deleted RunnerSet's labels, so a set
+// that is gone stops reporting a stale advertised capacity forever. Counters are left
+// alone: their series are cumulative totals a scrape may still be catching up on, while
+// a gauge that stops being written is indistinguishable from one frozen at its last
+// value. Nil-receiver-safe.
+func (m *Metrics) DeleteRunnerSet(namespace, runnerSet string) {
+	if m == nil {
+		return
+	}
+	labels := prometheus.Labels{"namespace": namespace, "runner_set": runnerSet}
+	m.AdvertisedCapacity.Delete(labels)
+	m.CapacityWithheld.DeletePartialMatch(labels)
 }
 
 // RecorderFor returns a MetricsRecorder that records into m's vectors under the given

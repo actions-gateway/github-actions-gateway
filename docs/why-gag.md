@@ -89,7 +89,7 @@ letting tenants run their own runners.
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">Auto</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Handling for quota-blocked and evicted jobs</strong> — a job the quota has no room for is never claimed, so it stays queued for a sibling with capacity; an evicted worker's job is lock-cancelled and re-queued, no manual rerun. Eviction recovery runs on both acquisition tiers; the pre-claim quota gate is <a href="../roadmap/#in-progress--near-term">classic-tier so far</a></span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Handling for quota-blocked and evicted jobs</strong> — a job the quota has no room for is never taken on, so it stays queued at GitHub until there is capacity; an evicted worker's job is lock-cancelled and re-queued, no manual rerun. Both run on both acquisition tiers</span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">1</span>
@@ -113,7 +113,7 @@ footprint.
 | Ephemeral, single-use runner pods | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
 | Custom runner pod template & image | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
 | Workers scale to zero between jobs | :material-check-circle:{ .gag-yes } yes, with `minRunners: 0` | :material-check-circle:{ .gag-yes } yes, by default |
-| Safe under a per-tenant `ResourceQuota` | :material-close-circle:{ .gag-no } quota-blocked jobs stall; manual cleanup + rerun | :material-check-circle:{ .gag-yes } [won't claim a job it can't place](design/04-operational-flows.md#42-job-execution-flow-agc)<br><span class="gag-cont">live quota headroom checked *before* the claim, so the job stays queued for a sibling; if headroom is lost after the claim, the pod create is retried in place while the lock is held. Classic acquisition tier today — the [port to scale-set](roadmap.md#in-progress--near-term) is in progress</span> |
+| Safe under a per-tenant `ResourceQuota` | :material-close-circle:{ .gag-no } quota-blocked jobs stall; manual cleanup + rerun | :material-check-circle:{ .gag-yes } [won't take on a job it can't place](design/04-operational-flows.md#42-job-execution-flow-agc)<br><span class="gag-cont">live quota headroom is read *before* the job is claimed — on the default tier it bounds the capacity advertised to GitHub, on classic it declines the claim — so the job stays queued at GitHub. If headroom is lost afterwards, the pod create is retried in place while the lock is held</span> |
 | Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner set](design/02-architecture.md) |
 | Throttle the *rate* new workers start (anti-stampede) | :material-close-circle:{ .gag-no } only `maxRunners` caps the count — a burst starts all at once | :material-check-circle:{ .gag-yes } opt-in [`scaleUp` creation-rate limit per set](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)<br><span class="gag-cont">for shared-egress onset (NAT / firewall / VPN)</span> |
 | Per-tenant dedicated egress IPs | :material-close-circle:{ .gag-no } shared cluster egress | :material-check-circle:{ .gag-yes } [per-tenant proxy pool](design/network-architecture.md)<br><span class="gag-cont"><span class="gag-v2-badge">v2</span> proxy optional</span> |

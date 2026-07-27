@@ -130,6 +130,80 @@ func QuotaHeadroomViolations(demand corev1.ResourceList, quotas []corev1.Resourc
 	return true, msgPrefix + strings.Join(violations, "; ")
 }
 
+// QuotaHeadroomPods returns how many additional worker pods of the given shape the
+// quotas can admit right now: the largest n in [0, max] whose WorkerFootprint clears
+// QuotaHeadroomViolations. It is the *integer* form of the same question
+// WorkerQuotaExhausted answers as a boolean, and it exists because the two acquisition
+// tiers need different shapes of the one answer — the classic tier decides per
+// delivered job ("is there room for one more?"), while the scale-set tier advertises a
+// number of jobs per poll ("how many more fit?") (Q443).
+//
+// It is deliberately a search over the shared arithmetic rather than a division: the
+// footprint spans several resources with different units and quantity formats, so
+// reusing WorkerFootprint/QuotaHeadroomViolations is what guarantees the two tiers can
+// never disagree about what fits. The predicate is monotone (the footprint is linear in
+// n, so a violating n keeps violating), which makes the binary search exact in
+// ⌈log2(max+1)⌉ evaluations. max is required and small in practice — the caller passes
+// the remaining distance to its own worker ceiling — so the search is bounded work.
+//
+// Returns 0 when not even one more pod fits, including when a quota is already
+// over-used. It reports nothing about read failures: a caller that cannot list quotas
+// must fail open before calling (see WorkerQuotaCapacity).
+func QuotaHeadroomPods(containers []corev1.Container, quotas []corev1.ResourceQuota, max int32) int32 {
+	if max <= 0 {
+		return 0
+	}
+	fits := func(n int32) bool {
+		over, _ := QuotaHeadroomViolations(WorkerFootprint(containers, n), quotas, "")
+		return !over
+	}
+	lo, hi := int32(0), max
+	for lo < hi {
+		mid := lo + (hi-lo+1)/2
+		if fits(mid) {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	return lo
+}
+
+// WorkerQuotaCapacity returns the total number of worker pods one owner may have in
+// flight given live namespace-ResourceQuota headroom — its own non-terminal worker
+// pods plus room for more — never reporting above max. It is the scale-set tier's
+// expression of the admission gate's quota rung (Q443): that tier advertises a total
+// (X-ScaleSetMaxCapacity bounds GitHub's totalAssignedJobs) where the classic tier
+// decides per job, so the observed headroom *delta* has to be converted to a total.
+//
+// active is the owner's own worker pods that already count against the quota's `used`,
+// so adding it back converts "how many more fit" into "how many may exist at once".
+// Using the owner's pod count rather than the number of jobs GitHub has assigned biases
+// the answer LOW, which is the safe direction: the two diverge across an assignment the
+// AGC has not provisioned yet, and under-advertising only delays a job, while
+// over-advertising reproduces the claim-and-stall this rung exists to prevent.
+//
+// Deliberately FAIL-OPEN like WorkerQuotaExhausted: a namespace with no quota, or one
+// whose quotas cannot be listed, yields bounded=false so the caller keeps its declared
+// ceiling and the provisioner's maxQuotaRetries loop remains the backstop. The signal is
+// not authoritative — `.status.used` is eventually consistent and quota scopes are
+// ignored — and it does not need to be: it can only ever lower the advertised number,
+// and the per-pod ceilingCheck still backstops every pod that is actually created.
+func WorkerQuotaCapacity(ctx context.Context, c client.Reader, ns string, containers []corev1.Container, active, max int32) (limit int32, bounded bool) {
+	var quotas corev1.ResourceQuotaList
+	if err := c.List(ctx, &quotas, client.InNamespace(ns)); err != nil {
+		return 0, false
+	}
+	if len(quotas.Items) == 0 {
+		return 0, false
+	}
+	if active < 0 {
+		active = 0
+	}
+	headroom := QuotaHeadroomPods(containers, quotas.Items, max-active)
+	return active + headroom, true
+}
+
 // WorkerQuotaExhausted reports whether the namespace ResourceQuotas in ns
 // currently lack the headroom to admit one more worker pod with the given
 // containers, plus a human-readable detail naming the binding resource.

@@ -120,6 +120,14 @@ func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitF
 //     tenant exactly when scale-up would have rescued it. That rung needs a capacity-
 //     feasibility primitive (ProvisioningRequest), not this gate.
 //
+// # Tier scope
+//
+// This is the per-delivered-job form of the ladder, used by the classic acquisition
+// tier only. A ScaleSet-protocol RunnerSet never reaches it — it states its capacity
+// as an integer once per long-poll instead — so every rung here has a counterpart in
+// AdvertiseCapacity, and a rung added to one without the other ships to one tier
+// (Q443).
+//
 // The returned AdmitFunc is safe for concurrent use across the owner's listeners.
 // v1 wires it via AdmitFor; the v2 RunnerSet controller wires it directly with a
 // RunnerSet-backed Target.
@@ -141,5 +149,81 @@ func (p *Provisioner) Admit(target Target) runnercore.AdmitFunc {
 			return nil, false, runnercore.AdmitReasonCeiling
 		}
 		return release, true, ""
+	}
+}
+
+// CapacityAdvertisement is the scale-set tier's per-poll expression of the admission
+// ladder: one integer, plus the accounting that produced it.
+type CapacityAdvertisement struct {
+	// Total is the number to advertise as X-ScaleSetMaxCapacity — the total jobs
+	// GitHub may hold assigned for this set at once, so it bounds totalAssignedJobs
+	// rather than granting a delta.
+	Total int32
+	// Ceiling is the declared worker ceiling (or the caller's unbounded default)
+	// before any observed rung lowered it. Total <= Ceiling always.
+	Ceiling int32
+	// Withheld maps an AdmitReason* to the slots that rung removed from Ceiling, and
+	// carries an explicit zero for every rung that was evaluated and did not bind, so
+	// a reader never has to distinguish "not withholding" from "not evaluated".
+	Withheld map[string]int32
+}
+
+// AdvertiseCapacity returns the per-poll capacity function for the scale-set
+// acquisition tier: the integer counterpart of Admit, walking the same rungs against
+// the same Target and re-reading them on every poll so spec and cluster changes take
+// effect without an AGC restart (Q117).
+//
+// The two forms exist because the tiers decide at different granularity. Classic asks
+// "may I claim this job?" once per delivered job; a ScaleSet set instead states, once
+// per long-poll, how many jobs GitHub may keep assigned to it. Both are the same
+// ladder, and a rung that is expressed in only one of them silently ships to only one
+// tier — which is exactly how the quota rung came to be classic-only until Q443. Any
+// rung added here must be added to Admit, and vice versa.
+//
+// unboundedDefault is the value to advertise when the owner declares no ceiling at all;
+// the caller owns that policy (the scale-set reconciler passes the maxListeners-matched
+// default).
+//
+// Rungs compose as a min() and can only ever LOWER the advertisement, so a rung that
+// fails open leaves today's behavior exactly:
+//
+//  1. The declared worker ceiling (Q59) — Target.Ceiling, else unboundedDefault.
+//  2. Observed namespace-ResourceQuota headroom (#784) — Target.QuotaCapacity,
+//     converted from a headroom delta to a total by the owner's own in-flight worker
+//     pods, and skipped entirely when DisableQuotaAdmission is set.
+//
+// Unlike the classic rung this reserves nothing and costs no claim: jobs beyond the
+// advertised total stay queued at GitHub, so a quota-blocked job is never assigned in
+// the first place. The trade is granularity — the decision is per poll for the whole
+// set rather than per job, so recovery from a stale read is one poll interval.
+func (p *Provisioner) AdvertiseCapacity(target Target, unboundedDefault int32) func(ctx context.Context) CapacityAdvertisement {
+	return func(ctx context.Context) CapacityAdvertisement {
+		ceiling, bounded := target.Ceiling(ctx)
+		if !bounded {
+			ceiling = unboundedDefault
+		}
+		if ceiling < 0 {
+			ceiling = 0
+		}
+		adv := CapacityAdvertisement{Total: ceiling, Ceiling: ceiling, Withheld: map[string]int32{}}
+		if p.DisableQuotaAdmission {
+			return adv
+		}
+		adv.Withheld[runnercore.AdmitReasonQuota] = 0
+		limit, quotaBounded := target.QuotaCapacity(ctx, ceiling)
+		if !quotaBounded || limit >= adv.Total {
+			return adv
+		}
+		if limit < 0 {
+			limit = 0
+		}
+		// Per-poll and steady while a tenant sits at its quota ceiling: Debug, with
+		// the withheld gauge and the owner's WorkerQuotaExceeded condition as the
+		// operator-facing signals.
+		p.logForKey(target.Key()).Debug("advertising reduced scale-set capacity: namespace ResourceQuota headroom is below the worker ceiling",
+			"ceiling", adv.Ceiling, "advertised", limit)
+		adv.Withheld[runnercore.AdmitReasonQuota] = adv.Total - limit
+		adv.Total = limit
+		return adv
 	}
 }
