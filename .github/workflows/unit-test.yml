@@ -89,6 +89,7 @@ jobs:
               - 'scripts/go-test.sh'
               - 'scripts/go-lint.sh'
               - 'scripts/local-throttle.sh'
+              - 'scripts/check-codegen-drift.sh'
               - 'scripts/lib/**'
               - 'coverage-baseline.txt'
               - '.github/workflows/unit-test.yml'
@@ -203,6 +204,15 @@ jobs:
       # touching code, without envtest assets or a cluster.
       - name: build-tagged files compile + vet (make build-tags-check)
         run: make build-tags-check
+      # Assert every committed CRD/RBAC/webhook manifest still matches what
+      # controller-gen generates from today's Go types (Q440). It belongs in this
+      # job, not manifest-validate.yml: the drift is caused by a GO TYPE change,
+      # and that workflow's `manifests` filter is deliberately scoped to the
+      # generated YAML. cmd/gmc's ActionsGateway CRD embeds AGC types, so an edit
+      # in cmd/agc/api goes stale in the GMC manifest with neither module's YAML
+      # touched — exactly the diff this job's `code` filter sees.
+      - name: controller-gen manifest drift (make codegen-check)
+        run: make codegen-check
   # Shellcheck the standalone helper scripts under scripts/. actionlint already
   # covers inline workflow `run:` blocks, but the scripts/*.sh files ship unlinted
   # otherwise. Isolated from the `lint` job so a scripts-only change does not also

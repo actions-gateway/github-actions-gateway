@@ -30,6 +30,14 @@ make -C cmd/gmc manifests  # regenerates CRD YAML and RBAC manifests
 
 Both steps are required. Skipping `manifests` leaves the CRD YAML out of sync with the Go types — the apiserver will silently prune unknown fields, and tests that set those fields will see the zero value instead.
 
+## Manifest drift is gated by `make check`
+
+`make codegen-check` ([`scripts/check-codegen-drift.sh`](../../scripts/check-codegen-drift.sh)) regenerates every module's CRD/RBAC/webhook manifests into a scratch tree and fails if any committed copy differs. It runs in `make check` and in CI's `lint` job, so a forgotten `make manifests` is caught on the PR that caused it rather than by the next contributor.
+
+**The cross-module case is why it exists.** The GMC's `ActionsGateway` CRD embeds AGC types (`RunnerGroupSpec`), so a doc comment or field edited in `cmd/agc/api/` changes the *GMC* manifest — and only `make -C cmd/gmc manifests` propagates it. `make -C cmd/agc manifests` does not, and neither does the root `make generate` (which runs each module's `generate`, not its `manifests`). PR #793 edited a `quotaRetryDelay` doc comment in `RunnerGroupSpec` and the GMC CRD stayed stale, handing every later GMC contributor that hunk as unrelated diff noise ([Q440](../STATUS.md)). **After any change to a type either controller embeds, regenerate every module that embeds it, not just the one you edited.**
+
+The gate also fails if a module gains a `manifests:` target without being registered in the script's `MODULES` table, or if a row stops matching the module's own recipe — so it cannot quietly under-cover. Full assertion list: [testing.md § The codegen drift gate](testing.md#the-codegen-drift-gate). Its scope is manifests only; DeepCopy drift is intra-module and fails to compile.
+
 ## Sync the Helm chart CRDs (after any CRD change)
 
 The Helm charts ship the CRDs under `templates/crds/`, but the **authoritative** schema is the controller-gen output under `cmd/*/config/crd` (the v1alpha1 CRDs) and `api/config/crd` (the v2alpha1 CRDs). The chart copies are *generated* from those sources — do not hand-edit them. The split:
