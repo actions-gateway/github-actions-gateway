@@ -533,7 +533,7 @@ poll so a series never freezes at its last non-zero reading. Both are dropped wh
 set is deleted.
 
 **Not measured yet.** §9 still owns the live validation, and none of it has run for this
-rung. Specifically unmeasured: the divergence between the AGC's pod count and GitHub's
+rung; it is tracked as [Q462](../STATUS.md#Q462). Specifically unmeasured: the divergence between the AGC's pod count and GitHub's
 `totalAssignedJobs` under burst (the bias-low margin), and whether one poll interval of
 recovery latency is noticeable to a tenant whose quota frees up mid-burst. The envtest
 proof asserts the mechanism (a quota-blocked job is never assigned, and assignment
