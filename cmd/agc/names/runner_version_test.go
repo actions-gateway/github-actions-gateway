@@ -8,8 +8,8 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
 )
 
-// dockerfileFromRE captures the tag and digest from the worker Dockerfile's
-// runner FROM line, e.g.:
+// dockerfileFromRE captures the tag and digest from the root Dockerfile's
+// `worker` stage FROM line, e.g.:
 //
 //	FROM ghcr.io/actions/actions-runner:2.335.1@sha256:08c30b…
 var dockerfileFromRE = regexp.MustCompile(
@@ -18,7 +18,8 @@ var dockerfileFromRE = regexp.MustCompile(
 // TestRunnerVersionLockstep is the drift guard for the runner-version pin
 // (Q118). The runner version lives in three places that must move together:
 //
-//   - cmd/worker/Dockerfile FROM tag — the runner binary the worker pod runs.
+//   - the root Dockerfile's `worker` stage FROM tag — the runner binary the
+//     worker pod runs.
 //   - names.RunnerVersion / names.WorkerImageDigest — the single source of
 //     truth that drives the AGC's DefaultWorkerImage and the GMC's injected
 //     GITHUB_RUNNER_VERSION (the agent.version GitHub validates at session
@@ -29,12 +30,12 @@ var dockerfileFromRE = regexp.MustCompile(
 // image — exactly the drift #197 introduced. Failing CI here forces the
 // constants to be updated in the same change.
 func TestRunnerVersionLockstep(t *testing.T) {
-	// cmd/agc/names → cmd/worker/Dockerfile
-	const dockerfilePath = "../../worker/Dockerfile"
+	// cmd/agc/names → the repo-root Dockerfile
+	const dockerfilePath = "../../../Dockerfile"
 
 	raw, err := os.ReadFile(dockerfilePath)
 	if err != nil {
-		t.Fatalf("read worker Dockerfile %q: %v", dockerfilePath, err)
+		t.Fatalf("read root Dockerfile %q: %v", dockerfilePath, err)
 	}
 
 	m := dockerfileFromRE.FindStringSubmatch(string(raw))
@@ -46,7 +47,7 @@ func TestRunnerVersionLockstep(t *testing.T) {
 
 	if gotTag != names.RunnerVersion {
 		t.Errorf("runner version drift: Dockerfile FROM tag %q != names.RunnerVersion %q; "+
-			"update RunnerVersion in cmd/agc/names/names.go (see the bump procedure in cmd/worker/Dockerfile)",
+			"update RunnerVersion in cmd/agc/names/names.go (see the bump procedure in the Dockerfile's worker stage)",
 			gotTag, names.RunnerVersion)
 	}
 	if gotDigest != names.WorkerImageDigest {

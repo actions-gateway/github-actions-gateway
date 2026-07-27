@@ -17,9 +17,13 @@ Individual module Makefiles (e.g. `cmd/agc/Makefile`) also output to `.build/` v
 ## Container images
 
 The four production images (`cmd/{agc,gmc,proxy,worker}/Dockerfile`) are built
-together via [`docker-bake.hcl`](../../docker-bake.hcl) (`docker buildx bake`);
-the e2e/CI image pipeline is described in
-[docker-image-speed.md](../plan/docker-image-speed.md).
+together via [`docker-bake.hcl`](../../docker-bake.hcl) (`docker buildx bake`).
+Every image is a named stage of the single root
+[`Dockerfile`](../../Dockerfile), selected with `--target`; they share one
+`deps` stage that compiles the vendored dependency tree once. The e2e/CI image
+pipeline is described in
+[e2e-ci-speed-round-2.md](../plan/e2e-ci-speed-round-2.md), with the earlier
+round in [docker-image-speed.md](../plan/docker-image-speed.md).
 
 ### Go version bumps (the `GOTOOLCHAIN=local` coupling)
 
@@ -30,11 +34,10 @@ directive (e.g. for a stdlib CVE) is therefore a **three-part coupled change**:
 1. **The `go` directive** — `go.work`, every `go.mod` (including `tools/`), and
    the three `go.work.gen` files; `make go-version-check` (part of `make check`)
    enforces they match.
-2. **The `golang` builder digest in six Dockerfiles** —
-   `cmd/{agc,gmc,proxy,worker}/Dockerfile`, `cmd/worker/Dockerfile.wrapper`
-   (easy to miss — it has no `golang` comment header), and
-   `test/fakegithub/Dockerfile`. The pinned digest must already ship ≥ the new
-   patch, or every image build fails with
+2. **The `golang` builder digest in the root [`Dockerfile`](../../Dockerfile)** —
+   one `FROM` line, on the shared `deps` stage every image builds from. The
+   pinned digest must already ship ≥ the new patch, or every image build fails
+   with
    `go: /src/go.work requires go >= X (running Y; GOTOOLCHAIN=local)`.
    Dependabot bumps these digests weekly (see
    [dependency-updates.md](dependency-updates.md)), but a CVE-driven bump can't
@@ -75,7 +78,7 @@ bake produces arm64 images that run natively in a local kind cluster. To
 cross-build one image explicitly:
 
 ```bash
-docker buildx build --platform linux/arm64 -f cmd/agc/Dockerfile .
+docker buildx build --platform linux/arm64 --target agc .
 ```
 
 Cross-compilation does not affect reproducibility: `-trimpath
@@ -94,7 +97,7 @@ That single constant drives, and must stay in lockstep with, three consumers:
 - the `GITHUB_RUNNER_VERSION` the GMC injects into the AGC Deployment — forwarded
   as `agent.version` on `CreateSession`, which **GitHub validates** at session
   creation (an empty or wrong value risks rejection), and
-- the `FROM` tag in [`cmd/worker/Dockerfile`](../../cmd/worker/Dockerfile).
+- the `FROM` tag on the root [`Dockerfile`](../../Dockerfile)'s `worker` stage.
 
 Dependabot bumps only the Dockerfile, so the lockstep test
 [`cmd/agc/names/runner_version_test.go`](../../cmd/agc/names/runner_version_test.go)

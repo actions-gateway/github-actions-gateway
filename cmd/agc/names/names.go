@@ -10,10 +10,10 @@
 //
 // The same single-source-of-truth discipline applies to the runner version: it
 // must be identical in the default worker image the AGC pulls, the agent.version
-// the AGC sends to GitHub at session creation, and the FROM tag in
-// cmd/worker/Dockerfile. RunnerVersion below drives the first two; the lockstep
-// test in runner_version_test.go pins it to the third so a Dependabot Dockerfile
-// bump that forgets the constant fails CI.
+// the AGC sends to GitHub at session creation, and the FROM tag in the root
+// Dockerfile's `worker` stage. RunnerVersion below drives the first two; the
+// lockstep test in runner_version_test.go pins it to the third so a Dependabot
+// Dockerfile bump that forgets the constant fails CI.
 package names
 
 // ControllerName is the canonical name used for:
@@ -38,8 +38,9 @@ const WorkerSAName = "actions-gateway-worker"
 //     rejection (the runner-version contract — see Q71/Q118 in docs/STATUS.md
 //     and the milestone-4 plan note).
 //
-// It MUST equal the FROM tag in cmd/worker/Dockerfile; the lockstep test in
-// runner_version_test.go enforces that so a future bump cannot drift.
+// It MUST equal the FROM tag in the root Dockerfile's `worker` stage; the
+// lockstep test in runner_version_test.go enforces that so a future bump cannot
+// drift.
 const RunnerVersion = "2.335.1"
 
 // WorkerImageRepo is the actions/runner image repository. It matches the ARC
@@ -49,8 +50,8 @@ const WorkerImageRepo = "ghcr.io/actions/actions-runner"
 
 // WorkerImageDigest is the multi-arch manifest-index digest of WorkerImageRepo
 // at RunnerVersion (covers linux/amd64 + linux/arm64; see the multi-arch
-// image plan, Q97). It MUST equal the @sha256 in
-// cmd/worker/Dockerfile's FROM line; the lockstep test enforces that.
+// image plan, Q97). It MUST equal the @sha256 in the root Dockerfile `worker`
+// stage's FROM line; the lockstep test enforces that.
 //
 // Re-resolve on a version bump with:
 //

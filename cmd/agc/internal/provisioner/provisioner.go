@@ -112,8 +112,9 @@ const (
 	//
 	// Sourced from names.DefaultWorkerImage (built from names.RunnerVersion) so the
 	// runner version stays locked to the agent.version the AGC registers and to the
-	// FROM line in cmd/worker/Dockerfile — see the bump procedure in that file's
-	// header comment and the lockstep test in cmd/agc/names/runner_version_test.go.
+	// FROM line in the root Dockerfile's `worker` stage — see the bump procedure
+	// in that stage's header comment and the lockstep test in
+	// cmd/agc/names/runner_version_test.go.
 	DefaultWorkerImage = names.DefaultWorkerImage
 
 	// defaultWorkerRunAsUser is the numeric UID applySecurityDefaults stamps
@@ -124,9 +125,9 @@ const (
 	// numeric UID — with only a username it rejects the pod at admission with
 	// `CreateContainerConfigError: container has runAsNonRoot and image has
 	// non-numeric user`. Pinning the runner's own UID (1001 — see the
-	// `USER runner (UID 1001)` line in cmd/worker/Dockerfile and the upstream
-	// actions/runner-images base) lets kubelet verify non-root without changing
-	// which user the runner actually runs as. (Q115)
+	// `USER runner (UID 1001)` line in the root Dockerfile's `worker` stage and
+	// the upstream actions/runner-images base) lets kubelet verify non-root
+	// without changing which user the runner actually runs as. (Q115)
 	defaultWorkerRunAsUser int64 = 1001
 
 	payloadMountPath = "/run/secrets/job-payload"
