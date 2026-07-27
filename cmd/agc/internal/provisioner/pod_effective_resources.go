@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // Effective pod requests/limits — the quantities Kubernetes charges a pod against
@@ -118,13 +119,20 @@ func IsNativeSidecar(c *corev1.Container) bool {
 // Mirrors the upstream helper of the same name.
 func addResourceList(dst, src corev1.ResourceList) {
 	for name, q := range src {
-		if v, ok := dst[name]; ok {
-			v.Add(q)
-			dst[name] = v
-		} else {
-			dst[name] = q.DeepCopy()
-		}
+		addQuantity(dst, name, q)
 	}
+}
+
+// addQuantity accumulates q into dst[name], seeding the key with a copy when it is
+// absent. The copy matters: resource.Quantity carries a cached formatted string, so
+// storing the caller's value and later Add()-ing to it would mutate through.
+func addQuantity(dst corev1.ResourceList, name corev1.ResourceName, q resource.Quantity) {
+	if v, ok := dst[name]; ok {
+		v.Add(q)
+		dst[name] = v
+		return
+	}
+	dst[name] = q.DeepCopy()
 }
 
 // maxResourceList raises dst to the per-resource maximum of dst and src, adding

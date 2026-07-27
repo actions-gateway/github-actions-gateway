@@ -127,8 +127,20 @@ without accounting for workers will block every worker pod.
 | Quota key | What consumes it | Per worker |
 |---|---|---|
 | `requests.ephemeral-storage`, `limits.ephemeral-storage` | the containers' own `ephemeral-storage` asks | summed like CPU/memory |
-| `persistentvolumeclaims` | each **generic ephemeral volume** in the pod (`volumes[].ephemeral`) creates a real PVC named `<pod>-<volume>` | 1 per ephemeral volume |
-| `requests.storage`, `<class>.storageclass.storage.k8s.io/requests.storage` | that PVC's `volumeClaimTemplate` ask | the declared `storage` |
+| `persistentvolumeclaims`, `<class>.storageclass.storage.k8s.io/persistentvolumeclaims` | each **generic ephemeral volume** in the pod (`volumes[].ephemeral`) creates a real PVC named `<pod>-<volume>` | 1 per ephemeral volume — a **count of objects**, unrelated to how much each asks for |
+| `requests.storage`, `<class>.storageclass.storage.k8s.io/requests.storage` | that PVC's `volumeClaimTemplate` ask | the declared `storage`, summed across the pod's ephemeral volumes |
+
+The class-scoped keys apply only when the claim template names a
+`storageClassName`. An unset one still resolves to the cluster default class and
+is charged under *that* class's keys — but the name is not knowable from the
+template, so the gateway's own footprint counts only the unscoped
+`persistentvolumeclaims` / `requests.storage` for such a volume. If you constrain
+a class-scoped key, name the class in the claim template too, or the conditions
+will not see that cap.
+
+A pod that mounts a **pre-existing** PVC (`volumes[].persistentVolumeClaim`)
+creates nothing and is charged nothing here — that claim was charged when it was
+created.
 
 This is what bites Kata tenants. The reference Kata worker shape mounts a
 per-pod 100Gi raw block device for `/var/lib/docker`, so a Kata set at
@@ -136,6 +148,27 @@ per-pod 100Gi raw block device for `/var/lib/docker`, so a Kata set at
 on top of its CPU and memory. A namespace quota that sets
 `persistentvolumeclaims` for other reasons — and does not raise it for workers —
 silently caps concurrency at whatever that number is.
+
+### A storage quota fails later, and quieter, than a compute quota
+
+The two families are enforced at different moments, and the difference decides
+what you will see when it goes wrong.
+
+A compute key is charged when the **pod** is admitted, so an exhausted
+`requests.cpu` rejects the pod outright and the AGC retries. A PVC key is charged
+against a **separate object**: the pod is admitted first, and Kubernetes' own
+ephemeral-volume controller then creates the PVC behind it. If that create is
+quota-rejected, nothing rejects the pod — it sits `Pending` with an unbound
+volume, holding a job that has already been claimed from GitHub, until the pod
+deadline reaps it.
+
+The gateway counts these keys in its worker footprint precisely so that case is
+caught before the job is claimed. Diagnose a suspected one on the PVC, not the
+pod:
+
+```sh
+kubectl get events -n <NAMESPACE> --field-selector reason=FailedCreate
+```
 
 ## Only constrain keys every pod declares
 
@@ -239,8 +272,23 @@ proxy pool, on the v2 API, `sizing.profile: Static`.
 | `limits.memory` | 84Gi | 640Mi | 4Gi | ~88.6Gi | `90Gi` |
 
 **Step 3 — storage.** This shape declares no `ephemeral-storage` asks and no
-ephemeral volumes, so no storage keys are needed. (The Kata variant would need
-`persistentvolumeclaims: 12` and `requests.storage: 1200Gi` here.)
+ephemeral volumes, so no storage keys are needed — and the gateway charges it
+nothing on them, so a `persistentvolumeclaims` cap set for something else in this
+namespace will not hold the set back.
+
+The Kata variant is where this bites. Swapping in
+`deploy/dogfood-e2e/overlays/kata/`'s worker adds one 100Gi ephemeral volume per
+pod on the `standard-rwo` class, so the same 12 workers need four more keys:
+
+| Quota key | Workers (×12) |
+|---|---|
+| `persistentvolumeclaims` | 12 |
+| `requests.storage` | `1200Gi` |
+| `standard-rwo.storageclass.storage.k8s.io/persistentvolumeclaims` | 12 |
+| `standard-rwo.storageclass.storage.k8s.io/requests.storage` | `1200Gi` |
+
+Set only the keys you intend to constrain — but whichever you set, size it for
+all 12. `WorkerQuotaPressure` trips on the tightest of them.
 
 **`limits.cpu` is deliberately absent** from the quota below: neither worker
 container declares a CPU limit, so constraining it would reject every worker pod.
@@ -284,10 +332,12 @@ kubectl get runnerset <NAME> -n <NAMESPACE> -o jsonpath='{range .status.conditio
 
 ## What the gateway's own quota conditions count
 
-The gateway computes a worker's footprint with the same four-part arithmetic this
-page uses — regular containers, native sidecars, the plain-init `max()` floor, and
-`RuntimeClass` overhead. One calculation feeds all three surfaces, so they cannot
-disagree:
+The gateway computes a worker's footprint with the same arithmetic this page uses:
+the four-part compute sum (regular containers, native sidecars, the plain-init
+`max()` floor, and `RuntimeClass` overhead) **plus** the storage keys from
+[Step 3](#step-3--the-storage-keys) — `ephemeral-storage` on both sides, and the
+PVC count and storage ask of every generic ephemeral volume, class-scoped keys
+included. One calculation feeds all three surfaces, so they cannot disagree:
 
 - the `WorkerQuotaPressure` / `WorkerQuotaExceeded` conditions;
 - the pre-claim quota gate on the classic acquisition tier;
@@ -295,29 +345,41 @@ disagree:
   in live quota headroom on the default tier.
 
 So a `False` `WorkerQuotaPressure` means the quota admits scaling to `maxWorkers`
-at the pod's **full** cost, sidecar and overhead included.
+at the pod's **full** cost — sidecar, overhead, and per-worker PVCs included.
+
+A worker shape that declares no `ephemeral-storage` and no ephemeral volumes is
+charged nothing on the storage keys, so a namespace already at its
+`persistentvolumeclaims` ceiling for unrelated reasons does not hold such a set
+back.
 
 !!! warning "This changed — conditions may now trip where they did not before"
 
-    Before this fix the footprint was the sum of `spec.containers` alone: all init
-    containers were dropped, and `RuntimeClass` overhead was ignored. That was
-    correct for plain init containers but **wrong for native sidecars**, which
-    Kubernetes sums. A DinD or Kata tenant was under-counted by the sidecar's
-    entire ask plus any pod overhead:
+    Before this fix the footprint covered CPU and memory summed over
+    `spec.containers` alone. Two things were missing.
+
+    **Init containers and pod overhead.** Dropping all init containers was correct
+    for plain ones but **wrong for native sidecars**, which Kubernetes sums;
+    `RuntimeClass` overhead was ignored outright:
 
     | Shape | Former per-pod under-count |
     |---|---|
     | Privileged DinD | `1` CPU / `3Gi` requests; `4Gi` memory limit |
     | Kata | `2` CPU / `6Gi` requests; `4` CPU / `8Gi` limits; plus `250m` / `160Mi` overhead |
 
-    On upgrade, a native-sidecar tenant whose quota was sized against those
-    under-counted numbers can go straight to `WorkerQuotaPressure=True` (or
-    `WorkerQuotaExceeded=True`) with no change to the quota or the workload.
-    **Nothing got worse** — such a quota could never place those pods, so they were
-    already being rejected at creation and retried; the condition just reports it
-    up front now instead of leaving it to show up as burnt lock time. A quota
-    already sized with the arithmetic on this page is unaffected; re-derive any
-    that were not.
+    **The storage keys.** `ephemeral-storage`, `persistentvolumeclaims` and
+    `requests.storage` were not counted at all, so a shape's entire storage cost
+    read as zero. The reference Kata worker was under-counted by its whole
+    per-worker PVC — `1` claim and `100Gi` per pod, or `4` claims and `400Gi` at
+    `maxWorkers: 4`.
+
+    On upgrade, a tenant whose quota was sized against those under-counted numbers
+    can go straight to `WorkerQuotaPressure=True` (or `WorkerQuotaExceeded=True`)
+    with no change to the quota or the workload. **Nothing got worse** — such a
+    quota could never place those pods; a compute-key shortfall was already
+    rejecting them at creation, and a storage-key shortfall was already stranding
+    them `Pending` on an unbound volume. The condition just reports it up front now
+    instead of leaving it to show up as burnt lock time. A quota already sized with
+    the arithmetic on this page is unaffected; re-derive any that were not.
 
 ### Pod overhead needs a cluster-scoped read
 

@@ -1844,8 +1844,17 @@ kubectl get runnergroup -n <namespace> <name> \
 - A long-running job is holding quota that a new job needs; quota will clear once it completes.
 - The quota retry budget (`maxQuotaRetries`, default 5) is exhausting before quota clears.
 - The quota was sized from the worker's regular containers only. A native sidecar (`restartPolicy: Always` init container — how the DinD daemon must be declared) is summed into the pod's footprint in full, and a Kata worker adds its `RuntimeClass` overhead on top. Both are invisible in `podTemplate.spec.containers`. Re-derive with [sizing the platform-owned `ResourceQuota`](resourcequota-sizing.md). The `WorkerQuota{Pressure,Exceeded}` conditions count both, so this shows up there first — if they read `False` while pods are being rejected, the mismatch is elsewhere in this list.
+- The binding key is a **storage** key, not a compute one. A worker's `ephemeral-storage` asks count like CPU and memory, and each generic ephemeral volume (`podTemplate.spec.volumes[].ephemeral` — the reference Kata worker's per-pod block device) creates a real PVC charged against `persistentvolumeclaims`, `requests.storage`, and the matching `<class>.storageclass.storage.k8s.io/…` keys. The conditions count these too; see [the storage keys](resourcequota-sizing.md#step-3--the-storage-keys).
 
 > **A `Forbidden` naming a *missing* resource is a different failure.** `must specify limits.cpu for: runner` is not exhaustion — it means the quota constrains a key the pod does not declare, which Kubernetes makes mandatory namespace-wide. The measured DinD worker shapes declare no CPU limit on purpose, so a quota constraining `limits.cpu` rejects every worker pod regardless of headroom. See [only constrain keys every pod declares](resourcequota-sizing.md#only-constrain-keys-every-pod-declares).
+
+> **An exhausted *storage* quota looks different again — no rejected pod at all.** A PVC key is charged against the PVC, which Kubernetes creates *after* admitting the pod, so nothing rejects the worker: it sits `Pending` with an unbound volume until the pending-pod deadline reaps it, and `kubectl describe pod` shows no quota error. Look at the claim instead:
+>
+> ```sh
+> kubectl get events -n <namespace> --field-selector reason=FailedCreate
+> ```
+>
+> The gateway counts these keys in the worker footprint so this is refused before the job is claimed — a set in this state should be reporting `WorkerQuotaExceeded=True`.
 
 **Diagnostics.**
 
