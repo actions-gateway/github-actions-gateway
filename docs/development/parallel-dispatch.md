@@ -39,8 +39,9 @@ run-specific knobs. A ready-to-paste template:
 > worker the self-healing contract from task one (launch the **pr-sentinel**
 > background watcher on PR open — one watcher that wakes on CI failures **and**
 > merge conflicts; push the real fix or `git rebase origin/main`, relaunch the
-> watcher after every wake — including `ready` — keep the main thread free, never
-> self-merge, escalate after 5 tries). **You own assignment,
+> watcher after every wake that it can act on, keep the main thread free, never
+> self-merge, escalate after 5 tries). **Re-check mergeability at the merge
+> step** — a `ready` PR can go stale in your review queue. **You own assignment,
 > merge ordering, and scope** — hand each worker exactly one item so none collide;
 > each worker removes its own `docs/STATUS.md` Queue row in its PR (isolated
 > commit). Tell every worker to run `make check` as a **background** task while it
@@ -168,9 +169,10 @@ base Bash permission and *prompts*. An unattended worker stalls there, and the P
 spends the rest of its life unwatched — which is how self-healing silently stops
 happening. Tune the watcher through the `env` block in `.claude/settings.json`
 (the watcher reads its knobs from the environment at launch) so the command stays
-auto-approved — that is where this repo sets `PR_SENTINEL_TIMEOUT` to 6 h, since
-the stock 1 h budget expires while a PR is still queued behind the dispatcher's
-merge review and leaves it unwatched.
+auto-approved — that is where this repo sets `PR_SENTINEL_TIMEOUT` to 6 h. The
+stock 1 h budget expires under a batch, where the heavy gates queue behind each
+other, and each expiry costs a `timeout` wake plus a relaunch the worker has to
+still be alive to perform.
 
 The watcher sleeps between polls (zero idle tokens) and reads **only
 GitHub-controlled check results and mergeable state — never the PR body, review
@@ -190,11 +192,12 @@ mechanism, exiting with a single event the moment the session must act:
   `strict` push policy **auto-approves a force-push of the worktree's own current
   branch**, so this needs no prompt.
 - **`ready`** — all checks green, no conflict. Hand back for merge review; **the
-  worker never merges** (see [the merge model](#the-merge-model)) — then
-  **relaunch the watcher anyway**. `ready` is a handoff, not a terminal state:
-  the PR stays open through the dispatcher's scope review, and that is exactly
-  the window in which a sibling merge turns it `DIRTY`. Only `closed` ends the
-  watch.
+  worker never merges** (see [the merge model](#the-merge-model)). This ends the
+  watch. **Do not relaunch pr-sentinel on `ready`** — it re-evaluates
+  immediately, sees the same green/`CLEAN` state, and exits with `ready` again,
+  so a relaunch loop spins with no sleep in between. See
+  [the post-`ready` gap](#the-post-ready-gap) for what actually covers the
+  window between handoff and merge.
 
 Because the watcher wakes on **mergeable state** too, a sibling PR merging — which
 silently leaves this PR conflicting with no CI signal — is just another wake, not
@@ -240,9 +243,9 @@ for cases where neither the plugin nor a background task is workable.
   [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
 - **Never self-merge.** A green + mergeable PR is handed to the dispatcher; the
   merge stays dispatcher-gated (see [the merge model](#the-merge-model)).
-- **Relaunch the watcher after every wake**, `ready` included — an unwatched open
-  PR heals nothing. The only events that end the watch are `closed` and the
-  safety valve below.
+- **Relaunch the watcher after every actionable wake** — `check_failure`,
+  `conflict`/`behind`, `timeout`, `error`. An unwatched open PR heals nothing.
+  `ready` and `closed` end the watch; the safety valve below does too.
 - **Verify what landed by content, never by SHA.** A rebase rewrites the branch's
   commit SHAs (and the eventual squash-merge discards them regardless), so check
   `git show origin/main:<path>` rather than looking for a commit you remember.
@@ -254,7 +257,26 @@ for cases where neither the plugin nor a background task is workable.
 Self-healing also makes the contention problem mostly disappear: when one PR
 merges, every other open PR's watcher wakes on the now-conflicting mergeable state
 and rebases onto `main`. That only holds for PRs whose watcher is still
-running — which is why `ready` relaunches rather than ends the watch.
+running — see [the post-`ready` gap](#the-post-ready-gap) for the one window it
+does not cover.
+
+### The post-`ready` gap
+
+A PR that reported `ready` has no watcher, but it is still **open** — it sits
+through the dispatcher's scope review and merge ordering, and a sibling merge in
+that window silently turns it `DIRTY` with nothing left to wake. Relaunching
+pr-sentinel does not close this gap (it would spin on `ready`; see the event
+list above). Two things that do:
+
+- **The dispatcher re-checks mergeability at the merge step** — baseline, no
+  moving parts, and the merge step is already where it looks at the PR. A stale
+  `ready` is caught there and routed by
+  [conflict policy](#conflict-policy).
+- **A mergeability-only background watch**, for review queues long enough that
+  the above is too late. This is [fallback 1](#fallback-1-a-self-managed-background-watcher)
+  narrowed to one field: sleep → `gh pr view <n> --json mergeStateStatus` →
+  exit on `DIRTY`/`BEHIND` or on the PR closing. Unlike a pr-sentinel relaunch
+  it sleeps between polls, so it does not spin.
 
 ### Standard worker prompt skeleton
 
@@ -554,7 +576,9 @@ production credentials) — exclude them explicitly and hand them to a human.
       native auto-merge).
 - [ ] PR-watcher gates on checks **and** mergeability and handles zero-check PRs.
 - [ ] Watcher launched **bare** (no inline `VAR=…` prefix, or the auto-allow
-      lapses into a prompt) and relaunched after every wake, `ready` included.
+      lapses into a prompt) and relaunched after every actionable wake.
+- [ ] Post-`ready` conflict window covered — dispatcher re-checks mergeability at
+      the merge step (see [the post-`ready` gap](#the-post-ready-gap)).
 - [ ] No-secrets boundary set; credential-dependent items excluded up front.
 - [ ] Cleanup plan for leftover worktrees/branches at the end.
 
@@ -562,9 +586,13 @@ production credentials) — exclude them explicitly and hand them to a human.
 
 - **Adding self-healing late.** The first several PRs were hand-rebased and
   needed dedicated fix/resolve chips. Make self-healing the default from task #1.
-- **Letting the watch end at `ready`.** A handed-off PR still sits open through
-  scope review — the exact window a sibling merge breaks it — and with no watcher
-  nothing wakes to rebase. Relaunch on `ready`; only `closed` is terminal.
+- **Treating `ready` as "this PR is now safe".** A handed-off PR still sits open
+  through scope review — the exact window a sibling merge breaks it — with no
+  watcher left. Re-check mergeability at the merge step
+  ([the post-`ready` gap](#the-post-ready-gap)). The tempting fix — relaunching
+  pr-sentinel on `ready` — does **not** work: it re-reports `ready` at once and
+  the relaunch loop spins without sleeping. Measured, not assumed: the first
+  draft of this doc shipped that rule and PR #892 span on it immediately.
 - **Decorating the watcher launch with an env prefix.** It costs the launch its
   auto-allow (the plugin matches a three-token command), so every relaunch
   prompts and an unattended worker stops relaunching. Put knobs in
