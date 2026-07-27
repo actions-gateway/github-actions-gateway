@@ -15,3 +15,34 @@ The `docs/` tree has two audiences: `docs/design/` explains how the system works
 | New, removed, or re-pointed inter-module dependency (an added/removed `replace` edge between workspace modules, or a new/deleted module in `go.work`) | [go-workspaces.md](go-workspaces.md) — update the module table's **Internal deps** column and the **Dependency direction** graph. The tidy script derives the order at runtime so it won't drift, but the human-readable table will. |
 | New or changed pinned tool/image version (a CI workflow version env var, an `updatecli.d/*.yaml` manifest, a `.github/dependabot.yml` ecosystem) | [dependency-updates.md](dependency-updates.md) — update the "What updates each surface" table and, if it's a new manual pin, the planned-fan-out list. |
 | Anything general | `README.md`, `CONTRIBUTING.md`, and any other `docs/` file that describes the changed behaviour. Also `.github/workflows/` if the change affects how tests are run, what modules exist, or what build inputs CI depends on (e.g. `go-version-file`, test commands, module paths). |
+
+## Name the acquisition tier when a capability is not universal
+
+Applies across every row above. **Before writing that the gateway does X, check
+which acquisition tier actually does X** — and if it is not both, say so in the
+same sentence. Prose that reads as a property of the system is the failure mode;
+it is not repaired by being true of the tier the author had in mind.
+
+This has bitten three times (Q419 eviction recovery, Q439 the pre-claim quota
+gate, Q446 poll-error metrics), and once in a change whose whole purpose was to
+polish the same paragraphs. The claims are not wrong so much as unqualified, so
+review does not catch them — only checking the code does.
+
+How to check: the tier seams are the `ScaleSet` early return in
+`runnerset_controller.go` (everything after it is classic-only by construction),
+`provision()` versus `ProvisionScaleSetWorker`, and the `listener/` versus
+`scalesetlistener/` packages.
+
+Two places it costs the most:
+
+- **Metrics tables.** A counter emitted from one tier reads a flat zero on the
+  other, and zero looks like "nothing happened" rather than "nothing is
+  watching". Say which tier emits it, and name the signal that substitutes.
+- **Positioning copy** (`README.md`, `why-gag.md`, `roadmap.md`). A capability
+  claimed for the system but implemented only on the deprecated tier is
+  scheduled for deletion, not shipped — it belongs in the parity table in
+  [v2-ga.md](../plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal),
+  which gates the `v2.0.0` removal on closing exactly this gap.
+
+This convention retires with the classic tier at `v2.0.0`; until then the parity
+table is the tracking mechanism, and anything found classic-only joins it.
