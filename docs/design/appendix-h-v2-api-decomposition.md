@@ -578,6 +578,48 @@ gate — cross-object admission validation is exactly what this appendix's §H.7
 philosophy avoids. While a profile is `Active`, `SizingDrift` reports
 `False/SizingProfileActive` (the template ask is not what pods run with).
 
+**Opt-in intake gating: `spec.capacityGate` (Q405).** A `RunnerSet` may opt into the
+placeability rung of the admission ladder — the AGC refuses to take on jobs whose
+worker pod the cluster cannot currently place, instead of claiming them and stalling.
+`capacityGate.mode` selects `Off` (the default, today's behavior exactly) or
+`SchedulerVerdict`, which reads the scheduler's own `PodScheduled=False` /
+`Unschedulable` verdict — the same fact `WorkersUnschedulable` already publishes.
+`AutoscalerVerdict` (Q406) and `Probe`/`Provision` (Q407) are reserved names on the
+same enum and are **rejected at admission** until they ship: an operator who selects
+a gate expects gating, and silently accepting an unimplemented mode as a no-op is the
+failure this rung exists to remove.
+
+The mode is an **operator assertion, never an auto-detection**, because the two
+readings of an unschedulable pod are opposites and only the operator knows which
+applies. On a fixed-size cluster nothing is waiting on that pod, so it is pure waste;
+on an elastic one the pod *is* the request for a node, and gating on it would suppress
+the very signal that would have rescued the tenant. A wrong auto-detection starves a
+tenant, so the AGC does not attempt one ([§D.8](appendix-d-alternatives-considered.md#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on)).
+
+The decision is published as `WorkerCapacityDeclined` and the rung reads that
+condition back rather than re-deriving the verdict, so `kubectl describe` and the
+AGC's intake behavior cannot disagree. It is a **separate** condition from
+`WorkersUnschedulable` even though phase 1 shares its source: it means something
+different to an operator ("intake is being refused" versus "pods are stuck"), it stays
+stable across the later modes while the signal underneath it changes, and
+`WorkersUnschedulable` is already an impairing rollup input — so
+`WorkerCapacityDeclined` is deliberately **excluded** from `ImpairingConditionTypes()`,
+which would otherwise double-count one stall into the gateway's `RunnerSetsDegraded`
+summary. A set that did not opt in carries no such condition at all.
+
+Two properties bound what the gate is worth. It does **not** eliminate the first
+wasted claim — the signal is derived from a stuck pod, so one has to exist — and it
+does not remove the need for `pendingPodDeadline` and the reaper. What it bounds is
+the *rate*: because the condition is derived from that pod's existence, reaping the
+pod clears it, one job is claimed, and a still-unplaceable shape trips it again, so a
+burst of *N* wasted claims becomes roughly one per deadline window. Per-pool behavior
+falls out of per-object keying rather than extra machinery — a verdict is only valid
+for the pod shape that produced it, and a `RunnerSet` resolves to exactly one worker
+template (§H.4), so a drained GPU pool gates the GPU sets while CPU sets keep claiming.
+Fail-open throughout: an unreadable set, an unresolved template chain, an unreadable
+pod list all leave intake exactly as it is today. The gate may under-gate freely; it
+must never over-gate.
+
 ## H.8. Ownership, GC, and deletion
 
 Shared objects must not be owner-referenced by their referrers:

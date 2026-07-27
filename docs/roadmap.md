@@ -35,6 +35,13 @@ tagged chart. Check the release notes for the exact image digests to pin.
   rerun either way. Both run on **both acquisition tiers**: the default scale-set
   protocol folds live quota headroom into the capacity it advertises to GitHub,
   and the classic tier declines the claim per delivered job.
+- **Capacity gate for unplaceable workers (opt-in).** A runner set can set
+  `capacityGate.mode: SchedulerVerdict` so the gateway stops taking on jobs while
+  the cluster cannot place its worker shape — a drained pool, a changed taint,
+  spot capacity gone. Jobs stay queued at GitHub instead of being claimed and
+  cancelled. It bounds the *rate* of wasted claims rather than eliminating the
+  first one, and it assumes a cluster that cannot grow: elastic clusters should
+  wait for the autoscaler-sourced mode below. Off by default.
 - **Priority tiers per runner group.** Reserve a guaranteed floor of slots for
   expensive runner types so cheap CPU jobs can't starve critical GPU work.
 - **Worker scale-up rate limiting (opt-in).** An optional per-runner-group token
@@ -132,12 +139,13 @@ last gaps an outside operator hits.
   validated, not on a date. The deprecation window opened at v1.1.0, and
   `gag-migrate` already moves a tenant across without changing how jobs are acquired.
   Detail: the [deprecation and removal notice](operations/v1alpha1-deprecation.md).
-- **Capacity-aware job intake.** <!-- q:Q405,Q406 --> Additional opt-in rungs on the pre-claim gate,
-  so a job is not claimed when the cluster demonstrably cannot place its worker:
-  one sourced from the scheduler's `Unschedulable` verdict (for fixed-size and
-  on-prem clusters) and one from a cluster-autoscaler or Karpenter declination
-  (for elastic clusters, where the scheduler signal alone is unsafe). Off by
-  default; the live quota-headroom check already ships.
+- **Capacity-aware job intake on elastic clusters.** <!-- q:Q406 --> The
+  scheduler-sourced capacity gate above is unsafe where a cluster autoscaler is
+  running: there, a Pending worker pod *is* the request for a node, so refusing
+  work on it can hold a tenant back exactly when scale-up would have rescued
+  them. The remaining mode sources the same rung from the autoscaler's own
+  declination — cluster-autoscaler or Karpenter saying it will not add a node —
+  which carries no such ambiguity. Off by default, like every mode.
 
 ## Exploring / longer-term
 

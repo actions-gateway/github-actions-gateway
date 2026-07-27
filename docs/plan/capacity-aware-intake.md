@@ -26,14 +26,14 @@ durable rationale in
 |---|---|---|---|
 | 0 | Design rationale recorded (D.8 asymmetry principle, G.16 deferral + triggers) | S | ✅ Done — this change |
 | 0a | Port the shipped quota rung to the scale-set tier, as the integer form of the ladder | M | ✅ Done ([§9a](#9a-the-shipped-quota-rung-was-classic-only-q443)/[§9b](#9b-what-the-port-shipped), Q443, 2026-07-26) |
-| 1 | `SchedulerVerdict` mode: gate on the scheduler's verdict, for clusters that cannot grow | M | ❌ Open ([Q405](../STATUS.md#Q405)) |
+| 1 | `SchedulerVerdict` mode: gate on the scheduler's verdict, for clusters that cannot grow | M | ✅ Done ([§6](#6-phase-1--schedulerverdict-q405), Q405, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
 | 2 | `AutoscalerVerdict` mode: gate on the autoscaler's own declination, for elastic clusters | M | ❌ Open ([Q406](../STATUS.md#Q406)) |
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
-Nothing here has been validated on a live cluster, item 0a included: it carries an
-envtest proof of the mechanism, not a measurement of its effect. Phase 1 carries a
-measurement step (§9) whose numbers are the input to the Phase 2/3 decision, and no
-effectiveness claim belongs in this doc before that measurement exists.
+Nothing here has been validated on a live cluster, items 0a and 1 included: each
+carries an envtest proof of the mechanism, not a measurement of its effect. §9 is the
+measurement step, and its numbers are the input to the Phase 2/3 decision; no
+effectiveness claim belongs in this doc, or in public copy, before it exists.
 
 ---
 
