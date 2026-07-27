@@ -26,7 +26,7 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 		for _, ns := range []string{nsA, nsB} {
 			utils.CreateNamespace(ns, nil)
 			utils.CreateGitHubAppSecret(ns, secretName, 11111, 22222, testRSAKeyPEM)
-			utils.BaseTenant(ns, agName, secretName).Apply()
+			utils.BaseTenant(ns, agName, secretName).ApplyWithWebhookRetry()
 		}
 	})
 

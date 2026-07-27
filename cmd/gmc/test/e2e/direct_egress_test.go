@@ -59,7 +59,11 @@ var _ = Describe("E2E_V2_DirectEgress", Ordered, func() {
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 13579, 24680, testRSAKeyPEM)
 
 		By("applying the proxy-less v2 object set: one ActionsGateway (no defaultProxyRef), one template, one RunnerSet (no proxyRef)")
-		Expect(utils.ApplyManifest(directEgressManifest(tenantNS, secretName, agcImage))).To(Succeed())
+		// Retry rather than one-shot: the ActionsGateway/RunnerTemplate/RunnerSet
+		// validating-webhook POSTs can transiently time out under the parallel suite
+		// even with the GMC 1/1 Running, and failurePolicy: Fail turns that blip into
+		// a hard BeforeAll failure (Q391). A genuine denial still fails fast.
+		Expect(utils.ApplyManifestWithWebhookRetry(directEgressManifest(tenantNS, secretName, agcImage))).To(Succeed())
 
 		// Deployment readiness is decoupled from GitHub reachability (the AGC binds
 		// its health server early — see WaitForRunnerGroupReconciled's comment), so
