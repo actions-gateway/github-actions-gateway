@@ -15,7 +15,7 @@ open.
 | 3 | Make the dependency compile a GHA-cacheable layer | ✅ Done — `deps` stage, `GOCACHE` as a real directory |
 | 4 | Overlap the runner disk cleanup with job setup | 🔲 Planned |
 | 5 | De-serialize `E2E_AGC_WorkerPodLifecycle` | ✅ Done — owner-scoped enqueue, `Serial` dropped |
-| 6 | Trim the HPA spec's fixed waits | ✅ Done — `Consistently` 30s → 15s, metrics-server resolution 15s → 10s |
+| 6 | Trim the HPA spec's fixed waits | ⚠️ Partial — `Consistently` 30s → 15s shipped; the metrics-server resolution change was tried and reverted |
 
 ## Baseline
 
@@ -248,11 +248,28 @@ reconciler does not claim `.spec.replicas` back from the HPA.
   re-triggers a reconcile, and at 2 s polling 15 s still samples the Deployment
   eight times across many passes. This is a fixed cost paid on every run inside
   a Serial spec, so it lands whole on the critical tail.
-- **metrics-server `--metric-resolution` 15 s → 10 s.** The HPA cannot report
-  `ScalingActive=True` until metrics-server has scraped, so the default
-  resolution sits directly in front of this spec. 10 s is metrics-server's
-  documented floor. Applied through the `kubectl patch` the suite already runs
-  for `--kubelet-insecure-tls`.
+### Tried and reverted: metrics-server `--metric-resolution` 15 s → 10 s
+
+The HPA cannot report `ScalingActive=True` until metrics-server has scraped, so
+the default resolution sits directly in front of this spec. Lowering it to 10 s
+— metrics-server's minimum *accepted* value — looked like free latency.
+
+It is not. `--metric-resolution` must also **exceed kubelet's housekeeping
+interval** (10 s by default). At exactly 10 s metrics-server keeps re-reading
+unchanged cAdvisor samples, discards them as duplicate timestamps, and never
+serves usage at all — so the outcome is not a slower HPA but a dead one.
+
+On PR #874 both specs that gate on `ScalingActive=True` timed out:
+
+| Spec | Timeout | Message |
+|---|---|---|
+| `E2E_GMC_HPADrivesScaleUp` | 300 s | metrics-server not serving metrics |
+| `E2E_AGC_SkippedJobIsRedeliveredAfterCapacityFrees` | 240 s | metrics-server not serving metrics |
+
+Reverted, with the reasoning recorded inline at the patch site so the next
+person to spot that 15 s does not re-derive it the expensive way. The lesson is
+the repo's own rule: this was shipped on a recalled documentation fact instead
+of a measurement, and the e2e leg is what caught it.
 
 ### Not done: the kube-controller-manager HPA sync period
 
