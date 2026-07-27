@@ -22,6 +22,7 @@ deploy/dogfood-e2e/
 | Extra cluster setup | none | Kata DaemonSet + `kata`/`kata-qemu` RuntimeClasses (`e2e-setup.sh`) |
 | DinD sidecar | `privileged: true` | unprivileged (micro-VM is the boundary); six-step entrypoint; ephemeral Block PVC |
 | CPU sizing | requests-only (bursts) | explicit CPU **limits** — Kata sizes the guest's vCPUs from them |
+| Runner CPU request | derived — the shared `NodeShare` profile overrides the template² | derived the same way; the CPU **limit** is untouched, so guest vCPU sizing is unaffected |
 | Egress | broad (open) — trusted only | same for now; the untrusted-PR posture needs a tighter policy + in-cluster mirror (future) |
 | Cost | lower | higher (C2 + nested virt + 100Gi ephemeral PD per worker) |
 | Use for | **trusted CI / dogfood only** | **untrusted / OSS PRs** (once egress is tightened) |
@@ -31,6 +32,15 @@ deploy/dogfood-e2e/
 Kata-aware, so the namespace still needs the privileged PSA level (envtest-verified —
 see [overlays/kata/resources.yaml](overlays/kata/resources.yaml)). What pins the pod
 unprivileged is the platform-owned `ClusterRunnerTemplate`, not the PSA label.
+
+² The shared RunnerSet in [base/resources.yaml](base/resources.yaml) selects the
+`NodeShare` sizing profile, so the runner container's CPU **request** is derived
+(envelope ÷ `workersPerNode`) rather than taken from the template. This tenant is
+where the release gate validates that profile — it needs no usage history, so it
+actuates on the first job, and `validate-release.sh` fails the RC if it does not.
+The declared envelope is deliberately **below** both variants' static request, so
+actuation can only lower a worker's ask; tightening it needs a measured node
+allocatable ([Q448](../../docs/STATUS.md#Q448)).
 
 Both use one build-capable runner image
 (`scripts/dogfood/e2e-runner/Dockerfile` —

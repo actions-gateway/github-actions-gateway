@@ -226,11 +226,31 @@ before it spends anything, not 25 minutes in.
    `actions-gateway-crds-v2.yaml` + `.cosign.bundle`, `cosign verify-blob` against the
    publish identity (step 3 below), `kubectl apply --server-side` it, and assert the
    five v2 CRDs register — the helm-free install path operators actually use.
-4. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh`
+4. **Assert the sizing profiles actuated.** A profile that silently falls back to
+   `Static` still provisions a healthy pod and still runs the matrix green, so
+   without this leg every other check reports success while the release's
+   headline feature sits inert. `sizing_leg` treats the two profiles differently
+   on purpose:
+
+   | Profile | Tenant | Behaviour |
+   |---|---|---|
+   | `NodeShare` | `gag-dogfood-e2e` | **Hard failure.** It needs no sample history, so it must report `sizingProfileState: Active` and derive the envelope's per-worker share. Anything else is a defect. |
+   | `Throughput` | `gag-dogfood` | **Reported, never fatal.** It needs ≥20 samples per template container, which accrues from the CI tenant's ordinary traffic over days — not from this gate. |
+   | `Binpack` | — | Not re-asserted; live-validated 2026-07-25. |
+
+   **Throughput has a pre-condition you cannot satisfy during the gate.** The
+   `ci` tenant must already be carrying ≥20 samples per container when the RC
+   runs, or the leg reports `NOT VALIDATED THIS RUN` and the profile ships
+   live-unvalidated. `scripts/dogfood/setup.sh` configures it, and
+   `status.sizingRecommendation` survives an AGC restart and a re-apply — so
+   deploy that config **well before the RC window**, not during it.
+
+5. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh`
    (dogfood scales to 0 at rest).
 
-A red matrix or a failed CRD smoke is a **stop-ship for the GA tag**: fix forward and
-cut a new RC — never promote a known-bad RC to a stable tag.
+A red matrix, a failed CRD smoke, or a dead `NodeShare` profile is a **stop-ship for
+the GA tag**: fix forward and cut a new RC — never promote a known-bad RC to a stable
+tag.
 
 ### 2. Tag and push
 

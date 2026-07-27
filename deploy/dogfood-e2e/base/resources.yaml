@@ -48,3 +48,34 @@ spec:
   # this single label. (Q231)
   runnerLabels: ["gag-ci-e2e"]
   maxWorkers: 2
+  # NodeShare sizing (Q359 Phase 3). This tenant validates the profile the
+  # release gate can actually reach in a single run: NodeShare needs NO usage
+  # history, so it actuates on the first job, unlike Binpack/Throughput which
+  # wait for 20 samples. That is also why it is the profile an operator can
+  # enable on day one — and it was the least exercised of the four.
+  #
+  # THE ENVELOPE IS A DELIBERATE LOWER BOUND, NOT THE NODE'S REAL ALLOCATABLE.
+  # The e2e pool is c2-standard-8 (8 vCPU), but the true allocatable after GKE
+  # system daemonsets has not been measured, and NodeShare divides the envelope
+  # into the RUNNER container only — the dind sidecar (2 CPU kata / 1 CPU dind)
+  # and the Kata RuntimeClass overhead (250m) are the operator's accounting, per
+  # the profile's design. Declaring an envelope too large would derive a runner
+  # request the node cannot hold and make the release's own e2e gate
+  # unschedulable, so this is pinned below BOTH variants' static runner request
+  # (kata 2, dind 3): actuation can only ever REDUCE the pod's ask, never grow
+  # it. 1500m is also observably different from either template, which is what
+  # lets validate-release.sh prove the profile actuated rather than assuming it.
+  #
+  # It leaves packing on the table by construction. Tighten it once someone
+  # measures the real number on a live e2e node:
+  #   kubectl get node -l cloud.google.com/gke-nodepool=gag-e2e-pool \
+  #     -o jsonpath='{.items[0].status.allocatable}'
+  # Tracked as Q448. CPU only on purpose: memory is non-compressible and both
+  # variants already carry hand-measured requests/limits (Q248), so there is no
+  # safe reduction to make there without the same measurement.
+  sizing:
+    profile: NodeShare
+    nodeShare:
+      allocatable:
+        cpu: "1500m"
+      workersPerNode: 1

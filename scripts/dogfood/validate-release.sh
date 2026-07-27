@@ -3,8 +3,8 @@
 # whole gate end-to-end and self-cleans on exit:
 #
 #   deploy (setup.sh) -> route CI (start.sh) -> on-demand e2e (e2e-start.sh)
-#   -> re-run the e2e matrix on GAG runners (gh run rerun) -> signed v2 CRD
-#   artifact smoke -> teardown (e2e-stop.sh + stop.sh)
+#   -> re-run the e2e matrix on GAG runners (gh run rerun) -> sizing-profile
+#   assertion -> signed v2 CRD artifact smoke -> teardown (e2e-stop.sh + stop.sh)
 #
 # It bakes in the env and ordering that the manual runbook
 # (docs/operations/release.md § "Validate the release candidate on dogfood")
@@ -81,6 +81,18 @@ V2_CRDS=(
 
 # WORKDIR holds the downloaded CRD artifacts; the EXIT trap removes it.
 WORKDIR=""
+
+# The on-demand e2e tenant's namespace and the label the provisioner stamps on
+# worker pods (provisioner.LabelRunnerSet), used by the sizing leg to find a
+# live worker.
+E2E_NAMESPACE="gag-dogfood-e2e"
+RUNNER_SET_LABEL="actions-gateway.com/runner-set"
+
+# The runner cpu request NodeShare must derive on an e2e worker: the nodeShare
+# envelope declared in deploy/dogfood-e2e/base/resources.yaml divided by its
+# workersPerNode (1500m / 1). Kept here rather than recomputed so a drift
+# between the manifest and this gate is a loud failure, not a silent pass.
+EXPECTED_NODESHARE_CPU="1500m"
 
 # E2E_RESOLVED_RUN_ID is the run id the e2e leg re-runs. resolve_e2e_run_id sets
 # it BEFORE any billable work; e2e_leg only consumes it.
@@ -216,9 +228,105 @@ e2e_leg() {
 		sleep 5
 	done
 
+	# Sample a live worker's derived sizing while the matrix runs. Worker pods are
+	# ephemeral — released the moment their job finishes — so this is the only
+	# window in which the value NodeShare derived can be read at all.
+	capture_worker_sizing &
+	local capture_pid=$!
+
 	echo "Watching run ${run_id} to completion (runners autoscale in; may be slow)..."
 	gh run watch "${run_id}" --repo "${REPO}" --exit-status
 	echo "  e2e matrix GREEN"
+	wait "${capture_pid}" || true
+}
+
+# capture_worker_sizing records the runner container's cpu request from the
+# first e2e worker pod it catches, into a file the sizing leg reads (a
+# background function cannot set a parent variable). Best-effort by design: a
+# miss is reported, never fatal, because pod churn is not a release defect. The
+# hard assertion in sizing_leg is on status.sizingProfileState, which persists
+# after every worker is gone.
+capture_worker_sizing() {
+	local i pod cpu
+	for ((i = 0; i < 30; i++)); do
+		pod="$(kubectl get pods -n "${E2E_NAMESPACE}" \
+			-l "${RUNNER_SET_LABEL}=ci-e2e" \
+			-o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+		if [[ -n "${pod}" ]]; then
+			cpu="$(kubectl get pod "${pod}" -n "${E2E_NAMESPACE}" \
+				-o jsonpath='{.spec.containers[?(@.name=="runner")].resources.requests.cpu}' 2>/dev/null || true)"
+			if [[ -n "${cpu}" ]]; then
+				printf '%s' "${cpu}" >"${WORKDIR}/e2e-runner-cpu"
+				return 0
+			fi
+		fi
+		sleep 10
+	done
+	return 0
+}
+
+# sizing_leg — assert the v1.3 headline sizing profiles actually actuated on
+# real workers. Without this the gate can pass having exercised NONE of them:
+# a profile that falls back to Static still provisions a healthy pod and still
+# runs the matrix green, so every other leg here would report success while the
+# release's headline feature sat inert. Same failure shape as Q400/Q404 — a
+# gate that cannot observe the thing it gates.
+#
+# The two profiles are asserted differently ON PURPOSE:
+#   NodeShare  — hard failure. It needs no sample history, so it MUST be Active
+#                whenever the overlay is applied. Anything else is a defect.
+#   Throughput — reported, never fatal. It needs >=20 samples per template
+#                container (usage.MinSamplesForDrift), which accrues from the
+#                CI tenant's ordinary traffic over days, not from this gate. A
+#                release must not be blocked on history maturing — but shipping
+#                the profile unvalidated must not be SILENT either.
+# Binpack is already live-validated (2026-07-25) and is not re-asserted here.
+sizing_leg() {
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
+	echo "Asserting the v1.3 sizing profiles actuated on real workers..."
+
+	local state
+	state="$(kubectl get runnerset ci-e2e -n "${E2E_NAMESPACE}" \
+		-o jsonpath='{.status.sizingProfileState}' 2>/dev/null || true)"
+	if [[ "${state}" != "Active" ]]; then
+		echo "error: RunnerSet ci-e2e sizingProfileState is '${state:-<empty>}', want Active." >&2
+		echo "  NodeShare needs no sample history, so anything else means the profile is not" >&2
+		echo "  actuating and every e2e worker ran on the template's static values instead." >&2
+		echo "  Check spec.sizing on deploy/dogfood-e2e/base/resources.yaml reached the cluster." >&2
+		return 1
+	fi
+	echo "  NodeShare: ci-e2e sizingProfileState=Active"
+
+	local observed=""
+	[[ -r "${WORKDIR}/e2e-runner-cpu" ]] && observed="$(cat "${WORKDIR}/e2e-runner-cpu")"
+	if [[ -z "${observed}" ]]; then
+		echo "  NodeShare: derived value NOT checked — no live worker pod was caught during"
+		echo "             the matrix. The state assertion above still holds; the pod-level"
+		echo "             value is simply unsampled this run."
+	elif [[ "${observed}" != "${EXPECTED_NODESHARE_CPU}" ]]; then
+		echo "error: e2e worker runner cpu request is '${observed}', want '${EXPECTED_NODESHARE_CPU}'." >&2
+		echo "  That is the nodeShare envelope in deploy/dogfood-e2e/base/resources.yaml" >&2
+		echo "  divided by workersPerNode. A mismatch means the two drifted apart." >&2
+		return 1
+	else
+		echo "  NodeShare: worker runner cpu request=${observed} (derived — the templates ask 2 and 3)"
+	fi
+
+	# Throughput on the always-on CI tenant: report, never fail.
+	local ci_state samples
+	ci_state="$(kubectl get runnerset ci -n gag-dogfood \
+		-o jsonpath='{.status.sizingProfileState}' 2>/dev/null || true)"
+	samples="$(kubectl get runnerset ci -n gag-dogfood \
+		-o jsonpath='{.status.sizingRecommendation[*].sampleCount}' 2>/dev/null || true)"
+	echo "  Throughput: ci sizingProfileState=${ci_state:-<empty>} sampleCounts=[${samples:-none}]"
+	if [[ "${ci_state}" == "Active" ]]; then
+		echo "             Throughput IS actuating — this RC ran CI on derived sizing."
+	else
+		echo "             NOT VALIDATED THIS RUN: Throughput needs >=20 samples per container."
+		echo "             The RC is not blocked on it, but the profile ships live-unvalidated."
+		echo "             Configure spec.sizing on the ci tenant well before the RC window so"
+		echo "             history accrues; see scripts/dogfood/setup.sh."
+	fi
 }
 
 # preflight_cosign — resolve the cosign binary the CRD smoke needs and set
@@ -387,6 +495,7 @@ main() {
 
 	deploy_leg
 	e2e_leg
+	sizing_leg
 	crd_smoke
 
 	echo ""

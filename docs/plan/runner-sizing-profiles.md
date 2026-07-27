@@ -183,7 +183,43 @@ guard, and the clamp call each removed in turn).
 `Binpack` has ([Live validation](#live-validation-2026-07-25)), so `Throughput`
 and `NodeShare` carry envtest confidence, not dogfood confidence. `NodeShare` is
 the more consequential of the two to leave there, since it needs no warm-up and
-so is the profile an operator can enable on day one.
+so is the profile an operator can enable on day one. The live path is below.
+
+### The live path, and why the RC gate could not have found this
+
+Auditing what `validate-release.sh` would actually exercise turned up something
+worse than the missing envtests: **neither dogfood tenant declared
+`spec.sizing` at all**, so the gate provisioned every worker at the `Static`
+default and would have passed an RC having validated none of the four profiles.
+The failure mode is quiet by construction — `Static` yields a valid, healthy
+pod, the matrix goes green, and nothing in the gate looks wrong. It is the
+Q400/Q404 shape again: a gate that cannot observe the thing it gates.
+
+Three changes close it, and they are asymmetric because the profiles are:
+
+| Profile | Where | Why there |
+|---|---|---|
+| `Throughput` | `ci` tenant (`scripts/dogfood/setup.sh`) | Needs ≥20 samples/container. The ~7-job e2e matrix cannot reach that in one run; the always-on CI tenant accrues them organically (it hit 36 on 07-25) and `status.sizingRecommendation` survives restart and re-apply. Must be configured **before** the RC window. |
+| `NodeShare` | e2e tenant (`deploy/dogfood-e2e/base/resources.yaml`) | Needs no history, so it actuates on the first job — the only profile a single gate run can validate outright. |
+| `Binpack` | — | Already live-validated; not re-run. |
+
+`Throughput` also happens to be what the `ci` template already encodes by hand —
+requests-only CPU, memory limit above the request for OOM headroom (Q248) — so
+the profile and the measured shape agree, and `minRequests`/`maxRequests` bound
+a bad derivation away from starving or over-asking on a real CI tenant.
+
+**The e2e envelope is a deliberate lower bound.** `allocatable.cpu: 1500m /
+workersPerNode: 1` sits below both variants' static runner request (kata 2, dind
+3), so actuation can only ever *reduce* a worker's ask — a wrong guess cannot
+make the release's own e2e gate unschedulable. It is CPU-only for the same
+reason. The true c2-standard-8 allocatable has not been measured, and NodeShare
+divides into the runner container only, leaving the dind sidecar and Kata's
+250m RuntimeClass overhead as the operator's accounting; the honest envelope
+therefore needs one `kubectl get node` reading first ([Q448](../STATUS.md#Q448)).
+The trivial `÷1` divisor is fine here on purpose: the envtests above already
+cover the arithmetic (8÷4, 32Gi÷4), so the dogfood leg buys the thing envtest
+cannot — actuation through the real provisioner, on a real GKE node, for a
+real job.
 
 Decisions taken at pickup (implementation:
 `cmd/agc/internal/controller/runnerset_sizing_profile.go`, applied in

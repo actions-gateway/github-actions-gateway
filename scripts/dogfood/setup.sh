@@ -672,6 +672,39 @@ spec:
   # deliberately absent: it is a Classic-only knob (one listener goroutine per
   # runner record) that the ScaleSet path ignores: a scale set has ONE listener.
   maxWorkers: 8
+  # Throughput sizing (Q359 Phase 3). This tenant is the ONLY place the profile
+  # can be validated live: it needs >=20 sampled jobs per template container
+  # (usage.MinSamplesForDrift) before it actuates, and the ~7-job e2e matrix in
+  # the release gate cannot reach that in one run. The always-on CI tenant
+  # accumulates samples organically — it reached 36 on 2026-07-25 — and
+  # status.sizingRecommendation survives an AGC restart and a re-apply, so the
+  # history is here when the RC gate looks. Configure it well BEFORE the RC
+  # window; configure it during, and the gate sees AwaitingSamples.
+  #
+  # Throughput rather than Binpack because it is what this template already
+  # encodes by hand: requests-only CPU (a limit just throttles bursty Go
+  # build/test jobs) with a memory limit above the request for OOM headroom.
+  # Binpack is already live-validated on this tenant (2026-07-25); Throughput
+  # is not, and both are v1.3 headline features.
+  #
+  # The clamps are the safety rails, not decoration: this tenant runs the
+  # project's real CI, so a derivation from noisy early samples must not be
+  # able to starve a heavy job or ask for a pod the node cannot hold.
+  #   minRequests.cpu 1    — a heavy -race/lint/envtest job never drops below
+  #                          one core's guarantee, whatever the p95 says.
+  #   maxRequests.cpu 3    — an e2-standard-4 worker node has ~3.4 vCPU
+  #                          allocatable; 3 still schedules, 4 would not.
+  #   minRequests.memory   — 1Gi floor under the measured ~2.1Gi peak.
+  # Reverting is a one-line delete here plus a re-apply, or an immediate
+  # kubectl patch of runnersets.v2alpha1.actions-gateway.com/ci in gag-dogfood
+  # removing /spec/sizing (--type=json, op remove).
+  sizing:
+    profile: Throughput
+    minRequests:
+      cpu: "1"
+      memory: "1Gi"
+    maxRequests:
+      cpu: "3"
 EOF
 }
 
