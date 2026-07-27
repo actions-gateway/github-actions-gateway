@@ -1,5 +1,11 @@
 # e2e CI speed, round 2
 
+**Status: Complete.** All six items shipped. Two sub-items under §6 are closed
+decisions rather than open work: the metrics-server `--metric-resolution` drop
+was tried, measured, and reverted, and the kube-controller-manager HPA sync
+period is declined on flake-risk grounds. Both are recorded below with their
+evidence. No Queue or Deferred row carries a residual.
+
 Second pass at the wall-clock cost of the `e2e / e2e` job, after
 [docker-image-speed.md](docker-image-speed.md) and
 [e2e-tests-speed.md](e2e-tests-speed.md) exhausted their own lists. Everything
@@ -15,7 +21,7 @@ open.
 | 3 | Make the dependency compile a GHA-cacheable layer | ✅ Done — `deps` stage, `GOCACHE` as a real directory |
 | 4 | Overlap the runner disk cleanup with job setup | ✅ Done — detached cleanup + a barrier before the bake |
 | 5 | De-serialize `E2E_AGC_WorkerPodLifecycle` | ✅ Done — owner-scoped enqueue, `Serial` dropped |
-| 6 | Trim the HPA spec's fixed waits | ⚠️ Partial — `Consistently` 30s → 15s shipped; the metrics-server resolution change was tried and reverted |
+| 6 | Trim the HPA spec's fixed waits | ✅ Done — `Consistently` 30s → 15s shipped; metrics-server resolution tried, measured, reverted; the kcm sync period declined |
 
 ## Baseline
 
@@ -268,6 +274,7 @@ reconciler does not claim `.spec.replicas` back from the HPA.
   re-triggers a reconcile, and at 2 s polling 15 s still samples the Deployment
   eight times across many passes. This is a fixed cost paid on every run inside
   a Serial spec, so it lands whole on the critical tail.
+
 ### Tried and reverted: metrics-server `--metric-resolution` 15 s → 10 s
 
 The HPA cannot report `ScalingActive=True` until metrics-server has scraped, so
