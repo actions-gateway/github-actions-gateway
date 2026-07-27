@@ -58,6 +58,15 @@ Test output is non-verbose by default: `go test` prints one `ok <pkg>` line per 
 
 A sub-second subset (gofmt on staged Go files + the STATUS.md lint) also runs automatically at commit time via the tracked pre-commit hook in `.githooks/`. Install it once with `make hooks` (or `scripts/setup.sh`); bypass a single commit with `git commit --no-verify`.
 
+#### Measuring the local gate: start from what is already recorded
+
+Before benchmarking any change to the throttle, the parallelism cap, or the slot count, read the phase costs already measured in [local-gate-throughput.md](../plan/local-gate-throughput.md) and pick a workload from them. Two facts there decide the experiment, and re-deriving them costs a session:
+
+- **`golangci-lint` is what saturates.** It fans out one worker per logical CPU and ignores `GOMAXPROCS`, so it — with coverage — is where `make check` spends its time. **`-race` is not part of `make check` at all**, and the full workspace race tier measures ~12–14 % mean CPU on an 18-core machine: far too little to tell two configurations apart.
+- **Only the cold-cache case is CPU-heavy.** Since `-trimpath` made the test-result cache shared across worktrees, a warm gate runs at ~12–14 % CPU and no throttle setting is load-bearing. `GOCACHE` — not `GOLANGCI_LINT_CACHE` — is the cache that decides whether a lint run costs anything; bust only the latter and a module lints in ~1 s.
+
+**Confirm the workload actually loaded the machine before believing any comparison.** Sample CPU busy% for the duration of each run and discard a trial where no configuration reaches ~50 %: an undersized workload returns identical timings for every configuration and reads as a clean result rather than an absent one. [`scripts/validate-throttle.sh`](../../scripts/validate-throttle.sh) enforces this and marks such a trial `INVALID`; [`scripts/qos-cluster-probe.sh`](../../scripts/qos-cluster-probe.sh) measures the compute ceiling a candidate prefix can reach. Calibrate any new instrument against a known-saturating load first — a null result is only evidence if the instrument can see a positive.
+
 #### Resource auto-throttle on GUI dev machines
 
 `make lint`/`make test`/`make check` lint each module with `golangci-lint` (which fans out one worker per logical CPU and ignores `GOMAXPROCS`/`GOFLAGS`) and run `go test` across every module. On a small machine this can saturate every core and make the desktop unresponsive. On macOS it is worst: the WindowServer compositor misses its kernel watchdog and restarts — the whole GUI freezes (it shows up as `WindowServer … userspace_watchdog_timeout` in **Console ▸ Crash Reports**). On a Linux/WSL desktop you instead get input lag and compositor stutter while the build runs.
