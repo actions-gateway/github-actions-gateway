@@ -148,6 +148,103 @@ else
 	echo "ok   a non-executable cosign fails the preflight"
 fi
 
+# --- The sizing-profile leg: the gate must be able to FAIL on a dead profile ---
+#
+# The whole point of sizing_leg is that a profile which silently falls back to
+# Static still provisions a healthy pod and still runs the matrix green, so
+# every other leg reports success. These assertions pin that the leg can
+# actually fail — a gate that cannot fail is decoration — and, just as
+# importantly, that it does NOT fail on the one condition that is not a defect:
+# Throughput's sample history not having matured yet.
+
+# stub_sizing_kubectl installs a kubectl stub answering the three jsonpath reads
+# sizing_leg makes: $1 = ci-e2e profile state, $2 = ci profile state,
+# $3 = ci sample counts.
+stub_sizing_kubectl() {
+	local e2e_state="$1" ci_state="$2" ci_samples="$3"
+	eval "kubectl() {
+		case \"\$*\" in
+			*runnerset\ ci-e2e*) printf '%s' '${e2e_state}' ;;
+			*sizingRecommendation*) printf '%s' '${ci_samples}' ;;
+			*runnerset\ ci\ *) printf '%s' '${ci_state}' ;;
+		esac
+	}"
+}
+
+# sizing_leg pins the cluster context before it reads anything, so the target
+# vars must be set even though the stub ignores them (set -u).
+PROJECT=p ZONE=z CLUSTER=c
+gke_get_credentials_and_verify() { echo "pin"; }
+
+# The happy path: NodeShare Active, the sampled worker matches the envelope.
+stub_sizing_kubectl "Active" "Active" "31 27"
+printf '%s' "${EXPECTED_NODESHARE_CPU}" >"${WORKDIR}/e2e-runner-cpu"
+if out="$(sizing_leg 2>&1)"; then
+	echo "ok   an actuating NodeShare passes the leg"
+else
+	echo "FAIL an actuating NodeShare must pass the leg" >&2
+	fails=$((fails + 1))
+fi
+check_contains "the leg reports the derived request" "cpu request=${EXPECTED_NODESHARE_CPU}" "${out}"
+check_contains "an active Throughput is reported as validated" "Throughput IS actuating" "${out}"
+
+# A profile that fell back to Static is the exact failure this leg exists for.
+stub_sizing_kubectl "AwaitingSamples" "Active" "31"
+if out="$(sizing_leg 2>&1)"; then
+	echo "FAIL a non-Active NodeShare must fail the gate" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   a non-Active NodeShare fails the gate"
+fi
+check_contains "the failure explains the fallback" "static values" "${out}"
+
+# An empty state (no profile configured at all) must fail the same way — this is
+# the pre-2026-07-26 condition, where the gate validated no profile whatsoever.
+stub_sizing_kubectl "" "" ""
+if sizing_leg >/dev/null 2>&1; then
+	echo "FAIL an unconfigured NodeShare must fail the gate" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   an unconfigured NodeShare fails the gate"
+fi
+
+# Active but deriving the wrong number: the manifest envelope and this gate's
+# expectation drifted apart.
+stub_sizing_kubectl "Active" "Active" "31"
+printf '%s' "999m" >"${WORKDIR}/e2e-runner-cpu"
+if out="$(sizing_leg 2>&1)"; then
+	echo "FAIL a mismatched derived request must fail the gate" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   a mismatched derived request fails the gate"
+fi
+check_contains "the mismatch names both values" "want '${EXPECTED_NODESHARE_CPU}'" "${out}"
+
+# No worker sampled: the state assertion still holds, and the skip is announced
+# rather than passing silently.
+stub_sizing_kubectl "Active" "Active" "31"
+rm -f "${WORKDIR}/e2e-runner-cpu"
+if out="$(sizing_leg 2>&1)"; then
+	echo "ok   an unsampled worker does not fail the leg"
+else
+	echo "FAIL an unsampled worker must not fail the leg" >&2
+	fails=$((fails + 1))
+fi
+check_contains "the unsampled run announces the skip" "NOT checked" "${out}"
+
+# Throughput below its sample threshold is NOT a release blocker — but it must
+# be said out loud, because the profile then ships live-unvalidated.
+stub_sizing_kubectl "Active" "AwaitingSamples" "4 6"
+printf '%s' "${EXPECTED_NODESHARE_CPU}" >"${WORKDIR}/e2e-runner-cpu"
+if out="$(sizing_leg 2>&1)"; then
+	echo "ok   an immature Throughput history does not block the release"
+else
+	echo "FAIL an immature Throughput history must not block the release" >&2
+	fails=$((fails + 1))
+fi
+check_contains "an unvalidated Throughput is called out" "NOT VALIDATED THIS RUN" "${out}"
+check_contains "the sample counts are printed" "sampleCounts=[4 6]" "${out}"
+
 # --- Q355: failure diagnostics are captured before teardown evicts them ---
 
 # Stub the cluster touchpoints. kubectl records its argv (proving which
