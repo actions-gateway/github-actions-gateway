@@ -1648,13 +1648,30 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#where-the-gateways-own-quota-conditions-under-count" class="md-nav__link">
+  <a href="#what-the-gateways-own-quota-conditions-count" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Where the gateway's own quota conditions under-count
+        What the gateway's own quota conditions count
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="What the gateway&#39;s own quota conditions count">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pod-overhead-needs-a-cluster-scoped-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pod overhead needs a cluster-scoped read
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2437,13 +2454,30 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#where-the-gateways-own-quota-conditions-under-count" class="md-nav__link">
+  <a href="#what-the-gateways-own-quota-conditions-count" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Where the gateway's own quota conditions under-count
+        What the gateway's own quota conditions count
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="What the gateway&#39;s own quota conditions count">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pod-overhead-needs-a-cluster-scoped-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pod overhead needs a cluster-scoped read
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2506,7 +2540,7 @@ never creates or mutates it (see
 <li><a href="#only-constrain-keys-every-pod-declares">Only constrain keys every pod declares</a></li>
 <li><a href="#sizing-profiles-change-the-ask-at-pod-build">Sizing profiles change the ask at pod build</a></li>
 <li><a href="#worked-example--a-dind-tenant-at-12-concurrent-jobs">Worked example — a DinD tenant at 12 concurrent jobs</a></li>
-<li><a href="#where-the-gateways-own-quota-conditions-under-count">Where the gateway's own quota conditions under-count</a></li>
+<li><a href="#what-the-gateways-own-quota-conditions-count">What the gateway's own quota conditions count</a></li>
 <li><a href="#related">Related</a></li>
 </ul>
 <h2 id="what-the-quota-actually-counts">What the quota actually counts<a class="headerlink" href="#what-the-quota-actually-counts" title="Permanent link">&para;</a></h2>
@@ -2539,8 +2573,8 @@ them are easy to miss on exactly the worker shapes that cost the most.</p>
 </tr>
 <tr>
 <td><code>RuntimeClass</code> pod overhead (<code>overhead.podFixed</code>)</td>
-<td><strong>Added</strong>, to requests <em>and</em> limits</td>
-<td>Kata workers carry <code>250m</code> CPU / <code>160Mi</code> memory per pod on top of their containers.</td>
+<td><strong>Added</strong> to requests in full; added to limits <strong>only for a key the pod already limits</strong> with a non-zero value</td>
+<td>Kata workers carry <code>250m</code> CPU / <code>160Mi</code> memory per pod on top of their containers. The asymmetry matters: a shape with no CPU limit gets no overhead on <code>limits.cpu</code>.</td>
 </tr>
 </tbody>
 </table>
@@ -2557,9 +2591,11 @@ CPU request and 75% of its memory request.</p>
 <code>RuntimeClass</code> overhead:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pod.requests.cpu    = Σ containers req.cpu    + Σ nativeSidecars req.cpu    + overhead.cpu
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pod.requests.memory = Σ containers req.memory + Σ nativeSidecars req.memory + overhead.memory
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pod.limits.cpu      = Σ containers lim.cpu    + Σ nativeSidecars lim.cpu    + overhead.cpu
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>pod.limits.memory   = Σ containers lim.memory + Σ nativeSidecars lim.memory + overhead.memory
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pod.limits.cpu      = Σ containers lim.cpu    + Σ nativeSidecars lim.cpu    [+ overhead.cpu]
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>pod.limits.memory   = Σ containers lim.memory + Σ nativeSidecars lim.memory [+ overhead.memory]
 </code></pre></div>
+<p>The bracketed overhead terms apply <strong>only if that limit is already non-zero</strong>. A
+shape declaring no CPU limit is not charged <code>overhead.cpu</code> against <code>limits.cpu</code>.</p>
 <p>Where the inputs come from:</p>
 <table>
 <thead>
@@ -2582,8 +2618,8 @@ CPU request and 75% of its memory request.</p>
 </tr>
 <tr>
 <td><code>overhead.podFixed</code></td>
-<td>the <code>RuntimeClass</code> named by <code>podTemplate.spec.runtimeClassName</code></td>
-<td>none (no <code>runtimeClassName</code> ⇒ no overhead)</td>
+<td><code>podTemplate.spec.overhead</code> when the template declares it, else the <code>RuntimeClass</code> named by <code>podTemplate.spec.runtimeClassName</code></td>
+<td>none (no <code>runtimeClassName</code> and no declared <code>overhead</code> ⇒ no overhead)</td>
 </tr>
 </tbody>
 </table>
@@ -2928,26 +2964,31 @@ conditions when the remaining headroom cannot cover the configured ceilings:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .status.conditions[?(@.type==&quot;WorkerQuotaPressure&quot;)]}{.status}{&quot; &quot;}{.message}{&quot;\n&quot;}{end}&#39;</span>
 </code></pre></div>
 <p><code>False</code> on both means the quota admits scaling to <code>maxReplicas</code> and <code>maxWorkers</code>.</p>
-<h2 id="where-the-gateways-own-quota-conditions-under-count">Where the gateway's own quota conditions under-count<a class="headerlink" href="#where-the-gateways-own-quota-conditions-under-count" title="Permanent link">&para;</a></h2>
-<p>Every consumer of the gateway's quota arithmetic computes a worker's footprint
-from the pod's <strong>regular containers only</strong> — excluding all init containers and
-ignoring <code>RuntimeClass</code> overhead. That is three surfaces, all sharing one
-<code>WorkerFootprint</code> calculation:</p>
+<h2 id="what-the-gateways-own-quota-conditions-count">What the gateway's own quota conditions count<a class="headerlink" href="#what-the-gateways-own-quota-conditions-count" title="Permanent link">&para;</a></h2>
+<p>The gateway computes a worker's footprint with the same four-part arithmetic this
+page uses — regular containers, native sidecars, the plain-init <code>max()</code> floor, and
+<code>RuntimeClass</code> overhead. One calculation feeds all three surfaces, so they cannot
+disagree:</p>
 <ul>
 <li>the <code>WorkerQuotaPressure</code> / <code>WorkerQuotaExceeded</code> conditions;</li>
 <li>the pre-claim quota gate on the classic acquisition tier;</li>
 <li>the capacity integer a scale-set runner set advertises to GitHub, which folds
   in live quota headroom on the default tier.</li>
 </ul>
-<p>That is correct for plain init containers, which contribute via <code>max()</code>. It is
-<strong>wrong for native sidecars</strong>, which Kubernetes sums. So on a DinD or Kata
-tenant the gateway under-counts each worker pod by the sidecar's whole ask plus
-any pod overhead:</p>
+<p>So a <code>False</code> <code>WorkerQuotaPressure</code> means the quota admits scaling to <code>maxWorkers</code>
+at the pod's <strong>full</strong> cost, sidecar and overhead included.</p>
+<div class="admonition warning">
+<p class="admonition-title">This changed — conditions may now trip where they did not before</p>
+<p>Before this fix the footprint was the sum of <code>spec.containers</code> alone: all init
+containers were dropped, and <code>RuntimeClass</code> overhead was ignored. That was
+correct for plain init containers but <strong>wrong for native sidecars</strong>, which
+Kubernetes sums. A DinD or Kata tenant was under-counted by the sidecar's
+entire ask plus any pod overhead:</p>
 <table>
 <thead>
 <tr>
 <th>Shape</th>
-<th>Per-pod under-count</th>
+<th>Former per-pod under-count</th>
 </tr>
 </thead>
 <tbody>
@@ -2961,13 +3002,30 @@ any pod overhead:</p>
 </tr>
 </tbody>
 </table>
-<p><strong>What this means for you:</strong> treat a <code>False</code> <code>WorkerQuotaPressure</code> on a
-native-sidecar tenant as necessary but not sufficient. Size from the arithmetic
-on this page, which counts the sidecar. The failure mode when you don't is not
-silent — worker pods are rejected by the quota at creation and the AGC retries
-them — but it burns lock time that the pressure condition was supposed to warn
-you about first, and on the scale-set tier it means GitHub was told the namespace
-had room for more jobs than it can actually place.</p>
+<p>On upgrade, a native-sidecar tenant whose quota was sized against those
+under-counted numbers can go straight to <code>WorkerQuotaPressure=True</code> (or
+<code>WorkerQuotaExceeded=True</code>) with no change to the quota or the workload.
+<strong>Nothing got worse</strong> — such a quota could never place those pods, so they were
+already being rejected at creation and retried; the condition just reports it
+up front now instead of leaving it to show up as burnt lock time. A quota
+already sized with the arithmetic on this page is unaffected; re-derive any
+that were not.</p>
+</div>
+<h3 id="pod-overhead-needs-a-cluster-scoped-read">Pod overhead needs a cluster-scoped read<a class="headerlink" href="#pod-overhead-needs-a-cluster-scoped-read" title="Permanent link">&para;</a></h3>
+<p>Overhead lives on the cluster-scoped <code>RuntimeClass</code>, not on the pod template, so
+the AGC reads it to size a Kata worker. The chart grants this through the
+per-gateway <code>agc-clusterrunnertemplate-reader</code> <code>ClusterRole</code>; a cluster whose AGC
+image is upgraded ahead of its chart has no such grant.</p>
+<p>The read is <strong>fail-open</strong>: without it the footprint simply omits overhead and the
+conditions behave as they did before, so nothing breaks — a Kata worker is just
+under-counted by its <code>overhead.podFixed</code> again. Confirm the grant landed:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>auth<span class="w"> </span>can-i<span class="w"> </span>get<span class="w"> </span>runtimeclasses<span class="w"> </span>--as<span class="o">=</span>system:serviceaccount:&lt;NAMESPACE&gt;:&lt;AGC_SERVICEACCOUNT&gt;
+</code></pre></div>
+<p>Two cases need no grant at all, because no read happens: a pod template with no
+<code>runtimeClassName</code>, and one that declares <code>spec.overhead</code> itself. A declared
+<code>overhead</code> always wins over the read, and cannot drift — the <code>RuntimeClass</code>
+admission controller rejects any pod whose declared overhead differs from its
+<code>RuntimeClass</code>'s.</p>
 <h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../tenant-onboarding/#step-1b-set-the-platform-owned-resourcequota">Tenant onboarding Step 1b</a> — where the quota is applied in the onboarding flow.</li>

@@ -968,6 +968,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#the-agcs-cluster-scoped-read-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The AGC's cluster-scoped read surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#supply-chain-compromise-of-the-worker-image" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2564,6 +2575,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#the-agcs-cluster-scoped-read-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The AGC's cluster-scoped read surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#supply-chain-compromise-of-the-worker-image" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2938,7 +2960,7 @@
 <tr>
 <td><strong>Denial of Service via Resource Exhaustion</strong></td>
 <td>Medium</td>
-<td>The namespace <code>ResourceQuota</code> is <strong>platform-owned</strong> — the platform admin sets it on the tenant namespace and GAG operates within it without ever creating or mutating it (Q130). It is the hard cap: a tenant-authored quota was removed pre-1.0 because the tenant could simply raise it. CPU/Memory limits are also defined in the <code>RunnerGroup</code> CRD spec. Rogue workflows cannot exceed the tenant quota. Both the GMC and the AGC hold <strong>read-only</strong> (<code>get</code>/<code>list</code>/<code>watch</code>) access to <code>resourcequotas</code> so they can compute the proxy and worker quota conditions respectively (Q82); both deliberately hold <strong>no</strong> quota-write verb, keeping least privilege intact (partially subsumes Q122) — they observe the quota but can never create or relax it. The AGC additionally surfaces <strong><code>WorkerQuotaPressure</code></strong> (warning — workers can't scale to <code>maxWorkers</code> within headroom) and <strong><code>WorkerQuotaExceeded</code></strong> (error — the quota can't admit another worker pod) on each <code>RunnerGroup</code>, complementing Q59's configured-ceiling admission gate.</td>
+<td>The namespace <code>ResourceQuota</code> is <strong>platform-owned</strong> — the platform admin sets it on the tenant namespace and GAG operates within it without ever creating or mutating it (Q130). It is the hard cap: a tenant-authored quota was removed pre-1.0 because the tenant could simply raise it. CPU/Memory limits are also defined in the <code>RunnerGroup</code> CRD spec. Rogue workflows cannot exceed the tenant quota. Both the GMC and the AGC hold <strong>read-only</strong> (<code>get</code>/<code>list</code>/<code>watch</code>) access to <code>resourcequotas</code> so they can compute the proxy and worker quota conditions respectively (Q82); both deliberately hold <strong>no</strong> quota-write verb, keeping least privilege intact (partially subsumes Q122) — they observe the quota but can never create or relax it. The AGC additionally surfaces <strong><code>WorkerQuotaPressure</code></strong> (warning — workers can't scale to <code>maxWorkers</code> within headroom) and <strong><code>WorkerQuotaExceeded</code></strong> (error — the quota can't admit another worker pod) on each <code>RunnerGroup</code>, complementing Q59's configured-ceiling admission gate. The worker footprint behind both conditions — and behind the pre-claim quota gate and the scale-set capacity integer, which share one calculation — matches Kubernetes' own effective-request arithmetic: regular containers and <strong>native sidecars</strong> summed, plain init containers as a <code>max()</code> floor, plus <code>RuntimeClass</code> pod overhead (Q450). Counting containers alone under-counted a DinD or Kata worker by its sidecar's entire ask, so the gate admitted jobs whose pods the quota then rejected.</td>
 </tr>
 <tr>
 <td><strong>Cross-Tenant Pod Preemption via PriorityClass</strong></td>
@@ -2947,6 +2969,56 @@
 </tr>
 </tbody>
 </table>
+<h3 id="the-agcs-cluster-scoped-read-surface">The AGC's cluster-scoped read surface<a class="headerlink" href="#the-agcs-cluster-scoped-read-surface" title="Permanent link">&para;</a></h3>
+<p>The AGC's cache and RBAC are namespace-scoped by design: the GMC binds the
+<code>agc-tenant-role</code> <code>ClusterRole</code> with a per-tenant <strong><code>RoleBinding</code></strong>, so every grant
+in it is confined to the tenant namespace. Two kinds the AGC genuinely depends on
+are cluster-scoped, and a <code>RoleBinding</code> cannot authorize those — they are bound
+separately, and cluster-wide, by the per-gateway <code>agc-clusterrunnertemplate-reader</code>
+<code>ClusterRoleBinding</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Verbs</th>
+<th>Why it cannot be namespaced</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>clusterrunnertemplates</code> (<code>actions-gateway.com</code>)</td>
+<td><code>get</code>/<code>list</code>/<code>watch</code></td>
+<td>The platform-authored worker template a tenant <code>RunnerSet</code> resolves through <code>templateRef</code>.</td>
+</tr>
+<tr>
+<td><code>runtimeclasses</code> (<code>node.k8s.io</code>)</td>
+<td><code>get</code>/<code>list</code>/<code>watch</code></td>
+<td>A worker pod's <code>ResourceQuota</code> charge includes its <code>RuntimeClass</code> <code>overhead.podFixed</code> (<code>250m</code>/<code>160Mi</code> on the reference Kata shape), and that value exists only on the cluster-scoped object — not on the pod template (Q450).</td>
+</tr>
+</tbody>
+</table>
+<p>This list is the whole of the AGC's cluster-wide authority, and the bar for adding
+to it is high. Three properties keep the surface acceptable:</p>
+<ul>
+<li><strong>Read-only, always.</strong> Neither kind carries a write verb. The AGC cannot create,
+  mutate, or delete a <code>ClusterRunnerTemplate</code> or a <code>RuntimeClass</code>; both are
+  platform-owned (a <code>RuntimeClass</code> is typically installed by the runtime's own
+  operator, e.g. kata-deploy).</li>
+<li><strong>Neither kind carries tenant data.</strong> A <code>RuntimeClass</code> holds a handler name, pod
+  overhead, and a scheduling <code>nodeSelector</code> — cluster topology, not secrets and not
+  another tenant's configuration. A compromised AGC reading them learns which
+  sandbox runtimes the cluster offers, which it can already infer from the templates
+  it is entitled to resolve.</li>
+<li><strong>Every read fails open.</strong> An AGC whose <code>ClusterRoleBinding</code> is absent or stale
+  (an image upgraded ahead of its chart) degrades rather than breaking: the
+  overhead term is omitted from the worker footprint and the quota conditions
+  behave as they did before Q450. The grant buys accuracy, so losing it costs
+  accuracy — never availability.</li>
+</ul>
+<p>The corresponding operator-visible consequence — a <code>WorkerQuotaPressure</code> that can
+newly trip on a Kata tenant, and how to confirm the grant landed — is in
+<a href="../../operations/resourcequota-sizing/#pod-overhead-needs-a-cluster-scoped-read">resourcequota-sizing.md</a>
+and the <a href="../../operations/upgrade/#worker-quota-accounting-now-counts-native-sidecars-and-runtimeclass-overhead">upgrade note</a>.</p>
 <h3 id="supply-chain-compromise-of-the-worker-image">Supply-chain compromise of the worker image<a class="headerlink" href="#supply-chain-compromise-of-the-worker-image" title="Permanent link">&para;</a></h3>
 <p><code>WorkerImage</code> SHOULD reference an immutable digest, not a floating tag (see <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1</a>). Digest pinning eliminates the "update the tag, get a different binary" attack class. Operators are expected to restrict the set of permitted registries via cluster admission policy (e.g. Kyverno, OPA Gatekeeper) — the GMC does not enforce this itself because registry policy is a cluster-wide concern. The gateway's own CI runs two supply-chain gates on every PR (<code>security-scan.yml</code>): <code>govulncheck</code> across all Go modules and <code>trivy</code> image scans of all five built images — see <a href="../../development/testing/#security-scanning">testing.md § Security scanning</a>. The four images built from a minimal/distroless base block on fixable HIGH/CRITICAL findings; the default worker image (built <code>FROM</code> the upstream actions-runner) is scanned report-only because its CVEs live in upstream components, with base bumps automated via dependabot. Tenants supplying their own <code>WorkerImage</code> are still expected to scan it themselves. <code>imagePullPolicy: IfNotPresent</code> (digest) or <code>Always</code> (tag) ensures the kubelet does not serve a stale, possibly tampered local copy. For the four first-party images the chart resolves (<code>gmc</code>, and the <code>AGC_IMAGE</code>/<code>PROXY_IMAGE</code>/<code>WRAPPER_IMAGE</code> refs the GMC injects), digest pinning is <em>enforced</em>, not advisory, and it is enforced at <strong>chart render time</strong>: the Helm chart fails to render — naming the offending image — while any of the four digests is empty (the <code>allowFloatingImageTags</code> value is the shared dev/test opt-out), and the CI <code>manifest-validate</code> gate asserts each image's render is rejected, so the check cannot regress to fail-open (Q307). Render-time enforcement is the primary layer because the GMC's own image has no runtime guard at all (nothing validates the image the GMC runs from), and because catching an unpinned AGC/proxy/wrapper ref at render surfaces it as one clear error rather than a later GMC crash-loop. The AGC/proxy/wrapper images are <em>additionally</em> re-checked by the GMC at startup — it rejects any injected reference not in <code>image@sha256:&lt;digest&gt;</code> form (the same <code>--allow-floating-image-tags</code> opt-out) — a second layer that also covers deployments that bypass the chart. All five first-party images additionally carry <code>org.opencontainers.image.*</code> provenance labels (<code>source</code>/<code>revision</code>/<code>version</code>/<code>title</code>/<code>description</code>, with <code>revision</code>/<code>version</code> stamped from the build's git SHA via <code>docker-bake.hcl</code>) so SBOM scanners can trace an image back to its commit, and their Go binaries are compiled with <code>-trimpath -ldflags=-buildid=</code> for path-free, reproducible output (a reproducible-build input). On a <code>v*</code> release tag, <code>publish.yml</code> pushes those five images to GHCR as <strong>multi-arch OCI indexes</strong> (<code>linux/amd64</code> + <code>linux/arm64</code>; the Go builder stages cross-compile on <code>$BUILDPLATFORM</code>, and the digest operators pin is the index digest) and <strong>signs each one keyless with <code>cosign</code></strong> (sigstore/Fulcio via GitHub Actions OIDC — no long-lived signing key, no stored secret), recursively over the index and every per-arch manifest, and attaches an SPDX-JSON SBOM <strong>per architecture</strong> as a cosign attestation on that architecture's manifest, so a downstream operator can <code>cosign verify</code> the publish-workflow identity before deploying and enforce it cluster-wide via an admission policy. Each image also carries a signed <strong>SLSA build-provenance attestation</strong> (<code>actions/attest-build-provenance</code>, Q103) on the index digest via the same keyless Fulcio/Rekor path — authenticated provenance recording the workflow, repo, commit, and trigger (<strong>SLSA Build L2</strong>; buildx's unsigned default provenance is disabled in favour of it, and full Build L3 would require an isolated reusable-workflow builder). The PR-time <code>security-scan.yml</code> already generates each SBOM as a build artifact so that path can't silently break. The publish pipeline itself is hardened against upstream-tag hijack: every <code>uses:</code> across <code>.github/workflows/</code> is pinned to a full commit SHA (the <code>publish</code> job holds <code>id-token: write</code>, so a mutable action tag repointed at malicious code could otherwise keyless-sign images as the release identity), runtime tool downloads are version-pinned (<code>cosign</code> via <code>cosign-installer</code>, <code>syft</code> via <code>syft-version</code>), and Dependabot's <code>github-actions</code> ecosystem bumps the SHA pins so they don't rot (Q123). The keyless signing identity is <strong>tags-only</strong>: <code>publish.yml</code> refuses to run from a non-tag ref and <code>make verify-release</code> anchors the cosign <code>--certificate-identity-regexp</code> to <code>…/publish.yml@refs/tags/v.*$</code>, so a signature minted from a branch (e.g. a <code>workflow_dispatch</code> from a scratch branch overwriting a released tag) is both prevented and rejected (Q124). See <a href="../../operations/security-operations/#image-provenance-signature--sbom-verification">security-operations.md § Image provenance</a> for the operator verification runbook and <a href="../../operations/release/#supply-chain-integrity-of-the-pipeline-itself">release.md § Supply-chain integrity of the pipeline</a> for the SHA-pin / signing-identity policy.</p>
 <h3 id="github-app-key-exfiltration-via-agc-apiserver-egress">GitHub-App-key exfiltration via AGC apiserver egress<a class="headerlink" href="#github-app-key-exfiltration-via-agc-apiserver-egress" title="Permanent link">&para;</a></h3>
