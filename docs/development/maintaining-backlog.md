@@ -6,6 +6,7 @@ The format and process come from the globally-installed **backlog skill** (agent
 
 - [`scripts/lint-backlog.sh`](../../scripts/lint-backlog.sh) — enforces every format rule below; its header comment is the canonical rule list. Runs in `make check` (`make lint-backlog`), CI ([`status-lint.yml`](../../.github/workflows/status-lint.yml) and `unit-test.yml`), and the pre-commit hook. The hook's `--staged` mode also rejects any commit that stages `docs/STATUS.md` alongside other files.
 - [`scripts/alloc-queue-id.sh`](../../scripts/alloc-queue-id.sh) — allocates a new Q-ID (`make queue-id`) by claiming a ref on the remote, so concurrent sessions never take the same one. Rationale, the alternatives weighed, and what it does *not* fix: [queue-id-allocation.md](queue-id-allocation.md).
+- [`scripts/git-merge-status.sh`](../../scripts/git-merge-status.sh) — a git merge driver that resolves Queue-table conflicts by row ID rather than by line position, and falls back to ordinary conflict markers for anything ambiguous. One-time `make merge-driver` per clone; a no-op until then. [Details below](#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position).
 - [`scripts/next-task.sh`](../../scripts/next-task.sh) — prints a kickoff prompt (or `--title`) for the top ready 🔲 Queue row, for starting a fresh session on the next task.
 - [`scripts/backlog-metrics.sh`](../../scripts/backlog-metrics.sh) — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP). Read-only.
 
@@ -21,9 +22,38 @@ The format and process come from the globally-installed **backlog skill** (agent
 - **`docs/STATUS.md` edits are isolated commits** — never mixed with code or plan-doc changes, even when completing an item mid-feature (the pre-commit hook enforces this). Use `docs(status):` subjects, and name the removal reason with a fixed verb — `complete QN`, `prune QN`, `merge QN into QM`, `defer QN` — so metrics can tell throughput from garbage collection. Batch bulk additions (one audit's discoveries) into one commit; keep reshuffles separate from additions. When a rebase or merge conflicts on this file, resolve it via the [fast path](#resolving-a-statusmd-only-conflict-verify-cheap-push-now) below.
 - **M/L items get a plan doc** under `docs/plan/`, linked from the Item cell.
 
+## The merge driver: resolve Queue rows by ID, not by line position
+
+Most `docs/STATUS.md` conflicts are an artifact of the file's shape rather than a real disagreement. A plain three-way merge decides by line position, and the process puts every edit in the same place: pick from the top, insert at the priority the item deserves, flakes first. One untouched row of separation merges cleanly; **adjacent** rows do not, so a four-worker dispatch batch that takes rows 1–4 conflicts by construction ([the measurements](queue-id-allocation.md#what-this-fixes-and-what-it-does-not)).
+
+[`scripts/git-merge-status.sh`](../../scripts/git-merge-status.sh) is a git merge driver that decides the Queue table by **row ID** instead: a row deleted on either side is deleted, a row added on either side is present, a row changed on one side takes that change, and row order is rebuilt from whichever side reordered. It runs on local merges, rebases, cherry-picks and stash applications — everywhere the pain is.
+
+**One-time setup, per clone:**
+
+```bash
+make merge-driver
+```
+
+`.gitattributes` already routes the file to `merge=backlog`, but git deliberately refuses to let a tracked file define a driver's *command* — that would be remote code execution on clone — so the config half is per-clone and opt-in. **Nothing requires you to install it:** until you do, the attribute names an undefined driver and git silently uses its built-in three-way merge, which is exactly the pre-driver behaviour. [`scripts/setup.sh`](../../scripts/setup.sh) installs it for you, as it does the git hooks.
+
+**What it refuses to resolve.** Every uncertainty ends the same way — the plain three-way merge re-runs and its conflict markers stand, with a one-line reason on stderr:
+
+| Situation | Outcome |
+|---|---|
+| A row changed on both sides | conflict markers |
+| A row deleted on one side, edited on the other | conflict markers |
+| One ID filed on both sides with different content | conflict markers |
+| Rows reordered on both sides | conflict markers |
+| A row whose anchor is missing or disagrees with its visible ID | conflict markers |
+| A conflict outside the Queue rows (Progress table, Deferred table, prose) | conflict markers |
+
+A conflict marker costs a minute; a wrongly resolved row loses backlog state. Two consequences worth internalising: the driver **cannot resurrect a row the other side deleted** (a deletion either wins outright or produces markers, never a re-add), and it claims **no** knowledge of the Progress or Deferred tables — those merge as plain text, exactly as before.
+
+**It does not help GitHub's server-side squash-merge**, which cannot see a clone's config. And a driver-resolved merge is still a merge you own: read the resulting row set, then run the three gates below. `make lint-backlog` remains the independent backstop — rules 8, 9 and 10 all still apply to whatever the driver produced.
+
 ## Resolving a `STATUS.md`-only conflict: verify cheap, push now
 
-Because every session edits `docs/STATUS.md`, rebase and merge conflicts on it are routine. When the conflict is **confined to `docs/STATUS.md`**, re-running the full `make check` before pushing is not just unnecessary — it is what causes the *next* conflict.
+Because every session edits `docs/STATUS.md`, rebase and merge conflicts on it are routine — fewer with the merge driver installed, never zero. When the conflict is **confined to `docs/STATUS.md`**, re-running the full `make check` before pushing is not just unnecessary — it is what causes the *next* conflict.
 
 The full gate takes ~6 minutes. Every one of those minutes is a window in which a sibling session merges its own `STATUS.md` edit and puts your branch behind again, so you resolve, wait ~6 minutes, and lose the race a second time. It is a feedback loop, not bad luck: [PR #724](https://github.com/actions-gateway/github-actions-gateway/pull/724) went around it four times. Shrinking the verify step from ~6 minutes to a few seconds is what breaks the loop.
 
@@ -49,7 +79,9 @@ Git raises a delete/modify conflict only when both sides touch the *same* lines.
 
 This is the second and more dangerous of the two ways a done row comes back — the squash-merge case at least leaves a conflict to notice. Both occurred on 2026-07-25: the squash case in [#766](https://github.com/actions-gateway/github-actions-gateway/pull/766)/[#768](https://github.com/actions-gateway/github-actions-gateway/pull/768), and the reorder case while rebasing a release-planning branch across [#805](https://github.com/actions-gateway/github-actions-gateway/pull/805), which had shipped the very row that branch was relabelling. A third near-miss on 2026-07-26 — a row inserted directly above one `main` had just deleted — is what finally bought the automated check below.
 
-**`make lint-backlog` checks this for you** (rule 9). An ID present in your `docs/STATUS.md` but absent from `origin/main`'s is *new* when the baseline's history never carried its anchor, and a *resurrection* when it did — the distinction a manual eyeball can't make cheaply. The rule fires only once your branch already contains the commit that did the deleting, so a branch that is merely behind `main` isn't flagged for a deletion a rebase will apply anyway.
+**`make lint-backlog` checks this for you** (rule 10). An ID present in your `docs/STATUS.md` but absent from `origin/main`'s is *new* when the baseline's history never carried its anchor, and a *resurrection* when it did — the distinction a manual eyeball can't make cheaply. The rule fires only once your branch already contains the commit that did the deleting, so a branch that is merely behind `main` isn't flagged for a deletion a rebase will apply anyway.
+
+The [merge driver](#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position) closes the reorder-over-delete path at the source — it decides by ID, so a relocated row cannot outvote a deletion — but only for people who installed it, and only for local merges. The lint rule stays the load-bearing check.
 
 Deliberately re-opening a closed item? `BACKLOG_ALLOW_RESURRECT="Q1 Q2" make lint-backlog`.
 
