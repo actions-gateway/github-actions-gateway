@@ -190,8 +190,11 @@ path-filters-check: ## Fail if a CI path filter misses a go.work module or names
 # Q432), the dogfood worker-drain gate (an unreadable cluster must never read
 # as idle and let a teardown strand worker nodes, Q434), and the CI path-filter
 # gate (a workspace module missing from a filter must fail, since the gate it
-# would skip reports green either way, Q429). Lightweight pure-bash checks; part
-# of `check` and the CI shellcheck job.
+# would skip reports green either way, Q429), and the throttle instruments'
+# parsers (iostat/powermetrics/vm_stat text -> the numbers a throttle decision
+# rests on, Q447 — the measurement paths are macOS-only and one needs root, but
+# the parsers are text-to-number and run here). Lightweight pure-bash checks;
+# part of `check` and the CI shellcheck job.
 #
 # The suites are independent and each isolates its own scratch state (mktemp -d,
 # or a $$-suffixed dir under tmp/), so they run concurrently — labeled output via
@@ -202,10 +205,11 @@ SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-tes
                  go-lint-scope-test \
                  check-roadmap-test check-conflict-markers-test check-v2-api-sync-test \
                  dependabot-rebase-stale-test go-vet-tags-test local-throttle-test \
-                 shellcheck-scripts-test release-version-hook-test check-path-filters-test
+                 shellcheck-scripts-test release-version-hook-test check-path-filters-test \
+                 validate-throttle-test qos-cluster-probe-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, CI path-filter coverage)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, CI path-filter coverage, throttle instrument parsers)
 	scripts/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of

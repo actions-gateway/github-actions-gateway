@@ -87,31 +87,47 @@ readonly CANDIDATES=(
 probe_pid=""
 iostat_pid=""
 
-# cleanup stops background samplers if the harness exits early.
+# cleanup stops background samplers if the harness exits early. Armed by main(),
+# not at load time, so sourcing this file for its parsers installs no traps.
 cleanup() {
 	[[ -n "$probe_pid" ]] && kill -TERM "$probe_pid" 2>/dev/null || true
 	[[ -n "$iostat_pid" ]] && kill -TERM "$iostat_pid" 2>/dev/null || true
 	probe_pid=""
 	iostat_pid=""
 }
-trap cleanup EXIT INT TERM
 
-# windowserver_reports counts WindowServer crash/watchdog reports. Any increase
-# across a trial is a hard fail — that is the exact failure the throttle prevents.
+# windowserver_reports counts WindowServer crash/watchdog reports in $1 (default
+# $REPORTS_DIR). Any increase across a trial is a hard fail — that is the exact
+# failure the throttle prevents. A missing directory counts 0: a Mac that has
+# never crashed WindowServer has no DiagnosticReports entry to find.
 windowserver_reports() {
+	local dir="${1:-$REPORTS_DIR}"
 	local f count=0
 	shopt -s nullglob nocaseglob
-	for f in "$REPORTS_DIR"/*windowserver*; do
+	for f in "$dir"/*windowserver*; do
 		[[ -e "$f" ]] && (( count++ ))
 	done
 	shopt -u nullglob nocaseglob
 	printf '%s' "$count"
 }
 
+# parse_swapins reads vm_stat output on stdin and prints the cumulative swapin
+# counter. Split from swapins() so it can be exercised against recorded text.
+#
+# Prints 0 rather than nothing when the counter is absent: the caller subtracts
+# two readings, and an empty operand makes that delta silently meaningless.
+# Prints exactly one line, so the caller's delta arithmetic can never be handed
+# "0\n0". Matches on the first Swapins line rather than exiting early, so vm_stat
+# is never handed a closed pipe.
+parse_swapins() {
+	awk '/Swapins/ && !found { gsub(/[^0-9]/, "", $NF); print $NF; found = 1 }
+	     END { if (!found) print 0 }'
+}
+
 # swapins prints the cumulative swapin counter, whose delta shows whether a
 # candidate pushed the machine into memory pressure.
 swapins() {
-	vm_stat | awk '/Swapins/ { gsub(/[^0-9]/, "", $NF); print $NF }'
+	vm_stat | parse_swapins
 }
 
 # mean_busy_pct averages (100 - idle) over an iostat capture. iostat's trailing
@@ -121,8 +137,17 @@ swapins() {
 # The first data row is iostat's since-boot average, not an interval sample, so
 # it is skipped — including it dragged a calibration run of 18 spin threads from
 # 100% down to 89%.
+#
+# The NF >= 4 guard is load-bearing, not defensive noise: awk treats $(NF-3) on a
+# short or blank line as a negative field index, which is a FATAL error, not an
+# empty string. Without the guard one blank line in the capture aborts the whole
+# harness under `set -e`, discarding every candidate measured so far in the trial.
+# iostat's own header block is skipped by the same test that skips it today — the
+# idle column reads "id" there, which is not numeric — and that matters because
+# iostat reprints the header every 20 data rows, so any trial long enough to be
+# worth running contains at least one.
 mean_busy_pct() {
-	awk '$(NF-3) ~ /^[0-9]+$/ { if (++row == 1) next; sum += 100 - $(NF-3); n++ }
+	awk 'NF >= 4 && $(NF-3) ~ /^[0-9]+$/ { if (++row == 1) next; sum += 100 - $(NF-3); n++ }
 	     END { printf "%.0f", (n > 0) ? sum / n : 0 }' "$1"
 }
 
@@ -219,6 +244,8 @@ field() {
 }
 
 main() {
+	trap cleanup EXIT INT TERM
+
 	if [[ "$(uname -s)" != "Darwin" ]]; then
 		printf 'validate-throttle: macOS only\n' >&2
 		return 2
@@ -297,4 +324,9 @@ main() {
 	printf 'Candidates are interleaved within each trial so thermal drift hits them equally.\n'
 }
 
-main "$@"
+# Run main only when executed directly, so validate-throttle-test.sh can source
+# this file to exercise the pure parsers against recorded instrument output —
+# the measurement paths are macOS-only, the text-to-number parsers are not.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	main "$@"
+fi
