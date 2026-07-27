@@ -250,7 +250,7 @@ Wired into `make check` and CI's `lint` job.
 
 `make codegen-check` ([`scripts/check-codegen-drift.sh`](../../scripts/check-codegen-drift.sh)) fails when a committed controller-gen manifest — any CRD, RBAC role, or webhook YAML under `api/config/`, `cmd/agc/config/`, or `cmd/gmc/config/` — no longer matches what controller-gen generates from today's Go types.
 
-Nothing ran `make manifests` on a contributor's behalf, so the committed YAML was only ever as fresh as the last person who remembered, and the gap is worst **across modules**: `cmd/gmc`'s `ActionsGateway` CRD embeds AGC types (`RunnerGroupSpec`), so a doc comment edited in `cmd/agc/api` changes the GMC manifest and only `make -C cmd/gmc manifests` propagates it. PR #793 edited a `quotaRetryDelay` doc comment in the AGC type and the GMC CRD never caught up, so every later GMC contributor got that hunk as unrelated diff noise the moment they regenerated (Q440).
+Nothing ran `make manifests` on a contributor's behalf, so the committed YAML was only ever as fresh as the last person who remembered, and the gap is worst **across modules**: `cmd/gmc`'s `ActionsGateway` CRD embeds AGC types (`RunnerGroupSpec`), so a doc comment edited in `cmd/agc/api` changes the GMC manifest and only `make -C cmd/gmc manifests` propagates it. PR #793 edited a `quotaRetryDelay` doc comment in the AGC type and the GMC CRD never caught up, so every later GMC contributor got that hunk as unrelated diff noise the moment they regenerated (Q440). The root `make generate` / `make manifests` now cover all three modules, so a contributor who runs the obvious root target no longer has to know which module embeds which (Q458) — this gate is what holds that property.
 
 Three assertions, cheapest first:
 
@@ -260,11 +260,11 @@ Three assertions, cheapest first:
 
 It regenerates into a scratch tree, never into the working tree, so it detects drift in the *committed* manifests (and any uncommitted hand-edit), not merely whether a regen-in-place produced a git diff. Cost is three controller-gen runs over already-parsed packages, ~2 s, plus the one-time `.build/controller-gen` build.
 
-**When it fails**, the remedy is in the failure message: run `make -C <module> manifests`, then `make chart-crds` to carry a CRD change into the Helm chart, and commit both. Never hand-edit the generated YAML.
+**When it fails**, the remedy is `make manifests` from the repo root (or `make generate`, which supersets it) — that regenerates the same three modules the gate checks, so running it is exactly what makes the gate pass. Then `make chart-crds` to carry a CRD change into the Helm chart, and commit both. The failure message names the single `make -C <module> manifests` if you prefer the narrower run. Never hand-edit the generated YAML.
 
 Wired into `make check` and CI's `lint` job in [`unit-test.yml`](../../.github/workflows/unit-test.yml) — deliberately **not** `manifest-validate.yml`, whose `manifests` filter is scoped to the generated YAML by design. The drift is caused by a Go type change that need not touch either module's YAML, which is exactly the diff the `code` filter sees.
 
-Scope is the manifests half of codegen. DeepCopy (`make generate`) is not covered: the controller-gen `object` generator writes `zz_generated.deepcopy.go` beside its source rather than into a redirectable output dir, and its drift is intra-module — a type change needing new DeepCopy code fails to compile.
+Scope is the manifests half of codegen. DeepCopy (`make deepcopy`, the other half of `make generate`) is not covered: the controller-gen `object` generator writes `zz_generated.deepcopy.go` beside its source rather than into a redirectable output dir, and its drift is intra-module — a type change needing new DeepCopy code fails to compile.
 
 ### The claude-usage snapshot gate
 
