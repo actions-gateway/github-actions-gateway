@@ -169,7 +169,10 @@ jobs:
         # in the local image cache and never touches Hub. Routing it through the
         # e2e local registry would not help: that registry isn't up yet at this
         # point, and seeding it would still require this same one Hub pull — so a
-        # retried runner-side pull is the simpler equivalent.
+        # retried runner-side pull is the simpler equivalent. Nor does this job
+        # carry the tar cache the security-scan trivy job gained in Q460: that
+        # cache exists to collapse six matrix shards pulling at once, and this is
+        # a single pull. The exponential, jittered retry schedule covers it.
         run: scripts/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
 
       - name: Set up Docker Buildx
