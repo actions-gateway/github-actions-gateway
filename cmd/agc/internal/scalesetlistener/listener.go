@@ -48,6 +48,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"sync"
 	"time"
 
@@ -189,6 +190,17 @@ type MetricsRecorder interface {
 	IncJobCompleted(result string)
 }
 
+// PollErrorRecorder counts GetMessage failures into the cross-tier
+// actions_gateway_message_poll_errors_total counter (Q446). It is separate from
+// MetricsRecorder because the counter is not this tier's: it is the shared
+// (namespace, reason) series the classic listener also writes, so parity means an
+// operator's existing dashboards and alerts survive the classic removal (Q264). The
+// implementation binds the namespace — runnercore.Metrics.PollErrors — leaving the
+// Listener to supply only the reason. Nil is safe.
+type PollErrorRecorder interface {
+	IncPollError(reason string)
+}
+
 // Config configures a Listener. Client, ScaleSetName, Provision, and Capacity are
 // required.
 type Config struct {
@@ -217,6 +229,9 @@ type Config struct {
 	Cleanup CleanupFunc
 	// Metrics records job accounting. Nil is safe.
 	Metrics MetricsRecorder
+	// PollErrors counts GetMessage failures into the shared cross-tier poll-error
+	// counter, by reason. Nil is safe.
+	PollErrors PollErrorRecorder
 	// Conditions publishes the Listener's session-failure conditions onto the owning
 	// RunnerSet (Q325): Degraded=True/Unauthorized when a session call is rejected as
 	// unauthorized, and RateLimited=True/SustainedRateLimit when message polling has
@@ -487,6 +502,16 @@ func (l *Listener) paceEmptyPoll(ctx context.Context, elapsed time.Duration) boo
 // Retry-After; anything else backs off (unless ctx is cancelled). Session calls
 // rejected as unauthorized surface the Degraded condition (Q325); a successful
 // refresh or re-create clears it.
+//
+// The failures that are poll failures rather than heal triggers — a 429, and the
+// transport/decode errors of the default branch — also increment the shared
+// actions_gateway_message_poll_errors_total counter (Q446), giving the tier the
+// rate-able signal its conditions cannot carry: a condition only trips once an
+// episode outlasts rateLimitAfter, so a stream of brief episodes is invisible to it.
+// The reason labels are the classic tier's, and the two heal branches deliberately
+// count nothing, because the classic listener heals a 401/403 or 404/410 without
+// touching the counter either — an operator's alert on the series keeps meaning what
+// it did before the classic machinery goes away.
 func (l *Listener) handlePollError(ctx context.Context, ssID int, sess *scaleset.RunnerScaleSetSession, err error) bool {
 	switch {
 	case ctx.Err() != nil:
@@ -524,6 +549,7 @@ func (l *Listener) handlePollError(ctx context.Context, ssID int, sess *scaleset
 		l.mu.Unlock()
 		return true
 	case isRateLimited(err):
+		l.metricsIncPollError("rate_limited")
 		// Track sustained rate limiting; surface the condition once the episode
 		// outlasts rateLimitAfter (classic parity: ten minutes by default). The
 		// next successful poll clears it (pollHealthy).
@@ -546,9 +572,24 @@ func (l *Listener) handlePollError(ctx context.Context, ssID int, sess *scaleset
 		}
 		return l.backoffFor(ctx, wait)
 	default:
+		l.metricsIncPollError(pollErrorReason(err))
 		l.log.Warn("scaleset: poll error", "scaleSet", l.cfg.ScaleSetName, "err", err)
 		return l.backoff(ctx)
 	}
+}
+
+// pollErrorReason classifies a poll failure that is neither a 429 nor a heal trigger
+// into the classic tier's remaining reason labels: "timeout" for a long poll the
+// server accepted but never answered (the client's response-header deadline fires,
+// surfacing as a net.Error timeout — the black-holed-connection class), and "other"
+// for every remaining transport or decode error. The loop returns early on parent
+// context cancellation, so a cancelled ctx never reaches here as a timeout.
+func pollErrorReason(err error) string {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return "timeout"
+	}
+	return "other"
 }
 
 // backoff waits pollBackoff or until ctx is cancelled, returning true to continue and
@@ -905,6 +946,14 @@ func (l *Listener) metricsIncProvisioned() {
 func (l *Listener) metricsIncProvisionError() {
 	if l.cfg.Metrics != nil {
 		l.cfg.Metrics.IncProvisionError()
+	}
+}
+
+// metricsIncPollError counts one GetMessage failure into the shared cross-tier
+// poll-error counter (Q446), when a recorder is wired.
+func (l *Listener) metricsIncPollError(reason string) {
+	if l.cfg.PollErrors != nil {
+		l.cfg.PollErrors.IncPollError(reason)
 	}
 }
 

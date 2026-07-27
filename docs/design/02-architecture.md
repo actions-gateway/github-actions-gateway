@@ -238,7 +238,7 @@ The per-tenant proxy and AGC serve metrics over **mutual TLS** on `:8443`: a scr
 | `actions_gateway_agent_recycles_total` | Counter | `namespace`, `runner_group`, `trigger` | Single-use JIT agents re-registered (`post_job`, `stale_session`, `startup`, `reconcile_repair`) |
 | `actions_gateway_agent_recycle_errors_total` | Counter | `namespace`, `runner_group` | Failed attempts to re-register a single-use JIT agent |
 | `actions_gateway_broker_session_leaks_total` | Counter | `namespace`, `runner_group` | Broker sessions abandoned after every `DELETE /sessions` attempt failed; each survives until GitHub expires it server-side (Q436) |
-| `actions_gateway_message_poll_errors_total` | Counter | `namespace` | GetMessage errors (non-empty-poll, non-session-expired) |
+| `actions_gateway_message_poll_errors_total` | Counter | `namespace`, `reason` | GetMessage errors on either acquisition tier (non-empty-poll, non-session-expired, non-unauthorized — the last two are heal paths): `rate_limited`, `timeout`, `other` |
 | `controller_runtime_reconcile_errors_total` | Counter | `controller` | GMC/AGC reconcile errors (controller-runtime built-in; no `actions_gateway_` prefix) |
 | `actions_gateway_ip_range_updates_total` | Counter | `namespace` | NetworkPolicy egress rule refreshes from GitHub meta API |
 | `actions_gateway_managed_gateways` | Gauge | — | Total `ActionsGateway` CRs currently managed by the GMC |

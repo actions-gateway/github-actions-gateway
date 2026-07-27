@@ -16,7 +16,7 @@ API surface, and the contract cannot be walked back.
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
 | 2 | Add `v2` to each kind, mark it storage, extend conversion coverage | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
-| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity cleared — Q417 and Q443 shipped 2026-07-26 |
+| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity cleared — Q417, Q443, and Q446 shipped 2026-07-26 |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q413](../STATUS.md#Q413)) |
 
 ## Why this is gated on a soak, not a date
@@ -112,7 +112,7 @@ prevent.
 |---|---|---|
 | Eviction recovery (detect an evicted worker, rerun the job, per-run retry budget) | ✅ **Both tiers.** Q417 ported it: the scale-set assignment's run identity is stamped on the worker pod, the owning reconciler detects `PodFailed`/`Evicted` and claims the pod set-once before calling `rerun-failed-jobs`, and the Q106 per-run budget is shared across tiers. | Cleared. Design: [04-operational-flows.md § On the scale-set tier](../design/04-operational-flows.md#on-the-scale-set-tier-q417). Plan: [scaleset-eviction-recovery.md](scaleset-eviction-recovery.md). |
 | Pre-claim quota gate (refuse work the namespace `ResourceQuota` cannot place, rather than claim it and stall) | ✅ **Both tiers.** Q443 ported it: the ladder `Provisioner.Admit` walks per delivered job is also expressed as an integer (`AdvertiseCapacity`), and the scale-set tier advertises `min(ceiling, own in-flight pods + quota headroom)` as `X-ScaleSetMaxCapacity` — so a quota-blocked job is never assigned at all. | Cleared. Design: [04-operational-flows.md § The ladder as an integer](../design/04-operational-flows.md#the-ladder-as-an-integer-scale-set-tier-q443). Plan: [capacity-aware-intake.md §9a](capacity-aware-intake.md#9a-the-shipped-quota-rung-was-classic-only-q443). |
-| Poll-error rate observability (`message_poll_errors_total`) | ⚠️ **Conditions yes, counter no.** `handlePollError` reaches deliberate condition parity (`Degraded`/`Unauthorized` on a rejected refresh, `RateLimited` after a sustained 429 episode) but increments no counter, so there is no rate-able signal — only a binary condition that trips after the episode outlasts `rateLimitAfter`. | **Open — does not gate.** [Q446](../STATUS.md#Q446). Conditions cover the operator-visible states, so this is a fidelity gap, not a lost capability. |
+| Poll-error rate observability (`message_poll_errors_total`) | ✅ **Both tiers.** Q446 closed the counter half: `handlePollError` increments the same `actions_gateway_message_poll_errors_total{namespace, reason}` series the classic listener writes, under the same reason vocabulary (`rate_limited`, `timeout`, `other`), with the 401/403 and 404/410 heal branches counting nothing exactly as classic does — so an existing dashboard or alert keeps its meaning. The conditions (`Degraded`/`Unauthorized`, `RateLimited` after a sustained episode) stay as the state half. | Cleared. Metric: [observability-metrics.md](../operations/observability-metrics.md). |
 
 ### What this audit checked, and found already covered
 
