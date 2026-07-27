@@ -2963,6 +2963,16 @@ egress to <code>169.254.169.254/32</code>. Kata alone is not the control.</p>
   the cluster-scoped <code>runtimeclasses</code> grant the chart ships; it is fail-open, so
   an AGC without it silently omits the overhead term. See
   <a href="../resourcequota-sizing/#pod-overhead-needs-a-cluster-scoped-read">sizing the platform-owned <code>ResourceQuota</code></a>.</li>
+<li><strong>The per-worker block device is quota-charged too, and it fails quietly.</strong> The
+  reference shape's <code>/var/lib/docker</code> device is a generic ephemeral volume, so
+  Kubernetes creates one real PVC per worker pod — charged against
+  <code>persistentvolumeclaims</code>, <code>requests.storage</code>, and the
+  <code>&lt;class&gt;.storageclass.storage.k8s.io/…</code> keys. At <code>maxWorkers: 4</code> that is <code>4</code>
+  claims and <code>400Gi</code>. Unlike a CPU or memory shortfall, an exhausted storage quota
+  does <strong>not</strong> reject the pod: the PVC is created after the pod is admitted, so the
+  worker sits <code>Pending</code> on an unbound volume holding a job already claimed from
+  GitHub. The AGC counts these keys in the worker footprint to refuse before
+  claiming — see <a href="../resourcequota-sizing/#step-3--the-storage-keys">the storage keys</a>.</li>
 <li><strong>Nested-virt capacity can be scarce.</strong> During validation, <code>n2-standard-4</code> and
   <code>n2d-standard-4</code> were both <code>ZONE_RESOURCE_POOL_EXHAUSTED</code> in <code>us-central1-a</code>
   while CPU quota sat at 0/200 — a stockout, not a quota problem (a plain

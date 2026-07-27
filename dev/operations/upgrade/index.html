@@ -1509,10 +1509,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#worker-quota-accounting-now-counts-native-sidecars-and-runtimeclass-overhead" class="md-nav__link">
+  <a href="#worker-quota-accounting-now-counts-native-sidecars-runtimeclass-overhead-and-storage" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Worker quota accounting now counts native sidecars and RuntimeClass overhead
+        Worker quota accounting now counts native sidecars, RuntimeClass overhead, and storage
       
     </span>
   </a>
@@ -2710,10 +2710,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#worker-quota-accounting-now-counts-native-sidecars-and-runtimeclass-overhead" class="md-nav__link">
+  <a href="#worker-quota-accounting-now-counts-native-sidecars-runtimeclass-overhead-and-storage" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Worker quota accounting now counts native sidecars and RuntimeClass overhead
+        Worker quota accounting now counts native sidecars, RuntimeClass overhead, and storage
       
     </span>
   </a>
@@ -3038,7 +3038,7 @@
 <li><a href="#breaking-specnamespacequota-removed--the-resourcequota-is-now-platform-owned">BREAKING: spec.namespaceQuota removed — the ResourceQuota is now platform-owned</a></li>
 <li><a href="#breaking-prioritytiers-priorityclasses-now-require-a-platform-allowlist-per-tier-preemptionpolicy-removed">BREAKING: priorityTiers PriorityClasses now require a platform allowlist; per-tier preemptionPolicy removed</a></li>
 <li><a href="#tenant-namespaces-now-require-the-actions-gatewaygithubcomtenant-marker-label">Tenant namespaces now require the actions-gateway.github.com/tenant marker label</a></li>
-<li><a href="#worker-quota-accounting-now-counts-native-sidecars-and-runtimeclass-overhead">Worker quota accounting now counts native sidecars and RuntimeClass overhead</a></li>
+<li><a href="#worker-quota-accounting-now-counts-native-sidecars-runtimeclass-overhead-and-storage">Worker quota accounting now counts native sidecars, RuntimeClass overhead, and storage</a></li>
 <li><a href="#worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended">Worker pods are now cleaned up automatically (one-time sweep recommended)</a></li>
 <li><a href="#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller">AGC Deployment renamed from actions-gateway-agc to actions-gateway-controller</a></li>
 <li><a href="#gmc-manager-networkpolicy-is-now-enabled-by-default">GMC manager NetworkPolicy is now enabled by default</a></li>
@@ -3247,16 +3247,27 @@ resources in them</em>, and each affected <code>ActionsGateway</code> will emit 
 <p>For a phased rollout where you cannot label every namespace up front, temporarily set
 <strong>both</strong> bindings' <code>validationActions</code> to <code>[Audit]</code> (instead of <code>[Deny]</code>) so denials are
 logged but not enforced, label the namespaces, then restore <code>[Deny]</code> on each.</p>
-<h3 id="worker-quota-accounting-now-counts-native-sidecars-and-runtimeclass-overhead">Worker quota accounting now counts native sidecars and <code>RuntimeClass</code> overhead<a class="headerlink" href="#worker-quota-accounting-now-counts-native-sidecars-and-runtimeclass-overhead" title="Permanent link">&para;</a></h3>
+<h3 id="worker-quota-accounting-now-counts-native-sidecars-runtimeclass-overhead-and-storage">Worker quota accounting now counts native sidecars, <code>RuntimeClass</code> overhead, and storage<a class="headerlink" href="#worker-quota-accounting-now-counts-native-sidecars-runtimeclass-overhead-and-storage" title="Permanent link">&para;</a></h3>
 <p>The worker footprint behind <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code>, the
 pre-claim quota gate, and the capacity a scale-set advertises to GitHub previously
-summed <code>podTemplate.spec.containers</code> only. It now matches what Kubernetes charges a
-pod: native sidecars (<code>restartPolicy: Always</code> init containers) are summed in, and
-<code>RuntimeClass</code> pod overhead is added. Plain init containers still contribute only a
-<code>max()</code> floor, as before.</p>
-<p><strong>No behaviour changes for a tenant with neither.</strong> For a Docker-in-Docker (DinD) or
-Kata tenant the reported footprint goes <strong>up</strong> — by the sidecar's whole ask, plus
-<code>250m</code> / <code>160Mi</code> on the reference Kata shape:</p>
+summed CPU and memory over <code>podTemplate.spec.containers</code> only. It now matches what
+Kubernetes charges, on both the compute and the storage keys:</p>
+<ul>
+<li><strong>Compute.</strong> Native sidecars (<code>restartPolicy: Always</code> init containers) are summed
+  in, and <code>RuntimeClass</code> pod overhead is added. Plain init containers still
+  contribute only a <code>max()</code> floor, as before.</li>
+<li><strong>Storage.</strong> <code>requests.ephemeral-storage</code> / <code>limits.ephemeral-storage</code> are summed
+  like CPU and memory, and every <strong>generic ephemeral volume</strong>
+  (<code>podTemplate.spec.volumes[].ephemeral</code>) is charged as the per-worker PVC it
+  creates — against <code>persistentvolumeclaims</code>, <code>requests.storage</code>, and the
+  <code>&lt;class&gt;.storageclass.storage.k8s.io/…</code> keys when the claim names a
+  <code>storageClassName</code>.</li>
+</ul>
+<p><strong>No behaviour change for a tenant with none of these.</strong> A shape declaring no
+ephemeral storage and no ephemeral volumes is charged nothing on the storage keys,
+so a namespace already at its <code>persistentvolumeclaims</code> ceiling for unrelated reasons
+does not newly hold such a set back. For a Docker-in-Docker (DinD) or Kata tenant the
+reported footprint goes <strong>up</strong>:</p>
 <table>
 <thead>
 <tr>
@@ -3271,19 +3282,21 @@ Kata tenant the reported footprint goes <strong>up</strong> — by the sidecar's
 </tr>
 <tr>
 <td>Kata</td>
-<td><code>2</code> CPU / <code>6Gi</code> requests; <code>4</code> CPU / <code>8Gi</code> limits; plus <code>250m</code> / <code>160Mi</code> overhead</td>
+<td><code>2</code> CPU / <code>6Gi</code> requests; <code>4</code> CPU / <code>8Gi</code> limits; plus <code>250m</code> / <code>160Mi</code> overhead; plus <code>1</code> PVC and <code>100Gi</code> of <code>requests.storage</code></td>
 </tr>
 </tbody>
 </table>
-<p>So a native-sidecar tenant whose quota was sized against the old numbers can come up
-with <code>WorkerQuotaPressure=True</code> (or <code>WorkerQuotaExceeded=True</code>) after upgrade with no
-change to the quota or the workload. <strong>Nothing got worse</strong> — those pods were already
-being quota-rejected at creation and retried; the condition now reports it up front
-instead of surfacing it as burnt lock time. Re-derive the affected quotas with
+<p>So an affected tenant whose quota was sized against the old numbers can come up with
+<code>WorkerQuotaPressure=True</code> (or <code>WorkerQuotaExceeded=True</code>) after upgrade with no
+change to the quota or the workload. <strong>Nothing got worse</strong> — a compute shortfall was
+already quota-rejecting those pods at creation and retrying, and a storage shortfall
+was already stranding them <code>Pending</code> on a PVC that could not be created. The
+condition now reports it up front instead of surfacing it as burnt lock time.
+Re-derive the affected quotas with
 <a href="../resourcequota-sizing/">sizing the platform-owned <code>ResourceQuota</code></a>.</p>
 <p>Find the tenants this can affect before upgrading — any runner template with a native
-sidecar or a <code>runtimeClassName</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnertemplate,clusterrunnertemplate<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.items[] | select((.spec.podTemplate.spec.initContainers // [])[]? .restartPolicy == &quot;Always&quot; or (.spec.podTemplate.spec.runtimeClassName // &quot;&quot;) != &quot;&quot;) | &quot;\(.kind) \(.metadata.namespace // &quot;-&quot;)/\(.metadata.name)&quot;&#39;</span>
+sidecar, a <code>runtimeClassName</code>, or a generic ephemeral volume:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnertemplate,clusterrunnertemplate<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.items[] | select(any((.spec.podTemplate.spec.initContainers // [])[]; .restartPolicy == &quot;Always&quot;) or (.spec.podTemplate.spec.runtimeClassName // &quot;&quot;) != &quot;&quot; or any((.spec.podTemplate.spec.volumes // [])[]; has(&quot;ephemeral&quot;))) | &quot;\(.kind) \(.metadata.namespace // &quot;-&quot;)/\(.metadata.name)&quot;&#39;</span>
 </code></pre></div>
 <p>Reading <code>RuntimeClass</code> overhead needs a cluster-scoped <code>runtimeclasses</code> read, added
 to the per-gateway <code>agc-clusterrunnertemplate-reader</code> <code>ClusterRole</code> in the same
