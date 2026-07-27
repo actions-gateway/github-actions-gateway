@@ -914,6 +914,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="4.2. Job Execution Flow (AGC)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-ladder-as-an-integer-scale-set-tier-q443" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The ladder as an integer (scale-set tier, Q443)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2392,6 +2409,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="4.2. Job Execution Flow (AGC)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-ladder-as-an-integer-scale-set-tier-q443" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The ladder as an integer (scale-set tier, Q443)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2570,10 +2604,11 @@
 does not run steps 2a–5 as written: the runner pulls and completes its own job
 through its own session, and the AGC advertises a single capacity integer
 (<code>X-ScaleSetMaxCapacity</code>) instead of deciding per delivered job. Two consequences
-are called out where they arise. Eviction auto-retry is now ported to this tier
-(Q417, <a href="#on-the-scale-set-tier-q417">below</a>). The quota rung of step 2a is not
-(<a href="../../STATUS/#Q443">Q443</a>) — a <code>2.0-gate</code> item, because the classic removal in
-<code>v2.0.0</code> deletes the only implementation unless it lands first.</p>
+are called out where they arise. Eviction auto-retry is ported to this tier
+(Q417, <a href="#on-the-scale-set-tier-q417">below</a>), as is the admission ladder of step 2a
+(Q443, <a href="#the-ladder-as-an-integer-scale-set-tier-q443">below</a>) — both were
+classic-only, which the <code>v2.0.0</code> removal of classic acquisition would have turned
+into a silent capability deletion.</p>
 </blockquote>
 <pre class="mermaid"><code>sequenceDiagram
     participant A as AGC goroutine
@@ -2600,7 +2635,7 @@ are called out where they arise. Eviction auto-retry is now ported to this tier
 <li><strong>Intercept:</strong> GitHub responds with a <code>RunnerJobRequest</code> message containing <code>run_service_url</code>, <code>runner_request_id</code>, and <code>billing_owner_id</code> in the decoded body.
 2a. <strong>Admit (Q59, #784):</strong> Before claiming the job, the goroutine consults the pre-acquisition admission gate, which asks two questions in order. <strong>Quota:</strong> can the namespace <code>ResourceQuota</code> admit one more worker pod right now (<code>hard − used</code> against this owner's worker footprint)? <strong>Ceiling:</strong> is the in-memory, per-RunnerGroup reservation counter below the worker ceiling (<code>maxWorkers</code> / the maximum <code>priorityTiers</code> threshold)? A no from either <strong>skips <code>acquirejob</code></strong>, increments <code>actions_gateway_jobs_admission_rejected_total{reason}</code> (<code>quota</code> or <code>ceiling</code>), and resumes polling at step 1 — the job stays queued at GitHub and is redelivered to a sibling session with capacity, rather than acquired-then-dropped. When the gate admits, it reserves a slot held until the job completes (step 11), then proceeds to step 3. The quota read fails open and reserves nothing; the reservation is fail-safe soft state (reset on AGC restart). The provisioner's post-acquire ceiling check and quota-retry loop (step 6) remain the authoritative backstops.</li>
 </ol>
-<p><strong>Tier scope.</strong> This gate is wired from <code>AdmitFor</code> (v1 <code>RunnerGroup</code>) and the classic branch of the v2 <code>RunnerSet</code> reconciler; <code>reconcileScaleSetListener</code> returns before it. A <code>ScaleSet</code> set expresses the <em>ceiling</em> rung as <code>X-ScaleSetMaxCapacity</code> (GitHub holds <code>totalAssignedJobs</code> at or below the advertised value), but has <strong>no quota rung</strong> — a quota-blocked job is assigned, and step 6's in-place retry is the only thing between it and abandonment, which is the failure mode this gate exists to prevent. <code>actions_gateway_jobs_admission_rejected_total</code> is likewise classic-only and reads zero there. Deriving the advertised integer from live headroom as well is <a href="../../STATUS/#Q443">Q443</a>.</p>
+<p><strong>Tier scope.</strong> This <em>per-delivered-job</em> form of the gate is wired from <code>AdmitFor</code> (v1 <code>RunnerGroup</code>) and the classic branch of the v2 <code>RunnerSet</code> reconciler; <code>reconcileScaleSetListener</code> returns before it. A <code>ScaleSet</code> set walks the same ladder once per long-poll and states the result as one integer — see <a href="#the-ladder-as-an-integer-scale-set-tier-q443">The ladder as an integer</a>. Every rung must exist in both forms; a rung added to only one ships to only one tier, which is how the quota rung came to be classic-only until Q443.</p>
 <p>Only the quota rung gates acquisition — not the scheduler's <code>WorkersUnschedulable</code> verdict, which looks symmetrical but is not. A <code>ResourceQuota</code> rejection is never an autoscaler input, so declining to claim forfeits no capacity and self-clears as in-flight jobs release headroom. A Pending unschedulable pod, by contrast, <em>is</em> the request for a node: gating on it would suppress the signal cluster-autoscaler needs and starve the tenant exactly when scale-up would have rescued it.
 3. <strong>Lock:</strong> The AGC immediately calls <code>POST {run_service_url}/acquirejob</code> via the proxy — before creating any Kubernetes resources — to claim the job within the 2-minute delivery window.
 4. <strong>Payload:</strong> <code>acquirejob</code> returns the full job instructions and <code>planId</code>. The AGC decrypts the payload and extracts the single-use <code>ACTIONS_RUNTIME_TOKEN</code>.
@@ -2617,6 +2652,38 @@ are called out where they arise. Eviction auto-retry is now ported to this tier
 <li><strong>Recycle (Q114):</strong> The acquisition in step 3 consumed the agent's single-use JIT runner record, so the session is dead. The goroutine deletes it (best-effort) and re-registers the agent under its stable <code>&lt;group&gt;-&lt;index&gt;</code> name — deregister-then-recreate, resolving a <code>409</code> from a surviving record by ID lookup.</li>
 <li><strong>Resume:</strong> The agent Secret is rewritten with the fresh credentials and a new session opens; the same goroutine resumes polling at step 1, so listener capacity never dips.</li>
 </ol>
+<h3 id="the-ladder-as-an-integer-scale-set-tier-q443">The ladder as an integer (scale-set tier, Q443)<a class="headerlink" href="#the-ladder-as-an-integer-scale-set-tier-q443" title="Permanent link">&para;</a></h3>
+<p>A <code>ScaleSet</code> set never reaches step 2a, because it is never offered a job to decline: it states, once per long-poll, how many jobs GitHub may keep assigned to it, as the <code>X-ScaleSetMaxCapacity</code> header. GitHub then holds <code>totalAssignedJobs</code> at or below that value, so the <em>same</em> ladder produces the <em>same</em> outcome — a job that would have been declined is simply left queued — through an integer rather than a per-job boolean.</p>
+<p>The advertised number is the <strong>minimum</strong> of the ladder's rungs, recomputed every poll (so a spec edit or a quota change takes effect without an AGC restart):</p>
+<table>
+<thead>
+<tr>
+<th>Rung</th>
+<th>Contribution</th>
+<th>Fail-open value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ceiling (Q59)</td>
+<td>the max <code>priorityTiers</code> threshold, else <code>maxWorkers</code>, else <code>10</code></td>
+<td>— (the <code>10</code> default <em>is</em> the fallback)</td>
+</tr>
+<tr>
+<td>Quota (#784, Q443)</td>
+<td>this set's non-terminal worker pods <strong>+</strong> how many more the namespace <code>ResourceQuota</code> can admit</td>
+<td>no bound (the ceiling stands)</td>
+</tr>
+</tbody>
+</table>
+<p>Three properties follow, and they are why this is not merely the classic gate in different clothing:</p>
+<ul>
+<li><strong>Nothing is spent to discover the limit.</strong> The classic gate declines a job that was already delivered; here the job is never assigned, so no single-use JIT runner record is consumed and no GitHub job lock is taken out on a pod that cannot be created.</li>
+<li><strong>The quota rung is a total, not a delta.</strong> Headroom answers "how many <em>more</em> fit"; the header wants "how many at once", so the set's own in-flight worker pods — already inside the quota's <code>used</code> — are added back. Deliberately the pod count and not GitHub's <code>totalAssignedJobs</code>: the two diverge across an assignment the AGC has not provisioned yet, and biasing low only delays a job where biasing high would reproduce the claim-and-stall.</li>
+<li><strong>Recovery is a poll, not a job.</strong> Classic re-decides per delivered job; this decides once per poll for the whole set, so restored headroom reopens assignment within one long-poll interval (~50s) rather than immediately.</li>
+</ul>
+<p>Because every rung can only <em>lower</em> the number, a rung that cannot read what it needs (no quota, an unreadable quota, an unresolved template) contributes no bound and the set advertises its declared ceiling — exactly the behavior that predates this rung. The provisioner's post-create ceiling check and quota-retry loop remain the backstops for the races an advertised integer cannot close (a sibling AGC, a stale <code>.status.used</code>).</p>
+<p><strong>What an operator sees.</strong> <code>actions_gateway_scaleset_advertised_capacity</code> is the number most recently advertised, and <code>actions_gateway_scaleset_capacity_withheld{reason}</code> attributes the gap to the rung that took it (<code>quota</code>). The per-job <code>actions_gateway_jobs_admission_rejected_total</code> is structurally unreachable on this tier — there is no rejected job to count — so these two gauges are its counterpart, alongside the <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code> conditions the set already publishes.</p>
 <hr />
 <h2 id="43-failure-paths">4.3. Failure Paths<a class="headerlink" href="#43-failure-paths" title="Permanent link">&para;</a></h2>
 <p>The happy-path flows above are sufficient for most operations. The following diagrams cover the most operationally significant failure modes.</p>

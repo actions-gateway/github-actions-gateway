@@ -5338,6 +5338,7 @@ the pod is its to recover. Either one missing makes recovery inert for that pod.
 <ul>
 <li>A child that is still alive when the wrapper's own budget expires is killed by the wrapper, which logs <code>child outlived the shutdown grace period; killing it</code> — an actionable line where there was previously silence.</li>
 <li>The child's exit code is propagated, and a child that died from a signal is reported as <code>128 + signal</code> (SIGTERM → <code>143</code>, SIGKILL → <code>137</code>) rather than the meaningless <code>255</code> that the raw <code>-1</code> used to become.</li>
+<li>A pod terminated in the first instants of its life is covered too (Q445). The wrapper installs its signal handler <em>before</em> it starts the runner, so a SIGTERM that arrives in that window is held and forwarded as soon as the child exists. Earlier fixed versions registered the handler after the start and could drop such a signal on the floor — PID 1 ignores a signal it has no handler for — which reproduced the unreported-job symptom above for a job cancelled or a node drained within a second or so of the pod starting.</li>
 </ul>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a><span class="c1"># Confirm the child was signalled: the wrapper logs the forward on the way down.</span>
@@ -5359,9 +5360,33 @@ the pod is its to recover. Either one missing makes recovery inert for that pod.
 - If you see <code>child outlived the shutdown grace period; killing it</code> routinely, the runner is not finishing its cancellation inside the budget — raise the pair above rather than accepting the kill, and check whether a job step is ignoring cancellation.</p>
 <hr />
 <h2 id="jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion<a class="headerlink" href="#jobs-failing-due-to-namespace-resourcequota-exhaustion" title="Permanent link">&para;</a></h2>
-<p><strong>Symptoms.</strong> <code>actions_gateway_jobs_admission_rejected_total{reason="quota"}</code> is climbing while jobs sit queued in GitHub — the AGC is declining to claim work it cannot place. The <code>RunnerGroup</code>/<code>RunnerSet</code> reports <code>WorkerQuotaExceeded=True</code> (and <code>actions_gateway_worker_quota_exceeded</code> reads <code>1</code>).</p>
+<p><strong>Symptoms.</strong> Jobs sit queued in GitHub while the <code>RunnerGroup</code>/<code>RunnerSet</code> reports <code>WorkerQuotaExceeded=True</code> (and <code>actions_gateway_worker_quota_exceeded</code> reads <code>1</code>) — the AGC is declining to take on work it cannot place. Which metric shows it depends on the acquisition tier:</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>What climbs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ScaleSet</code> (the default)</td>
+<td><code>actions_gateway_scaleset_advertised_capacity</code> <strong>falls</strong>, to <code>0</code> when no worker pod fits at all, and <code>actions_gateway_scaleset_capacity_withheld{reason="quota"}</code> accounts for the gap.</td>
+</tr>
+<tr>
+<td><code>Classic</code> (deprecated)</td>
+<td><code>actions_gateway_jobs_admission_rejected_total{reason="quota"}</code> climbs.</td>
+</tr>
+</tbody>
+</table>
+<p>On the scale-set tier <code>jobs_admission_rejected_total</code> reads a flat zero and that is correct, not a gap: a job the ladder declines there is never assigned, so there is no rejected delivery to count (Q443).</p>
 <p>If instead <code>actions_gateway_quota_retries_exhausted_total</code> is incrementing, pod creation is failing with a <code>Forbidden</code> error containing "exceeded quota" in the AGC logs and jobs are abandoned before a pod is ever scheduled, with a <code>Warning</code> event of reason <code>QuotaRetriesExhausted</code> (Q170) on the owner. That is the same root cause reaching the AGC one layer later — see <a href="#when-quota-exhaustion-still-reaches-the-retry-path">When quota exhaustion still reaches the retry path</a> below.</p>
-<p><strong>The admission gate declines on quota (#784).</strong> When the namespace <code>ResourceQuota</code> cannot admit another worker pod, the AGC skips <code>acquirejob</code> for newly delivered jobs, exactly as it does at the configured ceiling — leaving them queued at GitHub for redelivery to a sibling with capacity. Claiming them instead would hold the GitHub job lock across up to <code>maxQuotaRetries</code> × <code>quotaRetryDelay</code> (150s of a ~10-minute lock at the defaults) and, on budget exhaustion, drop the job <em>with the lock held</em>, which gets the run cancelled rather than requeued. The check is a live read of every <code>ResourceQuota</code> in the namespace (<code>hard − used</code>) against one more worker's footprint, and it <strong>fails open</strong>: a quota the AGC cannot read leaves the gate exactly as it was.</p>
+<p><strong>The admission gate declines on quota (#784, Q443).</strong> When the namespace <code>ResourceQuota</code> cannot admit another worker pod, the AGC stops taking on work rather than claiming it and stalling. Claiming it instead would hold the GitHub job lock across up to <code>maxQuotaRetries</code> × <code>quotaRetryDelay</code> (150s of a ~10-minute lock at the defaults) and, on budget exhaustion, drop the job <em>with the lock held</em>, which gets the run cancelled rather than requeued. The check is a live read of every <code>ResourceQuota</code> in the namespace (<code>hard − used</code>) against one more worker's footprint, and it <strong>fails open</strong>: a quota the AGC cannot read leaves capacity exactly as it was.</p>
+<p>How that refusal is expressed differs by tier, and the difference is worth knowing before you read the metrics:</p>
+<ul>
+<li><strong><code>ScaleSet</code> (the default).</strong> The AGC advertises a capacity of <code>min(worker ceiling, own in-flight pods + quota headroom)</code> on every long-poll, so GitHub simply assigns fewer jobs — or none, at <code>0</code>. Nothing is claimed and nothing is wasted. The cost is granularity: the decision is per poll for the whole set, so restored headroom reopens assignment within one long-poll (~50s) rather than instantly.</li>
+<li><strong><code>Classic</code> (deprecated).</strong> The AGC skips <code>acquirejob</code> per delivered job, leaving it queued at GitHub for redelivery to a sibling with capacity.</li>
+</ul>
 <p>The AGC surfaces two non-blocking conditions on each <code>RunnerGroup</code> for the namespace-quota axis (Q82), each exported as a gauge so you can alert without kube-state-metrics. Distinguish them from Q59's configured-ceiling backpressure (<code>actions_gateway_jobs_admission_rejected_total{reason="ceiling"}</code>), which is normal load-shedding to a sibling, not a quota problem:</p>
 <table>
 <thead>
@@ -5399,17 +5424,22 @@ the pod is its to recover. Either one missing makes recovery inert for that pod.
 <a id="__codelineno-63-2" name="__codelineno-63-2" href="#__codelineno-63-2"></a><span class="c1"># actions_gateway_quota_retries_total{namespace, runner_group}</span>
 <a id="__codelineno-63-3" name="__codelineno-63-3" href="#__codelineno-63-3"></a><span class="c1"># actions_gateway_quota_retries_exhausted_total{namespace, runner_group}</span>
 <a id="__codelineno-63-4" name="__codelineno-63-4" href="#__codelineno-63-4"></a>
-<a id="__codelineno-63-5" name="__codelineno-63-5" href="#__codelineno-63-5"></a><span class="c1"># Deliveries declined up-front because the quota had no headroom (#784).</span>
+<a id="__codelineno-63-5" name="__codelineno-63-5" href="#__codelineno-63-5"></a><span class="c1"># Deliveries declined up-front because the quota had no headroom (#784) — Classic tier.</span>
 <a id="__codelineno-63-6" name="__codelineno-63-6" href="#__codelineno-63-6"></a><span class="c1"># actions_gateway_jobs_admission_rejected_total{namespace, runner_group, reason=&quot;quota&quot;}</span>
 <a id="__codelineno-63-7" name="__codelineno-63-7" href="#__codelineno-63-7"></a>
-<a id="__codelineno-63-8" name="__codelineno-63-8" href="#__codelineno-63-8"></a><span class="c1"># Inspect current quota usage</span>
-<a id="__codelineno-63-9" name="__codelineno-63-9" href="#__codelineno-63-9"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>resourcequota<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-<a id="__codelineno-63-10" name="__codelineno-63-10" href="#__codelineno-63-10"></a>
-<a id="__codelineno-63-11" name="__codelineno-63-11" href="#__codelineno-63-11"></a><span class="c1"># Check AGC logs for quota errors</span>
-<a id="__codelineno-63-12" name="__codelineno-63-12" href="#__codelineno-63-12"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;agc-namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;exceeded quota&quot;</span>
-<a id="__codelineno-63-13" name="__codelineno-63-13" href="#__codelineno-63-13"></a>
-<a id="__codelineno-63-14" name="__codelineno-63-14" href="#__codelineno-63-14"></a><span class="c1"># See the abandonment event on the owner (RunnerGroup or RunnerSet)</span>
-<a id="__codelineno-63-15" name="__codelineno-63-15" href="#__codelineno-63-15"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A1<span class="w"> </span>QuotaRetriesExhausted
+<a id="__codelineno-63-8" name="__codelineno-63-8" href="#__codelineno-63-8"></a><span class="c1"># The same refusal on the ScaleSet tier (Q443): capacity withheld rather than</span>
+<a id="__codelineno-63-9" name="__codelineno-63-9" href="#__codelineno-63-9"></a><span class="c1"># jobs rejected. advertised + sum(withheld) == the set&#39;s declared ceiling.</span>
+<a id="__codelineno-63-10" name="__codelineno-63-10" href="#__codelineno-63-10"></a><span class="c1"># actions_gateway_scaleset_advertised_capacity{namespace, runner_set}</span>
+<a id="__codelineno-63-11" name="__codelineno-63-11" href="#__codelineno-63-11"></a><span class="c1"># actions_gateway_scaleset_capacity_withheld{namespace, runner_set, reason=&quot;quota&quot;}</span>
+<a id="__codelineno-63-12" name="__codelineno-63-12" href="#__codelineno-63-12"></a>
+<a id="__codelineno-63-13" name="__codelineno-63-13" href="#__codelineno-63-13"></a><span class="c1"># Inspect current quota usage</span>
+<a id="__codelineno-63-14" name="__codelineno-63-14" href="#__codelineno-63-14"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>resourcequota<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-63-15" name="__codelineno-63-15" href="#__codelineno-63-15"></a>
+<a id="__codelineno-63-16" name="__codelineno-63-16" href="#__codelineno-63-16"></a><span class="c1"># Check AGC logs for quota errors</span>
+<a id="__codelineno-63-17" name="__codelineno-63-17" href="#__codelineno-63-17"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;agc-namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;exceeded quota&quot;</span>
+<a id="__codelineno-63-18" name="__codelineno-63-18" href="#__codelineno-63-18"></a>
+<a id="__codelineno-63-19" name="__codelineno-63-19" href="#__codelineno-63-19"></a><span class="c1"># See the abandonment event on the owner (RunnerGroup or RunnerSet)</span>
+<a id="__codelineno-63-20" name="__codelineno-63-20" href="#__codelineno-63-20"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A1<span class="w"> </span>QuotaRetriesExhausted
 </code></pre></div>
 <p><strong>Resolution.</strong>
 - If quota is consistently full: increase the namespace <code>ResourceQuota</code> limits or reduce <code>maxWorkers</code> / <code>priorityTiers</code> thresholds so the AGC holds fewer concurrent pods.
@@ -5423,15 +5453,17 @@ the pod is its to recover. Either one missing makes recovery inert for that pod.
 <li>the AGC <strong>restarted</strong> between the claim and the create;</li>
 <li>the gate is <strong>off</strong> (<code>AGC_QUOTA_ADMISSION=false</code>, below), or it <strong>failed open</strong> on a quota it could not read.</li>
 </ul>
+<p>On the <code>ScaleSet</code> tier add one more: the advertised capacity is recomputed <strong>per poll</strong>, not per job, so headroom lost between two polls is not seen until the next one.</p>
 <p>So keep <code>maxQuotaRetries</code>/<code>quotaRetryDelay</code> tuned; the two mechanisms are layered, not alternatives.</p>
 <h3 id="turning-the-quota-rung-off">Turning the quota rung off<a class="headerlink" href="#turning-the-quota-rung-off" title="Permanent link">&para;</a></h3>
-<p>The gate's quota rung is <strong>on by default</strong>, and the AGC honours <code>AGC_QUOTA_ADMISSION=false</code> in its own environment to revert to the pre-#784 behaviour (claim first, discover quota exhaustion in the retry loop). On a GMC-provisioned gateway there is deliberately no tenant-facing field for it: the only route to the AGC Deployment's env is the testing-only <code>AGC_EXTRA_*</code> passthrough behind the GMC's <code>--allow-agc-extra-env</code>, which is not for production use.</p>
-<p>The one situation that would justify the escape hatch is a cluster whose <code>ResourceQuota.status</code> accounting is unreliable enough to starve a tenant that in fact has room — symptom: <code>reason="quota"</code> rejections climbing while <code>kubectl describe resourcequota</code> shows real headroom and no worker pods are being created. Fix the quota accounting first. If you hit a case that genuinely needs the opt-out in production, open an issue so it can be promoted to a supported field rather than worked around.</p>
+<p>The gate's quota rung is <strong>on by default</strong>, and the AGC honours <code>AGC_QUOTA_ADMISSION=false</code> in its own environment to revert to the pre-#784 behaviour (take the work first, discover quota exhaustion in the retry loop). It covers <strong>both</strong> tiers: on <code>ScaleSet</code> the set goes back to advertising its declared ceiling and publishes no <code>capacity_withheld{reason="quota"}</code> series at all. On a GMC-provisioned gateway there is deliberately no tenant-facing field for it: the only route to the AGC Deployment's env is the testing-only <code>AGC_EXTRA_*</code> passthrough behind the GMC's <code>--allow-agc-extra-env</code>, which is not for production use.</p>
+<p>The one situation that would justify the escape hatch is a cluster whose <code>ResourceQuota.status</code> accounting is unreliable enough to starve a tenant that in fact has room — symptom: capacity withheld for <code>quota</code> (or <code>reason="quota"</code> rejections on Classic) while <code>kubectl describe resourcequota</code> shows real headroom and no worker pods are being created. Fix the quota accounting first. If you hit a case that genuinely needs the opt-out in production, open an issue so it can be promoted to a supported field rather than worked around.</p>
 <hr />
 <h2 id="jobs-not-being-acquired-despite-queued-work-capacity-gate-saturated">Jobs Not Being Acquired Despite Queued Work (Capacity Gate Saturated)<a class="headerlink" href="#jobs-not-being-acquired-despite-queued-work-capacity-gate-saturated" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> Workflow jobs sit queued in GitHub while <code>actions_gateway_jobs_admission_rejected_total{namespace, runner_group, reason="ceiling"}</code> climbs and <code>actions_gateway_jobs_acquired_total</code> plateaus for the same group. <code>kubectl get pods</code> shows the group already running its full complement of worker pods. The AGC is healthy — this is throttling, not a fault.</p>
 <blockquote>
 <p><strong>Check the <code>reason</code> label first.</strong> <code>reason="quota"</code> is a different problem with a different fix — the namespace <code>ResourceQuota</code> is out of headroom, not the group's ceiling. See <a href="#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a>. The rest of this section is about <code>reason="ceiling"</code>.</p>
+<p><strong>On a <code>ScaleSet</code> <code>RunnerSet</code> (the default tier)</strong> the same throttling shows up as <code>actions_gateway_scaleset_advertised_capacity</code> sitting at the set's ceiling with all its slots in use — the ceiling is advertised to GitHub as <code>X-ScaleSetMaxCapacity</code>, so surplus jobs are never assigned rather than being delivered and declined. There is no <code>reason="ceiling"</code> series there; read <code>advertised_capacity</code> against the running worker-pod count instead. The resolutions below apply unchanged.</p>
 </blockquote>
 <p><strong>Cause.</strong> This is the pre-acquisition admission gate working as designed (Q59). When a RunnerGroup is already at its worker ceiling (<code>maxWorkers</code>, or the maximum <code>priorityTiers</code> threshold), the AGC <strong>deliberately skips <code>acquirejob</code></strong> for newly delivered jobs and leaves them queued at GitHub, so they are redelivered to a session with capacity rather than claimed-then-dropped (which would get the run cancelled). A rising rejection counter therefore means <em>demand exceeds the configured ceiling</em>, not that anything is broken. The gate's reservation count is in-memory and resets on AGC restart, so a brief post-restart burst of acquisitions is normal.</p>
 <p><strong>Diagnostics.</strong></p>

@@ -2528,7 +2528,7 @@
 <td><code>actions_gateway_jobs_admission_rejected_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>reason</code></td>
-<td>Delivered jobs the pre-acquisition capacity gate left queued at GitHub (acquire skipped). Expected to rise under sustained saturation; a persistent gap vs. <code>jobs_acquired_total</code> means demand exceeds available capacity. The <code>reason</code> label says which limit bound and therefore what to raise: <code>reason="ceiling"</code> — the owner is at its configured <code>maxWorkers</code> / max <code>priorityTiers</code> threshold (Q59); <code>reason="quota"</code> — the namespace <code>ResourceQuota</code> has no headroom for another worker pod, so the AGC declined to claim rather than claim-and-stall (#784). Read the owner's <code>WorkerQuotaExceeded</code> condition for the binding resource. <strong>Classic acquisition only</strong> — the gate runs in the classic listener, so both <code>reason</code> series read a flat zero on a <code>ScaleSet</code> set, which advertises a capacity integer to GitHub instead of declining per delivered job (Q443).</td>
+<td>Delivered jobs the pre-acquisition capacity gate left queued at GitHub (acquire skipped). Expected to rise under sustained saturation; a persistent gap vs. <code>jobs_acquired_total</code> means demand exceeds available capacity. The <code>reason</code> label says which limit bound and therefore what to raise: <code>reason="ceiling"</code> — the owner is at its configured <code>maxWorkers</code> / max <code>priorityTiers</code> threshold (Q59); <code>reason="quota"</code> — the namespace <code>ResourceQuota</code> has no headroom for another worker pod, so the AGC declined to claim rather than claim-and-stall (#784). Read the owner's <code>WorkerQuotaExceeded</code> condition for the binding resource. <strong>Classic acquisition only</strong> — this is the <em>per-delivered-job</em> form of the gate, so both <code>reason</code> series read a flat zero on a <code>ScaleSet</code> set. That set enforces the same ladder as a capacity integer instead, and its equivalents are <a href="#scale-set-acquisition-tier-q264"><code>scaleset_advertised_capacity</code> / <code>scaleset_capacity_withheld</code></a> (Q443).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_jobs_duplicate_delivery_total</code></td>
@@ -2811,7 +2811,7 @@ gateway condition thus has a metric twin, so the advisory <code>agcAutoscaling</
 emitted only on a v2 install and labelled per gateway (<code>namespace</code>, <code>name</code>).</p>
 </blockquote>
 <h3 id="scale-set-acquisition-tier-q264">Scale-set acquisition tier (Q264)<a class="headerlink" href="#scale-set-acquisition-tier-q264" title="Permanent link">&para;</a></h3>
-<p>These counters are emitted <strong>only</strong> by a <code>RunnerSet</code> with <code>spec.acquisitionProtocol: ScaleSet</code> (Q264 Option E, the default since P5), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool. A <code>Classic</code> (deprecated) <code>RunnerSet</code> never increments them, so they read zero on a Classic-only deployment; the classic <code>actions_gateway_jobs_*</code> series above are what a Classic set emits. All four are labelled per <code>RunnerSet</code> (<code>namespace</code>, <code>runner_set</code>). During the P4 dogfood validation (the Q224 fan-out acceptance gate) these are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.</p>
+<p>These series are emitted <strong>only</strong> by a <code>RunnerSet</code> with <code>spec.acquisitionProtocol: ScaleSet</code> (Q264 Option E, the default since P5), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool. A <code>Classic</code> (deprecated) <code>RunnerSet</code> never touches them, so they read zero on a Classic-only deployment; the classic <code>actions_gateway_jobs_*</code> series above are what a Classic set emits. All are labelled per <code>RunnerSet</code> (<code>namespace</code>, <code>runner_set</code>). During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.</p>
 <table>
 <thead>
 <tr>
@@ -2846,8 +2846,29 @@ emitted only on a v2 install and labelled per gateway (<code>namespace</code>, <
 <td><code>namespace</code>, <code>runner_set</code>, <code>result</code></td>
 <td>Terminal <code>JobCompleted</code> messages the queue delivered, by GitHub-reported <code>result</code> (e.g. <code>succeeded</code>, <code>failed</code>, <code>canceled</code>). This is the completion signal the classic many-acquirers protocol never delivered, so it is unique to the scale-set tier. Counted at most once per job even if a re-created session replays the message.</td>
 </tr>
+<tr>
+<td><code>actions_gateway_scaleset_advertised_capacity</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>The <code>X-ScaleSetMaxCapacity</code> most recently advertised for the set: the total jobs GitHub may keep assigned to it at once. This is the scale-set tier's whole admission decision — the minimum of the declared worker ceiling and live namespace-<code>ResourceQuota</code> headroom (Q443). A value below the set's <code>maxWorkers</code> means a rung is binding; <strong><code>0</code> means GitHub will assign nothing at all</strong> until it recovers. Dropped when the <code>RunnerSet</code> is deleted, so a stale series does not outlive the set.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_capacity_withheld</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
+<td>Slots the named rung removed from the declared ceiling on that same poll — <code>advertised_capacity</code> plus the sum of these equals the ceiling. <code>reason="quota"</code> is namespace-<code>ResourceQuota</code> headroom. Every evaluated rung publishes a value each poll, <strong>including an explicit <code>0</code></strong>, so a series never sits frozen at its last non-zero reading. Nothing is published for a rung an operator has turned off (<code>AGC_QUOTA_ADMISSION=false</code>).</td>
+</tr>
 </tbody>
 </table>
+<blockquote>
+<p><strong>Why gauges and not a rejection counter.</strong> On the classic tier a declined job is a
+delivered job, counted by <code>actions_gateway_jobs_admission_rejected_total{reason}</code>.
+On the scale-set tier the equivalent job is never assigned in the first place, so
+there is nothing to count — which is why that counter reads a flat zero here, and why
+these two gauges are its counterpart. Pair them with the set's
+<code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code> conditions, which name the binding
+resource in their message.</p>
+</blockquote>
 <h3 id="worker-usage--right-sizing-metrics-q359">Worker usage / right-sizing metrics (Q359)<a class="headerlink" href="#worker-usage--right-sizing-metrics-q359" title="Permanent link">&para;</a></h3>
 <p>The AGC samples worker pod CPU/memory usage from the <code>metrics.k8s.io</code> API
 (metrics-server) every 15s (<code>WORKER_USAGE_SAMPLE_INTERVAL</code> on the AGC
