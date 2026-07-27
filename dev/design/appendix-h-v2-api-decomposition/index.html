@@ -3448,6 +3448,20 @@ Emitted cluster-template names are namespace-qualified (<code>crt-&lt;ns&gt;-&lt
 tenants sharing a worker shape do not silently share one cluster-scoped object, and
 each carries an <code>actions-gateway.com/migrated-from-namespace</code> provenance label — the
 one migration output namespace deletion does not garbage-collect.</p>
+<p><strong><code>--apply</code> rides out a transiently unreachable webhook (Q461).</strong> The fan-out above is
+a non-atomic sequence of creates followed by the namespace patch, and every create is
+gated by a v2 validating webhook under <code>failurePolicy: Fail</code> that the apiserver does
+not retry on its own. A single stalled webhook POST — endpoint mid-rollout, node
+drain, cold TLS listener — therefore aborted <code>--apply</code> partway, leaving the earlier
+objects created; for a privileged tenant that includes the cluster-scoped
+<code>ClusterRunnerTemplate</code>, the one output namespace deletion does not reclaim. <code>--apply</code>
+now retries each individual create (and the namespace read-modify-write) for a bounded
+90s while the apiserver reports it could not <em>reach</em> a webhook, reporting progress on
+stderr. The retry is deliberately narrow: a webhook that ran and <strong>denied</strong> the
+request, and every other error (<code>AlreadyExists</code>, RBAC <code>Forbidden</code>, a CEL rejection),
+still fails on the first attempt, so admission verdicts stay fast and loud. The
+transport-error signatures are kept identical to the e2e helper's (Q392) so the two
+cannot drift apart on what counts as transient.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>       v1alpha1 (one monolith)            one-shot tool         v2alpha1 (fan-out)
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>  ┌──────────────────────────────┐                       ┌──────────────────────────────┐
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  │ ActionsGateway               │                  ┌──► │ ActionsGateway · identity    │

@@ -2818,10 +2818,22 @@ prompt in automation.</p>
 <p>It then creates the v2 objects (children before referrers) and patches the namespace
 additively. It is <strong>idempotent</strong>: an object that already exists is left untouched, so a
 re-run never clobbers a hand-edited v2 object. It never deletes v1 objects.</p>
+<p>Every create passes through a v2 validating webhook served by the GMC, so <code>--apply</code>
+<strong>rides out a transiently unreachable webhook</strong> rather than aborting partway through
+the fan-out. If the webhook endpoint is mid-rollout (or the apiserver's call to it
+times out), you will see:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>admission webhook unreachable applying EgressProxy/team-a-egress: Internal error occurred: failed calling webhook ...
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>this is usually transient (webhook endpoint rolling out); retrying for up to 1m30s
+</code></pre></div>
+<p>This is informational — the apply continues on its own once the webhook answers, and
+gives up with the last error after <strong>90 seconds</strong> if it never does. Only a webhook the
+apiserver could not <em>reach</em> is retried; a webhook that ran and <strong>rejected</strong> the object
+fails immediately with its own reason, so a real admission problem is never hidden
+behind a wait.</p>
 <p>Verify the v2 set reaches steady state:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>get<span class="w"> </span>actionsgateways.actions-gateway.com,egressproxies,runnersets
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Each RunnerSet should reach Ready=True once its references resolve; a</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Ready=False/TemplateNotFound or /ProxyNotFound names the missing referent.</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>get<span class="w"> </span>actionsgateways.actions-gateway.com,egressproxies,runnersets
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># Each RunnerSet should reach Ready=True once its references resolve; a</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Ready=False/TemplateNotFound or /ProxyNotFound names the missing referent.</span>
 </code></pre></div>
 <h2 id="step-3--coexistence-validation-and-rollback">Step 3 — coexistence, validation, and rollback<a class="headerlink" href="#step-3--coexistence-validation-and-rollback" title="Permanent link">&para;</a></h2>
 <p>After <code>--apply</code>, the v1 and v2 object sets <strong>run side by side</strong>. The v1 gateway keeps
@@ -2831,12 +2843,12 @@ v2 runner labels and confirm a worker pod is provisioned and egresses through th
 proxy) before removing v1.</p>
 <p><strong>Rollback is "stay on v1."</strong> Nothing about the migration removes v1 capability, so if
 the v2 path misbehaves you simply keep using the v1 gateway and delete the v2 objects:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span>--all
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>--all
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>egressproxies.actions-gateway.com<span class="w"> </span>--all
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnertemplates.actions-gateway.com<span class="w"> </span>--all
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Cluster-scoped, so NOT covered by the -n team-a deletes above:</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>clusterrunnertemplates<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/migrated-from-namespace<span class="o">=</span>team-a
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>egressproxies.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnertemplates.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Cluster-scoped, so NOT covered by the -n team-a deletes above:</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>clusterrunnertemplates<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/migrated-from-namespace<span class="o">=</span>team-a
 </code></pre></div>
 <p>The additive namespace labels are harmless to leave in place (the v1 markers are
 untouched), but you may remove the v2 keys if you want a clean rollback.</p>
@@ -2845,8 +2857,8 @@ untouched), but you may remove the v2 keys if you want a clean rollback.</p>
 controllers are still running during coexistence, so deleting the v1 <code>ActionsGateway</code>
 runs its finalizer and cascades cleanup of its AGC, proxy, and <code>RunnerGroup</code> children
 normally — nothing is stranded:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>--all
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Confirm the v1 RunnerGroups and the singleton AGC/proxy children are gone.</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>--all
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># Confirm the v1 RunnerGroups and the singleton AGC/proxy children are gone.</span>
 </code></pre></div>
 <p>If you later retire the tenant entirely, remember that any <code>ClusterRunnerTemplate</code> the
 migration emitted is cluster-scoped and survives deleting the namespace — reclaim it by
@@ -2878,6 +2890,12 @@ window keeps both spellings working.</p>
   dry-run: the namespace patch is the <strong>last</strong> step, so the v2 objects are already
   created when it fails. Re-running after adding the annotation is safe — apply is
   idempotent and skips what exists.</li>
+<li><strong><code>--apply</code> fails with <code>failed calling webhook … context deadline exceeded</code>.</strong> The
+  apiserver could not reach the GMC validating webhook. <code>--apply</code> already retries this
+  for 90 seconds, so reaching this error means the webhook was down for longer than
+  that — check the GMC deployment is <code>Running</code> with programmed endpoints
+  (<code>kubectl -n gag-system get deploy,endpoints</code>) before re-running. Re-running is
+  safe: apply is idempotent and skips whatever the aborted run already created.</li>
 <li><strong><code>gag-migrate</code> reports no namespaces.</strong> With <code>--all-namespaces</code> it only targets
   namespaces holding a v1 <code>ActionsGateway</code>; pass <code>--namespace</code> explicitly otherwise.</li>
 </ul>
