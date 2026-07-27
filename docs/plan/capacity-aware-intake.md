@@ -468,8 +468,8 @@ this phase owns:
 **Why it is a 2.0 gate.** Classic acquisition is removed in `v2.0.0`
 ([v2-ga.md](v2-ga.md#phase-3--the-coupled-removals)). Rung 1 exists only on
 classic. So the removal deletes the pre-claim quota gate outright unless this
-lands first — structurally identical to [Q417](../STATUS.md#Q417) for eviction
-recovery, and until now undeclared. Two of the four capabilities the README
+lands first — structurally identical to Q417 for eviction recovery, which cleared
+the same risk on 2026-07-26, and until now undeclared. Two of the four capabilities the README
 leads with are in this position. Tracked as [Q443](../STATUS.md#Q443), labelled
 `2.0-gate` to match.
 

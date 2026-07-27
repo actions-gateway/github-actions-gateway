@@ -364,6 +364,71 @@ func TestScalesetProbe_JobTestSkipsNonAvailableEntries(t *testing.T) {
 	}
 }
 
+// TestScalesetProbe_JobTestReportsRunIdentity pins the Q417 verification the probe
+// exists to carry out on a live run: a JobAssigned must be reported with an explicit
+// verdict on whether it carried the workflow-run identity scale-set eviction recovery
+// reads. The raw body is logged too, but a truncated redacted blob is not a finding —
+// the point of the verdict line is that a live run states the answer.
+func TestScalesetProbe_JobTestReportsRunIdentity(t *testing.T) {
+	srv := newScalesetStub(t)
+	srv.PrequeueJobs(1)
+
+	var out strings.Builder
+	p := newScalesetProbeLogging(t, srv, scalesetConfig{JobTest: true}, &out)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := p.run(ctx); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "run identity present on JobAssigned") {
+		t.Errorf("probe must report the identity verdict for an assignment that carried one; got:\n%s", got)
+	}
+	// The identity reported must be the one the backend actually delivered, not a
+	// placeholder — that is the whole point of the observation.
+	for _, want := range []string{
+		"owner=" + scalesettest.DefaultJobOwner,
+		"repo=" + scalesettest.DefaultJobRepository,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("verdict line must name the delivered identity (%s); got:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "GAP — JobAssigned carries no complete run identity") {
+		t.Errorf("a complete identity must not be reported as a gap; got:\n%s", got)
+	}
+}
+
+// TestScalesetProbe_JobTestReportsMissingRunIdentity is the other half, and the one
+// that matters on a backend that does not send the fields: the absence must be a loud
+// GAP naming the consequence, not a silent omission that reads like a clean run.
+func TestScalesetProbe_JobTestReportsMissingRunIdentity(t *testing.T) {
+	srv := newScalesetStub(t)
+	// A raw body bypasses the stub's model, which always fills identity in — the only
+	// way to present the probe with the shape this verification is looking for.
+	srv.SeedRawMessage(`[{"messageType":"JobAssigned","jobId":"bare-job"}]`)
+
+	var out strings.Builder
+	p := newScalesetProbeLogging(t, srv, scalesetConfig{JobTest: true}, &out)
+	p.jobTestTimeout = 2 * time.Second
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := p.run(ctx); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "GAP — JobAssigned carries no complete run identity") {
+		t.Errorf("a missing identity must be reported as a GAP; got:\n%s", got)
+	}
+	if strings.Contains(got, "run identity present on JobAssigned") {
+		t.Errorf("an incomplete identity must not be reported as present; got:\n%s", got)
+	}
+}
+
 func TestScalesetProbe_CapacityTestSequence(t *testing.T) {
 	srv := newScalesetStub(t)
 	// Two jobs queued against the label: at capacity 0 neither may be assigned, and

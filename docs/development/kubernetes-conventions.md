@@ -138,27 +138,55 @@ selector label. The canonical per-component values and operator `kubectl -l`
 recipes live in [observability.md](../operations/observability-metrics.md#selecting-gag-objects-with-the-recommended-labels).
 
 Controller-set annotations on worker pods (both v1 and v2, stamped by the
-provisioner at pod creation time from the AcquireJob payload):
+provisioner at pod creation time — from the AcquireJob payload on the classic
+tier, from the assignment message's `JobMessageBase` fields on the scale-set
+tier):
 
 - `actions-gateway.com/run-id` — GitHub workflow run ID.
 - `actions-gateway.com/repository` — `owner/repo` the job belongs to.
 - `actions-gateway.com/job-name` — job name as defined in the workflow YAML.
-- `actions-gateway.com/workflow` — workflow file name.
+- `actions-gateway.com/workflow` — workflow file name. Classic only; the
+  scale-set protocol delivers no workflow name.
 
-These are best-effort: absent if the GitHub payload omitted the corresponding
-`system.github.*` variable. Never use them for security enforcement — they are
-informational annotations for operator visibility.
+These are best-effort: absent if GitHub omitted the corresponding field
+(`system.github.*` variables on classic;
+`ownerName`/`repositoryName`/`workflowRunId` on scale-set). Never use them for
+security enforcement — they are informational annotations for operator
+visibility, **except** that on the scale-set tier `run-id` and `repository` are
+also load-bearing: they are the only record of which workflow run a worker was
+serving, so eviction recovery reads them back off the pod (Q417). Adding a fifth
+key is fine; changing or removing either of those two breaks recovery on that
+tier.
 
-One further controller-set annotation is stamped *after* pod creation, on the
-ScaleSet tier only (`provisioner.AnnotationJobCompletedAt`):
+Two further controller-set annotations are stamped *after* pod creation, on the
+ScaleSet tier only:
 
-- `actions-gateway.com/job-completed-at` — RFC 3339 UTC time at which the
-  scale-set listener saw the terminal `JobCompleted` for the job this pod was
-  created for. It is the reap deadline for a pod still `Running` after its own
-  job is over (Q420): the reaper deletes such a pod five minutes later. Set once
-  — a completion replayed to a re-created session must not push the deadline
-  back — and never set on the classic path, whose `provision()` goroutine owns
-  its pod through to a terminal phase.
+- `actions-gateway.com/job-completed-at` (`provisioner.AnnotationJobCompletedAt`)
+  — RFC 3339 UTC time at which the scale-set listener saw the terminal
+  `JobCompleted` for the job this pod was created for. It is the reap deadline
+  for a pod still `Running` after its own job is over (Q420): the reaper deletes
+  such a pod five minutes later. Set once — a completion replayed to a re-created
+  session must not push the deadline back — and never set on the classic path,
+  whose `provision()` goroutine owns its pod through to a terminal phase.
+- `actions-gateway.com/eviction-handled-at`
+  (`provisioner.AnnotationEvictionHandledAt`) — RFC 3339 UTC time at which the
+  owning reconciler adjudicated this pod's eviction, whether it went on to
+  trigger a re-run, found no run identity, or found the budget exhausted (Q417).
+  It is a **claim**, not a log line: it is written under an optimistic lock
+  *before* the GitHub call, which is what makes automatic recovery at-most-once
+  per evicted pod across reconciles, restarts, and replicas. If you add another
+  post-creation side effect keyed off a worker pod, follow the same pattern —
+  claim first with `client.MergeFromWithOptimisticLock`, then act.
+
+Alongside them, the scale-set tier stamps one controller-set **label** at pod
+creation:
+
+- `actions-gateway.com/acquisition-protocol` (`= "ScaleSet"`) — the tier marker.
+  Presence is the tier test: a classic worker carries no such label. It exists
+  because the two tiers own a worker's lifecycle differently, so eviction
+  recovery must filter on it or one eviction would be recovered twice (once
+  inline by the classic `provision()` goroutine, once by the reconciler),
+  spending two slots of one run's retry budget.
 
 The provisioner also gap-fills three **node-disruption-safety** annotations on
 every worker pod, so a node autoscaler or the descheduler does not evict a pod

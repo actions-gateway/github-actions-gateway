@@ -51,9 +51,12 @@ func newTestMetrics() *runnercore.Metrics {
 		}, []string{"namespace", "runner_group"}),
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_retries_total",
-		}, []string{"namespace", "runner_group"}),
+		}, []string{"namespace", "runner_group", "tier"}),
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_retries_exhausted_total",
+		}, []string{"namespace", "runner_group", "tier"}),
+		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_prov_eviction_recovery_identity_unknown_total",
 		}, []string{"namespace", "runner_group"}),
 		QuotaRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_quota_retries_total",
@@ -330,7 +333,7 @@ func TestProvisioner_ScaleSetWorker_StagesJITAndSetsMode(t *testing.T) {
 	}
 	const jit = "eyJydW5uZXIiOnt9fQ=="
 
-	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, "job-uuid-1", jit))
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{JobID: "job-uuid-1", JITConfig: jit}))
 
 	// The Secret carries the JIT blob and NO acquired payload.
 	secret := findSecret(ctx, t, fc, "team-a", "job-ss-")
@@ -359,10 +362,10 @@ func TestProvisioner_ScaleSetWorker_StagesJITAndSetsMode(t *testing.T) {
 	assert.Equal(t, "scaleset", mode, "the worker must run in scale-set mode (run.sh --jitconfig)")
 
 	// Idempotent: replaying the same job is a no-op (deterministic names → AlreadyExists).
-	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, "job-uuid-1", jit))
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{JobID: "job-uuid-1", JITConfig: jit}))
 
 	// A missing JIT config is rejected before any object is created.
-	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, "job-uuid-2", ""))
+	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{JobID: "job-uuid-2", JITConfig: ""}))
 }
 
 // TestProvisioner_OmitsJITKeyWhenEmpty pins the contract that an empty
@@ -922,7 +925,7 @@ func TestProvisioner_EvictionAutoRetry(t *testing.T) {
 	}
 
 	// H1: EvictionRetries counter must be incremented once.
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic")))
 }
 
 // TestProvisioner_EvictionRetryBudgetExhausted verifies that a second eviction
@@ -995,8 +998,8 @@ func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 	// H5: provision returns only after handleEviction finishes, so these assertions
 	// are race-free — no sleep needed.
 	runCycle("plan-evict-2")
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup")))
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup", "classic")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", "classic")))
 	assert.Equal(t, 1, rerunCount, "rerun API should be called exactly once")
 
 	// Budget exhaustion records a Warning Event on the owner so the operator sees a
@@ -1056,7 +1059,7 @@ func TestProvisioner_EvictionRerunAPI5xx(t *testing.T) {
 	}
 
 	// EvictionRetries counter incremented even when the API returns 5xx.
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic")))
 }
 
 // TestProvisioner_PriorityTiersSecondTier verifies that the second priority tier
@@ -1614,8 +1617,8 @@ func TestProvisioner_RGMaxEvictionRetriesZero(t *testing.T) {
 	}
 
 	// Exhausted counter must increment immediately.
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "mygroup")))
-	assert.Equal(t, float64(0), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "mygroup", "classic")))
+	assert.Equal(t, float64(0), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic")))
 }
 
 // TestProvisioner_RGMaxEvictionRetriesOne verifies that maxEvictionRetries:1 on the
@@ -1680,7 +1683,7 @@ func TestProvisioner_RGMaxEvictionRetriesOne(t *testing.T) {
 
 	// Second eviction: budget exhausted (count 1 >= 1), no retry.
 	runCycle("plan-rg-retry-2")
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup", "classic")))
 	assert.Equal(t, 1, rerunCount, "rerun API should be called exactly once")
 }
 

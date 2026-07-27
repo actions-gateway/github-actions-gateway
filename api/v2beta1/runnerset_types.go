@@ -95,11 +95,11 @@ type RunnerSetSpec struct {
 	// job whose worker pod was evicted. Set to 0 to disable auto-retry entirely.
 	// Defaults to 2 when omitted.
 	//
-	// Not yet honored on this API version. Eviction recovery is implemented on the
-	// classic acquisition path only, which blocks on the worker pod's terminal
-	// phase; v2beta1 is ScaleSet-only, and a ScaleSet worker is provisioned
-	// fire-and-forget, so no eviction is observed and no rerun is issued. An
-	// evicted worker's job needs a manual rerun until Q417 ports the recovery.
+	// Honored on both acquisition tiers as of Q417. On ScaleSet — the only tier this
+	// API version offers — the worker is provisioned fire-and-forget, so the eviction
+	// is detected by the owning reconciler from the worker pod rather than by a
+	// goroutine watching it; the budget itself is shared, keyed by workflow run, so
+	// this cap applies per run across both tiers rather than once each.
 	//
 	// +optional
 	// +kubebuilder:validation:Minimum=0
@@ -109,8 +109,7 @@ type RunnerSetSpec struct {
 	// EvictionRetryDelay is the minimum time to wait before re-queuing an evicted
 	// job. Must be at least 1s. Defaults to "5s" when omitted.
 	//
-	// Not yet honored on this API version, for the reason given on
-	// MaxEvictionRetries.
+	// Honored on both acquisition tiers as of Q417, as for MaxEvictionRetries.
 	//
 	// +optional
 	EvictionRetryDelay *metav1.Duration `json:"evictionRetryDelay,omitempty"`

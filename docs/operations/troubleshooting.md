@@ -46,7 +46,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)](#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)
 - [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
 - [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
-- [Evictions on a ScaleSet Set: No Automatic Rerun](#evictions-on-a-scaleset-set-no-automatic-rerun)
+- [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically)
 - [Terminated Worker Pod Never Reports Its Job (Job Hangs on GitHub Until the Lock Lapses)](#terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses)
 - [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion)
 - [Jobs Not Being Acquired Despite Queued Work (Capacity Gate Saturated)](#jobs-not-being-acquired-despite-queued-work-capacity-gate-saturated)
@@ -954,7 +954,7 @@ few seconds; the metric is the real-time signal.
 | `RunnerVersionTooOld` | Warning | Session creation was rejected permanently because the runner version is too old for GitHub. Also sets the `RunnerVersionTooOld` condition. | [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs) |
 | `SessionUnauthorized` | Warning | Session creation was rejected as unauthorized — the agent credentials are invalid or revoked. Also sets the `Degraded` condition. | [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration) |
 | `QuotaRetriesExhausted` | Warning | Worker pod creation was abandoned after exhausting the namespace `ResourceQuota` retry budget (`maxQuotaRetries`). | [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion) |
-| `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. Classic acquisition only — a `ScaleSet` set never emits it, because it never observes the eviction. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evictions on a ScaleSet set](#evictions-on-a-scaleset-set-no-automatic-rerun) |
+| `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, which share one per-run budget. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) |
 
 **Diagnostics.**
 
@@ -1652,16 +1652,14 @@ kubectl get secret -n <namespace> actions-gateway-proxy-tls \
 
 ## Evicted Worker Pods Exhausting Retry Budget
 
-> **Applies to the classic acquisition tier only.** Eviction auto-retry runs off the
-> classic provisioning path, which blocks on the worker pod's terminal phase. A
-> `RunnerSet` with `spec.acquisitionProtocol: ScaleSet` — the default, and the only
-> protocol `v2beta1` offers — provisions its worker fire-and-forget, so the AGC never
-> sees the eviction: no rerun is issued, neither eviction counter moves, and
-> `maxEvictionRetries`/`evictionRetryDelay` have no effect. If your workers are being
-> evicted on a ScaleSet set, the symptom is jobs **failing** with both counters flat
-> at zero, not a budget being exhausted — jump to
-> [Evictions on a ScaleSet set](#evictions-on-a-scaleset-set-no-automatic-rerun) below.
-> Q417 tracks porting the recovery.
+> **Applies to both acquisition tiers.** The budget is keyed by workflow run alone, so
+> `maxEvictionRetries` caps re-runs per run across classic and scale-set together, not
+> once each — several evicted workers of one run share one budget whichever tier they
+> came from. Split the counters by the `tier` label to see where the evictions are
+> landing. If the counters are flat at **zero** on a scale-set set rather than
+> exhausted, the recovery is not firing at all: see
+> [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically)
+> below.
 
 **Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing. Jobs are being cancelled after eviction despite automatic retries. `kubectl describe` on the owning `RunnerGroup`/`RunnerSet` shows a `Warning` event with reason `EvictionRetriesExhausted` (Q170) naming the affected run — the event-based companion to the metric.
 
@@ -1672,9 +1670,10 @@ kubectl get secret -n <namespace> actions-gateway-proxy-tls \
 **Diagnostics.**
 
 ```sh
-# Check eviction retry metrics
-# actions_gateway_eviction_retries_total{namespace, runner_group}
-# actions_gateway_eviction_retries_exhausted_total{namespace, runner_group}
+# Check eviction retry metrics. The tier label splits the two acquisition paths
+# (classic, scaleset); the retry budget itself is shared across them.
+# actions_gateway_eviction_retries_total{namespace, runner_group, tier}
+# actions_gateway_eviction_retries_exhausted_total{namespace, runner_group, tier}
 
 # Check recent evicted pods
 kubectl get pods -n <namespace> --field-selector=status.phase=Failed | grep Evicted
@@ -1698,32 +1697,75 @@ kubectl describe runnergroup -n <namespace> <name> | grep -A1 EvictionRetriesExh
 
 ---
 
-## Evictions on a ScaleSet Set: No Automatic Rerun
+## Evicted Scale-Set Jobs Are Not Re-Run Automatically
 
-**Symptoms.** Worker pods on a `spec.acquisitionProtocol: ScaleSet` `RunnerSet` are being evicted (preemption or OOM-kill), their jobs fail on GitHub, and a human has to rerun each one. Both `actions_gateway_eviction_retries_total` and `actions_gateway_eviction_retries_exhausted_total` sit at zero, and no `EvictionRetriesExhausted` event is ever emitted — so the metrics look healthy while jobs are visibly being lost.
+**Symptoms.** A `RunnerSet` on the scale-set acquisition tier
+(`spec.acquisitionProtocol: ScaleSet`, the default) has workers being evicted, but
+`actions_gateway_eviction_retries_total{tier="scaleset"}` stays flat and the jobs
+stay failed until someone re-runs them by hand. Usually one of two accompanying
+signals is present:
 
-**Cause.** This is a known gap, not a misconfiguration. Eviction recovery is implemented only on the classic acquisition path, where the AGC holds the job and blocks on the worker pod's terminal phase. A ScaleSet worker pulls and completes its own job through its own session, so the AGC provisions it fire-and-forget and never observes `PodFailed`/`Evicted`. There is also no run identity on that tier to rerun with — the scale-set queue message carries no run ID or repository, which classic takes from the acquire payload. Setting `maxEvictionRetries` or `evictionRetryDelay` on a ScaleSet set changes nothing.
+- `actions_gateway_eviction_recovery_identity_unknown_total` is incrementing, and
+  `kubectl describe runnerset` shows a `Warning` event with reason
+  `EvictionRecoveryIdentityUnknown`; or
+- neither counter moves at all.
+
+**Cause.** The scale-set tier provisions fire-and-forget — the runner pulls and
+completes its own job — so nothing in the AGC is watching a given worker pod, and
+there is no acquired payload to read the job's identity from. Recovery therefore
+depends on two things being on the pod: the run identity
+(`actions-gateway.com/run-id`, `actions-gateway.com/repository`), stamped from the
+assignment message's `ownerName`/`repositoryName`/`workflowRunId`, and the
+`actions-gateway.com/acquisition-protocol=ScaleSet` label that tells the reconciler
+the pod is its to recover. Either one missing makes recovery inert for that pod.
 
 **Diagnostics.**
 
 ```sh
-# Confirm the set is on the ScaleSet tier (the default; v2beta1 offers no other)
-kubectl get runnerset -n <namespace> <name> -o jsonpath='{.spec.acquisitionProtocol}{"\n"}'
+# Does the evicted worker carry its run identity and the tier marker?
+kubectl get pods -n <namespace> -l actions-gateway.com/acquisition-protocol=ScaleSet \
+  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,REASON:.status.reason,RUN:.metadata.annotations.actions-gateway\.com/run-id,REPO:.metadata.annotations.actions-gateway\.com/repository,HANDLED:.metadata.annotations.actions-gateway\.com/eviction-handled-at'
 ```
+
+Read the result as follows.
+
+| What you see | What it means |
+| --- | --- |
+| `REASON` is empty rather than `Evicted` | Not a kubelet eviction. Only `PodFailed`/`Evicted` triggers recovery — anything else ran and reported its own outcome, so re-running it would double-report |
+| `RUN`/`REPO` empty | The assignment carried no run identity. This is the `EvictionRecoveryIdentityUnknown` case |
+| `RUN`/`REPO` present, `HANDLED` empty | The reconciler has not adjudicated it yet, or the scan is failing — check the AGC log for `scale-set eviction recovery scan failed` |
+| `HANDLED` set but no re-run | The claim succeeded and the rerun call failed. Look for `eviction auto-retry failed` in the AGC log, or an exhausted budget |
 
 ```sh
-# Evicted workers are visible on the pods, not in the eviction metrics
-kubectl get pods -n <namespace> --field-selector=status.phase=Failed -o wide | grep -i evicted
+# The AGC's own account of what it did with the eviction.
+kubectl logs -n <namespace> deploy/<agc-deployment> \
+  | grep -E 'pod evicted|eviction auto-retry|run identity is unknown|eviction recovery scan failed'
+
+# The identity the queue actually delivered (raise the AGC to debug first).
+kubectl logs -n <namespace> deploy/<agc-deployment> \
+  | grep 'carries no run identity'
 ```
 
-**Resolution.** Reduce the eviction rate — the recovery that would absorb it does not exist on this tier yet:
-
-- Raise the worker's memory requests so the kubelet ranks it above cheaper pods under node pressure, and check `actions_gateway_worker_usage_*` / `status.sizingRecommendation` for what the jobs actually peak at ([worker right-sizing](worker-rightsizing.md)). A `Guaranteed`-QoS worker is the strongest protection against node-pressure eviction.
-- If the evictions are preemption rather than node pressure, raise this set's floor with `priorityTiers`, or lower the priority of the workloads displacing it.
-- Keep the worker-pod disruption markers in place — `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` and the descheduler's `prefer-no-eviction` are stamped by default and cover the *voluntary* disruption paths ([node-disruption-safety annotations](observability-metrics.md#node-disruption-safety-annotations)). They do not cover kubelet node-pressure eviction or preemption.
-- Where a job genuinely must survive eviction today, run it on a classic-protocol `RunnerSet` (`spec.acquisitionProtocol: Classic`) during the deprecation window. Weigh this against the removal in `v2.0.0` ([deprecation notice](v1alpha1-deprecation.md)) — it is a stopgap, not a destination.
-
-Porting the recovery to the ScaleSet tier is tracked as Q417; it gates the classic removal, so the capability will not disappear before it lands.
+**Resolution.**
+- **`RUN`/`REPO` empty on every evicted worker.** GitHub is not sending the
+  assignment fields recovery depends on. There is no configuration workaround — the
+  identity has no other source on this tier. Re-run affected jobs manually, and
+  treat a sustained rate as a protocol regression worth reporting rather than a
+  capacity problem.
+- **`REASON` is not `Evicted`.** Working as intended. The pod ran and reported its
+  own result; if the *job* nonetheless hung, see [Terminated Worker Pod Never
+  Reports Its Job](#terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses)
+  instead.
+- **Evicted pods disappearing before recovery runs.** Recovery reads the evicted
+  pod, so it must still exist. A very short `completedPodTTL` combined with a
+  backlogged AGC can delete the evidence first; raise `completedPodTTL` (default
+  5 m) if you see terminal workers vanishing within seconds.
+- **Budget exhausted instead.** See [Evicted Worker Pods Exhausting Retry
+  Budget](#evicted-worker-pods-exhausting-retry-budget). Note the budget is shared
+  across both tiers for a given run, not per tier.
+- **Node drains rather than kubelet evictions.** A drained pod is deleted, not left
+  `PodFailed`/`Evicted`, and the runner reports its own cancellation through the
+  SIGTERM relay — so it is deliberately outside this mechanism, not a gap in it.
 
 ---
 

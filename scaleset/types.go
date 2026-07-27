@@ -56,6 +56,7 @@ package scaleset
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -192,6 +193,49 @@ type JobMessage struct {
 	RunnerName string `json:"runnerName,omitempty"`
 	// Result is the terminal result on JobCompleted (e.g. "succeeded", "failed").
 	Result string `json:"result,omitempty"`
+
+	// Run identity, carried on every message type by the protocol's JobMessageBase
+	// (see RunIdentity for why these are modelled and how absence is handled).
+	//
+	// OwnerName is the repository owner (org or user) and RepositoryName the bare
+	// repository name — the protocol splits what the classic broker payload delivers
+	// as one "owner/repo" variable.
+	OwnerName      string `json:"ownerName,omitempty"`
+	RepositoryName string `json:"repositoryName,omitempty"`
+	// WorkflowRunID is the workflow run the job belongs to — the run_id the
+	// rerun-failed-jobs REST call takes.
+	WorkflowRunID int64 `json:"workflowRunId,omitempty"`
+	// JobDisplayName is the job's human-readable name from the workflow YAML.
+	JobDisplayName string `json:"jobDisplayName,omitempty"`
+}
+
+// RunIdentity returns the workflow run this job belongs to, as the (owner, repo,
+// run_id) triple the GitHub REST API addresses a run by, and whether all three are
+// present. A false ok means the message did not carry a complete identity, and any
+// caller that needs one (eviction recovery, which must POST rerun-failed-jobs for a
+// specific run) has to degrade rather than guess.
+//
+// Why the fields are modelled at all: this client mirrors the wire types of the
+// official actions/scaleset package (see the package doc), whose JobMessageBase —
+// embedded in JobAvailable, JobAssigned, JobStarted, and JobCompleted alike —
+// carries ownerName, repositoryName, and workflowRunId. The live probe of the
+// dotcom broker-host backend corroborates that the raw body really is a
+// JobMessageBase: it observed scaleSetAssignTime, another base field this client
+// does not model (Q264 plan §2a-3).
+//
+// A live probe against the dotcom broker-host backend confirmed all three on a real
+// JobAssigned on 2026-07-26, with workflowRunId matching the dispatched run exactly
+// (see the plan doc's "Measured live" section).
+//
+// Why ok is still a return value rather than an assumption: that is one observation on
+// one backend, and it says nothing about GHES, another event type, or a future protocol
+// revision. Treating identity as optional costs one branch and makes an absence
+// observable (a logged warning and an Event) instead of producing a rerun against run 0.
+func (j JobMessage) RunIdentity() (owner, repo, runID string, ok bool) {
+	if j.OwnerName == "" || j.RepositoryName == "" || j.WorkflowRunID == 0 {
+		return "", "", "", false
+	}
+	return j.OwnerName, j.RepositoryName, strconv.FormatInt(j.WorkflowRunID, 10), true
 }
 
 // AvailableJobIDs returns the RunnerRequestIDs of the JobAvailable entries in jobs

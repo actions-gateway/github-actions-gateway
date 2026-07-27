@@ -52,6 +52,14 @@ func (p *recordingProvisioner) count() int {
 	return len(p.provisioned)
 }
 
+// jobs returns a copy of every Job handed to Provision, so a test can assert on fields
+// beyond the job id.
+func (p *recordingProvisioner) jobs() []scalesetlistener.Job {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]scalesetlistener.Job(nil), p.provisioned...)
+}
+
 // runnerNames returns the RunnerName the listener registered for each provisioned job,
 // in order — the base {scaleSet}-{jobID} name, or a suffixed fresh name on fallback.
 func (p *recordingProvisioner) runnerNames() []string {
@@ -242,6 +250,55 @@ func TestListener_ProvisionsOneWorkerPerAssignedJob(t *testing.T) {
 	assert.GreaterOrEqual(t, assigned, n, "each assigned job is counted")
 	assert.Equal(t, n, provisioned, "one provisioned-worker metric per job")
 	assert.Zero(t, errs, "no provision errors on the happy path")
+}
+
+// TestListener_CarriesRunIdentityToProvision covers the Q417 handoff. The assignment
+// message is the only point at which this tier learns which workflow run a job belongs
+// to, and the listener keeps no per-job state, so an identity dropped here is
+// unrecoverable — the provisioner would stamp an empty run on the worker pod and
+// eviction recovery would have nothing to re-run.
+func TestListener_CarriesRunIdentityToProvision(t *testing.T) {
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	prov := &recordingProvisioner{srv: srv}
+	_, ssID := startListener(t, srv, fixedCapacity(1), prov, newCountingMetrics())
+
+	_, jobID := srv.EnqueueJob(ssID)
+
+	require.Eventually(t, func() bool { return prov.count() >= 1 }, 5*time.Second, 10*time.Millisecond)
+
+	jobs := prov.jobs()
+	require.Len(t, jobs, 1)
+	got := jobs[0]
+	assert.Equal(t, jobID, got.JobID)
+	assert.Equal(t, scalesettest.DefaultJobOwner, got.Owner)
+	assert.Equal(t, scalesettest.DefaultJobRepository, got.Repository)
+	assert.NotEmpty(t, got.RunID, "the assignment's workflowRunId must reach the provisioner")
+	assert.NotEqual(t, "0", got.RunID, "a zero run id addresses no run and must not be passed on as one")
+}
+
+// TestListener_ProvisionsWithoutRunIdentity is the degrade path: an assignment carrying
+// no JobMessageBase identity — seeded as a raw body so the fake's own model cannot
+// supply one — must still provision a worker and run the job. Only automatic eviction
+// recovery is lost, and the provisioner reports that loss separately.
+func TestListener_ProvisionsWithoutRunIdentity(t *testing.T) {
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	srv.SeedRawMessage(`[{"messageType":"JobAssigned","jobId":"bare-job"}]`)
+
+	prov := &recordingProvisioner{srv: srv, completeErr: true}
+	startListener(t, srv, fixedCapacity(1), prov, newCountingMetrics())
+
+	require.Eventually(t, func() bool { return prov.count() >= 1 }, 5*time.Second, 10*time.Millisecond,
+		"a job with no run identity must still provision a worker")
+
+	got := prov.jobs()[0]
+	assert.Equal(t, "bare-job", got.JobID)
+	assert.Empty(t, got.Owner)
+	assert.Empty(t, got.Repository)
+	assert.Empty(t, got.RunID, "an incomplete identity must arrive empty, never partial")
 }
 
 // TestListener_CapacityGatesAssignment proves the advertised capacity bounds how many

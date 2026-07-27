@@ -16,7 +16,7 @@ API surface, and the contract cannot be walked back.
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
 | 2 | Add `v2` to each kind, mark it storage, extend conversion coverage | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
-| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity gated on [Q417](../STATUS.md#Q417) |
+| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity cleared — Q417 shipped 2026-07-26 |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q413](../STATUS.md#Q413)) |
 
 ## Why this is gated on a soak, not a date
@@ -110,14 +110,20 @@ prevent.
 
 | Capability | State | Gate |
 |---|---|---|
-| Eviction recovery (detect an evicted worker, rerun the job, per-run retry budget) | Classic only. `handleEviction` is reached from one call site inside classic `provision()`; `ProvisionScaleSetWorker` is fire-and-forget and never observes `PodFailed`/`Evicted`, so no scale-set eviction is detected and no rerun fires. | [Q417](../STATUS.md#Q417) must land before the classic removal, or `v2.0.0` ships without automatic eviction recovery. Evidence and plan: [scaleset-eviction-recovery.md](scaleset-eviction-recovery.md). |
+| Eviction recovery (detect an evicted worker, rerun the job, per-run retry budget) | ✅ **Both tiers.** Q417 ported it: the scale-set assignment's run identity is stamped on the worker pod, the owning reconciler detects `PodFailed`/`Evicted` and claims the pod set-once before calling `rerun-failed-jobs`, and the Q106 per-run budget is shared across tiers. | Cleared. Design: [04-operational-flows.md § On the scale-set tier](../design/04-operational-flows.md#on-the-scale-set-tier-q417). Plan: [scaleset-eviction-recovery.md](scaleset-eviction-recovery.md). |
 
-This is a genuine gate, not a nice-to-have: eviction recovery is a headline
+This was a genuine gate, not a nice-to-have: eviction recovery is a headline
 capability in [01-executive-summary.md](../design/01-executive-summary.md),
 [README.md](../../README.md), and [why-gag.md](../why-gag.md), all of which describe
 it as a property of the system rather than of one acquisition tier. Removing classic
-without [Q417](../STATUS.md#Q417) would make those claims false at the same moment
-the only tier that satisfied them disappears.
+before Q417 landed would have made those claims false at the same moment the only tier
+that satisfied them disappeared. With the port in, the claims survive the cut.
+
+One residual is worth knowing about but does not gate the removal, because classic
+shares it: a worker pod force-deleted with no grace period (or lost with its node)
+leaves no `Failed`/`Evicted` object and no chance for the runner to report, so neither
+tier recovers it. Q435 measured the adjacent orphan-reclaim question and
+[Q438](../STATUS.md#Q438) carries its residual.
 
 Any further capability found to be classic-only before the cut joins this table and
 gates the same removal.

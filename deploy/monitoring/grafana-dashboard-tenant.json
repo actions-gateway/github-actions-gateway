@@ -347,8 +347,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (runner_group) (increase(actions_gateway_eviction_retries_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
-          "legendFormat": "{{runner_group}}",
+          "expr": "sum by (runner_group, tier) (increase(actions_gateway_eviction_retries_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
+          "legendFormat": "{{runner_group}} ({{tier}})",
           "refId": "A"
         }
       ]

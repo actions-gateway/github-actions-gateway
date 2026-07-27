@@ -353,7 +353,21 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// routing so both acquisition tiers persist it with their status writes.
 	r.applySizingStatus(&rs, refs.template)
 
-	// 2. Reap expired worker pods (terminal past completedPodTTL, Pending past
+	// 2. Recover evicted scale-set workers (Q417). Runs BEFORE the reaper: the
+	// evicted pod is the only record of which run to re-run, and the reaper deletes
+	// terminal pods once completedPodTTL elapses. It is a no-op for a classic set
+	// (whose pods carry no acquisition-protocol label) and for a set with nothing
+	// evicted. Deliberately not waited on — recovery waits out evictionRetryDelay
+	// before calling GitHub, and a reconcile must not block on either.
+	if rs.Spec.AcquisitionProtocol == v2alpha1.AcquisitionProtocolScaleSet {
+		if _, err := r.Provisioner.RecoverEvictedScaleSetWorkers(ctx, r.provisionerTarget(&rs)); err != nil {
+			// A failed scan must not stop the reconcile: the pods stay unclaimed, so
+			// the next reconcile retries them. Worth surfacing, not worth requeuing for.
+			log.Warn("scale-set eviction recovery scan failed", "error", err)
+		}
+	}
+
+	// 3. Reap expired worker pods (terminal past completedPodTTL, Pending past
 	// pendingPodDeadline). Runs before the token fetch so cleanup keeps working
 	// during a GitHub outage. podCounts is the pod phase snapshot used to
 	// populate status.activeJobs/pendingJobs.
@@ -371,7 +385,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return r.reconcileScaleSetListener(ctx, log, &rs, refs, reapAfter, podCounts)
 	}
 
-	// 3. Installation token for agent management. Process-wide (one GitHub App per
+	// 4. Installation token for agent management. Process-wide (one GitHub App per
 	// AGC); a failure affects every RunnerSet, so surface it and requeue.
 	instToken, err := r.TokenManager.Token(ctx)
 	if err != nil {
@@ -386,7 +400,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// 4. Ensure agent pool Secrets.
+	// 5. Ensure agent pool Secrets.
 	pool := r.getOrCreatePool(req.NamespacedName, rs.Namespace, rs.Name, rs.Spec.RunnerLabels)
 	if err := pool.EnsureAgents(ctx, rs.Spec.MaxListeners, instToken); err != nil {
 		log.Error("EnsureAgents failed", "error", err)
@@ -403,7 +417,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// 5. Start or update the multiplexer.
+	// 6. Start or update the multiplexer.
 	mux := r.getOrCreateMultiplexer(ctx, req.NamespacedName, rs.DeepCopy(), pool)
 	mux.SetMaxListeners(rs.Spec.MaxListeners)
 	var startErr error
@@ -415,7 +429,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	// 6. Update status.
+	// 7. Update status.
 	active := mux.ActiveCount()
 	rs.Status.ActiveSessions = active
 	rs.Status.ActiveJobs = podCounts.active
@@ -551,13 +565,7 @@ func (r *RunnerSetReconciler) getOrCreateMultiplexer(ctx context.Context, key ty
 
 	condUpdater := r.condUpdater()
 	brokerCfg := r.BrokerConfig
-	target := &runnerSetTarget{
-		client: r.Client,
-		prov:   r.Provisioner,
-		key:    key,
-		uid:    rs.UID,
-		events: r.eventRecorder(),
-	}
+	target := r.provisionerTarget(rs)
 
 	factory := func(index int) listener.Config {
 		agent := pool.ClaimAgent()
@@ -769,6 +777,21 @@ func (r *RunnerSetReconciler) nowFunc() func() time.Time {
 		return r.Now
 	}
 	return time.Now
+}
+
+// provisionerTarget returns the provisioner.Target adapter for rs — the seam the
+// Provisioner builds worker pods, counts capacity, and records owner Events through.
+// Every caller needs the identical adapter (the multiplexer path, the scale-set
+// listener path, and the eviction-recovery pass), so it is constructed once here rather
+// than re-literalled per call site.
+func (r *RunnerSetReconciler) provisionerTarget(rs *v2alpha1.RunnerSet) *runnerSetTarget {
+	return &runnerSetTarget{
+		client: r.Client,
+		prov:   r.Provisioner,
+		key:    types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name},
+		uid:    rs.UID,
+		events: r.eventRecorder(),
+	}
 }
 
 // reapWorkerPods deletes worker pods this RunnerSet no longer needs (terminal past

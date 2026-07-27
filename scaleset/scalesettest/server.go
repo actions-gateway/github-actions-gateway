@@ -56,7 +56,24 @@ type job struct {
 	jobID  string
 	state  jobState
 	result string
+	// Run identity, delivered on every job message by the protocol's JobMessageBase.
+	// The fake populates it because the real backend does: a client that reads
+	// ownerName/repositoryName/workflowRunId off an assignment (scale-set eviction
+	// recovery does — Q417) would otherwise be exercised against a fake that answers
+	// with fields the wire actually carries left empty, and the gap would only surface
+	// live. A test that needs the no-identity degrade path seeds a raw body instead
+	// (SeedRawMessage).
+	owner string
+	repo  string
+	runID int64
 }
+
+// The identity the fake stamps on every enqueued job. Exported so a test can assert
+// against the same values the fake will deliver rather than restating them.
+const (
+	DefaultJobOwner      = "acme"
+	DefaultJobRepository = "widgets"
+)
 
 // qmessage is one message in a scale set's queue log. The log is scale-set-scoped
 // (not session-scoped), so it survives a session delete/recreate — the property
@@ -397,16 +414,36 @@ func (s *Server) PrequeueJobs(n int) []int64 {
 	defer s.mu.Unlock()
 	ids := make([]int64, 0, n)
 	for range n {
-		s.nextReqID++
-		s.nextJobSeq++
-		s.pendingJobs = append(s.pendingJobs, &job{
-			reqID: s.nextReqID,
-			jobID: fmt.Sprintf("job-%d", s.nextJobSeq),
-			state: jobQueued,
-		})
-		ids = append(ids, s.nextReqID)
+		j := s.newQueuedJobLocked()
+		s.pendingJobs = append(s.pendingJobs, j)
+		ids = append(ids, j.reqID)
 	}
 	return ids
+}
+
+// newQueuedJobLocked mints one queued job with a fresh request id, job id, and run
+// identity. It is the SINGLE construction site for a job, shared by EnqueueJob (a job
+// queued against a live scale set) and PrequeueJobs (a job queued before the scale set
+// exists). Caller holds s.mu.
+//
+// One site, not two, because the two drifted the first time run identity was added:
+// EnqueueJob gained the fields and PrequeueJobs did not, so every test that pre-queues
+// — which is most of the probe's — was served assignments with the identity empty. That
+// is precisely the divergence the fake exists to prevent, since the real backend sends
+// these fields on every assignment.
+func (s *Server) newQueuedJobLocked() *job {
+	s.nextReqID++
+	s.nextJobSeq++
+	return &job{
+		reqID: s.nextReqID,
+		jobID: fmt.Sprintf("job-%d", s.nextJobSeq),
+		state: jobQueued,
+		owner: DefaultJobOwner,
+		repo:  DefaultJobRepository,
+		// One run per job, derived from the sequence so it is deterministic and
+		// distinct — a shared run id would hide any per-run bookkeeping bug.
+		runID: int64(900000 + s.nextJobSeq),
+	}
 }
 
 // SeedMessage appends one message to every newly created scale set's queue log,
@@ -461,7 +498,7 @@ func (s *Server) EnqueueJob(scaleSetID int) (reqID int64, jobID string) {
 	}
 	s.nextReqID++
 	s.nextJobSeq++
-	j := &job{reqID: s.nextReqID, jobID: fmt.Sprintf("job-%d", s.nextJobSeq), state: jobQueued}
+	j := s.newQueuedJobLocked()
 	ss.jobs = append(ss.jobs, j)
 	// A queued job produces no message until a poll re-evaluates it against the
 	// advertised capacity, so wake the parked polls to do exactly that.
@@ -1081,6 +1118,10 @@ func (s *Server) claimLocked(ss *scaleSet, ids []int64) map[string]any {
 					MessageType:     scaleset.MessageTypeJobAssigned,
 					RunnerRequestID: j.reqID,
 					JobID:           j.jobID,
+					OwnerName:       j.owner,
+					RepositoryName:  j.repo,
+					WorkflowRunID:   j.runID,
+					JobDisplayName:  j.jobID,
 				}})
 				won = append(won, reqID)
 			}
@@ -1278,8 +1319,12 @@ func (ss *scaleSet) assignUnderCapacity(capacity int, nextID func() int64) {
 		if j.state == jobQueued {
 			j.state = jobAssigned
 			ss.appendMessage(nextID(), []scaleset.JobMessage{{
-				MessageType: scaleset.MessageTypeJobAssigned,
-				JobID:       j.jobID,
+				MessageType:    scaleset.MessageTypeJobAssigned,
+				JobID:          j.jobID,
+				OwnerName:      j.owner,
+				RepositoryName: j.repo,
+				WorkflowRunID:  j.runID,
+				JobDisplayName: j.jobID,
 			}})
 			assigned++
 		}
