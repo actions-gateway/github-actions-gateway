@@ -431,11 +431,20 @@ func setupMetricsServer() {
 		_, _ = fmt.Fprintf(GinkgoWriter, "warning: metrics-server install: %v\n", err)
 		return
 	}
-	// Patch for kind (kubelet TLS is self-signed).
+	// Two patches:
+	//   --kubelet-insecure-tls  required on kind (kubelet TLS is self-signed).
+	//   --metric-resolution=10s the HPA cannot report ScalingActive=True until
+	//                           metrics-server has scraped, and the default 15s
+	//                           resolution puts that latency directly in front
+	//                           of E2E_GMC_HPADrivesScaleUp — a Serial spec, so
+	//                           it is on the suite's critical tail. 10s is
+	//                           metrics-server's documented floor; going below
+	//                           it trades scrape reliability for a second or two.
 	cmd = exec.Command("kubectl", "patch", "deployment", "metrics-server",
 		"-n", "kube-system",
 		"--type=json",
-		`-p=[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]`,
+		`-p=[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"},`+
+			`{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--metric-resolution=10s"}]`,
 	)
 	if _, err := utils.Run(cmd); err != nil {
 		_, _ = fmt.Fprintf(GinkgoWriter, "warning: metrics-server patch: %v\n", err)

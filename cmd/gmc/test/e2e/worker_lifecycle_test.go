@@ -26,15 +26,26 @@ import (
 //   - a stuck-Pending worker pod (unpullable image) is reaped once
 //     pendingPodDeadline elapses, with a WorkerPodStuckPending Warning event.
 //
-// Serial: fakegithub session IDs carry no tenant identity, so this suite —
-// which enqueues jobs onto every active session — must not run concurrently
-// with other session-consuming suites (job_lifecycle). In the serial phase the
-// only active sessions belong to this suite's two tenants.
-var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, Serial, func() {
+// NOT Serial. It used to be, because it enqueued a job onto every active
+// fakegithub session — session IDs are opaque, so that was the only way to be
+// sure both of its tenants got one, and it would have handed other suites'
+// tenants jobs they never asked for. fakegithub's control API grew an owner
+// filter since (GET /control/sessions?owner=<prefix>), so the enqueue below
+// scopes to this suite's own RunnerGroups and the specs can run in the parallel
+// phase. That matters: Ginkgo runs Serial specs after every parallel spec
+// completes, so these three were 60s of pure tail on the suite's wall time.
+//
+// The two tenants therefore need ActionsGateway names distinct from each other
+// AND from every other session-registering suite's — session ownerName is
+// "<runnerGroup>-<agentIndex>" and RunnerGroup name is "<ag>-<first label>", so
+// the ActionsGateway name is what makes the owner prefix selective. Sharing
+// "test-ag" with job_lifecycle is exactly what made the spray unavoidable.
+var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 	const (
 		cleanNS    = "tenant-pod-clean" // worker completes fast; short completedPodTTL
 		stuckNS    = "tenant-pod-stuck" // unpullable worker image; short pendingPodDeadline
-		agName     = "test-ag"
+		cleanAG    = "podclean-ag"
+		stuckAG    = "podstuck-ag"
 		secretName = "github-app-secret"
 
 		// stuckImage never pulls: .invalid is a reserved TLD, so the pod stays
@@ -54,17 +65,20 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, Serial, func() {
 			utils.ApplyFakegithubEgressNetworkPolicy(ns)
 		}
 		By("applying a tenant whose workers complete fast and are reaped on a short TTL")
-		utils.RunnerTenant(cleanNS, agName, secretName, agcImage).WithLifecycle(cleanTTL, "10m").Apply()
+		utils.RunnerTenant(cleanNS, cleanAG, secretName, agcImage).WithLifecycle(cleanTTL, "10m").Apply()
 		By("applying a tenant whose workers can never pull their image")
-		utils.RunnerTenant(stuckNS, agName, secretName, stuckImage).WithLifecycle("5m", stuckDeadline).Apply()
+		utils.RunnerTenant(stuckNS, stuckAG, secretName, stuckImage).WithLifecycle("5m", stuckDeadline).Apply()
 
 		By("waiting for both AGCs to be ready")
 		utils.WaitForDeploymentReady(cleanNS, agcName, 4*time.Minute)
 		utils.WaitForDeploymentReady(stuckNS, agcName, 4*time.Minute)
 
 		By("starting port-forward to fakegithub control API")
-		// fakegithubLocalPort is shared with job_lifecycle_test.go helpers;
-		// safe to reassign here because this suite is Serial.
+		// fakegithubLocalPort is the package-level var the control helpers read.
+		// Every session-consuming suite assigns it from its own base port in its
+		// own BeforeAll; that is safe without Serial because Ginkgo runs an
+		// Ordered container's specs contiguously within one process, so no other
+		// container can reassign it mid-suite.
 		fakegithubLocalPort = fmt.Sprintf("%d", 19300+GinkgoParallelProcess())
 		lifecyclePFCmd = exec.Command("kubectl", "port-forward",
 			"-n", infraNamespace,
@@ -81,20 +95,23 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, Serial, func() {
 			return nil
 		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 
-		By("enqueuing one job per active session so both tenants acquire a job")
-		// Session IDs are opaque: enqueue to all of them. Each session belongs
-		// to exactly one tenant's AGC, so every tenant ends up with >=1 job.
+		By("enqueuing one job per session of this suite's own two tenants")
+		// Owner-scoped, not sprayed across every active session: "<ag>-" selects
+		// exactly one ActionsGateway's sessions, so a job can never land on
+		// another suite's tenant and this suite does not need to be Serial.
 		fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
 			fakegithubServiceName, infraNamespace, fakegithubServicePort)
 		enqueued := map[string]bool{}
 		Eventually(func(g Gomega) {
-			for _, id := range fakegithubActiveSessions(g) {
-				if !enqueued[id] {
-					fakegithubEnqueueJob(id, map[string]interface{}{
-						"jobId":           "q95-" + id,
-						"run_service_url": fakegithubSvcURL,
-					})
-					enqueued[id] = true
+			for _, ownerPrefix := range []string{cleanAG + "-", stuckAG + "-"} {
+				for _, id := range fakegithubActiveSessionsForOwner(g, ownerPrefix) {
+					if !enqueued[id] {
+						fakegithubEnqueueJob(id, map[string]interface{}{
+							"jobId":           "q95-" + id,
+							"run_service_url": fakegithubSvcURL,
+						})
+						enqueued[id] = true
+					}
 				}
 			}
 			// Pods appearing in both namespaces is the success signal — it
@@ -108,9 +125,9 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, Serial, func() {
 		if lifecyclePFCmd != nil && lifecyclePFCmd.Process != nil {
 			_ = lifecyclePFCmd.Process.Kill()
 		}
-		for _, ns := range []string{cleanNS, stuckNS} {
-			utils.DeleteActionsGatewayCR(ns, agName)
-			utils.DeleteNamespace(ns)
+		for _, tenant := range []struct{ ns, ag string }{{cleanNS, cleanAG}, {stuckNS, stuckAG}} {
+			utils.DeleteActionsGatewayCR(tenant.ns, tenant.ag)
+			utils.DeleteNamespace(tenant.ns)
 		}
 	})
 
