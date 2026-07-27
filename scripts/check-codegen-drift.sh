@@ -73,8 +73,10 @@ EXEMPT=(
 	"cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml"
 )
 
-GEN_TMP="$(mktemp -d)"
-trap 'rm -rf "$GEN_TMP"' EXIT INT TERM
+# Scratch tree for the regenerated manifests. Created by main() rather than at
+# load time so check-codegen-drift-test.sh can source this file for its parsing
+# helpers without inheriting a temp dir or an EXIT trap of its own.
+GEN_TMP=""
 
 RC=0
 
@@ -255,6 +257,9 @@ main() {
 		exit 1
 	fi
 
+	GEN_TMP="$(mktemp -d)"
+	trap 'rm -rf "$GEN_TMP"' EXIT INT TERM
+
 	assert_registry_complete
 
 	local row module generators outputs
@@ -271,4 +276,9 @@ main() {
 	echo "committed CRD/RBAC/webhook manifests match controller-gen output for: $(module_dirs | tr '\n' ' ')"
 }
 
-main "$@"
+# Run main only when executed directly, so check-codegen-drift-test.sh can source
+# this file to exercise the recipe parsing and the registry assertions against
+# fixtures without building controller-gen or regenerating anything.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	main "$@"
+fi

@@ -57,6 +57,8 @@ The root `make generate` (or `make manifests`) is the way not to have to reason 
 
 The gate also fails if a module gains a `manifests:` target without being registered in the script's `MODULES` table, or if a row stops matching the module's own recipe — so it cannot quietly under-cover. Full assertion list: [testing.md § The codegen drift gate](testing.md#the-codegen-drift-gate). Its scope is manifests only; DeepCopy drift is intra-module and fails to compile.
 
+**Editing a `manifests:` recipe means re-syncing its `MODULES` row** — adding or dropping a generator, or pointing an `output:` rule at a different dir, fails the gate until the row matches again. The recipe is parsed out of the `Makefile` as text, tabs and backslash continuations included, so that parsing is itself asserted by [`scripts/check-codegen-drift-test.sh`](../../scripts/check-codegen-drift-test.sh) under `make scripts-test` ([why](testing.md#the-codegen-drift-gate)); re-wrapping a recipe is safe, but do it with that suite green.
+
 ## Sync the Helm chart CRDs (after any CRD change)
 
 The Helm charts ship the CRDs under `templates/crds/`, but the **authoritative** schema is the controller-gen output under `cmd/*/config/crd` (the v1alpha1 CRDs) and `api/config/crd` (the v2alpha1 CRDs). The chart copies are *generated* from those sources — do not hand-edit them. The split:
