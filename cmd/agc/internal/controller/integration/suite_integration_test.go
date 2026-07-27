@@ -153,6 +153,13 @@ type provisionerOptions struct {
 	// fanned-out job fans completejob out to every deduped sibling delivery on
 	// completion. Off in every suite but the one that asserts on it.
 	fanoutCompletion bool
+	// informerWaiter wires the production InformerPodWaiter onto the Provisioner
+	// instead of leaving Waiter nil (which falls back to the poll loop). Most
+	// suites drive completion by writing a terminal phase, where the two agree.
+	// They do NOT agree on a pod that is *deleted* without ever reaching one —
+	// the drain path — so the Q421 suite opts in to measure the production
+	// mechanism rather than the fallback's approximation of it.
+	informerWaiter bool
 }
 
 // startAGCReconciler starts a RunnerGroupReconciler for the duration of a test.
@@ -256,6 +263,11 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (*controller.
 			GitHubAPIURL:       opts.githubAPIURL,
 			HTTPClient:         brokerStub.HTTPClient(),
 			TokenFunc:          stubProvider{}.Token,
+		}
+		if opts.informerWaiter {
+			w := provisioner.NewInformerPodWaiter(mgr.GetCache(), nil)
+			require.NoError(t, mgr.Add(w))
+			p.Waiter = w
 		}
 		r.Provisioner = p
 	}

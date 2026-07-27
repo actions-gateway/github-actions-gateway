@@ -14,6 +14,7 @@
 //	POST /api/v3/{orgs/{org}|repos/{o}/{r}}/actions/runners/generate-jitconfig
 //	GET  /api/v3/.../actions/runners?name=<n>    — list runners (name filter)
 //	DELETE /api/v3/.../actions/runners/{id}      — deregister runner
+//	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/rerun-failed-jobs — eviction auto-retry
 //
 // Jobs are injected via the HTTP control API (only reachable from within the
 // pod; bind address is configurable via CONTROL_ADDR, default :9090):
@@ -21,6 +22,17 @@
 //	POST /control/enqueue?sessionId=<id>  — body: RunnerJobRequestBody JSON
 //	GET  /control/sessions                — active session IDs
 //	POST /control/singleuse?enabled=true  — toggle single-use JIT simulation
+//	GET  /control/reruns                  — eviction auto-retry calls observed
+//
+// # Eviction auto-retry observability (Q421)
+//
+// The AGC's automatic recovery from a worker-pod eviction is a POST to GitHub's
+// rerun-failed-jobs endpoint, and it is the only externally visible signal that
+// recovery fired. fakegithub answers that call like GitHub does (201, empty body)
+// and records it, so a Tier-B spec can assert recovery both ways: that it fires
+// for a kubelet eviction, and — the Q421 measurement — that it does NOT fire for a
+// node drain, whose Eviction API call deletes the pod rather than failing it.
+// Without this the absence of a rerun is indistinguishable from a 404 nobody read.
 //
 // # Single-use JIT runner simulation (Q114)
 //
@@ -216,6 +228,10 @@ type server struct {
 	// session's queue before it ages into the owner's pending pool (Q436). Set
 	// once at startup; read without mu. See sweepStaleQueuesLocked.
 	sessionQueueGrace time.Duration
+
+	// rerunPaths records the request path of every rerun-failed-jobs call the AGC
+	// has made, in order — the eviction auto-retry signal (Q421). Guarded by mu.
+	rerunPaths []string
 }
 
 // longPollTick is how often a held GET /message rechecks for a freshly enqueued
@@ -292,6 +308,11 @@ func (s *server) mainMux() http.Handler {
 	// Runner registration API (GHES-style /api/v3 prefix, matching what
 	// GithubRegistrar derives for a non-github.com host)
 	mux.HandleFunc("/api/v3/", s.handleRunnerAPI)
+	// REST endpoints the AGC addresses relative to GITHUB_API_BASE_URL itself
+	// rather than through the GHES /api/v3 prefix — the eviction auto-retry is
+	// the only one today (Q421). Both shapes route to the same handler because
+	// which one the AGC uses depends on how its API base is configured.
+	mux.HandleFunc("/repos/", s.handleReposAPI)
 	// Broker endpoints
 	mux.HandleFunc("/token", s.handleToken)
 	mux.HandleFunc("/session", s.handleSession)
@@ -310,6 +331,7 @@ func (s *server) controlMux() http.Handler {
 	mux.HandleFunc("/control/singleuse", s.handleSetSingleUse)
 	mux.HandleFunc("/control/redelivery", s.handleSetRedelivery)
 	mux.HandleFunc("/control/jobstats", s.handleJobStats)
+	mux.HandleFunc("/control/reruns", s.handleReruns)
 	return mux
 }
 
@@ -346,6 +368,10 @@ func (s *server) handleInstallationToken(w http.ResponseWriter, r *http.Request)
 // not validated — any org/repo works.
 func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	if strings.HasSuffix(path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
+		s.handleRerunFailedJobs(w, r)
+		return
+	}
 	idx := strings.Index(path, "/actions/runners")
 	if idx < 0 {
 		http.NotFound(w, r)
@@ -1109,6 +1135,56 @@ func (s *server) handleJobStats(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(stats)
+}
+
+// handleReposAPI routes the /repos/{owner}/{repo}/... REST endpoints the AGC
+// addresses directly off GITHUB_API_BASE_URL. Only rerun-failed-jobs is served;
+// anything else 404s, as an unimplemented endpoint should.
+func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
+		s.handleRerunFailedJobs(w, r)
+		return
+	}
+	http.NotFound(w, r)
+}
+
+// handleRerunFailedJobs serves the eviction auto-retry call:
+//
+//	POST /api/v3/repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs
+//
+// GitHub answers 201 with an empty object, and so does this. The path is recorded
+// so /control/reruns can report which runs were re-run (Q421).
+func (s *server) handleRerunFailedJobs(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.rerunPaths = append(s.rerunPaths, r.URL.Path)
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(map[string]any{})
+}
+
+// handleReruns is the control API: GET /control/reruns[?run=<substring>]
+// Returns {"count": <n>, "paths": [...]} for the rerun-failed-jobs calls observed,
+// optionally filtered to paths containing `run`. The filter is what makes the
+// endpoint usable from a spec running beside others on the shared instance: an
+// unfiltered count is process-wide, so a spec asserting "no rerun fired for MY run"
+// scopes to its own owner/repo (Q421).
+func (s *server) handleReruns(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	filter := r.URL.Query().Get("run")
+	s.mu.Lock()
+	paths := make([]string, 0, len(s.rerunPaths))
+	for _, p := range s.rerunPaths {
+		if filter == "" || strings.Contains(p, filter) {
+			paths = append(paths, p)
+		}
+	}
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"count": len(paths), "paths": paths})
 }
 
 // inRedeliveryScopeLocked reports whether ownerName is within the configured
