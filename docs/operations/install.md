@@ -80,7 +80,7 @@ remediation hint for each:
 | **CNI NetworkPolicy enforcement** | **FAIL** (blocking) | Detects the cluster CNI. An enforcing CNI (Calico, Cilium, Antrea, Weave Net, kube-router, Canal) passes; `kindnet` **fails loudly** — it does not enforce egress, so tenant isolation would be silently void. An unrecognised CNI warns (cannot confirm enforcement). |
 | **Kubernetes >= 1.30** | **FAIL** (blocking) | The GMC's `namespace-psa-guard` / `gmc-tenant-resource-guard` policies need the GA `ValidatingAdmissionPolicy` API. |
 | **cert-manager present** | WARN | Required only for the default cert path (`certManager.enabled=true`). An install with `--set certManager.enabled=false` uses the chart's self-signed fallback and does not need it. |
-| **metrics-server present** | WARN | The resource metrics the GMC/AGC HorizontalPodAutoscalers consume, and the source for the AGC's [worker usage sampling](worker-rightsizing.md). Install succeeds without it; autoscaling and usage sampling stay degraded until it is present. |
+| **metrics-server present** | WARN | The resource metrics the GMC/AGC HorizontalPodAutoscalers consume, and the source for the AGC's [worker usage sampling](worker-rightsizing.md). Install succeeds without it; autoscaling and usage sampling stay degraded until it is present. Checked with a [bounded retry](#preflighting-a-freshly-created-cluster) — on a brand-new cluster the addon is often still starting. |
 
 `make validate-cluster` exits non-zero on any blocking **FAIL** (or if the
 cluster is unreachable). Warnings do not block the install; set
@@ -89,6 +89,27 @@ it schedules no workloads and needs no extra permissions, so it is safe to run
 against a fresh cluster. Resolve every **FAIL** before proceeding; for CNI
 enforcement specifically, install on a cluster whose CNI enforces
 `NetworkPolicy` (see [Prerequisites](#prerequisites)).
+
+### Preflighting a freshly created cluster
+
+A cluster that was created minutes ago is still converging, so a one-shot check
+can report a prerequisite absent that is merely slow to start. The
+metrics-server check therefore retries, bounded in wall clock:
+
+- If the `metrics.k8s.io` APIService is registered but not yet `Available`, the
+  preflight prints a `[WAIT]` line and retries for up to **150 s** (a managed
+  addon typically needs ~2 min from cluster creation). It reports `PASS` as soon
+  as the API serves, so `VALIDATE_STRICT=1` does not fail a from-zero bootstrap
+  on an addon that is still coming up.
+- If no `metrics.k8s.io` APIService is registered at all, metrics-server is not
+  installed: the preflight warns after a short **15 s** grace rather than paying
+  the full budget.
+
+Both budgets are env-overridable — `VALIDATE_METRICS_TIMEOUT`,
+`VALIDATE_METRICS_GRACE`, and the `VALIDATE_METRICS_INTERVAL` poll interval, all
+in whole seconds. Set `VALIDATE_METRICS_TIMEOUT=0 VALIDATE_METRICS_GRACE=0` to
+restore the previous single-shot behaviour (useful in a scripted preflight
+against a long-running cluster, where a converging addon is not expected).
 
 ---
 
