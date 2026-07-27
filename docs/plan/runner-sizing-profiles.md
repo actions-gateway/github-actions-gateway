@@ -165,6 +165,26 @@ fresh RunnerSet (no history) provisions `Static` until confident; GPU counts
 byte-identical to the template in all profiles. (All three asserted by the
 envtest test `TestV2_RunnerSet_BinpackProfileProvisionsDerivedResources`.)
 
+**Every profile now has an envtest that provisions a real pod** — the other two
+were unit-tested only until 2026-07-26, which left the actuation path (the
+transform reached through `Resolve` at pod build, not the resource arithmetic in
+isolation) unexercised for both:
+
+| Test | Pins |
+|---|---|
+| `TestV2_RunnerSet_ThroughputProfileProvisionsBurstableResources` | Requests from the history; the CPU limit **removed** so jobs burst (Burstable, not Guaranteed); memory limit = observed peak × headroom, driven at both the 150% default and an explicit `limitHeadroomPercent`; GPU byte-identical. |
+| `TestV2_RunnerSet_NodeShareProfileDividesTheNodeEnvelope` | `Active` with **zero** samples — the property that separates it from the history-based profiles; allocatable ÷ `workersPerNode` on the runner container only, with the sidecar's ask untouched; a template limit below the derived request lifted to it; `maxRequests` clamping the derived share, and the lift following the clamp. |
+
+Each assertion was confirmed to fail against a mutated implementation before
+being trusted (headroom constant, the CPU-limit `delete`, the runner-container
+guard, and the clamp call each removed in turn).
+
+**Still true after this:** neither profile has run on a live cluster. Only
+`Binpack` has ([Live validation](#live-validation-2026-07-25)), so `Throughput`
+and `NodeShare` carry envtest confidence, not dogfood confidence. `NodeShare` is
+the more consequential of the two to leave there, since it needs no warm-up and
+so is the profile an operator can enable on day one.
+
 Decisions taken at pickup (implementation:
 `cmd/agc/internal/controller/runnerset_sizing_profile.go`, applied in
 `runnerSetTarget.Resolve`; design summary in
