@@ -367,7 +367,11 @@ they are cache-warm from step 1 — a warm gate is ~2 min against a cold one's t
 
 **The one rule: step 1's verdict covers the tree it saw.** If step 2 turns up a
 code change, that verdict is void and the confirming run is cold again for the
-affected packages — which is just a normal gate run, minus the head start.
+affected packages — which is just a normal gate run, minus the head start. A
+*code* change here is anything the gate compiles or lints: a `scripts/*.sh` or
+`Makefile` edit counts, not only Go. And step 3 is the **whole** gate, not the
+subset you judge affected — that judgement is exactly what the gate exists to
+replace.
 
 A queued run reports itself now, so a background gate's log distinguishes
 "queued" from "hung": a heartbeat every 30 s
