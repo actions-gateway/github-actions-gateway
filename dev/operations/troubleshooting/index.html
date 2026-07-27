@@ -2573,10 +2573,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#evictions-on-a-scaleset-set-no-automatic-rerun" class="md-nav__link">
+  <a href="#evicted-scale-set-jobs-are-not-re-run-automatically" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Evictions on a ScaleSet Set: No Automatic Rerun
+        Evicted Scale-Set Jobs Are Not Re-Run Automatically
       
     </span>
   </a>
@@ -3514,10 +3514,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#evictions-on-a-scaleset-set-no-automatic-rerun" class="md-nav__link">
+  <a href="#evicted-scale-set-jobs-are-not-re-run-automatically" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Evictions on a ScaleSet Set: No Automatic Rerun
+        Evicted Scale-Set Jobs Are Not Re-Run Automatically
       
     </span>
   </a>
@@ -3904,7 +3904,7 @@
 <li><a href="#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache">DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)</a></li>
 <li><a href="#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot">Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot</a></li>
 <li><a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a></li>
-<li><a href="#evictions-on-a-scaleset-set-no-automatic-rerun">Evictions on a ScaleSet Set: No Automatic Rerun</a></li>
+<li><a href="#evicted-scale-set-jobs-are-not-re-run-automatically">Evicted Scale-Set Jobs Are Not Re-Run Automatically</a></li>
 <li><a href="#terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses">Terminated Worker Pod Never Reports Its Job (Job Hangs on GitHub Until the Lock Lapses)</a></li>
 <li><a href="#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a></li>
 <li><a href="#jobs-not-being-acquired-despite-queued-work-capacity-gate-saturated">Jobs Not Being Acquired Despite Queued Work (Capacity Gate Saturated)</a></li>
@@ -4629,8 +4629,8 @@ few seconds; the metric is the real-time signal.</p>
 <tr>
 <td><code>EvictionRetriesExhausted</code></td>
 <td>Warning</td>
-<td>An evicted worker pod's auto-retry budget (<code>maxEvictionRetries</code>) is exhausted; a manual re-run is required. Classic acquisition only — a <code>ScaleSet</code> set never emits it, because it never observes the eviction.</td>
-<td><a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a> · <a href="#evictions-on-a-scaleset-set-no-automatic-rerun">Evictions on a ScaleSet set</a></td>
+<td>An evicted worker pod's auto-retry budget (<code>maxEvictionRetries</code>) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, which share one per-run budget.</td>
+<td><a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a> · <a href="#evicted-scale-set-jobs-are-not-re-run-automatically">Evicted Scale-Set Jobs Are Not Re-Run Automatically</a></td>
 </tr>
 </tbody>
 </table>
@@ -5212,38 +5212,37 @@ section (Q260) — a distinct duplicate-acquisition cause.</strong></p>
 <hr />
 <h2 id="evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget<a class="headerlink" href="#evicted-worker-pods-exhausting-retry-budget" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Applies to the classic acquisition tier only.</strong> Eviction auto-retry runs off the
-classic provisioning path, which blocks on the worker pod's terminal phase. A
-<code>RunnerSet</code> with <code>spec.acquisitionProtocol: ScaleSet</code> — the default, and the only
-protocol <code>v2beta1</code> offers — provisions its worker fire-and-forget, so the AGC never
-sees the eviction: no rerun is issued, neither eviction counter moves, and
-<code>maxEvictionRetries</code>/<code>evictionRetryDelay</code> have no effect. If your workers are being
-evicted on a ScaleSet set, the symptom is jobs <strong>failing</strong> with both counters flat
-at zero, not a budget being exhausted — jump to
-<a href="#evictions-on-a-scaleset-set-no-automatic-rerun">Evictions on a ScaleSet set</a> below.
-Q417 tracks porting the recovery.</p>
+<p><strong>Applies to both acquisition tiers.</strong> The budget is keyed by workflow run alone, so
+<code>maxEvictionRetries</code> caps re-runs per run across classic and scale-set together, not
+once each — several evicted workers of one run share one budget whichever tier they
+came from. Split the counters by the <code>tier</code> label to see where the evictions are
+landing. If the counters are flat at <strong>zero</strong> on a scale-set set rather than
+exhausted, the recovery is not firing at all: see
+<a href="#evicted-scale-set-jobs-are-not-re-run-automatically">Evicted Scale-Set Jobs Are Not Re-Run Automatically</a>
+below.</p>
 </blockquote>
 <p><strong>Symptoms.</strong> <code>actions_gateway_eviction_retries_exhausted_total</code> is incrementing. Jobs are being cancelled after eviction despite automatic retries. <code>kubectl describe</code> on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> shows a <code>Warning</code> event with reason <code>EvictionRetriesExhausted</code> (Q170) naming the affected run — the event-based companion to the metric.</p>
 <p><strong>Likely causes.</strong>
 - Worker pod keeps being evicted on every attempt (persistent node pressure, OOM loop, or scheduling conflict that prevents the pod from completing).
 - <code>maxEvictionRetries</code> is set too low for a workload that occasionally experiences preemption.</p>
 <p><strong>Diagnostics.</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a><span class="c1"># Check eviction retry metrics</span>
-<a id="__codelineno-58-2" name="__codelineno-58-2" href="#__codelineno-58-2"></a><span class="c1"># actions_gateway_eviction_retries_total{namespace, runner_group}</span>
-<a id="__codelineno-58-3" name="__codelineno-58-3" href="#__codelineno-58-3"></a><span class="c1"># actions_gateway_eviction_retries_exhausted_total{namespace, runner_group}</span>
-<a id="__codelineno-58-4" name="__codelineno-58-4" href="#__codelineno-58-4"></a>
-<a id="__codelineno-58-5" name="__codelineno-58-5" href="#__codelineno-58-5"></a><span class="c1"># Check recent evicted pods</span>
-<a id="__codelineno-58-6" name="__codelineno-58-6" href="#__codelineno-58-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--field-selector<span class="o">=</span>status.phase<span class="o">=</span>Failed<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>Evicted
-<a id="__codelineno-58-7" name="__codelineno-58-7" href="#__codelineno-58-7"></a>
-<a id="__codelineno-58-8" name="__codelineno-58-8" href="#__codelineno-58-8"></a><span class="c1"># Describe an evicted pod for the eviction reason</span>
-<a id="__codelineno-58-9" name="__codelineno-58-9" href="#__codelineno-58-9"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;evicted-pod-name&gt;
-<a id="__codelineno-58-10" name="__codelineno-58-10" href="#__codelineno-58-10"></a><span class="c1"># Look for: &quot;The node was low on resource: memory&quot; or &quot;Preempted by another pod&quot;</span>
-<a id="__codelineno-58-11" name="__codelineno-58-11" href="#__codelineno-58-11"></a>
-<a id="__codelineno-58-12" name="__codelineno-58-12" href="#__codelineno-58-12"></a><span class="c1"># Check node events around the eviction time</span>
-<a id="__codelineno-58-13" name="__codelineno-58-13" href="#__codelineno-58-13"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--sort-by<span class="o">=</span><span class="s1">&#39;.lastTimestamp&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>evict
-<a id="__codelineno-58-14" name="__codelineno-58-14" href="#__codelineno-58-14"></a>
-<a id="__codelineno-58-15" name="__codelineno-58-15" href="#__codelineno-58-15"></a><span class="c1"># See the budget-exhaustion event on the owner (RunnerGroup or RunnerSet)</span>
-<a id="__codelineno-58-16" name="__codelineno-58-16" href="#__codelineno-58-16"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A1<span class="w"> </span>EvictionRetriesExhausted
+<div class="highlight"><pre><span></span><code><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a><span class="c1"># Check eviction retry metrics. The tier label splits the two acquisition paths</span>
+<a id="__codelineno-58-2" name="__codelineno-58-2" href="#__codelineno-58-2"></a><span class="c1"># (classic, scaleset); the retry budget itself is shared across them.</span>
+<a id="__codelineno-58-3" name="__codelineno-58-3" href="#__codelineno-58-3"></a><span class="c1"># actions_gateway_eviction_retries_total{namespace, runner_group, tier}</span>
+<a id="__codelineno-58-4" name="__codelineno-58-4" href="#__codelineno-58-4"></a><span class="c1"># actions_gateway_eviction_retries_exhausted_total{namespace, runner_group, tier}</span>
+<a id="__codelineno-58-5" name="__codelineno-58-5" href="#__codelineno-58-5"></a>
+<a id="__codelineno-58-6" name="__codelineno-58-6" href="#__codelineno-58-6"></a><span class="c1"># Check recent evicted pods</span>
+<a id="__codelineno-58-7" name="__codelineno-58-7" href="#__codelineno-58-7"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--field-selector<span class="o">=</span>status.phase<span class="o">=</span>Failed<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>Evicted
+<a id="__codelineno-58-8" name="__codelineno-58-8" href="#__codelineno-58-8"></a>
+<a id="__codelineno-58-9" name="__codelineno-58-9" href="#__codelineno-58-9"></a><span class="c1"># Describe an evicted pod for the eviction reason</span>
+<a id="__codelineno-58-10" name="__codelineno-58-10" href="#__codelineno-58-10"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;evicted-pod-name&gt;
+<a id="__codelineno-58-11" name="__codelineno-58-11" href="#__codelineno-58-11"></a><span class="c1"># Look for: &quot;The node was low on resource: memory&quot; or &quot;Preempted by another pod&quot;</span>
+<a id="__codelineno-58-12" name="__codelineno-58-12" href="#__codelineno-58-12"></a>
+<a id="__codelineno-58-13" name="__codelineno-58-13" href="#__codelineno-58-13"></a><span class="c1"># Check node events around the eviction time</span>
+<a id="__codelineno-58-14" name="__codelineno-58-14" href="#__codelineno-58-14"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--sort-by<span class="o">=</span><span class="s1">&#39;.lastTimestamp&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>evict
+<a id="__codelineno-58-15" name="__codelineno-58-15" href="#__codelineno-58-15"></a>
+<a id="__codelineno-58-16" name="__codelineno-58-16" href="#__codelineno-58-16"></a><span class="c1"># See the budget-exhaustion event on the owner (RunnerGroup or RunnerSet)</span>
+<a id="__codelineno-58-17" name="__codelineno-58-17" href="#__codelineno-58-17"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A1<span class="w"> </span>EvictionRetriesExhausted
 </code></pre></div>
 <p><strong>Resolution.</strong>
 - If evictions are due to node memory pressure: increase the worker pod's memory requests to discourage the kubelet from evicting it, or investigate the workload's actual memory usage.
@@ -5251,24 +5250,86 @@ Q417 tracks porting the recovery.</p>
 - If the retry budget is too low for a workload that occasionally gets preempted: increase <code>maxEvictionRetries</code> on the RunnerGroup spec (default 2, max 10).
 - If the workload is consistently failing (OOM crash, not preemption): the auto-retry is not appropriate. Set <code>maxEvictionRetries: 0</code> and investigate the underlying workload issue.</p>
 <hr />
-<h2 id="evictions-on-a-scaleset-set-no-automatic-rerun">Evictions on a ScaleSet Set: No Automatic Rerun<a class="headerlink" href="#evictions-on-a-scaleset-set-no-automatic-rerun" title="Permanent link">&para;</a></h2>
-<p><strong>Symptoms.</strong> Worker pods on a <code>spec.acquisitionProtocol: ScaleSet</code> <code>RunnerSet</code> are being evicted (preemption or OOM-kill), their jobs fail on GitHub, and a human has to rerun each one. Both <code>actions_gateway_eviction_retries_total</code> and <code>actions_gateway_eviction_retries_exhausted_total</code> sit at zero, and no <code>EvictionRetriesExhausted</code> event is ever emitted — so the metrics look healthy while jobs are visibly being lost.</p>
-<p><strong>Cause.</strong> This is a known gap, not a misconfiguration. Eviction recovery is implemented only on the classic acquisition path, where the AGC holds the job and blocks on the worker pod's terminal phase. A ScaleSet worker pulls and completes its own job through its own session, so the AGC provisions it fire-and-forget and never observes <code>PodFailed</code>/<code>Evicted</code>. There is also no run identity on that tier to rerun with — the scale-set queue message carries no run ID or repository, which classic takes from the acquire payload. Setting <code>maxEvictionRetries</code> or <code>evictionRetryDelay</code> on a ScaleSet set changes nothing.</p>
-<p><strong>Diagnostics.</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a><span class="c1"># Confirm the set is on the ScaleSet tier (the default; v2beta1 offers no other)</span>
-<a id="__codelineno-59-2" name="__codelineno-59-2" href="#__codelineno-59-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.spec.acquisitionProtocol}{&quot;\n&quot;}&#39;</span>
-</code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a><span class="c1"># Evicted workers are visible on the pods, not in the eviction metrics</span>
-<a id="__codelineno-60-2" name="__codelineno-60-2" href="#__codelineno-60-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--field-selector<span class="o">=</span>status.phase<span class="o">=</span>Failed<span class="w"> </span>-o<span class="w"> </span>wide<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>evicted
-</code></pre></div>
-<p><strong>Resolution.</strong> Reduce the eviction rate — the recovery that would absorb it does not exist on this tier yet:</p>
+<h2 id="evicted-scale-set-jobs-are-not-re-run-automatically">Evicted Scale-Set Jobs Are Not Re-Run Automatically<a class="headerlink" href="#evicted-scale-set-jobs-are-not-re-run-automatically" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> A <code>RunnerSet</code> on the scale-set acquisition tier
+(<code>spec.acquisitionProtocol: ScaleSet</code>, the default) has workers being evicted, but
+<code>actions_gateway_eviction_retries_total{tier="scaleset"}</code> stays flat and the jobs
+stay failed until someone re-runs them by hand. Usually one of two accompanying
+signals is present:</p>
 <ul>
-<li>Raise the worker's memory requests so the kubelet ranks it above cheaper pods under node pressure, and check <code>actions_gateway_worker_usage_*</code> / <code>status.sizingRecommendation</code> for what the jobs actually peak at (<a href="../worker-rightsizing/">worker right-sizing</a>). A <code>Guaranteed</code>-QoS worker is the strongest protection against node-pressure eviction.</li>
-<li>If the evictions are preemption rather than node pressure, raise this set's floor with <code>priorityTiers</code>, or lower the priority of the workloads displacing it.</li>
-<li>Keep the worker-pod disruption markers in place — <code>cluster-autoscaler.kubernetes.io/safe-to-evict: "false"</code> and the descheduler's <code>prefer-no-eviction</code> are stamped by default and cover the <em>voluntary</em> disruption paths (<a href="../observability-metrics/#node-disruption-safety-annotations">node-disruption-safety annotations</a>). They do not cover kubelet node-pressure eviction or preemption.</li>
-<li>Where a job genuinely must survive eviction today, run it on a classic-protocol <code>RunnerSet</code> (<code>spec.acquisitionProtocol: Classic</code>) during the deprecation window. Weigh this against the removal in <code>v2.0.0</code> (<a href="../v1alpha1-deprecation/">deprecation notice</a>) — it is a stopgap, not a destination.</li>
+<li><code>actions_gateway_eviction_recovery_identity_unknown_total</code> is incrementing, and
+  <code>kubectl describe runnerset</code> shows a <code>Warning</code> event with reason
+  <code>EvictionRecoveryIdentityUnknown</code>; or</li>
+<li>neither counter moves at all.</li>
 </ul>
-<p>Porting the recovery to the ScaleSet tier is tracked as Q417; it gates the classic removal, so the capability will not disappear before it lands.</p>
+<p><strong>Cause.</strong> The scale-set tier provisions fire-and-forget — the runner pulls and
+completes its own job — so nothing in the AGC is watching a given worker pod, and
+there is no acquired payload to read the job's identity from. Recovery therefore
+depends on two things being on the pod: the run identity
+(<code>actions-gateway.com/run-id</code>, <code>actions-gateway.com/repository</code>), stamped from the
+assignment message's <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code>, and the
+<code>actions-gateway.com/acquisition-protocol=ScaleSet</code> label that tells the reconciler
+the pod is its to recover. Either one missing makes recovery inert for that pod.</p>
+<p><strong>Diagnostics.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a><span class="c1"># Does the evicted worker carry its run identity and the tier marker?</span>
+<a id="__codelineno-59-2" name="__codelineno-59-2" href="#__codelineno-59-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/acquisition-protocol<span class="o">=</span>ScaleSet<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-59-3" name="__codelineno-59-3" href="#__codelineno-59-3"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;NAME:.metadata.name,PHASE:.status.phase,REASON:.status.reason,RUN:.metadata.annotations.actions-gateway\.com/run-id,REPO:.metadata.annotations.actions-gateway\.com/repository,HANDLED:.metadata.annotations.actions-gateway\.com/eviction-handled-at&#39;</span>
+</code></pre></div>
+<p>Read the result as follows.</p>
+<table>
+<thead>
+<tr>
+<th>What you see</th>
+<th>What it means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>REASON</code> is empty rather than <code>Evicted</code></td>
+<td>Not a kubelet eviction. Only <code>PodFailed</code>/<code>Evicted</code> triggers recovery — anything else ran and reported its own outcome, so re-running it would double-report</td>
+</tr>
+<tr>
+<td><code>RUN</code>/<code>REPO</code> empty</td>
+<td>The assignment carried no run identity. This is the <code>EvictionRecoveryIdentityUnknown</code> case</td>
+</tr>
+<tr>
+<td><code>RUN</code>/<code>REPO</code> present, <code>HANDLED</code> empty</td>
+<td>The reconciler has not adjudicated it yet, or the scan is failing — check the AGC log for <code>scale-set eviction recovery scan failed</code></td>
+</tr>
+<tr>
+<td><code>HANDLED</code> set but no re-run</td>
+<td>The claim succeeded and the rerun call failed. Look for <code>eviction auto-retry failed</code> in the AGC log, or an exhausted budget</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a><span class="c1"># The AGC&#39;s own account of what it did with the eviction.</span>
+<a id="__codelineno-60-2" name="__codelineno-60-2" href="#__codelineno-60-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;agc-deployment&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-60-3" name="__codelineno-60-3" href="#__codelineno-60-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;pod evicted|eviction auto-retry|run identity is unknown|eviction recovery scan failed&#39;</span>
+<a id="__codelineno-60-4" name="__codelineno-60-4" href="#__codelineno-60-4"></a>
+<a id="__codelineno-60-5" name="__codelineno-60-5" href="#__codelineno-60-5"></a><span class="c1"># The identity the queue actually delivered (raise the AGC to debug first).</span>
+<a id="__codelineno-60-6" name="__codelineno-60-6" href="#__codelineno-60-6"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;agc-deployment&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-60-7" name="__codelineno-60-7" href="#__codelineno-60-7"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">&#39;carries no run identity&#39;</span>
+</code></pre></div>
+<p><strong>Resolution.</strong>
+- <strong><code>RUN</code>/<code>REPO</code> empty on every evicted worker.</strong> GitHub is not sending the
+  assignment fields recovery depends on. There is no configuration workaround — the
+  identity has no other source on this tier. Re-run affected jobs manually, and
+  treat a sustained rate as a protocol regression worth reporting rather than a
+  capacity problem.
+- <strong><code>REASON</code> is not <code>Evicted</code>.</strong> Working as intended. The pod ran and reported its
+  own result; if the <em>job</em> nonetheless hung, see <a href="#terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses">Terminated Worker Pod Never
+  Reports Its Job</a>
+  instead.
+- <strong>Evicted pods disappearing before recovery runs.</strong> Recovery reads the evicted
+  pod, so it must still exist. A very short <code>completedPodTTL</code> combined with a
+  backlogged AGC can delete the evidence first; raise <code>completedPodTTL</code> (default
+  5 m) if you see terminal workers vanishing within seconds.
+- <strong>Budget exhausted instead.</strong> See <a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry
+  Budget</a>. Note the budget is shared
+  across both tiers for a given run, not per tier.
+- <strong>Node drains rather than kubelet evictions.</strong> A drained pod is deleted, not left
+  <code>PodFailed</code>/<code>Evicted</code>, and the runner reports its own cancellation through the
+  SIGTERM relay — so it is deliberately outside this mechanism, not a gap in it.</p>
 <hr />
 <h2 id="terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses">Terminated Worker Pod Never Reports Its Job (Job Hangs on GitHub Until the Lock Lapses)<a class="headerlink" href="#terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> A worker pod is terminated before its job finishes — evicted, drained off a node, deleted, or its run cancelled in the GitHub UI — and the job keeps showing as in-progress on GitHub for minutes afterwards, until the job lock lapses and GitHub gives up on it. The worker container logs stop abruptly with no cancellation or completion line, and the pod's last state shows an exit code of <code>137</code> (SIGKILL). Re-running the workflow is the only way to move it along.</p>

@@ -970,6 +970,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Worker Pod Eviction and Auto-Retry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-the-scale-set-tier-q417" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On the scale-set tier (Q417)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -2431,6 +2448,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Worker Pod Eviction and Auto-Retry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-the-scale-set-tier-q417" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On the scale-set tier (Q417)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -2536,10 +2570,10 @@
 does not run steps 2a–5 as written: the runner pulls and completes its own job
 through its own session, and the AGC advertises a single capacity integer
 (<code>X-ScaleSetMaxCapacity</code>) instead of deciding per delivered job. Two consequences
-are called out where they arise — the quota rung of step 2a
-(<a href="../../STATUS/#Q443">Q443</a>) and eviction auto-retry
-(<a href="../../STATUS/#Q417">Q417</a>) — and both are <code>2.0-gate</code> items, because the classic
-removal in <code>v2.0.0</code> deletes the only implementation unless they land first.</p>
+are called out where they arise. Eviction auto-retry is now ported to this tier
+(Q417, <a href="#on-the-scale-set-tier-q417">below</a>). The quota rung of step 2a is not
+(<a href="../../STATUS/#Q443">Q443</a>) — a <code>2.0-gate</code> item, because the classic removal in
+<code>v2.0.0</code> deletes the only implementation unless it lands first.</p>
 </blockquote>
 <pre class="mermaid"><code>sequenceDiagram
     participant A as AGC goroutine
@@ -2638,17 +2672,15 @@ removal in <code>v2.0.0</code> deletes the only implementation unless they land 
 <hr />
 <h3 id="worker-pod-eviction-and-auto-retry">Worker Pod Eviction and Auto-Retry<a class="headerlink" href="#worker-pod-eviction-and-auto-retry" title="Permanent link">&para;</a></h3>
 <blockquote>
-<p><strong>Classic acquisition tier only, today.</strong> This flow is reached from exactly one
-call site: the classic <code>provision()</code> path, which blocks on the worker pod's
-terminal phase. <code>ProvisionScaleSetWorker</code> is fire-and-forget by design — the
-runner pulls and completes its own job through its own session, so the AGC never
-observes <code>PodFailed</code>/<code>Evicted</code> and never calls the rerun API. An evicted
-<strong><code>ScaleSet</code>-protocol</strong> worker therefore gets no automatic rerun and needs a
-manual one. That matters because <code>ScaleSet</code> is the default protocol (Q264 P5) and
-the only one <code>v2beta1</code> offers, so this recovery covers the <em>deprecated</em> tier only.
-<a href="../../STATUS/#Q417">Q417</a> ports it
-(<a href="../../plan/scaleset-eviction-recovery/">plan</a>); it gates the <code>v2.0.0</code> classic
-removal, which would otherwise delete the capability outright.</p>
+<p><strong>Both acquisition tiers, by two different routes.</strong> The flow below is the classic
+<code>provision()</code> path, which blocks on the worker pod's terminal phase.
+<code>ProvisionScaleSetWorker</code> is fire-and-forget by design — the runner pulls and
+completes its own job — so it observes nothing, and until Q417 an evicted
+<code>ScaleSet</code> worker got no rerun at all. That mattered because <code>ScaleSet</code> is the
+default protocol (Q264 P5) and the only one <code>v2beta1</code> offers, so the capability
+covered only the <em>deprecated</em> tier. The port relocates both of the classic path's
+inputs onto the worker pod; see
+<a href="#on-the-scale-set-tier-q417">On the scale-set tier</a> below.</p>
 </blockquote>
 <pre class="mermaid"><code>sequenceDiagram
     participant A as AGC goroutine
@@ -2665,6 +2697,28 @@ removal, which would otherwise delete the capability outright.</p>
     end</code></pre>
 <p>The AGC stops renewal immediately on detecting <code>Evicted</code>, so the outstanding lock starts lapsing at once and GitHub cancels the run when it expires: within the remaining lock window, at worst ~10 minutes from the last renewal (the lock TTL — see <code>RenewJobResponse.LockedUntil</code> in <code>broker/types.go</code>). The AGC then waits <code>evictionRetryDelay</code> (default 5 seconds) before calling the rerun API. The actual eviction-to-cancellation latency against live GitHub has not been measured, and neither has whether the rerun call succeeds while the run is still winding down inside that window; Q396 tracks a dogfood benchmark for both.</p>
 <p><code>maxEvictionRetries</code> is a hard lifetime cap per <code>run_id</code>, not a per-eviction-wave allowance: once exhausted, every subsequent eviction of that run is a no-op (counted by <code>eviction_retries_exhausted_total</code>) until the AGC restarts and the in-memory counters reset. Because a single workflow run can have several worker pods evicted simultaneously under node pressure, the check-and-increment of the per-run counter is serialized per <code>run_id</code>, so concurrent evictions can never collectively exceed the budget.</p>
+<h4 id="on-the-scale-set-tier-q417">On the scale-set tier (Q417)<a class="headerlink" href="#on-the-scale-set-tier-q417" title="Permanent link">&para;</a></h4>
+<p>The flow above is the <strong>classic</strong> tier, where one goroutine holds the job's identity and watches its own pod. The scale-set tier provisions fire-and-forget and receives no acquired payload, so it has neither the watcher nor the identity. Both are relocated onto the worker pod, which makes the mechanism restart-safe rather than process-scoped:</p>
+<pre class="mermaid"><code>sequenceDiagram
+    participant Q as Scale-set queue
+    participant L as Listener
+    participant P as Worker Pod
+    participant R as RunnerSet reconciler
+    participant GH as GitHub
+    Q--&gt;&gt;L: JobAssigned (ownerName, repositoryName, workflowRunId)
+    L-&gt;&gt;P: provision, stamping run-id/repository + acquisition-protocol=ScaleSet
+    Note over L: fire-and-forget — the runner pulls and completes its own job
+    P--&gt;&gt;R: Failed/Evicted, seen via the reconciler's pod watch
+    R-&gt;&gt;P: claim: stamp eviction-handled-at (optimistic lock)
+    alt claim won and identity present
+        R-&gt;&gt;GH: POST .../runs/{run_id}/rerun-failed-jobs
+    else identity absent
+        Note over R: eviction_recovery_identity_unknown_total++, Warning Event (manual re-run)
+    else claim lost
+        Note over R: another reconcile or replica owns it — skip
+    end</code></pre>
+<p>Three properties make this equivalent rather than merely similar. The claim is stamped <strong>before</strong> the GitHub call, so recovery is at-most-once per evicted pod across reconciles, restarts, and replicas — a duplicate re-run would silently spend another slot of the run's budget. The recovery scan runs <strong>before</strong> the worker-pod reaper in the same reconcile, so a terminal pod is never deleted before its identity is read. And the budget is the same budget, keyed by <code>run_id</code> alone: <code>maxEvictionRetries</code> bounds re-runs per run across both tiers together, with the <code>tier</code> metric label splitting the reporting but not the cap.</p>
+<p>Deletion is deliberately excluded. An API-initiated eviction (<code>kubectl drain</code>) or a plain delete leaves a graceful termination, where the Q385 SIGTERM relay hands the signal to the runner and it reports its own outcome; such a pod is deleted rather than left <code>Failed</code>/<code>Evicted</code>, so it never reaches this path — covering it would double-report the case the relay already owns. <a href="../../STATUS/#Q421">Q421</a> measures the drain path on both tiers.</p>
 <p>To keep the per-<code>run_id</code> counter map from growing unbounded over the AGC's uptime, a background sweeper reclaims a run's counter once it has gone a fixed TTL (24 hours — well beyond any run's realistic lifetime) without a further eviction, bounding the map to runs evicted within that trailing window. An evicted worker pod only ever exists for a live run, so a counter idle for the TTL belongs to a run that can no longer be evicted; reclaiming it therefore never refills a live run's budget, and the hard cap above still holds (Q141).</p>
 <hr />
 <h3 id="stuck-pending-worker-pod">Stuck-Pending Worker Pod<a class="headerlink" href="#stuck-pending-worker-pod" title="Permanent link">&para;</a></h3>

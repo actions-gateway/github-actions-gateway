@@ -2868,7 +2868,7 @@
 <tr>
 <td><strong>Eviction-Retry API Misuse</strong></td>
 <td>Medium</td>
-<td>Reachable on the classic acquisition tier only — the <code>ScaleSet</code> tier issues no rerun call at all today (<a href="../04-operational-flows/#worker-pod-eviction-and-auto-retry">§4</a>), so this row is the threat model the <a href="../../STATUS/#Q417">Q417</a> port must preserve, not one it introduces. The AGC calls <code>POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs</code> using the tenant's installation access token when a worker pod is evicted. The blast radius is bounded: the installation token is scoped to the GitHub App's installation on a specific organization or repository, so the AGC cannot re-run jobs belonging to other tenants or organizations. The <code>run_id</code> is extracted from the job payload delivered by GitHub's broker — the AGC cannot fabricate or substitute a run ID for a run it did not acquire. To prevent abuse of the retry path (e.g. a compromised AGC looping re-runs), <code>maxEvictionRetries</code> caps the number of automatic retries per job and is enforced before the API call is made. Operators should monitor <code>actions_gateway_eviction_retries_exhausted_total</code> to detect abnormal eviction patterns.</td>
+<td>The AGC calls <code>POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs</code> using the tenant's installation access token when a worker pod is evicted. The blast radius is bounded: the installation token is scoped to the GitHub App's installation on a specific organization or repository, so the AGC cannot re-run jobs belonging to other tenants or organizations. The <code>run_id</code> originates with GitHub in both acquisition tiers — from the job payload delivered by the broker (classic), or from the <code>workflowRunId</code> on the scale-set assignment message, which the provisioner records on the worker pod at creation and reads back on eviction (scale-set, Q417). Neither path lets the AGC fabricate or substitute a run ID for a run it did not acquire; the pod annotation is controller-written and controller-read, and an absent or malformed identity is refused rather than defaulted (no re-run is attempted, and <code>actions_gateway_eviction_recovery_identity_unknown_total</code> increments). To prevent abuse of the retry path (e.g. a compromised AGC looping re-runs), <code>maxEvictionRetries</code> caps the number of automatic retries per run — keyed by run ID alone, so the cap is shared across both tiers rather than doubled — and is enforced before the API call is made. The scale-set path additionally claims each evicted pod under an optimistic lock before calling GitHub, so a re-run is attempted at most once per evicted pod even across AGC replicas. Operators should monitor <code>actions_gateway_eviction_retries_exhausted_total</code> to detect abnormal eviction patterns.</td>
 </tr>
 <tr>
 <td><strong>DNS Exfiltration Side-Channel</strong> (Unattributed Egress)</td>
@@ -3280,11 +3280,10 @@ needs) explicitly in their <code>PodTemplate</code>.</p>
 every profile when the tenant container declares neither. This moves a
 worker pod off Best-Effort QoS — the first thing the kubelet evicts under
 node pressure, which otherwise burns the eviction-retry budget fast. A
-single-container worker pod with the defaults is Guaranteed QoS. On the
-<code>ScaleSet</code> tier there is no eviction-retry budget to burn — that recovery is
-classic-only until <a href="../../STATUS/#Q417">Q417</a> lands
-(<a href="../04-operational-flows/#worker-pod-eviction-and-auto-retry">§4</a>) — so the QoS
-default is the whole protection there, not a first line of defence.</p>
+single-container worker pod with the defaults is Guaranteed QoS. The eviction-retry
+budget backs it up on both acquisition tiers as of Q417
+(<a href="../04-operational-flows/#on-the-scale-set-tier-q417">§4</a>), so the QoS default is a
+first line of defence rather than the only one — on either tier.</p>
 <h2 id="57-workload-identity-the-no-pem-delegation-model">5.7. Workload identity: the no-PEM delegation model<a class="headerlink" href="#57-workload-identity-the-no-pem-delegation-model" title="Permanent link">&para;</a></h2>
 <p>A gateway authenticates to GitHub as a GitHub App by signing a short-lived App
 JWT and exchanging it for an installation token. There are two trust models for

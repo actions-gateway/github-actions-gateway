@@ -3285,7 +3285,7 @@ to the metric or audit-log query that surfaces it.</p>
 <tbody>
 <tr>
 <td><strong>Eviction-Retry API Misuse</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>) — compromised AGC looping <code>rerun-failed-jobs</code></td>
-<td><code>eviction_retries_total</code> rate climbs without matching node pressure; <code>eviction_retries_exhausted_total</code> increments</td>
+<td><code>eviction_retries_total</code> rate climbs without matching node pressure; <code>eviction_retries_exhausted_total</code> increments. Split by the <code>tier</code> label to see which acquisition path is issuing the re-runs (Q417); the alert below aggregates over it, so it fires either way</td>
 <td>Metric</td>
 <td>Ticket → Page on sustained climb</td>
 </tr>

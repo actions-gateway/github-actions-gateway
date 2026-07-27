@@ -2413,8 +2413,8 @@
 </tr>
 <tr>
 <td>Eviction retries</td>
-<td><code>increase(actions_gateway_eviction_retries_total[1h])</code></td>
-<td>Bar chart</td>
+<td><code>sum by (runner_group, tier) (increase(actions_gateway_eviction_retries_total[1h]))</code></td>
+<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>)</td>
 </tr>
 <tr>
 <td>Eviction budget exhausted</td>

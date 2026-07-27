@@ -1880,6 +1880,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#breaking-observability-changes-q417" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking observability changes (Q417)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#breaking-observability-changes-q205" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2444,6 +2455,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#breaking-observability-changes-q417" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking observability changes (Q417)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#breaking-observability-changes-q205" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2571,14 +2593,20 @@
 <tr>
 <td><code>actions_gateway_eviction_retries_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td>Jobs automatically re-queued after worker pod eviction. <strong>Classic acquisition only</strong> — see the note below the table.</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code></td>
+<td>Jobs automatically re-queued after worker pod eviction. <code>tier="classic"</code> is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; <code>tier="scaleset"</code> is the scale-set path, where the owning reconciler detects the eviction from the worker pod itself (Q417). The retry budget is <strong>shared</strong> — it is keyed by run ID alone, so <code>maxEvictionRetries</code> bounds re-runs per run across both tiers together, not once per tier. The <code>tier</code> label was added in Q417; see <a href="#breaking-observability-changes-q417">Breaking observability changes</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
 <td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code></td>
+<td>Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an <code>EvictionRetriesExhausted</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170). <code>tier</code> as above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
+<td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code></td>
-<td>Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an <code>EvictionRetriesExhausted</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170). <strong>Classic acquisition only</strong>, as above.</td>
+<td>Evicted <strong>scale-set</strong> worker pods that carried no workflow-run identity, so no automatic re-run could be attempted and the job stays failed until a human re-runs it (Q417). Each occurrence also emits an <code>EvictionRecoveryIdentityUnknown</code> Warning Event on the owning <code>RunnerSet</code>. This is the one failure mode that makes scale-set eviction recovery silently inert, which is why it is counted separately from an exhausted budget: an exhausted budget means a tenant is evicting more than <code>maxEvictionRetries</code> allows, while this means GitHub did not send the assignment fields (<code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>) the mechanism reads. <strong>Expected to be zero</strong> — the assignment fields were confirmed present on live GitHub on 2026-07-26, so a sustained rate is a protocol-level regression, not a capacity problem — see the <a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_quota_retries_total</code></td>
@@ -2733,17 +2761,17 @@
 </tbody>
 </table>
 <blockquote>
-<p><strong>Eviction-retry metrics are classic-acquisition only.</strong> Both
-<code>eviction_retries_total</code> and <code>eviction_retries_exhausted_total</code> are emitted from the
-classic provisioning path, which blocks on the worker pod's terminal phase. A
-<code>RunnerSet</code> with <code>spec.acquisitionProtocol: ScaleSet</code> — the default since Q264 P5,
-and the only protocol <code>v2beta1</code> offers — provisions its worker fire-and-forget, so
-the AGC never observes the eviction, never issues a rerun, and <strong>never increments
-either counter</strong>. On that tier an evicted worker's job fails and needs a manual
-rerun; <code>maxEvictionRetries</code> and <code>evictionRetryDelay</code> are inert. A flat zero here is
-therefore not evidence that no worker was evicted — check
-<code>kubectl get pods --field-selector=status.phase=Failed</code> for <code>Evicted</code> pods instead.
-Porting the recovery is tracked as Q417.</p>
+<p><strong>Reading the eviction metrics across tiers.</strong> Both <code>eviction_retries_total</code> and
+<code>eviction_retries_exhausted_total</code> are emitted on <strong>both</strong> acquisition tiers, split
+by the <code>tier</code> label (Q417). The two are detected by different machinery — an inline
+pod wait on classic, the owning reconciler's recovery pass on scale-set — but they
+share one budget, keyed by workflow run alone, so <code>maxEvictionRetries</code> caps re-runs
+per run across the pair rather than once each.</p>
+<p>A flat zero on <code>tier="scaleset"</code> while workers are visibly being evicted means the
+recovery is not firing, not that nothing was evicted. Check
+<code>kubectl get pods --field-selector=status.phase=Failed</code> for <code>Evicted</code> pods, then
+<code>actions_gateway_eviction_recovery_identity_unknown_total</code> and the
+<a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.</p>
 <p><strong>Proxy conditions on a v2 deploy.</strong> On a v2 install (the opt-in
 <code>actions-gateway-crds-v2</code> CRDs), the GMC also counts v2 <code>ActionsGateway</code>s in
 <code>managed_gateways</code> and reflects each <code>EgressProxy</code>'s proxy conditions in
@@ -3022,8 +3050,8 @@ triggers the next reconcile (typically sub-second).</p>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;name&gt;
 </code></pre></div>
 <p>Add <code>-o wide</code> for node placement or <code>-w</code> to watch phase transitions live.</p>
-<p><strong>Correlating a pod with its GitHub Actions job:</strong> the AGC stamps four
-annotations on every worker pod at creation time from the AcquireJob payload:</p>
+<p><strong>Correlating a pod with its GitHub Actions job:</strong> the AGC stamps these
+annotations on every worker pod at creation time:</p>
 <table>
 <thead>
 <tr>
@@ -3051,10 +3079,45 @@ annotations on every worker pod at creation time from the AcquireJob payload:</p
 <tr>
 <td><code>actions-gateway.com/workflow</code></td>
 <td><code>CI</code></td>
-<td>Workflow name</td>
+<td>Workflow name. Classic only — the scale-set protocol delivers no workflow name</td>
 </tr>
 </tbody>
 </table>
+<p>On the scale-set tier these are more than diagnostics: <code>run-id</code> and <code>repository</code>
+are the <strong>only</strong> record of which workflow run a worker was serving, because that
+tier provisions fire-and-forget with no in-process job state. Eviction recovery
+reads them back off the pod to name the run to re-run (Q417), so a worker missing
+them cannot be recovered automatically — that case is counted by
+<code>actions_gateway_eviction_recovery_identity_unknown_total</code>. Do not remove or
+overwrite them.</p>
+<p>Scale-set worker pods additionally carry:</p>
+<table>
+<thead>
+<tr>
+<th>Metadata</th>
+<th>Example</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions-gateway.com/acquisition-protocol</code> (label)</td>
+<td><code>ScaleSet</code></td>
+<td>Marks the pod as provisioned by the scale-set tier. Present only on that tier, so <code>-l actions-gateway.com/acquisition-protocol=ScaleSet</code> selects exactly the scale-set workers</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/job-completed-at</code> (annotation)</td>
+<td><code>2026-07-26T12:00:00Z</code></td>
+<td>When GitHub reported the pod's job terminal. Gives a still-Running worker a reap deadline (Q420)</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/eviction-handled-at</code> (annotation)</td>
+<td><code>2026-07-26T12:04:00Z</code></td>
+<td>When the AGC adjudicated this pod's eviction. Its presence is what makes automatic recovery at-most-once per evicted pod across reconciles, restarts, and replicas (Q417)</td>
+</tr>
+</tbody>
+</table>
+<p>All three are controller-set: never set them by hand.</p>
 <p>To see them in a table:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/runner-group<span class="o">=</span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;NAME:.metadata.name,PHASE:.status.phase,RUN:.metadata.annotations.actions-gateway\.com/run-id,JOB:.metadata.annotations.actions-gateway\.com/job-name,WORKFLOW:.metadata.annotations.actions-gateway\.com/workflow&#39;</span>
@@ -3062,7 +3125,10 @@ annotations on every worker pod at creation time from the AcquireJob payload:</p
 <p>Or inspect a single pod in full:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
-<p>The annotations are absent if the AcquireJob payload did not include the corresponding <code>system.github.*</code> variables (older GitHub runners or stub/test jobs).</p>
+<p>The annotations are absent if the job's identity did not reach the AGC: on the
+classic tier, an AcquireJob payload without the corresponding <code>system.github.*</code>
+variables (older GitHub runners or stub/test jobs); on the scale-set tier, an
+assignment message without <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code>.</p>
 <h3 id="selecting-gag-objects-with-the-recommended-labels">Selecting GAG objects with the recommended labels<a class="headerlink" href="#selecting-gag-objects-with-the-recommended-labels" title="Permanent link">&para;</a></h3>
 <p>Every object GAG creates — AGC/proxy/worker pods, Deployments, Services,
 NetworkPolicies, ServiceAccounts, RBAC, Secrets, PDBs, HPAs, and the per-tenant CRs
@@ -3157,6 +3223,37 @@ labels and the per-tenant namespaces to allocation queries — see
 <li><strong>Stable, human-meaningful names</strong> like <code>gpu-2x</code>, <code>cpu-standard</code>, <code>gpu-a100</code> are correct. These are configured in the <code>ActionsGateway</code> spec and should not change after initial setup.</li>
 <li>If you need per-workflow or per-repo attribution, use Prometheus recording rules or labels from job metadata, not from RunnerGroup names.</li>
 </ul>
+<h2 id="breaking-observability-changes-q417">Breaking observability changes (Q417)<a class="headerlink" href="#breaking-observability-changes-q417" title="Permanent link">&para;</a></h2>
+<p>Q417 ported eviction recovery to the scale-set acquisition tier and added a <code>tier</code>
+label to the two eviction counters so the two tiers' recoveries are distinguishable:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Labels before</th>
+<th>Labels after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_eviction_retries_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code></td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>What breaks.</strong> Only queries that match the full label set exactly, or that render
+one series per metric and now render two. Aggregations are unaffected: <code>sum(...)</code>,
+<code>increase(...) &gt; 0</code>, and <code>sum by (namespace, runner_group) (...)</code> keep working
+unchanged, which covers the shipped dashboards and alert rules. Add <code>tier</code> to a
+<code>by (...)</code> clause where you want the split.</p>
+<p><strong>Continuity.</strong> Both counters keep their names, so history is preserved; series
+recorded before the upgrade simply carry no <code>tier</code> label.</p>
 <h2 id="breaking-observability-changes-q205">Breaking observability changes (Q205)<a class="headerlink" href="#breaking-observability-changes-q205" title="Permanent link">&para;</a></h2>
 <p>The Q205 naming audit aligned metric and span/attribute names to the Prometheus and
 OpenTelemetry conventions before the v2beta1 freeze. These are <strong>breaking</strong> for any
