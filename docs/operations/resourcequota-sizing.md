@@ -281,9 +281,15 @@ kubectl get runnerset <NAME> -n <NAMESPACE> -o jsonpath='{range .status.conditio
 
 ## Where the gateway's own quota conditions under-count
 
-`WorkerQuotaPressure` / `WorkerQuotaExceeded` and the pre-claim quota gate
-compute a worker's footprint from the pod's **regular containers only**. They
-exclude all init containers and ignore `RuntimeClass` overhead.
+Every consumer of the gateway's quota arithmetic computes a worker's footprint
+from the pod's **regular containers only** — excluding all init containers and
+ignoring `RuntimeClass` overhead. That is three surfaces, all sharing one
+`WorkerFootprint` calculation:
+
+- the `WorkerQuotaPressure` / `WorkerQuotaExceeded` conditions;
+- the pre-claim quota gate on the classic acquisition tier;
+- the capacity integer a scale-set runner set advertises to GitHub, which folds
+  in live quota headroom on the default tier.
 
 That is correct for plain init containers, which contribute via `max()`. It is
 **wrong for native sidecars**, which Kubernetes sums. So on a DinD or Kata
@@ -300,7 +306,8 @@ native-sidecar tenant as necessary but not sufficient. Size from the arithmetic
 on this page, which counts the sidecar. The failure mode when you don't is not
 silent — worker pods are rejected by the quota at creation and the AGC retries
 them — but it burns lock time that the pressure condition was supposed to warn
-you about first.
+you about first, and on the scale-set tier it means GitHub was told the namespace
+had room for more jobs than it can actually place.
 
 ## Related
 
