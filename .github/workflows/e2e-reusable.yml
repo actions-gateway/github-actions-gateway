@@ -112,34 +112,30 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Free runner disk space
-        # The job runs the GitHub-hosted image close to its free-disk ceiling:
-        # the kind node image, a 3-node cluster with Calico/cert-manager/
-        # metrics-server images preloaded onto every node, six bake-built
-        # images, and the restored cache tars all land on the same root
-        # filesystem — and the background bake peaks exactly while images are
-        # being kind-loaded. One cold-ish buildx cache was enough to tip a
-        # main run into ENOSPC mid `kind load` with 59 MB free (Q292). Drop
-        # the preinstalled toolchains this job never touches (~15–20 GB)
-        # before any heavy step. Hosted-only: a self-hosted runner
-        # (GAG_E2E_RUNNER) owns its own image and won't have these dirs.
+      - name: Start freeing runner disk space
+        # Drops the preinstalled toolchains this job never touches (~15–20 GB)
+        # so the bake + kind-load peak cannot hit ENOSPC (Q292 — see
+        # scripts/free-runner-disk.sh for the full disk-pressure story).
+        #
+        # Detached, not serial: nothing between here and the image build needs
+        # the headroom, so the deletions overlap with the toolchain setup and
+        # cache restores below instead of costing 17–61 s of critical path on
+        # their own. The "Wait for the disk cleanup" step just before the bake
+        # is what makes that safe — it blocks on the sentinel and falls back to
+        # a synchronous run if this one never finished.
+        #
+        # Hosted-only: a self-hosted runner (GAG_E2E_RUNNER) owns its own image
+        # and won't have these dirs.
         if: runner.environment == 'github-hosted'
+        env:
+          DONE_SENTINEL: /tmp/free-runner-disk.done
         run: |
           set -euo pipefail
-          echo "==> disk before cleanup"
-          df -h /
-          # Deletions run concurrently — the Android SDK alone is tens of
-          # thousands of files and dominates a serial rm. Absent paths are a
-          # silent no-op under -f.
-          sudo rm -rf /usr/local/lib/android &
-          sudo rm -rf /usr/share/dotnet &
-          sudo rm -rf /opt/hostedtoolcache/CodeQL &
-          sudo rm -rf /usr/share/swift &
-          sudo rm -rf /opt/ghc /usr/local/.ghcup &
-          sudo rm -rf /usr/local/share/powershell &
-          wait
-          echo "==> disk after cleanup"
-          df -h /
+          rm -f "${DONE_SENTINEL}"
+          # setsid detaches from this step's process group so the runner tearing
+          # the step down cannot take the cleanup with it.
+          setsid scripts/free-runner-disk.sh >/tmp/free-runner-disk.log 2>&1 &
+          echo "started disk cleanup in the background (pid $!)"
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -357,6 +353,38 @@ jobs:
           scripts/prepull-manifest-images.sh metrics-server \
             "https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICSSERVER_VERSION}/components.yaml" \
             /tmp/metrics-server-images
+
+      - name: Wait for the disk cleanup to finish
+        # The barrier for the detached cleanup started at the top of the job.
+        # Everything above this point is light on disk; everything below —
+        # the bake's six images and the kind-load of the preloaded manifests —
+        # is exactly what tipped a run into ENOSPC before Q292's mitigation, so
+        # the headroom has to be real by the time we get here.
+        #
+        # If the sentinel never lands (the detached process was killed, or a
+        # deletion failed and `set -e` aborted before writing it), run the
+        # cleanup synchronously instead of proceeding on a half-cleaned runner.
+        # Re-deleting paths the background run already removed is a no-op.
+        if: runner.environment == 'github-hosted'
+        env:
+          DONE_SENTINEL: /tmp/free-runner-disk.done
+        run: |
+          set -euo pipefail
+          # Generous relative to the 17–61 s the cleanup actually takes: this
+          # bound exists to catch a dead process, not a slow one.
+          deadline=$((SECONDS + 180))
+          while [[ ! -f "${DONE_SENTINEL}" && "${SECONDS}" -lt "${deadline}" ]]; do
+            sleep 2
+          done
+          echo "::group::background disk cleanup output"
+          cat /tmp/free-runner-disk.log 2>/dev/null || echo "(no log)"
+          echo "::endgroup::"
+          if [[ ! -f "${DONE_SENTINEL}" ]]; then
+            echo "::warning::background disk cleanup did not complete; running it synchronously"
+            scripts/free-runner-disk.sh
+          fi
+          echo "==> disk available to the build"
+          df -h /
 
       - name: Build images while the kind cluster and cert-manager come up
         # The image build is the long pole on a cold cache (~8 min). It depends
