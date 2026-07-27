@@ -85,6 +85,19 @@ func (t *runnerGroupTarget) QuotaCapacity(context.Context, int32) (int32, bool) 
 	return 0, false
 }
 
+// CapacityDeclined and DeclinedCapacity report no capacity signal for a v1
+// RunnerGroup: the capacity gate is v2-only (Q405). v1 is terminal (Q273/Q264), so
+// rather than grow the v1 API a `spec.capacityGate` it will never carry past
+// `v2.0.0`, the rung no-ops here and a v1 group keeps today's behavior exactly —
+// which is what fail-open means for this rung anyway.
+func (t *runnerGroupTarget) CapacityDeclined(context.Context) (bool, string) {
+	return false, ""
+}
+
+func (t *runnerGroupTarget) DeclinedCapacity(context.Context, int32) (int32, bool) {
+	return 0, false
+}
+
 func (t *runnerGroupTarget) Resolve(ctx context.Context) (*ResolvedSpec, error) {
 	rg := t.current(ctx)
 	p := t.p

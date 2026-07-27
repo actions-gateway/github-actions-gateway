@@ -66,7 +66,55 @@ func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context,
 	if unsched.unschedulable && !wasUnsched {
 		r.recordEvent(rs, corev1.EventTypeWarning, "WorkersUnschedulable", "Reconcile", unsched.message)
 	}
+
+	r.applyCapacityGateCondition(rs, unsched)
 	return unsched.requeueAfter
+}
+
+// applyCapacityGateCondition publishes the WorkerCapacityDeclined condition — the
+// decision the admission ladder's placeability rung reads back (Q405). The rung does
+// not re-derive the verdict; this condition IS the decision, so an operator's
+// `kubectl describe` and the AGC's intake behavior cannot disagree.
+//
+// It reuses the WorkersUnschedulable evaluation the caller just computed rather than
+// re-deriving from the pod list: in mode SchedulerVerdict the two read the same
+// underlying fact (a worker pod Pending past the scheduling grace with
+// PodScheduled=False/Unschedulable), and computing it twice would let them disagree
+// across a single reconcile. Later modes (Q406/Q407) change the source feeding this
+// condition without changing the condition or the rung.
+//
+// A set that did not opt in carries NO such condition at all: it is removed rather
+// than published False. Absence is what the default costs — no cost, no stale alarm
+// after opting out, and the condition's presence is itself the "this set has a
+// capacity gate" signal.
+func (r *RunnerSetReconciler) applyCapacityGateCondition(rs *v2alpha1.RunnerSet, unsched workersUnschedulable) {
+	if runnerSetCapacityGateMode(rs) == v2alpha1.CapacityGateModeOff {
+		meta.RemoveStatusCondition(&rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+		return
+	}
+
+	declined, reason, message := unsched.unschedulable, v2alpha1.ReasonCapacityAvailable,
+		"the cluster can place this runner set's worker pods; job intake is not gated"
+	if declined {
+		reason = v2alpha1.ReasonPodsUnschedulable
+		message = "job intake is gated: " + unsched.message
+	}
+
+	wasDeclined := meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+		Type:               v2alpha1.ConditionWorkerCapacityDeclined,
+		Status:             boolConditionStatus(declined),
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: rs.Generation,
+	})
+	// Warning on the False→True transition only. It deliberately duplicates the
+	// WorkersUnschedulable Event's underlying fact, because it reports a different
+	// consequence — this set has STOPPED taking jobs — and that is the moment an
+	// operator needs to know about, not the stuck pod that preceded it.
+	if declined && !wasDeclined {
+		r.recordEvent(rs, corev1.EventTypeWarning, "WorkerCapacityDeclined", "Reconcile", message)
+	}
 }
 
 // clearWorkerCapacityConditions resets the worker-capacity conditions to their benign
@@ -92,6 +140,11 @@ func (r *RunnerSetReconciler) clearWorkerCapacityConditions(rs *v2alpha1.RunnerS
 			ObservedGeneration: rs.Generation,
 		})
 	}
+	// The capacity gate reads a condition, so a stale True would keep intake gated for
+	// a set that is provisioning nothing anyway. Remove it rather than set it False,
+	// matching applyCapacityGateCondition's contract that the condition is present only
+	// while a gate is actually being evaluated.
+	meta.RemoveStatusCondition(&rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
 }
 
 // evalRunnerSetWorkerQuota computes the WorkerQuotaPressure (warning) and

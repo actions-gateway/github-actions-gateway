@@ -312,7 +312,11 @@ func (f *fakeTarget) PodOwnerLabels() map[string]string                  { retur
 func (f *fakeTarget) Ceiling(context.Context) (int32, bool)              { return 0, false }
 func (f *fakeTarget) QuotaExhausted(context.Context) (bool, string)      { return false, "" }
 func (f *fakeTarget) QuotaCapacity(context.Context, int32) (int32, bool) { return 0, false }
-func (f *fakeTarget) RecordEvent(_, _, _, _ string)                      {}
+func (f *fakeTarget) CapacityDeclined(context.Context) (bool, string)    { return false, "" }
+func (f *fakeTarget) DeclinedCapacity(context.Context, int32) (int32, bool) {
+	return 0, false
+}
+func (f *fakeTarget) RecordEvent(_, _, _, _ string) {}
 func (f *fakeTarget) Resolve(context.Context) (*provisioner.ResolvedSpec, error) {
 	return f.spec, nil
 }

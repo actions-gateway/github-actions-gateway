@@ -11,6 +11,7 @@ import (
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -139,6 +140,69 @@ func (t *runnerSetTarget) QuotaCapacity(ctx context.Context, max int32) (int32, 
 	}
 	active := countActiveWorkerPodsByLabel(ctx, t.client, t.key.Namespace, provisioner.LabelRunnerSet, t.key.Name)
 	return provisioner.WorkerQuotaCapacity(ctx, t.client, t.key.Namespace, spec, active, max)
+}
+
+// CapacityDeclined is the placeability rung of the admission ladder (Q405): true when
+// this set opted into a capacity gate AND that gate is currently declining, which the
+// reconciler publishes as the WorkerCapacityDeclined condition.
+//
+// Reading the published condition rather than re-deriving the verdict here is what
+// keeps the gate and the operator's view of it from ever disagreeing — the condition
+// IS the decision, and `kubectl describe runnerset` explains a stall completely. It
+// also keeps this a cheap per-delivery cache read, like Ceiling and QuotaExhausted,
+// instead of a pod list on the acquisition hot path.
+//
+// Fail-open at every step: an unreadable set, a set that never opted in, and a set
+// whose condition has not been computed yet all yield false. The mode is re-checked
+// here even though the reconciler only publishes the condition for an opted-in set,
+// so that opting out takes effect on the very next delivered job rather than waiting
+// for a reconcile to retract the condition.
+func (t *runnerSetTarget) CapacityDeclined(ctx context.Context) (bool, string) {
+	rs := &v2alpha1.RunnerSet{}
+	if err := t.client.Get(ctx, t.key, rs); err != nil {
+		return false, ""
+	}
+	if runnerSetCapacityGateMode(rs) == v2alpha1.CapacityGateModeOff {
+		return false, ""
+	}
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	if c == nil || c.Status != metav1.ConditionTrue {
+		return false, ""
+	}
+	return true, c.Message
+}
+
+// DeclinedCapacity is the integer form of the same rung, for the scale-set tier's
+// per-poll advertisement (Q443's invariant — a rung expressed in only one form ships
+// to only one tier). A declining gate means "no room for another worker pod", so the
+// bound is this set's own non-terminal worker pods: GitHub keeps whatever it has
+// already assigned and is offered nothing more, and the advertisement falls to zero
+// once those drain.
+//
+// Bias-low by construction, like QuotaCapacity: the count is of pods the AGC can see,
+// which lags an assignment it has not provisioned yet. Under-advertising only delays
+// jobs; over-advertising would reproduce the claim-and-stall this rung exists to stop.
+func (t *runnerSetTarget) DeclinedCapacity(ctx context.Context, max int32) (int32, bool) {
+	declined, _ := t.CapacityDeclined(ctx)
+	if !declined {
+		return 0, false
+	}
+	active := countActiveWorkerPodsByLabel(ctx, t.client, t.key.Namespace, provisioner.LabelRunnerSet, t.key.Name)
+	if active > max {
+		return max, true
+	}
+	return active, true
+}
+
+// runnerSetCapacityGateMode returns the set's effective capacity-gate mode, applying
+// the Off default for an unset spec.capacityGate (an older object stored before the
+// field existed, or one that simply omits it). Off is the only value that means "no
+// rung", so defaulting to it is the fail-open direction.
+func runnerSetCapacityGateMode(rs *v2alpha1.RunnerSet) string {
+	if rs.Spec.CapacityGate == nil || rs.Spec.CapacityGate.Mode == "" {
+		return v2alpha1.CapacityGateModeOff
+	}
+	return rs.Spec.CapacityGate.Mode
 }
 
 // workerPodSpec resolves the pod spec of the worker this set would provision right

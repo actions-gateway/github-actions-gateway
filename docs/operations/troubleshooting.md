@@ -15,6 +15,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [ActionsGateway Reports RunnerGroupsDegraded](#actionsgateway-reports-runnergroupsdegraded)
 - [Runners Never Appear Online — AGC `unknown authority` Through the Egress Proxy](#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy)
 - [RunnerGroup Reports WorkersUnschedulable](#runnergroup-reports-workersunschedulable)
+- [RunnerSet Reports WorkerCapacityDeclined (the Gateway Stopped Claiming Jobs)](#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)
 - [Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine](#worker--proxy--agc-pods-rejected-by-a-cluster-policy-engine)
 - [ActionsGateway Reports EgressRulesStale](#actionsgateway-reports-egressrulesstale)
 - [Tenant Namespace Missing the Managed-Tenant Marker Label](#tenant-namespace-missing-the-managed-tenant-marker-label)
@@ -366,6 +367,78 @@ kubectl describe pod -n <namespace> <worker-pod>   # look for "FailedScheduling"
 
 The condition clears automatically on the next reconcile once a worker pod
 schedules successfully.
+
+---
+
+## RunnerSet Reports WorkerCapacityDeclined (the Gateway Stopped Claiming Jobs)
+
+**Symptoms.** `kubectl get runnerset` shows a `WorkerCapacityDeclined=True`
+condition and a `WorkerCapacityDeclined` Warning event. Jobs sit **queued at
+GitHub** and are never picked up — no worker pods are being created, and no jobs
+are being cancelled either. On the classic tier
+`actions_gateway_jobs_admission_rejected_total{reason="capacity"}` climbs; on the
+default `ScaleSet` tier `actions_gateway_scaleset_advertised_capacity` has dropped
+and `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` holds the
+remainder of the ceiling.
+
+**Cause.** This is **deliberate, and only ever happens on a set that opted in.**
+The runner set has `spec.capacityGate.mode` set to something other than `Off`
+(Q405), and the signal that mode watches is currently saying the cluster cannot
+place another worker pod of this set's shape. In `SchedulerVerdict` mode that
+signal is the scheduler's own verdict — the same `PodScheduled=False` /
+`Unschedulable` fact behind
+[`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable). The gateway is
+refusing to claim work it cannot run, because each such claim spends a single-use
+JIT runner record, holds a GitHub job lock until `pendingPodDeadline`, and ends in
+a **cancelled** workflow run rather than a redelivered one.
+
+A set with no `capacityGate` (the default) never carries this condition at all —
+its absence is not a failure to report, it means the set did not opt in.
+
+> **The gate throttles, it does not seal.** The condition is derived from a stuck
+> worker pod, so the reaper deleting that pod at `pendingPodDeadline` clears it and
+> one more job is claimed; if capacity is still missing, that job's pod trips it
+> again. Expect roughly one claim per deadline window, not zero — a `RunnerSet`
+> that never claims anything again has a different problem.
+
+**Diagnostics.**
+
+```sh
+# Which mode is this set gating on, and is the gate currently closed?
+kubectl get runnerset -n <namespace> <runner-set> \
+  -o jsonpath='{.spec.capacityGate.mode}{"\n"}{range .status.conditions[?(@.type=="WorkerCapacityDeclined")]}{.status} {.reason}: {.message}{"\n"}{end}'
+```
+
+```sh
+# The message carries the scheduler's own verdict; confirm it on a stuck pod.
+kubectl describe pod -n <namespace> <worker-pod>   # look for "FailedScheduling"
+```
+
+**Resolution.** The gate is reporting a real cluster condition, so fix the
+placement problem — the resolutions are the same ones listed under
+[`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable) (allocatable
+capacity, `nodeSelector`/affinity, tolerations). The condition clears on the next
+reconcile once a worker pod schedules.
+
+**If you need jobs flowing again immediately**, turn the gate off and accept
+today's claim-and-cancel behaviour while you fix the cluster:
+
+```sh
+kubectl patch runnerset -n <namespace> <runner-set> --type=merge \
+  -p '{"spec":{"capacityGate":{"mode":"Off"}}}'
+```
+
+The next delivered job (classic) or the next long-poll (`ScaleSet`) picks that up —
+no AGC restart — and the condition is retracted on the next reconcile.
+
+> **Check this first if you did not expect the gate to be closed.**
+> `SchedulerVerdict` is sound **only where nothing will act on a Pending pod to
+> create capacity** — a fixed-size cluster with no autoscaler. If this cluster
+> *does* run a cluster autoscaler or Karpenter, the mode is wrong for it: the
+> unschedulable pod was the request for a node, and gating on it can hold a set
+> back exactly when scale-up would have rescued it. Set the mode to `Off` until
+> `AutoscalerVerdict` ships (Q406), which gates on the autoscaler's own
+> declination instead.
 
 ---
 

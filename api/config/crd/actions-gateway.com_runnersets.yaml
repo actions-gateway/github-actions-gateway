@@ -129,6 +129,23 @@ spec:
                 - message: acquisitionProtocol is immutable; create a new RunnerSet
                     to change the acquisition protocol
                   rule: self == oldSelf
+              capacityGate:
+                description: |-
+                  CapacityGate opts this runner set into the placeability rung of the admission
+                  ladder (Q405): the AGC refuses to take on jobs whose worker pod the cluster
+                  cannot currently place, instead of claiming them and stalling. Omitted (or
+                  mode Off) keeps today's behavior exactly — no capacity rung.
+                properties:
+                  mode:
+                    default: "Off"
+                    description: |-
+                      Mode selects which capacity signal gates job intake; see the CapacityGateMode*
+                      constants. Off is the default and is today's behavior.
+                    enum:
+                    - "Off"
+                    - SchedulerVerdict
+                    type: string
+                type: object
               completedPodTTL:
                 description: |-
                   CompletedPodTTL is how long a worker pod that has reached a terminal phase is
@@ -823,6 +840,23 @@ spec:
               (docs/design/appendix-h-v2-api-decomposition.md §H.5). The scheduling and
               lifecycle fields are carried over from RunnerGroup unchanged in meaning.
             properties:
+              capacityGate:
+                description: |-
+                  CapacityGate opts this runner set into the placeability rung of the admission
+                  ladder (Q405): the AGC refuses to take on jobs whose worker pod the cluster
+                  cannot currently place, instead of claiming them and stalling. Omitted (or
+                  mode Off) keeps today's behavior exactly — no capacity rung.
+                properties:
+                  mode:
+                    default: "Off"
+                    description: |-
+                      Mode selects which capacity signal gates job intake; see the CapacityGateMode*
+                      constants. Off is the default and is today's behavior.
+                    enum:
+                    - "Off"
+                    - SchedulerVerdict
+                    type: string
+                type: object
               completedPodTTL:
                 description: |-
                   CompletedPodTTL is how long a worker pod that has reached a terminal phase is

@@ -49,12 +49,15 @@ type EventRecorder interface {
 type AdmitFunc func(ctx context.Context) (release func(), ok bool, reason string)
 
 // AdmitReason* are the AdmitFunc rejection reasons, used verbatim as the `reason`
-// label of actions_gateway_jobs_admission_rejected_total. Both mean the job was
+// label of actions_gateway_jobs_admission_rejected_total. All mean the job was
 // deliberately left queued at GitHub, but they call for different operator action:
 // ceiling → raise maxWorkers/priorityTiers (or accept the throttling); quota →
 // raise the namespace ResourceQuota (see the owner's WorkerQuotaExceeded condition
-// for the binding resource).
+// for the binding resource); capacity → the cluster cannot place this owner's
+// worker shape at all (see its WorkerCapacityDeclined condition for which signal
+// said so), so restore the capacity or relax the shape.
 const (
-	AdmitReasonCeiling = "ceiling"
-	AdmitReasonQuota   = "quota"
+	AdmitReasonCeiling  = "ceiling"
+	AdmitReasonQuota    = "quota"
+	AdmitReasonCapacity = "capacity"
 )

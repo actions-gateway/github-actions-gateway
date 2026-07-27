@@ -334,6 +334,23 @@ It coexists with the cluster autoscaler / Karpenter: bounding pod-admission rate
 
 > **v2 (`RunnerSet`)** carries the same `spec.scaleUp` field with identical semantics.
 
+**Optional — refuse jobs the cluster can't place (`capacityGate`, v2 only, opt-in, default-off).** A `RunnerSet` accepts an optional `spec.capacityGate` that adds a *placeability* rung to the pre-claim admission gate. Without it, a set whose worker shape has become unplaceable — a drained node pool, a changed taint, spot capacity gone — keeps taking on jobs, and each one spends a single-use runner registration, holds the GitHub job lock until `pendingPodDeadline`, and ends as a **cancelled** workflow run. With it, those jobs stay queued at GitHub instead.
+
+```yaml
+spec:
+  capacityGate:
+    mode: SchedulerVerdict   # Off (default) | SchedulerVerdict
+```
+
+**Only set `SchedulerVerdict` on a cluster that cannot grow.** The mode gates on the scheduler's `Unschedulable` verdict, and that verdict means opposite things depending on your cluster: on a fixed-size or on-prem cluster nothing is waiting on the Pending pod, so it is pure waste; but where a **cluster autoscaler or Karpenter is running**, that pod *is* the request for a node, and refusing work on it can hold the set back exactly when scale-up would have rescued it. Choosing the mode is your assertion about your node contract — the AGC does not auto-detect it, because a wrong guess starves a tenant. Elastic clusters should stay `Off` until the autoscaler-sourced mode ships.
+
+Two things to expect once it is on:
+
+- **It throttles, it does not seal.** The signal comes from a stuck worker pod, so the reaper deleting that pod at `pendingPodDeadline` reopens intake for one job; if the shape is still unplaceable, that job's pod closes the gate again. Budget for roughly one wasted claim per `pendingPodDeadline` window, not zero.
+- **A gated set says so.** It reports `WorkerCapacityDeclined=True` with a Warning event, and either `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` (default tier) or `actions_gateway_jobs_admission_rejected_total{reason="capacity"}` (classic) moves. Diagnosis and the one-line rollback: [troubleshooting](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs).
+
+Everything about it fails **open**: an unreadable set, an unresolved template, an unreadable pod list all leave intake exactly as it is today. v1 `RunnerGroup` has no equivalent field and never will — v1 is terminal.
+
 **Changing `runnerGroups` later.** Editing `spec.runnerGroups` on an existing `ActionsGateway` reconciles to the desired set: added entries create new `RunnerGroup` CRs, and **removing an entry deletes its `RunnerGroup`** (which stops its listeners and cascades to its worker pods). Reordering entries is safe — the GMC keys pruning on owner labels, not list position, so a reorder never deletes or recreates a group. Removing an entry is the way to retire a runner group; `maxListeners` has a minimum of `1`, so there is no in-place scale-to-zero.
 
 **Worker image — the default works out of the box.** A plain install runs jobs with no `workerImage` set: the AGC **injects** GAG's wrapper into every worker pod — a read-only OCI image volume on Kubernetes ≥ 1.33, an initContainer below that — so the runner image itself can be the unmodified upstream `ghcr.io/actions/actions-runner` (the default) or **any `actions/runner`-derived image**. The wrapper is what feeds the mounted job payload + JIT config into `Runner.Worker`; injecting it means the runner image no longer has to carry it. Set `workerImage` only to use a **custom** image (your own tools, a pinned digest) — the wrapper is injected into that too. The upstream `actions-runner` (and GAG's images built on it) run as UID 1001, so on every profile except `privileged` the AGC stamps `runAsNonRoot: true` and gap-fills `runAsUser: 1001` automatically. If you point `workerImage` at a **custom** image whose user is **not** UID 1001 — a different named user, or one that runs as root — set `securityContext.runAsUser` (or `runAsNonRoot: false` for a root-based image) on the runner container in the `podTemplate`; otherwise kubelet rejects the pod with `CreateContainerConfigError`. See [troubleshooting: worker pod fails to start after secure-by-default SecurityContext](troubleshooting.md#worker-pod-fails-to-start-after-secure-by-default-securitycontext).

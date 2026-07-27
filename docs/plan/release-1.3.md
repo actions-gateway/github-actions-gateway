@@ -185,7 +185,7 @@ the Q400 residual risk above is unaffected. Detail:
 
 | Deferred | Was | Why out of 1.3 |
 |---|---|---|
-| Capacity gate `SchedulerVerdict` / `AutoscalerVerdict` modes | [Q405](../STATUS.md#Q405), [Q406](../STATUS.md#Q406) | Only the quota pre-claim rung shipped. Both modes are M-sized and unstarted. Ship the quota rung and describe it as exactly that rather than implying the full ladder. |
+| Capacity gate `AutoscalerVerdict` mode | [Q406](../STATUS.md#Q406) | The quota pre-claim rung and `SchedulerVerdict` (Q405) shipped; `AutoscalerVerdict` is M-sized and unstarted. Describe what shipped as exactly that rather than implying the full ladder. |
 | `v1alpha1` + `v2alpha1` + classic **removal** | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | 1.3 is the *notice*. Executing the removal in the same release it is announced would violate the one-release-ahead policy. These land at `v2.0.0`. |
 | `v2` GA API version | [v2-ga.md](v2-ga.md) | Gated on a beta soak that has not started. Deliberately slow: GA signs a permanent backward-compatibility contract. |
 

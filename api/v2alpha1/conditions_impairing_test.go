@@ -28,13 +28,17 @@ func TestImpairingConditionTypes(t *testing.T) {
 		t.Errorf("missing impairing condition %q", c)
 	}
 
-	// The advisory/transient conditions must never be treated as impairing.
+	// The advisory/transient conditions must never be treated as impairing. The last
+	// entry is the load-bearing one for Q405: WorkerCapacityDeclined derives from the
+	// same fact as WorkersUnschedulable, which IS impairing, so rolling both up would
+	// double-count one stall into the gateway summary (Q304).
 	for _, c := range []string{
 		ConditionRateLimited,
 		ConditionWorkerQuotaPressure,
 		ConditionWorkerQuotaExceeded,
 		ConditionEgressUnattributed,
 		ConditionPossibleReapBlockingSidecar,
+		ConditionWorkerCapacityDeclined,
 	} {
 		for _, imp := range ImpairingConditionTypes() {
 			if imp == c {

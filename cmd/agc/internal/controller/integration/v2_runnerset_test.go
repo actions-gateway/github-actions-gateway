@@ -85,6 +85,9 @@ func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Reg
 		Registrar:    reg,
 		AgentKeyType: agentpool.KeyTypeEd25519,
 		Provisioner:  p,
+		// The same process-wide counters the v1 suite asserts on, so a v2 classic test
+		// can read jobs_admission_rejected_total as a delta against a baseline.
+		Metrics: sharedListenerMetrics(),
 		// A mutable stub sizing source (Q359 Phase 2): empty by default (no
 		// sizing status is written), populated per-test via sizingStub.Set —
 		// concurrency-safe, so tests may seed it while the manager runs.

@@ -90,6 +90,23 @@ const (
 	// exhaustion — the two never double-report. It does NOT gate Ready, but it is the
 	// signal that a set's pendingJobs are climbing because capacity is not materializing.
 	ConditionWorkersUnschedulable = "WorkersUnschedulable"
+	// ConditionWorkerCapacityDeclined is True when the RunnerSet's capacity gate is
+	// currently refusing to take on jobs because the cluster cannot place this set's
+	// worker pods (Q405, abnormal-is-True). It is present ONLY on a set that opted in
+	// via spec.capacityGate.mode; the default (Off) carries no such condition at all,
+	// so its presence is itself the "this set has a capacity gate" signal.
+	//
+	// It is deliberately a SEPARATE condition from ConditionWorkersUnschedulable even
+	// in the SchedulerVerdict mode, where the two derive from the same underlying fact,
+	// for three reasons: it means something different to an operator ("intake is being
+	// refused" versus "pods are stuck"), it stays stable across the later gate modes
+	// while the signal underneath it changes (Q406/Q407), and WorkersUnschedulable is
+	// already an ImpairingConditionTypes rollup input — overloading it would tangle the
+	// gateway-level RunnerSetsDegraded summary with an intake decision.
+	//
+	// For that last reason it is NOT itself in ImpairingConditionTypes: rolling up both
+	// would double-count one fact into the GMC's summary (Q304).
+	ConditionWorkerCapacityDeclined = "WorkerCapacityDeclined"
 )
 
 // Egress proxy mode reported in status.proxyMode (§H.10). It makes "no proxy" an
@@ -225,6 +242,13 @@ const (
 	// resource) and are set inline by the reconciler, not fixed here.
 	ReasonPodsUnschedulable  = "PodsUnschedulable"
 	ReasonWorkersSchedulable = "WorkersSchedulable"
+	// ReasonCapacityAvailable is the WorkerCapacityDeclined=False reason (Q405): the
+	// gate is engaged and is not refusing intake. The True reasons name the SIGNAL the
+	// gate read, so the operator can tell which rung stopped their jobs — today only
+	// ReasonPodsUnschedulable (mode SchedulerVerdict, reusing the reason the sibling
+	// WorkersUnschedulable condition already publishes). Q406 adds ScaleUpDeclined and
+	// Q407 CapacityUnavailable; neither is declared until its mode ships.
+	ReasonCapacityAvailable = "CapacityAvailable"
 	// Ready=False reasons for classic-path runtime provisioning failures (Q308). Unlike
 	// the reference-resolution reasons above (a missing referent), these are transient
 	// failures *after* resolution: the set holds Ready=False with the failing step named
