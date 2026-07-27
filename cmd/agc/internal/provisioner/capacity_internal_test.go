@@ -21,13 +21,13 @@ import (
 // (AdvertiseCapacity) — the last of which must never advertise ABOVE the declared
 // ceiling, because that is the property that makes the whole path safe to add.
 
-// halfCPUWorker is a worker container requesting 500m of cpu, matching the shape the
-// quota tests in worker_quota_internal_test.go use.
-func halfCPUWorker() []corev1.Container {
-	return []corev1.Container{{
+// halfCPUWorker is a worker pod whose single container requests 500m of cpu,
+// matching the shape the quota tests in worker_quota_internal_test.go use.
+func halfCPUWorker() *corev1.PodSpec {
+	return &corev1.PodSpec{Containers: []corev1.Container{{
 		Name:      WorkerContainerName,
 		Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("500m")}},
-	}}
+	}}}
 }
 
 // podsQuota builds a namespace ResourceQuota constraining the pod COUNT only.

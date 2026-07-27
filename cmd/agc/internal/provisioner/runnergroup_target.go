@@ -74,7 +74,7 @@ func (t *runnerGroupTarget) Ceiling(ctx context.Context) (int32, bool) {
 // returns false when it cannot list quotas).
 func (t *runnerGroupTarget) QuotaExhausted(ctx context.Context) (bool, string) {
 	rg := t.current(ctx)
-	return WorkerQuotaExhausted(ctx, t.p.Client, rg.Namespace, rg.Spec.PodTemplate.Spec.Containers)
+	return WorkerQuotaExhausted(ctx, t.p.Client, rg.Namespace, &rg.Spec.PodTemplate.Spec)
 }
 
 // QuotaCapacity reports no quota-derived bound for a v1 RunnerGroup. The integer form

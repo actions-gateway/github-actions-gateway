@@ -35,14 +35,6 @@ const (
 	conditionWorkerQuotaExceeded = v1alpha1.ConditionWorkerQuotaExceeded
 )
 
-// workerFootprint returns the quota footprint of `count` v1 RunnerGroup worker
-// pods. The footprint arithmetic itself lives in the provisioner package
-// (provisioner.WorkerFootprint) so the admission gate's quota rung and these
-// conditions size a worker pod identically — see that file's header.
-func workerFootprint(rg *v1alpha1.RunnerGroup, count int32) corev1.ResourceList {
-	return provisioner.WorkerFootprint(rg.Spec.PodTemplate.Spec.Containers, count)
-}
-
 // workerQuotaConditions carries the computed status of the two worker
 // namespace-quota conditions (mutually exclusive; error supersedes warning).
 type workerQuotaConditions struct {
@@ -88,8 +80,13 @@ func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha
 		return st
 	}
 
+	// Resolve the pod shape ONCE — the error and warning tiers below must size a
+	// worker identically, and this is what folds in RuntimeClass overhead alongside
+	// the native sidecars the footprint arithmetic already counts (Q450).
+	spec := provisioner.ResolveWorkerPodSpec(ctx, r.Client, &rg.Spec.PodTemplate.Spec)
+
 	// Error tier — can the quota admit even one more worker pod?
-	if over, msg := provisioner.QuotaHeadroomViolations(workerFootprint(rg, 1), quotas.Items,
+	if over, msg := provisioner.QuotaHeadroomViolations(provisioner.WorkerFootprint(spec, 1), quotas.Items,
 		"namespace ResourceQuota cannot admit another worker pod; new jobs will be rejected: "); over {
 		st.exceeded = true
 		st.exceededReason = "QuotaExhausted"
@@ -100,7 +97,7 @@ func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha
 	if ceiling, bounded := provisioner.WorkerCeiling(rg); bounded {
 		current := r.countActiveWorkerPods(ctx, rg)
 		if additional := ceiling - current; additional > 0 {
-			if over, msg := provisioner.QuotaHeadroomViolations(workerFootprint(rg, additional), quotas.Items,
+			if over, msg := provisioner.QuotaHeadroomViolations(provisioner.WorkerFootprint(spec, additional), quotas.Items,
 				"workers cannot scale to the configured ceiling with current quota headroom: "); over {
 				st.pressure = true
 				st.pressureReason = "InsufficientQuotaHeadroom"

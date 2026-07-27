@@ -212,7 +212,7 @@ gateway will not fight it.
 [**Sizing the platform-owned `ResourceQuota`**](resourcequota-sizing.md) is the full derivation: per-pod footprint → concurrency → the control-plane terms, with a worked example you can copy. Read it before setting the numbers for a real tenant — the three things it exists to stop you getting wrong are:
 
 - **Native sidecars count in full.** A worker's quota footprint is *not* just its `podTemplate.spec.containers`. The Docker-in-Docker (DinD) daemon is a native sidecar (`restartPolicy: Always` init container), and Kubernetes sums its whole ask into the pod. On the reference DinD shape that is 25% of the pod's CPU request and 75% of its memory request.
-- **Kata workers carry `RuntimeClass` pod overhead** (`250m` / `160Mi` per pod), added to requests *and* limits, plus one PVC and its `requests.storage` per worker if the shape uses a generic ephemeral volume.
+- **Kata workers carry `RuntimeClass` pod overhead** (`250m` / `160Mi` per pod), added to requests in full and to limits only for a key the pod already limits, plus one PVC and its `requests.storage` per worker if the shape uses a generic ephemeral volume.
 - **Constraining a key makes it mandatory for every pod.** The measured DinD shapes declare no CPU limit, so a quota constraining `limits.cpu` rejects 100% of worker pods with `must specify limits.cpu for: runner`. On v1 the same trap applies to `requests.cpu` and the AGC pod, which stamps no resources — pair the quota with a `LimitRange`, or constrain only `pods`.
 
 ---

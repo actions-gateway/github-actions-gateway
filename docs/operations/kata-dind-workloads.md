@@ -407,7 +407,14 @@ egress to `169.254.169.254/32`. Kata alone is not the control.
   `kind create cluster` took 58 s from a cold image cache (43 s warm) against a
   ~6 min ceiling. The bigger planning cost is the `RuntimeClass` `overhead`
   (160Mi / 250m **per pod**), which the scheduler reserves on top of the
-  container's own requests — size nodes for it.
+  container's own requests — size nodes *and* the namespace `ResourceQuota` for
+  it. The gateway charges it too: the AGC reads the `RuntimeClass` to fold
+  `overhead.podFixed` into the worker footprint behind the `WorkerQuota`
+  conditions and the pre-claim quota gate, so a Kata tenant can report quota
+  pressure a `runc` tenant of the same container shape would not. That read needs
+  the cluster-scoped `runtimeclasses` grant the chart ships; it is fail-open, so
+  an AGC without it silently omits the overhead term. See
+  [sizing the platform-owned `ResourceQuota`](resourcequota-sizing.md#pod-overhead-needs-a-cluster-scoped-read).
 - **Nested-virt capacity can be scarce.** During validation, `n2-standard-4` and
   `n2d-standard-4` were both `ZONE_RESOURCE_POOL_EXHAUSTED` in `us-central1-a`
   while CPU quota sat at 0/200 — a stockout, not a quota problem (a plain

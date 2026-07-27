@@ -117,11 +117,11 @@ func (t *runnerSetTarget) Ceiling(ctx context.Context) (int32, bool) {
 // not resolve, or an unreadable quota all yield false. A set whose references are
 // broken must fail closed in Resolve (§H.7), not be silently starved by the gate.
 func (t *runnerSetTarget) QuotaExhausted(ctx context.Context) (bool, string) {
-	containers, ok := t.workerContainers(ctx)
+	spec, ok := t.workerPodSpec(ctx)
 	if !ok {
 		return false, ""
 	}
-	return provisioner.WorkerQuotaExhausted(ctx, t.client, t.key.Namespace, containers)
+	return provisioner.WorkerQuotaExhausted(ctx, t.client, t.key.Namespace, spec)
 }
 
 // QuotaCapacity is the integer form of the same rung, for the scale-set tier's per-poll
@@ -133,19 +133,19 @@ func (t *runnerSetTarget) QuotaExhausted(ctx context.Context) (bool, string) {
 // Fail-open at every step, for the same reason: a set whose references are broken must
 // fail closed in Resolve (§H.7), never be silently starved of assignments by the gate.
 func (t *runnerSetTarget) QuotaCapacity(ctx context.Context, max int32) (int32, bool) {
-	containers, ok := t.workerContainers(ctx)
+	spec, ok := t.workerPodSpec(ctx)
 	if !ok {
 		return 0, false
 	}
 	active := countActiveWorkerPodsByLabel(ctx, t.client, t.key.Namespace, provisioner.LabelRunnerSet, t.key.Name)
-	return provisioner.WorkerQuotaCapacity(ctx, t.client, t.key.Namespace, containers, active, max)
+	return provisioner.WorkerQuotaCapacity(ctx, t.client, t.key.Namespace, spec, active, max)
 }
 
-// workerContainers resolves the containers of the worker pod this set would provision
-// right now — the template chain only (not the proxy; the pod shape is all a quota
+// workerPodSpec resolves the pod spec of the worker this set would provision right
+// now — the template chain only (not the proxy; the pod shape is all a quota
 // footprint needs), with the sizing profile applied. ok=false means something did not
 // resolve, and every caller must then fail open.
-func (t *runnerSetTarget) workerContainers(ctx context.Context) ([]corev1.Container, bool) {
+func (t *runnerSetTarget) workerPodSpec(ctx context.Context) (*corev1.PodSpec, bool) {
 	rs := &v2alpha1.RunnerSet{}
 	if err := t.client.Get(ctx, t.key, rs); err != nil {
 		return nil, false
@@ -158,7 +158,7 @@ func (t *runnerSetTarget) workerContainers(ctx context.Context) ([]corev1.Contai
 	if !res.resolved() {
 		return nil, false
 	}
-	return runnerSetWorkerContainers(rs, tmpl), true
+	return runnerSetWorkerPodSpec(rs, tmpl), true
 }
 
 // Resolve re-reads the RunnerSet and resolves its references into a provisioning

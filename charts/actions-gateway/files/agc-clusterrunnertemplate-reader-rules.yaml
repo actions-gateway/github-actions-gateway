@@ -1,9 +1,24 @@
-# Cluster-scoped read of ClusterRunnerTemplate, the one AGC dependency a namespaced
-# RoleBinding cannot authorize (the kind is cluster-scoped). The GMC binds this
-# ClusterRole to each gateway's AGC ServiceAccount via a per-gateway
-# ClusterRoleBinding (M3b, §H.16 #1). Strictly read-only on the single
-# cluster-scoped kind — least privilege: the AGC never writes ClusterRunnerTemplate
-# (the kind is platform-authored) and gets no other cluster-scoped access.
+# Cluster-scoped READS the AGC needs and a namespaced RoleBinding cannot authorize,
+# because the kinds are cluster-scoped. The GMC binds this ClusterRole to each
+# gateway's AGC ServiceAccount via a per-gateway ClusterRoleBinding (M3b, §H.16 #1).
+#
+# Strictly read-only, and deliberately short — least privilege: every rule here is a
+# cluster-wide grant, so a kind earns a place only when the AGC genuinely cannot do
+# its job without it, and never with a write verb.
+#
+# ClusterRunnerTemplate: the platform-authored worker template a tenant RunnerSet
+# resolves through templateRef. The AGC never writes it.
 - apiGroups: ["actions-gateway.com"]
   resources: ["clusterrunnertemplates"]
+  verbs: ["get", "list", "watch"]
+# RuntimeClass (Q450): a worker pod's ResourceQuota charge includes its RuntimeClass
+# pod overhead — 250m CPU / 160Mi memory per pod on the reference Kata shape — and
+# that number lives only on the cluster-scoped RuntimeClass, not on the pod template.
+# Without this rule the WorkerQuota conditions, the pre-claim admission gate, and the
+# capacity a scale-set advertises to GitHub all under-count every Kata worker. The
+# AGC never writes RuntimeClass (it is platform/runtime-installer-owned), and the
+# read is fail-open: an install that has not applied this rule yet keeps the
+# pre-Q450 behaviour rather than failing.
+- apiGroups: ["node.k8s.io"]
+  resources: ["runtimeclasses"]
   verbs: ["get", "list", "watch"]

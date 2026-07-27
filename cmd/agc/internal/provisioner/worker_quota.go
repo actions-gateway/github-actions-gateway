@@ -22,6 +22,12 @@ import (
 // package already imports provisioner, so the reverse direction would cycle — and
 // because the footprint must reflect the pod the provisioner would actually build,
 // resource defaults included.
+//
+// Every consumer sizes a worker from a whole *corev1.PodSpec, resolved through
+// ResolveWorkerPodSpec, and never from spec.containers alone: native sidecars and
+// RuntimeClass overhead are both quota-charged and both invisible in the container
+// list (Q450). QuotaHeadroomPods and WorkerQuotaCapacity are the scale-set tier's
+// integer form of the same question, so they must read the identical footprint.
 
 // quotaCheck maps a worker-footprint resource to the ResourceQuota hard key that
 // constrains it (including the legacy cpu/memory aliases for requests).
@@ -41,40 +47,39 @@ var workerQuotaChecks = []quotaCheck{
 }
 
 // WorkerFootprint returns the quota footprint of `count` worker pods built from
-// the given containers: the per-pod container requests/limits (summed across
-// containers, after the same resource gap-fill buildPod stamps) scaled by count,
+// the given pod spec: the pod's effective per-pod requests/limits scaled by count,
 // plus the pod count. Keys mirror ResourceQuota hard keys. Linear in count.
 //
 // Owner-agnostic so the v1 RunnerGroup (spec.podTemplate) and v2 RunnerSet
-// (resolved RunnerTemplate) capacity checks share one footprint calc. Init
-// containers are excluded, matching applyResourceDefaults: the wrapper init
-// container is short-lived and the quota's `used` tracks the max of init and
-// regular requests, which for a worker pod is the runner container's.
-func WorkerFootprint(containers []corev1.Container, count int32) corev1.ResourceList {
+// (resolved RunnerTemplate) capacity checks share one footprint calc.
+//
+// It takes the whole PodSpec, not just the containers, because a worker pod's
+// quota charge is not the container sum (Q450): native sidecars and pod overhead
+// both count, and neither is visible in spec.containers. See
+// pod_effective_resources.go for the arithmetic and its upstream provenance. Pass
+// a spec that has been through ResolveWorkerPodSpec so .Overhead is populated.
+func WorkerFootprint(spec *corev1.PodSpec, count int32) corev1.ResourceList {
 	if count < 0 {
 		count = 0
-	}
-	var reqCPU, reqMem, limCPU, limMem resource.Quantity
-	for i := range containers {
-		res := gapFilledResources(&containers[i])
-		reqCPU.Add(res.Requests[corev1.ResourceCPU])
-		reqMem.Add(res.Requests[corev1.ResourceMemory])
-		limCPU.Add(res.Limits[corev1.ResourceCPU])
-		limMem.Add(res.Limits[corev1.ResourceMemory])
 	}
 	out := corev1.ResourceList{
 		corev1.ResourcePods: *resource.NewQuantity(int64(count), resource.DecimalSI),
 	}
+	if spec == nil {
+		return out
+	}
+	reqs := podEffectiveRequests(spec)
+	limits := podEffectiveLimits(spec)
 	add := func(key corev1.ResourceName, per resource.Quantity) {
 		if per.IsZero() {
 			return
 		}
 		out[key] = mulQuantity(per, int64(count))
 	}
-	add(corev1.ResourceRequestsCPU, reqCPU)
-	add(corev1.ResourceRequestsMemory, reqMem)
-	add(corev1.ResourceLimitsCPU, limCPU)
-	add(corev1.ResourceLimitsMemory, limMem)
+	add(corev1.ResourceRequestsCPU, reqs[corev1.ResourceCPU])
+	add(corev1.ResourceRequestsMemory, reqs[corev1.ResourceMemory])
+	add(corev1.ResourceLimitsCPU, limits[corev1.ResourceCPU])
+	add(corev1.ResourceLimitsMemory, limits[corev1.ResourceMemory])
 	return out
 }
 
@@ -149,12 +154,12 @@ func QuotaHeadroomViolations(demand corev1.ResourceList, quotas []corev1.Resourc
 // Returns 0 when not even one more pod fits, including when a quota is already
 // over-used. It reports nothing about read failures: a caller that cannot list quotas
 // must fail open before calling (see WorkerQuotaCapacity).
-func QuotaHeadroomPods(containers []corev1.Container, quotas []corev1.ResourceQuota, max int32) int32 {
+func QuotaHeadroomPods(spec *corev1.PodSpec, quotas []corev1.ResourceQuota, max int32) int32 {
 	if max <= 0 {
 		return 0
 	}
 	fits := func(n int32) bool {
-		over, _ := QuotaHeadroomViolations(WorkerFootprint(containers, n), quotas, "")
+		over, _ := QuotaHeadroomViolations(WorkerFootprint(spec, n), quotas, "")
 		return !over
 	}
 	lo, hi := int32(0), max
@@ -189,7 +194,7 @@ func QuotaHeadroomPods(containers []corev1.Container, quotas []corev1.ResourceQu
 // not authoritative — `.status.used` is eventually consistent and quota scopes are
 // ignored — and it does not need to be: it can only ever lower the advertised number,
 // and the per-pod ceilingCheck still backstops every pod that is actually created.
-func WorkerQuotaCapacity(ctx context.Context, c client.Reader, ns string, containers []corev1.Container, active, max int32) (limit int32, bounded bool) {
+func WorkerQuotaCapacity(ctx context.Context, c client.Reader, ns string, spec *corev1.PodSpec, active, max int32) (limit int32, bounded bool) {
 	var quotas corev1.ResourceQuotaList
 	if err := c.List(ctx, &quotas, client.InNamespace(ns)); err != nil {
 		return 0, false
@@ -200,13 +205,13 @@ func WorkerQuotaCapacity(ctx context.Context, c client.Reader, ns string, contai
 	if active < 0 {
 		active = 0
 	}
-	headroom := QuotaHeadroomPods(containers, quotas.Items, max-active)
+	headroom := QuotaHeadroomPods(ResolveWorkerPodSpec(ctx, c, spec), quotas.Items, max-active)
 	return active + headroom, true
 }
 
 // WorkerQuotaExhausted reports whether the namespace ResourceQuotas in ns
-// currently lack the headroom to admit one more worker pod with the given
-// containers, plus a human-readable detail naming the binding resource.
+// currently lack the headroom to admit one more worker pod of the given shape,
+// plus a human-readable detail naming the binding resource.
 //
 // It is the live read behind the admission gate's quota rung (#784). Deliberately
 // FAIL-OPEN: a quota it cannot list, or a namespace with no quota at all, yields
@@ -222,7 +227,7 @@ func WorkerQuotaCapacity(ctx context.Context, c client.Reader, ns string, contai
 // the common case — a tenant sitting at its own quota ceiling — from "claim the job
 // and burn lock time retrying" into "leave it queued at GitHub", which is what the
 // Q59 gate exists to do.
-func WorkerQuotaExhausted(ctx context.Context, c client.Reader, ns string, containers []corev1.Container) (exhausted bool, detail string) {
+func WorkerQuotaExhausted(ctx context.Context, c client.Reader, ns string, spec *corev1.PodSpec) (exhausted bool, detail string) {
 	var quotas corev1.ResourceQuotaList
 	if err := c.List(ctx, &quotas, client.InNamespace(ns)); err != nil {
 		return false, ""
@@ -230,6 +235,6 @@ func WorkerQuotaExhausted(ctx context.Context, c client.Reader, ns string, conta
 	if len(quotas.Items) == 0 {
 		return false, ""
 	}
-	return QuotaHeadroomViolations(WorkerFootprint(containers, 1), quotas.Items,
+	return QuotaHeadroomViolations(WorkerFootprint(ResolveWorkerPodSpec(ctx, c, spec), 1), quotas.Items,
 		"namespace ResourceQuota cannot admit another worker pod: ")
 }
