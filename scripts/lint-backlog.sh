@@ -40,6 +40,14 @@
 #      the many rows that merely *cite* a completed plan as evidence. Set
 #      BACKLOG_ALLOW_PROGRESS_STALE="plan/foo.md" when the vanished row was such
 #      a citation and real work genuinely remains.
+#  10. A row the baseline *deleted* may not reappear. Done rows are deleted, so
+#      a resurrected one re-opens finished work — and it arrives silently:
+#      reordering a row moves it, so a branch that relocates a row while main
+#      deletes it merges with no conflict at all (maintaining-backlog.md § A
+#      moved row defeats conflict detection). A clean rebase is not evidence of
+#      a correct one. An ID absent from the baseline file is a new row if the
+#      baseline's history never carried it, and a resurrection if it did.
+#      Deliberately re-opening a closed item? Set BACKLOG_ALLOW_RESURRECT="Q1 Q2".
 #
 # Usage:
 #   lint-backlog.sh [--staged] [path/to/STATUS.md]
@@ -108,19 +116,43 @@ flake_queue_ids() {
     '
 }
 
-check_flake_rows_preserved() {
-    local baseline_ref="" baseline="" rel repo_root
-    repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-    [[ -n "$repo_root" ]] || return 0
-    rel="${FILE#"$repo_root"/}"
-
+# baseline_ref prints the ref to compare the backlog against — the pre-commit
+# state in --staged mode, otherwise origin/main (the branch point for any PR).
+# Empty when neither resolves, which makes the git-baseline rules no-ops rather than
+# failures on a fresh clone with no origin.
+baseline_ref() {
     if (( STAGED )); then
-        baseline_ref="HEAD"
+        printf 'HEAD'
     elif git rev-parse --verify --quiet origin/main >/dev/null; then
-        baseline_ref="origin/main"
-    else
-        return 0
+        printf 'origin/main'
     fi
+}
+
+# backlog_relpath prints FILE relative to the repo root, for `git show REF:path`.
+# Empty outside a repo.
+#
+# Asks git for the prefix rather than stripping `git rev-parse --show-toplevel`
+# off the front: on macOS the two spellings of a temp path (/var/... and
+# /private/var/...) differ by a symlink, so the string strip silently failed to
+# match and quietly disabled the git-baseline rules.
+backlog_relpath() {
+    local dir prefix
+    dir="$(dirname "$FILE")"
+    prefix="$(git -C "$dir" rev-parse --show-prefix 2>/dev/null)" || return 0
+    printf '%s%s' "$prefix" "$(basename "$FILE")"
+}
+
+# anchor_ids prints every "QN" that has a row anchor in the STATUS.md on stdin.
+anchor_ids() {
+    grep -oE '<a id="Q[0-9]+"></a>' | grep -oE 'Q[0-9]+'
+}
+
+check_flake_rows_preserved() {
+    local baseline_ref="" baseline="" rel
+    rel="$(backlog_relpath)"
+    [[ -n "$rel" ]] || return 0
+    baseline_ref="$(baseline_ref)"
+    [[ -n "$baseline_ref" ]] || return 0
 
     baseline="$(git show "$baseline_ref:$rel" 2>/dev/null || true)"
     [[ -n "$baseline" ]] || return 0
@@ -133,6 +165,16 @@ check_flake_rows_preserved() {
         [[ -n "$id" ]] || continue
         # Still present anywhere in the file (Queue or Deferred) -> fine.
         grep -q "<a id=\"$id\"></a>" "$FILE" && continue
+        # Absent — but a branch opened before the row was filed never had it to
+        # delete. Only flag when HEAD already carries the commit that added it;
+        # otherwise every branch that is merely behind main reports a deletion
+        # it did not make. (Same staleness trap as rule 9.)
+        local added_in
+        added_in="$(git log -1 --format=%H -S"<a id=\"$id\"></a>" \
+            "$baseline_ref" -- "$rel" 2>/dev/null || true)"
+        if [[ -n "$added_in" ]]; then
+            git merge-base --is-ancestor "$added_in" HEAD 2>/dev/null || continue
+        fi
         local ok=0 a
         for a in ${allowed+"${allowed[@]}"}; do
             [[ "$a" == "$id" ]] && ok=1 && break
@@ -155,8 +197,75 @@ check_flake_rows_preserved() {
     return "$missing"
 }
 
+# Rule 10. Catches the resurrection the manual `comm` check in
+# maintaining-backlog.md asks for, and distinguishes the two cases it cannot:
+# an ID missing from the baseline FILE is a new row when the baseline's HISTORY
+# never carried it, and a resurrected done row when it did.
+check_no_resurrected_rows() {
+    local baseline_ref="" baseline="" rel
+    rel="$(backlog_relpath)"
+    [[ -n "$rel" ]] || return 0
+    baseline_ref="$(baseline_ref)"
+    [[ -n "$baseline_ref" ]] || return 0
+
+    baseline="$(git show "$baseline_ref:$rel" 2>/dev/null || true)"
+    [[ -n "$baseline" ]] || return 0
+
+    local -a allowed=()
+    read -r -a allowed <<<"${BACKLOG_ALLOW_RESURRECT:-}"
+
+    local id rc=0 ok a
+    while read -r id; do
+        [[ -n "$id" ]] || continue
+        # Still in the baseline file: not a deletion, nothing to resurrect.
+        grep -q "<a id=\"$id\"></a>" <<<"$baseline" && continue
+        # Absent from the baseline file. If its history never held the anchor
+        # either, this is simply a newly filed row.
+        #
+        # Captured rather than piped into `grep -q`: under `set -o pipefail`,
+        # grep exits at the first line, git log dies of SIGPIPE, and the
+        # pipeline reports 141 — which read as "no history" and silently
+        # skipped every resurrection this rule exists to catch.
+        local removed_in
+        removed_in="$(git log -1 --format=%H -S"<a id=\"$id\"></a>" \
+            "$baseline_ref" -- "$rel" 2>/dev/null || true)"
+        [[ -n "$removed_in" ]] || continue
+
+        # The history held it, so it was deleted — but by whom, relative to this
+        # branch? If the deleting commit is not yet an ancestor of HEAD, the
+        # branch simply predates the deletion and a rebase will apply it. Only a
+        # branch that ALREADY carries the deletion and still shows the row has
+        # actually brought it back. Without this the rule fires on every branch
+        # that is merely behind main.
+        git merge-base --is-ancestor "$removed_in" HEAD 2>/dev/null || continue
+        ok=0
+        for a in ${allowed+"${allowed[@]}"}; do
+            [[ "$a" == "$id" ]] && ok=1 && break
+        done
+        (( ok )) && continue
+        if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+            printf '::error file=%s::%s is back in %s but %s deleted it — done rows are deleted, so this re-opens finished work. A reordered row merges cleanly over a delete, so a clean rebase is not evidence of a correct one. See docs/development/maintaining-backlog.md#a-moved-row-defeats-conflict-detection\n' \
+                "$FILE" "$id" "$(basename "$FILE")" "$baseline_ref"
+        else
+            printf 'lint-backlog: %s: %s is present here but %s deleted it.\n' "$FILE" "$id" "$baseline_ref" >&2
+            printf '  Done rows are deleted (git is the archive), so a row that comes back\n' >&2
+            printf '  re-opens finished work. Reordering a row moves it, so a branch that\n' >&2
+            printf '  relocates a row while main deletes it merges with NO conflict — a clean\n' >&2
+            printf '  rebase is not evidence of a correct one. Check whether the work shipped:\n' >&2
+            printf '    git log -S%s%s%s --oneline %s -- %s\n' \
+                "'" "<a id=\"$id\"></a>" "'" "$baseline_ref" "$rel" >&2
+            printf '  See docs/development/maintaining-backlog.md#a-moved-row-defeats-conflict-detection.\n' >&2
+            printf '  Deliberately re-opening it? BACKLOG_ALLOW_RESURRECT=%s\n' "$id" >&2
+        fi
+        rc=1
+    done < <(anchor_ids <"$FILE")
+
+    return "$rc"
+}
+
 flake_check_rc=0
 check_flake_rows_preserved || flake_check_rc=1
+check_no_resurrected_rows || flake_check_rc=1
 
 # Rule 9. Every `plan/NAME.md` path linked from a Queue row's Item or Notes cell.
 # Deferred rows are deliberately excluded: a deferred residual does not hold a
@@ -191,18 +300,11 @@ progress_status() {
 }
 
 check_progress_rederived() {
-    local baseline_ref="" baseline="" rel repo_root
-    repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-    [[ -n "$repo_root" ]] || return 0
-    rel="${FILE#"$repo_root"/}"
-
-    if (( STAGED )); then
-        baseline_ref="HEAD"
-    elif git rev-parse --verify --quiet origin/main >/dev/null; then
-        baseline_ref="origin/main"
-    else
-        return 0
-    fi
+    local baseline_ref="" baseline="" rel
+    rel="$(backlog_relpath)"
+    [[ -n "$rel" ]] || return 0
+    baseline_ref="$(baseline_ref)"
+    [[ -n "$baseline_ref" ]] || return 0
 
     baseline="$(git show "$baseline_ref:$rel" 2>/dev/null || true)"
     [[ -n "$baseline" ]] || return 0

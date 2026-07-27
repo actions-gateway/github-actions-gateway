@@ -56,7 +56,7 @@ fixture() {
 # linter, so it is left unadorned (backticks here would read as a command
 # substitution to shellcheck).
 qrow() {
-	printf '| <a id="%s"></a>%s | %s | infra | %s | S | %s |' "$1" "$1" "$2" "$3" "$4"
+	printf '| <a id="%s"></a>%s | %s | %s | %s | S | %s |' "$1" "$1" "$2" "${5:-infra}" "$3" "$4"
 }
 
 # drow ID ITEM TRIGGER — build a Deferred row.
@@ -302,6 +302,93 @@ rc=0
 (cd "$progress_allow_repo" && BACKLOG_ALLOW_PROGRESS_STALE='plan/some-item.md' "$LINT" --staged) >/dev/null 2>&1 || rc=$?
 if [[ "$rc" == 0 ]]; then printf 'ok   progress: BACKLOG_ALLOW_PROGRESS_STALE -> clean\n'; else
 	printf 'FAIL progress: the escape hatch should admit the stale row (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+# --- Rule 10: a row the baseline deleted may not come back --------------------
+
+# Reproduces the failure this rule exists for. A row is filed, ships, and its
+# row is deleted on main; a branch then brings it back. In the real incident the
+# branch had merely *reordered* rows around the deleted one, which merges with
+# no conflict at all — so nothing but this check would have caught it.
+res_repo="$WORKDIR/resurrect"
+mkdir -p "$res_repo/docs"
+git -C "$res_repo" init -q
+# Throwaway repo: it has no user identity configured, and must not read the
+# developer's.
+git_id=(-c user.email=test@example.invalid -c user.name=test)
+
+commit_backlog() {
+	local msg="$1"
+	shift
+	cp "$(fixture "$@")" "$res_repo/docs/STATUS.md"
+	git -C "$res_repo" add docs/STATUS.md
+	git -C "$res_repo" "${git_id[@]}" commit -qm "$msg"
+}
+
+Q1_ROW="$(qrow Q1 "$PLAIN_ITEM" 🔲 'one')"
+Q2_ROW="$(qrow Q2 "$PLAIN_ITEM" 🔲 'two')"
+
+commit_backlog 'file Q1 and Q2' "$Q1_ROW" "$Q2_ROW"
+commit_backlog 'Q1 ships; delete its row' "$Q2_ROW"
+git -C "$res_repo" update-ref refs/remotes/origin/main HEAD
+
+run_res() { rc=0; (cd "$res_repo" && "$LINT" "$res_repo/docs/STATUS.md") >/dev/null 2>&1 || rc=$?; }
+
+# Q1 is back, and reordered below Q2 the way a rebase would leave it.
+cp "$(fixture "$Q2_ROW" "$Q1_ROW")" "$res_repo/docs/STATUS.md"
+run_res
+if [[ "$rc" == 1 ]]; then printf 'ok   rule 10: resurrected done row     -> fail\n'; else
+	printf 'FAIL rule 10: a row main deleted came back and was not flagged (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+# Same file, but the re-open is deliberate.
+rc=0; (cd "$res_repo" && BACKLOG_ALLOW_RESURRECT=Q1 "$LINT" "$res_repo/docs/STATUS.md") >/dev/null 2>&1 || rc=$?
+if [[ "$rc" == 0 ]]; then printf 'ok   rule 10: BACKLOG_ALLOW_RESURRECT -> pass\n'; else
+	printf 'FAIL rule 10: the escape hatch should allow a deliberate re-open (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+# A genuinely new ID is absent from the baseline too, and must NOT be flagged —
+# this is the case the manual `comm` check cannot tell apart.
+cp "$(fixture "$Q2_ROW" "$(qrow Q9 "$PLAIN_ITEM" 🔲 'new')")" "$res_repo/docs/STATUS.md"
+run_res
+if [[ "$rc" == 0 ]]; then printf 'ok   rule 10: newly filed row          -> pass\n'; else
+	printf 'FAIL rule 10: a new ID was mistaken for a resurrection (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+# A branch that merely predates the deletion is NOT resurrecting anything: its
+# HEAD does not carry the deleting commit, and a rebase will apply it. This case
+# is common (main moves while a branch is open) so a false positive here would
+# make the rule noise. HEAD is moved back to before Q1 was deleted.
+git -C "$res_repo" checkout -q -- docs/STATUS.md # drop the fixture; checkout needs a clean tree
+git -C "$res_repo" checkout -q HEAD~1
+cp "$(fixture "$Q1_ROW" "$Q2_ROW")" "$res_repo/docs/STATUS.md"
+run_res
+if [[ "$rc" == 0 ]]; then printf 'ok   rule 10: branch behind main       -> pass\n'; else
+	printf 'FAIL rule 10: a branch merely behind main was flagged as resurrecting (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+# --- Rule 8: the same staleness trap ------------------------------------------
+
+# A flake row filed on main after this branch opened is absent from the branch's
+# file, but the branch never deleted it — it simply predates it. Before the
+# ancestry check, rule 8 reported that as a vanished flake row on every stale
+# branch.
+flake_repo="$WORKDIR/flake"
+mkdir -p "$flake_repo/docs"
+git -C "$flake_repo" init -q
+# shellcheck disable=SC2016  # the backticks are markdown; rule 8 matches /`flake`/
+FLAKE_ROW="$(qrow Q3 "$PLAIN_ITEM" 🔲 'flaky' '`flake`')"
+
+cp "$(fixture "$Q2_ROW")" "$flake_repo/docs/STATUS.md"
+git -C "$flake_repo" add docs/STATUS.md
+git -C "$flake_repo" "${git_id[@]}" commit -qm 'branch point'
+git -C "$flake_repo" update-ref refs/heads/branch HEAD
+
+# main then files a flake row; the branch stays at the older commit.
+cp "$(fixture "$Q2_ROW" "$FLAKE_ROW")" "$flake_repo/docs/STATUS.md"
+git -C "$flake_repo" add docs/STATUS.md
+git -C "$flake_repo" "${git_id[@]}" commit -qm 'file a flake row'
+git -C "$flake_repo" update-ref refs/remotes/origin/main HEAD
+git -C "$flake_repo" checkout -q branch
+cp "$(fixture "$Q2_ROW")" "$flake_repo/docs/STATUS.md"
+
+rc=0; (cd "$flake_repo" && "$LINT" "$flake_repo/docs/STATUS.md") >/dev/null 2>&1 || rc=$?
+if [[ "$rc" == 0 ]]; then printf 'ok   rule 8: branch behind main       -> pass\n'; else
+	printf 'FAIL rule 8: a branch predating a flake row was flagged for deleting it (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
 
 # --- The real file must pass every rule ---------------------------------------
 

@@ -47,9 +47,13 @@ The full gate takes ~6 minutes. Every one of those minutes is a window in which 
 
 Git raises a delete/modify conflict only when both sides touch the *same* lines. Reordering a row moves it, so a branch that **relocates** a row while `main` **deletes** it produces no conflict at all: git applies the delete at the old position and the re-add at the new one, and a completed row silently comes back. **A clean rebase is not evidence of a correct one.**
 
-This is the second mechanism behind [Q395](../STATUS.md#Q395), and the more dangerous of the two, because the squash-merge case at least leaves a conflict to notice. Both occurred on 2026-07-25: the squash case in [#766](https://github.com/actions-gateway/github-actions-gateway/pull/766)/[#768](https://github.com/actions-gateway/github-actions-gateway/pull/768), and the reorder case while rebasing a release-planning branch across [#805](https://github.com/actions-gateway/github-actions-gateway/pull/805), which had shipped the very row that branch was relabelling.
+This is the second and more dangerous of the two ways a done row comes back — the squash-merge case at least leaves a conflict to notice. Both occurred on 2026-07-25: the squash case in [#766](https://github.com/actions-gateway/github-actions-gateway/pull/766)/[#768](https://github.com/actions-gateway/github-actions-gateway/pull/768), and the reorder case while rebasing a release-planning branch across [#805](https://github.com/actions-gateway/github-actions-gateway/pull/805), which had shipped the very row that branch was relabelling. A third near-miss on 2026-07-26 — a row inserted directly above one `main` had just deleted — is what finally bought the automated check below.
 
-**The check.** After any rebase that reordered rows, list the IDs your branch has that `origin/main` does not:
+**`make lint-backlog` checks this for you** (rule 9). An ID present in your `docs/STATUS.md` but absent from `origin/main`'s is *new* when the baseline's history never carried its anchor, and a *resurrection* when it did — the distinction a manual eyeball can't make cheaply. The rule fires only once your branch already contains the commit that did the deleting, so a branch that is merely behind `main` isn't flagged for a deletion a rebase will apply anyway.
+
+Deliberately re-opening a closed item? `BACKLOG_ALLOW_RESURRECT="Q1 Q2" make lint-backlog`.
+
+**To inspect by hand**, list the IDs your branch has that `origin/main` does not:
 
 ```bash
 comm -23 <(grep -o 'id="Q[0-9]*"' docs/STATUS.md | sort -u) <(git show origin/main:docs/STATUS.md | grep -o 'id="Q[0-9]*"' | sort -u)
