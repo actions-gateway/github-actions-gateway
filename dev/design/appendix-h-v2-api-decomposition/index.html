@@ -3229,6 +3229,44 @@ derived value. Quota/LimitRange conflicts are deliberately a <strong>runtime</st
 gate — cross-object admission validation is exactly what this appendix's §H.7
 philosophy avoids. While a profile is <code>Active</code>, <code>SizingDrift</code> reports
 <code>False/SizingProfileActive</code> (the template ask is not what pods run with).</p>
+<p><strong>Opt-in intake gating: <code>spec.capacityGate</code> (Q405).</strong> A <code>RunnerSet</code> may opt into the
+placeability rung of the admission ladder — the AGC refuses to take on jobs whose
+worker pod the cluster cannot currently place, instead of claiming them and stalling.
+<code>capacityGate.mode</code> selects <code>Off</code> (the default, today's behavior exactly) or
+<code>SchedulerVerdict</code>, which reads the scheduler's own <code>PodScheduled=False</code> /
+<code>Unschedulable</code> verdict — the same fact <code>WorkersUnschedulable</code> already publishes.
+<code>AutoscalerVerdict</code> (Q406) and <code>Probe</code>/<code>Provision</code> (Q407) are reserved names on the
+same enum and are <strong>rejected at admission</strong> until they ship: an operator who selects
+a gate expects gating, and silently accepting an unimplemented mode as a no-op is the
+failure this rung exists to remove.</p>
+<p>The mode is an <strong>operator assertion, never an auto-detection</strong>, because the two
+readings of an unschedulable pod are opposites and only the operator knows which
+applies. On a fixed-size cluster nothing is waiting on that pod, so it is pure waste;
+on an elastic one the pod <em>is</em> the request for a node, and gating on it would suppress
+the very signal that would have rescued the tenant. A wrong auto-detection starves a
+tenant, so the AGC does not attempt one (<a href="../appendix-d-alternatives-considered/#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">§D.8</a>).</p>
+<p>The decision is published as <code>WorkerCapacityDeclined</code> and the rung reads that
+condition back rather than re-deriving the verdict, so <code>kubectl describe</code> and the
+AGC's intake behavior cannot disagree. It is a <strong>separate</strong> condition from
+<code>WorkersUnschedulable</code> even though phase 1 shares its source: it means something
+different to an operator ("intake is being refused" versus "pods are stuck"), it stays
+stable across the later modes while the signal underneath it changes, and
+<code>WorkersUnschedulable</code> is already an impairing rollup input — so
+<code>WorkerCapacityDeclined</code> is deliberately <strong>excluded</strong> from <code>ImpairingConditionTypes()</code>,
+which would otherwise double-count one stall into the gateway's <code>RunnerSetsDegraded</code>
+summary. A set that did not opt in carries no such condition at all.</p>
+<p>Two properties bound what the gate is worth. It does <strong>not</strong> eliminate the first
+wasted claim — the signal is derived from a stuck pod, so one has to exist — and it
+does not remove the need for <code>pendingPodDeadline</code> and the reaper. What it bounds is
+the <em>rate</em>: because the condition is derived from that pod's existence, reaping the
+pod clears it, one job is claimed, and a still-unplaceable shape trips it again, so a
+burst of <em>N</em> wasted claims becomes roughly one per deadline window. Per-pool behavior
+falls out of per-object keying rather than extra machinery — a verdict is only valid
+for the pod shape that produced it, and a <code>RunnerSet</code> resolves to exactly one worker
+template (§H.4), so a drained GPU pool gates the GPU sets while CPU sets keep claiming.
+Fail-open throughout: an unreadable set, an unresolved template chain, an unreadable
+pod list all leave intake exactly as it is today. The gate may under-gate freely; it
+must never over-gate.</p>
 <h2 id="h8-ownership-gc-and-deletion">H.8. Ownership, GC, and deletion<a class="headerlink" href="#h8-ownership-gc-and-deletion" title="Permanent link">&para;</a></h2>
 <p>Shared objects must not be owner-referenced by their referrers:</p>
 <ul>
