@@ -144,20 +144,11 @@ jobs:
       attestations: write # actions/attest-build-provenance writes the signed SLSA provenance
     strategy:
       fail-fast: false
-      # One leg per first-party Dockerfile. fakegithub is a test fixture, not a
-      # published artifact, so it is intentionally absent.
+      # One leg per published image. Every image is a named stage of the root
+      # Dockerfile, so a leg is selected by `target`, not by file. fakegithub is
+      # a test fixture, not a published artifact, so its stage is absent here.
       matrix:
-        include:
-          - name: gmc
-            dockerfile: cmd/gmc/Dockerfile
-          - name: agc
-            dockerfile: cmd/agc/Dockerfile
-          - name: proxy
-            dockerfile: cmd/proxy/Dockerfile
-          - name: worker
-            dockerfile: cmd/worker/Dockerfile
-          - name: wrapper
-            dockerfile: cmd/worker/Dockerfile.wrapper
+        name: [gmc, agc, proxy, worker, wrapper]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Resolve publish tag
@@ -212,12 +203,13 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: Dockerfile
+          target: ${{ matrix.name }}
           push: true
           # Multi-arch (Q97): both platforms on every release. The result is an
           # OCI image index; steps.build.outputs.digest below is the INDEX
           # digest — the ref operators pin in chart values. No QEMU: the
-          # Dockerfiles cross-compile Go on $BUILDPLATFORM and the runtime
+          # Dockerfile cross-compiles Go on $BUILDPLATFORM and the runtime
           # stages are COPY-only.
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
@@ -234,6 +226,15 @@ jobs:
           # PR build) would be baked into the release and keyless-signed as the
           # publish identity. `no-cache: true` closes that supply-chain surface;
           # the extra build minutes are acceptable on the rare release path.
+          #
+          # That also means this leg executes the Dockerfile's `deps` stage for
+          # real, compiling the whole vendored tree rather than just this
+          # binary's dependency closure — the stage exists to make the e2e bake's
+          # cache reusable across runs, and an uncached release build cannot
+          # benefit from it. Measured cost is a couple of minutes on the smaller
+          # legs (proxy/worker/wrapper), well inside this job's 30-minute
+          # timeout, and it is the price of e2e exercising the exact same
+          # Dockerfile the release builds from.
           no-cache: true
           # Disable buildx's default provenance attestation (mode=max for public
           # repos): it is UNSIGNED and would embed extra attestation manifests in

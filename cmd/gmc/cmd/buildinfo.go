@@ -3,7 +3,7 @@ package main
 import "github.com/prometheus/client_golang/prometheus"
 
 // version is the GMC build version, stamped at link time via
-// -ldflags "-X main.version=<tag>" (see cmd/gmc/Dockerfile). It defaults to
+// -ldflags "-X main.version=<tag>" (see the root Dockerfile's build-gmc stage). It defaults to
 // "dev" for un-stamped local builds, following the Prometheus *_build_info
 // convention of reporting a placeholder rather than an empty string.
 var version = "dev"

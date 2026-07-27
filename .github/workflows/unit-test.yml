@@ -79,6 +79,10 @@ jobs:
               - 'go.work'
               - 'go.work.sum'
               - 'tools/**'
+              # cmd/agc/names/runner_version_test.go reads the root Dockerfile's
+              # `worker` stage FROM line, so a Dockerfile-only edit can break a
+              # unit test.
+              - 'Dockerfile'
               - '.golangci.yml'
               - 'Makefile'
               - 'scripts/coverage.sh'

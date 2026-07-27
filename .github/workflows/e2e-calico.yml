@@ -41,6 +41,7 @@ on:
     paths:
       - 'cmd/gmc/**'
       - 'cmd/proxy/**'
+      - 'Dockerfile'
       - 'charts/actions-gateway/templates/**'
       - 'scripts/kind-with-registry.sh'
       - 'scripts/bake-with-retry.sh'
@@ -84,6 +85,7 @@ jobs:
             calico:
               - 'cmd/gmc/**'           # generates tenant + manager NetworkPolicies, IPRangeReconciler, e2e specs
               - 'cmd/proxy/**'         # the egress proxy (ProxyConnectWorks)
+              - 'Dockerfile'           # builds the gmc + proxy images this lane deploys
               - 'charts/actions-gateway/templates/**'  # manager NetworkPolicy templates (ManagerMetricsNP); templates-only so a metadata Chart.yaml bump doesn't fire this lane (Q296)
               - 'scripts/kind-with-registry.sh'  # CNI/cluster bring-up incl. Calico install
               - 'scripts/bake-with-retry.sh'     # image bake/push retry on the bring-up critical path

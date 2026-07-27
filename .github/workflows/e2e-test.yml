@@ -72,6 +72,11 @@ jobs:
               - 'scripts/!(dogfood)/**'
               - 'Makefile'
               - 'docker-bake.hcl'
+              # The root Dockerfile builds all six images this tier deploys. It
+              # used to live under cmd/** and test/**, already covered above;
+              # at the repo root it needs its own entry or an image-only change
+              # skips e2e.
+              - 'Dockerfile'
               - '.github/workflows/e2e-test.yml'
               - '.github/workflows/e2e-reusable.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun

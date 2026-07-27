@@ -1,15 +1,17 @@
-// docker-bake.hcl — build all five e2e images concurrently with one Buildx
-// invocation. Replaces five sequential `docker buildx build` calls in the CI
-// workflow with one bake step bounded by the slowest target's wall time.
+// docker-bake.hcl — build all six e2e images concurrently with one Buildx
+// invocation. Every target is a named stage of the single root Dockerfile,
+// selected with `target`; they share its `deps` stage, so the vendored
+// dependency tree is compiled once per bake instead of once per image.
 //
 // Invoke:
-//   docker buildx bake                        # build all five (default group)
+//   docker buildx bake                        # build all six (default group)
 //   docker buildx bake gmc                    # build just one target
 //   GHA_CACHE=true docker buildx bake         # opt into GitHub Actions cache
 //
 // All targets share the repo-root context and push to the local registry
-// stood up by scripts/kind-with-registry.sh; see docs/plan/docker-image-speed.md
-// for the full pipeline description.
+// stood up by scripts/kind-with-registry.sh; see
+// docs/plan/e2e-ci-speed-round-2.md for the current pipeline description and
+// docs/plan/docker-image-speed.md for the earlier round.
 
 variable "GIT_SHA" {
   default = ""
@@ -47,65 +49,63 @@ group "default" {
 // _common holds the settings every target inherits. The output `type=registry`
 // pushes the resulting image straight to IMAGE_REGISTRY; the local kind nodes
 // pull from there on demand (see scripts/kind-with-registry.sh).
+//
+// ONE cache scope for all six targets, not one per image. They share the root
+// Dockerfile's `deps` stage — a ~1.1 GB warm Go build cache — and a per-image
+// scope would export six copies of it, burning the repo's 10 GB Actions-cache
+// budget to store the same layer six times. A single scope stores it once and
+// every target restores from it.
 target "_common" {
-  context = "."
-  output  = ["type=registry"]
-  // Provenance for the org.opencontainers.image.* labels each Dockerfile sets.
+  context    = "."
+  dockerfile = "Dockerfile"
+  output     = ["type=registry"]
+  // Provenance for the org.opencontainers.image.* labels each final stage sets.
   // REVISION is the build's git SHA; VERSION falls back to it when no release
   // tag is supplied.
   args = {
     REVISION = GIT_SHA
     VERSION  = VERSION != "" ? VERSION : GIT_SHA
   }
+  cache-from = GHA_CACHE != "" ? ["type=gha,scope=images"] : []
+  cache-to   = GHA_CACHE != "" ? ["type=gha,mode=max,scope=images"] : []
 }
 
 target "gmc" {
-  inherits   = ["_common"]
-  dockerfile = "cmd/gmc/Dockerfile"
-  tags       = ["${IMAGE_REGISTRY}/gmc:e2e-${GIT_SHA}"]
-  cache-from = GHA_CACHE != "" ? ["type=gha,scope=gmc"] : []
-  cache-to   = GHA_CACHE != "" ? ["type=gha,mode=max,scope=gmc"] : []
+  inherits = ["_common"]
+  target   = "gmc"
+  tags     = ["${IMAGE_REGISTRY}/gmc:e2e-${GIT_SHA}"]
 }
 
 target "agc" {
-  inherits   = ["_common"]
-  dockerfile = "cmd/agc/Dockerfile"
-  tags       = ["${IMAGE_REGISTRY}/agc:e2e-${GIT_SHA}"]
-  cache-from = GHA_CACHE != "" ? ["type=gha,scope=agc"] : []
-  cache-to   = GHA_CACHE != "" ? ["type=gha,mode=max,scope=agc"] : []
+  inherits = ["_common"]
+  target   = "agc"
+  tags     = ["${IMAGE_REGISTRY}/agc:e2e-${GIT_SHA}"]
 }
 
 target "proxy" {
-  inherits   = ["_common"]
-  dockerfile = "cmd/proxy/Dockerfile"
-  tags       = ["${IMAGE_REGISTRY}/proxy:e2e-${GIT_SHA}"]
-  cache-from = GHA_CACHE != "" ? ["type=gha,scope=proxy"] : []
-  cache-to   = GHA_CACHE != "" ? ["type=gha,mode=max,scope=proxy"] : []
+  inherits = ["_common"]
+  target   = "proxy"
+  tags     = ["${IMAGE_REGISTRY}/proxy:e2e-${GIT_SHA}"]
 }
 
 target "fakegithub" {
-  inherits   = ["_common"]
-  dockerfile = "test/fakegithub/Dockerfile"
-  tags       = ["${IMAGE_REGISTRY}/fakegithub:e2e-${GIT_SHA}"]
-  cache-from = GHA_CACHE != "" ? ["type=gha,scope=fakegithub"] : []
-  cache-to   = GHA_CACHE != "" ? ["type=gha,mode=max,scope=fakegithub"] : []
+  inherits = ["_common"]
+  target   = "fakegithub"
+  tags     = ["${IMAGE_REGISTRY}/fakegithub:e2e-${GIT_SHA}"]
 }
 
 target "worker" {
-  inherits   = ["_common"]
-  dockerfile = "cmd/worker/Dockerfile"
-  tags       = ["${IMAGE_REGISTRY}/worker:e2e-${GIT_SHA}"]
-  cache-from = GHA_CACHE != "" ? ["type=gha,scope=worker"] : []
-  cache-to   = GHA_CACHE != "" ? ["type=gha,mode=max,scope=worker"] : []
+  inherits = ["_common"]
+  target   = "worker"
+  tags     = ["${IMAGE_REGISTRY}/worker:e2e-${GIT_SHA}"]
 }
 
 // wrapper is the ~2 MB scratch image holding just the cmd/worker wrapper binary,
 // injected into worker pods at runtime so the runner image can be the unmodified
-// upstream actions-runner (Q235).
+// upstream actions-runner (Q235). It shares the `build-wrapper` stage with the
+// worker target, so the two ship byte-identical binaries from one compile.
 target "wrapper" {
-  inherits   = ["_common"]
-  dockerfile = "cmd/worker/Dockerfile.wrapper"
-  tags       = ["${IMAGE_REGISTRY}/wrapper:e2e-${GIT_SHA}"]
-  cache-from = GHA_CACHE != "" ? ["type=gha,scope=wrapper"] : []
-  cache-to   = GHA_CACHE != "" ? ["type=gha,mode=max,scope=wrapper"] : []
+  inherits = ["_common"]
+  target   = "wrapper"
+  tags     = ["${IMAGE_REGISTRY}/wrapper:e2e-${GIT_SHA}"]
 }

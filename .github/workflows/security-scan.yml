@@ -67,6 +67,8 @@ jobs:
               - 'go.work.sum'
               - 'tools/**'
               - 'docker-bake.hcl'
+              # The root Dockerfile builds every image the trivy matrix scans.
+              - 'Dockerfile'
               - 'Makefile'
               - 'scripts/go-vulncheck.sh'
               - 'scripts/lib/**'
@@ -103,15 +105,15 @@ jobs:
       - name: run govulncheck across workspace modules
         run: make vulncheck
 
-  # Build each image, scan it, and generate its SBOM. One matrix leg per
-  # Dockerfile so a finding points straight at the offending image and the five
-  # builds run in parallel. The SBOM is generated from the same build — a PR-time
+  # Build each image, scan it, and generate its SBOM. One matrix leg per image
+  # (a named stage of the root Dockerfile) so a finding points straight at the
+  # offending image and the six builds run in parallel. The SBOM is generated from the same build — a PR-time
   # check so SBOM generation can't silently break before a release. It is
   # uploaded as a build artifact only; SIGNING and attaching the SBOM as a cosign
   # attestation to a PUBLISHED image happen in publish.yml (needs a registry push
   # + OIDC), never on PRs.
   #
-  # exit-code per leg: the four images we build FROM a minimal/distroless base
+  # exit-code per leg: the images we build FROM a minimal/distroless base
   # block the PR (exit-code 1) — their only packages are ones we chose, so a
   # finding is actionable here. The worker image is built FROM the upstream
   # ghcr.io/actions/actions-runner and inherits dozens of HIGH/CRITICAL CVEs in
@@ -137,26 +139,22 @@ jobs:
       BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f
     strategy:
       fail-fast: false
+      # Each image is a named stage of the root Dockerfile, so a leg is selected
+      # by `target`, not by file.
       matrix:
         include:
           - name: gmc
-            dockerfile: cmd/gmc/Dockerfile
             exit-code: '1'
           - name: agc
-            dockerfile: cmd/agc/Dockerfile
             exit-code: '1'
           - name: proxy
-            dockerfile: cmd/proxy/Dockerfile
             exit-code: '1'
           - name: fakegithub
-            dockerfile: test/fakegithub/Dockerfile
             exit-code: '1'
           - name: worker
-            dockerfile: cmd/worker/Dockerfile
             # report-only — see the per-leg exit-code note on the job above.
             exit-code: '0'
           - name: wrapper
-            dockerfile: cmd/worker/Dockerfile.wrapper
             # blocking: FROM scratch + the Go wrapper binary, no OS base CVEs
             # (unlike the worker leg's actions-runner base).
             exit-code: '1'
@@ -177,12 +175,15 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
+          file: Dockerfile
+          target: ${{ matrix.name }}
           load: true
           tags: local/${{ matrix.name }}:scan
-          # Read-only reuse of the e2e bake's gha cache scopes (docker-bake.hcl);
+          # Read-only reuse of the e2e bake's gha cache scope (docker-bake.hcl);
           # no cache-to so these scan builds never evict the e2e build cache.
-          cache-from: type=gha,scope=${{ matrix.name }}
+          # One scope, not one per image: every target shares the Dockerfile's
+          # `deps` stage, so the bake exports that warm Go build cache once.
+          cache-from: type=gha,scope=images
       # Generate an SPDX-JSON SBOM for the image we just built and upload it as a
       # build artifact. Runs right after the build (before the trivy scan) so a
       # CVE-induced scan failure never suppresses SBOM generation. This is the

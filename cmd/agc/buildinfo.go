@@ -4,7 +4,7 @@ import "github.com/prometheus/client_golang/prometheus"
 
 // The build version reported here is main.version (declared in main.go, also
 // used as the OpenTelemetry service.version); it is stamped at link time via
-// -ldflags "-X main.version=<tag>" (see cmd/agc/Dockerfile) and defaults to
+// -ldflags "-X main.version=<tag>" (see the root Dockerfile's build-agc stage) and defaults to
 // "dev" for un-stamped local builds.
 
 // registerBuildInfo registers the actions_gateway_build_info gauge on reg. The

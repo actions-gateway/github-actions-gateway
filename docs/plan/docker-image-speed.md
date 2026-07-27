@@ -194,10 +194,11 @@ module cache at all.
 
 1. Pinned `# syntax=docker/dockerfile:1.7` at the top of each Dockerfile.
 2. Added `--mount=type=cache,target=/root/.cache/go-build` to the `go build`
-   step in [cmd/gmc/Dockerfile](../../cmd/gmc/Dockerfile),
-   [cmd/agc/Dockerfile](../../cmd/agc/Dockerfile),
-   [cmd/proxy/Dockerfile](../../cmd/proxy/Dockerfile),
-   and [test/fakegithub/Dockerfile](../../test/fakegithub/Dockerfile).
+   step in `cmd/gmc/Dockerfile`, `cmd/agc/Dockerfile`, `cmd/proxy/Dockerfile`,
+   and `test/fakegithub/Dockerfile`. (Those six per-image Dockerfiles were later
+   consolidated into the root [Dockerfile](../../Dockerfile), and this cache
+   mount replaced by a cacheable `deps` layer — see
+   [e2e-ci-speed-round-2.md](e2e-ci-speed-round-2.md) §1–3.)
 
 ### Notes
 
@@ -222,9 +223,9 @@ module cache at all.
 
 ### Problem
 
-[cmd/gmc/Dockerfile:11](../../cmd/gmc/Dockerfile),
-[cmd/agc/Dockerfile:10](../../cmd/agc/Dockerfile), and
-[test/fakegithub/Dockerfile:11](../../test/fakegithub/Dockerfile) all ran
+`cmd/gmc/Dockerfile:11`, `cmd/agc/Dockerfile:10`, and
+`test/fakegithub/Dockerfile:11` (since consolidated into the root
+[Dockerfile](../../Dockerfile)) all ran
 `RUN go work sync 2>/dev/null || true` immediately before `COPY . .`. The next
 layer overwrites the working directory, so any side-effect of `go work sync`
 was thrown away. It was a no-op step that produced its own layer and added

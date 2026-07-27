@@ -9,8 +9,8 @@
 #                      --ignore-unfixed additionally drops CVEs with no
 #                      released fix (nothing actionable here); only fixable
 #                      findings fail.
-#   TRIVY_IMAGES       Space-separated "<name>=<dockerfile>" entries — the five
-#                      images the CI trivy matrix scans.
+#   TRIVY_IMAGES       Space-separated image names — each is a named stage of
+#                      the root Dockerfile and a leg of the CI trivy matrix.
 #   TRIVY_REPORT_ONLY  Space-separated image names scanned report-only
 #                      (findings printed, never fail the scan): the worker
 #                      image is built FROM the upstream actions-runner and
@@ -27,18 +27,16 @@ require_cmd trivy "https://trivy.dev/latest/getting-started/installation/"
 require_cmd docker "https://docs.docker.com/get-docker/"
 
 TRIVY_SEVERITY="${TRIVY_SEVERITY:-HIGH,CRITICAL}"
-TRIVY_IMAGES="${TRIVY_IMAGES:-gmc=cmd/gmc/Dockerfile agc=cmd/agc/Dockerfile proxy=cmd/proxy/Dockerfile worker=cmd/worker/Dockerfile fakegithub=test/fakegithub/Dockerfile}"
+TRIVY_IMAGES="${TRIVY_IMAGES:-gmc agc proxy worker wrapper fakegithub}"
 TRIVY_REPORT_ONLY="${TRIVY_REPORT_ONLY:-worker}"
 
-for entry in $TRIVY_IMAGES; do
-	name="${entry%%=*}"
-	dockerfile="${entry#*=}"
+for name in $TRIVY_IMAGES; do
 	code=1
 	for ro in $TRIVY_REPORT_ONLY; do
 		[[ "$ro" == "$name" ]] && code=0
 	done
-	echo "==> building local/$name:trivy from $dockerfile"
-	docker buildx build --load -t "local/$name:trivy" -f "$dockerfile" .
+	echo "==> building local/$name:trivy from the root Dockerfile (target $name)"
+	docker buildx build --load -t "local/$name:trivy" --target "$name" -f Dockerfile .
 	echo "==> trivy image local/$name:trivy (exit-code $code)"
 	trivy image --severity "$TRIVY_SEVERITY" --ignore-unfixed --exit-code "$code" "local/$name:trivy"
 done

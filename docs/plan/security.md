@@ -870,7 +870,7 @@ by-design / accepted.
 
 ### M-19. Worker Dockerfile base image is not digest-pinned — **Resolved 2026-06-01**
 
-- **Location:** [cmd/worker/Dockerfile](../../cmd/worker/Dockerfile)
+- **Location:** `cmd/worker/Dockerfile`, since consolidated into the root [Dockerfile](../../Dockerfile)'s `worker` stage
 - **Category:** OWASP A08:2025 — Software and Data Integrity Failures (supply chain)
 - **Why Medium (historical):** The runtime stage was
   `FROM ghcr.io/actions/actions-runner:2.327.1` — a floating tag
