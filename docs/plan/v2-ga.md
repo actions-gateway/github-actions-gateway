@@ -84,6 +84,17 @@ before starting: shared version-neutral code lives in `api/apiconditions` with
 one-line re-exports per version, and `check-v2-api-sync.sh` gates every shared v2
 file. Getting this wrong is the most likely way to break the hop.
 
+**One shape decision the hop must make: does `v2` define `CiliumFQDN`/`CalicoFQDN`?**
+The two deprecated `EgressProxy.spec.egressPolicyMode` aliases cannot be removed at
+`v2.0.0` — they are members of the served beta version `v2beta1`, so their floor is
+`v3.0.0` ([Q428](../operations/v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn)).
+That leaves a live choice for `v2`: omit them (a clean GA surface, but the hub moves
+to `v2` and a `v2beta1` object naming an alias then needs a lossless carrier, since
+the conversion deliberately rides the values across verbatim rather than collapsing
+them to `FQDN`) or carry them deprecated (trivially lossless, but GA is effectively
+frozen and would be born owning two aliases). Either way the removal release is
+unchanged. Decide it here, not at the tag: [Q452](../STATUS.md#Q452).
+
 ## Phase 3 — the coupled removals
 
 `v2.0.0` executes all three removals announced by

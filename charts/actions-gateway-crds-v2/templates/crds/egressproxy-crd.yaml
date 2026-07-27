@@ -131,9 +131,9 @@ spec:
                   allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range
                   reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy
                   whose mechanism the operator picks via --fqdn-policy-backend). The deprecated
-                  CiliumFQDN/CalicoFQDN aliases pin their namesake backend. It has no effect when
-                  managedNetworkPolicy is false. See the EgressPolicyMode docs for the
-                  secure-by-default (fail-closed) guarantee.
+                  CiliumFQDN/CalicoFQDN aliases pin their namesake backend and stay accepted until
+                  v3.0.0 at the earliest. It has no effect when managedNetworkPolicy is false. See
+                  the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.
                 enum:
                 - CIDR
                 - FQDN
@@ -1702,9 +1702,9 @@ spec:
                   allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range
                   reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy
                   whose mechanism the operator picks via --fqdn-policy-backend). The deprecated
-                  CiliumFQDN/CalicoFQDN aliases pin their namesake backend. It has no effect when
-                  managedNetworkPolicy is false. See the EgressPolicyMode docs for the
-                  secure-by-default (fail-closed) guarantee.
+                  CiliumFQDN/CalicoFQDN aliases pin their namesake backend and stay accepted until
+                  v3.0.0 at the earliest. It has no effect when managedNetworkPolicy is false. See
+                  the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.
                 enum:
                 - CIDR
                 - FQDN

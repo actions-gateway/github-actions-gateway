@@ -12,7 +12,9 @@
 
 This page is the project's standing deprecation notice. It records what `v2.0.0`
 removes, what keeps working until then, and what an operator has to do before
-upgrading past it.
+upgrading past it. One further deprecation runs on its own, later clock —
+[the `CiliumFQDN` / `CalicoFQDN` egress modes](#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn),
+removable no earlier than `v3.0.0`.
 
 ## What `v2.0.0` removes
 
@@ -32,6 +34,54 @@ removed, and `v2.0.0` adds the GA `v2` version beside it rather than taking it a
 entire reason to exist. Splitting the three removals across separate releases would
 buy nothing and would cost every operator a second breaking migration, so they land
 together on one major tag.
+
+## A fourth deprecation on a different clock: `CiliumFQDN` / `CalicoFQDN`
+
+The `EgressProxy` field `spec.egressPolicyMode` accepts two deprecated per-Container
+Network Interface (CNI) values, `CiliumFQDN` and `CalicoFQDN`, superseded by the
+`FQDN` intent plus the operator's `--fqdn-policy-backend` selector
+([security-operations](security-operations.md#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in)).
+They are **not** part of the `v2.0.0` bundle above.
+
+**The earliest release that may remove them is `v3.0.0`.**
+
+Why they cannot ride the `v2.0.0` clock:
+
+1. **They are elements of a beta version, not a version themselves.** The two values
+   exist in `v2alpha1` *and* in `v2beta1`, which is the storage and hub version. The
+   `v2alpha1` copy disappears with `v2alpha1` at `v2.0.0`; the `v2beta1` copy does not,
+   because `v2.0.0` keeps serving `v2beta1` — it adds the General Availability (GA)
+   `v2` version beside it.
+2. **An API element is removed by incrementing the version, never by deleting it from
+   a served one.** Deleting a value from a version already in the field would reject
+   objects an operator has stored and can still `kubectl apply` — the exact breakage
+   the versioning contract exists to prevent. So the values live for as long as
+   `v2beta1` is served.
+3. **Beta promises the version will not be removed without a migration path.** Retiring
+   a served version is a breaking change, and this project lands breaking changes on a
+   major tag announced at least one release ahead ([roadmap](../roadmap.md)). The next
+   major after `v2.0.0` is `v3.0.0`, so that is the earliest tag that can retire
+   `v2beta1` and, with it, these two values.
+
+Naming `v2.0.0` for them would have been a promise the API contract forbids keeping:
+the removal would have had to either break `v2beta1` objects or quietly not happen.
+
+Two consequences worth stating plainly:
+
+- **`v3.0.0` is not scheduled and carries no date**, exactly as `v2.0.0` carries none.
+  It is gated on `v2beta1`'s retirement, which is gated in turn on the `v2` GA soak
+  ([v2 GA plan](../plan/v2-ga.md)). The commitment here is a floor — *not
+  before* `v3.0.0` — and the removal still gets its own one-release-ahead announcement.
+- **Whether the GA `v2` version defines the two values at all is a separate, open
+  question**, settled by the graduation hop rather than by this notice. `v2` is a new
+  version, so it is free to omit them; if it does, an operator on `v2` simply cannot
+  set them, while an operator on `v2beta1` still can until `v3.0.0`. Either way the
+  removal release above is unchanged.
+
+**What to do now:** nothing is forced, but migrate when convenient — set
+`egressPolicyMode: FQDN` on the `EgressProxy` and have the platform operator set the
+matching GMC `--fqdn-policy-backend`. The admission webhook already warns on every
+write that still names a deprecated value, and the warning names `v3.0.0`.
 
 ## Status
 
@@ -105,8 +155,8 @@ ahead ([roadmap](../roadmap.md)); `v1.3.0` carries that announcement for all thr
 items above.
 
 `v2.0.0` is a **major** tag because removing a served API version is a breaking
-change, and it is gated on the **`v2` (General Availability) API being available and
-validated**, not on a date and not on an adopter census. Gating on v2 maturity is
+change, and it is gated on the **`v2` (GA) API being available and validated**, not on
+a date and not on an adopter census. Gating on v2 maturity is
 what lets the commitment be concrete: you are never asked to move onto an alpha to
 escape a removal, and there is no census to wait on. `v2beta1` is production-relyable
 today and converts to `v2` in place.

@@ -222,7 +222,8 @@ type EgressProxySpec struct {
     // every CNI) or FQDN (by hostname, via a CNI-native DNS-aware policy). For FQDN
     // intent the OPERATOR picks the mechanism with the GMC --fqdn-policy-backend flag
     // (none|cilium|calico|gke) — none (default) rejects FQDN intent at admission. The
-    // deprecated CiliumFQDN/CalicoFQDN values pin their namesake backend (Q245). FQDN
+    // deprecated CiliumFQDN/CalicoFQDN values pin their namesake backend (Q245) and are
+    // removable no earlier than v3.0.0, being members of the served beta version (Q428). FQDN
     // modes are fail-closed: the standard NetworkPolicy still default-denies GitHub
     // egress, so an unenforced FQDN policy keeps egress denied rather than opening it
     // (Q208). No effect when ManagedNetworkPolicy is false.

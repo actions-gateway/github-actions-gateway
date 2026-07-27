@@ -24,9 +24,13 @@ import (
 //   - CiliumFQDN / CalicoFQDN are DEPRECATED aliases retained for backward
 //     compatibility. Each pins its namesake mechanism (a CiliumNetworkPolicy with
 //     toFQDNs, or a Calico NetworkPolicy with destination domains) regardless of the
-//     operator backend. Prefer FQDN + --fqdn-policy-backend; these values still work
-//     but will be removed in a future release, on the classic/v1alpha1 deprecation
-//     clock.
+//     operator backend. Prefer FQDN + --fqdn-policy-backend; these values still work,
+//     and the earliest release that may remove them is v3.0.0 — NOT the v2.0.0 that
+//     removes v1alpha1, v2alpha1, and classic acquisition. They are enum members of
+//     the served beta version v2beta1, which v2.0.0 keeps serving; an API element is
+//     removable only by incrementing the version, so the aliases live exactly as long
+//     as v2beta1 does, and v3.0.0 is the earliest major tag that can retire it. See
+//     docs/operations/v1alpha1-deprecation.md.
 //
 // All FQDN-family modes are fail-closed: the standard NetworkPolicy still
 // default-denies GitHub egress (it drops the GitHub-CIDR rule but keeps a DNS-only
@@ -47,11 +51,14 @@ const (
 	EgressPolicyModeFQDN EgressPolicyMode = "FQDN"
 	// EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium
 	// backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend.
-	// Prefer FQDN + --fqdn-policy-backend=cilium.
+	// Prefer FQDN + --fqdn-policy-backend=cilium. Removable no earlier than v3.0.0; see
+	// the EgressPolicyMode doc comment for why v2.0.0 cannot remove it.
 	EgressPolicyModeCiliumFQDN EgressPolicyMode = "CiliumFQDN"
 	// EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico
 	// backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless
-	// of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=calico.
+	// of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=calico. Removable no
+	// earlier than v3.0.0; see the EgressPolicyMode doc comment for why v2.0.0 cannot
+	// remove it.
 	EgressPolicyModeCalicoFQDN EgressPolicyMode = "CalicoFQDN"
 )
 
@@ -145,9 +152,9 @@ type EgressProxySpec struct {
 	// allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range
 	// reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy
 	// whose mechanism the operator picks via --fqdn-policy-backend). The deprecated
-	// CiliumFQDN/CalicoFQDN aliases pin their namesake backend. It has no effect when
-	// managedNetworkPolicy is false. See the EgressPolicyMode docs for the
-	// secure-by-default (fail-closed) guarantee.
+	// CiliumFQDN/CalicoFQDN aliases pin their namesake backend and stay accepted until
+	// v3.0.0 at the earliest. It has no effect when managedNetworkPolicy is false. See
+	// the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.
 	//
 	// +optional
 	// +kubebuilder:default=CIDR
