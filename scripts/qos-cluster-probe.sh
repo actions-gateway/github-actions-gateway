@@ -3,11 +3,14 @@
 # qos-cluster-probe.sh — measure how much of this Mac a throttle prefix actually
 # lets a build use.
 #
-# Context: scripts/local-throttle.sh wraps heavy phases in `taskpolicy -c
-# utility` and caps parallelism at (physical cores - 2). On Apple Silicon the
-# QoS clamp turns out to confine work to a single CPU cluster at a pinned
-# frequency, so the parallelism cap can be sizing against cores the build will
-# never get. This probe measures the real ceiling per candidate prefix.
+# Context: scripts/local-throttle.sh wraps heavy phases in a low-priority prefix
+# and caps parallelism at (physical cores - 2). On Apple Silicon a `-c` QoS clamp
+# turns out to confine work to a single CPU cluster at a pinned frequency, so the
+# parallelism cap can be sizing against cores the build will never get — this
+# probe is what established that, and it is why the macOS prefix demotes I/O and
+# CPU separately (`nice -n 10 taskpolicy -d throttle`) instead of clamping QoS.
+# Re-run it whenever the prefix is revisited: it measures the real ceiling per
+# candidate.
 #
 # Method: saturate N spin threads under a candidate prefix, sample per-cluster
 # HW active residency and frequency with powermetrics, tear the load down, and
@@ -34,9 +37,9 @@ readonly SETTLE_SECONDS=3
 # every other row is measured against; the second is today's production setting.
 readonly CANDIDATES=(
 	''                              # unthrottled ceiling
-	'taskpolicy -c utility'         # current local-throttle.sh prefix
-	'taskpolicy -d throttle'        # disk I/O demoted, CPU QoS unclamped
-	'nice -n 10 taskpolicy -d throttle' # ... plus mild CPU deprioritization
+	'nice -n 10 taskpolicy -d throttle' # current local-throttle.sh prefix
+	'taskpolicy -d throttle'        # ... without the CPU deprioritization
+	'taskpolicy -c utility'         # the pre-Q441 clamp, for contrast
 	'taskpolicy -c background'      # the lower clamp, for contrast
 )
 
