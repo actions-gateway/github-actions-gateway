@@ -1,0 +1,124 @@
+# The v1alpha1 DinD tenant that Q415 migrates for real.
+#
+# This is the LEGACY shape on purpose: `actions-gateway.github.com/v1alpha1`, one
+# monolithic ActionsGateway carrying its runner group, its inline proxy, and its
+# security profile. It mirrors the `utils.DinDTenant` fixture the Q414 e2e migrates
+# on kind, so the live run exercises the same fan-out the spec covers — the
+# privileged worker shape that must land on a CLUSTER-scoped ClusterRunnerTemplate.
+#
+# Deleted with the rest of the v1 surface at v2.0.0. See
+# docs/plan/q415-migrate-dogfood-validation.md.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gag-dogfood-migrate
+  labels:
+    # v1 tenant marker — authorizes the GMC to operate here on the v1 domain. The
+    # migration relocates the security profile onto the v2 labels and leaves this
+    # one in place, so v1 admission keeps passing during coexistence.
+    actions-gateway.github.com/tenant: "true"
+    # Platform-applied privileged eligibility grant. Fail-closed and NOT
+    # self-service: without it the GMC webhook rejects securityProfile: privileged
+    # and this tenant never provisions at all.
+    #
+    # Deliberately the V1 domain, not the v2 spelling. The v1 webhook dual-reads
+    # both during the coexistence window (§H.12), so either would be admitted — but
+    # the v1 grant is what a genuine pre-migration tenant carries, and it is the one
+    # `gag-migrate` detects and carries FORWARD onto the v2 domain. Granting via the
+    # v2 label instead would skip that carry-forward entirely, so the run would not
+    # validate it. (The tool reads only this domain where the webhook reads both —
+    # see the plan doc's rehearsal findings.)
+    actions-gateway.github.com/privileged-profile: allowed
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dogfood-migrate-quota
+  namespace: gag-dogfood-migrate
+spec:
+  hard:
+    # One worker + the AGC + the proxy pool, with headroom for a rolling replace.
+    pods: "6"
+---
+apiVersion: actions-gateway.github.com/v1alpha1
+kind: ActionsGateway
+metadata:
+  name: dogfood-migrate
+  namespace: gag-dogfood-migrate
+spec:
+  # Note the capital H: v1alpha1 spells these `gitHubAppRef`/`gitHubURL`, unlike
+  # v2's `credentials.githubApp` / `githubURL`. Both are required fields.
+  gitHubAppRef:
+    name: github-app-v1 # Secret created out-of-band (see README.md)
+  gitHubURL: https://github.com/actions-gateway/github-actions-gateway
+  # v1 hangs the security profile off the GATEWAY. v2 relocates it to the namespace
+  # — that relocation is one of the things the migration is being validated on.
+  securityProfile: privileged
+  logLevel: debug
+  proxy:
+    minReplicas: 1
+    maxReplicas: 2
+  runnerGroups:
+    # Exactly ONE label, deliberately. v1 Classic permits many and v2beta1 ScaleSet
+    # permits exactly one, so a single-label v1 tenant migrates without the
+    # workflow's `runs-on` having to change — same label before and after.
+    - runnerLabels: ["gag-migrate-v1"]
+      maxListeners: 2
+      maxWorkers: 1
+      workerImage: &runnerImage ghcr.io/actions-gateway/dogfood-e2e-runner:2.335.1-2
+      podTemplate:
+        spec:
+          nodeSelector:
+            cloud.google.com/gke-nodepool: e2e
+          tolerations:
+            - key: dedicated
+              value: e2e
+              effect: NoSchedule
+          # dind as a NATIVE sidecar (restartPolicy: Always init container, K8s
+          # >=1.29). Load-bearing, not stylistic: a regular sidecar's dockerd never
+          # exits, so the pod never completes, the AGC keeps the session active, and
+          # maxWorkers strands (Q249).
+          initContainers:
+            - name: dind
+              image: docker:27-dind
+              restartPolicy: Always
+              args: ["--host=tcp://0.0.0.0:2375", "--tls=false"]
+              env:
+                # Plain TCP bound to the pod's own network namespace, reachable only
+                # by the runner container in the same pod.
+                - name: DOCKER_TLS_CERTDIR
+                  value: ""
+              securityContext:
+                privileged: true
+              # Sized for a SMOKE job (docker build + docker run), not the
+              # kind-in-DinD e2e suite the Q248 measurements cover — roughly a third
+              # of the e2e tenant's dind sidecar. See the plan doc for why this run
+              # is a smoke job.
+              resources:
+                requests: { cpu: "500m", memory: "1Gi" }
+                limits: { memory: "2Gi" }
+          containers:
+            - name: runner
+              image: *runnerImage
+              env:
+                - name: DOCKER_HOST
+                  value: "tcp://localhost:2375"
+              resources:
+                requests: { cpu: "500m", memory: "512Mi" }
+                limits: { memory: "2Gi" }
+---
+# Open egress (additive; unions with GAG's managed default-deny). TRUSTED-ONLY, and
+# scoped to this throwaway namespace: the smoke job pulls its base image from Docker
+# Hub, which is CDN-fronted (a CIDR allowlist would rot, and FQDN enforcement needs
+# GKE's opt-in --enable-fqdn-network-policy, which dogfood does not enable — Q245).
+# Same trade-off, and the same trusted-only caveat, as the dind e2e overlay.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: migrate-open-egress
+  namespace: gag-dogfood-migrate
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - {}
