@@ -3,6 +3,7 @@ package provisioner
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -26,16 +27,27 @@ import (
 // Every consumer sizes a worker from a whole *corev1.PodSpec, resolved through
 // ResolveWorkerPodSpec, and never from spec.containers alone: native sidecars and
 // RuntimeClass overhead are both quota-charged and both invisible in the container
-// list (Q450). QuotaHeadroomPods and WorkerQuotaCapacity are the scale-set tier's
-// integer form of the same question, so they must read the identical footprint.
+// list (Q450), and a generic ephemeral volume is charged as a PVC that lives in
+// spec.volumes, not in any container (Q453). QuotaHeadroomPods and
+// WorkerQuotaCapacity are the scale-set tier's integer form of the same question,
+// so they must read the identical footprint.
+//
+// The footprint spans two Kubernetes quota evaluators — the pod evaluator
+// (pod_effective_resources.go) and the PVC evaluator (pod_storage_claims.go) —
+// because a worker's cost is not all charged at pod admission. See each file's
+// header.
 
 // quotaCheck maps a worker-footprint resource to the ResourceQuota hard key that
-// constrains it (including the legacy cpu/memory aliases for requests).
+// constrains it (including the legacy cpu/memory/ephemeral-storage aliases for
+// requests).
 type quotaCheck struct {
 	footprint corev1.ResourceName
 	hardKey   corev1.ResourceName
 }
 
+// workerQuotaChecks is every fixed-name quota key a worker can be charged against.
+// The class-scoped storage keys are NOT here — they are named after the tenant's
+// StorageClass, so quotaChecksFor derives them from the footprint instead.
 var workerQuotaChecks = []quotaCheck{
 	{corev1.ResourcePods, corev1.ResourcePods},
 	{corev1.ResourceRequestsCPU, corev1.ResourceRequestsCPU},
@@ -44,6 +56,44 @@ var workerQuotaChecks = []quotaCheck{
 	{corev1.ResourceRequestsMemory, corev1.ResourceMemory},
 	{corev1.ResourceLimitsCPU, corev1.ResourceLimitsCPU},
 	{corev1.ResourceLimitsMemory, corev1.ResourceLimitsMemory},
+	// Local ephemeral storage: charged by the pod evaluator exactly like cpu and
+	// memory, legacy unprefixed alias included (Q453).
+	{corev1.ResourceRequestsEphemeralStorage, corev1.ResourceRequestsEphemeralStorage},
+	{corev1.ResourceRequestsEphemeralStorage, corev1.ResourceEphemeralStorage},
+	{corev1.ResourceLimitsEphemeralStorage, corev1.ResourceLimitsEphemeralStorage},
+	// Generic ephemeral volumes: charged by the PVC evaluator against separate
+	// objects the pod's admission never touches. See pod_storage_claims.go.
+	{corev1.ResourcePersistentVolumeClaims, corev1.ResourcePersistentVolumeClaims},
+	{corev1.ResourceRequestsStorage, corev1.ResourceRequestsStorage},
+}
+
+// quotaChecksFor returns the checks to run against `demand`: the fixed table above,
+// plus an identity check for every class-scoped storage key the footprint carries
+// (`<class>.storageclass.storage.k8s.io/...`). Those keys cannot be tabulated ahead
+// of time, and skipping them would leave a tenant capped per-StorageClass — the
+// usual way a platform caps expensive storage — invisible to the gate.
+//
+// The derived checks are sorted so a multi-class pod always reports its violations
+// in the same order; map order alone would churn the condition message between
+// reconciles for no reason.
+func quotaChecksFor(demand corev1.ResourceList) []quotaCheck {
+	var scoped []corev1.ResourceName
+	for name := range demand {
+		if isStorageClassQuotaKey(name) {
+			scoped = append(scoped, name)
+		}
+	}
+	if len(scoped) == 0 {
+		return workerQuotaChecks
+	}
+	sort.Slice(scoped, func(i, j int) bool { return scoped[i] < scoped[j] })
+
+	checks := make([]quotaCheck, len(workerQuotaChecks), len(workerQuotaChecks)+len(scoped))
+	copy(checks, workerQuotaChecks)
+	for _, name := range scoped {
+		checks = append(checks, quotaCheck{name, name})
+	}
+	return checks
 }
 
 // WorkerFootprint returns the quota footprint of `count` worker pods built from
@@ -54,10 +104,16 @@ var workerQuotaChecks = []quotaCheck{
 // (resolved RunnerTemplate) capacity checks share one footprint calc.
 //
 // It takes the whole PodSpec, not just the containers, because a worker pod's
-// quota charge is not the container sum (Q450): native sidecars and pod overhead
-// both count, and neither is visible in spec.containers. See
-// pod_effective_resources.go for the arithmetic and its upstream provenance. Pass
-// a spec that has been through ResolveWorkerPodSpec so .Overhead is populated.
+// quota charge is not the container sum: native sidecars and pod overhead both
+// count and neither is visible in spec.containers (Q450), and spec.volumes carries
+// the generic ephemeral volumes charged as PVCs (Q453). See
+// pod_effective_resources.go and pod_storage_claims.go for the arithmetic and its
+// upstream provenance. Pass a spec that has been through ResolveWorkerPodSpec so
+// .Overhead is populated.
+//
+// Zero-valued keys are omitted rather than emitted as 0, so a shape that declares
+// no ephemeral storage and no ephemeral volumes is charged nothing on those keys —
+// including against a quota already over its ceiling on them.
 func WorkerFootprint(spec *corev1.PodSpec, count int32) corev1.ResourceList {
 	if count < 0 {
 		count = 0
@@ -78,8 +134,17 @@ func WorkerFootprint(spec *corev1.PodSpec, count int32) corev1.ResourceList {
 	}
 	add(corev1.ResourceRequestsCPU, reqs[corev1.ResourceCPU])
 	add(corev1.ResourceRequestsMemory, reqs[corev1.ResourceMemory])
+	add(corev1.ResourceRequestsEphemeralStorage, reqs[corev1.ResourceEphemeralStorage])
 	add(corev1.ResourceLimitsCPU, limits[corev1.ResourceCPU])
 	add(corev1.ResourceLimitsMemory, limits[corev1.ResourceMemory])
+	add(corev1.ResourceLimitsEphemeralStorage, limits[corev1.ResourceEphemeralStorage])
+
+	// The PVCs the pod's generic ephemeral volumes will cause to be created. Scaled
+	// by the same count as everything else — n workers create n copies of the pod's
+	// claims — but derived by COUNTING volumes rather than summing a declared ask.
+	for name, per := range podClaimFootprint(spec) {
+		add(name, per)
+	}
 	return out
 }
 
@@ -104,13 +169,14 @@ func mulQuantity(q resource.Quantity, n int64) resource.Quantity {
 // and both callers treat a miss as fail-open (see WorkerQuotaExhausted).
 func QuotaHeadroomViolations(demand corev1.ResourceList, quotas []corev1.ResourceQuota, msgPrefix string) (bool, string) {
 	var violations []string
+	checks := quotaChecksFor(demand)
 	for i := range quotas {
 		q := &quotas[i]
 		hard := q.Status.Hard
 		if len(hard) == 0 {
 			hard = q.Spec.Hard
 		}
-		for _, c := range workerQuotaChecks {
+		for _, c := range checks {
 			need, ok := demand[c.footprint]
 			if !ok {
 				continue

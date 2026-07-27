@@ -35,7 +35,7 @@ Steady-state sessions   = number of RunnerGroups in the ActionsGateway
 Peak sessions (worst case) = sum of maxListeners across all RunnerGroups
 ```
 
-The platform-owned namespace `ResourceQuota` remains the binding constraint on how many jobs run concurrently — it is independent of listener count. It is set on the namespace by the platform admin (or your GitOps / tenant-operator stack), not on the `ActionsGateway` CR. For the arithmetic that turns runner shapes and `maxWorkers` into the actual quota numbers — including the native sidecars and Kata `RuntimeClass` overhead that the per-container asks alone do not account for — see [sizing the platform-owned `ResourceQuota`](../operations/resourcequota-sizing.md).
+The platform-owned namespace `ResourceQuota` remains the binding constraint on how many jobs run concurrently — it is independent of listener count. It is set on the namespace by the platform admin (or your GitOps / tenant-operator stack), not on the `ActionsGateway` CR. For the arithmetic that turns runner shapes and `maxWorkers` into the actual quota numbers — including the native sidecars, Kata `RuntimeClass` overhead, and per-worker PVCs that the per-container asks alone do not account for — see [sizing the platform-owned `ResourceQuota`](../operations/resourcequota-sizing.md).
 
 ---
 

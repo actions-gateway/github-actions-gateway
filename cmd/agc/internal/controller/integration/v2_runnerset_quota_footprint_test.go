@@ -133,3 +133,122 @@ func TestV2_RunnerSet_WorkerQuota_CountsRuntimeClassOverhead(t *testing.T) {
 	}, 20*time.Second, 100*time.Millisecond,
 		"RuntimeClass pod overhead must count toward the worker footprint (Q450)")
 }
+
+// Q453: the storage keys. The two tests below constrain ONLY a storage key — no
+// compute key at all — so the condition can trip solely through the storage half of
+// the footprint. They cover the two arithmetics separately, because they differ:
+// requests.storage sums a declared quantity, persistentvolumeclaims counts objects.
+
+// newRunnerTemplateWithEphemeralVolume builds a template carrying a per-worker
+// generic ephemeral volume, the shape the reference Kata worker uses for its raw
+// block device (deploy/dogfood-e2e/overlays/kata/resources.yaml). Kubernetes creates
+// a real PVC per pod from it, charged against the namespace quota.
+func newRunnerTemplateWithEphemeralVolume(name, ns, storage string) *v2alpha1.RunnerTemplate {
+	tmpl := newRunnerTemplateWithCPURequest(name, ns, "100m")
+	tmpl.Spec.PodTemplate.Spec.Volumes = []corev1.Volume{{
+		Name: "docker-blk",
+		VolumeSource: corev1.VolumeSource{
+			Ephemeral: &corev1.EphemeralVolumeSource{
+				VolumeClaimTemplate: &corev1.PersistentVolumeClaimTemplate{
+					Spec: corev1.PersistentVolumeClaimSpec{
+						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+						Resources: corev1.VolumeResourceRequirements{
+							Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(storage)},
+						},
+					},
+				},
+			},
+		},
+	}}
+	return tmpl
+}
+
+// TestV2_RunnerSet_WorkerQuota_CountsEphemeralVolumeStorage proves requests.storage
+// reaches the operator-visible condition. The worker's ephemeral volume asks 100Gi
+// and the quota allows 50Gi, so a single worker already cannot be placed.
+//
+// This is the failure the compute-only footprint hid best: an exhausted storage
+// quota does not reject the worker POD — the pod is admitted and the PVC create
+// fails behind it, leaving the pod Pending with an unbound volume and the job
+// claimed. The condition was False the whole time.
+func TestV2_RunnerSet_WorkerQuota_CountsEphemeralVolumeStorage(t *testing.T) {
+	const ns = "v2-rs-quota-storage"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplateWithEphemeralVolume("tmpl", ns, "100Gi")))
+	rs := newRunnerSet("storage-set", ns, "gw")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+
+	quota := &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{Name: "tight", Namespace: ns},
+		Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{
+			corev1.ResourceRequestsStorage: resource.MustParse("50Gi"),
+		}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, quota))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), quota)
+		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconciler(t)
+
+	waitForSetReadyReason(t, ns, "storage-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	require.Eventually(t, func() bool {
+		c := setCondition(t, ns, "storage-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == "QuotaExhausted"
+	}, 20*time.Second, 100*time.Millisecond,
+		"a generic ephemeral volume's storage ask must count toward the worker footprint (Q453)")
+}
+
+// TestV2_RunnerSet_WorkerQuota_CountsPerWorkerClaims proves the PVC COUNT reaches the
+// warning tier, where the count-versus-quantity distinction is observable: the quota
+// allows 3 claims and each worker creates exactly 1, so one worker fits (Exceeded
+// stays False) but the set cannot reach its maxWorkers of 6 (Pressure trips). A
+// footprint deriving the count from the storage total, or omitting it, gets both
+// halves wrong.
+func TestV2_RunnerSet_WorkerQuota_CountsPerWorkerClaims(t *testing.T) {
+	const ns = "v2-rs-quota-claims"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplateWithEphemeralVolume("tmpl", ns, "10Gi")))
+	rs := newRunnerSet("claims-set", ns, "gw")
+	rs.Spec.MaxWorkers = ptr.To(int32(6))
+	require.NoError(t, k8sClient.Create(ctx, rs))
+
+	quota := &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{Name: "tight", Namespace: ns},
+		Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{
+			corev1.ResourcePersistentVolumeClaims: resource.MustParse("3"),
+		}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, quota))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), quota)
+		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconciler(t)
+
+	waitForSetReadyReason(t, ns, "claims-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	require.Eventually(t, func() bool {
+		c := setCondition(t, ns, "claims-set", v2alpha1.ConditionWorkerQuotaPressure)
+		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == "InsufficientQuotaHeadroom"
+	}, 20*time.Second, 100*time.Millisecond,
+		"6 workers needing 1 PVC each must not fit a 3-claim quota (Q453)")
+
+	// The error tier must stay False: one worker's single claim fits in 3, and
+	// tripping it here would report "no job can run" for a set that can run several.
+	exceeded := setCondition(t, ns, "claims-set", v2alpha1.ConditionWorkerQuotaExceeded)
+	require.NotNil(t, exceeded)
+	require.Equal(t, metav1.ConditionFalse, exceeded.Status,
+		"one worker's claim fits the quota; only scaling to the ceiling does not")
+}

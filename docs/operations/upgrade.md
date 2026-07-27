@@ -17,7 +17,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [BREAKING: spec.namespaceQuota removed — the ResourceQuota is now platform-owned](#breaking-specnamespacequota-removed--the-resourcequota-is-now-platform-owned)
   - [BREAKING: priorityTiers PriorityClasses now require a platform allowlist; per-tier preemptionPolicy removed](#breaking-prioritytiers-priorityclasses-now-require-a-platform-allowlist-per-tier-preemptionpolicy-removed)
   - [Tenant namespaces now require the actions-gateway.github.com/tenant marker label](#tenant-namespaces-now-require-the-actions-gatewaygithubcomtenant-marker-label)
-  - [Worker quota accounting now counts native sidecars and RuntimeClass overhead](#worker-quota-accounting-now-counts-native-sidecars-and-runtimeclass-overhead)
+  - [Worker quota accounting now counts native sidecars, RuntimeClass overhead, and storage](#worker-quota-accounting-now-counts-native-sidecars-runtimeclass-overhead-and-storage)
   - [Worker pods are now cleaned up automatically (one-time sweep recommended)](#worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended)
   - [AGC Deployment renamed from actions-gateway-agc to actions-gateway-controller](#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller)
   - [GMC manager NetworkPolicy is now enabled by default](#gmc-manager-networkpolicy-is-now-enabled-by-default)
@@ -258,36 +258,48 @@ For a phased rollout where you cannot label every namespace up front, temporaril
 **both** bindings' `validationActions` to `[Audit]` (instead of `[Deny]`) so denials are
 logged but not enforced, label the namespaces, then restore `[Deny]` on each.
 
-### Worker quota accounting now counts native sidecars and `RuntimeClass` overhead
+### Worker quota accounting now counts native sidecars, `RuntimeClass` overhead, and storage
 
 The worker footprint behind `WorkerQuotaPressure`/`WorkerQuotaExceeded`, the
 pre-claim quota gate, and the capacity a scale-set advertises to GitHub previously
-summed `podTemplate.spec.containers` only. It now matches what Kubernetes charges a
-pod: native sidecars (`restartPolicy: Always` init containers) are summed in, and
-`RuntimeClass` pod overhead is added. Plain init containers still contribute only a
-`max()` floor, as before.
+summed CPU and memory over `podTemplate.spec.containers` only. It now matches what
+Kubernetes charges, on both the compute and the storage keys:
 
-**No behaviour changes for a tenant with neither.** For a Docker-in-Docker (DinD) or
-Kata tenant the reported footprint goes **up** — by the sidecar's whole ask, plus
-`250m` / `160Mi` on the reference Kata shape:
+- **Compute.** Native sidecars (`restartPolicy: Always` init containers) are summed
+  in, and `RuntimeClass` pod overhead is added. Plain init containers still
+  contribute only a `max()` floor, as before.
+- **Storage.** `requests.ephemeral-storage` / `limits.ephemeral-storage` are summed
+  like CPU and memory, and every **generic ephemeral volume**
+  (`podTemplate.spec.volumes[].ephemeral`) is charged as the per-worker PVC it
+  creates — against `persistentvolumeclaims`, `requests.storage`, and the
+  `<class>.storageclass.storage.k8s.io/…` keys when the claim names a
+  `storageClassName`.
+
+**No behaviour change for a tenant with none of these.** A shape declaring no
+ephemeral storage and no ephemeral volumes is charged nothing on the storage keys,
+so a namespace already at its `persistentvolumeclaims` ceiling for unrelated reasons
+does not newly hold such a set back. For a Docker-in-Docker (DinD) or Kata tenant the
+reported footprint goes **up**:
 
 | Shape | Per-pod increase |
 |---|---|
 | Privileged DinD | `1` CPU / `3Gi` requests; `4Gi` memory limit |
-| Kata | `2` CPU / `6Gi` requests; `4` CPU / `8Gi` limits; plus `250m` / `160Mi` overhead |
+| Kata | `2` CPU / `6Gi` requests; `4` CPU / `8Gi` limits; plus `250m` / `160Mi` overhead; plus `1` PVC and `100Gi` of `requests.storage` |
 
-So a native-sidecar tenant whose quota was sized against the old numbers can come up
-with `WorkerQuotaPressure=True` (or `WorkerQuotaExceeded=True`) after upgrade with no
-change to the quota or the workload. **Nothing got worse** — those pods were already
-being quota-rejected at creation and retried; the condition now reports it up front
-instead of surfacing it as burnt lock time. Re-derive the affected quotas with
+So an affected tenant whose quota was sized against the old numbers can come up with
+`WorkerQuotaPressure=True` (or `WorkerQuotaExceeded=True`) after upgrade with no
+change to the quota or the workload. **Nothing got worse** — a compute shortfall was
+already quota-rejecting those pods at creation and retrying, and a storage shortfall
+was already stranding them `Pending` on a PVC that could not be created. The
+condition now reports it up front instead of surfacing it as burnt lock time.
+Re-derive the affected quotas with
 [sizing the platform-owned `ResourceQuota`](resourcequota-sizing.md).
 
 Find the tenants this can affect before upgrading — any runner template with a native
-sidecar or a `runtimeClassName`:
+sidecar, a `runtimeClassName`, or a generic ephemeral volume:
 
 ```sh
-kubectl get runnertemplate,clusterrunnertemplate -A -o json | jq -r '.items[] | select((.spec.podTemplate.spec.initContainers // [])[]? .restartPolicy == "Always" or (.spec.podTemplate.spec.runtimeClassName // "") != "") | "\(.kind) \(.metadata.namespace // "-")/\(.metadata.name)"'
+kubectl get runnertemplate,clusterrunnertemplate -A -o json | jq -r '.items[] | select(any((.spec.podTemplate.spec.initContainers // [])[]; .restartPolicy == "Always") or (.spec.podTemplate.spec.runtimeClassName // "") != "" or any((.spec.podTemplate.spec.volumes // [])[]; has("ephemeral"))) | "\(.kind) \(.metadata.namespace // "-")/\(.metadata.name)"'
 ```
 
 Reading `RuntimeClass` overhead needs a cluster-scoped `runtimeclasses` read, added
