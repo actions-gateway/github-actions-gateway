@@ -1843,6 +1843,9 @@ kubectl get runnergroup -n <namespace> <name> \
 - The namespace ResourceQuota `pods` or `requests.cpu`/`requests.memory` limit is too low for the burst of concurrent jobs arriving.
 - A long-running job is holding quota that a new job needs; quota will clear once it completes.
 - The quota retry budget (`maxQuotaRetries`, default 5) is exhausting before quota clears.
+- The quota was sized from the worker's regular containers only. A native sidecar (`restartPolicy: Always` init container — how the DinD daemon must be declared) is summed into the pod's footprint in full, and a Kata worker adds its `RuntimeClass` overhead on top. Both are invisible in `podTemplate.spec.containers`. Re-derive with [sizing the platform-owned `ResourceQuota`](resourcequota-sizing.md).
+
+> **A `Forbidden` naming a *missing* resource is a different failure.** `must specify limits.cpu for: runner` is not exhaustion — it means the quota constrains a key the pod does not declare, which Kubernetes makes mandatory namespace-wide. The measured DinD worker shapes declare no CPU limit on purpose, so a quota constraining `limits.cpu` rejects every worker pod regardless of headroom. See [only constrain keys every pod declares](resourcequota-sizing.md#only-constrain-keys-every-pod-declares).
 
 **Diagnostics.**
 
