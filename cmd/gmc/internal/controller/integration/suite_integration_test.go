@@ -21,6 +21,7 @@ import (
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/logtest"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
 	webhookv2beta1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2beta1"
@@ -95,6 +96,11 @@ func mustParseCIDRs(ss ...string) []*net.IPNet {
 }
 
 func TestMain(m *testing.M) {
+	// Fulfill controller-runtime's root logger first. This suite always outlives
+	// the 30-second mark at which an unfulfilled root logger dumps a goroutine
+	// stack to stderr mid-run (Q455); see package logtest.
+	logtest.Install()
+
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 

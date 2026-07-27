@@ -333,6 +333,30 @@ A root-cause claim needs evidence measured from *this* failure, not a resemblanc
 - **Symptom-matching a prior issue.** When a failure looks like a known issue — a flake row on the [backlog](../STATUS.md), a previously fixed bug, a memory of "this is always X" — that match is a **hypothesis, not a diagnosis**. The same surface symptom (a scheduling timeout, an egress blip, a wedged run) can have a different cause each time. Before acting on the remembered cause — and above all before spending a billable re-run, a fix PR, or a state-changing command on it — take a direct measurement from the failing system: read the actual events, describe the actual pod, pull the actual log line. If the environment tears down evidence on failure, capturing diagnostics *before* teardown is part of the fix, not optional (filed from the v1.2.0 release retro, where gate failures had to be re-run just to observe them).
 - **Trusting source inspection.** Reading code — or a plan doc's ✅ investigation findings, which usually derive from source-reading — tells you what *should* happen, not what does. Treat such findings as unverified until confirmed end-to-end: actually exec the thing. Source-reading alone has produced wrong conclusions before (PR #59).
 
+### A goroutine stack in the output is not always a failure
+
+Read the `--- FAIL` line and the exit code before attributing a stack trace to the test it appears under. One stack in particular is printed by a **passing** run:
+
+```text
+[controller-runtime] log.SetLogger(...) was never called; logs will not be displayed.
+Detected at:
+	>  goroutine 307 [running]:
+	...
+```
+
+controller-runtime's root logger begins unfulfilled. If nothing calls `log.SetLogger` within **30 seconds of process start**, the next call through the root logger fulfills it with a null sink and writes that banner plus the calling goroutine's entire stack to stderr — a passing test, exit code 0, output that reads like a panic. Because it fires on the first log call *after* the mark, the test it names is decided by how far the binary got in 30 seconds, i.e. by host load: on an idle machine a fast package never reaches the mark at all, which is why the artifact "does not reproduce" (Q455 — reported against `TestReconcileDelete_FailClosedOnDeleteError`, which the same package reproduces against a different test under heavier load).
+
+GMC test binaries close this off by installing a logger before any test runs:
+
+```go
+func TestMain(m *testing.M) {
+	logtest.Install() // cmd/gmc/internal/logtest
+	os.Exit(m.Run())
+}
+```
+
+**Add that `TestMain` to any new GMC test package whose code under test logs through controller-runtime**, so the package's output never becomes a function of how long it takes to run. Under `-v` (`V=1 make test`, `V=1 make cover-check`) the installed logger writes to stderr, so controller-runtime output is available when you want it; otherwise it discards.
+
 ### Proving a flake fix: invert it
 
 Repeated passes do not validate a flake fix. A green `-count=20` is equally consistent with *"the race is closed"* and *"the race didn't fire this time"* — and on an unloaded dev machine the second is the more likely of the two, because the timing that produces the flake on a loaded CI runner often can't be reproduced locally at all. Passing-after is necessary evidence, not sufficient evidence.
