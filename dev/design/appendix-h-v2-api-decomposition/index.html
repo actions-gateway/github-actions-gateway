@@ -2831,50 +2831,51 @@ traffic egresses through the proxy pool's stable per-tenant IP.</p>
 <a id="__codelineno-2-68" name="__codelineno-2-68" href="#__codelineno-2-68"></a><span class="w">    </span><span class="c1">// every CNI) or FQDN (by hostname, via a CNI-native DNS-aware policy). For FQDN</span>
 <a id="__codelineno-2-69" name="__codelineno-2-69" href="#__codelineno-2-69"></a><span class="w">    </span><span class="c1">// intent the OPERATOR picks the mechanism with the GMC --fqdn-policy-backend flag</span>
 <a id="__codelineno-2-70" name="__codelineno-2-70" href="#__codelineno-2-70"></a><span class="w">    </span><span class="c1">// (none|cilium|calico|gke) — none (default) rejects FQDN intent at admission. The</span>
-<a id="__codelineno-2-71" name="__codelineno-2-71" href="#__codelineno-2-71"></a><span class="w">    </span><span class="c1">// deprecated CiliumFQDN/CalicoFQDN values pin their namesake backend (Q245). FQDN</span>
-<a id="__codelineno-2-72" name="__codelineno-2-72" href="#__codelineno-2-72"></a><span class="w">    </span><span class="c1">// modes are fail-closed: the standard NetworkPolicy still default-denies GitHub</span>
-<a id="__codelineno-2-73" name="__codelineno-2-73" href="#__codelineno-2-73"></a><span class="w">    </span><span class="c1">// egress, so an unenforced FQDN policy keeps egress denied rather than opening it</span>
-<a id="__codelineno-2-74" name="__codelineno-2-74" href="#__codelineno-2-74"></a><span class="w">    </span><span class="c1">// (Q208). No effect when ManagedNetworkPolicy is false.</span>
-<a id="__codelineno-2-75" name="__codelineno-2-75" href="#__codelineno-2-75"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Enum=CIDR;FQDN;CiliumFQDN;CalicoFQDN</span>
-<a id="__codelineno-2-76" name="__codelineno-2-76" href="#__codelineno-2-76"></a><span class="w">    </span><span class="c1">// +kubebuilder:default=CIDR</span>
-<a id="__codelineno-2-77" name="__codelineno-2-77" href="#__codelineno-2-77"></a><span class="w">    </span><span class="nx">EgressPolicyMode</span><span class="w"> </span><span class="nx">EgressPolicyMode</span><span class="w"> </span><span class="s">`json:&quot;egressPolicyMode,omitempty&quot;`</span>
-<a id="__codelineno-2-78" name="__codelineno-2-78" href="#__codelineno-2-78"></a>
-<a id="__codelineno-2-79" name="__codelineno-2-79" href="#__codelineno-2-79"></a><span class="w">    </span><span class="c1">// Sharing controls cross-namespace reference. nil ⇒ same-namespace only</span>
-<a id="__codelineno-2-80" name="__codelineno-2-80" href="#__codelineno-2-80"></a><span class="w">    </span><span class="c1">// (default, secure). Consent lives on the provider (proxy owner) side.</span>
-<a id="__codelineno-2-81" name="__codelineno-2-81" href="#__codelineno-2-81"></a><span class="w">    </span><span class="nx">Sharing</span><span class="w"> </span><span class="o">*</span><span class="nx">ProxySharing</span><span class="w"> </span><span class="s">`json:&quot;sharing,omitempty&quot;`</span>
-<a id="__codelineno-2-82" name="__codelineno-2-82" href="#__codelineno-2-82"></a><span class="p">}</span>
-<a id="__codelineno-2-83" name="__codelineno-2-83" href="#__codelineno-2-83"></a>
-<a id="__codelineno-2-84" name="__codelineno-2-84" href="#__codelineno-2-84"></a><span class="kd">type</span><span class="w"> </span><span class="nx">ProxySharing</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-85" name="__codelineno-2-85" href="#__codelineno-2-85"></a><span class="w">    </span><span class="c1">// AllowedNamespaces lists namespaces permitted to reference this proxy.</span>
-<a id="__codelineno-2-86" name="__codelineno-2-86" href="#__codelineno-2-86"></a><span class="w">    </span><span class="c1">// Alternatively a NamespaceSelector may be offered.</span>
-<a id="__codelineno-2-87" name="__codelineno-2-87" href="#__codelineno-2-87"></a><span class="w">    </span><span class="nx">AllowedNamespaces</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;allowedNamespaces,omitempty&quot;`</span>
-<a id="__codelineno-2-88" name="__codelineno-2-88" href="#__codelineno-2-88"></a><span class="p">}</span>
-<a id="__codelineno-2-89" name="__codelineno-2-89" href="#__codelineno-2-89"></a>
-<a id="__codelineno-2-90" name="__codelineno-2-90" href="#__codelineno-2-90"></a><span class="c1">// RunnerTemplate (namespaced) and ClusterRunnerTemplate (cluster-scoped, identical</span>
-<a id="__codelineno-2-91" name="__codelineno-2-91" href="#__codelineno-2-91"></a><span class="c1">// spec) — the only object permitted to be large. Isolated so it never co-bloats</span>
-<a id="__codelineno-2-92" name="__codelineno-2-92" href="#__codelineno-2-92"></a><span class="c1">// a controller object, and reusable across many RunnerSets. The cluster-scoped</span>
-<a id="__codelineno-2-93" name="__codelineno-2-93" href="#__codelineno-2-93"></a><span class="c1">// variant lets the platform own golden privileged templates (DinD/sysbox) once.</span>
-<a id="__codelineno-2-94" name="__codelineno-2-94" href="#__codelineno-2-94"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RunnerTemplateSpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-95" name="__codelineno-2-95" href="#__codelineno-2-95"></a><span class="w">    </span><span class="nx">PodTemplate</span><span class="w"> </span><span class="nx">corev1</span><span class="p">.</span><span class="nx">PodTemplateSpec</span><span class="w"> </span><span class="c1">// the big field</span>
-<a id="__codelineno-2-96" name="__codelineno-2-96" href="#__codelineno-2-96"></a><span class="w">    </span><span class="nx">WorkerImage</span><span class="w"> </span><span class="kt">string</span>
-<a id="__codelineno-2-97" name="__codelineno-2-97" href="#__codelineno-2-97"></a>
-<a id="__codelineno-2-98" name="__codelineno-2-98" href="#__codelineno-2-98"></a><span class="w">    </span><span class="c1">// Reserved-pod-field rejection (serviceAccountName, hostPID/hostNetwork/hostIPC,</span>
-<a id="__codelineno-2-99" name="__codelineno-2-99" href="#__codelineno-2-99"></a><span class="w">    </span><span class="c1">// automountServiceAccountToken, proxy env vars) moves to THIS object&#39;s webhook.</span>
-<a id="__codelineno-2-100" name="__codelineno-2-100" href="#__codelineno-2-100"></a><span class="p">}</span>
-<a id="__codelineno-2-101" name="__codelineno-2-101" href="#__codelineno-2-101"></a>
-<a id="__codelineno-2-102" name="__codelineno-2-102" href="#__codelineno-2-102"></a><span class="c1">// RunnerSet — small scheduling/quota binder (was RunnerGroup; podTemplate removed,</span>
-<a id="__codelineno-2-103" name="__codelineno-2-103" href="#__codelineno-2-103"></a><span class="c1">// references added). See H.6 for the rename rationale.</span>
-<a id="__codelineno-2-104" name="__codelineno-2-104" href="#__codelineno-2-104"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RunnerSetSpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-2-105" name="__codelineno-2-105" href="#__codelineno-2-105"></a><span class="w">    </span><span class="nx">GatewayRef</span><span class="w">  </span><span class="nx">ObjectRef</span><span class="w">  </span><span class="c1">// which GitHub connection (was implicit via namespace)</span>
-<a id="__codelineno-2-106" name="__codelineno-2-106" href="#__codelineno-2-106"></a><span class="w">    </span><span class="nx">TemplateRef</span><span class="w"> </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w"> </span><span class="c1">// RunnerTemplate | ClusterRunnerTemplate; optional (Q172): unset ⇒ gateway.defaultTemplateRef ⇒ the single cluster-default ClusterRunnerTemplate ⇒ TemplateNotFound</span>
-<a id="__codelineno-2-107" name="__codelineno-2-107" href="#__codelineno-2-107"></a><span class="w">    </span><span class="nx">ProxyRef</span><span class="w">    </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w"> </span><span class="c1">// EgressProxy; nil ⇒ gateway.defaultProxyRef; both nil ⇒ direct egress</span>
-<a id="__codelineno-2-108" name="__codelineno-2-108" href="#__codelineno-2-108"></a>
-<a id="__codelineno-2-109" name="__codelineno-2-109" href="#__codelineno-2-109"></a><span class="w">    </span><span class="nx">RunnerLabels</span><span class="w">  </span><span class="p">[]</span><span class="kt">string</span>
-<a id="__codelineno-2-110" name="__codelineno-2-110" href="#__codelineno-2-110"></a><span class="w">    </span><span class="nx">MaxListeners</span><span class="w">  </span><span class="kt">int32</span>
-<a id="__codelineno-2-111" name="__codelineno-2-111" href="#__codelineno-2-111"></a><span class="w">    </span><span class="nx">MaxWorkers</span><span class="w">    </span><span class="o">*</span><span class="kt">int32</span>
-<a id="__codelineno-2-112" name="__codelineno-2-112" href="#__codelineno-2-112"></a><span class="w">    </span><span class="nx">PriorityTiers</span><span class="w"> </span><span class="p">[]</span><span class="nx">PriorityTier</span>
-<a id="__codelineno-2-113" name="__codelineno-2-113" href="#__codelineno-2-113"></a><span class="w">    </span><span class="c1">// lifecycle tunables (eviction/quota retries, TTLs, deadlines) — unchanged from RunnerGroup</span>
-<a id="__codelineno-2-114" name="__codelineno-2-114" href="#__codelineno-2-114"></a><span class="p">}</span>
+<a id="__codelineno-2-71" name="__codelineno-2-71" href="#__codelineno-2-71"></a><span class="w">    </span><span class="c1">// deprecated CiliumFQDN/CalicoFQDN values pin their namesake backend (Q245) and are</span>
+<a id="__codelineno-2-72" name="__codelineno-2-72" href="#__codelineno-2-72"></a><span class="w">    </span><span class="c1">// removable no earlier than v3.0.0, being members of the served beta version (Q428). FQDN</span>
+<a id="__codelineno-2-73" name="__codelineno-2-73" href="#__codelineno-2-73"></a><span class="w">    </span><span class="c1">// modes are fail-closed: the standard NetworkPolicy still default-denies GitHub</span>
+<a id="__codelineno-2-74" name="__codelineno-2-74" href="#__codelineno-2-74"></a><span class="w">    </span><span class="c1">// egress, so an unenforced FQDN policy keeps egress denied rather than opening it</span>
+<a id="__codelineno-2-75" name="__codelineno-2-75" href="#__codelineno-2-75"></a><span class="w">    </span><span class="c1">// (Q208). No effect when ManagedNetworkPolicy is false.</span>
+<a id="__codelineno-2-76" name="__codelineno-2-76" href="#__codelineno-2-76"></a><span class="w">    </span><span class="c1">// +kubebuilder:validation:Enum=CIDR;FQDN;CiliumFQDN;CalicoFQDN</span>
+<a id="__codelineno-2-77" name="__codelineno-2-77" href="#__codelineno-2-77"></a><span class="w">    </span><span class="c1">// +kubebuilder:default=CIDR</span>
+<a id="__codelineno-2-78" name="__codelineno-2-78" href="#__codelineno-2-78"></a><span class="w">    </span><span class="nx">EgressPolicyMode</span><span class="w"> </span><span class="nx">EgressPolicyMode</span><span class="w"> </span><span class="s">`json:&quot;egressPolicyMode,omitempty&quot;`</span>
+<a id="__codelineno-2-79" name="__codelineno-2-79" href="#__codelineno-2-79"></a>
+<a id="__codelineno-2-80" name="__codelineno-2-80" href="#__codelineno-2-80"></a><span class="w">    </span><span class="c1">// Sharing controls cross-namespace reference. nil ⇒ same-namespace only</span>
+<a id="__codelineno-2-81" name="__codelineno-2-81" href="#__codelineno-2-81"></a><span class="w">    </span><span class="c1">// (default, secure). Consent lives on the provider (proxy owner) side.</span>
+<a id="__codelineno-2-82" name="__codelineno-2-82" href="#__codelineno-2-82"></a><span class="w">    </span><span class="nx">Sharing</span><span class="w"> </span><span class="o">*</span><span class="nx">ProxySharing</span><span class="w"> </span><span class="s">`json:&quot;sharing,omitempty&quot;`</span>
+<a id="__codelineno-2-83" name="__codelineno-2-83" href="#__codelineno-2-83"></a><span class="p">}</span>
+<a id="__codelineno-2-84" name="__codelineno-2-84" href="#__codelineno-2-84"></a>
+<a id="__codelineno-2-85" name="__codelineno-2-85" href="#__codelineno-2-85"></a><span class="kd">type</span><span class="w"> </span><span class="nx">ProxySharing</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-86" name="__codelineno-2-86" href="#__codelineno-2-86"></a><span class="w">    </span><span class="c1">// AllowedNamespaces lists namespaces permitted to reference this proxy.</span>
+<a id="__codelineno-2-87" name="__codelineno-2-87" href="#__codelineno-2-87"></a><span class="w">    </span><span class="c1">// Alternatively a NamespaceSelector may be offered.</span>
+<a id="__codelineno-2-88" name="__codelineno-2-88" href="#__codelineno-2-88"></a><span class="w">    </span><span class="nx">AllowedNamespaces</span><span class="w"> </span><span class="p">[]</span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;allowedNamespaces,omitempty&quot;`</span>
+<a id="__codelineno-2-89" name="__codelineno-2-89" href="#__codelineno-2-89"></a><span class="p">}</span>
+<a id="__codelineno-2-90" name="__codelineno-2-90" href="#__codelineno-2-90"></a>
+<a id="__codelineno-2-91" name="__codelineno-2-91" href="#__codelineno-2-91"></a><span class="c1">// RunnerTemplate (namespaced) and ClusterRunnerTemplate (cluster-scoped, identical</span>
+<a id="__codelineno-2-92" name="__codelineno-2-92" href="#__codelineno-2-92"></a><span class="c1">// spec) — the only object permitted to be large. Isolated so it never co-bloats</span>
+<a id="__codelineno-2-93" name="__codelineno-2-93" href="#__codelineno-2-93"></a><span class="c1">// a controller object, and reusable across many RunnerSets. The cluster-scoped</span>
+<a id="__codelineno-2-94" name="__codelineno-2-94" href="#__codelineno-2-94"></a><span class="c1">// variant lets the platform own golden privileged templates (DinD/sysbox) once.</span>
+<a id="__codelineno-2-95" name="__codelineno-2-95" href="#__codelineno-2-95"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RunnerTemplateSpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-96" name="__codelineno-2-96" href="#__codelineno-2-96"></a><span class="w">    </span><span class="nx">PodTemplate</span><span class="w"> </span><span class="nx">corev1</span><span class="p">.</span><span class="nx">PodTemplateSpec</span><span class="w"> </span><span class="c1">// the big field</span>
+<a id="__codelineno-2-97" name="__codelineno-2-97" href="#__codelineno-2-97"></a><span class="w">    </span><span class="nx">WorkerImage</span><span class="w"> </span><span class="kt">string</span>
+<a id="__codelineno-2-98" name="__codelineno-2-98" href="#__codelineno-2-98"></a>
+<a id="__codelineno-2-99" name="__codelineno-2-99" href="#__codelineno-2-99"></a><span class="w">    </span><span class="c1">// Reserved-pod-field rejection (serviceAccountName, hostPID/hostNetwork/hostIPC,</span>
+<a id="__codelineno-2-100" name="__codelineno-2-100" href="#__codelineno-2-100"></a><span class="w">    </span><span class="c1">// automountServiceAccountToken, proxy env vars) moves to THIS object&#39;s webhook.</span>
+<a id="__codelineno-2-101" name="__codelineno-2-101" href="#__codelineno-2-101"></a><span class="p">}</span>
+<a id="__codelineno-2-102" name="__codelineno-2-102" href="#__codelineno-2-102"></a>
+<a id="__codelineno-2-103" name="__codelineno-2-103" href="#__codelineno-2-103"></a><span class="c1">// RunnerSet — small scheduling/quota binder (was RunnerGroup; podTemplate removed,</span>
+<a id="__codelineno-2-104" name="__codelineno-2-104" href="#__codelineno-2-104"></a><span class="c1">// references added). See H.6 for the rename rationale.</span>
+<a id="__codelineno-2-105" name="__codelineno-2-105" href="#__codelineno-2-105"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RunnerSetSpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-106" name="__codelineno-2-106" href="#__codelineno-2-106"></a><span class="w">    </span><span class="nx">GatewayRef</span><span class="w">  </span><span class="nx">ObjectRef</span><span class="w">  </span><span class="c1">// which GitHub connection (was implicit via namespace)</span>
+<a id="__codelineno-2-107" name="__codelineno-2-107" href="#__codelineno-2-107"></a><span class="w">    </span><span class="nx">TemplateRef</span><span class="w"> </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w"> </span><span class="c1">// RunnerTemplate | ClusterRunnerTemplate; optional (Q172): unset ⇒ gateway.defaultTemplateRef ⇒ the single cluster-default ClusterRunnerTemplate ⇒ TemplateNotFound</span>
+<a id="__codelineno-2-108" name="__codelineno-2-108" href="#__codelineno-2-108"></a><span class="w">    </span><span class="nx">ProxyRef</span><span class="w">    </span><span class="o">*</span><span class="nx">ObjectRef</span><span class="w"> </span><span class="c1">// EgressProxy; nil ⇒ gateway.defaultProxyRef; both nil ⇒ direct egress</span>
+<a id="__codelineno-2-109" name="__codelineno-2-109" href="#__codelineno-2-109"></a>
+<a id="__codelineno-2-110" name="__codelineno-2-110" href="#__codelineno-2-110"></a><span class="w">    </span><span class="nx">RunnerLabels</span><span class="w">  </span><span class="p">[]</span><span class="kt">string</span>
+<a id="__codelineno-2-111" name="__codelineno-2-111" href="#__codelineno-2-111"></a><span class="w">    </span><span class="nx">MaxListeners</span><span class="w">  </span><span class="kt">int32</span>
+<a id="__codelineno-2-112" name="__codelineno-2-112" href="#__codelineno-2-112"></a><span class="w">    </span><span class="nx">MaxWorkers</span><span class="w">    </span><span class="o">*</span><span class="kt">int32</span>
+<a id="__codelineno-2-113" name="__codelineno-2-113" href="#__codelineno-2-113"></a><span class="w">    </span><span class="nx">PriorityTiers</span><span class="w"> </span><span class="p">[]</span><span class="nx">PriorityTier</span>
+<a id="__codelineno-2-114" name="__codelineno-2-114" href="#__codelineno-2-114"></a><span class="w">    </span><span class="c1">// lifecycle tunables (eviction/quota retries, TTLs, deadlines) — unchanged from RunnerGroup</span>
+<a id="__codelineno-2-115" name="__codelineno-2-115" href="#__codelineno-2-115"></a><span class="p">}</span>
 </code></pre></div>
 <p><strong>Why <code>templateRef</code> and <code>proxyRef</code> are both optional — but resolve differently.</strong>
 They look parallel but the <em>fallback</em> differs. An unset <code>proxyRef</code> has a well-defined

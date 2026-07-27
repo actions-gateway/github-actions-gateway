@@ -1532,6 +1532,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A fourth deprecation on a different clock: CiliumFQDN / CalicoFQDN
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#status" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2350,6 +2361,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A fourth deprecation on a different clock: CiliumFQDN / CalicoFQDN
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#status" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2439,7 +2461,9 @@ convenience: the move changes the API objects, not how jobs are acquired.</p>
 </div>
 <p>This page is the project's standing deprecation notice. It records what <code>v2.0.0</code>
 removes, what keeps working until then, and what an operator has to do before
-upgrading past it.</p>
+upgrading past it. One further deprecation runs on its own, later clock —
+<a href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">the <code>CiliumFQDN</code> / <code>CalicoFQDN</code> egress modes</a>,
+removable no earlier than <code>v3.0.0</code>.</p>
 <h2 id="what-v200-removes">What <code>v2.0.0</code> removes<a class="headerlink" href="#what-v200-removes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2479,6 +2503,49 @@ removed, and <code>v2.0.0</code> adds the GA <code>v2</code> version beside it r
 entire reason to exist. Splitting the three removals across separate releases would
 buy nothing and would cost every operator a second breaking migration, so they land
 together on one major tag.</p>
+<h2 id="a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">A fourth deprecation on a different clock: <code>CiliumFQDN</code> / <code>CalicoFQDN</code><a class="headerlink" href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn" title="Permanent link">&para;</a></h2>
+<p>The <code>EgressProxy</code> field <code>spec.egressPolicyMode</code> accepts two deprecated per-Container
+Network Interface (CNI) values, <code>CiliumFQDN</code> and <code>CalicoFQDN</code>, superseded by the
+<code>FQDN</code> intent plus the operator's <code>--fqdn-policy-backend</code> selector
+(<a href="../security-operations/#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">security-operations</a>).
+They are <strong>not</strong> part of the <code>v2.0.0</code> bundle above.</p>
+<p><strong>The earliest release that may remove them is <code>v3.0.0</code>.</strong></p>
+<p>Why they cannot ride the <code>v2.0.0</code> clock:</p>
+<ol>
+<li><strong>They are elements of a beta version, not a version themselves.</strong> The two values
+   exist in <code>v2alpha1</code> <em>and</em> in <code>v2beta1</code>, which is the storage and hub version. The
+   <code>v2alpha1</code> copy disappears with <code>v2alpha1</code> at <code>v2.0.0</code>; the <code>v2beta1</code> copy does not,
+   because <code>v2.0.0</code> keeps serving <code>v2beta1</code> — it adds the General Availability (GA)
+   <code>v2</code> version beside it.</li>
+<li><strong>An API element is removed by incrementing the version, never by deleting it from
+   a served one.</strong> Deleting a value from a version already in the field would reject
+   objects an operator has stored and can still <code>kubectl apply</code> — the exact breakage
+   the versioning contract exists to prevent. So the values live for as long as
+   <code>v2beta1</code> is served.</li>
+<li><strong>Beta promises the version will not be removed without a migration path.</strong> Retiring
+   a served version is a breaking change, and this project lands breaking changes on a
+   major tag announced at least one release ahead (<a href="../../roadmap/">roadmap</a>). The next
+   major after <code>v2.0.0</code> is <code>v3.0.0</code>, so that is the earliest tag that can retire
+   <code>v2beta1</code> and, with it, these two values.</li>
+</ol>
+<p>Naming <code>v2.0.0</code> for them would have been a promise the API contract forbids keeping:
+the removal would have had to either break <code>v2beta1</code> objects or quietly not happen.</p>
+<p>Two consequences worth stating plainly:</p>
+<ul>
+<li><strong><code>v3.0.0</code> is not scheduled and carries no date</strong>, exactly as <code>v2.0.0</code> carries none.
+  It is gated on <code>v2beta1</code>'s retirement, which is gated in turn on the <code>v2</code> GA soak
+  (<a href="../../plan/v2-ga/">v2 GA plan</a>). The commitment here is a floor — <em>not
+  before</em> <code>v3.0.0</code> — and the removal still gets its own one-release-ahead announcement.</li>
+<li><strong>Whether the GA <code>v2</code> version defines the two values at all is a separate, open
+  question</strong>, settled by the graduation hop rather than by this notice. <code>v2</code> is a new
+  version, so it is free to omit them; if it does, an operator on <code>v2</code> simply cannot
+  set them, while an operator on <code>v2beta1</code> still can until <code>v3.0.0</code>. Either way the
+  removal release above is unchanged.</li>
+</ul>
+<p><strong>What to do now:</strong> nothing is forced, but migrate when convenient — set
+<code>egressPolicyMode: FQDN</code> on the <code>EgressProxy</code> and have the platform operator set the
+matching GMC <code>--fqdn-policy-backend</code>. The admission webhook already warns on every
+write that still names a deprecated value, and the warning names <code>v3.0.0</code>.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>All three are deprecated and still fully served.</strong> No release has removed any of
@@ -2573,8 +2640,8 @@ policy is that a removal lands on a named release announced at least one release
 ahead (<a href="../../roadmap/">roadmap</a>); <code>v1.3.0</code> carries that announcement for all three
 items above.</p>
 <p><code>v2.0.0</code> is a <strong>major</strong> tag because removing a served API version is a breaking
-change, and it is gated on the <strong><code>v2</code> (General Availability) API being available and
-validated</strong>, not on a date and not on an adopter census. Gating on v2 maturity is
+change, and it is gated on the <strong><code>v2</code> (GA) API being available and validated</strong>, not on
+a date and not on an adopter census. Gating on v2 maturity is
 what lets the commitment be concrete: you are never asked to move onto an alpha to
 escape a removal, and there is no census to wait on. <code>v2beta1</code> is production-relyable
 today and converts to <code>v2</code> in place.</p>

@@ -4071,10 +4071,19 @@ the platform operator, or use egressPolicyMode: CIDR"), not left with a silently
 <p><strong>Deprecated <code>CiliumFQDN</code> / <code>CalicoFQDN</code>.</strong> The earlier per-CNI enum values still work:
 each pins its namesake backend regardless of <code>--fqdn-policy-backend</code>, so existing
 <code>EgressProxy</code> objects keep behaving exactly as before. They are <strong>deprecated</strong> — the
-admission webhook attaches a warning steering you to <code>FQDN</code> + <code>--fqdn-policy-backend</code> —
-and will be removed in a future release (on the classic/v1alpha1 deprecation clock).
+admission webhook attaches a warning steering you to <code>FQDN</code> + <code>--fqdn-policy-backend</code>.
 Migrate by changing the tenant field to <code>FQDN</code> and setting the matching operator backend.</p>
 <blockquote>
+<p><strong>They are not removed at <code>v2.0.0</code>. The earliest release that may remove them is
+<code>v3.0.0</code>.</strong> The two values are enum members of <code>egressPolicyMode</code> in the <strong>beta</strong>
+version <code>actions-gateway.com/v2beta1</code>, and <code>v2.0.0</code> keeps serving <code>v2beta1</code> — it adds
+the General Availability (GA) <code>v2</code> version beside it rather than taking it away. An
+API element can only be removed by incrementing the version, never deleted from a
+version that is still served, so these two live exactly as long as <code>v2beta1</code> does.
+Retiring a served version is a breaking change and lands on a major tag, which puts
+the earliest possible removal at <code>v3.0.0</code> — one major beyond the <code>v2.0.0</code> that removes
+<code>v1alpha1</code>, <code>v2alpha1</code>, and classic acquisition. Full reasoning and the coupling to
+the other clocks: <a href="../v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">the deprecation and removal notice</a>.</p>
 <p><strong>Managed "Cilium" platforms usually do NOT accept the <code>cilium</code> backend.</strong> The CRD
 test is literal: <code>kubectl get crd ciliumnetworkpolicies.cilium.io</code> must succeed.
 <strong>GKE Dataplane V2's managed Cilium does not install it</strong> (dropped since GKE
