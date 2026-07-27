@@ -90,6 +90,13 @@ tagged chart. Check the release notes for the exact image digests to pin.
   for the full list.
 - **Day-2 operations.** Helm upgrade and rollback paths, a backup/restore and
   disaster-recovery runbook, and troubleshooting guides.
+- **A `ResourceQuota` sizing guide.** Turn a tenant's runner shapes and
+  concurrency ceilings into the quota numbers a platform admin sets, so the
+  first install is a calculation rather than a guess:
+  [sizing the platform-owned `ResourceQuota`](operations/resourcequota-sizing.md)
+  covers what the quota actually counts (native sidecars and Kata `RuntimeClass`
+  overhead both do), which keys are safe to constrain, and a worked
+  Docker-in-Docker example.
 - **An onboarding and migration path that is already written.** A
   [switching-from-ARC walkthrough](operations/migration-from-arc.md) that moves one
   runner group across with zero downtime, a
@@ -131,9 +138,6 @@ last gaps an outside operator hits.
   on-prem clusters) and one from a cluster-autoscaler or Karpenter declination
   (for elastic clusters, where the scheduler signal alone is unsafe). Off by
   default; the live quota-headroom check already ships.
-- **`ResourceQuota` sizing helper.** <!-- q:Q410 --> Turn a tenant's runner shapes and
-  concurrency into the quota numbers a platform admin should set, so the first
-  install lands without a guess.
 
 ## Exploring / longer-term
 

@@ -128,7 +128,7 @@ The AGC control-plane pod stamps no requests of its own, so without a `LimitRang
 to supply defaults it is refused with `must specify requests.cpu` and never
 schedules. The `LimitRange` above fills that gap (and covers any worker pod whose
 runner group leaves requests unset). See
-[Tenant Onboarding — LimitRange caveat](operations/tenant-onboarding.md#copy-pasteable-template).
+[only constrain keys every pod declares](operations/resourcequota-sizing.md#only-constrain-keys-every-pod-declares).
 
 The gateway reads remaining quota and reacts to exhaustion (it won't claim a job
 the quota can't place, and lock-cancels then reruns any job that loses headroom
