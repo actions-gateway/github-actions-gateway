@@ -42,7 +42,10 @@ run-specific knobs. A ready-to-paste template:
 > thread free, never self-merge, escalate after 5 tries). **You own assignment,
 > merge ordering, and scope** — hand each worker exactly one item so none collide;
 > each worker removes its own `docs/STATUS.md` Queue row in its PR (isolated
-> commit). Stream tasks by shared files and land foundational changes first. Verify each PR's
+> commit). Tell every worker to run `make check` as a **background** task while it
+> does its docs / STATUS-row / PR-body work and re-run it over the final tree —
+> under a batch the gate is mostly heavy-build-slot queue time and must not sit on
+> the critical path. Stream tasks by shared files and land foundational changes first. Verify each PR's
 > **scope**, then merge after CI is green. **No secret may be read, printed,
 > logged, or passed to a model** — exclude any task needing real credentials and
 > tell me. Minimize asks (only genuine decisions, e.g. a license choice).
@@ -235,6 +238,12 @@ the dispatcher conversation) and include:
 - **Rules:** follow the repo's contributor instructions; Conventional Commits
   with no AI attribution; the project's doc-update expectations; test via the
   repo's `make` gate, not bare tooling.
+- **Gate placement:** once the code is final, start `make check` as a
+  **background** task and do the docs / `docs/STATUS.md` row / PR-body work while
+  it runs, then re-run it over the final tree before opening the PR. Under a
+  batch the gate is mostly slot-queue time, and this is what keeps it off the
+  critical path (see
+  [run the local gate in the background](#run-the-local-gate-in-the-background-not-on-the-critical-path)).
 - **Boundaries:** work only inside this worktree; never touch another branch or
   PR; never read, print, log, or pass any secret/credential anywhere.
 - **The task:** what to change, which files, the acceptance check, and the bare
@@ -327,6 +336,55 @@ This is the key design decision; get it right up front.
   setting), merge it before the dependents run so they do not rediscover the same
   problem in parallel. Warn workers about known shared-file pitfalls in their
   prompts.
+
+### Run the local gate in the background, not on the critical path
+
+`make check` is the biggest single block of a worker's wall clock, and under a
+batch most of it is *waiting*. Its three heavy phases (`build-tags-check`,
+`lint`, `cover-check`) each take one of **2** machine-wide slots
+([resource auto-throttle](testing.md#resource-auto-throttle-on-gui-dev-machines)),
+so whenever a 6-worker batch is in those phases, four of the six are queued. A
+cold gate is dominated by `cover-check` — ~19 of ~21 min on the machine the
+baseline was taken on ([measurements](../plan/local-gate-throughput.md)).
+
+**Every worker should launch the gate as a background task and keep working:**
+
+1. Finish the **code**, then start `make check` as a *background* task — not a
+   foreground run ([foreground-guard](testing.md#slow-tiers-need-an-explicit-timeout-or-a-background-run)
+   asks for exactly this).
+2. **While it runs**, do the work whose correctness that verdict does not decide:
+   the doc updates ([doc-update-matrix](doc-update-matrix.md)), the
+   `docs/STATUS.md` Queue-row removal, any plan-doc update, staging explicit
+   paths, and drafting the PR body.
+3. When it reports, run `make check` **again** over the final tree. That green
+   run is the one that counts.
+
+The confirming run is cheap, for a specific reason: the gates that validate what
+step 2 wrote — `lint-backlog`, `doc-links`, `plan-index-check`,
+`no-plan-refs-check`, `shellcheck` — are the *fast* gates, which take **no**
+heavy-build slot and run concurrently. Only the three heavy phases re-queue, and
+they are cache-warm from step 1 — a warm gate is ~2 min against a cold one's tens.
+
+**The one rule: step 1's verdict covers the tree it saw.** If step 2 turns up a
+code change, that verdict is void and the confirming run is cold again for the
+affected packages — which is just a normal gate run, minus the head start.
+
+A queued run reports itself now, so a background gate's log distinguishes
+"queued" from "hung": a heartbeat every 30 s
+(`==> waiting for a heavy-build slot (2 in use, queued 90s)...`) and a
+`==> heavy-build slot acquired after Ns queued` line on admission.
+
+**Why not stagger the workers' gate starts instead?** Staggering re-orders
+arrivals at a fixed-throughput server; it adds no service capacity, so the
+batch's aggregate queue time is unchanged, and holding a worker back while a slot
+sits idle is strictly worse than letting the semaphore admit it. The one
+mechanism a stagger could offer — let one worker warm `GOCACHE` before the rest
+start — is already delivered by content-keyed caching (`-trimpath` made even the
+test-result cache path-independent), which does not care about arrival spacing.
+And `make check` takes a slot three separate times, releasing between phases, so
+whatever spacing you set at *t=0* is gone by the second acquisition. Backgrounding
+does not reduce contention either — it stops the queue time from being *dead*
+time, which is the part that was actually costing the batch (Q376).
 
 ### The dispatcher owns assignment, not coordination files
 
