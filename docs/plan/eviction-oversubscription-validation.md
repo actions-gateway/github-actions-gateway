@@ -135,15 +135,44 @@ is documented in
 [§4.2](../design/04-operational-flows.md#42-job-execution-flow-agc) step 2a, so
 asserting it needs no new plumbing.
 
-- **Half A (envtest):** quota exhausted, `acquirejob` is skipped, the counter
-  increments with `reason="quota"`, and the ceiling budget is untouched (the
-  quota rung reserves nothing). Existing coverage is unit-level
-  (`worker_quota_test.go`) plus the capacity integration suites; none of it
-  exercises the skip under real contention.
+- **Half A (envtest) — done 2026-07-26.** Covered by
+  [`q422_quota_admission_test.go`](../../cmd/agc/internal/controller/integration/q422_quota_admission_test.go),
+  one test per tier the rung serves. Findings below.
 - **Half B (Tier-C):** two AGC sessions on the same RunnerGroup, one without
   headroom, and the job is picked up by the sibling. This is the half that
   needs live GitHub redelivery and cannot be faked.
 - **Not blocked.**
+
+### Half A findings
+
+Both tests drive a live listener against the broker/scale-set fakes with a real
+`ResourceQuota` read through the manager's informer cache, and both were
+mutation-checked: disabling the rung fails each of them.
+
+- **Classic tier.** With the quota full, three deliveries in a row are skipped:
+  `acquirejob` is never called (asserted on the broker stub's server-side call
+  counter, not on the absence of a pod — "no pod appeared" would also pass for
+  the claim-and-stall this rung exists to prevent),
+  `..._admission_rejected_total{reason="quota"}` increments once per delivery,
+  and no worker pod or per-job Secret is staged.
+- **The ceiling budget is untouched.** `maxWorkers` is 1, so a single leaked
+  reservation would close the gate permanently. Once headroom returns a job is
+  claimed and a pod is built, and the `reason="ceiling"` series never moves.
+  Mutating `Admit` to reserve a slot before refusing for quota fails exactly
+  this assertion.
+- **Scale-set tier** (the rung reached it in Q443, and Q450 corrected the
+  footprint). The existing Q443 test covers the all-or-nothing case; the gap was
+  the *partial* one, where `AdvertiseCapacity` converts a headroom delta into a
+  total. Under a half-consumed quota the invariant `advertised + withheld ==
+  declared ceiling` holds, which is the scale-set expression of "the quota rung
+  reserves nothing".
+- **A caveat on what envtest can show.** There is no resourcequota controller,
+  so the tests own `status.hard`/`status.used` outright — which is what lets
+  them fill a quota the way a busy namespace does (`hard − used`, the arithmetic
+  the gate actually runs) rather than declaring a hard limit too small to ever
+  fit a worker, as every prior envtest does. The flip side is that `used` does
+  not rise as worker pods are created, so these tests cannot assert an
+  assignment count across more than one poll.
 
 ## Experiment 5: utilization delta ([Q424](../STATUS.md#Q424), deferred)
 
