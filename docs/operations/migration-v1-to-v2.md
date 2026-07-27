@@ -269,6 +269,22 @@ It then creates the v2 objects (children before referrers) and patches the names
 additively. It is **idempotent**: an object that already exists is left untouched, so a
 re-run never clobbers a hand-edited v2 object. It never deletes v1 objects.
 
+Every create passes through a v2 validating webhook served by the GMC, so `--apply`
+**rides out a transiently unreachable webhook** rather than aborting partway through
+the fan-out. If the webhook endpoint is mid-rollout (or the apiserver's call to it
+times out), you will see:
+
+```text
+admission webhook unreachable applying EgressProxy/team-a-egress: Internal error occurred: failed calling webhook ...
+this is usually transient (webhook endpoint rolling out); retrying for up to 1m30s
+```
+
+This is informational — the apply continues on its own once the webhook answers, and
+gives up with the last error after **90 seconds** if it never does. Only a webhook the
+apiserver could not *reach* is retried; a webhook that ran and **rejected** the object
+fails immediately with its own reason, so a real admission problem is never hidden
+behind a wait.
+
 Verify the v2 set reaches steady state:
 
 ```bash
@@ -344,5 +360,11 @@ window keeps both spellings working.
   dry-run: the namespace patch is the **last** step, so the v2 objects are already
   created when it fails. Re-running after adding the annotation is safe — apply is
   idempotent and skips what exists.
+- **`--apply` fails with `failed calling webhook … context deadline exceeded`.** The
+  apiserver could not reach the GMC validating webhook. `--apply` already retries this
+  for 90 seconds, so reaching this error means the webhook was down for longer than
+  that — check the GMC deployment is `Running` with programmed endpoints
+  (`kubectl -n gag-system get deploy,endpoints`) before re-running. Re-running is
+  safe: apply is idempotent and skips whatever the aborted run already created.
 - **`gag-migrate` reports no namespaces.** With `--all-namespaces` it only targets
   namespaces holding a v1 `ActionsGateway`; pass `--namespace` explicitly otherwise.

@@ -222,6 +222,16 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 // the kube context explicitly rather than relying on the ambient current-context (a
 // parallel session can repoint it). Output is stdout+stderr combined, so a caller can
 // assert on both the manifest stream and the warning block.
+//
+// Deliberately a ONE-SHOT invocation, with no ApplyManifestWithWebhookRetry-style
+// wrapper around it (Q461). The `--apply` path creates v2 objects through the same
+// validating webhooks that stall transiently under `--procs 6` (Q391), but the retry
+// belongs INSIDE the binary — a real operator hits the same blip, and a mid-fan-out
+// abort strands already-created objects. gag-migrate retries its own transient
+// webhook failures per-object, so this spec inherits the fix; wrapping the whole
+// binary here would instead re-run the confirmation and warnings on every attempt and
+// turn a genuine admission denial into a long stall. If this spec starts flaking on a
+// webhook transport error again, fix cmd/gmc/migrate, not this helper.
 func runMigrate(namespace string, extraArgs ...string) (string, error) {
 	args := append([]string{"--namespace", namespace, "--context", currentKubeContext()}, extraArgs...)
 	return utils.Run(exec.Command(migrateBinaryPath(), args...))

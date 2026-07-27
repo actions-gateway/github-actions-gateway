@@ -417,43 +417,56 @@ func applyResult(ctx context.Context, c client.Client, res *migrate.Result, stde
 		if obj == nil {
 			continue
 		}
-		if err := c.Create(ctx, obj); err != nil {
+		what := fmt.Sprintf("%s/%s", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+		// Every one of these creates is gated by a v2 validating webhook, so a
+		// transient webhook-unreachable blip would otherwise abort the fan-out
+		// partway through and leave the earlier objects behind (Q461).
+		err := retryOnTransientWebhookError(ctx, what, stderr, func() error { return c.Create(ctx, obj) })
+		if err != nil {
 			if apierrors.IsAlreadyExists(err) {
-				fprintf(stderr, "exists, skipped: %s/%s\n", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+				fprintf(stderr, "exists, skipped: %s\n", what)
 				continue
 			}
-			return fmt.Errorf("create %s/%s: %w", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), err)
+			return fmt.Errorf("create %s: %w", what, err)
 		}
 	}
-	return patchNamespace(ctx, c, res.NamespacePatch)
+	return patchNamespace(ctx, c, res.NamespacePatch, stderr)
 }
 
 // patchNamespace applies the additive label/annotation patch to the tenant
 // namespace via a read-modify-write. Only keys present in the patch are set; no key
 // is removed, so the v1 markers keep working during coexistence (the VAPs dual-read).
-func patchNamespace(ctx context.Context, c client.Client, patch *migrate.NamespacePatch) error {
+//
+// The whole read-modify-write is the retry unit, not just the Patch: re-reading gives
+// each attempt a fresh resourceVersion, so a retry cannot fail on a stale one. A
+// genuine rejection — namespace-security-profile-guard refusing a downgrade without
+// the opt-in annotation — is not a transport error and still fails on the first
+// attempt.
+func patchNamespace(ctx context.Context, c client.Client, patch *migrate.NamespacePatch, stderr io.Writer) error {
 	if patch == nil || (len(patch.Labels) == 0 && len(patch.Annotations) == 0) {
 		return nil
 	}
-	var ns corev1.Namespace
-	if err := c.Get(ctx, types.NamespacedName{Name: patch.Name}, &ns); err != nil {
-		return fmt.Errorf("get namespace %q for patch: %w", patch.Name, err)
-	}
-	base := ns.DeepCopy()
-	if ns.Labels == nil {
-		ns.Labels = map[string]string{}
-	}
-	for k, v := range patch.Labels {
-		ns.Labels[k] = v
-	}
-	if len(patch.Annotations) > 0 && ns.Annotations == nil {
-		ns.Annotations = map[string]string{}
-	}
-	for k, v := range patch.Annotations {
-		ns.Annotations[k] = v
-	}
-	if err := c.Patch(ctx, &ns, client.MergeFrom(base)); err != nil {
-		return fmt.Errorf("patch namespace %q: %w", patch.Name, err)
-	}
-	return nil
+	return retryOnTransientWebhookError(ctx, "Namespace/"+patch.Name, stderr, func() error {
+		var ns corev1.Namespace
+		if err := c.Get(ctx, types.NamespacedName{Name: patch.Name}, &ns); err != nil {
+			return fmt.Errorf("get namespace %q for patch: %w", patch.Name, err)
+		}
+		base := ns.DeepCopy()
+		if ns.Labels == nil {
+			ns.Labels = map[string]string{}
+		}
+		for k, v := range patch.Labels {
+			ns.Labels[k] = v
+		}
+		if len(patch.Annotations) > 0 && ns.Annotations == nil {
+			ns.Annotations = map[string]string{}
+		}
+		for k, v := range patch.Annotations {
+			ns.Annotations[k] = v
+		}
+		if err := c.Patch(ctx, &ns, client.MergeFrom(base)); err != nil {
+			return fmt.Errorf("patch namespace %q: %w", patch.Name, err)
+		}
+		return nil
+	})
 }
