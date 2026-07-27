@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 )
@@ -93,12 +94,23 @@ func TestV2_RunnerSet_SizingRecommendationAndDrift(t *testing.T) {
 		WindowStart: windowStart,
 	}})
 	// Touch the set to trigger a reconcile that picks the seeded snapshot up.
-	require.NoError(t, k8sClient.Get(ctx, key, rs))
-	if rs.Annotations == nil {
-		rs.Annotations = map[string]string{}
-	}
-	rs.Annotations["test/sizing-poke"] = "1"
-	require.NoError(t, k8sClient.Update(ctx, rs))
+	//
+	// Retry on conflict: the RunnerSet reconciler is running and writes to this
+	// same object, so a write of its own landing between the Get and the Update
+	// rejects ours with "the object has been modified". A bare Get-then-Update
+	// fails the test outright when it loses that race — observed on #874, where
+	// this line failed on a change that touched no AGC code. Mirrors the same
+	// retry around the concurrent PodTemplate edit in pod_provisioning_test.go.
+	require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := k8sClient.Get(ctx, key, rs); err != nil {
+			return err
+		}
+		if rs.Annotations == nil {
+			rs.Annotations = map[string]string{}
+		}
+		rs.Annotations["test/sizing-poke"] = "1"
+		return k8sClient.Update(ctx, rs)
+	}))
 
 	var got v2alpha1.RunnerSet
 	require.Eventually(t, func() bool {
