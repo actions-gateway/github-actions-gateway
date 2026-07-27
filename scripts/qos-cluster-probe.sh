@@ -26,7 +26,6 @@ set -euo pipefail
 # the repo root, never beside the script.
 OUT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tmp"
 readonly OUT_DIR
-mkdir -p "$OUT_DIR"
 
 readonly DEFAULT_SAMPLES=12
 readonly SETTLE_SECONDS=3
@@ -43,7 +42,9 @@ readonly CANDIDATES=(
 
 pids=()
 
-# cleanup kills every spinner, including on Ctrl-C or an early exit.
+# cleanup kills every spinner, including on Ctrl-C or an early exit. Armed by
+# main(), not at load time, so sourcing this file for its parsers installs no
+# traps over the caller's own.
 cleanup() {
 	local pid
 	for pid in "${pids[@]:-}"; do
@@ -52,7 +53,6 @@ cleanup() {
 	wait 2>/dev/null || true
 	pids=()
 }
-trap cleanup EXIT INT TERM
 
 # spin_load starts $2 busy loops under the prefix in $1.
 spin_load() {
@@ -89,14 +89,27 @@ summarize() {
 			total = 0; out = ""
 			for (i = 1; i <= ncl; i++) {
 				c = order[i]
-				r = rsum[c] / rn[c]
-				f = fsum[c] / fn[c]
+				# note() registers a cluster from EITHER line kind, so a capture
+				# truncated mid-sample (powermetrics interrupted) can leave one
+				# counter at zero. Division by zero is fatal in awk, which would
+				# abort the sweep and discard every candidate already measured;
+				# report the missing half as 0 instead.
+				r = (rn[c] > 0) ? rsum[c] / rn[c] : 0
+				f = (fn[c] > 0) ? fsum[c] / fn[c] : 0
 				total += (r / 100) * cores[c] * (f / 1000)
 				out = out sprintf("%s=%.0f%% ", c, r)
 			}
 			printf "%s\t%.1f\n", out, total
 		}
 	' "$1"
+}
+
+# pct_of_max GHZ BASE — GHz-cores as a percentage of the unthrottled ceiling.
+# A zero or absent base (the first row measured nothing) yields 0 rather than a
+# divide-by-zero, so a broken baseline reads as an empty column instead of
+# poisoning every comparison below it.
+pct_of_max() {
+	awk -v g="$1" -v b="$2" 'BEGIN { printf("%.0f", (b > 0) ? (100 * g / b) : 0) }'
 }
 
 # measure runs one candidate end to end and prints its summary line.
@@ -143,7 +156,7 @@ sweep() {
 		ghz="$(printf '%s' "$line" | cut -f2)"
 		[[ -z "$base" ]] && base="$ghz"
 		printf '%-36s %-34s %10s %7s%%\n' "${prefix:-<none>}" "$pct" "$ghz" \
-			"$(awk -v g="$ghz" -v b="$base" 'BEGIN { printf("%.0f", (b > 0) ? (100 * g / b) : 0) }')"
+			"$(pct_of_max "$ghz" "$base")"
 	done
 
 	printf '\nGHz-cores = sum over clusters of (active residency x cores x clock).\n'
@@ -153,10 +166,14 @@ sweep() {
 main() {
 	local mode="${1:-sweep}"
 
+	trap cleanup EXIT INT TERM
+
 	if [[ "$(uname -s)" != "Darwin" ]]; then
 		printf 'qos-cluster-probe: macOS only\n' >&2
 		return 2
 	fi
+
+	mkdir -p "$OUT_DIR"
 
 	case "$mode" in
 		sweep) sweep ;;
@@ -171,4 +188,9 @@ main() {
 	esac
 }
 
-main "$@"
+# Run main only when executed directly, so qos-cluster-probe-test.sh can source
+# this file to exercise the pure parsers against a recorded powermetrics capture
+# — the measurement path needs root and macOS, the parsers need neither.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	main "$@"
+fi
