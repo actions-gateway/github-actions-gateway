@@ -130,6 +130,32 @@ type Target interface {
 	// (0, false).
 	QuotaCapacity(ctx context.Context, max int32) (limit int32, bounded bool)
 
+	// CapacityDeclined reports whether the owner's opt-in capacity gate is currently
+	// refusing intake because the cluster cannot place this owner's worker pods, with
+	// a human-readable detail naming the signal that said so (Q405). It is the third
+	// rung of the ladder — placeability, which neither the declared ceiling nor
+	// namespace quota can answer, because quota is namespace-wide and pool-blind
+	// while placeability is a property of the pod shape and the pools it can land on.
+	//
+	// Fail-open by contract, like QuotaExhausted, and additionally OFF by default: an
+	// owner that did not opt in (spec.capacityGate unset or mode Off), an owner it
+	// cannot read, or an owner whose tier has no capacity gate all yield false. The
+	// gate may under-gate freely — that is today's behavior — but must never
+	// over-gate, because over-gating starves a tenant.
+	CapacityDeclined(ctx context.Context) (declined bool, detail string)
+
+	// DeclinedCapacity returns the same capacity signal as an integer instead of a
+	// boolean, for the scale-set tier's per-poll advertisement — the CapacityDeclined
+	// counterpart of QuotaCapacity (Q443's invariant: a rung expressed in only one
+	// form ships to only one tier). Declined means "no room for another worker pod",
+	// so the bound is the owner's own in-flight worker pods: GitHub keeps the jobs it
+	// has already assigned and is offered no more.
+	//
+	// Fail-open by contract exactly like QuotaCapacity: bounded=false means "no
+	// capacity-derived bound applies" (gate off, nothing declined, or nothing
+	// readable) and the caller keeps whatever the earlier rungs left.
+	DeclinedCapacity(ctx context.Context, max int32) (limit int32, bounded bool)
+
 	// Resolve returns the current, fully-resolved provisioning inputs, re-read on
 	// every acquired job. A non-nil error means a required reference no longer
 	// resolves (v2: missing RunnerTemplate/EgressProxy); the provisioner fails the

@@ -167,16 +167,21 @@ func TestWorkerQuotaCapacity_FailsOpen(t *testing.T) {
 	})
 }
 
-// capacityTarget is a Target stub for the rung-composition tests: it answers the two
+// capacityTarget is a Target stub for the rung-composition tests: it answers the
 // cheap capacity reads and nothing else.
 type capacityTarget struct {
-	ceiling      int32
-	bounded      bool
-	quotaLimit   int32
-	quotaBounded bool
+	ceiling         int32
+	bounded         bool
+	quotaLimit      int32
+	quotaBounded    bool
+	declinedLimit   int32
+	declinedBounded bool
 	// maxSeen records the cap AdvertiseCapacity passed down, so the test can assert
 	// the quota search is bounded by the declared ceiling rather than run open-ended.
 	maxSeen int32
+	// declinedMaxSeen is the same for the capacity rung, which runs after quota and
+	// must therefore be capped by whatever quota already left rather than the ceiling.
+	declinedMaxSeen int32
 }
 
 func (c *capacityTarget) Key() client.ObjectKey             { return client.ObjectKey{Namespace: "ns", Name: "s"} }
@@ -189,6 +194,13 @@ func (c *capacityTarget) QuotaExhausted(context.Context) (bool, string) { return
 func (c *capacityTarget) QuotaCapacity(_ context.Context, max int32) (int32, bool) {
 	c.maxSeen = max
 	return c.quotaLimit, c.quotaBounded
+}
+func (c *capacityTarget) CapacityDeclined(context.Context) (bool, string) {
+	return c.declinedBounded, "stub"
+}
+func (c *capacityTarget) DeclinedCapacity(_ context.Context, max int32) (int32, bool) {
+	c.declinedMaxSeen = max
+	return c.declinedLimit, c.declinedBounded
 }
 func (c *capacityTarget) RecordEvent(_, _, _, _ string) {}
 func (c *capacityTarget) Resolve(context.Context) (*ResolvedSpec, error) {
@@ -208,38 +220,71 @@ func TestAdvertiseCapacity(t *testing.T) {
 			name:         "quota below the ceiling binds",
 			target:       capacityTarget{ceiling: 8, bounded: true, quotaLimit: 3, quotaBounded: true},
 			wantTotal:    3,
-			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 5},
+			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 5, runnercore.AdmitReasonCapacity: 0},
 		},
 		{
 			name:         "quota above the ceiling never raises the advertisement",
 			target:       capacityTarget{ceiling: 8, bounded: true, quotaLimit: 50, quotaBounded: true},
 			wantTotal:    8,
-			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 0},
+			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 0, runnercore.AdmitReasonCapacity: 0},
 		},
 		{
 			name:         "an unbounded quota rung leaves the ceiling alone",
 			target:       capacityTarget{ceiling: 8, bounded: true},
 			wantTotal:    8,
-			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 0},
+			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 0, runnercore.AdmitReasonCapacity: 0},
 		},
 		{
 			name:         "no declared ceiling falls back to the caller's default",
 			target:       capacityTarget{quotaLimit: 4, quotaBounded: true},
 			wantTotal:    4,
-			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 6},
+			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 6, runnercore.AdmitReasonCapacity: 0},
 		},
 		{
 			name:         "quota with no headroom advertises zero",
 			target:       capacityTarget{ceiling: 8, bounded: true, quotaBounded: true},
 			wantTotal:    0,
-			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 8},
+			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 8, runnercore.AdmitReasonCapacity: 0},
 		},
 		{
-			name:         "the quota opt-out skips the rung entirely",
+			// The quota opt-out is an AGC-wide kill switch, so that rung is not
+			// evaluated and publishes nothing. The capacity rung is per-owner spec, so
+			// it is still evaluated and still publishes its explicit zero.
+			name:         "the quota opt-out skips the quota rung entirely",
 			target:       capacityTarget{ceiling: 8, bounded: true, quotaLimit: 3, quotaBounded: true},
 			disableQuota: true,
 			wantTotal:    8,
-			wantWithheld: map[string]int32{},
+			wantWithheld: map[string]int32{runnercore.AdmitReasonCapacity: 0},
+		},
+		{
+			// Q405: a declining gate bounds the total at the set's own in-flight pods.
+			name:         "a declining capacity gate binds below the ceiling",
+			target:       capacityTarget{ceiling: 8, bounded: true, declinedLimit: 2, declinedBounded: true},
+			wantTotal:    2,
+			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 0, runnercore.AdmitReasonCapacity: 6},
+		},
+		{
+			// The trickle floor: nothing in flight and nothing placeable means GitHub
+			// is offered nothing, which is the whole point of the integer form.
+			name:         "a declining gate with nothing in flight advertises zero",
+			target:       capacityTarget{ceiling: 8, bounded: true, declinedBounded: true},
+			wantTotal:    0,
+			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 0, runnercore.AdmitReasonCapacity: 8},
+		},
+		{
+			// Rungs compose as a min(): each withheld entry is that rung's own marginal
+			// contribution, and the entries sum to Ceiling - Total.
+			name:         "quota and capacity both bind, each withholding its own margin",
+			target:       capacityTarget{ceiling: 10, bounded: true, quotaLimit: 6, quotaBounded: true, declinedLimit: 2, declinedBounded: true},
+			wantTotal:    2,
+			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 4, runnercore.AdmitReasonCapacity: 4},
+		},
+		{
+			// A capacity rung that would RAISE the total must not: quota already said 3.
+			name:         "the capacity rung never raises what quota already lowered",
+			target:       capacityTarget{ceiling: 10, bounded: true, quotaLimit: 3, quotaBounded: true, declinedLimit: 9, declinedBounded: true},
+			wantTotal:    3,
+			wantWithheld: map[string]int32{runnercore.AdmitReasonQuota: 7, runnercore.AdmitReasonCapacity: 0},
 		},
 	}
 	for _, tt := range tests {
@@ -256,6 +301,10 @@ func TestAdvertiseCapacity(t *testing.T) {
 			if !tt.disableQuota {
 				assert.Equal(t, adv.Ceiling, target.maxSeen, "the quota search must be bounded by the ceiling")
 			}
+			// The capacity rung runs after quota, so its cap is what quota left — not
+			// the ceiling. Passing the ceiling would let it re-open slots quota closed.
+			assert.LessOrEqual(t, target.declinedMaxSeen, adv.Ceiling,
+				"the capacity rung must be capped by the running total, never above the ceiling")
 		})
 	}
 }

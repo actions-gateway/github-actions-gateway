@@ -169,6 +169,71 @@ type RunnerSetSpec struct {
 	//
 	// +optional
 	Sizing *WorkerSizing `json:"sizing,omitempty"`
+
+	// CapacityGate opts this runner set into the placeability rung of the admission
+	// ladder (Q405): the AGC refuses to take on jobs whose worker pod the cluster
+	// cannot currently place, instead of claiming them and stalling. Omitted (or
+	// mode Off) keeps today's behavior exactly — no capacity rung.
+	//
+	// +optional
+	CapacityGate *CapacityGate `json:"capacityGate,omitempty"`
+}
+
+// Capacity-gate modes selectable via CapacityGate.Mode (Q405). The enum is
+// deliberately additive: each mode names the SIGNAL the rung reads, because "can
+// this pod be placed" has different sound answers depending on whether another
+// actor — a cluster autoscaler — is waiting on the unplaceable pod to make
+// capacity appear (docs/design/appendix-d-alternatives-considered.md §D.8).
+//
+// Reserved but NOT YET IMPLEMENTED, and therefore not accepted by the enum:
+// AutoscalerVerdict (gate on the cluster autoscaler's own declination, for elastic
+// clusters — Q406) and Probe/Provision (ask before claiming via a
+// ProvisioningRequest capacity check — Q407). They are rejected at admission
+// rather than accepted as no-ops: an operator who selects a gate expects gating,
+// and silently doing nothing is the failure mode this rung exists to remove.
+const (
+	// CapacityGateModeOff is the default: no capacity rung, today's behavior.
+	CapacityGateModeOff = "Off"
+	// CapacityGateModeSchedulerVerdict gates intake on the scheduler's own verdict —
+	// the set's worker pods have sat Pending past the scheduling grace reporting
+	// PodScheduled=False/Unschedulable, which is what the WorkersUnschedulable
+	// condition already publishes.
+	//
+	// Sound ONLY where nothing will act on those Pending pods to create capacity,
+	// i.e. a fixed-size cluster with no autoscaler. On an elastic cluster the Pending
+	// pod IS the request for a node, and gating on it would suppress the very signal
+	// that would have rescued the tenant. Selecting this mode is the operator's
+	// assertion that their cluster cannot grow; the AGC does not auto-detect it,
+	// because a wrong detection starves a tenant.
+	CapacityGateModeSchedulerVerdict = "SchedulerVerdict"
+)
+
+// CapacityGate configures the placeability rung of the admission ladder (Q405).
+//
+// Without it, a runner set whose worker shape has become unplaceable — a drained
+// GPU pool, a changed taint, spot capacity gone — keeps claiming jobs, and each
+// claim spends a single-use JIT runner record, holds a GitHub job lock until
+// pendingPodDeadline, and ends in a reaped pod plus a CANCELLED workflow run. The
+// gate does not eliminate the first wasted claim (the signal is derived from a
+// stuck pod, so one has to exist); it bounds the RATE, turning a burst of N wasted
+// claims into roughly one per pendingPodDeadline window.
+//
+// That derivation is also what makes the gate self-clearing: the reaper deletes the
+// stuck pod at the deadline, the condition clears, one job is claimed, and if
+// capacity is still absent the new pod trips it again.
+//
+// Fail-open by contract at every step — an unreadable set, an unresolved template
+// chain, an unreadable pod list all leave intake exactly as it is today. The gate
+// may under-gate freely; it must never over-gate, because over-gating starves a
+// tenant.
+type CapacityGate struct {
+	// Mode selects which capacity signal gates job intake; see the CapacityGateMode*
+	// constants. Off is the default and is today's behavior.
+	//
+	// +kubebuilder:default=Off
+	// +kubebuilder:validation:Enum=Off;SchedulerVerdict
+	// +optional
+	Mode string `json:"mode,omitempty"`
 }
 
 // Worker sizing profiles selectable via WorkerSizing.Profile (Q359 Phase 3). The
