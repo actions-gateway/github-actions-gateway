@@ -24,7 +24,7 @@
 //     container, so a pod SIGTERM (eviction, node drain, `gh run cancel`)
 //     reaches only the wrapper — the child must be signalled explicitly or it
 //     runs to the cgroup SIGKILL with no chance to report its outcome. See
-//     relayTerminationSignals.
+//     terminationRelay.
 //  8. Translate Runner.Worker's exit code: a successful job exits 100 (not 0),
 //     because Runner.Worker returns TaskResultUtil.TranslateToReturnCode(result)
 //     == 100 + (int)TaskResult and TaskResult.Succeeded == 0. We map the success
@@ -319,21 +319,23 @@ func run() error {
 	if len(proxyTrustEnv) > 0 {
 		cmd.Env = append(os.Environ(), proxyTrustEnv...)
 	}
+	// Relay pod termination to Runner.Worker: it is not PID 1, so it never sees
+	// the pod's SIGTERM on its own (Q385). Arm before starting it — a signal that
+	// lands between Start and the registration has no handler to reach (Q445).
+	relay := armTerminationRelay(shutdownGrace())
 	if err := cmd.Start(); err != nil {
+		relay.disarm()
 		_ = r1.Close()
 		_ = w1.Close()
 		_ = r2.Close()
 		_ = w2.Close()
 		return fmt.Errorf("start Runner.Worker: %w", err)
 	}
+	stopRelay, relayDone := relay.forwardTo(cmd.Process)
 
 	// Child inherited r1 and w2; close our copies so EOF propagates correctly.
 	_ = r1.Close()
 	_ = w2.Close()
-
-	// Relay pod termination to Runner.Worker: it is not PID 1, so it never sees
-	// the pod's SIGTERM on its own (Q385).
-	stopRelay, relayDone := relayTerminationSignals(cmd.Process, shutdownGrace())
 
 	// 5. Write payload to worker-input pipe concurrently.
 	// The write blocks until Runner.Worker opens the read end.
@@ -409,14 +411,18 @@ func runScaleSet(payloadDir, runnerHome string) error {
 	}
 
 	slog.Info("starting scale-set runner", "script", runScript)
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start run.sh: %w", err)
-	}
 
 	// Same PID 1 problem as the classic path: run.sh has its own SIGTERM handling
 	// (it tells its runner to stop after the current job and report it), but it
-	// only ever gets the chance if the wrapper forwards the signal (Q385).
-	stopRelay, relayDone := relayTerminationSignals(cmd.Process, shutdownGrace())
+	// only ever gets the chance if the wrapper forwards the signal (Q385). Arm
+	// before Start so no signal can land while the default disposition still
+	// applies (Q445).
+	relay := armTerminationRelay(shutdownGrace())
+	if err := cmd.Start(); err != nil {
+		relay.disarm()
+		return fmt.Errorf("start run.sh: %w", err)
+	}
+	stopRelay, relayDone := relay.forwardTo(cmd.Process)
 	err = cmd.Wait()
 	stopRelay()
 	<-relayDone
@@ -450,7 +456,7 @@ func readJITBlob(payloadDir string) (string, error) {
 	return blob, nil
 }
 
-// terminable is the subset of *os.Process that relayTerminationSignals needs.
+// terminable is the subset of *os.Process that terminationRelay.forwardTo needs.
 // Narrowing it keeps the relay unit-testable against a recording fake without
 // spawning a process.
 type terminable interface {
@@ -476,14 +482,53 @@ func shutdownGrace() time.Duration {
 	return d
 }
 
-// relayTerminationSignals forwards SIGTERM and SIGINT to proc until stop is
-// called. It exists because the wrapper is PID 1 of the worker container:
-// Kubernetes delivers SIGTERM to PID 1 only, so without this relay the child
-// (Runner.Worker in classic mode, run.sh in scale-set mode) is never told the
-// pod is going away and runs until the cgroup SIGKILL at grace expiry — with no
-// chance to abort its job and report the cancellation, leaving GitHub to wait
-// out the job lock instead (Q385). See
+// terminationRelay is a SIGTERM/SIGINT registration held on behalf of a child
+// process that does not exist yet. It exists because the wrapper is PID 1 of the
+// worker container: Kubernetes delivers SIGTERM to PID 1 only, so without this
+// relay the child (Runner.Worker in classic mode, run.sh in scale-set mode) is
+// never told the pod is going away and runs until the cgroup SIGKILL at grace
+// expiry — with no chance to abort its job and report the cancellation, leaving
+// GitHub to wait out the job lock instead (Q385). See
 // docs/development/kubernetes-conventions.md § Graceful shutdown, rule 5.
+//
+// Arming and forwarding are two steps rather than one so the registration can be
+// made *before* the child is started: see armTerminationRelay.
+type terminationRelay struct {
+	sigCh chan os.Signal
+	grace time.Duration
+}
+
+// armTerminationRelay registers for SIGTERM/SIGINT and returns a relay ready to
+// forward them. Call it before starting the child, then hand the started process
+// to forwardTo (or, if the start failed, call disarm).
+//
+// The ordering is the whole point. Between process start and the first
+// signal.Notify, Go leaves the signal at its default disposition, and there the
+// wrapper has no good outcome: as PID 1 of the worker container the kernel drops
+// a default-disposition SIGTERM on the floor (SIGNAL_UNKILLABLE), so the pod's
+// one termination notice is lost and the child runs to the cgroup SIGKILL — the
+// exact Q385 failure this relay exists to prevent; run anywhere that is *not*
+// PID 1 (a test binary, a local run) the default disposition kills the process
+// outright instead (Q445). Registering first closes the window in both roles,
+// the same way cmd/proxy registers a tunnel before hijacking it (rule 4).
+//
+// A signal that arrives while the relay is armed but the child is not yet
+// started is held in the buffered channel and forwarded as soon as forwardTo
+// runs, so an early SIGTERM stops the job it raced instead of being swallowed.
+func armTerminationRelay(grace time.Duration) *terminationRelay {
+	// Buffered: signal.Notify never blocks, so an unbuffered channel would drop
+	// the very signal we exist to forward if the goroutine is mid-iteration —
+	// or, before forwardTo, if no goroutine is receiving yet.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	return &terminationRelay{sigCh: sigCh, grace: grace}
+}
+
+// disarm releases an armed relay whose child never started, restoring the
+// default disposition. It is the error-path counterpart of forwardTo.
+func (r *terminationRelay) disarm() { signal.Stop(r.sigCh) }
+
+// forwardTo starts forwarding the armed signals to proc until stop is called.
 //
 // grace bounds the wait, per rule 7 — a drain whose worst case we can name. It
 // starts at the first forwarded signal; if the child is still alive when it
@@ -499,11 +544,8 @@ func shutdownGrace() time.Duration {
 // it in a closure). Call stop only after waiting on the child — stopping earlier
 // would restore the default disposition and let a late SIGTERM kill the wrapper
 // out from under a child that is still reporting.
-func relayTerminationSignals(proc terminable, grace time.Duration) (stop func(), done <-chan struct{}) {
-	// Buffered: signal.Notify never blocks, so an unbuffered channel would drop
-	// the very signal we exist to forward if the goroutine is mid-iteration.
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+func (r *terminationRelay) forwardTo(proc terminable) (stop func(), done <-chan struct{}) {
+	sigCh, grace := r.sigCh, r.grace
 
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})

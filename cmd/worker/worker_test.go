@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -974,10 +975,10 @@ func startIdleChild(t *testing.T, dir, trapBody string) *exec.Cmd {
 	return cmd
 }
 
-// TestRelayTerminationSignals_ForwardsToChild is the core Q385 assertion: a
+// TestTerminationRelay_ForwardsToChild is the core Q385 assertion: a
 // SIGTERM delivered to the wrapper reaches the child, which gets to run its
 // shutdown work before exiting with a code of its own choosing.
-func TestRelayTerminationSignals_ForwardsToChild(t *testing.T) {
+func TestTerminationRelay_ForwardsToChild(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("worker wrapper targets Linux; shell-stub strategy is POSIX-only")
 	}
@@ -986,7 +987,7 @@ func TestRelayTerminationSignals_ForwardsToChild(t *testing.T) {
 	// observable side effect first, then a deliberate exit code.
 	cmd := startIdleChild(t, dir, "printf reported > cancelled.txt; exit 7")
 
-	stop, done := relayTerminationSignals(cmd.Process, 30*time.Second)
+	stop, done := armTerminationRelay(30 * time.Second).forwardTo(cmd.Process)
 	// Retire the relay even if an assertion below fails: a live relay left
 	// registered would swallow the next test's signal.
 	t.Cleanup(stop)
@@ -1007,18 +1008,18 @@ func TestRelayTerminationSignals_ForwardsToChild(t *testing.T) {
 	assert.Equal(t, "reported", string(got))
 }
 
-// TestRelayTerminationSignals_KillsChildOutlivingGrace pins the bounded-drain
+// TestTerminationRelay_KillsChildOutlivingGrace pins the bounded-drain
 // decision (kubernetes-conventions.md rule 7): a child that ignores SIGTERM is
 // killed at the wrapper's own deadline, inside the pod grace period, rather than
 // the whole cgroup being SIGKILLed with no record of why.
-func TestRelayTerminationSignals_KillsChildOutlivingGrace(t *testing.T) {
+func TestTerminationRelay_KillsChildOutlivingGrace(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("worker wrapper targets Linux; shell-stub strategy is POSIX-only")
 	}
 	dir := t.TempDir()
 	cmd := startIdleChild(t, dir, "") // empty trap body: SIGTERM is ignored
 
-	stop, done := relayTerminationSignals(cmd.Process, 200*time.Millisecond)
+	stop, done := armTerminationRelay(200 * time.Millisecond).forwardTo(cmd.Process)
 	t.Cleanup(stop)
 	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGTERM))
 
@@ -1059,12 +1060,12 @@ func (p *recordingProc) snapshot() ([]os.Signal, bool) {
 	return append([]os.Signal(nil), p.signals...), p.killed
 }
 
-// TestRelayTerminationSignals_QuietExitLeavesChildAlone verifies the normal case
+// TestTerminationRelay_QuietExitLeavesChildAlone verifies the normal case
 // — the overwhelming majority of worker pods — is untouched: a job that finishes
 // on its own is never signalled, and the relay goroutine exits on stop().
-func TestRelayTerminationSignals_QuietExitLeavesChildAlone(t *testing.T) {
+func TestTerminationRelay_QuietExitLeavesChildAlone(t *testing.T) {
 	proc := &recordingProc{}
-	stop, done := relayTerminationSignals(proc, time.Millisecond)
+	stop, done := armTerminationRelay(time.Millisecond).forwardTo(proc)
 	stop()
 	stop() // idempotent
 	<-done
@@ -1074,14 +1075,14 @@ func TestRelayTerminationSignals_QuietExitLeavesChildAlone(t *testing.T) {
 	assert.False(t, killed, "the grace timer must not be armed until a signal arrives")
 }
 
-// TestRelayTerminationSignals_ForwardsSIGINT covers the interactive/local path:
+// TestTerminationRelay_ForwardsSIGINT covers the interactive/local path:
 // SIGINT is relayed as SIGINT, not silently converted to SIGTERM.
-func TestRelayTerminationSignals_ForwardsSIGINT(t *testing.T) {
+func TestTerminationRelay_ForwardsSIGINT(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("signal delivery to self is POSIX-only in this test")
 	}
 	proc := &recordingProc{}
-	stop, done := relayTerminationSignals(proc, 30*time.Second)
+	stop, done := armTerminationRelay(30 * time.Second).forwardTo(proc)
 	t.Cleanup(stop)
 	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGINT))
 	require.Eventually(t, func() bool {
@@ -1096,8 +1097,82 @@ func TestRelayTerminationSignals_ForwardsSIGINT(t *testing.T) {
 	assert.False(t, killed, "the child exited within the grace period")
 }
 
+// guardSignals registers a test-owned SIGTERM/SIGINT channel so a signal the
+// code under test is *not* expected to catch cannot fall through to Go's default
+// disposition and kill the test binary. signal.Notify fans out to every
+// registered channel, so this observes without stealing.
+func guardSignals(t *testing.T) <-chan os.Signal {
+	t.Helper()
+	guard := make(chan os.Signal, 1)
+	signal.Notify(guard, syscall.SIGTERM, syscall.SIGINT)
+	t.Cleanup(func() { signal.Stop(guard) })
+	return guard
+}
+
+// TestArmTerminationRelay_ForwardsSignalArrivingBeforeChildStarts is the Q445
+// regression test. The wrapper used to call signal.Notify only after starting
+// its child, leaving a window in which the pod's one SIGTERM hit the default
+// disposition: dropped on the floor for a container's PID 1 (so the child ran to
+// the cgroup SIGKILL — the Q385 failure), fatal anywhere else. Arming first must
+// mean a signal that beats the child is held and delivered to it, not lost.
+func TestArmTerminationRelay_ForwardsSignalArrivingBeforeChildStarts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signal delivery to self is POSIX-only in this test")
+	}
+	relay := armTerminationRelay(30 * time.Second)
+	t.Cleanup(relay.disarm)
+
+	// The signal arrives while the relay is armed but has no process to forward
+	// to yet — exactly the window the child start used to sit in.
+	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGTERM))
+	require.Eventually(t, func() bool { return len(relay.sigCh) == 1 }, 10*time.Second, 5*time.Millisecond,
+		"an armed relay must capture a signal that arrives before the child starts")
+
+	proc := &recordingProc{}
+	stop, done := relay.forwardTo(proc)
+	t.Cleanup(stop)
+	require.Eventually(t, func() bool {
+		signals, _ := proc.snapshot()
+		return len(signals) == 1
+	}, 10*time.Second, 5*time.Millisecond, "the held signal was never forwarded to the child")
+	stop()
+	<-done
+
+	signals, killed := proc.snapshot()
+	assert.Equal(t, []os.Signal{syscall.SIGTERM}, signals,
+		"a pre-start SIGTERM must reach the child that raced it")
+	assert.False(t, killed, "the child exited within the grace period")
+}
+
+// TestArmTerminationRelay_DisarmReleasesTheRegistration covers the start-failed
+// path: the relay must not keep a registration alive for a child that never
+// existed, or the wrapper's own exit path would swallow signals it no longer
+// forwards anywhere.
+func TestArmTerminationRelay_DisarmReleasesTheRegistration(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signal delivery to self is POSIX-only in this test")
+	}
+	guard := guardSignals(t) // keeps the disarmed signal from killing the binary
+	relay := armTerminationRelay(30 * time.Second)
+	relay.disarm()
+
+	require.NoError(t, syscall.Kill(syscall.Getpid(), syscall.SIGTERM))
+	select {
+	case <-guard:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the test's own guard never saw the signal")
+	}
+	assert.Empty(t, relay.sigCh, "a disarmed relay must no longer receive signals")
+}
+
 // TestRunScaleSet_ForwardsSIGTERMToRunSh exercises the scale-set path end to end:
 // run.sh is what reports the job in that mode, so the signal must reach it too.
+//
+// It leans on the Q445 ordering: run.sh's ready.txt is written after
+// runScaleSet started it, which is after the relay was armed, so the SIGTERM
+// below can only land on an armed handler. With the old arm-after-start order
+// that implication did not hold and this test could kill the test binary
+// outright instead of failing.
 func TestRunScaleSet_ForwardsSIGTERMToRunSh(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("run.sh exec test is POSIX-only")

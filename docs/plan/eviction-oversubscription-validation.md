@@ -92,7 +92,7 @@ report its own result is the evidence that would reopen that decision on both ti
 Assertions:
 
 1. The wrapper relays SIGTERM and the runner reports its own terminal result
-   ([relayTerminationSignals](../../cmd/worker/main.go)). The relay is
+   ([terminationRelay](../../cmd/worker/main.go)). The relay is
    tier-independent; the scale-set `run.sh` branch has the same PID-1 handling,
    so this experiment runs on both tiers.
 2. The report completes inside the grace period. The provisioner sets no

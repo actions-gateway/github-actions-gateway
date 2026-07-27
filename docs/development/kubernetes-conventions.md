@@ -381,12 +381,24 @@ closed and the tracked set can only shrink.
 SIGTERM on its own. A wrapper that `exec.Command`s a real workload must catch
 SIGTERM, forward it, and wait — otherwise the child runs on until the cgroup
 SIGKILL with no chance to report its outcome. Our worker wrapper does this in
-`relayTerminationSignals` ([cmd/worker/main.go](../../cmd/worker/main.go)): it
+`terminationRelay` ([cmd/worker/main.go](../../cmd/worker/main.go)): it
 forwards SIGTERM/SIGINT to `Runner.Worker` (or `run.sh`), waits for it inside a
 bounded grace (`WORKER_SHUTDOWN_GRACE`, default 25s), and kills it with a logged
 reason if it overruns. Propagate the child's exit code, including the
 128+signal encoding for a signalled child — `os.ProcessState.ExitCode` reports
 -1 there, and `os.Exit(-1)` silently becomes 255.
+
+**Register the handler *before* starting the child** — `signal.Notify` first,
+`cmd.Start` second, same register-before-the-window discipline as rule 4's
+hijack tracker. A signal landing in between hits Go's default disposition, where
+PID 1 has no good outcome: the kernel drops a default-disposition SIGTERM sent to
+a namespace's init (`SIGNAL_UNKILLABLE`), so the pod's one termination notice is
+lost and you are back to the unreported-job failure this rule exists to prevent;
+off PID 1 (tests, local runs) the same signal kills the supervisor outright and
+strands the child. The window is small but reachable — a job cancelled or a node
+drained seconds after the pod starts, or just a scheduler hiccup between the two
+statements (Q445). Buffer the channel so a signal caught before the child exists
+is held and forwarded once it does, rather than dropped.
 
 **6. Anything serving traffic through a Service needs a `preStop` sleep.**
 Because of the concurrency in the first bullet above, SIGTERM is not a signal
@@ -456,7 +468,8 @@ For any binary that runs in a pod:
       and retried?
 - [ ] Are hijacked/upgraded connections tracked separately from
       `http.Server.Shutdown`?
-- [ ] If there is a child process, is SIGTERM forwarded to it?
+- [ ] If there is a child process, is SIGTERM forwarded to it — with the handler
+      registered *before* the child is started?
 - [ ] Does the pod serve traffic through a Service (⇒ needs a `preStop` sleep, or
       better, an in-process linger inside the existing drain budget)?
 - [ ] Is `terminationGracePeriodSeconds` ≥ the worst-case shutdown (`preStop` +
