@@ -27,7 +27,7 @@ Getting it wrong fails in two directions, both quiet:
 - [Only constrain keys every pod declares](#only-constrain-keys-every-pod-declares)
 - [Sizing profiles change the ask at pod build](#sizing-profiles-change-the-ask-at-pod-build)
 - [Worked example — a DinD tenant at 12 concurrent jobs](#worked-example--a-dind-tenant-at-12-concurrent-jobs)
-- [Where the gateway's own quota conditions under-count](#where-the-gateways-own-quota-conditions-under-count)
+- [What the gateway's own quota conditions count](#what-the-gateways-own-quota-conditions-count)
 - [Related](#related)
 
 ## What the quota actually counts
@@ -41,7 +41,7 @@ them are easy to miss on exactly the worker shapes that cost the most.
 | Regular containers | **Summed** | The `runner` container. |
 | Native sidecars (`restartPolicy: Always` init containers) | **Summed** | The DinD daemon is declared this way, and must be — a regular-container sidecar strands the pod (Q249). Its whole ask counts. |
 | Plain init containers | **`max()` against the regular-container sum** | The AGC-injected `gag-wrapper-install` init container declares no resources, so it contributes nothing. A tenant-authored init container only matters if it out-asks the runner. |
-| `RuntimeClass` pod overhead (`overhead.podFixed`) | **Added**, to requests *and* limits | Kata workers carry `250m` CPU / `160Mi` memory per pod on top of their containers. |
+| `RuntimeClass` pod overhead (`overhead.podFixed`) | **Added** to requests in full; added to limits **only for a key the pod already limits** with a non-zero value | Kata workers carry `250m` CPU / `160Mi` memory per pod on top of their containers. The asymmetry matters: a shape with no CPU limit gets no overhead on `limits.cpu`. |
 
 Verified on Kubernetes v1.36.1 by applying one pod at a time into a quota'd
 namespace and reading the `.status.used` delta. Reproduce it on any cluster:
@@ -63,9 +63,12 @@ Sum, per pod, across **regular containers plus native sidecars**, then add any
 ```
 pod.requests.cpu    = Σ containers req.cpu    + Σ nativeSidecars req.cpu    + overhead.cpu
 pod.requests.memory = Σ containers req.memory + Σ nativeSidecars req.memory + overhead.memory
-pod.limits.cpu      = Σ containers lim.cpu    + Σ nativeSidecars lim.cpu    + overhead.cpu
-pod.limits.memory   = Σ containers lim.memory + Σ nativeSidecars lim.memory + overhead.memory
+pod.limits.cpu      = Σ containers lim.cpu    + Σ nativeSidecars lim.cpu    [+ overhead.cpu]
+pod.limits.memory   = Σ containers lim.memory + Σ nativeSidecars lim.memory [+ overhead.memory]
 ```
+
+The bracketed overhead terms apply **only if that limit is already non-zero**. A
+shape declaring no CPU limit is not charged `overhead.cpu` against `limits.cpu`.
 
 Where the inputs come from:
 
@@ -73,7 +76,7 @@ Where the inputs come from:
 |---|---|---|
 | Container `requests`/`limits` | `podTemplate.spec.containers[].resources` on the `RunnerTemplate` (v2) or `runnerGroups[].podTemplate` (v1) | `500m` / `1Gi` as **both** requests and limits — the AGC gap-fills any container declaring neither, so a bare template still costs quota |
 | Native sidecar `requests`/`limits` | `podTemplate.spec.initContainers[]` entries with `restartPolicy: Always` | none — the gap-fill deliberately skips init containers, so an undeclared sidecar contributes `0` |
-| `overhead.podFixed` | the `RuntimeClass` named by `podTemplate.spec.runtimeClassName` | none (no `runtimeClassName` ⇒ no overhead) |
+| `overhead.podFixed` | `podTemplate.spec.overhead` when the template declares it, else the `RuntimeClass` named by `podTemplate.spec.runtimeClassName` | none (no `runtimeClassName` and no declared `overhead` ⇒ no overhead) |
 
 A term with no value drops out. A shape that declares requests but no limits
 contributes `0` to the `limits.*` rows — which is a constraint on *which quota
@@ -279,35 +282,63 @@ kubectl get runnerset <NAME> -n <NAMESPACE> -o jsonpath='{range .status.conditio
 
 `False` on both means the quota admits scaling to `maxReplicas` and `maxWorkers`.
 
-## Where the gateway's own quota conditions under-count
+## What the gateway's own quota conditions count
 
-Every consumer of the gateway's quota arithmetic computes a worker's footprint
-from the pod's **regular containers only** — excluding all init containers and
-ignoring `RuntimeClass` overhead. That is three surfaces, all sharing one
-`WorkerFootprint` calculation:
+The gateway computes a worker's footprint with the same four-part arithmetic this
+page uses — regular containers, native sidecars, the plain-init `max()` floor, and
+`RuntimeClass` overhead. One calculation feeds all three surfaces, so they cannot
+disagree:
 
 - the `WorkerQuotaPressure` / `WorkerQuotaExceeded` conditions;
 - the pre-claim quota gate on the classic acquisition tier;
 - the capacity integer a scale-set runner set advertises to GitHub, which folds
   in live quota headroom on the default tier.
 
-That is correct for plain init containers, which contribute via `max()`. It is
-**wrong for native sidecars**, which Kubernetes sums. So on a DinD or Kata
-tenant the gateway under-counts each worker pod by the sidecar's whole ask plus
-any pod overhead:
+So a `False` `WorkerQuotaPressure` means the quota admits scaling to `maxWorkers`
+at the pod's **full** cost, sidecar and overhead included.
 
-| Shape | Per-pod under-count |
-|---|---|
-| Privileged DinD | `1` CPU / `3Gi` requests; `4Gi` memory limit |
-| Kata | `2` CPU / `6Gi` requests; `4` CPU / `8Gi` limits; plus `250m` / `160Mi` overhead |
+!!! warning "This changed — conditions may now trip where they did not before"
 
-**What this means for you:** treat a `False` `WorkerQuotaPressure` on a
-native-sidecar tenant as necessary but not sufficient. Size from the arithmetic
-on this page, which counts the sidecar. The failure mode when you don't is not
-silent — worker pods are rejected by the quota at creation and the AGC retries
-them — but it burns lock time that the pressure condition was supposed to warn
-you about first, and on the scale-set tier it means GitHub was told the namespace
-had room for more jobs than it can actually place.
+    Before this fix the footprint was the sum of `spec.containers` alone: all init
+    containers were dropped, and `RuntimeClass` overhead was ignored. That was
+    correct for plain init containers but **wrong for native sidecars**, which
+    Kubernetes sums. A DinD or Kata tenant was under-counted by the sidecar's
+    entire ask plus any pod overhead:
+
+    | Shape | Former per-pod under-count |
+    |---|---|
+    | Privileged DinD | `1` CPU / `3Gi` requests; `4Gi` memory limit |
+    | Kata | `2` CPU / `6Gi` requests; `4` CPU / `8Gi` limits; plus `250m` / `160Mi` overhead |
+
+    On upgrade, a native-sidecar tenant whose quota was sized against those
+    under-counted numbers can go straight to `WorkerQuotaPressure=True` (or
+    `WorkerQuotaExceeded=True`) with no change to the quota or the workload.
+    **Nothing got worse** — such a quota could never place those pods, so they were
+    already being rejected at creation and retried; the condition just reports it
+    up front now instead of leaving it to show up as burnt lock time. A quota
+    already sized with the arithmetic on this page is unaffected; re-derive any
+    that were not.
+
+### Pod overhead needs a cluster-scoped read
+
+Overhead lives on the cluster-scoped `RuntimeClass`, not on the pod template, so
+the AGC reads it to size a Kata worker. The chart grants this through the
+per-gateway `agc-clusterrunnertemplate-reader` `ClusterRole`; a cluster whose AGC
+image is upgraded ahead of its chart has no such grant.
+
+The read is **fail-open**: without it the footprint simply omits overhead and the
+conditions behave as they did before, so nothing breaks — a Kata worker is just
+under-counted by its `overhead.podFixed` again. Confirm the grant landed:
+
+```sh
+kubectl auth can-i get runtimeclasses --as=system:serviceaccount:<NAMESPACE>:<AGC_SERVICEACCOUNT>
+```
+
+Two cases need no grant at all, because no read happens: a pod template with no
+`runtimeClassName`, and one that declares `spec.overhead` itself. A declared
+`overhead` always wins over the read, and cannot drift — the `RuntimeClass`
+admission controller rejects any pod whose declared overhead differs from its
+`RuntimeClass`'s.
 
 ## Related
 

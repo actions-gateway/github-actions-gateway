@@ -18,6 +18,15 @@
 // are namespaced, so the per-tenant RoleBinding scopes this to the tenant
 // namespace; the sampler degrades gracefully when metrics-server is absent.
 // +kubebuilder:rbac:groups=metrics.k8s.io,resources=pods,verbs=get;list
+// runtimeclasses read-only (Q450): a worker pod's ResourceQuota charge includes its
+// RuntimeClass pod overhead (250m/160Mi on the reference Kata shape), and overhead
+// lives on the cluster-scoped RuntimeClass, not the pod template. Without this the
+// WorkerQuota conditions, the pre-claim gate, and the scale-set capacity integer all
+// under-count a Kata worker. Read-only on a kind that carries no tenant data; the
+// read is fail-open, so an install that has not yet been granted it behaves exactly
+// as it did before Q450. Cluster-scoped, so it is bound by the per-gateway
+// agc-clusterrunnertemplate-reader ClusterRoleBinding, not the tenant RoleBinding.
+// +kubebuilder:rbac:groups=node.k8s.io,resources=runtimeclasses,verbs=get;list;watch
 //
 // v2 (actions-gateway.com): the RunnerSet reconciler reconciles RunnerSets and
 // reads their references (gatewayRef → ActionsGateway, proxyRef/defaultProxyRef →

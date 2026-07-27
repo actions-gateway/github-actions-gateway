@@ -128,7 +128,7 @@ func TestRunnerSetTarget_QuotaExhausted_HonoursSizingProfile(t *testing.T) {
 	// Sanity: the same shape drives the advisory condition.
 	var live v2alpha1.RunnerSet
 	require.NoError(t, target.client.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "set"}, &live))
-	containers := runnerSetWorkerContainers(&live, &tmpl.Spec)
-	cpu := containers[0].Resources.Requests[corev1.ResourceCPU]
+	podSpec := runnerSetWorkerPodSpec(&live, &tmpl.Spec)
+	cpu := podSpec.Containers[0].Resources.Requests[corev1.ResourceCPU]
 	assert.Equal(t, "250m", cpu.String())
 }

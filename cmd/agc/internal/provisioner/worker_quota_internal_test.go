@@ -63,7 +63,7 @@ func cpuQuota(hard, used string) *corev1.ResourceQuota {
 // time (500m/1Gi), rather than reading it as free. Without this the quota rung is
 // blind to exactly the templates most deployments run.
 func TestWorkerFootprint_GapFillsDefaults(t *testing.T) {
-	fp := WorkerFootprint([]corev1.Container{{Name: WorkerContainerName}}, 2)
+	fp := WorkerFootprint(&corev1.PodSpec{Containers: []corev1.Container{{Name: WorkerContainerName}}}, 2)
 
 	cpu := fp[corev1.ResourceRequestsCPU]
 	assert.Equal(t, "1", cpu.String(), "two default workers request 2x500m of cpu")
@@ -73,10 +73,10 @@ func TestWorkerFootprint_GapFillsDefaults(t *testing.T) {
 	assert.Equal(t, "2", pods.String())
 
 	// A container that declares either requests or limits keeps the tenant's values.
-	explicit := WorkerFootprint([]corev1.Container{{
+	explicit := WorkerFootprint(&corev1.PodSpec{Containers: []corev1.Container{{
 		Name:      WorkerContainerName,
 		Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m")}},
-	}}, 2)
+	}}}, 2)
 	cpu = explicit[corev1.ResourceRequestsCPU]
 	assert.Equal(t, "200m", cpu.String())
 	_, hasMem := explicit[corev1.ResourceLimitsMemory]
@@ -125,7 +125,7 @@ func TestWorkerQuotaExhausted(t *testing.T) {
 			fc := fake.NewClientBuilder().WithScheme(quotaTestScheme()).WithRuntimeObjects(tt.objs...).Build()
 			rg := quotaRunnerGroup(tt.cpu)
 
-			exhausted, detail := WorkerQuotaExhausted(context.Background(), fc, "ns", rg.Spec.PodTemplate.Spec.Containers)
+			exhausted, detail := WorkerQuotaExhausted(context.Background(), fc, "ns", &rg.Spec.PodTemplate.Spec)
 			assert.Equal(t, tt.wantExhausted, exhausted)
 			if tt.wantExhausted {
 				assert.Contains(t, detail, "cannot admit another worker pod", "the detail must name the binding resource")
@@ -145,7 +145,7 @@ func TestWorkerQuotaExhausted_FailsOpenOnReadError(t *testing.T) {
 	fc := fake.NewClientBuilder().WithScheme(admissionTestScheme()).Build()
 
 	exhausted, detail := WorkerQuotaExhausted(context.Background(), fc, "ns",
-		quotaRunnerGroup("500m").Spec.PodTemplate.Spec.Containers)
+		&quotaRunnerGroup("500m").Spec.PodTemplate.Spec)
 
 	assert.False(t, exhausted, "an unreadable quota must not close the gate")
 	assert.Empty(t, detail)

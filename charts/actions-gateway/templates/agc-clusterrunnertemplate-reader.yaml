@@ -1,16 +1,19 @@
 {{- /*
 The agc-clusterrunnertemplate-reader rules are single-sourced in
-files/agc-clusterrunnertemplate-reader-rules.yaml. This template embeds them via
-.Files.Get, and the GMC integration suite (installClusterRunnerTemplateReaderRole
-in suite_integration_test.go) reads the SAME file — so the shipped permission set
-and the RBAC-scope test can never drift. Edit the fragment, not this block.
+files/agc-clusterrunnertemplate-reader-rules.yaml; this template embeds them via
+.Files.Get. Edit the fragment, not this block. Unlike agc-tenant-role, no test
+reads this fragment back, so nothing catches drift between it and the
++kubebuilder:rbac markers in cmd/agc/internal/controller/doc.go — keep the two in
+sync by hand when adding a rule (Q454 tracks closing that).
 */ -}}
-# agc-clusterrunnertemplate-reader — read-only access to the cluster-scoped
-# ClusterRunnerTemplate kind, the one AGC dependency a namespaced RoleBinding
-# cannot grant. The GMC binds this ClusterRole to each gateway's AGC
+# agc-clusterrunnertemplate-reader — read-only access to the cluster-scoped kinds
+# the AGC depends on and a namespaced RoleBinding cannot grant: ClusterRunnerTemplate
+# and (since Q450) RuntimeClass, whose pod overhead is part of a worker's
+# ResourceQuota charge. The GMC binds this ClusterRole to each gateway's AGC
 # ServiceAccount via a per-gateway ClusterRoleBinding (M3b, §H.16 #1).
 #
-# The name is intentionally UNPREFIXED and must stay
+# The name is now narrower than the contents, and is kept anyway: it is intentionally
+# UNPREFIXED and must stay
 # `agc-clusterrunnertemplate-reader`: the GMC manager-role grants `bind` only on
 # this exact resourceName (not create/escalate), so renaming it breaks the
 # per-gateway ClusterRoleBinding the v2 ActionsGateway reconciler creates.

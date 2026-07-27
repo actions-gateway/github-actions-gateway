@@ -110,3 +110,11 @@ rules:
   verbs:
   - get
   - list
+- apiGroups:
+  - node.k8s.io
+  resources:
+  - runtimeclasses
+  verbs:
+  - get
+  - list
+  - watch

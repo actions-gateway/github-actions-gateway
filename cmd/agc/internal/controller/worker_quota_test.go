@@ -71,7 +71,8 @@ func wqWorkerPod(name string, phase corev1.PodPhase) *corev1.Pod {
 }
 
 func TestWorkerFootprint(t *testing.T) {
-	fp := workerFootprint(wqRunnerGroup(10, "100m", "256Mi"), 10)
+	rg := wqRunnerGroup(10, "100m", "256Mi")
+	fp := provisioner.WorkerFootprint(&rg.Spec.PodTemplate.Spec, 10)
 	pods := fp[corev1.ResourcePods]
 	assert.Equal(t, int64(10), pods.Value())
 	cpu := fp[corev1.ResourceRequestsCPU]
