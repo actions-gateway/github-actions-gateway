@@ -24,6 +24,12 @@ go build ./cmd/probe/...
 echo "==> installing git hooks (core.hooksPath -> .githooks)"
 git config core.hooksPath .githooks
 
+# .gitattributes routes docs/STATUS.md to `merge=backlog`, but git will not let a
+# tracked file define the driver's command, so the config half has to be
+# per-clone. Without it, git just uses its built-in three-way merge.
+echo "==> installing the docs/STATUS.md merge driver (merge.backlog)"
+scripts/git-merge-status.sh --install
+
 echo ""
 echo "Setup complete. Run tests with:"
 echo "  go test -race ./..."

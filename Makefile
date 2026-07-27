@@ -60,7 +60,7 @@ WRAPPER_IMG    ?= $(IMAGE_REGISTRY)/wrapper:e2e-$(GIT_SHA)
 
 .DEFAULT_GOAL := help
 
-.PHONY: all check hooks generate build build-agc build-gmc build-migrate build-probe build-proxy test test-race test-integration \
+.PHONY: all check hooks merge-driver generate build build-agc build-gmc build-migrate build-probe build-proxy test test-race test-integration \
         cover cover-update cover-check tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
@@ -206,10 +206,10 @@ SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-tes
                  check-roadmap-test check-conflict-markers-test check-v2-api-sync-test \
                  dependabot-rebase-stale-test go-vet-tags-test local-throttle-test \
                  shellcheck-scripts-test release-version-hook-test check-path-filters-test \
-                 validate-throttle-test qos-cluster-probe-test
+                 validate-throttle-test qos-cluster-probe-test git-merge-status-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, CI path-filter coverage, throttle instrument parsers)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver)
 	scripts/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of
@@ -235,6 +235,17 @@ claude-usage-test: ## Byte-compile claude-usage/ and run its Python unit tests (
 hooks: ## Install the tracked git hooks (sets core.hooksPath to .githooks)
 	git config core.hooksPath .githooks
 	@echo "git hooks installed: core.hooksPath -> .githooks (fast gofmt + STATUS.md gate on commit)"
+
+# Install the docs/STATUS.md merge driver for this clone. .gitattributes already
+# routes the file to `merge=backlog`, but git refuses to let a tracked file
+# define a driver's command (that would be remote code execution on clone), so
+# the config half is per-clone and opt-in. Until it is installed the attribute
+# names an undefined driver and git uses its built-in three-way merge — the
+# pre-driver behaviour. Run once after cloning (scripts/setup.sh does it for you);
+# repo-local, never --global, and shared with every linked worktree.
+.PHONY: merge-driver
+merge-driver: ## Install the docs/STATUS.md merge driver (Queue conflicts resolve by row ID)
+	scripts/git-merge-status.sh --install
 
 # Diagnose the local toolchain: report which required/e2e/extended CLI tools are
 # missing or installed-but-not-on-PATH, with per-OS install and PATH-fix hints.
