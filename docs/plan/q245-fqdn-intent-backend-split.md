@@ -385,8 +385,16 @@ beta field**, not a free alpha reshape.
 operator backend (with a deprecation warning), and map old→new in the Q74
 conversion webhook (fuzz-test the v2beta1→v2alpha1→v2beta1 round-trip so the
 Cilium-vs-Calico distinction isn't silently dropped). Remove the old values only
-at a later, deliberate breaking hop — on the **same deprecation clock as
-classic/v1alpha1**.
+at a later, deliberate breaking hop.
+
+> **Corrected (Q428): that hop is not the classic/`v1alpha1` clock.** This section
+> originally said the old values ride the **same deprecation clock as
+> classic/v1alpha1**, i.e. `v2.0.0`. They cannot: they are enum members of the beta
+> version `v2beta1`, which `v2.0.0` keeps serving, and an API element is removable
+> only by incrementing the version — so they live as long as `v2beta1` does. The
+> earliest release that may remove them is **`v3.0.0`**. Reasoning and the
+> operator-facing statement:
+> [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn).
 
 A **clean break** (drop the old values immediately) breaks any v2beta1 object
 that set an FQDN mode. Real usage is thin — the only known consumers of

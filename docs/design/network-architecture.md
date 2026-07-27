@@ -239,7 +239,7 @@ On a DNS-aware policy CNI an operator can have the GMC express the proxy pool's 
 - **Tenant intent** — a v2 `EgressProxy` selects `spec.egressPolicyMode`:
   - `CIDR` (default) — the standard NetworkPolicy + 24h IP-range reconcile described above. Works on every CNI, needs no operator backend.
   - `FQDN` — "express my GitHub allowlist by hostname." The tenant does **not** name a CNI; the mechanism is the operator's choice.
-  - `CiliumFQDN` / `CalicoFQDN` — **deprecated** aliases that pin their namesake mechanism regardless of the operator backend (retained for backward compatibility; the admission webhook warns).
+  - `CiliumFQDN` / `CalicoFQDN` — **deprecated** aliases that pin their namesake mechanism regardless of the operator backend (retained for backward compatibility; the admission webhook warns). Removable no earlier than `v3.0.0`: they are enum members of the beta version `v2beta1`, which the `v2.0.0` removal bundle keeps serving ([why](../operations/v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn)).
 - **Operator backend** — the GMC `--fqdn-policy-backend` flag (`none` | `cilium` | `calico` | `gke`) resolves an `FQDN` intent to a concrete emitter, once per cluster:
   - `cilium` → a `CiliumNetworkPolicy` (`cilium.io/v2`) with `toFQDNs` rules on TCP/443 plus a DNS-visibility rule so Cilium's DNS proxy learns the resolved IPs.
   - `calico` → a Calico `NetworkPolicy` (`projectcalico.org/v3`) with the GitHub hostnames as destination `domains`.

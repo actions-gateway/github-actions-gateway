@@ -113,9 +113,13 @@ both halves the policy needs, the API surface and the docs.
 > Two stale statements were corrected in passing: "you can stay on `v1alpha1`
 > indefinitely" (upgrade.md) and "Classic is slated for removal one *minor* release
 > out" (tenant-onboarding, troubleshooting), which understated a major-tag removal.
-> The `CiliumFQDN`/`CalicoFQDN` enum values still say "a future release (on the
-> classic/`v1alpha1` deprecation clock)"; naming a release for them is a separate
-> decision, filed as [Q428](../STATUS.md#Q428).
+> The `CiliumFQDN`/`CalicoFQDN` enum values were left saying "a future release (on the
+> classic/`v1alpha1` deprecation clock)"; naming a release for them was filed as
+> Q428 and is now **settled: `v3.0.0` at the earliest**, not
+> `v2.0.0`. They are enum members of the beta version `v2beta1`, which `v2.0.0` keeps
+> serving, and an API element is removable only by incrementing the version — so they
+> outlive this release's bundle by a major tag. Stated for operators in
+> [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn).
 
 The docs half of the notice already shipped as **Q409**: the ARC migration guide,
 getting-started, tenant onboarding, install, and the positioning pages were all

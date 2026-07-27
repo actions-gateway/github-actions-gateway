@@ -63,7 +63,10 @@ trade-off.
   (default `CIDR`) to allowlist GitHub by hostname; the operator picks the enforcement
   mechanism with the GMC `--fqdn-policy-backend` flag (`none`|`cilium`|`calico`|`gke`).
   The earlier per-CNI `CiliumFQDN` / `CalicoFQDN` values remain accepted-but-deprecated
-  (Q245).
+  (Q245) and are **not** removed by `v2.0.0` — they are enum members of the beta version
+  `v2beta1`, which `v2.0.0` keeps serving, so `v3.0.0` is the earliest release that may
+  remove them
+  ([why](v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn)).
 
 **Quality-of-life and hardening — batched into the one schema break:**
 

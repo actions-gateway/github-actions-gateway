@@ -769,9 +769,19 @@ nothing else touches the `EgressProxy`.
 **Deprecated `CiliumFQDN` / `CalicoFQDN`.** The earlier per-CNI enum values still work:
 each pins its namesake backend regardless of `--fqdn-policy-backend`, so existing
 `EgressProxy` objects keep behaving exactly as before. They are **deprecated** — the
-admission webhook attaches a warning steering you to `FQDN` + `--fqdn-policy-backend` —
-and will be removed in a future release (on the classic/v1alpha1 deprecation clock).
+admission webhook attaches a warning steering you to `FQDN` + `--fqdn-policy-backend`.
 Migrate by changing the tenant field to `FQDN` and setting the matching operator backend.
+
+> **They are not removed at `v2.0.0`. The earliest release that may remove them is
+> `v3.0.0`.** The two values are enum members of `egressPolicyMode` in the **beta**
+> version `actions-gateway.com/v2beta1`, and `v2.0.0` keeps serving `v2beta1` — it adds
+> the General Availability (GA) `v2` version beside it rather than taking it away. An
+> API element can only be removed by incrementing the version, never deleted from a
+> version that is still served, so these two live exactly as long as `v2beta1` does.
+> Retiring a served version is a breaking change and lands on a major tag, which puts
+> the earliest possible removal at `v3.0.0` — one major beyond the `v2.0.0` that removes
+> `v1alpha1`, `v2alpha1`, and classic acquisition. Full reasoning and the coupling to
+> the other clocks: [the deprecation and removal notice](v1alpha1-deprecation.md#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn).
 
 > **Managed "Cilium" platforms usually do NOT accept the `cilium` backend.** The CRD
 > test is literal: `kubectl get crd ciliumnetworkpolicies.cilium.io` must succeed.
