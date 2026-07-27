@@ -13,7 +13,7 @@ open.
 | 1 | Deduplicate the wrapper compile | ✅ Done — folded into the shared `build-wrapper` stage |
 | 2 | One shared builder stage for all six images | ✅ Done — single root `Dockerfile` |
 | 3 | Make the dependency compile a GHA-cacheable layer | ✅ Done — `deps` stage, `GOCACHE` as a real directory |
-| 4 | Overlap the runner disk cleanup with job setup | 🔲 Planned |
+| 4 | Overlap the runner disk cleanup with job setup | ✅ Done — detached cleanup + a barrier before the bake |
 | 5 | De-serialize `E2E_AGC_WorkerPodLifecycle` | ✅ Done — owner-scoped enqueue, `Serial` dropped |
 | 6 | Trim the HPA spec's fixed waits | ⚠️ Partial — `Consistently` 30s → 15s shipped; the metrics-server resolution change was tried and reverted |
 
@@ -194,14 +194,34 @@ budget.
 
 ---
 
-## 4. Overlap the runner disk cleanup with job setup
+## 4. Overlap the runner disk cleanup with job setup ✓
 
-**Estimated saving: 17–61 s**
+**Saving: 17–61 s**
 
 "Free runner disk space" (Q292's ENOSPC mitigation) deletes ~15–20 GB of unused
-toolchains and is pure serial critical path before any other step. Nothing until
-the bake needs the headroom, so it can run in the background and be waited on
-just before the build step.
+toolchains and was pure serial critical path before any other step. Nothing
+until the bake needs that headroom.
+
+### Approach (shipped)
+
+The deletions moved into [scripts/free-runner-disk.sh](../../scripts/free-runner-disk.sh)
+and now run in two workflow steps:
+
+- **Start freeing runner disk space**, at the top of the job, launches the
+  script under `setsid` so tearing the step down cannot take the cleanup with
+  it. The deletions then overlap with setup-go, setup-helm, the kind install,
+  the buildx boot, and the four cache-restore/mirror steps.
+- **Wait for the disk cleanup to finish**, immediately before the bake, blocks
+  on a sentinel the script writes as its last action.
+
+The barrier is what makes this safe rather than a re-run of Q292. Everything
+above it is light on disk; everything below it — six baked images plus the
+kind-loads — is exactly what exhausted the filesystem before. The sentinel is
+written last and only on the success path, so a deletion that fails under
+`set -e` looks identical to a dead process: the waiter times out (180 s, chosen
+to catch a dead process rather than a slow one) and runs the cleanup
+synchronously instead of building on a half-cleaned runner. Re-deleting paths
+the background run already removed is a no-op.
 
 ## 5. De-serialize `E2E_AGC_WorkerPodLifecycle` ✓
 
