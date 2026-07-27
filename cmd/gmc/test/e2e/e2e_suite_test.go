@@ -432,6 +432,16 @@ func setupMetricsServer() {
 		return
 	}
 	// Patch for kind (kubelet TLS is self-signed).
+	//
+	// Do NOT add --metric-resolution here to make the HPA specs settle sooner.
+	// Tried and reverted: 10s is metrics-server's minimum ACCEPTED value, but it
+	// also has to exceed kubelet's housekeeping interval (10s by default), or
+	// metrics-server keeps re-reading unchanged cAdvisor samples, discards them
+	// as duplicate timestamps, and never serves usage at all. The result is not
+	// a slower HPA but a dead one: on PR #874 both specs that gate on
+	// ScalingActive=True (E2E_GMC_HPADrivesScaleUp and
+	// E2E_AGC_SkippedJobIsRedeliveredAfterCapacityFrees) timed out at 300s and
+	// 240s with "metrics-server not serving metrics".
 	cmd = exec.Command("kubectl", "patch", "deployment", "metrics-server",
 		"-n", "kube-system",
 		"--type=json",
