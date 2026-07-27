@@ -105,7 +105,8 @@ workspace_modules() {
 # script's header for the detection rules and rationale (an unthrottled run
 # can trip the macOS WindowServer watchdog and freeze the GUI).
 #
-# THROTTLE_PREFIX is a command prefix ("taskpolicy -c utility", "nice -n 19")
+# THROTTLE_PREFIX is a command prefix ("nice -n 10 taskpolicy -d throttle",
+# "nice -n 19 ionice -c 3")
 # that callers expand UNQUOTED so it word-splits into command + args; when
 # empty it disappears entirely.
 init_throttle() {

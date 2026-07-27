@@ -14,24 +14,35 @@
 #
 # To keep the machine usable, an interactive GUI dev shell throttles the heavy
 # phases two ways:
-#   1. Run them at a low-priority QoS tier so foreground apps (the compositor
-#      included) preempt them, and — critically on macOS — so their disk I/O is
-#      throttled too. This is the root-cause fix.
-#        - macOS: `taskpolicy -c utility` (utility QoS — demotes CPU *and* disk
-#          I/O via the QoS band, the only way to throttle I/O on macOS since it
-#          has no ionice). The gentler `utility` tier is used rather than the
-#          lowest `-b`/background band: it still clamps aggregate build CPU and
-#          stays scheduled below the UI, but builds keep making real progress
-#          (measured 2–4× faster than `-b`). Why I/O and not just CPU: an
-#          unthrottled build already runs at a *lower* QoS than WindowServer yet
-#          still triggers the watchdog, so CPU priority alone is not the fix —
-#          the I/O demotion that `nice` cannot express on macOS is load-bearing.
+#   1. Demote both the disk I/O and the CPU priority of the build below the
+#      desktop, so foreground apps (the compositor included) preempt it. This is
+#      the root-cause fix. Why I/O and not just CPU: an unthrottled build already
+#      runs at a *lower* QoS than WindowServer yet still triggers the watchdog,
+#      so CPU priority alone is not the fix — the I/O demotion is load-bearing.
+#        - macOS: `nice -n 10 taskpolicy -d throttle`. `-d throttle` sets the
+#          disk I/O policy alone (taskpolicy is the only macOS way to express
+#          that — there is no ionice); `nice -n 10` supplies the CPU-priority
+#          demotion separately.
 #        - Linux: `nice -n 19` (lowest CPU priority), plus `ionice -c 3` (idle
 #          I/O class) when ionice is installed — the same CPU+I/O demotion, via
 #          Linux's separate knobs.
 #   2. Cap parallelism to (physical cores - 2), leaving cores for the UI. This
 #      is the only lever that reaches golangci-lint, which takes `-j` but reads
 #      no GOMAXPROCS/GOFLAGS env.
+#
+# The macOS prefix was `taskpolicy -c utility` until Q441. That is a QoS *clamp*,
+# and it did far more than deprioritize: it confined the whole build to a single
+# performance cluster — 21% of an M5 Max's compute on synthetic load, 37-39% mean
+# CPU on a real cold-cache lint — with no higher tier selectable, since `-c` only
+# ever ratchets QoS down. Splitting the two demotions apart (`-d throttle` for
+# I/O, `nice` for CPU) returns the idle clusters: measured 3.6x faster on the
+# cold-cache lint that dominates `make check`, for +1.4 ms of p99 desktop
+# scheduling latency, with zero stutter events past 50 ms, zero swapins and zero
+# WindowServer reports across nine runs. The variant keeping a CPU demotion was
+# both faster and lower-jitter than bare `-d throttle`, so there was no
+# speed-versus-safety trade to adjudicate. Evidence and method:
+# docs/plan/local-gate-throughput.md; instruments: scripts/qos-cluster-probe.sh
+# (compute ceiling) and scripts/validate-throttle.sh (desktop cost).
 #
 # Throttling is auto-detected and applies ONLY to an interactive, GUI-bearing
 # dev machine that is not CI:
@@ -70,9 +81,19 @@
 # whole duration (waits up to 5 h were observed). It is now an N-slot semaphore
 # (`slots`): N runs proceed at once, the rest queue. N holders at `jobs` each can
 # oversubscribe the physical cores, deliberately — the desktop-safety property is
-# the QoS demotion (CPU *and* I/O below the compositor), which every holder still
-# carries; the parallelism cap is a secondary bound. Set GAG_HEAVY_BUILD_SLOTS=1
-# to restore strict serialization.
+# the priority demotion (CPU *and* I/O below the compositor), which every holder
+# still carries; the parallelism cap is a secondary bound. Set
+# GAG_HEAVY_BUILD_SLOTS=1 to restore strict serialization.
+#
+# N=2 is measured, not guessed (Q441). Aggregate throughput of M concurrent
+# cold-cache lints, relative to one: 2 holders 1.25x, 3 holders 1.30x, 4 holders
+# 1.31x — the second slot is the only one that pays, and the tail keeps growing
+# past it (worst single wake 16.8 ms at 4 holders, past a 60 Hz frame). One
+# holder already reaches 81-85% CPU on this machine, which is why there is so
+# little left for a second to claim. Slot 2 still earns its place on LATENCY as
+# much as throughput: two holders finish in 36.7 s where strict serialization
+# needs 23.0 + 23.0 = 46 s, and the sibling starts immediately instead of
+# blocking for a full run.
 set -euo pipefail
 
 # Physical cores left for the GUI/foreground apps when throttling.
@@ -143,23 +164,30 @@ compute_jobs() {
 	printf '%s\n' "$jobs"
 }
 
+# has_ionice returns success when ionice(1) is installed. A named function rather
+# than an inline `command -v` so local-throttle-test.sh can assert BOTH Linux
+# branches on a machine that has neither tool.
+has_ionice() {
+	command -v ionice >/dev/null 2>&1
+}
+
 # qos_prefix prints the per-OS command wrapper that drops the build to
 # background/idle scheduling priority.
 qos_prefix() {
 	local prefix
 	case "$(os_kind)" in
 		darwin)
-			# utility QoS: demotes CPU + disk I/O below the UI (taskpolicy is the
-			# only macOS knob that throttles I/O — there is no ionice). Gentler
-			# than `-b`/background so the build keeps progressing (~2–4× faster)
-			# while still leaving headroom for the compositor.
-			printf '%s\n' "taskpolicy -c utility"
+			# `-d throttle` demotes disk I/O only (taskpolicy is the only macOS
+			# knob that throttles I/O — there is no ionice); `nice -n 10` adds the
+			# CPU demotion. Deliberately NOT a `-c` QoS clamp: that confines the
+			# build to one performance cluster. See the header note on Q441.
+			printf '%s\n' "nice -n 10 taskpolicy -d throttle"
 			;;
 		linux)
 			prefix="nice -n 19"
 			# ionice (util-linux) is usually present but not guaranteed; idle I/O
 			# class further protects the desktop from build I/O storms.
-			if command -v ionice >/dev/null 2>&1; then
+			if has_ionice; then
 				prefix="${prefix} ionice -c 3"
 			fi
 			printf '%s\n' "$prefix"

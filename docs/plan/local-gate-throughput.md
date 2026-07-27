@@ -195,7 +195,151 @@ variant that keeps a CPU-priority demotion is also the quicker one.
 3. **The prefix is the lever**, worth 3.6× measured end to end.
 
 Both knobs should be re-derived *after* the prefix changes, against the ceiling
-that then exists. Tracked as [Q441](../STATUS.md#Q441).
+that then exists. Done below.
+
+## Change 4: the prefix switches, and the two knobs are re-derived ✓
+
+The macOS prefix is now `nice -n 10 taskpolicy -d throttle`
+([`scripts/local-throttle.sh`](../../scripts/local-throttle.sh)), on the evidence
+above. Linux is untouched — `nice -n 19` + `ionice -c 3` already expresses the
+two demotions separately, which is exactly what macOS was missing.
+
+With the ceiling lifted, both parallelism knobs were re-measured against it.
+[`scripts/validate-throttle.sh`](../../scripts/validate-throttle.sh) grew the two
+axes needed for that: `GAG_THROTTLE_CANDIDATES` entries take `|jobs=N` (so a
+parallelism sweep interleaves within a trial, and thermal drift hits every level
+equally) and `|holders=M` (M copies run concurrently, as M sessions holding M
+semaphore slots would). A `test` workload was added alongside `lint`, because
+`jobs` is spent in two different places — `golangci-lint -j` in
+`scripts/go-lint.sh`, `go test -p` plus `GOMAXPROCS` in `scripts/go-test.sh` and
+`scripts/coverage.sh` — and a lint-only sweep cannot speak for the other.
+
+### `jobs`: not a lever for lint at any level from 8 to 24
+
+Cold-cache `golangci-lint` on `cmd/agc` under the new prefix, 3 interleaved
+trials (wall seconds per trial, then the jitter range across all three):
+
+| jobs | Wall (3 trials) | CPU% | p99 jitter | max jitter | >50 ms | swapins | WindowServer |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 8 | 18 / 21 / 21 | 59–73 % | 5.44–5.73 ms | 11.0 ms | 0 | 0 | 0 |
+| 12 | 18 / 19 / 19 | 63–79 % | 5.45–6.47 ms | 11.0 ms | 0 | 0 | 0 |
+| 16 (current) | 18 / 23 / 21 | 66–81 % | 5.73–6.38 ms | 12.1 ms | 0 | 0 | 0 |
+| 18 | 18 / 19 / 23 | 68–82 % | 5.71–5.89 ms | 12.2 ms | 0 | 0 | 0 |
+| 24 | 18 / 19 / 19 | 66–80 % | 5.97–7.29 ms | 9.8 ms | 0 | 0 | 0 |
+
+Every level lands in 18–23 s. **The spread *within* one level (16: 18→23 s) is
+wider than the spread between the extremes**, so there is no signal here to fit a
+curve to — `jobs` is simply not what bounds a per-module lint on this machine.
+Two things follow, and they point in opposite directions from the ones the
+section above anticipated:
+
+- Raising it buys nothing. `go-lint.sh` lints modules **serially**, one
+  `golangci-lint -j jobs` per module, and a single module's lint stops scaling
+  below 8. CPU% climbs with `jobs` (59 % → 80 %) while wall time does not — that
+  is the oversubscription cost showing up with no throughput to pay for it.
+- Lowering it costs nothing *here*, but `jobs` is not lint's alone (see the unit
+  tier below), so a cut would have to be justified against that consumer too.
+
+Desktop cost is flat as well, and stays close to the idle floor (p50 3.16 ms,
+p99 4.17 ms) at every level: worst p99 7.29 ms, worst single wake 12.2 ms — still
+inside one 60 Hz frame — with zero stutter events past 50 ms, zero swapins and
+zero WindowServer reports in all 15 runs, including the 1.33× oversubscribed
+`jobs=24`.
+
+### The unit tier had to go cold too — the fourth null
+
+The first attempt at the `test` workload kept the build cache **warm** and used
+`-count=1`, on the theory that this isolates `go test -p` from a compile storm.
+It reproduced the harness's signature failure exactly: 46/40/40/40 s at
+`jobs=4/8/16/24` and 18–36 % mean CPU, correctly marked `INVALID`. With the build
+cache warm, `-count=1` defeats only the *result* cache, so what remains is test
+execution — a handful of suites waiting on timers and envtest, which no amount of
+`-p` makes faster.
+
+That is now **four** undersized workloads across this investigation (`cmd/agc`
+alone, the warm `-race` tier, the warm unit tier, and — from the other
+direction — a `GOLANGCI_LINT_CACHE`-only bust). Every one of them returned
+identical numbers for every candidate and would have read as "the knob doesn't
+matter" without the saturation guard. **The generalization: on this repo, warm
+caches make every tier execution-bound and unable to discriminate; `GOCACHE` is
+what has to be cold for a parallelism knob to show a curve at all.** `run_test`
+therefore busts `GOCACHE` per run like `run_lint` does, which is also the regime
+that matters — a fresh worktree is exactly when the local gate is expensive.
+
+Cold, the unit tier does saturate (55–74 % CPU, `VALID`) and answers the other
+half of the `jobs` question — full workspace, `-count=1`, 2 interleaved trials:
+
+| jobs | Wall (2 trials) | CPU% | p99 jitter | max jitter | >50 ms | swapins | WindowServer |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 8 | 57 / 61 | 55–64 % | 4.19–4.25 ms | 10.4 ms | 0 | 0 | 0 |
+| 16 (current) | 59 / 64 | 67–72 % | 5.14–6.04 ms | 11.6 ms | 0 | 0 | 0 |
+| 24 | 66 / 63 | 61–74 % | 5.33–5.65 ms | 13.0 ms | 0 | 0 | 0 |
+
+The trend is mildly *negative*: more parallelism is very slightly slower, which
+is the oversubscription cost again. But the whole range spans 57–66 s against a
+4–5 s within-level spread, so this is a weak signal at best — and it certainly
+contains no case for raising `jobs`.
+
+### `jobs` stays at `physical - 2`
+
+Neither consumer shows a throughput gain anywhere in 8–24, and the unit tier
+leans slightly *against* the high end. That is not, however, evidence for
+lowering it, because **`jobs` is a formula, not the number 16**: on this 18-core
+machine `physical - 2` happens to yield 16, but on a 4-core laptop it yields 2,
+and that is the case where it actually binds. The measurements say the formula's
+exact output stops mattering once the machine is wide — not that its
+GUI-headroom rationale (leave two physical cores for the compositor) is wrong.
+Replacing it with a tuned constant would trade a rationale that scales for a
+number fitted to one machine, to buy an effect inside the noise.
+
+What did change is the reason it is safe. Before, `jobs = 16` was
+[fictional](#what-this-means-for-the-two-knobs) — 2.7× oversubscription of a
+6-core confinement. Now the cores are really there, `jobs=24` genuinely
+oversubscribes them, and the desktop still never registered a stutter event.
+
+### `slots` stays at 2 — the knee is exactly there
+
+M concurrent cold-cache lints, 3 interleaved trials. `WALL_S` is the time until
+the **last** holder finishes, so aggregate throughput is M/wall — that, not wall
+time, is what a slot count buys:
+
+| holders | Wall (3 trials) | Mean | Throughput | vs 1 slot | CPU% | p99 jitter | max jitter | >50 ms |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 19 / 25 / 25 | 23.0 s | 0.043 /s | 1.00× | 81–85 % | 5.3–6.5 ms | 11.8 ms | 0 |
+| **2 (current)** | 33 / 39 / 38 | 36.7 s | 0.055 /s | **1.25×** | 92–94 % | 7.1–8.2 ms | 14.9 ms | 0 |
+| 3 | 48 / 59 / 52 | 53.0 s | 0.057 /s | 1.30× | 91–95 % | 8.1–8.2 ms | 14.0 ms | 0 |
+| 4 | 64 / 76 / 71 | 70.3 s | 0.057 /s | 1.31× | 89–94 % | 8.5–9.2 ms | 16.8 ms | 0 |
+
+**The second slot earns its place; the third and fourth do not.** Slot 2 adds
+25 % aggregate throughput for ~1.7 ms of p99. Slot 3 adds 4 %, slot 4 adds 1 % —
+both inside the noise — while the tail keeps growing, and at 4 holders the worst
+single wake (16.8 ms) finally crosses a 60 Hz frame. No configuration produced a
+stutter event past 50 ms, a swapin, or a WindowServer report.
+
+This confirms the current default, but it retires the reasoning that was
+[recorded for it](#what-this-means-for-the-two-knobs). That reasoning said
+`slots` "was never adding hardware" because every holder shared the clamped band.
+The band is gone, and the conclusion survives for the opposite reason: **one
+holder now reaches 81–85 % CPU on its own**, so there is genuinely little machine
+left for a second to claim. Under `-c utility` a single run took ~37 %, and the
+second slot was dividing a ceiling; now it is competing for a nearly-full one.
+
+The throughput column also understates what slot 2 is for. The problem it was
+added to solve ([Q376](../STATUS.md)) was *queue depth* — a sibling session
+blocked for a full run before it could start. Two holders finish in 36.7 s where
+strict serialization needs 23.0 + 23.0 = 46 s, so the second session both starts
+immediately and finishes sooner. That is the argument for slot 2, and it does not
+extend to slot 3.
+
+`GAG_HEAVY_BUILD_SLOTS` still overrides the default in both directions for anyone
+whose machine or taste differs.
+
+### Scope of these numbers
+
+All of the above is one machine (M5 Max, 18 physical cores) and one repo. The
+`jobs` formula and the `MIN_CORES_FOR_MULTIPLE_SLOTS=4` floor exist for narrow
+machines, where both knobs actually bind — nothing here measures that case, and
+nothing here should be read as evidence about it.
 
 ### Scope: this only matters cold
 

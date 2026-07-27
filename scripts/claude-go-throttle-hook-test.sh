@@ -126,6 +126,10 @@ expect_unchanged 'compound: no -race        -> unchanged' \
 	'(cd cmd/agc && go test ./...)'
 # An already-throttled compound short-circuits before the compound branch.
 expect_unchanged 'compound: already throttled -> unchanged' \
+	'(cd cmd/agc && nice -n 10 taskpolicy -d throttle go test -race ./...)'
+# The pre-Q441 prefix must still read as throttled: a stale worktree still emits
+# it, and re-wrapping an already-demoted command would stack two prefixes.
+expect_unchanged 'compound: legacy prefix     -> unchanged' \
 	'(cd cmd/agc && taskpolicy -c utility go test -race ./...)'
 # A non-go command is not our concern.
 expect_unchanged 'non-go: cargo test        -> unchanged' \

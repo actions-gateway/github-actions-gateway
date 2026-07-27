@@ -254,6 +254,47 @@ mkdir -p "$UNRELATED_FIXTURE"
 : >"$UNRELATED_FIXTURE/Dock-2026-07-26-104233.ips"
 expect_eq ws-reports/ignores-other-reports 0 "$(windowserver_reports "$UNRELATED_FIXTURE")"
 
+# --- candidate_prefix / candidate_opt: the candidate-entry format -------------
+#
+# A candidate is `prefix` optionally followed by `|jobs=N` and/or `|holders=M`.
+# These two parsers decide what command actually runs and how many copies of it,
+# so a misread here does not fail loudly — it measures a configuration nobody
+# asked for and publishes the number as the derived default.
+
+# The default candidates carry no options and must survive unchanged, including
+# the embedded `-n 10` that makes the prefix look like it has fields of its own.
+expect_eq candidate/prefix-bare 'nice -n 10 taskpolicy -d throttle' \
+	"$(candidate_prefix 'nice -n 10 taskpolicy -d throttle')"
+expect_eq candidate/prefix-strips-options 'nice -n 10 taskpolicy -d throttle' \
+	"$(candidate_prefix 'nice -n 10 taskpolicy -d throttle|jobs=8|holders=2')"
+# Whitespace around the separator is trimmed: `run_workload` splits the prefix on
+# whitespace into a command array, where a trailing blank becomes an empty argv
+# entry and the exec fails.
+expect_eq candidate/prefix-trims-space 'taskpolicy -d throttle' \
+	"$(candidate_prefix '  taskpolicy -d throttle |jobs=8')"
+# The unthrottled row is a legitimate candidate and must stay empty, not become
+# a literal that the shell would try to exec.
+expect_eq candidate/prefix-empty '' "$(candidate_prefix '')"
+expect_eq candidate/prefix-empty-with-opts '' "$(candidate_prefix '|jobs=4')"
+
+expect_eq candidate/opt-jobs 8 "$(candidate_opt 'p|jobs=8' jobs 16)"
+expect_eq candidate/opt-holders 3 "$(candidate_opt 'p|jobs=8|holders=3' holders 1)"
+expect_eq candidate/opt-order-independent 8 "$(candidate_opt 'p|holders=3|jobs=8' jobs 16)"
+# An absent key takes the caller's default — that is how an entry inherits the
+# jobs value scripts/local-throttle.sh sizes.
+expect_eq candidate/opt-absent 16 "$(candidate_opt 'p|holders=2' jobs 16)"
+expect_eq candidate/opt-none 1 "$(candidate_opt 'taskpolicy -d throttle' holders 1)"
+# `jobs` must not answer a `holders` query: the keys sit in the same entry and
+# swapping them silently runs N concurrent copies at the wrong parallelism.
+expect_eq candidate/opt-distinct-keys 1 "$(candidate_opt 'p|jobs=24' holders 1)"
+# Junk and zero fall back to the default rather than reaching `golangci-lint -j`
+# (which would fail the run) or the holder loop (where 0 measures nothing at all
+# and reports it as a wall time).
+expect_eq candidate/opt-junk 16 "$(candidate_opt 'p|jobs=lots' jobs 16)"
+expect_eq candidate/opt-zero 1 "$(candidate_opt 'p|holders=0' holders 1)"
+expect_eq candidate/opt-negative 16 "$(candidate_opt 'p|jobs=-4' jobs 16)"
+expect_eq candidate/opt-empty-value 16 "$(candidate_opt 'p|jobs=' jobs 16)"
+
 # --- summary -----------------------------------------------------------------
 
 if (( fails > 0 )); then

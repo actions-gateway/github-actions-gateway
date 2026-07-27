@@ -52,6 +52,39 @@ expect_eq slots-override-zero 2 "$(GAG_HEAVY_BUILD_SLOTS=0 compute_slots)"
 expect_eq slots-override-junk 2 "$(GAG_HEAVY_BUILD_SLOTS=lots compute_slots)"
 expect_eq slots-override-negative 2 "$(GAG_HEAVY_BUILD_SLOTS=-1 compute_slots)"
 
+# --- qos_prefix ------------------------------------------------------------
+# os_kind is stubbed per case so both platforms' prefixes are asserted wherever
+# this runs. These strings ARE the throttle: the wrong one either freezes the
+# GUI or throws away most of the machine.
+
+expect_eq prefix-darwin 'nice -n 10 taskpolicy -d throttle' \
+	"$(os_kind() { printf 'darwin'; }; qos_prefix)"
+
+# The regression this pins is a return to `taskpolicy -c utility` (or any other
+# `-c` band). `-c` is a QoS CLAMP, not a nice level: on Apple Silicon it confines
+# the whole build to a single CPU cluster — 21% of an M5 Max — and since it only
+# ever ratchets QoS down there is no higher tier to select back. Q441 measured
+# the split demotion 3.6x faster for +1.4 ms of p99 desktop latency, so a change
+# back here is a 3.6x regression that no test would otherwise notice.
+expect_eq prefix-darwin-no-qos-clamp '' \
+	"$(os_kind() { printf 'darwin'; }; qos_prefix | grep -o -- '-c [a-z]*' || true)"
+# Both demotions must survive: dropping `taskpolicy -d` loses the disk I/O
+# demotion that `nice` cannot express on macOS, and that is the one the
+# WindowServer watchdog actually needs.
+expect_eq prefix-darwin-has-io-demotion 'taskpolicy -d throttle' \
+	"$(os_kind() { printf 'darwin'; }; qos_prefix | grep -o 'taskpolicy -d throttle' || true)"
+
+# Linux expresses the same CPU+I/O demotion through two separate tools, and
+# ionice is not guaranteed to be installed — the CPU half must still apply.
+expect_eq prefix-linux-with-ionice 'nice -n 19 ionice -c 3' \
+	"$(os_kind() { printf 'linux'; }; has_ionice() { return 0; }; qos_prefix)"
+expect_eq prefix-linux-without-ionice 'nice -n 19' \
+	"$(os_kind() { printf 'linux'; }; has_ionice() { return 1; }; qos_prefix)"
+
+# An unsupported OS gets no prefix at all, so the Makefile runs the command bare
+# rather than through a wrapper that does not exist there.
+expect_eq prefix-other '' "$(os_kind() { printf 'other'; }; qos_prefix)"
+
 # --- lock_file -------------------------------------------------------------
 # Slot 1 must keep the pre-semaphore filename: a worktree still running the old
 # single-lock code opens exactly that path, so it contends with slot 1 here

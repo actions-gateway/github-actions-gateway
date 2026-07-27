@@ -206,7 +206,7 @@ main() {
 					hookSpecificOutput: {
 						hookEventName: "PreToolUse",
 						permissionDecision: "ask",
-						permissionDecisionReason: "Auto-throttled a heavy `go ... -race` (utility QoS) — confirm to run the throttled form. An unthrottled -race run can saturate the machine and freeze the local GUI; see CLAUDE.md.",
+						permissionDecisionReason: "Auto-throttled a heavy `go ... -race` (I/O and CPU demoted below the desktop) — confirm to run the throttled form. An unthrottled -race run can saturate the machine and freeze the local GUI; see CLAUDE.md.",
 						updatedInput: { command: $cmd }
 					}
 				}'
@@ -236,7 +236,7 @@ main() {
 		hookSpecificOutput: {
 			hookEventName: "PreToolUse",
 			permissionDecision: "allow",
-			permissionDecisionReason: "Auto-throttled heavy go build/test (utility QoS) to keep the local GUI responsive — see CLAUDE.md.",
+			permissionDecisionReason: "Auto-throttled heavy go build/test (I/O and CPU demoted below the desktop) to keep the local GUI responsive — see CLAUDE.md.",
 			updatedInput: { command: $cmd }
 		}
 	}'

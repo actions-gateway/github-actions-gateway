@@ -34,7 +34,23 @@
 # Usage:
 #   scripts/validate-throttle.sh                 # lint phase, 1 trial per candidate
 #   scripts/validate-throttle.sh 3               # 3 trials per candidate
+#   scripts/validate-throttle.sh 2 test          # unit tier instead (`go test -p`)
 #   scripts/validate-throttle.sh 1 race          # race tier instead (expect INVALID)
+#
+# GAG_THROTTLE_CANDIDATES (newline-separated) replaces the candidate list, so the
+# same harness re-derives the OTHER two knobs once a prefix is settled. Each entry
+# is a prefix optionally followed by `|jobs=N` and/or `|holders=M`:
+#
+#   jobs=N     parallelism for this row (golangci-lint -j / go test -p), instead
+#              of whatever scripts/local-throttle.sh currently sizes.
+#   holders=M  run M copies of the workload CONCURRENTLY, as M sibling worktree
+#              sessions holding M semaphore slots would. WALL_S is then the time
+#              until the last one finishes, so throughput is M/WALL_S — a second
+#              holder pays for itself only when WALL_S grows by less than 2x.
+#
+#   # sweep parallelism under one prefix, interleaved so drift hits rows equally
+#   GAG_THROTTLE_CANDIDATES=$'nice -n 10 taskpolicy -d throttle|jobs=8
+#   nice -n 10 taskpolicy -d throttle|jobs=16' scripts/validate-throttle.sh 3
 #
 # Needs .build/golangci-lint (`make golangci-lint`). No sudo required.
 set -euo pipefail
@@ -78,11 +94,18 @@ readonly MIN_SATURATION_PCT=50
 # compared to it. The unthrottled prefix is deliberately absent: its compute
 # ceiling is already known and it is the configuration that historically froze
 # the GUI, so there is nothing to learn by running it against a real -race build.
-readonly CANDIDATES=(
-	'taskpolicy -c utility'             # current: scripts/local-throttle.sh
-	'nice -n 10 taskpolicy -d throttle' # proposed: I/O demoted, CPU deprioritized
-	'taskpolicy -d throttle'            # aggressive: I/O demoted only
+#
+# GAG_THROTTLE_CANDIDATES (newline-separated) replaces the list — see the header
+# for the `prefix|jobs=N|holders=M` entry format.
+CANDIDATES=(
+	'nice -n 10 taskpolicy -d throttle' # current: scripts/local-throttle.sh
+	'taskpolicy -d throttle'            # aggressive: I/O demoted only, no nice
+	'taskpolicy -c utility'             # the pre-Q441 clamp, for contrast
 )
+if [[ -n "${GAG_THROTTLE_CANDIDATES:-}" ]]; then
+	IFS=$'\n' read -r -d '' -a CANDIDATES <<<"$GAG_THROTTLE_CANDIDATES" || true
+fi
+readonly CANDIDATES
 
 probe_pid=""
 iostat_pid=""
@@ -166,6 +189,33 @@ run_race() {
 	) || true
 }
 
+# run_test runs the whole unit tier as one invocation, matching scripts/go-test.sh
+# minus -race. This is the OTHER half of what `jobs` reaches: go-lint.sh spends it
+# on `golangci-lint -j`, while go-test.sh and coverage.sh spend it on `go test -p`
+# plus GOMAXPROCS, and a lint-only sweep cannot speak for either.
+#
+# GOCACHE is COLD per run, for the same reason run_lint busts it. A warm-cache
+# version of this workload was tried first and is the third null this harness has
+# produced: 40 s at every parallelism level from 4 to 24 and only 18-36% mean CPU,
+# INVALID under MIN_SATURATION_PCT. With the build cache warm, `-count=1` defeats
+# only the RESULT cache, so what is left is test execution — a few slow suites
+# waiting on timers and envtest, which no amount of `-p` makes faster. Cold, the
+# run is compile-bound, which is both what actually saturates and the regime that
+# matters: a fresh worktree is exactly when the local gate is expensive.
+run_test() {
+	local jobs="$2" gocache
+	local pfx=() patterns=() dir
+	[[ -n "$1" ]] && read -r -a pfx <<<"$1"
+	for dir in $(workspace_modules); do patterns+=("$dir/..."); done
+	gocache="$(mktemp -d "${TMP_DIR}/gocache.XXXXXX")"
+	(
+		cd "$REPO_ROOT" || exit 1
+		GOCACHE="$gocache" GOMAXPROCS="$jobs" "${pfx[@]}" go test -trimpath -count=1 \
+			-timeout 20m -p "$jobs" "${patterns[@]}" >/dev/null 2>&1
+	) || true
+	rm -rf "$gocache"
+}
+
 # run_lint lints one heavy module under the candidate prefix, mirroring
 # scripts/go-lint.sh's invocation but with BOTH caches cold.
 #
@@ -193,22 +243,72 @@ run_lint() {
 	rm -rf "$gocache" "$lintcache"
 }
 
-# run_workload dispatches to the selected phase and prints elapsed seconds.
-run_workload() {
-	local started ended
-	started="$(date +%s)"
+# candidate_prefix prints the command prefix of a candidate entry: everything
+# before the first `|`, with surrounding whitespace trimmed. An entry with no
+# options is returned unchanged, which is why the default candidates need no
+# special-casing.
+candidate_prefix() {
+	local prefix="${1%%|*}"
+	prefix="${prefix#"${prefix%%[![:space:]]*}"}"
+	printf '%s' "${prefix%"${prefix##*[![:space:]]}"}"
+}
+
+# candidate_opt ENTRY KEY DEFAULT prints the value of `|KEY=V` in a candidate
+# entry, or DEFAULT when the key is absent.
+#
+# A non-numeric or zero value falls back to DEFAULT rather than propagating: it
+# reaches `golangci-lint -j` and the concurrency loop, where a typo would either
+# fail the run outright or — worse — silently measure a configuration nobody
+# asked for and publish it as the derived default.
+candidate_opt() {
+	local entry="$1" key="$2" default="$3" value
+	value="$(printf '%s' "$entry" | tr '|' '\n' |
+		awk -F= -v k="$key" '$1 == k { print $2; exit }')"
+	[[ "$value" =~ ^[0-9]+$ ]] && (( value >= 1 )) || value="$default"
+	printf '%s' "$value"
+}
+
+# run_once dispatches to the selected phase for a single holder.
+run_once() {
 	case "$WORKLOAD" in
 		lint) run_lint "$1" "$2" ;;
+		test) run_test "$1" "$2" ;;
 		race) run_race "$1" "$2" ;;
 		*) printf 'unknown workload: %s\n' "$WORKLOAD" >&2; exit 2 ;;
 	esac
+}
+
+# run_workload runs $3 (default 1) concurrent copies of the phase and prints the
+# seconds until the LAST one finishes — what a sibling session actually waits.
+#
+# Concurrency is the only way to measure the `slots` semaphore: one holder can
+# never show whether a second one is buying throughput or just dividing a fixed
+# ceiling. Each holder gets its own GOCACHE (run_lint mktemps per call), so they
+# contend for the machine exactly as separate worktrees do rather than sharing
+# warm artifacts and flattering the result.
+run_workload() {
+	local holders="${3:-1}" i started ended
+	local pids=()
+	started="$(date +%s)"
+	for (( i = 0; i < holders; i++ )); do
+		run_once "$1" "$2" &
+		pids+=("$!")
+	done
+	for i in "${pids[@]}"; do
+		wait "$i" || true
+	done
 	ended="$(date +%s)"
 	printf '%s' "$(( ended - started ))"
 }
 
-# measure runs one candidate once and prints a TSV row.
+# measure runs one candidate entry once and prints a TSV row. $2 is the harness's
+# auto-sized jobs, used only when the entry does not pin its own.
 measure() {
-	local prefix="$1" jobs="$2" trial="$3"
+	local entry="$1" trial="$3"
+	local prefix jobs holders
+	prefix="$(candidate_prefix "$entry")"
+	jobs="$(candidate_opt "$entry" jobs "$2")"
+	holders="$(candidate_opt "$entry" holders 1)"
 	local ws_before ws_after sw_before sw_after wall jitter busy
 	local io_out="${TMP_DIR}/iostat.out"
 
@@ -220,7 +320,7 @@ measure() {
 	iostat -c 100000 -w 1 >"$io_out" 2>/dev/null &
 	iostat_pid="$!"
 
-	wall="$(run_workload "$prefix" "$jobs")"
+	wall="$(run_workload "$prefix" "$jobs" "$holders")"
 
 	kill -TERM "$probe_pid" 2>/dev/null || true
 	wait "$probe_pid" 2>/dev/null || true
@@ -234,7 +334,7 @@ measure() {
 	ws_after="$(windowserver_reports)"
 	sw_after="$(swapins)"
 
-	printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$prefix" "$trial" "$wall" "$jitter" \
+	printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$entry" "$trial" "$wall" "$jitter" \
 		"$(( sw_after - sw_before ))|$(( ws_after - ws_before ))" "$busy"
 }
 
@@ -269,32 +369,36 @@ main() {
 		return 2
 	fi
 
-	printf '==> workload=%s%s trials=%s jobs=%s\n' "$WORKLOAD" \
-		"$([[ "$WORKLOAD" == "lint" ]] && printf ' (cold cache, %s)' "$LINT_MODULE")" \
+	printf '==> workload=%s%s trials=%s jobs=%s (default; per-candidate |jobs= wins)\n' \
+		"$WORKLOAD" \
+		"$([[ "$WORKLOAD" == "lint" ]] && printf ' (cold cache, %s)' "$LINT_MODULE"
+			[[ "$WORKLOAD" == "test" ]] && printf ' (cold cache, all modules)')" \
 		"$TRIALS" "$jobs"
 	printf '==> idle jitter floor: %s\n' "$("$PROBE" 16.667 5)"
 
-	# No warmup for the lint workload: every trial deliberately starts from a cold
-	# GOCACHE, so there is no shared first-run cost for a warmup to absorb. The
-	# race tier does need one, since its first run compiles instrumented deps.
+	# No warmup for the lint and test workloads: both deliberately start each run
+	# from a cold GOCACHE, so there is no shared first-run cost for a warmup to
+	# absorb. The race tier does need one, since its first run compiles the
+	# instrumented deps, which would otherwise land entirely on whichever
+	# candidate happened to be measured first.
 	if [[ "$WORKLOAD" == "race" ]]; then
 		printf '==> warming the build cache (unmeasured, several minutes)\n'
 		run_workload '' "$jobs" >/dev/null
 	fi
 
-	printf '\n%-36s %5s %7s %5s %8s %8s %8s %7s %7s %s\n' \
-		'PREFIX' 'TRIAL' 'WALL_S' 'CPU%' 'p50_ms' 'p99_ms' 'max_ms' '>50ms' '>250ms' 'SWAPIN|WS'
-	printf '%s\n' '-------------------------------------------------------------------------------------------------------------------'
+	printf '\n%-52s %5s %7s %5s %8s %8s %8s %7s %7s %s\n' \
+		'CANDIDATE' 'TRIAL' 'WALL_S' 'CPU%' 'p50_ms' 'p99_ms' 'max_ms' '>50ms' '>250ms' 'SWAPIN|WS'
+	printf '%s\n' '-------------------------------------------------------------------------------------------------------------------------------------'
 
-	local trial pfx row jit busy peak note
+	local trial cand row jit busy peak note
 	local rows=()
 	for (( trial = 1; trial <= TRIALS; trial++ )); do
 		# Collect the whole trial before printing: validity is a property of the
 		# trial (did ANY candidate load the machine?), not of an individual row.
 		rows=()
 		peak=0
-		for pfx in "${CANDIDATES[@]}"; do
-			row="$(measure "$pfx" "$jobs" "$trial")"
+		for cand in "${CANDIDATES[@]}"; do
+			row="$(measure "$cand" "$jobs" "$trial")"
 			rows+=("$row")
 			busy="$(printf '%s' "$row" | cut -f6)"
 			(( busy > peak )) && peak="$busy"
@@ -305,7 +409,7 @@ main() {
 
 		for row in "${rows[@]}"; do
 			jit="$(printf '%s' "$row" | cut -f4)"
-			printf '%-36s %5s %7s %4s%% %8s %8s %8s %7s %7s %s%s\n' \
+			printf '%-52s %5s %7s %4s%% %8s %8s %8s %7s %7s %s%s\n' \
 				"$(printf '%s' "$row" | cut -f1)" \
 				"$(printf '%s' "$row" | cut -f2)" \
 				"$(printf '%s' "$row" | cut -f3)" \
@@ -322,6 +426,8 @@ main() {
 	printf 'A low CPU%% on one candidate alone is the throttle working, not a bad measurement.\n'
 	printf 'SWAPIN|WS = swapins during the trial | new WindowServer reports (must be 0).\n'
 	printf 'Candidates are interleaved within each trial so thermal drift hits them equally.\n'
+	printf 'holders=M runs M copies concurrently and WALL_S is until the LAST finishes:\n'
+	printf 'compare M/WALL_S against the holders=1 row to see what a slot actually buys.\n'
 }
 
 # Run main only when executed directly, so validate-throttle-test.sh can source
