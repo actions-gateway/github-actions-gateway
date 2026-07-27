@@ -14,8 +14,8 @@ open.
 | 2 | One shared builder stage for all six images | ✅ Done — single root `Dockerfile` |
 | 3 | Make the dependency compile a GHA-cacheable layer | ✅ Done — `deps` stage, `GOCACHE` as a real directory |
 | 4 | Overlap the runner disk cleanup with job setup | 🔲 Planned |
-| 5 | De-serialize `E2E_AGC_WorkerPodLifecycle` | 🔲 Planned |
-| 6 | Trim the HPA spec's fixed waits | 🔲 Planned |
+| 5 | De-serialize `E2E_AGC_WorkerPodLifecycle` | ✅ Done — owner-scoped enqueue, `Serial` dropped |
+| 6 | Trim the HPA spec's fixed waits | ⚠️ Partial — `Consistently` 30s → 15s shipped; the metrics-server resolution change was tried and reverted |
 
 ## Baseline
 
@@ -203,36 +203,82 @@ toolchains and is pure serial critical path before any other step. Nothing until
 the bake needs the headroom, so it can run in the background and be waited on
 just before the build step.
 
-## 5. De-serialize `E2E_AGC_WorkerPodLifecycle`
+## 5. De-serialize `E2E_AGC_WorkerPodLifecycle` ✓
 
-**Estimated saving: ~60 s off the serial tail**
+**Saving: ~60 s off the serial tail**
 
-Its three specs are `Serial` for a reason that no longer holds. The comment says
-session IDs carry no tenant identity, so the suite enqueues a job onto *every*
-active fakegithub session and must not run alongside other session-consuming
+Its three specs were `Serial` for a reason that no longer held. The comment said
+session IDs carry no tenant identity, so the suite enqueued a job onto *every*
+active fakegithub session and could not run alongside other session-consuming
 suites. But fakegithub grew an owner filter since —
 `GET /control/sessions?owner=<prefix>`, already used by `singleuse_selfheal`,
 `acquire_admission`, and `job_lifecycle` via `fakegithubActiveSessionsForOwner`.
-Scoping the enqueue to this suite's own RunnerGroups moves 60 s from the tail
-into the parallel phase.
 
-Note the suite runs two tenants that currently share `agName` (`test-ag`), so
-the owner prefix cannot distinguish them from each other or from other suites'
-tenants; the RunnerGroup names have to be made distinct as part of this.
+### Approach (shipped)
 
-## 6. Trim the HPA spec's fixed waits
+- The enqueue loop is scoped by owner prefix to this suite's own two tenants
+  instead of spraying every active session.
+- Those tenants get distinct ActionsGateway names (`podclean-ag`, `podstuck-ag`)
+  where both were `test-ag` before. Session ownerName is
+  `<runnerGroup>-<agentIndex>` and RunnerGroup name is `<ag>-<first label>`, so
+  the ActionsGateway name is what makes the prefix selective — and sharing
+  `test-ag` with `job_lifecycle` is precisely what made the spray unavoidable.
+- `Serial` dropped; `Ordered` kept.
 
-**Estimated saving: ~15 s off the serial tail, plus the ScalingActive wait**
+Dropping `Serial` does not disturb the shared `fakegithubLocalPort` package
+var. Six sibling suites (`job_lifecycle`, `acquire_admission`,
+`singleuse_selfheal`, `vault_workload_identity`, `v2_multigateway`,
+`worker_securitycontext`) already assign it from their own base port in their own
+`BeforeAll` without being `Serial`: Ginkgo runs an `Ordered` container's specs
+contiguously within one process, so no other container can reassign it
+mid-suite. This suite keeps its own base port (19300).
 
-`E2E_GMC_HPADrivesScaleUp` is 78 s, of which 30 s is a fixed
+## 6. Trim the HPA spec's fixed waits ✓
+
+**Saving: ~15 s off the serial tail, plus part of the ScalingActive wait**
+
+`E2E_GMC_HPADrivesScaleUp` is 78 s, of which 30 s was a fixed
 `Consistently(30*time.Second, ...)` — the Q283 regression guard that the
-reconciler does not claim `.spec.replicas` back from the HPA. Its own comment
-notes every proxy pod reaching Ready re-triggers a reconcile, so a shorter
-window still spans multiple passes.
+reconciler does not claim `.spec.replicas` back from the HPA.
 
-The `ScalingActive` wait ahead of it is bounded by metrics-server's default 15 s
-`--metric-resolution` and kube-controller-manager's 15 s HPA sync period; both
-are tunable (the latter through a kind kubeadm patch).
+### Approach (shipped)
+
+- **`Consistently` 30 s → 15 s.** What determines whether a revert is caught is
+  the reconcile rate, not the wall-clock window; every proxy pod reaching Ready
+  re-triggers a reconcile, and at 2 s polling 15 s still samples the Deployment
+  eight times across many passes. This is a fixed cost paid on every run inside
+  a Serial spec, so it lands whole on the critical tail.
+### Tried and reverted: metrics-server `--metric-resolution` 15 s → 10 s
+
+The HPA cannot report `ScalingActive=True` until metrics-server has scraped, so
+the default resolution sits directly in front of this spec. Lowering it to 10 s
+— metrics-server's minimum *accepted* value — looked like free latency.
+
+It is not. `--metric-resolution` must also **exceed kubelet's housekeeping
+interval** (10 s by default). At exactly 10 s metrics-server keeps re-reading
+unchanged cAdvisor samples, discards them as duplicate timestamps, and never
+serves usage at all — so the outcome is not a slower HPA but a dead one.
+
+On PR #874 both specs that gate on `ScalingActive=True` timed out:
+
+| Spec | Timeout | Message |
+|---|---|---|
+| `E2E_GMC_HPADrivesScaleUp` | 300 s | metrics-server not serving metrics |
+| `E2E_AGC_SkippedJobIsRedeliveredAfterCapacityFrees` | 240 s | metrics-server not serving metrics |
+
+Reverted, with the reasoning recorded inline at the patch site so the next
+person to spot that 15 s does not re-derive it the expensive way. The lesson is
+the repo's own rule: this was shipped on a recalled documentation fact instead
+of a measurement, and the e2e leg is what caught it.
+
+### Not done: the kube-controller-manager HPA sync period
+
+The other bound on `ScalingActive` is kube-controller-manager's 15 s
+`--horizontal-pod-autoscaler-sync-period`, settable through a kind
+`kubeadmConfigPatches` block. Left alone deliberately: it raises the reconcile
+rate cluster-wide, on a 4-vCPU runner, for perhaps 5 s on one spec — and CPU
+starvation on this cluster is the documented mechanism behind the Q300 kindnet
+flake family. Not a trade worth making for 5 s.
 
 ## Not doing
 

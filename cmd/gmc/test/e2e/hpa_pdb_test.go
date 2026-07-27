@@ -129,6 +129,13 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 		// Q283 regression guard: the reconciler must not claim .spec.replicas back
 		// from the HPA. Every proxy pod that reaches Ready re-triggers a reconcile
 		// via the Owns(Deployment) watch, so this window covers many passes.
+		//
+		// 15s, not 30s: this is a fixed cost paid on every run, inside a Serial
+		// spec, so it lands whole on the suite's critical tail. The reconcile
+		// rate is what determines whether a revert would be caught, not the
+		// wall-clock window — and at 2s polling this still samples the
+		// Deployment eight times across many reconcile passes. Widen it again if
+		// a Q283-shaped regression ever slips through.
 		By("asserting the reconciler leaves the HPA's replica count alone")
 		Consistently(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get", "deployment", proxyName,
@@ -136,7 +143,7 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 			out, err := utils.Run(cmd)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(out).To(Equal("2"), "reconciler reverted the HPA's scale-out (Q283)")
-		}, 30*time.Second, 2*time.Second).Should(Succeed())
+		}, 15*time.Second, 2*time.Second).Should(Succeed())
 	})
 
 	It("E2E_GMC_PDBPreventsEvictionBelowMinAvailable: PDB blocks eviction when at minimum",
