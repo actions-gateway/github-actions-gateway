@@ -43,7 +43,8 @@ import (
 // controller, so the tests own `status` outright and nothing rewrites it underneath
 // them.
 //
-// See docs/plan/eviction-oversubscription-validation.md § Experiment 4.
+// The coverage these two cases provide, and what envtest cannot show, are recorded in
+// docs/design/07-test-plan.md § Pre-claim quota gate under contention (Q422).
 
 // filledCPUQuota builds a namespace ResourceQuota that is *occupied*: hard and used are
 // both set on the status, so remaining headroom is hard − used. The gate prefers
