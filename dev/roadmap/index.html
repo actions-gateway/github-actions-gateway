@@ -1301,6 +1301,8 @@
       
         
       
+        
+      
     
     
     
@@ -1586,6 +1588,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1725,10 +1755,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7_15" id="__nav_7_15_label" tabindex="0">
             
   
   
@@ -1746,8 +1776,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2397,6 +2427,13 @@ tagged chart. Check the release notes for the exact image digests to pin.</p>
   for the full list.</li>
 <li><strong>Day-2 operations.</strong> Helm upgrade and rollback paths, a backup/restore and
   disaster-recovery runbook, and troubleshooting guides.</li>
+<li><strong>A <code>ResourceQuota</code> sizing guide.</strong> Turn a tenant's runner shapes and
+  concurrency ceilings into the quota numbers a platform admin sets, so the
+  first install is a calculation rather than a guess:
+  <a href="../operations/resourcequota-sizing/">sizing the platform-owned <code>ResourceQuota</code></a>
+  covers what the quota actually counts (native sidecars and Kata <code>RuntimeClass</code>
+  overhead both do), which keys are safe to constrain, and a worked
+  Docker-in-Docker example.</li>
 <li><strong>An onboarding and migration path that is already written.</strong> A
   <a href="../operations/migration-from-arc/">switching-from-ARC walkthrough</a> that moves one
   runner group across with zero downtime, a
@@ -2436,9 +2473,6 @@ last gaps an outside operator hits.</p>
   on-prem clusters) and one from a cluster-autoscaler or Karpenter declination
   (for elastic clusters, where the scheduler signal alone is unsafe). Off by
   default; the live quota-headroom check already ships.</li>
-<li><strong><code>ResourceQuota</code> sizing helper.</strong> <!-- q:Q410 --> Turn a tenant's runner shapes and
-  concurrency into the quota numbers a platform admin should set, so the first
-  install lands without a guess.</li>
 </ul>
 <h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
 <p>Directions we expect to pursue as demand and validated evidence accumulate. These

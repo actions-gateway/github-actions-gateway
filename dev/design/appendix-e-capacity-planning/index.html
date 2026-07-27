@@ -1448,6 +1448,8 @@
       
         
       
+        
+      
     
     
     
@@ -1733,6 +1735,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1872,10 +1902,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7_15" id="__nav_7_15_label" tabindex="0">
             
   
   
@@ -1893,8 +1923,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2649,7 +2679,7 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Steady-state sessions   = number of RunnerGroups in the ActionsGateway
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Peak sessions (worst case) = sum of maxListeners across all RunnerGroups
 </code></pre></div>
-<p>The platform-owned namespace <code>ResourceQuota</code> remains the binding constraint on how many jobs run concurrently — it is independent of listener count. It is set on the namespace by the platform admin (or your GitOps / tenant-operator stack), not on the <code>ActionsGateway</code> CR.</p>
+<p>The platform-owned namespace <code>ResourceQuota</code> remains the binding constraint on how many jobs run concurrently — it is independent of listener count. It is set on the namespace by the platform admin (or your GitOps / tenant-operator stack), not on the <code>ActionsGateway</code> CR. For the arithmetic that turns runner shapes and <code>maxWorkers</code> into the actual quota numbers — including the native sidecars and Kata <code>RuntimeClass</code> overhead that the per-container asks alone do not account for — see <a href="../../operations/resourcequota-sizing/">sizing the platform-owned <code>ResourceQuota</code></a>.</p>
 <hr />
 <h2 id="e2-what-runnergroups-are-and-arent-for">E.2. What RunnerGroups Are (and Aren't) For<a class="headerlink" href="#e2-what-runnergroups-are-and-arent-for" title="Permanent link">&para;</a></h2>
 <p>A <code>RunnerGroup</code> represents a <strong>pool of listener goroutines sharing a common pod shape</strong>. It is not a per-repo, per-team, or per-workflow construct.</p>

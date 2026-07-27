@@ -1332,6 +1332,8 @@
       
         
       
+        
+      
     
     
     
@@ -1617,6 +1619,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1756,10 +1786,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_7_15" id="__nav_7_15_label" tabindex="0">
             
   
   
@@ -1777,8 +1807,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2488,7 +2518,7 @@ The AGC control-plane pod stamps no requests of its own, so without a <code>Limi
 to supply defaults it is refused with <code>must specify requests.cpu</code> and never
 schedules. The <code>LimitRange</code> above fills that gap (and covers any worker pod whose
 runner group leaves requests unset). See
-<a href="../operations/tenant-onboarding/#copy-pasteable-template">Tenant Onboarding — LimitRange caveat</a>.</p>
+<a href="../operations/resourcequota-sizing/#only-constrain-keys-every-pod-declares">only constrain keys every pod declares</a>.</p>
 <p>The gateway reads remaining quota and reacts to exhaustion (it won't claim a job
 the quota can't place, and lock-cancels then reruns any job that loses headroom
 after the claim — see <a href="../why-gag/">why-gag</a>), but the quota itself is yours to

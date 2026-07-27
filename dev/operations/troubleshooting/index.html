@@ -1210,6 +1210,8 @@
       
         
       
+        
+      
     
     
     
@@ -1498,6 +1500,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1640,10 +1670,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="">
+          <label class="md-nav__link" for="__nav_7_15" id="__nav_7_15_label" tabindex="">
             
   
   
@@ -1661,8 +1691,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -5418,7 +5448,11 @@ the pod is its to recover. Either one missing makes recovery inert for that pod.
 <p><strong>Likely causes.</strong>
 - The namespace ResourceQuota <code>pods</code> or <code>requests.cpu</code>/<code>requests.memory</code> limit is too low for the burst of concurrent jobs arriving.
 - A long-running job is holding quota that a new job needs; quota will clear once it completes.
-- The quota retry budget (<code>maxQuotaRetries</code>, default 5) is exhausting before quota clears.</p>
+- The quota retry budget (<code>maxQuotaRetries</code>, default 5) is exhausting before quota clears.
+- The quota was sized from the worker's regular containers only. A native sidecar (<code>restartPolicy: Always</code> init container — how the DinD daemon must be declared) is summed into the pod's footprint in full, and a Kata worker adds its <code>RuntimeClass</code> overhead on top. Both are invisible in <code>podTemplate.spec.containers</code>. Re-derive with <a href="../resourcequota-sizing/">sizing the platform-owned <code>ResourceQuota</code></a>.</p>
+<blockquote>
+<p><strong>A <code>Forbidden</code> naming a <em>missing</em> resource is a different failure.</strong> <code>must specify limits.cpu for: runner</code> is not exhaustion — it means the quota constrains a key the pod does not declare, which Kubernetes makes mandatory namespace-wide. The measured DinD worker shapes declare no CPU limit on purpose, so a quota constraining <code>limits.cpu</code> rejects every worker pod regardless of headroom. See <a href="../resourcequota-sizing/#only-constrain-keys-every-pod-declares">only constrain keys every pod declares</a>.</p>
+</blockquote>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a><span class="c1"># Check quota retry metrics</span>
 <a id="__codelineno-63-2" name="__codelineno-63-2" href="#__codelineno-63-2"></a><span class="c1"># actions_gateway_quota_retries_total{namespace, runner_group}</span>
