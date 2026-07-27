@@ -4,7 +4,26 @@
 
 Whenever you modify CRD types (`api/` for the shared v2 kinds, `cmd/agc/api/` or `cmd/gmc/api/` for the v1 kinds), run the corresponding targets. Also run `make manifests` whenever you add or remove RBAC verbs/resources in a controller.
 
-The v2 (`actions-gateway.com`) `v2alpha1` kinds live in the neutral `api/` module shared by both controllers — the Actions Gateway Controller (AGC) and the Gateway Manager Controller (GMC) (Q164); the v1 (`actions-gateway.github.com`) kinds stay split across `cmd/agc/api/v1alpha1` and `cmd/gmc/api/v1alpha1`. `make -C <module> generate` is per-module, so editing a v2 type means regenerating the `api/` module, not the controller modules. The root `make generate` runs all three (`api`, `gmc`, `agc`) in order.
+The v2 (`actions-gateway.com`) `v2alpha1` kinds live in the neutral `api/` module shared by both controllers — the Actions Gateway Controller (AGC) and the Gateway Manager Controller (GMC) (Q164); the v1 (`actions-gateway.github.com`) kinds stay split across `cmd/agc/api/v1alpha1` and `cmd/gmc/api/v1alpha1`.
+
+## The root targets regenerate everything (start here)
+
+From the repo root, either target covers all three modules — you do not need to know which module a type change reaches:
+
+```bash
+make generate    # manifests + DeepCopy, for all of api, cmd/gmc, cmd/agc
+make manifests   # manifests only, for all three (the `make codegen-check` remedy)
+```
+
+**`make generate` is the one to reach for after a type change**, and it supersets `make manifests` — every module's `generate` is `manifests deepcopy`, so there is no second controller-gen pass to pay for. Reach for `make manifests` only when a change alters no Go type: adding or removing a `+kubebuilder:rbac` or `+kubebuilder:webhook` marker.
+
+Both cost about two seconds. Because `make generate` covers every module, it also handles the cross-module case below — an AGC type edit reaches the GMC manifest without you having to know it embeds one.
+
+This has to stay true. `cmd/gmc`'s `generate` was once DeepCopy-only, so the root loop over the three modules' `generate` skipped GMC's manifests — the one module whose CRD embeds another module's types, and so the exact miss behind [Q440](../STATUS.md) ([Q458](../STATUS.md)). **A module's `generate` must keep depending on its `manifests`**; if one stops, the root target silently under-covers again and only `make codegen-check` notices.
+
+## Per-module targets
+
+`make -C <module> generate` is per-module, so editing a v2 type means regenerating the `api/` module, not the controller modules. Use these when you know the blast radius and want the faster loop; when in doubt, use the root targets above.
 
 ## API module (the shared v2 kinds)
 
@@ -14,27 +33,27 @@ make -C api generate   # regenerates zz_generated.deepcopy.go + the five v2 CRD 
 
 The `api/` module owns only API artifacts: DeepCopy methods and the five v2 CRD manifests (`ActionsGateway`, `EgressProxy`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`). It emits **no** RBAC or webhook manifests — those markers live on the controllers/webhooks in `cmd/gmc` and `cmd/agc` and are generated there.
 
-## AGC (two steps required)
+## AGC
 
 ```bash
-make -C cmd/agc generate   # regenerates zz_generated.deepcopy.go
-make -C cmd/agc manifests  # regenerates CRD YAML and RBAC manifests
+make -C cmd/agc generate   # regenerates zz_generated.deepcopy.go + CRD YAML + RBAC manifests
 ```
 
-## GMC (two steps required)
+## GMC
 
 ```bash
-make -C cmd/gmc generate   # regenerates zz_generated.deepcopy.go
-make -C cmd/gmc manifests  # regenerates CRD YAML and RBAC manifests
+make -C cmd/gmc generate   # regenerates zz_generated.deepcopy.go + CRD YAML + RBAC + webhook manifests
 ```
 
-Both steps are required. Skipping `manifests` leaves the CRD YAML out of sync with the Go types — the apiserver will silently prune unknown fields, and tests that set those fields will see the zero value instead.
+Each module also exposes the two halves separately — `manifests` (CRD/RBAC/webhook YAML) and `deepcopy` (`zz_generated.deepcopy.go`) — but `generate` runs both, and running both is what you want after a type change. **The manifests half is the one that is easy to skip and expensive to skip**: leaving the CRD YAML out of sync with the Go types makes the apiserver silently prune unknown fields, so tests that set those fields see the zero value instead.
 
 ## Manifest drift is gated by `make check`
 
 `make codegen-check` ([`scripts/check-codegen-drift.sh`](../../scripts/check-codegen-drift.sh)) regenerates every module's CRD/RBAC/webhook manifests into a scratch tree and fails if any committed copy differs. It runs in `make check` and in CI's `lint` job, so a forgotten `make manifests` is caught on the PR that caused it rather than by the next contributor.
 
-**The cross-module case is why it exists.** The GMC's `ActionsGateway` CRD embeds AGC types (`RunnerGroupSpec`), so a doc comment or field edited in `cmd/agc/api/` changes the *GMC* manifest — and only `make -C cmd/gmc manifests` propagates it. `make -C cmd/agc manifests` does not, and neither does the root `make generate` (which runs each module's `generate`, not its `manifests`). PR #793 edited a `quotaRetryDelay` doc comment in `RunnerGroupSpec` and the GMC CRD stayed stale, handing every later GMC contributor that hunk as unrelated diff noise ([Q440](../STATUS.md)). **After any change to a type either controller embeds, regenerate every module that embeds it, not just the one you edited.**
+**The cross-module case is why it exists.** The GMC's `ActionsGateway` CRD embeds AGC types (`RunnerGroupSpec`), so a doc comment or field edited in `cmd/agc/api/` changes the *GMC* manifest — and only `make -C cmd/gmc manifests` propagates it. `make -C cmd/agc manifests` does not. PR #793 edited a `quotaRetryDelay` doc comment in `RunnerGroupSpec` and the GMC CRD stayed stale, handing every later GMC contributor that hunk as unrelated diff noise ([Q440](../STATUS.md)).
+
+The root `make generate` (or `make manifests`) is the way not to have to reason about this: it covers all three modules, so an AGC type edit reaches the GMC manifest without you knowing it had to. **If you use the per-module targets instead, regenerate every module that embeds the type you changed, not just the one you edited.**
 
 The gate also fails if a module gains a `manifests:` target without being registered in the script's `MODULES` table, or if a row stops matching the module's own recipe — so it cannot quietly under-cover. Full assertion list: [testing.md § The codegen drift gate](testing.md#the-codegen-drift-gate). Its scope is manifests only; DeepCopy drift is intra-module and fails to compile.
 

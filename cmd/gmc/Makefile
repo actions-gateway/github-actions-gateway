@@ -47,11 +47,11 @@ build-migrate: ## Build the gag-migrate one-shot v1->v2 migration tool into .bui
 	go build -o $(LOCALBIN)/gag-migrate ./migrate
 
 .PHONY: test
-test: generate ## Run unit tests (no envtest required)
+test: deepcopy ## Run unit tests (no envtest required)
 	go test -race -timeout 5m ./...
 
 .PHONY: test-integration
-test-integration: manifests generate $(SETUP_ENVTEST) ## Run envtest-backed integration tests
+test-integration: generate $(SETUP_ENVTEST) ## Run envtest-backed integration tests
 	KUBEBUILDER_ASSETS="$(shell "$(SETUP_ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" \
 		go test -race -timeout 5m -tags integration ./...
 
@@ -61,8 +61,16 @@ manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests from kubebuilder m
 		output:crd:artifacts:config=config/crd/bases \
 		output:rbac:artifacts:config=config/rbac
 
+# `generate` is the whole-module codegen entrypoint, same as in api/ and
+# cmd/agc/: manifests AND DeepCopy. It was deepcopy-only here, which made the
+# root `make generate` (a loop over the three modules' `generate`) skip exactly
+# the module whose CRD embeds another module's types — the Q440 miss (Q458).
+# Keep the three modules' `generate` meaning the same thing.
 .PHONY: generate
-generate: $(CONTROLLER_GEN) ## Regenerate DeepCopy methods from kubebuilder markers
+generate: manifests deepcopy ## Regenerate CRD/RBAC manifests and DeepCopy methods
+
+.PHONY: deepcopy
+deepcopy: $(CONTROLLER_GEN) ## Regenerate DeepCopy methods from kubebuilder markers
 	GOWORK=$(CURDIR)/go.work.gen "$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="./..."
 
 ##@ Docker

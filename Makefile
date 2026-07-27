@@ -60,7 +60,7 @@ WRAPPER_IMG    ?= $(IMAGE_REGISTRY)/wrapper:e2e-$(GIT_SHA)
 
 .DEFAULT_GOAL := help
 
-.PHONY: all check hooks merge-driver generate build build-agc build-gmc build-migrate build-probe build-proxy test test-race test-integration \
+.PHONY: all check hooks merge-driver generate manifests build build-agc build-gmc build-migrate build-probe build-proxy test test-race test-integration \
         cover cover-update cover-check tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
@@ -256,11 +256,30 @@ merge-driver: ## Install the docs/STATUS.md merge driver (Queue conflicts resolv
 doctor: ## Check required CLI tools are installed and on PATH (install/PATH-fix hints for any missing)
 	scripts/check-tools.sh
 
+# Each module's `generate` is `manifests deepcopy`, so this regenerates the
+# manifests too — it supersets `make manifests` below, and there is no second
+# controller-gen pass to pay for. That contract is load-bearing and used to be
+# broken: cmd/gmc's `generate` was deepcopy-only, so the root target skipped the
+# manifests of the one module whose CRD embeds another module's types — the
+# exact miss behind Q440 (Q458). A module whose `generate` stops covering its
+# `manifests` silently reopens that hole; `make codegen-check` is what notices.
 .PHONY: generate
-generate: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests and DeepCopy methods
+generate: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests and DeepCopy methods (all modules)
 	$(MAKE) -C api generate
 	$(MAKE) -C cmd/gmc generate
 	$(MAKE) -C cmd/agc generate
+
+# The manifests half alone, for a change that alters no Go type — adding or
+# removing a +kubebuilder:rbac / +kubebuilder:webhook marker. Running this is
+# exactly what makes `make codegen-check` pass: that gate regenerates these same
+# three modules' manifests into a scratch tree and diffs them against the
+# committed copies. Prefer `make generate` when a type changed; DeepCopy is not
+# regenerated here.
+.PHONY: manifests
+manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC/webhook manifests for all modules (the `codegen-check` remedy; `generate` supersets this)
+	$(MAKE) -C api manifests
+	$(MAKE) -C cmd/gmc manifests
+	$(MAKE) -C cmd/agc manifests
 
 # Fail if a committed controller-gen manifest is stale relative to the Go types
 # behind it (Q440). Nothing ran `make manifests` on a contributor's behalf, and
