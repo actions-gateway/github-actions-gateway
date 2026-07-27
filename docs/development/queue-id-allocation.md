@@ -46,7 +46,7 @@ Adjacency is the whole story: one untouched row of separation is enough to merge
 
 **Row conflicts are unchanged by this.** They are also concentrated where the process puts them, because picking from the top means deletions cluster at the top, and priority-on-entry plus flakes-first means insertions cluster there too. A four-worker dispatch batch takes rows 1 through 4 and every pair is adjacent.
 
-What the ref allocator removes is the *expensive* class (duplicate IDs and the renumbering cascade) and the one conflict that was guaranteed rather than incidental. Row conflicts remain, are two lines, and resolve obviously. Their real danger is a botched resolution, which is [Q395](../STATUS.md#Q395), not the conflict itself.
+What the ref allocator removes is the *expensive* class (duplicate IDs and the renumbering cascade) and the one conflict that was guaranteed rather than incidental. Row conflicts remain, are two lines, and resolve obviously. Their real danger is a botched resolution — a done row silently restored — not the conflict itself; `lint-backlog` rule 9 now catches that ([why](maintaining-backlog.md#a-moved-row-defeats-conflict-detection)).
 
 ## Alternatives considered
 
