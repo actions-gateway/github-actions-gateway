@@ -34,7 +34,11 @@
 // resolve the worker pod shape and egress proxy (§H.7). These markers mirror the
 // chart's hand-maintained agc-tenant-role and agc-clusterrunnertemplate-reader
 // grants (charts/actions-gateway/files/agc-*-rules.yaml) so the generated agc-role
-// no longer drifts from the shipped v2 permission set.
+// no longer drifts from the shipped v2 permission set. That pairing is gated by
+// rbac_chart_drift_test.go (Q454): every marker here must be shipped by one of the
+// two chart roles, and the cluster-scoped reader's rules must match these verbs
+// exactly — so a marker added without its chart rule fails the build, not a
+// production install.
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=runnersets,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=runnersets/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=runnersets/finalizers,verbs=get;update;patch

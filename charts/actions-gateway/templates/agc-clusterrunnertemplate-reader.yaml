@@ -1,10 +1,11 @@
 {{- /*
 The agc-clusterrunnertemplate-reader rules are single-sourced in
 files/agc-clusterrunnertemplate-reader-rules.yaml; this template embeds them via
-.Files.Get. Edit the fragment, not this block. Unlike agc-tenant-role, no test
-reads this fragment back, so nothing catches drift between it and the
-+kubebuilder:rbac markers in cmd/agc/internal/controller/doc.go — keep the two in
-sync by hand when adding a rule (Q454 tracks closing that).
+.Files.Get. Edit the fragment, not this block. The fragment stays hand-synced
+with the +kubebuilder:rbac markers in cmd/agc/internal/controller/doc.go, and
+that pairing is gated: TestClusterReaderFragmentMatchesRBACMarkers reads this
+fragment back and fails on any rule the markers do not declare with the same
+verbs, or on any write verb at all (Q454).
 */ -}}
 # agc-clusterrunnertemplate-reader — read-only access to the cluster-scoped kinds
 # the AGC depends on and a namespaced RoleBinding cannot grant: ClusterRunnerTemplate
