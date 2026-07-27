@@ -5,7 +5,7 @@ before opening a PR. On a small dev machine it costs ~21 minutes on a fresh
 worktree, and because the heavy phases hold a machine-wide *exclusive* lock, a
 second session cannot start its gate until the first finishes. With half a dozen
 parallel worktree sessions the gate, not the work, sets the pace — observed
-waits up to 5 h ([Q376](../STATUS.md)).
+waits up to 5 h (Q376).
 
 **Goal.** Cut both the cost of one run and the queue depth across concurrent
 runs, without weakening any gate and without regressing the desktop-safety
@@ -346,6 +346,55 @@ nothing here should be read as evidence about it.
 Warm, the whole local gate runs at 12–14% CPU and no setting is load-bearing —
 `-trimpath` cache sharing made that the common case. The throttle is a
 fresh-worktree concern, which is also precisely when several sessions collide.
+
+## Change 5: the gate moves off the worker's critical path ✓ (Q376)
+
+Changes 2 and 4 shrank the queue and the service time; neither empties the queue.
+With `slots = 2` and a 6-worker dispatch batch, four of the six are queued
+whenever all are in a heavy phase — and change 4 measured why that stays true:
+the second slot is worth 1.25× aggregate and the third only 1.30×, so throughput
+is not where the remaining win is. It is in what the wait *costs*.
+
+Two remedies were on the table — **stagger** the workers' gate starts, or
+**background** the gate during each worker's docs/PR prep. Backgrounding wins,
+and the stagger is not merely weaker, it is inert:
+
+- **A stagger adds no service capacity.** The semaphore is a fixed-throughput
+  server; spacing arrivals re-orders the queue without shortening it, and holding
+  a worker back while a slot sits idle is strictly worse than letting the
+  semaphore's own admission control admit it.
+- **Its one real mechanism is already delivered.** Spacing starts so that one
+  worker warms `GOCACHE` before the rest begin would matter if the caches were
+  time-ordered; they are content-keyed, and `-trimpath` (change 1) extended that
+  to the test-result cache. A sibling starting one second later at the same
+  content hits the same entries as one starting an hour later.
+- **There is nothing for a stagger to preserve.** `make check` acquires a slot
+  **three separate times** — `build-tags-check`, `lint`, `cover-check` — releasing
+  between them (`Makefile`, `CHECK_FAST_GATES` block). Each worker's queue
+  position is re-drawn at every heavy phase, so whatever spacing exists at *t=0*
+  is gone by the second acquisition.
+
+Backgrounding does not reduce contention either. It changes what the contention
+*costs*: the wait stops being dead time on the worker's critical path and becomes
+the docs / `docs/STATUS.md` / PR-body work the worker owes anyway and whose
+correctness the gate's verdict does not decide. What stays on the critical path
+is the confirming re-run over the final tree, and warm that is ~2 min against a
+cold gate's tens — because the gates that validate the docs work (`lint-backlog`, `doc-links`,
+`plan-index-check`, `no-plan-refs-check`, `shellcheck`) are in `CHECK_FAST_GATES`
+and take **no** heavy-build slot, while the three heavy phases re-queue cache-warm.
+
+Landed as process in
+[parallel-dispatch.md § Run the local gate in the background](../development/parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path)
+(worker prompt skeleton and the `/goal` template, so future runs actually get it),
+plus one supporting code change: `serialize_heavy_build` now heartbeats every 30 s
+while queued and prints its total on acquire. A backgrounded gate's log is the
+only signal it has, and the previous single line followed by open-ended silence
+was indistinguishable from a hang — which is also why the *observed* waits this
+whole section exists to bound were only ever anecdotal (change 4 measured
+aggregate throughput at M holders, not what any one run actually waited). The
+change is stderr-only: lock paths, slot count, and the acquire protocol are
+untouched, so worktrees still on older code contend on the same files exactly as
+before.
 
 ## Follow-ups (not in this change)
 

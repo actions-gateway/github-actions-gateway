@@ -146,6 +146,16 @@ init_throttle() {
 # holding process dies, so a Ctrl-C'd or killed build never strands a stale lock
 # that wedges every later run. With N > 1 the acquire is a non-blocking sweep
 # over the slots plus a 1 s retry, since flock cannot block on "any of N".
+#
+# The wait is REPORTED, not just endured: a heartbeat every 30 s while queued and
+# a one-line total on acquire. The recommended way to run the gate under
+# contention is in the background while you do the docs/PR work the gate's
+# verdict doesn't gate (docs/development/parallel-dispatch.md), and then the run's
+# log is the only signal there is — a single line followed by hours of silence is
+# indistinguishable from a hang, which is why the queue depth this semaphore
+# exists to bound was only ever anecdotal ("waits up to 5 h were observed").
+# stderr only: the lock paths, their count, and the acquire protocol are
+# unchanged, so a worktree still on older code contends here exactly as before.
 serialize_heavy_build() {
 	[[ -n "${GAG_HEAVY_BUILD_LOCK_HELD:-}" ]] && return 0
 	local throttle="$REPO_ROOT/scripts/local-throttle.sh"
@@ -166,7 +176,7 @@ serialize_heavy_build() {
 	exec perl -MFcntl=:flock -e '
 		my $n = shift @ARGV;
 		my @paths = splice(@ARGV, 0, $n);
-		my ($fh, $waited) = (undef, 0);
+		my ($fh, $start, $next_report) = (undef, time, 0);
 		while (1) {
 			my $openable = 0;
 			for my $p (@paths) {
@@ -176,9 +186,15 @@ serialize_heavy_build() {
 			}
 			last if $fh;
 			exec @ARGV if !$openable;
-			print STDERR "==> waiting for a heavy-build slot (" . scalar(@paths) . " in use)...\n" unless $waited++;
+			my $queued = time - $start;
+			if ($queued >= $next_report) {
+				printf STDERR "==> waiting for a heavy-build slot (%d in use, queued %ds)...\n", scalar(@paths), $queued;
+				$next_report = $queued + 30;
+			}
 			select(undef, undef, undef, 1);
 		}
+		my $queued = time - $start;
+		printf STDERR "==> heavy-build slot acquired after %ds queued\n", $queued if $queued >= 5;
 		my $rc = system @ARGV;
 		exit 255 if $rc == -1;
 		exit($rc & 127 ? 128 + ($rc & 127) : $rc >> 8);

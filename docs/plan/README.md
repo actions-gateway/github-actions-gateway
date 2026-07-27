@@ -65,7 +65,7 @@ markers per item.
 | [docker-image-speed.md](docker-image-speed.md) | Image build + load-into-kind time | ✅ Done — every item shipped (§1/2/4/5/8/9/13) or explicitly 🚫 not pursued (§7/12); §3/6/10/11 obsoleted by vendoring + in-cluster registry |
 | [e2e-tests-speed.md](e2e-tests-speed.md) | E2E suite + CI-pipeline speed improvements | ✅ Done — Round 1 (§1–§14) and Round 2 (§15–§18) all shipped (the top-of-file TOC ✓ markers lag the authoritative status tables) |
 | [e2e-ci-speed-round-2.md](e2e-ci-speed-round-2.md) | `e2e / e2e` job wall time after the first two speed plans: the image bake and the suite's serial tail | ⚠️ Image-build consolidation shipped (§1–3: one root Dockerfile, shared cacheable `deps` stage); the CI step overlap (§4) and serial-tail work (§5–6) remain open |
-| [local-gate-throughput.md](local-gate-throughput.md) | Cost of one `make check` run and queue depth across concurrent worktree sessions | ⚠️ Cross-worktree test-cache sharing (`-trimpath`), the N-slot heavy-build semaphore, the parallel cheap gates, and the throttle-prefix switch off the QoS clamp (with `jobs`/`slots` re-derived against the new ceiling) all shipped; the sequential coverage loop ([Q377](../STATUS.md#Q377)) remains open |
+| [local-gate-throughput.md](local-gate-throughput.md) | Cost of one `make check` run and queue depth across concurrent worktree sessions | ⚠️ Cross-worktree test-cache sharing (`-trimpath`), the N-slot heavy-build semaphore, the parallel cheap gates, the throttle-prefix switch off the QoS clamp (with `jobs`/`slots` re-derived against the new ceiling), and moving the gate off a dispatch worker's critical path all shipped; the sequential coverage loop ([Q377](../STATUS.md#Q377)) remains open |
 
 ## Deployment
 
