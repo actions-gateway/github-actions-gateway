@@ -182,7 +182,12 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		// Per-RunnerSet Prometheus recorder over the scale-set tier's counters
 		// (Q264 P4 observability). Nil ScaleSetMetrics yields a nil recorder, which
 		// the listener treats as metrics-disabled.
-		Metrics:    r.ScaleSetMetrics.RecorderFor(key.Namespace, key.Name),
+		Metrics: r.ScaleSetMetrics.RecorderFor(key.Namespace, key.Name),
+		// The shared cross-tier poll-error counter, which is the classic tier's series
+		// rather than this tier's own: a namespace-bound recorder over
+		// actions_gateway_message_poll_errors_total, so poll health stays rate-able on
+		// the same query after classic is removed (Q446).
+		PollErrors: r.Metrics.PollErrors(key.Namespace),
 		Conditions: sink,
 		Events:     sink,
 		Log:        log,

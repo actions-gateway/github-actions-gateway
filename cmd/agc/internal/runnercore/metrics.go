@@ -281,6 +281,39 @@ func (m *Metrics) IncAgentRecycleError(namespace, group string) {
 	m.AgentRecycleErrorsTotal.WithLabelValues(namespace, group).Inc()
 }
 
+// PollErrors returns a recorder that increments MessagePollErrorsTotal under the
+// given namespace, for a caller that owns one session and therefore knows only its
+// reason. It is the cross-tier seam for the counter (Q446): the classic listener
+// writes the vector directly because its config already carries the namespace, while
+// the scale-set Listener takes this recorder through its Config.PollErrors, so both
+// tiers land on the same (namespace, reason) series and an operator's existing
+// dashboards and alerts keep working after the classic machinery is removed (Q264).
+//
+// Nil-receiver-safe, and the returned recorder is safe to call on a nil *Metrics, so
+// a caller that never wired NewMetrics needs no guard.
+func (m *Metrics) PollErrors(namespace string) *PollErrorRecorder {
+	return &PollErrorRecorder{metrics: m, namespace: namespace}
+}
+
+// PollErrorRecorder binds a Metrics to one namespace's poll-error series. Build it
+// with Metrics.PollErrors.
+type PollErrorRecorder struct {
+	metrics   *Metrics
+	namespace string
+}
+
+// IncPollError counts one GetMessage failure under the bound namespace and the given
+// reason. The reason vocabulary is shared across acquisition tiers: "rate_limited"
+// (429), "timeout" (a long poll the server accepted but never answered), "other"
+// (any remaining transport or decode error). Session expiry and credential rejection
+// are deliberately absent — both are heal paths, not poll failures.
+func (r *PollErrorRecorder) IncPollError(reason string) {
+	if r == nil || r.metrics == nil {
+		return
+	}
+	r.metrics.MessagePollErrorsTotal.WithLabelValues(r.namespace, reason).Inc()
+}
+
 // IncTokenRefreshes implements token.MetricsRecorder.
 func (m *Metrics) IncTokenRefreshes(ns string) {
 	m.TokenRefreshesTotal.WithLabelValues(ns).Inc()
