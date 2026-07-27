@@ -111,6 +111,39 @@ prevent.
 | Capability | State | Gate |
 |---|---|---|
 | Eviction recovery (detect an evicted worker, rerun the job, per-run retry budget) | ✅ **Both tiers.** Q417 ported it: the scale-set assignment's run identity is stamped on the worker pod, the owning reconciler detects `PodFailed`/`Evicted` and claims the pod set-once before calling `rerun-failed-jobs`, and the Q106 per-run budget is shared across tiers. | Cleared. Design: [04-operational-flows.md § On the scale-set tier](../design/04-operational-flows.md#on-the-scale-set-tier-q417). Plan: [scaleset-eviction-recovery.md](scaleset-eviction-recovery.md). |
+| Pre-claim quota gate (decline to claim a job the namespace `ResourceQuota` cannot place, leaving it queued for a sibling) | ❌ **Classic only.** `Provisioner.Admit`'s headroom rung is wired from `AdmitFor` and the classic branch of the RunnerSet reconciler; `reconcileScaleSetListener` returns before it. A scale-set set advertises `X-ScaleSetMaxCapacity` from `target.Ceiling` — the Q59 concurrency rung — and consults no quota headroom, so a quota-blocked job is assigned and then retried in place. | **Open — gates the cut.** [Q443](../STATUS.md#Q443). Decision and design: [capacity-aware-intake.md §9a](capacity-aware-intake.md#the-decision-port-the-rung-and-treat-it-as-a-20-gate-q443). |
+| Poll-error rate observability (`message_poll_errors_total`) | ⚠️ **Conditions yes, counter no.** `handlePollError` reaches deliberate condition parity (`Degraded`/`Unauthorized` on a rejected refresh, `RateLimited` after a sustained 429 episode) but increments no counter, so there is no rate-able signal — only a binary condition that trips after the episode outlasts `rateLimitAfter`. | **Open — does not gate.** [Q446](../STATUS.md#Q446). Conditions cover the operator-visible states, so this is a fidelity gap, not a lost capability. |
+
+### What this audit checked, and found already covered
+
+Recorded so the cut does not re-derive it. Method: walk the tier seams — the
+`ScaleSet` early return in `runnerset_controller.go`, `provision()` versus
+`ProvisionScaleSetWorker`, and the `listener/` versus `scalesetlistener/`
+packages — then cross-check every capability the README, roadmap, and why-gag
+present as a property of the system.
+
+**Confirmed on both tiers** (wired before the protocol route, or ported):
+worker-capacity conditions `WorkerQuotaPressure`/`WorkerQuotaExceeded`/
+`WorkersUnschedulable` (Q303, explicitly "identical to the classic path"), the
+opt-in scale-up rate limit `spec.scaleUp`, the measured sizing recommendation and
+`SizingDrift` condition (Q359), the worker-pod reaper including
+`orphaned_running` (Q420), and eviction recovery (Q417).
+
+**Correctly absent from the scale-set tier** — artifacts of the many-acquirers
+and JIT-agent models that `ScaleSet` removes by construction, so they should
+disappear *with* classic rather than be ported:
+`jobs_duplicate_delivery_total`, `abandoned_delivery_completions_total`,
+`fanout_loser_recycle_deferred_total`, `agent_recycles_total`,
+`agent_recycle_errors_total`, `broker_token_propagation_retries_total`, and
+`broker_session_leaks_total`. Each measures a race or a repair that only exists
+because many sessions acquire against one pool.
+
+**Alerting already has its analog:** `job_acquisition_errors_total` is
+classic-only, but [observability-alerting.md](../operations/observability-alerting.md)
+ships `actions_gateway:scaleset_provision_success_rate:rate5m` alongside the
+classic `job_acquisition_success_rate`, so the shipped rules do not go silent at
+the cut. `active_sessions` is likewise classic-only with
+`scaleset_jobs_assigned_total` as the documented substitute.
 
 This was a genuine gate, not a nice-to-have: eviction recovery is a headline
 capability in [01-executive-summary.md](../design/01-executive-summary.md),
