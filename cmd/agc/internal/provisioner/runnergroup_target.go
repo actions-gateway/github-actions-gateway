@@ -77,6 +77,14 @@ func (t *runnerGroupTarget) QuotaExhausted(ctx context.Context) (bool, string) {
 	return WorkerQuotaExhausted(ctx, t.p.Client, rg.Namespace, rg.Spec.PodTemplate.Spec.Containers)
 }
 
+// QuotaCapacity reports no quota-derived bound for a v1 RunnerGroup. The integer form
+// of the quota rung exists for the scale-set tier's per-poll capacity advertisement
+// (Q443); v1 acquires per delivered job through Admit's boolean rung, which is the
+// authoritative form for it, and v1 is terminal (Q273/Q264) so it never grows one.
+func (t *runnerGroupTarget) QuotaCapacity(context.Context, int32) (int32, bool) {
+	return 0, false
+}
+
 func (t *runnerGroupTarget) Resolve(ctx context.Context) (*ResolvedSpec, error) {
 	rg := t.current(ctx)
 	p := t.p

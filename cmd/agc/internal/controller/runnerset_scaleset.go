@@ -178,7 +178,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		Cleanup: func(ctx context.Context, jobID string) error {
 			return r.Provisioner.CleanupScaleSetJob(ctx, target, jobID)
 		},
-		Capacity: r.scaleSetCapacityFunc(target),
+		Capacity: r.scaleSetCapacityFunc(key, target),
 		// Per-RunnerSet Prometheus recorder over the scale-set tier's counters
 		// (Q264 P4 observability). Nil ScaleSetMetrics yields a nil recorder, which
 		// the listener treats as metrics-disabled.
@@ -205,19 +205,28 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 	return h, nil
 }
 
-// scaleSetCapacityFunc returns the CapacityFunc advertised as X-ScaleSetMaxCapacity:
-// the set's total worker ceiling (the max tier threshold, else maxWorkers, else the
-// default). GitHub keeps totalAssignedJobs at or below this value, so it is the
-// scale-set expression of the Q59 admission gate — concurrency governed by
-// maxWorkers/priorityTiers, not maxListeners (§3 Reworked). The provisioner's own
-// ceilingCheck backstops per pod, so a stale read never over-provisions.
-func (r *RunnerSetReconciler) scaleSetCapacityFunc(target *runnerSetTarget) scalesetlistener.CapacityFunc {
+// scaleSetCapacityFunc returns the CapacityFunc advertised as X-ScaleSetMaxCapacity —
+// this tier's whole admission ladder, expressed as one integer per poll. GitHub keeps
+// totalAssignedJobs at or below the advertised value, so a slot this function withholds
+// is a job that is never assigned: the same outcome the classic tier's Admit produces by
+// declining to claim, without spending a JIT runner record or a job lock to get there.
+//
+// provisioner.AdvertiseCapacity owns the rungs and their composition (the declared
+// ceiling, then live namespace-ResourceQuota headroom), so the two tiers cannot drift
+// apart the way they did while the quota rung was classic-only (Q443). This function
+// only supplies the no-ceiling default and publishes the resulting accounting.
+//
+// The provisioner's own ceilingCheck still backstops per pod, so a stale read never
+// over-provisions.
+func (r *RunnerSetReconciler) scaleSetCapacityFunc(key types.NamespacedName, target *runnerSetTarget) scalesetlistener.CapacityFunc {
+	advertise := r.Provisioner.AdvertiseCapacity(target, defaultScaleSetMaxCapacity)
 	return func(ctx context.Context) int {
-		ceiling, bounded := target.Ceiling(ctx)
-		if !bounded {
-			return defaultScaleSetMaxCapacity
+		adv := advertise(ctx)
+		r.ScaleSetMetrics.SetAdvertisedCapacity(key.Namespace, key.Name, adv.Total)
+		for reason, slots := range adv.Withheld {
+			r.ScaleSetMetrics.SetCapacityWithheld(key.Namespace, key.Name, reason, slots)
 		}
-		return int(ceiling)
+		return int(adv.Total)
 	}
 }
 

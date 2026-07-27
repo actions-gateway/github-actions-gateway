@@ -9,6 +9,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -116,19 +117,48 @@ func (t *runnerSetTarget) Ceiling(ctx context.Context) (int32, bool) {
 // not resolve, or an unreadable quota all yield false. A set whose references are
 // broken must fail closed in Resolve (§H.7), not be silently starved by the gate.
 func (t *runnerSetTarget) QuotaExhausted(ctx context.Context) (bool, string) {
+	containers, ok := t.workerContainers(ctx)
+	if !ok {
+		return false, ""
+	}
+	return provisioner.WorkerQuotaExhausted(ctx, t.client, t.key.Namespace, containers)
+}
+
+// QuotaCapacity is the integer form of the same rung, for the scale-set tier's per-poll
+// capacity advertisement (Q443): the total worker pods this set may have in flight
+// given live namespace-ResourceQuota headroom, capped at max. It sizes the pod exactly
+// as QuotaExhausted does, and converts the observed headroom delta to a total with the
+// set's own non-terminal worker pods — the ones already counted in the quota's `used`.
+//
+// Fail-open at every step, for the same reason: a set whose references are broken must
+// fail closed in Resolve (§H.7), never be silently starved of assignments by the gate.
+func (t *runnerSetTarget) QuotaCapacity(ctx context.Context, max int32) (int32, bool) {
+	containers, ok := t.workerContainers(ctx)
+	if !ok {
+		return 0, false
+	}
+	active := countActiveWorkerPodsByLabel(ctx, t.client, t.key.Namespace, provisioner.LabelRunnerSet, t.key.Name)
+	return provisioner.WorkerQuotaCapacity(ctx, t.client, t.key.Namespace, containers, active, max)
+}
+
+// workerContainers resolves the containers of the worker pod this set would provision
+// right now — the template chain only (not the proxy; the pod shape is all a quota
+// footprint needs), with the sizing profile applied. ok=false means something did not
+// resolve, and every caller must then fail open.
+func (t *runnerSetTarget) workerContainers(ctx context.Context) ([]corev1.Container, bool) {
 	rs := &v2alpha1.RunnerSet{}
 	if err := t.client.Get(ctx, t.key, rs); err != nil {
-		return false, ""
+		return nil, false
 	}
 	gw := &v2alpha1.ActionsGateway{}
 	if err := t.client.Get(ctx, types.NamespacedName{Namespace: t.key.Namespace, Name: rs.Spec.GatewayRef.Name}, gw); err != nil {
-		return false, ""
+		return nil, false
 	}
 	tmpl, _, _, res := resolveTemplateChain(ctx, t.client, t.key.Namespace, rs, gw)
 	if !res.resolved() {
-		return false, ""
+		return nil, false
 	}
-	return provisioner.WorkerQuotaExhausted(ctx, t.client, t.key.Namespace, runnerSetWorkerContainers(rs, tmpl))
+	return runnerSetWorkerContainers(rs, tmpl), true
 }
 
 // Resolve re-reads the RunnerSet and resolves its references into a provisioning

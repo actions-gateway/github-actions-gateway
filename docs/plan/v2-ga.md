@@ -16,7 +16,7 @@ API surface, and the contract cannot be walked back.
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
 | 2 | Add `v2` to each kind, mark it storage, extend conversion coverage | M | ❌ Open ([Q413](../STATUS.md#Q413)) |
-| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity cleared — Q417 shipped 2026-07-26 |
+| 3 | Storage migration, then drop `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open ([Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264)); capability parity cleared — Q417 and Q443 shipped 2026-07-26 |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q413](../STATUS.md#Q413)) |
 
 ## Why this is gated on a soak, not a date
@@ -111,7 +111,7 @@ prevent.
 | Capability | State | Gate |
 |---|---|---|
 | Eviction recovery (detect an evicted worker, rerun the job, per-run retry budget) | ✅ **Both tiers.** Q417 ported it: the scale-set assignment's run identity is stamped on the worker pod, the owning reconciler detects `PodFailed`/`Evicted` and claims the pod set-once before calling `rerun-failed-jobs`, and the Q106 per-run budget is shared across tiers. | Cleared. Design: [04-operational-flows.md § On the scale-set tier](../design/04-operational-flows.md#on-the-scale-set-tier-q417). Plan: [scaleset-eviction-recovery.md](scaleset-eviction-recovery.md). |
-| Pre-claim quota gate (decline to claim a job the namespace `ResourceQuota` cannot place, leaving it queued for a sibling) | ❌ **Classic only.** `Provisioner.Admit`'s headroom rung is wired from `AdmitFor` and the classic branch of the RunnerSet reconciler; `reconcileScaleSetListener` returns before it. A scale-set set advertises `X-ScaleSetMaxCapacity` from `target.Ceiling` — the Q59 concurrency rung — and consults no quota headroom, so a quota-blocked job is assigned and then retried in place. | **Open — gates the cut.** [Q443](../STATUS.md#Q443). Decision and design: [capacity-aware-intake.md §9a](capacity-aware-intake.md#the-decision-port-the-rung-and-treat-it-as-a-20-gate-q443). |
+| Pre-claim quota gate (refuse work the namespace `ResourceQuota` cannot place, rather than claim it and stall) | ✅ **Both tiers.** Q443 ported it: the ladder `Provisioner.Admit` walks per delivered job is also expressed as an integer (`AdvertiseCapacity`), and the scale-set tier advertises `min(ceiling, own in-flight pods + quota headroom)` as `X-ScaleSetMaxCapacity` — so a quota-blocked job is never assigned at all. | Cleared. Design: [04-operational-flows.md § The ladder as an integer](../design/04-operational-flows.md#the-ladder-as-an-integer-scale-set-tier-q443). Plan: [capacity-aware-intake.md §9a](capacity-aware-intake.md#9a-the-shipped-quota-rung-was-classic-only-q443). |
 | Poll-error rate observability (`message_poll_errors_total`) | ⚠️ **Conditions yes, counter no.** `handlePollError` reaches deliberate condition parity (`Degraded`/`Unauthorized` on a rejected refresh, `RateLimited` after a sustained 429 episode) but increments no counter, so there is no rate-able signal — only a binary condition that trips after the episode outlasts `rateLimitAfter`. | **Open — does not gate.** [Q446](../STATUS.md#Q446). Conditions cover the operator-visible states, so this is a fidelity gap, not a lost capability. |
 
 ### What this audit checked, and found already covered
@@ -145,12 +145,17 @@ classic `job_acquisition_success_rate`, so the shipped rules do not go silent at
 the cut. `active_sessions` is likewise classic-only with
 `scaleset_jobs_assigned_total` as the documented substitute.
 
-This was a genuine gate, not a nice-to-have: eviction recovery is a headline
-capability in [01-executive-summary.md](../design/01-executive-summary.md),
+Both were genuine gates, not nice-to-haves: eviction recovery and the pre-claim quota
+gate are headline capabilities in [01-executive-summary.md](../design/01-executive-summary.md),
 [README.md](../../README.md), and [why-gag.md](../why-gag.md), all of which describe
-it as a property of the system rather than of one acquisition tier. Removing classic
-before Q417 landed would have made those claims false at the same moment the only tier
-that satisfied them disappeared. With the port in, the claims survive the cut.
+them as properties of the system rather than of one acquisition tier. Removing classic
+before Q417 and Q443 landed would have made those claims false at the same moment the
+only tier that satisfied them disappeared. With both ports in, the claims survive the cut.
+
+The two were found the same way and a day apart, which is the reusable lesson: a
+capability wired into a call site the default tier never reaches reads as shipped from
+every angle except the one that matters — the tier tenants actually run. A claim about
+what GAG does is not verified until it names the acquisition tier it was verified on.
 
 One residual is worth knowing about but does not gate the removal, because classic
 shares it: a worker pod force-deleted with no grace period (or lost with its node)

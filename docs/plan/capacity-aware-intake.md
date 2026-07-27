@@ -25,12 +25,14 @@ durable rationale in
 | # | Item | Sz | Status |
 |---|---|---|---|
 | 0 | Design rationale recorded (D.8 asymmetry principle, G.16 deferral + triggers) | S | ✅ Done — this change |
+| 0a | Port the shipped quota rung to the scale-set tier, as the integer form of the ladder | M | ✅ Done ([§9a](#9a-the-shipped-quota-rung-was-classic-only-q443)/[§9b](#9b-what-the-port-shipped), Q443, 2026-07-26) |
 | 1 | `SchedulerVerdict` mode: gate on the scheduler's verdict, for clusters that cannot grow | M | ❌ Open ([Q405](../STATUS.md#Q405)) |
 | 2 | `AutoscalerVerdict` mode: gate on the autoscaler's own declination, for elastic clusters | M | ❌ Open ([Q406](../STATUS.md#Q406)) |
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
-Nothing here has been validated on a live cluster. Phase 1 carries a measurement
-step (§9) whose numbers are the input to the Phase 2/3 decision, and no
+Nothing here has been validated on a live cluster, item 0a included: it carries an
+envtest proof of the mechanism, not a measurement of its effect. Phase 1 carries a
+measurement step (§9) whose numbers are the input to the Phase 2/3 decision, and no
 effectiveness claim belongs in this doc before that measurement exists.
 
 ---
@@ -179,9 +181,16 @@ the choice mutually exclusive, which it is. v2 only: v1 `RunnerGroup` is termina
 **One rung, one condition, one metric label.**
 
 * `Target.CapacityDeclined(ctx) (declined bool, detail string)` joins
-  `Ceiling`/`QuotaExhausted` in
+  `Ceiling`/`QuotaExhausted`/`QuotaCapacity` in
   [`target.go`](../../cmd/agc/internal/provisioner/target.go), fail-open by
   contract like `QuotaExhausted`.
+* **And its integer counterpart, in the same change.** Q443 established that a rung
+  reaches the default acquisition tier only if it is also expressed in
+  `AdvertiseCapacity` — as a bound on the advertised total, the way `QuotaCapacity`
+  expresses rung 1 ([§9b](#9b-what-the-port-shipped)). A phase that ships only
+  `CapacityDeclined` ships classic-only and inherits the exact defect Q443 fixed. The
+  arithmetic is the same shape: `declined` ⇒ contribute a bound of the set's own
+  in-flight worker pods (no room for more), otherwise no bound.
 * `Admit` gains a third rung, ordered **after** quota and **before** the ceiling
   (like quota it reserves nothing, so the reservation arithmetic is untouched),
   rejecting with a new `runnercore.AdmitReasonCapacity = "capacity"` on the
@@ -240,7 +249,10 @@ mostly API surface and wiring.
    RunnerSet (a cheap per-delivery read, matching `Ceiling`/`QuotaExhausted`);
    `runnerGroupTarget.CapacityDeclined` returning false.
 4. The `Admit` rung + reason constant + the Debug log line, mirroring the quota
-   rung's shape.
+   rung's shape — **and the matching `AdvertiseCapacity` rung**, or the mode is
+   inert on the default tier (§5, [§9b](#9b-what-the-port-shipped)). A
+   `SchedulerVerdict` that only lands in `Admit` is not Phase 1 shipped, it is
+   Phase 1 shipped to the deprecated tier.
 5. Field doc **and** operator doc stating the soundness precondition in the same
    words: this mode assumes no autoscaler will act on the pods, and an elastic
    cluster wants `AutoscalerVerdict` instead.
@@ -388,13 +400,17 @@ ScaleSet. The counters above come from the admission path rather than from
 completions, so they were never blocked by it either way. Detail:
 [gke-dogfood B7](gke-dogfood.md#b7-create-the-v2-tenant-objects).
 
-## 9a. The shipped quota rung is classic-only (Q443)
+## 9a. The shipped quota rung was classic-only (Q443)
 
 Found while qualifying the eviction-recovery claims for Q419 (shipped
 2026-07-26) — same defect class, same public sentences, other half. Recorded here
 rather than fixed there, because the two capabilities have different owners and
 different remedies. The copy correction shipped 2026-07-26 (Q439); the port it
-revealed is [Q443](../STATUS.md#Q443), specified below.
+revealed is Q443, specified below and shipped the same day.
+
+**Shipped 2026-07-26.** The port described below is in; what remains of this section
+is the finding, the decision, and the design it settled on, which §6/§7 inherit. What
+shipped is recorded in [§9b](#9b-what-the-port-shipped).
 
 The rung this plan builds on — rung 1, live namespace-`ResourceQuota` headroom
 checked *before* the claim — is wired into `Provisioner.Admit`, and `Admit` is
@@ -470,12 +486,58 @@ this phase owns:
 classic. So the removal deletes the pre-claim quota gate outright unless this
 lands first — structurally identical to Q417 for eviction recovery, which cleared
 the same risk on 2026-07-26, and until now undeclared. Two of the four capabilities the README
-leads with are in this position. Tracked as [Q443](../STATUS.md#Q443), labelled
-`2.0-gate` to match.
+leads with were in this position. Tracked as Q443, labelled `2.0-gate` to match, and
+shipped 2026-07-26 ([§9b](#9b-what-the-port-shipped)).
 
 **What ships without waiting:** the copy correction. Every claim above is now
 scoped to the classic tier, and the "auto lock-cancel + re-queue" sentence is
 removed rather than qualified, since no code path implements it on any tier.
+
+## 9b. What the port shipped
+
+Shipped 2026-07-26. The three design questions §9a raised were answered as follows;
+each answer is a constraint on Q405/Q406, not a local choice.
+
+**One ladder, two shapes.** `Provisioner.AdvertiseCapacity(target, unboundedDefault)`
+sits beside `Provisioner.Admit(target)` in
+[`admission.go`](../../cmd/agc/internal/provisioner/admission.go), walks the same rungs
+against the same `Target`, and returns a `CapacityAdvertisement` — the integer plus the
+per-rung accounting that produced it. Both godoc comments state the invariant that
+caused this bug: **a rung added to one and not the other ships to one tier.** §6/§7
+therefore each land in both, which is the "design the integer path once, for all three
+rungs" requirement discharged rather than deferred.
+
+**Delta-to-total, biased low.** `Target.QuotaCapacity(ctx, max)` joins
+`Ceiling`/`QuotaExhausted` with the same fail-open contract. The v2 adapter converts
+observed headroom to a total as `own non-terminal worker pods + headroom`, capped at
+`max`; v1 returns unbounded (it is terminal, and `Admit`'s boolean is its authoritative
+form). The pod count, not GitHub's `totalAssignedJobs`, is deliberate and is the
+bias-low choice §9a asked for: an assignment the AGC has not provisioned yet is inside
+`totalAssignedJobs` but not inside the quota's `used`, so counting assignments would
+over-advertise by exactly the in-flight gap.
+
+**The integer arithmetic reuses the boolean's.** `QuotaHeadroomPods` binary-searches
+`WorkerFootprint`/`QuotaHeadroomViolations` for the largest fitting count rather than
+dividing headroom by a per-pod footprint. Division would have been a second
+implementation of a multi-resource, multi-format comparison, free to drift from the
+rung it is supposed to mirror; the search is exact, bounded by the caller's ceiling, and
+`TestQuotaHeadroomPods_AgreesWithTheBooleanRung` asserts the two answers cannot
+disagree.
+
+**Observability.** `actions_gateway_scaleset_advertised_capacity` and
+`actions_gateway_scaleset_capacity_withheld{reason}` are the tier's counterpart to
+`jobs_admission_rejected_total{reason}`, which is structurally unreachable here — a
+declined job is never assigned, so there is no rejected delivery to count. Gauges, not
+counters, for the same reason, and every evaluated rung publishes an explicit zero each
+poll so a series never freezes at its last non-zero reading. Both are dropped when the
+set is deleted.
+
+**Not measured yet.** §9 still owns the live validation, and none of it has run for this
+rung. Specifically unmeasured: the divergence between the AGC's pod count and GitHub's
+`totalAssignedJobs` under burst (the bias-low margin), and whether one poll interval of
+recovery latency is noticeable to a tenant whose quota frees up mid-burst. The envtest
+proof asserts the mechanism (a quota-blocked job is never assigned, and assignment
+resumes when headroom returns), not its behaviour at scale.
 
 ## 10. Non-goals
 

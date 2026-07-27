@@ -18,9 +18,9 @@
 // # The loop
 //
 // After ensuring the scale set and opening a session, the Listener long-polls the
-// queue advertising its free worker slots as the X-ScaleSetMaxCapacity header (the
-// Q59 admission gate as batch size). GitHub assigns at most that many jobs, exactly
-// once each (dotcom auto-assign; on GHES the JobAvailable→AcquireJobs path claims
+// queue advertising its worker capacity as the X-ScaleSetMaxCapacity header (the
+// admission ladder as one integer). GitHub holds totalAssignedJobs at or below that
+// value, assigning each job exactly once (dotcom auto-assign; on GHES the JobAvailable→AcquireJobs path claims
 // them — one rule, §5a-U8). Each JobAssigned mints a per-job JIT config and provisions
 // one worker; the worker pulls its job through its own session and reports its own
 // completion (the runner renews/completes its job, not the AGC — §2.4). The
@@ -143,12 +143,19 @@ type ProvisionFunc func(ctx context.Context, job Job) error
 // reconciler's reaper collects terminal pods on spec.completedPodTTL.
 type CleanupFunc func(ctx context.Context, jobID string) error
 
-// CapacityFunc returns the number of free worker slots right now — the value
-// advertised as X-ScaleSetMaxCapacity, so GitHub assigns at most that many jobs. It
-// is the scale-set expression of the Q59 admission gate (maxWorkers/priorityTiers
-// minus in-flight worker pods). A non-positive return advertises zero capacity: the
-// Listener still polls (to drain JobStarted/JobCompleted and keep the session alive)
-// but GitHub assigns nothing.
+// CapacityFunc returns the value to advertise as X-ScaleSetMaxCapacity on the next
+// poll. It is a TOTAL, not a free-slot delta: GitHub holds totalAssignedJobs at or
+// below it, so jobs already assigned to this set count against it and a return equal
+// to the current assigned count means "no more".
+//
+// It is the scale-set expression of the whole admission ladder — the declared worker
+// ceiling (maxWorkers/priorityTiers) bounded by live namespace-ResourceQuota headroom
+// (Q443) — evaluated once per poll rather than once per delivered job. Every rung the
+// classic tier's Provisioner.Admit walks must be represented here too; see
+// provisioner.AdvertiseCapacity, which is what the reconciler wires in.
+//
+// A non-positive return advertises zero capacity: the Listener still polls (to drain
+// JobStarted/JobCompleted and keep the session alive) but GitHub assigns nothing.
 type CapacityFunc func(ctx context.Context) int
 
 // ConditionSetter publishes one status condition onto the owning RunnerSet. Like
@@ -202,7 +209,7 @@ type Config struct {
 	WorkFolder string
 	// Provision provisions one worker per assigned job. Required.
 	Provision ProvisionFunc
-	// Capacity returns the free worker slots to advertise each poll. Required.
+	// Capacity returns the total worker capacity to advertise each poll. Required.
 	Capacity CapacityFunc
 	// Cleanup releases a completed job's staged worker resources (its JIT-config
 	// Secret). Nil disables reclaim, which leaks one Secret per job until the owning
