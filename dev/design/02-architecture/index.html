@@ -2838,8 +2838,8 @@
 <tr>
 <td><code>actions_gateway_message_poll_errors_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code></td>
-<td>GetMessage errors (non-empty-poll, non-session-expired)</td>
+<td><code>namespace</code>, <code>reason</code></td>
+<td>GetMessage errors on either acquisition tier (non-empty-poll, non-session-expired, non-unauthorized — the last two are heal paths): <code>rate_limited</code>, <code>timeout</code>, <code>other</code></td>
 </tr>
 <tr>
 <td><code>controller_runtime_reconcile_errors_total</code></td>
