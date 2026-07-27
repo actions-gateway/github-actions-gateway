@@ -2895,11 +2895,51 @@ before it spends anything, not 25 minutes in.</p>
    <code>actions-gateway-crds-v2.yaml</code> + <code>.cosign.bundle</code>, <code>cosign verify-blob</code> against the
    publish identity (step 3 below), <code>kubectl apply --server-side</code> it, and assert the
    five v2 CRDs register — the helm-free install path operators actually use.</li>
+<li><strong>Assert the sizing profiles actuated.</strong> A profile that silently falls back to
+   <code>Static</code> still provisions a healthy pod and still runs the matrix green, so
+   without this leg every other check reports success while the release's
+   headline feature sits inert. <code>sizing_leg</code> treats the two profiles differently
+   on purpose:</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Tenant</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NodeShare</code></td>
+<td><code>gag-dogfood-e2e</code></td>
+<td><strong>Hard failure.</strong> It needs no sample history, so it must report <code>sizingProfileState: Active</code> and derive the envelope's per-worker share. Anything else is a defect.</td>
+</tr>
+<tr>
+<td><code>Throughput</code></td>
+<td><code>gag-dogfood</code></td>
+<td><strong>Reported, never fatal.</strong> It needs ≥20 samples per template container, which accrues from the CI tenant's ordinary traffic over days — not from this gate.</td>
+</tr>
+<tr>
+<td><code>Binpack</code></td>
+<td>—</td>
+<td>Not re-asserted; live-validated 2026-07-25.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Throughput has a pre-condition you cannot satisfy during the gate.</strong> The
+   <code>ci</code> tenant must already be carrying ≥20 samples per container when the RC
+   runs, or the leg reports <code>NOT VALIDATED THIS RUN</code> and the profile ships
+   live-unvalidated. <code>scripts/dogfood/setup.sh</code> configures it, and
+   <code>status.sizingRecommendation</code> survives an AGC restart and a re-apply — so
+   deploy that config <strong>well before the RC window</strong>, not during it.</p>
+<ol>
 <li><strong>Tear down.</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>scripts/dogfood/stop.sh</code>
    (dogfood scales to 0 at rest).</li>
 </ol>
-<p>A red matrix or a failed CRD smoke is a <strong>stop-ship for the GA tag</strong>: fix forward and
-cut a new RC — never promote a known-bad RC to a stable tag.</p>
+<p>A red matrix, a failed CRD smoke, or a dead <code>NodeShare</code> profile is a <strong>stop-ship for
+the GA tag</strong>: fix forward and cut a new RC — never promote a known-bad RC to a stable
+tag.</p>
 <h3 id="2-tag-and-push">2. Tag and push<a class="headerlink" href="#2-tag-and-push" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>switch<span class="w"> </span>main<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>pull<span class="w"> </span>--ff-only
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>vX.Y.Z<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Release vX.Y.Z&quot;</span>
