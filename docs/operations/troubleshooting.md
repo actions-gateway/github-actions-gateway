@@ -1779,6 +1779,7 @@ Fixed versions forward SIGTERM (and SIGINT) from the wrapper to its child and wa
 
 - A child that is still alive when the wrapper's own budget expires is killed by the wrapper, which logs `child outlived the shutdown grace period; killing it` — an actionable line where there was previously silence.
 - The child's exit code is propagated, and a child that died from a signal is reported as `128 + signal` (SIGTERM → `143`, SIGKILL → `137`) rather than the meaningless `255` that the raw `-1` used to become.
+- A pod terminated in the first instants of its life is covered too (Q445). The wrapper installs its signal handler *before* it starts the runner, so a SIGTERM that arrives in that window is held and forwarded as soon as the child exists. Earlier fixed versions registered the handler after the start and could drop such a signal on the floor — PID 1 ignores a signal it has no handler for — which reproduced the unreported-job symptom above for a job cancelled or a node drained within a second or so of the pod starting.
 
 **Diagnostics.**
 
