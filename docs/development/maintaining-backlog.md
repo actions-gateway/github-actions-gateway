@@ -122,6 +122,8 @@ When you remove a Queue row for a **shipped user-facing capability**, also check
 
 A plan is `⚠️` only while it has at least one open row **in the Queue**. Intentionally-deferred residuals live in Deferred (or, for non-commitments, in [appendix-g](../design/appendix-g-future-enhancements.md)) and do **not** keep a plan `⚠️`: a plan whose only remainders are Deferred rows is `✅`. This keeps the table honest — `⚠️` reads as "active work remains," not "a box was once left unchecked."
 
+`scripts/lint-backlog.sh` enforces the transition at the moment it becomes owed: deleting the **last** Queue row that links `plan/NAME.md` fails the gate while that plan's Progress row is still `⚠️`, naming the plan and the flip. It fires only on that deletion, never on a steady-state scan — plenty of open rows merely *cite* a completed plan as evidence, and treating those as active work would make the rule cry wolf. For the rare case where the vanished row was such a citation and real work genuinely remains elsewhere, `BACKLOG_ALLOW_PROGRESS_STALE="plan/NAME.md"` admits it.
+
 When you flip a plan to `✅`, add (or update) a **Status** banner at the top of its plan doc naming the Deferred IDs carrying its residuals (e.g. "Status: Complete — residuals deferred as [Q11](../STATUS.md#Q11)"). The plan doc is **not** archived in this case — its `✅` Progress row still references it.
 
 ## Don't pre-assign release versions to backlog items

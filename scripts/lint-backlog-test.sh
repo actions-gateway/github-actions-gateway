@@ -199,6 +199,110 @@ rc=0; (cd "$staged_repo" && "$LINT" --staged) >/dev/null 2>&1 || rc=$?
 if [[ "$rc" == 0 ]]; then printf 'ok   staged: backlog not staged      -> no-op\n'; else
 	printf 'FAIL staged: non-backlog commit should pass untouched (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
 
+# --- Rule 9: re-derive the Progress row when the last Queue row goes ----------
+
+# Deleting the last Queue row that points at a plan makes that plan ✅ (deferred
+# residuals don't count), and the flip must land in the same edit. The real miss:
+# Q398 was the last Queue row on runner-sizing-profiles.md, its removal left the
+# Progress row at ⚠️, and a follow-up PR (#857) had to correct it.
+#
+# progress_fixture STATUS ROW... — a STATUS.md carrying a Progress table whose
+# single row links plan/some-item.md with the given status, plus the Queue rows.
+progress_fixture() {
+	local status="$1" file="$WORKDIR/progress-STATUS.md"
+	shift
+	{
+		printf '# Project Status\n\n'
+		printf '## Progress\n\n'
+		printf '| Item | Labels | Status |\n'
+		printf '|---|---|---|\n'
+		printf '| [Some plan](plan/some-item.md) | infra | %s |\n\n' "$status"
+		printf '## Queue\n\n'
+		printf '| ID | Item | Labels | St | Sz | Notes |\n'
+		printf '|---|---|---|---|---|---|\n'
+		local row
+		for row in "$@"; do printf '%s\n' "$row"; done
+		printf '\n## Deferred\n\n'
+		printf '| ID | Item | Labels | Sz | Trigger to revive |\n'
+		printf '|---|---|---|---|---|\n'
+		printf '| <a id="Q9"></a>Q9 | [Residual](plan/some-item.md) | infra | S | **Demand:** an operator reports it. |\n'
+	} >"$file"
+	printf '%s\n' "$file"
+}
+
+# expect_progress NAME WANT_RC BEFORE_STATUS AFTER_STATUS -- BEFORE_ROWS -- AFTER_ROWS
+# Commits BEFORE as the baseline, stages AFTER, runs the linter in --staged mode.
+expect_progress() {
+	local name="$1" want_rc="$2" before_st="$3" after_st="$4"
+	shift 4
+	local -a before=() after=(); local seen_sep=0 arg
+	for arg in "$@"; do
+		if [[ "$arg" == "--" ]]; then seen_sep=$((seen_sep + 1)); continue; fi
+		if (( seen_sep < 2 )); then before+=("$arg"); else after+=("$arg"); fi
+	done
+
+	local repo="$WORKDIR/progress-repo" rc=0
+	rm -rf "$repo"; mkdir -p "$repo/docs"
+	git -C "$repo" init -q
+	cp "$(progress_fixture "$before_st" ${before+"${before[@]}"})" "$repo/docs/STATUS.md"
+	git -C "$repo" add docs/STATUS.md
+	git -C "$repo" -c user.email=t@t -c user.name=t commit -qm base
+	cp "$(progress_fixture "$after_st" ${after+"${after[@]}"})" "$repo/docs/STATUS.md"
+	git -C "$repo" add docs/STATUS.md
+	(cd "$repo" && "$LINT" --staged) >/dev/null 2>&1 || rc=$?
+	if [[ "$rc" == "$want_rc" ]]; then
+		printf 'ok   %s\n' "$name"
+	else
+		printf 'FAIL %s: want rc=%s got rc=%s\n' "$name" "$want_rc" "$rc" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+PLAN_ITEM='[Some item](plan/some-item.md)'
+OTHER_ITEM='[Other item](plan/other.md)'
+
+# The miss: last row on the plan deleted, Progress row left at ⚠️.
+expect_progress 'progress: last row gone, still ⚠️ -> fail' 1 ⚠️ ⚠️ \
+	-- "$(qrow Q1 "$PLAN_ITEM" 🔲 'notes')" -- "$(qrow Q2 "$OTHER_ITEM" 🔲 'notes')"
+
+# The same edit, done right: the flip rides along.
+expect_progress 'progress: last row gone, flipped ✅ -> clean' 0 ⚠️ ✅ \
+	-- "$(qrow Q1 "$PLAN_ITEM" 🔲 'notes')" -- "$(qrow Q2 "$OTHER_ITEM" 🔲 'notes')"
+
+# A deferred residual does NOT hold the plan at ⚠️ — the Deferred row linking
+# plan/some-item.md is present in every fixture above, and the clean case proves
+# it is correctly ignored. Conversely, another *Queue* row on the same plan does
+# hold it: deleting one of two rows owes nothing.
+expect_progress 'progress: another Queue row remains -> clean' 0 ⚠️ ⚠️ \
+	-- "$(qrow Q1 "$PLAN_ITEM" 🔲 'notes')" "$(qrow Q2 "$PLAN_ITEM" 🔲 'notes')" \
+	-- "$(qrow Q2 "$PLAN_ITEM" 🔲 'notes')"
+
+# Steady state must stay silent: the rule only looks at plans whose last row just
+# vanished, so the many rows that merely cite a completed (✅) plan never trip it.
+expect_progress 'progress: unrelated edit, ✅ + citation -> clean' 0 ✅ ✅ \
+	-- "$(qrow Q1 "$PLAN_ITEM" 🔲 'notes')" -- "$(qrow Q1 "$PLAN_ITEM" 🔲 'edited notes')"
+
+# The escape hatch, for a vanished row that was only citing the plan. Rebuild the
+# failing state from the first case, then prove the env var admits it — asserting
+# against a state known to fail, not a vacuously clean one.
+progress_allow_repo="$WORKDIR/progress-allow"
+rm -rf "$progress_allow_repo"; mkdir -p "$progress_allow_repo/docs"
+git -C "$progress_allow_repo" init -q
+cp "$(progress_fixture ⚠️ "$(qrow Q1 "$PLAN_ITEM" 🔲 'notes')")" "$progress_allow_repo/docs/STATUS.md"
+git -C "$progress_allow_repo" add docs/STATUS.md
+git -C "$progress_allow_repo" -c user.email=t@t -c user.name=t commit -qm base
+cp "$(progress_fixture ⚠️ "$(qrow Q2 "$OTHER_ITEM" 🔲 'notes')")" "$progress_allow_repo/docs/STATUS.md"
+git -C "$progress_allow_repo" add docs/STATUS.md
+
+rc=0; (cd "$progress_allow_repo" && "$LINT" --staged) >/dev/null 2>&1 || rc=$?
+if [[ "$rc" == 1 ]]; then printf 'ok   progress: escape-hatch baseline does fail\n'; else
+	printf 'FAIL progress: escape-hatch baseline should fail first (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
+rc=0
+(cd "$progress_allow_repo" && BACKLOG_ALLOW_PROGRESS_STALE='plan/some-item.md' "$LINT" --staged) >/dev/null 2>&1 || rc=$?
+if [[ "$rc" == 0 ]]; then printf 'ok   progress: BACKLOG_ALLOW_PROGRESS_STALE -> clean\n'; else
+	printf 'FAIL progress: the escape hatch should admit the stale row (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
+
 # --- The real file must pass every rule ---------------------------------------
 
 rc=0

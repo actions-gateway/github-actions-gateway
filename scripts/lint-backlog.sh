@@ -33,6 +33,13 @@
 #      invisible from the file alone. Retiring a Flake watch row is a separate,
 #      grooming-time decision — set BACKLOG_ALLOW_FLAKE_DELETE="Q1 Q2" to allow
 #      specific IDs through.
+#   9. Deleting the LAST Queue row that points at a plan doc changes that plan's
+#      Progress verdict to ✅ (deferred residuals don't count), and the flip must
+#      land in the same edit. Also checked against a git baseline, and only for
+#      plans whose last row just disappeared: a steady-state scan would misread
+#      the many rows that merely *cite* a completed plan as evidence. Set
+#      BACKLOG_ALLOW_PROGRESS_STALE="plan/foo.md" when the vanished row was such
+#      a citation and real work genuinely remains.
 #
 # Usage:
 #   lint-backlog.sh [--staged] [path/to/STATUS.md]
@@ -151,6 +158,90 @@ check_flake_rows_preserved() {
 flake_check_rc=0
 check_flake_rows_preserved || flake_check_rc=1
 
+# Rule 9. Every `plan/NAME.md` path linked from a Queue row's Item or Notes cell.
+# Deferred rows are deliberately excluded: a deferred residual does not hold a
+# plan at ⚠️.
+queue_plan_links() {
+    awk '
+        /^## Queue/ { in_queue = 1; next }
+        /^## /      { in_queue = 0 }
+        in_queue && /^\|/ {
+            line = $0
+            while (match(line, /\(plan\/[A-Za-z0-9._-]+\.md/)) {
+                print substr(line, RSTART + 1, RLENGTH - 1)
+                line = substr(line, RSTART + RLENGTH)
+            }
+        }
+    ' | sort -u
+}
+
+# progress_status PLAN < FILE — the Progress table's Status cell for the row
+# linking PLAN, or "" when no such row exists.
+progress_status() {
+    awk -F'|' -v want="($1" '
+        /^## Progress/ { in_progress = 1; next }
+        /^## /         { in_progress = 0 }
+        in_progress && /^\|/ && index($2, want) {
+            st = $4
+            gsub(/[[:space:]]/, "", st)
+            print st
+            exit
+        }
+    '
+}
+
+check_progress_rederived() {
+    local baseline_ref="" baseline="" rel repo_root
+    repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+    [[ -n "$repo_root" ]] || return 0
+    rel="${FILE#"$repo_root"/}"
+
+    if (( STAGED )); then
+        baseline_ref="HEAD"
+    elif git rev-parse --verify --quiet origin/main >/dev/null; then
+        baseline_ref="origin/main"
+    else
+        return 0
+    fi
+
+    baseline="$(git show "$baseline_ref:$rel" 2>/dev/null || true)"
+    [[ -n "$baseline" ]] || return 0
+
+    local -a allowed=()
+    read -r -a allowed <<<"${BACKLOG_ALLOW_PROGRESS_STALE:-}"
+
+    local plan stale=0 st ok a
+    # Plans the baseline's Queue pointed at that the current Queue no longer does.
+    while read -r plan; do
+        [[ -n "$plan" ]] || continue
+        st="$(progress_status "$plan" <"$FILE")"
+        # No Progress row, or already re-derived to ✅ -> nothing owed.
+        [[ "$st" == "⚠️" ]] || continue
+        ok=0
+        for a in ${allowed+"${allowed[@]}"}; do
+            [[ "$a" == "$plan" ]] && ok=1 && break
+        done
+        (( ok )) && continue
+        if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+            printf '::error file=%s::the last Queue row pointing at %s is gone, but its Progress row is still ⚠️; a plan with only deferred residuals is ✅. Flip it in this same edit. See docs/development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count\n' \
+                "$FILE" "$plan"
+        else
+            printf 'lint-backlog: %s: the last Queue row pointing at %s is gone (it was in %s),\n' "$FILE" "$plan" "$baseline_ref" >&2
+            printf '  but its Progress row is still ⚠️. ⚠️ means an open *Queue* row remains;\n' >&2
+            printf '  deferred residuals do not count, so the row is now ✅. Flip it in this same\n' >&2
+            printf '  edit — the Progress table is only ever re-derived by hand. See\n' >&2
+            printf '  docs/development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count.\n' >&2
+            printf '  Was the vanished row only *citing* that plan, with real work left? BACKLOG_ALLOW_PROGRESS_STALE=%s\n' "$plan" >&2
+        fi
+        stale=1
+    done < <(comm -23 <(queue_plan_links <<<"$baseline") <(queue_plan_links <"$FILE"))
+
+    return "$stale"
+}
+
+progress_check_rc=0
+check_progress_rederived || progress_check_rc=1
+
 # Single awk pass. Rows split on `|`:
 #   Queue:    | <a id="Q4"></a>Q4 | Item | `labels` | St | Sz | Notes |  -> 8 fields
 #   Deferred: | <a id="Q4"></a>Q4 | Item | `labels` | Sz | Trigger    |  -> 7 fields
@@ -261,7 +352,7 @@ END {
 }
 ' "$FILE" || awk_rc=1
 
-if (( ${awk_rc:-0} || flake_check_rc )); then
+if (( ${awk_rc:-0} || flake_check_rc || progress_check_rc )); then
     exit 1
 fi
 
