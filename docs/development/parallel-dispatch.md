@@ -38,8 +38,9 @@ run-specific knobs. A ready-to-paste template:
 > independent Claude Code session (a task chip), never a sub-agent**. Give every
 > worker the self-healing contract from task one (launch the **pr-sentinel**
 > background watcher on PR open — one watcher that wakes on CI failures **and**
-> merge conflicts; push the real fix or `git merge origin/main`, keep the main
-> thread free, never self-merge, escalate after 5 tries). **You own assignment,
+> merge conflicts; push the real fix or `git rebase origin/main`, relaunch the
+> watcher after every wake — including `ready` — keep the main thread free, never
+> self-merge, escalate after 5 tries). **You own assignment,
 > merge ordering, and scope** — hand each worker exactly one item so none collide;
 > each worker removes its own `docs/STATUS.md` Queue row in its PR (isolated
 > commit). Tell every worker to run `make check` as a **background** task while it
@@ -160,6 +161,17 @@ the nudge names:
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/pr-sentinel-watch.sh" <PR>
 ```
 
+**Launch it bare — never with an inline `VAR=…` prefix.** pr-sentinel
+auto-approves its own watcher launch only for that exact three-token shape; an
+inline env assignment makes it four tokens, so the launch falls through to the
+base Bash permission and *prompts*. An unattended worker stalls there, and the PR
+spends the rest of its life unwatched — which is how self-healing silently stops
+happening. Tune the watcher through the `env` block in `.claude/settings.json`
+(the watcher reads its knobs from the environment at launch) so the command stays
+auto-approved — that is where this repo sets `PR_SENTINEL_TIMEOUT` to 6 h, since
+the stock 1 h budget expires while a PR is still queued behind the dispatcher's
+merge review and leaves it unwatched.
+
 The watcher sleeps between polls (zero idle tokens) and reads **only
 GitHub-controlled check results and mergeable state — never the PR body, review
 comments, or issue comments**. It covers **both** post-PR failure modes in one
@@ -171,12 +183,18 @@ mechanism, exiting with a single event the moment the session must act:
   green), then relaunch the watcher.
 - **`conflict` / `behind`** — the base branch advanced and the PR no longer merges
   cleanly (`mergeStateStatus` is `DIRTY`/`BEHIND`). Heal it and relaunch. This
-  repo pushes **merge, not rebase** (branch-guard blocks force-push), so launch
-  the watcher with `PR_SENTINEL_HEAL=merge` — its wake report then tells the
-  session to `git merge origin/main`; re-run `make check` and push (a
-  fast-forward, no `--force`).
+  repo takes pr-sentinel's **default `rebase` heal**: `git rebase origin/main`,
+  resolve, re-run `make check`, `git push --force-with-lease`. Branches here are
+  single-owner (one worktree, one task), so a rebase keeps history linear and
+  costs nothing a squash-merge wouldn't discard anyway. branch-guard's default
+  `strict` push policy **auto-approves a force-push of the worktree's own current
+  branch**, so this needs no prompt.
 - **`ready`** — all checks green, no conflict. Hand back for merge review; **the
-  worker never merges** (see [the merge model](#the-merge-model)).
+  worker never merges** (see [the merge model](#the-merge-model)) — then
+  **relaunch the watcher anyway**. `ready` is a handoff, not a terminal state:
+  the PR stays open through the dispatcher's scope review, and that is exactly
+  the window in which a sibling merge turns it `DIRTY`. Only `closed` ends the
+  watch.
 
 Because the watcher wakes on **mergeable state** too, a sibling PR merging — which
 silently leaves this PR conflicting with no CI signal — is just another wake, not
@@ -194,8 +212,9 @@ legitimate poll with `PR_SENTINEL_OVERRIDE=<reason>`.
 If pr-sentinel is not active in the worker's session, the worker runs its **own**
 background task (`run_in_background`) that loops: sleep → non-blocking
 `gh pr checks <n>` for check state **and** `gh pr view <n> --json mergeable` for
-conflict state → wake to push the real fix or `git merge origin/main`, re-run
-`make check`, push. **Never foreground-poll** — no `gh pr checks --watch` /
+conflict state → wake to push the real fix or `git rebase origin/main`, re-run
+`make check`, `git push --force-with-lease`, relaunch. **Never foreground-poll**
+— no `gh pr checks --watch` /
 `gh run watch` / `sleep`-loop on the main thread (it pins the session, and
 pr-sentinel's hook denies it outright where installed).
 
@@ -221,6 +240,12 @@ for cases where neither the plugin nor a background task is workable.
   [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
 - **Never self-merge.** A green + mergeable PR is handed to the dispatcher; the
   merge stays dispatcher-gated (see [the merge model](#the-merge-model)).
+- **Relaunch the watcher after every wake**, `ready` included — an unwatched open
+  PR heals nothing. The only events that end the watch are `closed` and the
+  safety valve below.
+- **Verify what landed by content, never by SHA.** A rebase rewrites the branch's
+  commit SHAs (and the eventual squash-merge discards them regardless), so check
+  `git show origin/main:<path>` rather than looking for a commit you remember.
 - **Safety valve.** If the PR can't be made green after ~5 attempts, post a PR
   comment summarizing the blocker and stop, so the dispatcher can intervene.
 - **No secrets.** Never read, print, log, or pass any secret while healing (see
@@ -228,7 +253,8 @@ for cases where neither the plugin nor a background task is workable.
 
 Self-healing also makes the contention problem mostly disappear: when one PR
 merges, every other open PR's watcher wakes on the now-conflicting mergeable state
-and merges `main` back in.
+and rebases onto `main`. That only holds for PRs whose watcher is still
+running — which is why `ready` relaunches rather than ends the watch.
 
 ### Standard worker prompt skeleton
 
@@ -302,9 +328,10 @@ auditable and resumable.
 
 This is the key design decision; get it right up front.
 
-- **Auto-*fix* is delegated to each session.** Pushing the real CI fix and merging
-  `origin/main` on a conflict are both scoped to one PR and reversible, so they are
-  safe to hand to the worker — the pr-sentinel background watcher wakes it for both
+- **Auto-*fix* is delegated to each session.** Pushing the real CI fix and rebasing
+  onto `origin/main` on a conflict are both scoped to one unmerged topic branch
+  and reversible, so they are safe to hand to the worker — the pr-sentinel
+  background watcher wakes it for both
   (see [the worker contract](#the-worker-contract-self-healing)). (This is the
   self-healing loop.)
 - **Auto-*merge* stays dispatcher-gated.** Merge is a global, irreversible write
@@ -400,7 +427,7 @@ implementing the **same** Queue item — an *assignment* problem — not keeping
   repo rule that STATUS.md changes get their own commit). PRs stay self-contained
   and the Queue stays current as they merge.
 - **Self-healing absorbs the churn.** When a sibling merges, the trivial
-  STATUS.md conflict is resolved by the worker's `git merge origin/main` step —
+  STATUS.md conflict is resolved by the worker's `git rebase origin/main` step —
   and usually before that, by the
   [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position),
   which decides the Queue table by row ID. Picking from the top makes every
@@ -463,13 +490,18 @@ relitigated:
 
 ## Conflict policy
 
+Healing is the worker's job — the dispatcher only steps in when a worker is gone
+or stuck.
+
 - **Doc-only / trivial conflicts** the dispatcher can resolve directly (a small
-  helper that merges `origin/main` into the PR branch in a throwaway worktree and
-  fast-forward-pushes works well).
+  helper that rebases the PR branch onto `origin/main` in a throwaway worktree and
+  force-pushes with lease works well). The `docs/STATUS.md`
+  [merge driver](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position)
+  runs during rebase too, so Queue-row conflicts usually resolve on their own.
 - **Semantic / code conflicts** go back to a worker: spawn a small resolve chip
-  that takes over the PR branch, merges `main`, resolves with full judgment,
-  re-runs the gate, and pushes. The dispatcher does not hand-edit code conflicts
-  on another session's branch.
+  that takes over the PR branch, rebases onto `main`, resolves with full
+  judgment, re-runs the gate, and force-pushes with lease. The dispatcher does
+  not hand-edit code conflicts on another session's branch.
 
 ## PR-watcher requirements
 
@@ -517,6 +549,8 @@ production credentials) — exclude them explicitly and hand them to a human.
 - [ ] Merge model decided (gated vs. risk-tiered; branch protection if using
       native auto-merge).
 - [ ] PR-watcher gates on checks **and** mergeability and handles zero-check PRs.
+- [ ] Watcher launched **bare** (no inline `VAR=…` prefix, or the auto-allow
+      lapses into a prompt) and relaunched after every wake, `ready` included.
 - [ ] No-secrets boundary set; credential-dependent items excluded up front.
 - [ ] Cleanup plan for leftover worktrees/branches at the end.
 
@@ -524,6 +558,16 @@ production credentials) — exclude them explicitly and hand them to a human.
 
 - **Adding self-healing late.** The first several PRs were hand-rebased and
   needed dedicated fix/resolve chips. Make self-healing the default from task #1.
+- **Letting the watch end at `ready`.** A handed-off PR still sits open through
+  scope review — the exact window a sibling merge breaks it — and with no watcher
+  nothing wakes to rebase. Relaunch on `ready`; only `closed` is terminal.
+- **Decorating the watcher launch with an env prefix.** It costs the launch its
+  auto-allow (the plugin matches a three-token command), so every relaunch
+  prompts and an unattended worker stops relaunching. Put knobs in
+  `.claude/settings.json` `env` instead. This is what made a stale
+  "branch-guard blocks force-push" note expensive: it forced a
+  `PR_SENTINEL_HEAL=merge` prefix onto every launch, for a restriction
+  branch-guard's default `strict` policy does not actually impose.
 - **Bundling the STATUS.md Queue-row edit into a code commit.** Mixed into a code
   commit it makes every sibling merge conflict painfully; keep it an isolated
   commit so self-healing absorbs the trivial conflict. (Workers owning their own
