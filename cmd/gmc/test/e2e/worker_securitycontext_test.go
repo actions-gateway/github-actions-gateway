@@ -39,7 +39,7 @@ var _ = Describe("E2E_AGC_WorkerSecurityContext", Ordered, func() {
 	const (
 		tenantNS   = "tenant-worker-sec"
 		agName     = "sec-ag"
-		secretName = "github-app-secret"
+		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 	)
 
 	var secPFCmd *exec.Cmd
@@ -77,7 +77,7 @@ var _ = Describe("E2E_AGC_WorkerSecurityContext", Ordered, func() {
 			if err != nil {
 				return err
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil
 		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 	})

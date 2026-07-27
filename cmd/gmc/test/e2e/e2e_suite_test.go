@@ -10,12 +10,10 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -281,7 +279,13 @@ func setupV2CRDs() {
 	render := fmt.Sprintf(
 		"set -o pipefail; helm template actions-gateway-crds-v2 %q --namespace %s | kubectl apply --server-side --force-conflicts -f -",
 		v2CRDChartDir(), gmcNamespace)
-	cmd := exec.Command("bash", "-c", render)
+	// G204: this one really does invoke a shell, so it is not covered by the
+	// constant-binary gosec exclusion in .golangci.yml and is accepted by hand.
+	// `render` interpolates only v2CRDChartDir() — an absolute path derived from
+	// this file's own compile-time location and %q-quoted — and the gmcNamespace
+	// package constant. Nothing from the environment, the cluster, or a fixture
+	// reaches it. The shell is needed for `set -o pipefail` + the helm|kubectl pipe.
+	cmd := exec.Command("bash", "-c", render) //nolint:gosec // G204: shell script built only from a compile-time path and a package const.
 	_, err := utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "install v2 CRDs (helm template | kubectl apply)")
 }
@@ -543,6 +547,3 @@ spec:
     targetPort: 9090
 `, ns, image, ns)
 }
-
-// stringReader wraps a string as an io.Reader for kubectl stdin.
-func stringReader(s string) io.Reader { return strings.NewReader(s) }

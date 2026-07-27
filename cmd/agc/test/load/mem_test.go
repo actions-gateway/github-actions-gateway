@@ -290,7 +290,7 @@ func stopAll(muxes []*listener.Multiplexer) {
 // with `go tool pprof` (e.g. inspecting inuse_space by package).
 func writeHeapProfile(t *testing.T, path string) {
 	t.Helper()
-	f, err := os.Create(path) //nolint:gosec // operator-supplied diagnostic path
+	f, err := os.Create(path)
 	if err != nil {
 		t.Errorf("create heap profile %q: %v", path, err)
 		return

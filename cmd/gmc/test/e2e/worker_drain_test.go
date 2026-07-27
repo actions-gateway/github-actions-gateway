@@ -69,7 +69,7 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 	const (
 		tenantNS   = "tenant-drain"
 		agName     = "drainprobe-ag"
-		secretName = "github-app-secret"
+		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 
 		// runID is this spec's own workflow run. It is what scopes the rerun
 		// assertion to this spec: /control/reruns is process-wide, and another
@@ -141,7 +141,7 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 			if err != nil {
 				return err
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil
 		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 	})

@@ -74,7 +74,7 @@ func TestAGCLoad(t *testing.T) {
 func writeReport(t *testing.T, path string, res *Result) {
 	t.Helper()
 	if dir := filepath.Dir(path); dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Errorf("create report dir %q: %v", dir, err)
 			return
 		}

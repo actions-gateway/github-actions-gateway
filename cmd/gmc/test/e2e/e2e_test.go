@@ -332,6 +332,11 @@ var _ = Describe("Manager", Ordered, func() {
 // It uses the Kubernetes TokenRequest API to generate a token by directly sending a request
 // and parsing the resulting token from the API response.
 func serviceAccountToken() (string, error) {
+	// G101: the identifier matches gosec's credential-name pattern, but the value
+	// is an empty TokenRequest *request body* — the API kind that ASKS the
+	// apiserver to mint a token. No credential is embedded here; the token comes
+	// back in the response below.
+	//nolint:gosec // G101: a TokenRequest API body, not a credential value.
 	const tokenRequestRawString = `{
 		"apiVersion": "authentication.k8s.io/v1",
 		"kind": "TokenRequest"

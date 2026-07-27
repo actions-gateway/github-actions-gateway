@@ -18,19 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// buildJobPayload creates a JSON-encoded AcquireJob-style payload with owner/repo/runID.
-// The provisioner unmarshals this from the payload bytes to extract eviction retry info.
-func buildJobPayload(owner, repo string, runID int64) []byte {
-	b, _ := json.Marshal(map[string]interface{}{
-		"run_id": runID,
-		"variables": map[string]interface{}{
-			"system.github.repository": map[string]string{"value": owner + "/" + repo},
-			"system.github.run_id":     map[string]string{"value": "12345"},
-		},
-	})
-	return b
-}
-
 // TestAGC_FailureRecovery_PodCrash_NoSecretLeak verifies that when a worker pod
 // fails (non-eviction), the provisioner deletes the job Secret without leaking it
 // and does not trigger an auto-rerun.

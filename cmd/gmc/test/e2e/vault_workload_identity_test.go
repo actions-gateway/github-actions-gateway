@@ -89,7 +89,7 @@ var _ = Describe("E2E_VaultWorkloadIdentity", Ordered, Label("vault-workload-ide
 			if err != nil {
 				return err
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil
 		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 	})

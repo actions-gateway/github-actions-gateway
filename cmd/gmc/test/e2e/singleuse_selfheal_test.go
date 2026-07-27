@@ -26,7 +26,7 @@ var _ = Describe("E2E_AGC_SingleUseSelfHeal", Ordered, func() {
 	const (
 		tenantNS   = "tenant-selfheal"
 		agName     = "selfheal-ag"
-		secretName = "github-app-secret"
+		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 	)
 
 	var selfhealPFCmd *exec.Cmd
@@ -62,7 +62,7 @@ var _ = Describe("E2E_AGC_SingleUseSelfHeal", Ordered, func() {
 			if err != nil {
 				return err
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil
 		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 
