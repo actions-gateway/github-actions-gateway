@@ -73,9 +73,20 @@ make chart-webhook   # scripts/sync-chart-webhook.sh — regenerates charts/acti
 
 `make chart-webhook-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if the chart template drifted from the controller-gen source — so a marker change (a new intercepted resource/operation, a path or `failurePolicy` change) that is regenerated into `config/` but not propagated to the chart fails CI ([Q143](../STATUS.md)).
 
-## agc-tenant-role rules (NOT controller-gen)
+## AGC ClusterRole rules (NOT controller-gen)
+
+Both AGC ClusterRoles the chart ships are hand-maintained, and both are gated by
+`cmd/agc/internal/controller/rbac_chart_drift_test.go` (a unit test, so `make check`
+runs it): every `(group, resource)` the AGC's `+kubebuilder:rbac` markers declare
+must be shipped by one of the two fragments, or a real install 403s on it.
+
+### agc-tenant-role
 
 The `agc-tenant-role` ClusterRole — the permission set every AGC ServiceAccount runs as — is **not** generated from a `+kubebuilder:rbac` marker. It deliberately withholds permissions the AGC's own marker role (`cmd/agc/config/rbac/role.yaml`, ClusterRole `agc-role`) grants (e.g. `runnergroups` create/delete, `secrets` patch) for least privilege, so generating it from the markers would be a privilege escalation. Its single source is the hand-maintained fragment `charts/actions-gateway/files/agc-tenant-role-rules.yaml`: the chart embeds it via `.Files.Get` in `templates/agc-tenant-role.yaml`, and the GMC integration suite (`installAGCTenantClusterRole`) reads the same file — so the shipped role and the RBAC-scope test can never drift. Edit the fragment, not either consumer ([Q143](../STATUS.md)).
+
+### agc-clusterrunnertemplate-reader
+
+The `agc-clusterrunnertemplate-reader` ClusterRole carries the cluster-scoped reads a namespaced `RoleBinding` cannot authorize — `clusterrunnertemplates` and (since [Q450](../STATUS.md)) `runtimeclasses`. Its source is likewise the hand-maintained fragment `charts/actions-gateway/files/agc-clusterrunnertemplate-reader-rules.yaml`. Unlike the tenant role it holds *exactly* what the markers declare for those kinds, so the drift test asserts verb-level equality both ways, plus the read-only property the cluster-wide scope depends on: any write verb here fails the test ([Q454](../STATUS.md), rationale in [design/05-security.md](../design/05-security.md#the-agcs-cluster-scoped-read-surface)). Adding a cluster-scoped kind to the AGC means editing the marker in `doc.go` *and* this fragment in the same change.
 
 ## RBAC marker placement
 

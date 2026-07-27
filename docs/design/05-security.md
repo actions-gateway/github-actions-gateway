@@ -101,6 +101,16 @@ to it is high. Three properties keep the surface acceptable:
   behave as they did before Q450. The grant buys accuracy, so losing it costs
   accuracy — never availability.
 
+The table above is enforced, not just documented. The shipped rules
+(`charts/actions-gateway/files/agc-clusterrunnertemplate-reader-rules.yaml`) and the
+`+kubebuilder:rbac` markers that declare the AGC's needs
+(`cmd/agc/internal/controller/doc.go`) are hand-synced, and a unit test
+(`rbac_chart_drift_test.go`, Q454) fails on any divergence: a cluster-wide rule the
+markers never asked for, a marker verb the chart does not grant, and — the read-only
+property above — any write verb at all. A second case asserts the reverse direction
+for both AGC roles, so a marker added without its chart rule fails the build instead
+of 403-ing in a real install.
+
 The corresponding operator-visible consequence — a `WorkerQuotaPressure` that can
 newly trip on a Kata tenant, and how to confirm the grant landed — is in
 [resourcequota-sizing.md](../operations/resourcequota-sizing.md#pod-overhead-needs-a-cluster-scoped-read)
