@@ -51,7 +51,11 @@ var _ = Describe("E2E_V2_MultiGateway", Ordered, func() {
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
 
 		By("applying the v2 object set: one EgressProxy, two ActionsGateways, one template, two RunnerSets")
-		Expect(utils.ApplyManifest(v2MultiGatewayManifest(tenantNS, secretName, agcImage))).To(Succeed())
+		// Retry rather than one-shot: the ActionsGateway/RunnerTemplate/RunnerSet
+		// validating-webhook POSTs can transiently time out under the parallel suite
+		// even with the GMC 1/1 Running, and failurePolicy: Fail turns that blip into
+		// a hard BeforeAll failure (Q391). A genuine denial still fails fast.
+		Expect(utils.ApplyManifestWithWebhookRetry(v2MultiGatewayManifest(tenantNS, secretName, agcImage))).To(Succeed())
 
 		By("granting workload pods egress to fakegithub in e2e-infra (both gateways' AGCs)")
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)

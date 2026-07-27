@@ -25,7 +25,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
-		utils.BaseTenant(tenantNS, agName, secretName).Apply()
+		utils.BaseTenant(tenantNS, agName, secretName).ApplyWithWebhookRetry()
 	})
 
 	AfterAll(func() {

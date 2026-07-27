@@ -29,7 +29,7 @@ var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {
 			gmcv1alpha1.PrivilegedProfileLabel: gmcv1alpha1.PrivilegedProfileAllowed,
 		})
 		utils.CreateGitHubAppSecret(ns, secretName, 55555, 66666, testRSAKeyPEM)
-		utils.BaseTenant(ns, agName, secretName).Apply()
+		utils.BaseTenant(ns, agName, secretName).ApplyWithWebhookRetry()
 	})
 
 	AfterAll(func() {

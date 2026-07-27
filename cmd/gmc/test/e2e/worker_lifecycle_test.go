@@ -65,9 +65,9 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 			utils.ApplyFakegithubEgressNetworkPolicy(ns)
 		}
 		By("applying a tenant whose workers complete fast and are reaped on a short TTL")
-		utils.RunnerTenant(cleanNS, cleanAG, secretName, agcImage).WithLifecycle(cleanTTL, "10m").Apply()
+		utils.RunnerTenant(cleanNS, cleanAG, secretName, agcImage).WithLifecycle(cleanTTL, "10m").ApplyWithWebhookRetry()
 		By("applying a tenant whose workers can never pull their image")
-		utils.RunnerTenant(stuckNS, stuckAG, secretName, stuckImage).WithLifecycle("5m", stuckDeadline).Apply()
+		utils.RunnerTenant(stuckNS, stuckAG, secretName, stuckImage).WithLifecycle("5m", stuckDeadline).ApplyWithWebhookRetry()
 
 		By("waiting for both AGCs to be ready")
 		utils.WaitForDeploymentReady(cleanNS, agcName, 4*time.Minute)

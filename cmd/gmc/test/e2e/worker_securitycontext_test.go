@@ -50,7 +50,7 @@ var _ = Describe("E2E_AGC_WorkerSecurityContext", Ordered, func() {
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
 
 		By("applying a tenant whose RunnerGroup uses the REAL worker image (non-numeric USER runner)")
-		utils.RunnerTenant(tenantNS, agName, secretName, workerImage).Apply()
+		utils.RunnerTenant(tenantNS, agName, secretName, workerImage).ApplyWithWebhookRetry()
 
 		By("waiting for AGC to be ready")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)

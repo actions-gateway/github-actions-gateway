@@ -25,7 +25,7 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 33333, 44444, testRSAKeyPEM)
-		utils.BaseTenant(tenantNS, agName, secretName).Apply()
+		utils.BaseTenant(tenantNS, agName, secretName).ApplyWithWebhookRetry()
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
 	})
 

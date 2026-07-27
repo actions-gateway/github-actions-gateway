@@ -195,16 +195,15 @@ func cloneGroups(in []RunnerGroupFixture) []RunnerGroupFixture {
 	return out
 }
 
-// Apply renders the fixture and applies it, failing the spec on error.
-func (f TenantFixture) Apply() {
-	GinkgoHelper()
-	Expect(ApplyManifest(f.Manifest())).To(Succeed(),
-		"apply ActionsGateway %s/%s", f.Namespace, f.Name)
-}
-
-// ApplyWithWebhookRetry applies the fixture through ApplyManifestWithWebhookRetry,
-// riding out a transient GMC-webhook stall under the parallel suite (Q391). Use it in
-// a BeforeAll whose apply triggers the validating webhook.
+// ApplyWithWebhookRetry renders the fixture and applies it through
+// ApplyManifestWithWebhookRetry, failing the spec on error. It is the ONLY fixture
+// apply on purpose (Q392): every ActionsGateway apply goes through the GMC validating
+// webhook, so every one of them can hit the transient webhook-unreachable stall the
+// parallel suite provokes (Q391) — there is no fixture apply that should skip the
+// retry. A genuine webhook denial still fails on the first attempt. A spec that
+// deliberately wants a one-shot apply — to assert on the admission outcome itself,
+// the way manager_np_test.go does — should call ApplyManifest/ApplyManifestOutput
+// with Manifest() directly rather than reintroduce a non-retrying method here.
 func (f TenantFixture) ApplyWithWebhookRetry() {
 	GinkgoHelper()
 	Expect(ApplyManifestWithWebhookRetry(f.Manifest())).To(Succeed(),

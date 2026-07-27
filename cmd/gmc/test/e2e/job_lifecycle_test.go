@@ -39,7 +39,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		// (already loaded into the cluster); it acts as a placeholder since
 		// job-lifecycle tests only verify session registration and pod creation,
 		// not that runner pods complete successfully.
-		utils.RunnerTenant(tenantNS, agName, secretName, agcImage).Apply()
+		utils.RunnerTenant(tenantNS, agName, secretName, agcImage).ApplyWithWebhookRetry()
 
 		By("granting workload pods egress to fakegithub in e2e-infra")
 		// The GMC-built workload NP restricts 8080 egress to proxy pods only
