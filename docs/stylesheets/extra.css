@@ -973,9 +973,29 @@ body[data-md-color-scheme="slate"] {
 /* The why-gag comparison table: fill the column (so it isn't left-aligned with a
    right-hand gap) and restore roomy cell padding. Material's default cell padding
    is :not([class])-guarded, so the reveal JS that classes this table drops it —
-   hence re-stating it here. Scoped to this page so other tables are untouched. */
+   hence re-stating it here. Scoped to this page so other tables are untouched.
+   table-layout: fixed pins the column widths below: under auto layout the browser
+   splits width by each column's max-content demand, and the GAG column's
+   continuation sentences dwarf the other two — it took 58% while the capability
+   label, the anchor of every row, was starved to 19% (narrower than ARC's 23%)
+   and wrapped labels that would otherwise fit on one line. */
 .md-content__inner:has(.gag-vs-hero) table {
   width: 100%;
+  table-layout: fixed;
+}
+
+/* Label column gets room for a one-line capability name; the two compared columns
+   stay close enough to read side-by-side, GAG widest as it carries ~2x the text. */
+.md-content__inner:has(.gag-vs-hero) table th:nth-child(1) {
+  width: 26%;
+}
+
+.md-content__inner:has(.gag-vs-hero) table th:nth-child(2) {
+  width: 32%;
+}
+
+.md-content__inner:has(.gag-vs-hero) table th:nth-child(3) {
+  width: 42%;
 }
 
 .md-content__inner:has(.gag-vs-hero) table th,
