@@ -46,6 +46,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)](#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)
 - [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
 - [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
+- [Draining a Node Does Not Auto-Re-Run the Jobs It Interrupts](#draining-a-node-does-not-auto-re-run-the-jobs-it-interrupts)
 - [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically)
 - [Terminated Worker Pod Never Reports Its Job (Job Hangs on GitHub Until the Lock Lapses)](#terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses)
 - [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion)
@@ -1694,6 +1695,78 @@ kubectl describe runnergroup -n <namespace> <name> | grep -A1 EvictionRetriesExh
 - If evictions are from preemption by higher-priority pods: reduce the priority of competing workloads or adjust `priorityTiers` to give this RunnerGroup a higher floor.
 - If the retry budget is too low for a workload that occasionally gets preempted: increase `maxEvictionRetries` on the RunnerGroup spec (default 2, max 10).
 - If the workload is consistently failing (OOM crash, not preemption): the auto-retry is not appropriate. Set `maxEvictionRetries: 0` and investigate the underlying workload issue.
+
+---
+
+## Draining a Node Does Not Auto-Re-Run the Jobs It Interrupts
+
+> **Applies to both acquisition tiers**, and it is the one disruption path neither the
+> disruption-safety markers nor eviction recovery covers.
+
+**Symptoms.** You cordon and drain a node that has worker pods on it. The jobs those
+workers were running do not come back: `actions_gateway_eviction_retries_total` stays
+flat, no `rerun-failed-jobs` call is made, and the affected runs need a manual re-run
+in the GitHub UI. The same drain on a node whose workers were evicted by *node
+pressure* would have re-run them automatically.
+
+**Cause — this is current behaviour, not a misconfiguration.** The two disruptions
+reach the gateway as different things:
+
+- **The kubelet evicting under node pressure** leaves the pod in `Failed` with
+  `status.reason: Evicted`. That is the shape both tiers' eviction recovery keys on,
+  and it triggers the automatic re-run.
+- **`kubectl drain`** does not fail the pod. It POSTs to the pod's `pods/<name>/eviction`
+  subresource, and an admitted eviction is a graceful **delete**. Measured on a real
+  cluster (Q421), a drained worker pod publishes no terminal phase at all — it goes
+  from its running/pending state straight to absent — so there is nothing for either
+  tier's detection to see, and no re-run fires.
+
+Two related things operators reasonably expect to help, and which do not:
+
+- The worker pod's `cluster-autoscaler.kubernetes.io/safe-to-evict: false`,
+  `karpenter.sh/do-not-disrupt: true`, and descheduler prefer-no-eviction annotations
+  are advisory to **those controllers only**. `kubectl drain` ignores all three, by
+  design — they exist to stop an autoscaler or descheduler from moving a mid-job
+  worker, not to stop an administrator.
+- Worker pods carry no PodDisruptionBudget, so nothing rejects the eviction either.
+
+What *does* happen is the Q385 SIGTERM relay: the wrapper forwards the signal, the
+runner gets the pod's grace period to abort its job and report the result, and GitHub
+concludes the job rather than waiting the lock out. That is why the job does not hang
+— but concluding a job is not re-running it.
+
+**Diagnostics.**
+
+```sh
+# Confirm the interruption was a drain (deletion) and not a kubelet eviction.
+# A kubelet eviction leaves the pod behind in Failed/Evicted; a drain leaves nothing.
+kubectl get events -n <namespace> --sort-by='.lastTimestamp' \
+  | grep -E 'Evicted|Killing|TaintManagerEviction'
+
+# Whether eviction recovery fired at all for the window in question.
+# actions_gateway_eviction_retries_total{namespace, runner_group, tier}
+# Flat across a drain is expected; flat across a node-pressure eviction is not
+# (see the two runbooks above).
+
+# Confirm the runner did get its chance to report before the pod went away.
+kubectl logs -n <namespace> <worker-pod> --previous \
+  | grep -E 'forwarding termination signal|outlived the shutdown grace period'
+```
+
+**Resolution / how to drain safely.**
+- **Drain during a quiet window, or wait the workers out.** A worker pod is a
+  single-job pod with no replacement behind it. `kubectl get pods -n <namespace> -l
+  app.kubernetes.io/managed-by=actions-gateway-controller` on the target node shows
+  what a drain would interrupt; an empty result is the safe moment.
+- **Re-run the affected workflow runs manually** after the drain. There is no
+  automatic recovery on this path today.
+- **Give the runner room to report** before you drain, so the jobs at least conclude
+  cleanly instead of hanging: raise `terminationGracePeriodSeconds` in the runner
+  group's `podTemplate` and `WORKER_SHUTDOWN_GRACE` with it, per
+  [Terminated Worker Pod Never Reports Its Job](#terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses).
+- Do **not** try to make the drain fail instead: a PodDisruptionBudget over worker
+  pods would block the drain rather than protect the job, and would leave the node
+  undrainable for as long as any job runs.
 
 ---
 

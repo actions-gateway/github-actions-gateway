@@ -758,3 +758,89 @@ func TestStrandedSessionQueueAgesIntoPool(t *testing.T) {
 		}
 	})
 }
+
+// TestRerunFailedJobsIsRecordedAndScoped covers the eviction auto-retry
+// observability the Q421 drain experiment reads (see the package doc): the call
+// is answered like GitHub answers it, recorded, and reportable per run — the last
+// part being what lets one spec assert "no rerun for MY run" while another spec's
+// rerun sits in the same list.
+//
+// Both routes are exercised because which one the AGC uses depends on its
+// configured API base: a GHES-shaped base carries the /api/v3 prefix, while the
+// e2e deployment points GITHUB_API_BASE_URL straight at this server and addresses
+// /repos/... directly.
+func TestRerunFailedJobsIsRecordedAndScoped(t *testing.T) {
+	s := newServer()
+	main := httptest.NewServer(s.mainMux())
+	defer main.Close()
+	control := httptest.NewServer(s.controlMux())
+	defer control.Close()
+
+	rerun := func(path string) int {
+		t.Helper()
+		resp, err := http.Post(main.URL+path, "application/json", strings.NewReader("{}"))
+		if err != nil {
+			t.Fatalf("POST %s: %v", path, err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		return resp.StatusCode
+	}
+	reruns := func(filter string) (int, []string) {
+		t.Helper()
+		query := ""
+		if filter != "" {
+			query = "?run=" + filter
+		}
+		resp, err := http.Get(control.URL + "/control/reruns" + query)
+		if err != nil {
+			t.Fatalf("GET /control/reruns: %v", err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		var out struct {
+			Count int      `json:"count"`
+			Paths []string `json:"paths"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatalf("decode reruns: %v", err)
+		}
+		return out.Count, out.Paths
+	}
+
+	if n, _ := reruns(""); n != 0 {
+		t.Fatalf("a fresh server reports %d reruns, want 0", n)
+	}
+
+	// The shape the e2e AGC sends (API base is this server's root).
+	if code := rerun("/repos/o/r/actions/runs/4210/rerun-failed-jobs"); code != http.StatusCreated {
+		t.Fatalf("rerun-failed-jobs returned %d, want 201 (GitHub's own status)", code)
+	}
+	// The GHES-prefixed shape.
+	if code := rerun("/api/v3/repos/o/r/actions/runs/999/rerun-failed-jobs"); code != http.StatusCreated {
+		t.Fatalf("/api/v3 rerun-failed-jobs returned %d, want 201", code)
+	}
+
+	if n, paths := reruns(""); n != 2 {
+		t.Fatalf("server recorded %d reruns (%v), want both routes", n, paths)
+	}
+	n, paths := reruns("/runs/4210/")
+	if n != 1 {
+		t.Fatalf("run-scoped filter matched %d reruns (%v), want exactly the 4210 call", n, paths)
+	}
+	if !strings.Contains(paths[0], "/runs/4210/") {
+		t.Fatalf("filtered path %q is not the run that was asked for", paths[0])
+	}
+	if n, _ := reruns("/runs/12345/"); n != 0 {
+		t.Fatalf("a run nobody re-ran reports %d reruns, want 0 — the Q421 assertion depends on this", n)
+	}
+
+	// An unimplemented /repos endpoint must still 404 rather than be silently
+	// counted as a rerun.
+	resp, err := http.Get(main.URL + "/repos/o/r/actions/runs/4210")
+	if err != nil {
+		t.Fatalf("GET unimplemented repos endpoint: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unimplemented /repos endpoint returned %d, want 404", resp.StatusCode)
+	}
+}

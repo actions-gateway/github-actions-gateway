@@ -209,6 +209,11 @@ curl -s 'http://localhost:9090/control/sessions?owner=my-ag-'
 # delivering session's runner record; scope with owner= to avoid affecting
 # other suites on the shared instance
 curl -s -X POST 'http://localhost:9090/control/singleuse?enabled=true&owner=my-ag-'
+# Eviction auto-retry calls the AGC has made (the rerun-failed-jobs POST is the
+# only externally visible sign that eviction recovery fired). Filter by run so
+# the count is one spec's own rather than the whole process's.
+curl -s http://localhost:9090/control/reruns
+curl -s 'http://localhost:9090/control/reruns?run=%2Fruns%2F12345%2F'
 ```
 
 For the runner side, `gh run list --repo <org>/<repo>` and `gh run view <id> --json status,conclusion` give the GitHub-side view that `kubectl` can't.

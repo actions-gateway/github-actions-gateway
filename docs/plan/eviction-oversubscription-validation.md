@@ -34,6 +34,7 @@ clean run with no `timeout-minutes` set.
 | Q419 | **Shipped 2026-07-26** with Q417 — the docs half of the same gap. The tier-agnostic claims in the exec summary, README, and why-gag are now true of both tiers rather than needing a qualification. Independent of these experiments. |
 | Q420 | **Shipped 2026-07-26**, ahead of Q417 and independently of it — the reap deadline came from a pod annotation, not a pod watch. Orphaned Running workers would otherwise have contaminated 3 and 5 by holding quota, which is exactly the idle-capacity signature those experiments measure. |
 | [Q418](../STATUS.md#Q418) | Deferred, event-gated on experiment 1 attributing the delay. |
+| [Q459](../STATUS.md#Q459) | **Filed by experiment 2**, 2026-07-27. Its residual: neither tier recovers a drained worker, and whether that matters turns on what GitHub does with the runner's own relayed report — a Tier C question. |
 
 ## Experiment 1: mid-job eviction latency, both tiers ([Q396](../STATUS.md#Q396))
 
@@ -54,7 +55,10 @@ Phase 1 records the same. The genuinely additive assertion is the retry budget
   [Q418](../STATUS.md#Q418) trigger.
 - **Unblocked** — Q417 shipped 2026-07-26, so the scale-set tier now detects evictions and fires the rerun this experiment measures.
 
-## Experiment 2: the node-drain path ([Q421](../STATUS.md#Q421))
+## Experiment 2: the node-drain path (Q421)
+
+**Done 2026-07-27** — jump to the [Result](#result-measured-2026-07-27). The heading
+keeps its original slug because several docs link to it.
 
 Cordon and drain a node mid-job. Assert what the wrapper, the runner, the
 provisioner, and GitHub each do.
@@ -105,8 +109,83 @@ Assertions:
    (see scaleset-eviction-recovery.md Phase 3, which fails to find a job-scoped
    credential on that tier), so this assertion does not port.
 
-- **Not blocked.** Sized M rather than S, because a failed assertion 3 turns
-  this into a design question about the delete path.
+### Result, measured 2026-07-27
+
+**The code reading held, on both tiers: a drain reaches no eviction recovery
+whatsoever.** The prediction is now a measurement, taken at two venues.
+
+**envtest, both tiers** —
+[`drain_eviction_test.go`](../../cmd/agc/internal/controller/integration/drain_eviction_test.go).
+Each test drives the real `pods/<name>/eviction` subresource against a worker pod
+that came out of the real provisioning path, carrying a complete run identity, and
+asserts the rerun API is never called. The classic case wires the production
+`InformerPodWaiter` rather than the poll fallback, because the two agree on a pod
+that reaches a terminal phase and disagree on one that is deleted without ever
+reaching one. Both pass. Each is the exact twin of the eviction test that *does*
+fire a rerun on the same wiring, so the eviction/deletion distinction is isolated
+to one substitution rather than argued.
+
+**Tier B on kind** —
+[`worker_drain_test.go`](../../cmd/gmc/test/e2e/worker_drain_test.go)
+(`E2E_AGC_WorkerNodeDrain`). A real `kubectl drain` against the node holding a live,
+AGC-watched worker pod. Recorded:
+
+| Observation | Value |
+|---|---|
+| `kubectl drain` output | `node/… cordoned` then `evicting pod tenant-drain/runner-…` |
+| Worker pod phase/reason sequence, sampled at 200 ms across the drain | `Pending/` — and then gone |
+| `cluster-autoscaler.kubernetes.io/safe-to-evict` on the drained pod | `false` — the drain evicted it regardless |
+| `rerun-failed-jobs` calls for the run, over 45 s after removal | `0` |
+
+The pod never published *any* terminal phase, let alone `PodFailed`/`Evicted`: it
+went from `Pending` straight to absent. Nothing either tier's detection reads ever
+existed. Observing the rerun at this tier needed fakegithub to answer and record
+the call at all, which it now does (`/control/reruns`); the spec first asserts the
+AGC's `GITHUB_API_BASE_URL` points at fakegithub, so the absence it measures cannot
+be an absence of instrumentation.
+
+**The second finding, which the experiment was not looking for.** The AGC stamps
+every worker pod `safe-to-evict: false`, Karpenter `do-not-disrupt`, and the
+descheduler's prefer-no-eviction marker
+([`defaults.go`](../../cmd/agc/internal/provisioner/defaults.go)) precisely so a
+mid-job worker is not disrupted. `kubectl drain` honours none of them — they are
+advisory to autoscalers and deschedulers, not to the Eviction API — and worker pods
+carry no PodDisruptionBudget. So an operator draining a node is the one disruption
+source that is *neither* deflected by the disruption-safety markers *nor* recovered
+by eviction recovery. Every other disruption path is covered by one or the other.
+
+**Answers to the assertions.**
+
+- **3 (does the job requeue, and by what mechanism):** answered, and the answer is
+  *not by the AGC, on either tier*. This is the load-bearing result.
+- **1, 2 (does the relay get the runner's own report out inside the grace period):**
+  **not answered here, and not answerable at this tier.** A Tier B worker running the
+  real runner image exits by itself within seconds — fakegithub's synthetic payload
+  is not a job the runner can execute — so the spec deliberately drains a
+  scheduled-but-`Pending` worker instead, which makes the drain the unambiguous cause
+  of the pod's removal but leaves no live container to signal. The relay itself is
+  covered by the `cmd/worker` unit tests (Q385/Q445); what remains unmeasured is
+  whether a *real* job, reported by a *real* runner during the grace period, ends up
+  in a state GitHub will retry.
+- **4 (classic lock release):** the AGC's `provision()` returns as soon as the pod
+  vanishes — the waiter reports a deleted pod as `PodSucceeded` — so the AGC does not
+  hold the job open. What GitHub does with that is the same open question as 1–2.
+
+**Consequence: the gap is real but its severity is not yet established, so it is
+filed rather than fixed.** Q417 scoped scale-set eviction detection to
+`PodFailed`/`Evicted` on the stated reasoning that the SIGTERM relay already owns
+the deletion case. That reasoning is now known to be load-bearing on both tiers, and
+its premise — that the relay's report leaves the job recoverable — is exactly the
+part still unmeasured. Extending both tiers to treat a graceful deletion as
+recoverable would be the fix, but doing it before knowing what GitHub does with a
+relayed cancellation risks auto-rerunning jobs that a human deliberately cancelled
+(a `kubectl delete pod`, or a run cancelled in the GitHub UI, arrives on the same
+path as a drain). [Q459](../STATUS.md#Q459) carries the Tier C measurement and the
+decision that follows from it.
+
+Worth noting for that decision: the drain path is currently *worse* for the user
+than the ungraceful one. A kubelet node-pressure eviction auto-reruns the job; a
+graceful operator drain does not.
 
 ## Experiment 3: oversubscription demo ([Q423](../STATUS.md#Q423))
 
@@ -189,21 +268,29 @@ fixed window.
 
 Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
 
-1. [Q421](../STATUS.md#Q421) (experiment 2) and [Q422](../STATUS.md#Q422)
-   (experiment 4). Q421 first: it now *tests* Q417's decision to leave deletion to
-   the SIGTERM relay rather than feeding a design still being written.
-2. [Q396](../STATUS.md#Q396) (experiment 1), which then gates
-   [Q418](../STATUS.md#Q418).
-3. [Q423](../STATUS.md#Q423) (experiment 3), then revive
+1. ~~Q421 (experiment 2)~~ — **done 2026-07-27**; see
+   [Result](#result-measured-2026-07-27). Its residual is
+   [Q459](../STATUS.md#Q459), which needs Tier C and so sequences with the other
+   Tier C work below rather than ahead of it.
+2. [Q422](../STATUS.md#Q422) (experiment 4).
+3. [Q396](../STATUS.md#Q396) (experiment 1), which then gates
+   [Q418](../STATUS.md#Q418). Fold [Q459](../STATUS.md#Q459) in around here: both
+   want a real GitHub run interrupted mid-job, and Q396 is already standing that
+   up.
+4. [Q423](../STATUS.md#Q423) (experiment 3), then revive
    [Q424](../STATUS.md#Q424) (experiment 5).
 
 ## Acceptance criteria
 
 - A published eviction-recovery latency figure with the mechanism attributed,
   replacing the confounded U5 number everywhere it is cited.
-- A recorded answer for the drain path: either it recovers via the SIGTERM relay, as
+- ~~A recorded answer for the drain path: either it recovers via the SIGTERM relay, as
   Q417 assumed when it scoped detection to `PodFailed`/`Evicted`, or the gap is filed
-  and both tiers are extended to cover deletion.
+  and both tiers are extended to cover deletion.~~ **Met 2026-07-27** by the second
+  branch: neither tier recovers a drained worker, and the gap is filed as
+  [Q459](../STATUS.md#Q459). Extending the tiers is deliberately left to that row —
+  the same code path carries deliberate cancellations, so it needs the Tier C answer
+  before it can tell a drain from a `kubectl delete pod` worth honouring.
 - The quota gate demonstrated under contention, with the rejection counter as
   the observable.
 - Preemption recovery demonstrated end to end before the oversubscription claim
