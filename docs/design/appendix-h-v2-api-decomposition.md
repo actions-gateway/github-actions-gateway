@@ -815,6 +815,21 @@ tenants sharing a worker shape do not silently share one cluster-scoped object, 
 each carries an `actions-gateway.com/migrated-from-namespace` provenance label — the
 one migration output namespace deletion does not garbage-collect.
 
+**`--apply` rides out a transiently unreachable webhook (Q461).** The fan-out above is
+a non-atomic sequence of creates followed by the namespace patch, and every create is
+gated by a v2 validating webhook under `failurePolicy: Fail` that the apiserver does
+not retry on its own. A single stalled webhook POST — endpoint mid-rollout, node
+drain, cold TLS listener — therefore aborted `--apply` partway, leaving the earlier
+objects created; for a privileged tenant that includes the cluster-scoped
+`ClusterRunnerTemplate`, the one output namespace deletion does not reclaim. `--apply`
+now retries each individual create (and the namespace read-modify-write) for a bounded
+90s while the apiserver reports it could not *reach* a webhook, reporting progress on
+stderr. The retry is deliberately narrow: a webhook that ran and **denied** the
+request, and every other error (`AlreadyExists`, RBAC `Forbidden`, a CEL rejection),
+still fails on the first attempt, so admission verdicts stay fast and loud. The
+transport-error signatures are kept identical to the e2e helper's (Q392) so the two
+cannot drift apart on what counts as transient.
+
 ```
        v1alpha1 (one monolith)            one-shot tool         v2alpha1 (fan-out)
   ┌──────────────────────────────┐                       ┌──────────────────────────────┐
