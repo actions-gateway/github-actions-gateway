@@ -104,11 +104,11 @@ all: generate build test ## Generate, build, and test all modules
 CHECK_FAST_GATES := lint-backlog roadmap-check plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
                     v2-api-sync-check path-filters-check shellcheck chart-crds-check \
-                    chart-rbac-check chart-webhook-check scripts-test claude-usage-test \
-                    doc-links
+                    chart-rbac-check chart-webhook-check codegen-check scripts-test \
+                    claude-usage-test doc-links
 
 .PHONY: check
-check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + claude-usage tests + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + controller-gen manifest drift + scripts-test + claude-usage tests + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
 	scripts/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")
 	$(MAKE) build-tags-check
 	$(MAKE) lint
@@ -261,6 +261,18 @@ generate: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests and DeepCopy method
 	$(MAKE) -C api generate
 	$(MAKE) -C cmd/gmc generate
 	$(MAKE) -C cmd/agc generate
+
+# Fail if a committed controller-gen manifest is stale relative to the Go types
+# behind it (Q440). Nothing ran `make manifests` on a contributor's behalf, and
+# the gap is worst ACROSS modules: cmd/gmc's ActionsGateway CRD embeds AGC types,
+# so a doc comment edited in cmd/agc/api reaches the GMC manifest only when
+# someone runs the GMC's own manifests target — #793 edited one and the GMC CRD
+# never caught up, handing every later GMC contributor that hunk as diff noise.
+# The script regenerates into a scratch tree, so it never mutates the working
+# tree. Fast: three controller-gen runs, ~2s.
+.PHONY: codegen-check
+codegen-check: $(CONTROLLER_GEN) ## Fail if a committed CRD/RBAC/webhook manifest drifted from the Go types controller-gen generates it from (Q440)
+	CONTROLLER_GEN=$(CONTROLLER_GEN) scripts/check-codegen-drift.sh
 
 .PHONY: build
 build: build-agc build-gmc build-probe build-proxy ## Build all binaries into .build/
