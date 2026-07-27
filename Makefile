@@ -181,7 +181,9 @@ path-filters-check: ## Fail if a CI path filter misses a go.work module or names
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — the tags-only release signing-identity regexp (Q124), the
 # validate-cluster preflight decision helpers (CNI classification + K8s version
-# parsing, Q184), the dogfood gate's e2e run resolution (an in-flight run must
+# parsing, Q184, plus the bounded metrics-server retry against faked probes —
+# a still-converging addon must not warn, an absent one still must, Q397), the
+# dogfood gate's e2e run resolution (an in-flight run must
 # not abort the gate after the billable scale-up), the go-lint change-scoping
 # decision (which modules a diff makes golangci-lint cover), the build-tag
 # coverage guard (a new tag must fail the gate, not silently skip files), that a
@@ -524,9 +526,12 @@ manifest-validate: ## Validate the static install manifests + Helm chart (yamlli
 # tenant isolation BEFORE `helm install`: CNI NetworkPolicy enforcement (the
 # critical one — kindnet silently voids it = hard fail), Kubernetes >= 1.30,
 # cert-manager, and metrics-server. Detection-based (no workloads scheduled), so
-# it is safe to run against a fresh cluster. KUBECTL/VALIDATE_STRICT env-override
-# the binary and warning strictness (see the script header). Operators run this
-# as the required first install step (docs/operations/install.md).
+# it is safe to run against a fresh cluster — the metrics-server check retries
+# within a bounded budget, since a just-created cluster's addon is still
+# converging when preflight runs (Q397). KUBECTL/VALIDATE_STRICT env-override the
+# binary and warning strictness, VALIDATE_METRICS_* the retry budgets (see the
+# script header). Operators run this as the required first install step
+# (docs/operations/install.md).
 .PHONY: validate-cluster
 validate-cluster: ## Preflight the target cluster before install (CNI enforcement, K8s>=1.30, cert-manager, metrics-server)
 	scripts/validate-cluster.sh

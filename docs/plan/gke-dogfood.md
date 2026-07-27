@@ -938,12 +938,21 @@ orphan sweep confirmed no disks or reserved addresses survived.
   exists, so the absent case needed no change.
 
 **One artifact to expect on a from-zero run:** the preflight
-(`validate-cluster.sh`) reports `metrics-server: metrics.k8s.io API is not
+(`validate-cluster.sh`) reported `metrics-server: metrics.k8s.io API is not
 Available`. That is a race, not a real gap — GKE's metrics-server addon is still
 starting while `setup.sh` reaches preflight, and it was measured `Available`
 about two minutes into the cluster's life. The check is a WARN, so the bootstrap
-proceeds correctly, but it is a false negative and a run with `VALIDATE_STRICT=1`
-would fail the from-zero path on it. Tracked as [Q397](../STATUS.md#Q397).
+proceeded correctly, but it is a false negative and a run with `VALIDATE_STRICT=1`
+would have failed the from-zero path on it.
+
+The preflight now retries that check within a bounded budget instead of looking
+once ([Q397](../STATUS.md#Q397)): 150 s for a registered-but-not-yet-`Available`
+`metrics.k8s.io` APIService, and a 15 s grace for the APIService to appear at all
+before it concludes metrics-server is absent (so a cluster genuinely without it
+still warns promptly). The retry is unit-tested against faked probes in
+`scripts/validate-cluster-test.sh`; the from-zero timing itself is only
+observable on a real recreate, so **the next dogfood recreate is where this gets
+confirmed** — expect a `[WAIT]` line followed by `PASS`, not a WARN.
 
 To go further and remove the project itself (irreversible, and it takes the
 GCP-side App wiring with it):

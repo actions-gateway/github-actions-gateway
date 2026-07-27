@@ -16,19 +16,27 @@
 #      uses the chart's self-signed fallback and does not need it.
 #   4. metrics-server present (the resource metrics the GMC/AGC HPAs consume).
 #      WARN — install succeeds without it; autoscaling stays degraded until it
-#      is present.
+#      is present. Checked with a bounded retry: on a from-zero cluster the
+#      addon is still converging when preflight runs (Q397).
 #
 # Backs `make validate-cluster`. Detection-based by design: it classifies the
 # installed CNI rather than scheduling a live deny-policy probe, so it needs no
 # workload images, no RBAC to create pods, and is safe to run against a fresh
-# cluster. The pure classification/parsing helpers (classify_cni,
-# parse_k8s_minor, k8s_meets_min) are unit-tested by
-# scripts/validate-cluster-test.sh under `make check`.
+# cluster. The cluster-free helpers (classify_cni, parse_k8s_minor,
+# k8s_meets_min, retry_until) and the metrics-server check's retry behaviour
+# against faked probes are unit-tested by scripts/validate-cluster-test.sh under
+# `make check`.
 #
 # Env:
-#   KUBECTL                 kubectl binary to use (default: kubectl on PATH).
-#   VALIDATE_STRICT         when "1"/"true", treat WARN checks as failures too
-#                           (exit non-zero on any WARN). Default: only FAIL fails.
+#   KUBECTL                   kubectl binary to use (default: kubectl on PATH).
+#   VALIDATE_STRICT           when "1"/"true", treat WARN checks as failures too
+#                             (exit non-zero on any WARN). Default: only FAIL fails.
+#   VALIDATE_METRICS_TIMEOUT  seconds to wait for a registered metrics.k8s.io
+#                             APIService to report Available (default: 150).
+#   VALIDATE_METRICS_GRACE    seconds to wait for that APIService to be registered
+#                             at all before calling metrics-server absent
+#                             (default: 15).
+#   VALIDATE_METRICS_INTERVAL poll interval for both waits, in seconds (default: 5).
 #
 # Exit: 0 when every check passes (or only warns, unless VALIDATE_STRICT); 1 when
 # any check hard-fails, when VALIDATE_STRICT and any check warns, or when the
@@ -98,10 +106,47 @@ k8s_meets_min() {
 	((min >= rmin))
 }
 
+# retry_until TIMEOUT INTERVAL CMD [ARG...] — run CMD until it exits 0 or TIMEOUT
+# seconds of wall clock have elapsed, sleeping INTERVAL seconds between attempts.
+# Returns 0 as soon as CMD succeeds, 1 when the budget is spent. Two properties
+# the callers depend on, and validate-cluster-test.sh asserts:
+#   * CMD is always attempted at least once, so TIMEOUT=0 degrades to the
+#     one-shot check this replaced rather than skipping the probe entirely.
+#   * The loop never sleeps past the deadline — it stops when the next attempt
+#     would land beyond TIMEOUT — so the worst case is bounded at roughly
+#     TIMEOUT plus one CMD invocation, never an open-ended wait.
+# TIMEOUT and INTERVAL are whole seconds (integer arithmetic).
+retry_until() {
+	local timeout="$1" interval="$2"
+	shift 2
+	local start elapsed
+	start="$(date +%s)"
+	while true; do
+		if "$@"; then
+			return 0
+		fi
+		elapsed=$(($(date +%s) - start))
+		((elapsed + interval > timeout)) && return 1
+		sleep "$interval"
+	done
+}
+
 # --- reporting ---------------------------------------------------------------
 
 MIN_K8S_MAJOR=1
 MIN_K8S_MINOR=30
+
+# metrics-server convergence budget (Q397). A from-zero cluster registers the
+# metrics.k8s.io APIService with the addon's manifests but needs longer for the
+# backing pod to serve: GKE's addon was measured Available about two minutes into
+# a fresh cluster's life, and `scripts/dogfood/setup.sh` reaches preflight inside
+# that window. 150 s is that measured window plus ~25% headroom — enough to
+# absorb a slow node registration, short enough to stay a preflight rather than a
+# wait-for-rollout. A genuinely absent metrics-server does not pay it: with no
+# APIService registered the check gives up after the much shorter grace below.
+METRICS_AVAILABLE_TIMEOUT="${VALIDATE_METRICS_TIMEOUT:-150}"
+METRICS_REGISTER_GRACE="${VALIDATE_METRICS_GRACE:-15}"
+METRICS_POLL_INTERVAL="${VALIDATE_METRICS_INTERVAL:-5}"
 
 # Counters for the final summary / exit code.
 n_fail=0
@@ -200,15 +245,52 @@ check_cert_manager() {
 	fi
 }
 
+# metrics_api_available — does the metrics.k8s.io APIService report Available?
+metrics_api_available() {
+	"$KUBECTL" get apiservice v1beta1.metrics.k8s.io \
+		-o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null | grep -q '^True$'
+}
+
+# metrics_api_registered — is the metrics.k8s.io APIService present at all
+# (whatever its condition)? Registration is a control-plane object write that
+# lands with the addon's manifests; going Available additionally needs the
+# backing pod scheduled and serving. The gap between the two is what separates
+# "still coming up" from "not installed".
+metrics_api_registered() {
+	"$KUBECTL" get apiservice v1beta1.metrics.k8s.io >/dev/null 2>&1
+}
+
 # check_metrics_server — the resource metrics the GMC/AGC HPAs consume. WARN:
 # install succeeds without it; autoscaling stays degraded until present.
+#
+# Bounded retry rather than a one-shot check (Q397): on a from-zero cluster the
+# addon is still converging when preflight runs, so a single look reported a
+# false absence — harmless as a WARN, but VALIDATE_STRICT turns it into a failed
+# bootstrap. The wait is capped in wall clock and split in two so a cluster that
+# really has no metrics-server still warns promptly instead of stalling for the
+# full convergence budget.
 check_metrics_server() {
-	if "$KUBECTL" get apiservice v1beta1.metrics.k8s.io \
-		-o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null | grep -q '^True$'; then
+	if metrics_api_available; then
 		report pass "metrics-server" "metrics.k8s.io API is Available"
-	else
-		report warn "metrics-server" "metrics.k8s.io API is not Available" \
+		return 0
+	fi
+	if ! retry_until "$METRICS_REGISTER_GRACE" "$METRICS_POLL_INTERVAL" metrics_api_registered; then
+		report warn "metrics-server" \
+			"no metrics.k8s.io APIService registered after ${METRICS_REGISTER_GRACE}s — metrics-server is not installed" \
 			"Install metrics-server (https://github.com/kubernetes-sigs/metrics-server) so the GMC/AGC HorizontalPodAutoscalers can scale."
+		return 0
+	fi
+	printf '  [WAIT] %-18s %s\n' "metrics-server" \
+		"metrics.k8s.io registered but not Available yet — retrying for up to ${METRICS_AVAILABLE_TIMEOUT}s (a freshly created cluster's addon needs ~2 min)"
+	local start elapsed
+	start="$(date +%s)"
+	if retry_until "$METRICS_AVAILABLE_TIMEOUT" "$METRICS_POLL_INTERVAL" metrics_api_available; then
+		elapsed=$(($(date +%s) - start))
+		report pass "metrics-server" "metrics.k8s.io API is Available (after waiting ${elapsed}s)"
+	else
+		report warn "metrics-server" \
+			"metrics.k8s.io API is still not Available after ${METRICS_AVAILABLE_TIMEOUT}s" \
+			"Check the metrics-server workload (kubectl get apiservice v1beta1.metrics.k8s.io -o yaml); the GMC/AGC HorizontalPodAutoscalers cannot scale until it serves."
 	fi
 }
 

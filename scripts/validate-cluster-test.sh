@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 #
-# Unit tests for the pure decision helpers in scripts/validate-cluster.sh
-# (Q184): CNI classification and Kubernetes-version parsing/comparison. These
-# are the logic that determines pass/warn/fail, so they are asserted here
-# without a live cluster. Runs under `make check` (via `make scripts-test`) and
-# the CI shellcheck job.
+# Unit tests for the decision helpers in scripts/validate-cluster.sh: CNI
+# classification and Kubernetes-version parsing/comparison (Q184), plus the
+# bounded metrics-server retry (Q397). These are the logic that determines
+# pass/warn/fail, so they are asserted here without a live cluster — the
+# metrics-server probes are faked. Runs under `make check` (via `make
+# scripts-test`) and the CI shellcheck job.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
+# Shrink the metrics-server retry budgets before sourcing (they are read from the
+# environment at source time, so this also asserts that override path): the
+# production defaults are minutes, and these assertions must run in seconds.
+export VALIDATE_METRICS_TIMEOUT=2 VALIDATE_METRICS_GRACE=1 VALIDATE_METRICS_INTERVAL=1
 # Source the script under test for its functions; the BASH_SOURCE guard there
 # keeps main() from running on source.
 # shellcheck source=scripts/validate-cluster.sh
@@ -83,6 +88,88 @@ expect_version "1.30.0" meet
 expect_version "v0.99.0" below
 expect_version "notaversion" unparseable
 expect_version "v1" unparseable
+
+# --- bounded metrics-server retry (Q397) --------------------------------------
+
+# Fake probes replacing the two kubectl calls check_metrics_server makes, so the
+# retry behaviour is asserted without a cluster. Redefining them after the source
+# above shadows the real ones; the counters record how hard the check actually
+# tried. fake_available_after is how many probes fail before one succeeds
+# (a large value = metrics-server never converges).
+fake_available_after=0
+fake_available_calls=0
+fake_registered=yes
+
+metrics_api_available() {
+	fake_available_calls=$((fake_available_calls + 1))
+	((fake_available_calls > fake_available_after))
+}
+
+metrics_api_registered() {
+	[[ "$fake_registered" == yes ]]
+}
+
+# expect_retry DESC SUCCEED_AFTER TIMEOUT EXPECT_RC EXPECT_CALLS — assert
+# retry_until's contract directly: it always probes once, and stops on the budget.
+expect_retry() {
+	local desc="$1" succeed_after="$2" timeout="$3" expect_rc="$4" expect_calls="$5" rc=0
+	fake_available_after="$succeed_after"
+	fake_available_calls=0
+	retry_until "$timeout" "$VALIDATE_METRICS_INTERVAL" metrics_api_available || rc=$?
+	if ((rc == expect_rc)) && ((fake_available_calls == expect_calls)); then
+		printf 'ok   retry     %s (rc=%s, %s probe(s))\n' "$desc" "$rc" "$fake_available_calls"
+	else
+		printf 'FAIL retry     %s want rc=%s calls=%s got rc=%s calls=%s\n' \
+			"$desc" "$expect_rc" "$expect_calls" "$rc" "$fake_available_calls" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+# A zero budget still probes exactly once — it degrades to the one-shot check
+# this replaced, never to no check at all.
+expect_retry "timeout=0 probes once and gives up" 99 0 1 1
+expect_retry "timeout=0 succeeds without sleeping" 0 0 0 1
+# Within the budget: keeps probing until the probe succeeds.
+expect_retry "succeeds on the second probe" 1 2 0 2
+
+# expect_metrics DESC AVAILABLE_AFTER REGISTERED EXPECT MAX_SECONDS MIN_PROBES —
+# run check_metrics_server against the fake probes and assert the verdict it
+# tallies (pass|warn — a WARN is what VALIDATE_STRICT turns into a failure), that
+# it stayed inside its wall-clock bound, and that it probed at least MIN_PROBES
+# times (so "warn" cannot pass by never retrying at all).
+expect_metrics() {
+	local desc="$1" available_after="$2" registered="$3" expect="$4" max_seconds="$5" min_probes="$6"
+	local start elapsed got
+	fake_available_after="$available_after"
+	fake_available_calls=0
+	fake_registered="$registered"
+	n_warn=0
+	n_fail=0
+	start="$(date +%s)"
+	check_metrics_server >/dev/null
+	elapsed=$(($(date +%s) - start))
+	if ((n_warn > 0)); then got=warn; else got=pass; fi
+	if [[ "$got" == "$expect" ]] && ((elapsed <= max_seconds)) && ((fake_available_calls >= min_probes)); then
+		printf 'ok   metrics   %-4s %s (%ss, %s probe(s))\n' "$expect" "$desc" "$elapsed" "$fake_available_calls"
+	else
+		printf 'FAIL metrics   want=%s got=%s elapsed=%ss (max %ss) probes=%s (min %s)  %s\n' \
+			"$expect" "$got" "$elapsed" "$max_seconds" "$fake_available_calls" "$min_probes" "$desc" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+# Already Available: passes on the first probe, no waiting.
+expect_metrics "Available on the first probe" 0 yes pass 1 1
+# The Q397 case: the addon is registered but still converging, and goes Available
+# on a retry. Must PASS — VALIDATE_STRICT must not fail a from-zero bootstrap on
+# an addon that is merely still coming up.
+expect_metrics "becomes Available on retry" 2 yes pass 4 3
+# Registered but never Available inside the budget: still WARNs (and so still
+# fails under VALIDATE_STRICT), bounded by the timeout rather than hanging.
+expect_metrics "never Available within budget" 99 yes warn 5 3
+# Nothing registered metrics.k8s.io at all: genuinely absent, so WARN after the
+# short registration grace instead of paying the full convergence budget.
+expect_metrics "absent — no APIService registered" 99 no warn 3 1
 
 if ((fails > 0)); then
 	echo "validate-cluster-test: ${fails} assertion(s) failed" >&2
