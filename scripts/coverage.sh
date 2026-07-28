@@ -3,10 +3,15 @@
 # Measure per-module unit-test coverage and gate it against a recorded baseline.
 #
 # The repo is a Go workspace, so coverage — like the unit tests themselves — is
-# measured per module (`go test -coverprofile` in each `go.work` Use directory),
-# never with a repo-root `go test ./...`. Each module's number is the aggregate
-# statement coverage reported by `go tool cover -func`, computed over a profile
-# from which generated and thin wiring code has been filtered out (see
+# reported per module, never with a repo-root `go test ./...`. It is *measured*
+# with one workspace-wide `go test -coverprofile` over an explicit `./<module>/...`
+# pattern per go.work module (the same shape scripts/go-test.sh uses for `make
+# test`), and the merged profile is then split back per module. One invocation
+# lets Go schedule the whole workspace as a single build graph, so the many
+# small modules overlap with the big cmd/agc / cmd/gmc dependency compiles
+# instead of queueing behind them. Each module's number is the aggregate
+# statement coverage reported by `go tool cover -func`, computed over its slice
+# of the profile with generated and thin wiring code filtered out (see
 # EXCLUDE_RE) so the floor reflects hand-written logic, not boilerplate that
 # churns whenever a CRD field is added or a binary is rewired.
 #
@@ -26,7 +31,7 @@
 #            minus TOLERANCE. This is the gate CI and `make cover-check` run.
 #
 # A bare `go test` here is rewritten to carry the local-throttle prefix by the
-# Claude Code go-throttle hook, and the loop also applies scripts/local-throttle.sh
+# Claude Code go-throttle hook, and the run also applies scripts/local-throttle.sh
 # itself, so a manual run on a GUI dev machine stays desktop-safe; on CI/headless
 # the prefix is empty and it runs at full speed (same convention as `make test`).
 set -euo pipefail
@@ -35,34 +40,6 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 # shellcheck source=scripts/lib/common.sh
 source "$REPO_ROOT/scripts/lib/common.sh"
-
-# Serialize against a concurrent heavy build (queue rather than saturate cores)
-# — the same desktop-safety make test has — so make check can fold in the
-# coverage ratchet without a second, unthrottled test pass. No-op on CI/headless.
-serialize_heavy_build "$@"
-
-# All coverage temp files live in a per-run directory under the repo-local,
-# gitignored tmp/ — never the host-wide $TMPDIR (/var/folders on macOS, /tmp
-# elsewhere). Host-wide temp is shared across worktrees and sessions, so
-# concurrent runs collide on the fixed `cover.XXXXXX.*` template; a per-run
-# directory under this worktree's tmp/ keeps every run's scratch isolated (the
-# same reason #615 moved the e2e JUnit report here). The trap removes the
-# directory on any exit — including SIGTERM/SIGINT from an interrupted `make
-# check` timeout — so a killed run can't strand `cover.XXXXXX.out` files that
-# would make the next `mktemp` fail (`File exists`) and report spurious "no
-# coverage" regressions.
-mkdir -p "$REPO_ROOT/tmp"
-# Best-effort sweep of any cover.* run directory left by a prior run that was
-# SIGKILLed or crashed before its trap could fire (SIGTERM is handled by the
-# trap below). Safe here: serialize_heavy_build has returned, so no concurrent
-# same-worktree coverage run is holding one, and each run's directory is
-# uniquely named so this can never touch a live sibling.
-rm -rf "$REPO_ROOT"/tmp/cover.* 2>/dev/null || true
-RUN_TMP="$(mktemp -d "$REPO_ROOT/tmp/cover.XXXXXX")"
-cleanup() { rm -rf "$RUN_TMP" 2>/dev/null || true; }
-trap cleanup EXIT
-trap 'cleanup; exit 130' INT
-trap 'cleanup; exit 143' TERM
 
 BASELINE_FILE="${BASELINE_FILE:-coverage-baseline.txt}"
 
@@ -102,71 +79,85 @@ TOLERANCE="${COVERAGE_TOLERANCE:-0.5}"
 # already filtered above.
 EXCLUDE_RE='(zz_generated.*\.go|groupversion_info\.go|/[a-z]+test/|/test/)'
 
-MODULES=$(go work edit -json | jq -r '.Use[].DiskPath')
-
-init_throttle # sets THROTTLE_JOBS + THROTTLE_PREFIX
-p_flag=""
-[[ -n "$THROTTLE_JOBS" ]] && p_flag="-p $THROTTLE_JOBS"
-# V / VERBOSE streams `go test -v` (matches make test) for debugging a hang.
-verbose_flag=""
-[[ -n "${V:-}${VERBOSE:-}" ]] && verbose_flag="-v"
-
-# measure_module DIR -> echoes "DIR<TAB>PCT" (PCT is "n/a" when the module has
-# no statements covered by any test, e.g. a module with no _test.go files).
-measure_module() {
-	local dir="$1"
-	local profile filtered total pct
-	profile="$(mktemp "$RUN_TMP/cover.XXXXXX.out")"
-	filtered="$(mktemp "$RUN_TMP/cover.XXXXXX.filtered")"
-	# shellcheck disable=SC2064
-	trap "rm -f '$profile' '$filtered'" RETURN
-
-	# Run the module's unit tests with coverage. A module with no tests produces
-	# "[no test files]" lines and an empty/headers-only profile — handled below.
-	# go test's per-package output goes to stderr so a green run still shows the
-	# `ok pkg` lines (make test parity) while this function's STDOUT stays the
-	# DIR<TAB>PCT the caller parses. GOMAXPROCS + -p match make test's throttle.
-	echo "==> coverage $dir" >&2
-	(
-		cd "$dir"
-		[[ -n "$THROTTLE_JOBS" ]] && export GOMAXPROCS="$THROTTLE_JOBS"
-		# -trimpath makes the test-result cache key path-independent so a fresh
-		# worktree inherits an already-measured module instead of re-running it
-		# (see scripts/go-test.sh's header and docs/plan/local-gate-throughput.md).
-		# A cached run still emits a byte-identical coverage profile, so the
-		# ratchet reads the same number either way.
-		# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
-		$THROTTLE_PREFIX go test -trimpath -timeout 2m $p_flag $verbose_flag -coverprofile="$profile" ./... >&2
-	) || {
-		echo "coverage: 'go test' failed in $dir (output above)" >&2
-		exit 1
-	}
-
-	if [[ ! -s "$profile" ]]; then
-		printf '%s\t%s\n' "$dir" "n/a"
-		return
-	fi
-
-	# Keep the `mode:` header and drop any profiled line whose file path matches
-	# an excluded pattern, then let `go tool cover -func` recompute the total
-	# over what remains.
-	{ head -n1 "$profile"; grep -vE "$EXCLUDE_RE" "$profile" | tail -n +2 || true; } >"$filtered"
-
-	if [[ "$(wc -l <"$filtered")" -le 1 ]]; then
-		# Header only — every covered statement was in excluded files.
-		printf '%s\t%s\n' "$dir" "n/a"
-		return
-	fi
-
-	total="$(go tool cover -func="$filtered" | tail -n1)"
-	pct="$(awk '{print $NF}' <<<"$total" | tr -d '%')"
-	printf '%s\t%s\n' "$dir" "$pct"
+# module_import_path DIR — echo the module path declared by DIR/go.mod. The
+# coverage profile identifies packages by import path, so this is what maps a
+# profiled line back to the go.work disk path the baseline is keyed by.
+module_import_path() {
+	awk '$1 == "module" { print $2; exit }' "$1/go.mod"
 }
 
+# module_profile MODPATH PROFILE — write the slice of merged profile PROFILE
+# owned by module import path MODPATH: the `mode:` header, then every profiled
+# line whose package path is under MODPATH/, minus files matching EXCLUDE_RE.
+#
+# The trailing `/` is the boundary that keeps one module path from swallowing
+# another that merely shares its prefix (`.../agc` must not claim `.../agcutil`).
+# Output is a valid profile `go tool cover -func` can total on its own; a
+# header-only result means the module has no measurable coverage.
+module_profile() {
+	local modpath="$1" profile="$2"
+	head -n1 "$profile"
+	grep -E "^${modpath}/" "$profile" | grep -vE "$EXCLUDE_RE" || true
+}
+
+# run_coverage PROFILE — run the unit tests across every go.work module in one
+# invocation, writing the merged coverage profile to PROFILE.
+run_coverage() {
+	local profile="$1" dir
+	local patterns=()
+	for dir in $(workspace_modules); do
+		patterns+=("$dir/...")
+	done
+
+	init_throttle # sets THROTTLE_JOBS + THROTTLE_PREFIX
+	local p_flag=""
+	[[ -n "$THROTTLE_JOBS" ]] && p_flag="-p $THROTTLE_JOBS"
+	# V / VERBOSE streams `go test -v` (matches make test) for debugging a hang.
+	local verbose_flag=""
+	[[ -n "${V:-}${VERBOSE:-}" ]] && verbose_flag="-v"
+	[[ -n "$THROTTLE_JOBS" ]] && export GOMAXPROCS="$THROTTLE_JOBS"
+
+	# go test's per-package output goes to stderr so a green run still shows the
+	# `ok pkg` lines (make test parity) while this script's STDOUT stays the
+	# DIR<TAB>PCT table its callers parse. GOMAXPROCS + -p match make test's
+	# throttle. -trimpath makes the test-result cache key path-independent so a
+	# fresh worktree inherits an already-measured package instead of re-running
+	# it (see scripts/go-test.sh's header and docs/plan/archive/local-gate-throughput.md).
+	# A cached run still emits a byte-identical coverage profile, so the ratchet
+	# reads the same number either way.
+	echo "==> go test -coverprofile ${patterns[*]}" >&2
+	# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
+	$THROTTLE_PREFIX go test -trimpath -timeout 2m $p_flag $verbose_flag \
+		-coverprofile="$profile" "${patterns[@]}" >&2 || {
+		echo "coverage: 'go test' failed (output above)" >&2
+		exit 1
+	}
+}
+
+# measure_all — echo "DIR<TAB>PCT" per go.work module, in go.work order. PCT is
+# "n/a" when the module has no statements covered by any test (e.g. a module
+# with no _test.go files, or one whose every profiled file is excluded).
 measure_all() {
-	local dir
-	for dir in $MODULES; do
-		measure_module "$dir"
+	local profile="$RUN_TMP/merged.out"
+	run_coverage "$profile"
+
+	local dir modpath filtered pct
+	for dir in $(workspace_modules); do
+		if [[ ! -s "$profile" ]]; then
+			printf '%s\t%s\n' "$dir" "n/a"
+			continue
+		fi
+		modpath="$(module_import_path "$dir")"
+		filtered="$RUN_TMP/$(tr '/.' '__' <<<"$dir").filtered"
+		module_profile "$modpath" "$profile" >"$filtered"
+		if [[ "$(wc -l <"$filtered")" -le 1 ]]; then
+			# Header only — the module has no profiled lines, or every covered
+			# statement was in an excluded file.
+			printf '%s\t%s\n' "$dir" "n/a"
+			continue
+		fi
+		pct="$(go tool cover -func="$filtered" | tail -n1 | awk '{print $NF}' | tr -d '%')"
+		printf '%s\t%s\n' "$dir" "$pct"
 	done
 }
 
@@ -253,9 +244,46 @@ cmd_check() {
 	echo "coverage: all modules at or above their baseline floor"
 }
 
-case "${1:-report}" in
-	report) cmd_report ;;
-	update) cmd_update ;;
-	check)  cmd_check ;;
-	*) echo "usage: $0 {report|update|check}" >&2; exit 2 ;;
-esac
+main() {
+	# Serialize against a concurrent heavy build (queue rather than saturate
+	# cores) — the same desktop-safety make test has — so make check can fold in
+	# the coverage ratchet without a second, unthrottled test pass. No-op on
+	# CI/headless. Must run before anything else: it re-execs this script.
+	serialize_heavy_build "$@"
+
+	# All coverage temp files live in a per-run directory under the repo-local,
+	# gitignored tmp/ — never the host-wide $TMPDIR (/var/folders on macOS, /tmp
+	# elsewhere). Host-wide temp is shared across worktrees and sessions, so
+	# concurrent runs collide on the fixed `cover.XXXXXX.*` template; a per-run
+	# directory under this worktree's tmp/ keeps every run's scratch isolated (the
+	# same reason #615 moved the e2e JUnit report here). The trap removes the
+	# directory on any exit — including SIGTERM/SIGINT from an interrupted `make
+	# check` timeout — so a killed run can't strand `cover.XXXXXX.out` files that
+	# would make the next `mktemp` fail (`File exists`) and report spurious "no
+	# coverage" regressions.
+	mkdir -p "$REPO_ROOT/tmp"
+	# Best-effort sweep of any cover.* run directory left by a prior run that was
+	# SIGKILLed or crashed before its trap could fire (SIGTERM is handled by the
+	# trap below). Safe here: serialize_heavy_build has returned, so no concurrent
+	# same-worktree coverage run is holding one, and each run's directory is
+	# uniquely named so this can never touch a live sibling.
+	rm -rf "$REPO_ROOT"/tmp/cover.* 2>/dev/null || true
+	RUN_TMP="$(mktemp -d "$REPO_ROOT/tmp/cover.XXXXXX")"
+	cleanup() { rm -rf "$RUN_TMP" 2>/dev/null || true; }
+	trap cleanup EXIT
+	trap 'cleanup; exit 130' INT
+	trap 'cleanup; exit 143' TERM
+
+	case "${1:-report}" in
+		report) cmd_report ;;
+		update) cmd_update ;;
+		check)  cmd_check ;;
+		*) echo "usage: $0 {report|update|check}" >&2; exit 2 ;;
+	esac
+}
+
+# Run main only when executed directly, so coverage-test.sh can source this file
+# and exercise the pure profile-splitting helpers without running the suite.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	main "$@"
+fi
