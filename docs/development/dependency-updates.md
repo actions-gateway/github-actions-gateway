@@ -13,13 +13,14 @@ is automated, by what, and where the manual edges are.
 | Go module deps (10 modules) | `*/go.mod`, vendored in `vendor/` + `tools/vendor/` | **Dependabot** (`gomod`, weekly, grouped) → auto-repaired by [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml), and auto-rebased when stale by [`dependabot-rebase-stale.yml`](../../.github/workflows/dependabot-rebase-stale.yml) |
 | GitHub Actions (`uses:` SHAs) | `.github/workflows/*.yml` | **Dependabot** (`github-actions`, weekly, grouped) |
 | Docker base images (`FROM` digests) | `Dockerfile` (all image stages), `scripts/dogfood/*/Dockerfile` | **Dependabot** (`docker`, weekly, grouped) |
-| kind version + binary checksum | `KIND_VERSION` / `KIND_BINARY_SHA256` in [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) | **updatecli** ([`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml), weekly) |
+| kind version + binary checksum (2 files) | `KIND_VERSION` / `KIND_BINARY_SHA256` in [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) **and** [`autoscaler-drift.yml`](../../.github/workflows/autoscaler-drift.yml) | **updatecli** ([`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml), weekly — rewrites both, so they can't drift. This PR doubles as the [live-autoscaler drift gate's](testing.md#its-cadence-the-version-bump-not-a-clock) trigger: the autoscaler harness pins no node image, so a kind bump that moves the default node image's Kubernetes minor is the moment `CA_VERSION` must move too) |
 | Calico version (2 files) | `CALICO_VERSION` in `e2e-reusable.yml` **and** the root `Makefile` | **updatecli** ([`updatecli.d/calico.yaml`](../../updatecli.d/calico.yaml), weekly — rewrites both, so they can't drift) |
 | shellcheck version + checksum | `SHELLCHECK_VERSION` / `SHELLCHECK_SHA256` in [`unit-test.yml`](../../.github/workflows/unit-test.yml) | **updatecli** ([`updatecli.d/shellcheck.yaml`](../../updatecli.d/shellcheck.yaml), weekly) |
 | polaris version + checksum | `POLARIS_VERSION` / `POLARIS_SHA256` in [`security-scan.yml`](../../.github/workflows/security-scan.yml) | **updatecli** ([`updatecli.d/polaris.yaml`](../../updatecli.d/polaris.yaml), weekly) |
 | buildkit builder image digest (3 files) | `BUILDKIT_IMAGE` in `e2e-reusable.yml`, `security-scan.yml` **and** `publish.yml` | **updatecli** ([`updatecli.d/buildkit.yaml`](../../updatecli.d/buildkit.yaml), weekly — rewrites all three, so they can't drift) |
 | envtest Kubernetes version (3 files) | `ENVTEST_K8S_VERSION` in [`integration-test.yml`](../../.github/workflows/integration-test.yml) **and** `cmd/gmc/Makefile` + `cmd/agc/Makefile` | **updatecli** ([`updatecli.d/envtest.yaml`](../../updatecli.d/envtest.yaml), weekly — rewrites all three, so they can't drift; resolved from controller-tools' `envtest-releases.yaml`, **no auto-merge** since it moves the tested Kubernetes version — keep it on the same minor as `KIND_NODE_IMAGE`. The review-gated PR doubles as a **latest-Kubernetes compatibility canary**: it runs the integration tier against the newest envtest release, so a green PR confirms the project still works on the latest version) |
 | kind node image | `KIND_NODE_IMAGE` in `e2e-reusable.yml` | **manual** (changes the tested Kubernetes version — a deliberate choice; keep the envtest version above on the same Kubernetes minor) |
+| cluster-autoscaler + kwok (drift harness) | `CA_VERSION` / `KWOK_VERSION` in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) | **manual, prompted by the kind bump** — cluster-autoscaler is released per Kubernetes minor and the harness runs kind's *default* node image, so `CA_VERSION`'s minor is whatever kind ships. A kind bump that moves that minor fails the drift gate on skew; bump `CA_VERSION` to the matching CA minor in the same PR. See [testing.md](testing.md#its-cadence-the-version-bump-not-a-clock) |
 
 Dependabot config: [`.github/dependabot.yml`](../../.github/dependabot.yml). The
 supply-chain gates that catch drift on any of these (`vendor-check`,
@@ -73,7 +74,7 @@ rewrites `ENVTEST_K8S_VERSION` across the workflow and both controller Makefiles
 
 | Manifest | Pins | Checksum strategy |
 |---|---|---|
-| [`kind.yaml`](../../updatecli.d/kind.yaml) | `KIND_VERSION` + `KIND_BINARY_SHA256` | published `.sha256sum` |
+| [`kind.yaml`](../../updatecli.d/kind.yaml) | `KIND_VERSION` + `KIND_BINARY_SHA256` in two files | published `.sha256sum` |
 | [`calico.yaml`](../../updatecli.d/calico.yaml) | `CALICO_VERSION` in two files | none (version-only) |
 | [`shellcheck.yaml`](../../updatecli.d/shellcheck.yaml) | `SHELLCHECK_VERSION` + `SHELLCHECK_SHA256` | hash the tarball |
 | [`polaris.yaml`](../../updatecli.d/polaris.yaml) | `POLARIS_VERSION` + `POLARIS_SHA256` | published `checksums.txt` line |
@@ -111,7 +112,10 @@ with `dry_run: true` runs `diff`.
   `GITHUB_TOKEN`-authored PR (the same constraint [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml)
   documents). The relevant gate must run before merge — e2e for a kind or Calico
   bump, the lint job for shellcheck — so a maintainer re-triggers checks by
-  closing and reopening the PR. A stored App token would remove this step; it is
+  closing and reopening the PR. **On a kind bump this step is the whole point,
+  not a formality:** the [live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock)
+  has no other trigger, so a kind bump merged without re-running checks is the
+  one path that lets an upstream vocabulary reword through unobserved. A stored App token would remove this step; it is
   deliberately not used yet (one more secret to manage), matching the go-sync
   rationale.
 - **Triage cadence.** updatecli is scheduled just after Dependabot so all

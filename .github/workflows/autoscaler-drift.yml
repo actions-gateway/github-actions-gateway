@@ -1,0 +1,193 @@
+# The live-autoscaler drift gate (Q474), given a trigger (Q480).
+#
+# What it detects: the capacity gate's elastic-cluster signal recognizes
+# cluster-autoscaler by two Event reasons and a reporter name — strings UPSTREAM
+# owns. A reword there fails *open* (an unrecognized vocabulary yields "not
+# declined", which is exactly the ungated behaviour), so the mode would silently
+# become a no-op on every elastic cluster with every recorded-sample test still
+# green. `make test-autoscaler` asserts the matcher against events a real
+# cluster-autoscaler emits, on its kwok cloud provider (real autoscaler, real
+# scheduler-framework evaluation, real events, fake nodes).
+#
+# WHY THIS IS CHANGE-TRIGGERED AND NOT SCHEDULED (the Q480 decision).
+# A weekly sweep would re-run one fixed experiment: CA_VERSION is a pin, so a
+# cron at that pin installs the same image and asserts the same strings every
+# week, forever, until something in the repo changes. It cannot observe upstream
+# drift, because drift arrives in a cluster-autoscaler release this job would
+# never install. The event that flips the answer is a version move, so the
+# version move is the trigger:
+#
+#   * CA_VERSION / KWOK_VERSION / the manifests / the matcher — a PR touching any
+#     of them runs this gate. That turns "run it when bumping CA_VERSION" from a
+#     doc instruction nothing enforced into a check.
+#   * KIND_VERSION below — the coupling that makes this fire on its own. The
+#     harness deliberately does NOT pin KIND_NODE_IMAGE: it rides kind's default
+#     node image, so the cluster's Kubernetes minor is chosen by the kind
+#     release. cluster-autoscaler is released per Kubernetes minor, so a kind
+#     bump that moves the default node image's minor is exactly the moment
+#     CA_VERSION must move to the matching CA minor — and a CA minor is where a
+#     vocabulary reword lands. updatecli bumps KIND_VERSION here weekly
+#     (updatecli.d/kind.yaml rewrites this file and e2e-reusable.yml together),
+#     so that bump PR trips the `changes` filter below and runs the gate.
+#
+# CAVEAT that the trigger depends on: GitHub does not run workflows on a PR
+# authored by GITHUB_TOKEN, so the weekly updatecli bump PR arrives with no
+# checks. Re-trigger it (close + reopen) as part of the dependency triage pass —
+# see docs/development/dependency-updates.md.
+name: autoscaler drift
+
+on:
+  # No top-level path filter, per the repo-wide pattern: a workflow skipped by
+  # one reports NO check at all, and a PR opened before its code lands does not
+  # reliably re-trigger it on the later push (actions/runner#2324). That skip
+  # would be silent here in the worst way — this gate's whole job is to run on
+  # the PR that moves a version pin. Trigger on every PR, classify in `changes`.
+  # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      ca_version:
+        description: 'cluster-autoscaler image tag to test (default: the CA_VERSION pin in scripts/autoscaler-cluster.sh). Probe a new minor here before committing to it.'
+        type: string
+
+# One run per PR; a superseded run's verdict is moot. Keyed on github.ref (the
+# unique refs/pull/<n>/merge), not head_ref, so a colliding branch name cannot
+# cancel another PR's runs.
+concurrency:
+  group: autoscaler-drift-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      autoscaler: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.autoscaler || 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        id: filter
+        # Fails OPEN (Q363): paths-filter classifies the diff through one
+        # un-retried GitHub API call, so a transient 5xx runs the gate rather
+        # than skipping it.
+        continue-on-error: true
+        with:
+          filters: |
+            autoscaler:
+              # The version pins and the cluster recipe.
+              - 'scripts/autoscaler-cluster.sh'
+              - 'test/autoscaler/**'
+              # The matcher under test and both of its test files. A matcher edit
+              # that stays consistent with the recorded unit table can still be
+              # wrong against a live autoscaler; that is the case this catches
+              # and the unit tier cannot.
+              - 'cmd/agc/internal/controller/autoscaler_verdict.go'
+              - 'cmd/agc/internal/controller/autoscaler_verdict_test.go'
+              - 'cmd/agc/internal/controller/autoscaler_verdict_live_test.go'
+              # Self-trigger, and the reason the weekly kind bump reaches this
+              # job: updatecli rewrites KIND_VERSION in this file.
+              - '.github/workflows/autoscaler-drift.yml'
+      - name: warn when change detection failed
+        if: steps.filter.outcome == 'failure'
+        run: echo "::warning::paths-filter could not classify the diff; assuming the autoscaler filter matched so the drift gate runs"
+
+  drift:
+    needs: [changes]
+    if: needs.changes.outputs.autoscaler == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # kind release, pinned (not @latest) for reproducibility, and bumped
+      # together with the copy in e2e-reusable.yml by updatecli
+      # (updatecli.d/kind.yaml) so the two cannot drift.
+      #
+      # KIND_NODE_IMAGE is deliberately UNSET — see the header. The harness wants
+      # kind's default node image so the Kubernetes minor tracks the kind
+      # release; pinning it here would decouple the cluster's minor from
+      # CA_VERSION and silently reintroduce the skew this gate is meant to
+      # surface.
+      KIND_VERSION: v0.32.0
+      KIND_BINARY_SHA256: 50030de23cf40a18505f20426f6a8506bedf13c6e509244bd1fa9463721b0f54
+      # Empty on every trigger but a dispatch that set it; scripts/autoscaler-cluster.sh
+      # uses `${CA_VERSION:-<pin>}`, which falls back on empty as well as unset.
+      # Threaded as an env var rather than interpolated into a run: script — no
+      # script-injection surface from the dispatch input.
+      CA_VERSION: ${{ inputs.ca_version }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+
+      - name: Install kind ${{ env.KIND_VERSION }}
+        # Same pinned-binary + checksum path as e2e-reusable.yml:
+        # download-verified.sh retries a transient GitHub releases CDN error and
+        # gates on KIND_BINARY_SHA256 before anything lands at the output path.
+        run: |
+          scripts/download-verified.sh \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64" \
+            "${KIND_BINARY_SHA256}" /tmp/kind
+          sudo install -m 0755 /tmp/kind /usr/local/bin/kind
+          kind version
+
+      - name: Stand up the live-autoscaler cluster
+        run: make autoscaler-cluster
+
+      - name: Assert the matcher against the live autoscaler
+        run: make test-autoscaler
+
+      - name: Diagnostics on failure
+        if: failure()
+        # A drift failure is read from the events themselves: the question a
+        # human asks next is "what vocabulary DID it emit?", so dump the raw
+        # events and CA's own log rather than only the test's assertion diff.
+        # Captured here because the runner is torn down with the cluster on it.
+        run: |
+          ctx=kind-gag-autoscaler
+          echo "::group::cluster-autoscaler image + status"
+          kubectl --context "$ctx" -n kube-system get deploy/cluster-autoscaler \
+            -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}' || true
+          kubectl --context "$ctx" -n kube-system get configmap cluster-autoscaler-status -o yaml || true
+          echo "::endgroup::"
+          echo "::group::events (all namespaces, raw)"
+          kubectl --context "$ctx" get events --all-namespaces -o yaml || true
+          echo "::endgroup::"
+          echo "::group::cluster-autoscaler log"
+          kubectl --context "$ctx" -n kube-system logs deploy/cluster-autoscaler --tail=300 || true
+          echo "::endgroup::"
+          echo "::group::nodes + pods"
+          kubectl --context "$ctx" get nodes -o wide || true
+          kubectl --context "$ctx" get pods --all-namespaces -o wide || true
+          echo "::endgroup::"
+
+  # Aggregate gate, same shape as every other workflow here so this CAN be made a
+  # required status check without restructuring. It is deliberately NOT required
+  # today: a drift failure wants a human decision — adopt the new vocabulary
+  # (matcher + recorded unit table) or hold the version bump — the same posture
+  # as the shellcheck and polaris bump PRs. See docs/development/testing.md.
+  autoscaler-drift-gate:
+    needs: [changes, drift]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: require every gating job to have succeeded or skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          echo "needed job results: ${RESULTS}"
+          for r in ${RESULTS}; do
+            case "$r" in
+              success | skipped) ;;
+              *) echo "::error::a gating job concluded '${r}'"; exit 1 ;;
+            esac
+          done
