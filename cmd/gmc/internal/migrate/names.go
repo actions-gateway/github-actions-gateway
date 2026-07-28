@@ -1,11 +1,10 @@
 package migrate
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
+	"github.com/actions-gateway/github-actions-gateway/api/apinames"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 )
 
@@ -16,27 +15,21 @@ import (
 // would be rejected at admission.
 const maxNameLen = 52
 
-// shortHash returns the first n hex characters of the SHA-256 of s. It is used
-// to disambiguate a truncated name and to derive a content-addressed template
-// name; n is small (6–12) because these are collision-resistance hints over a
-// per-namespace object set, not cryptographic identifiers.
-func shortHash(s string, n int) string {
-	sum := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(sum[:])[:n]
-}
-
 // cap52 bounds name to maxNameLen characters. A name already within the cap is
 // returned unchanged so migrated objects keep their recognizable v1 names. A name
 // over the cap is truncated and suffixed with a 6-hex content hash so two distinct
 // long names cannot collide after truncation; the boolean reports whether
 // truncation happened so the caller can warn the operator that a name changed.
+//
+// The truncation itself is [apinames.Truncate], which additionally trims a hyphen
+// the cut exposes — so a cut landing on one now yields "<head>-<hash>" rather than
+// "<head>--<hash>". Both are valid; the doubled separator was only ever cosmetic,
+// since the hash tail already guaranteed a valid final character.
 func cap52(name string) (string, bool) {
 	if len(name) <= maxNameLen {
 		return name, false
 	}
-	h := shortHash(name, 6)
-	keep := maxNameLen - 1 - len(h) // room for "-<hash>"
-	return name[:keep] + "-" + h, true
+	return apinames.Truncate(name, maxNameLen, 6), true
 }
 
 // derive builds a "<base>-<suffix>" child name bounded to maxNameLen. When the
@@ -67,7 +60,7 @@ func templateName(spec v2alpha1.RunnerTemplateSpec) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "rt-" + shortHash(key, 12), nil
+	return "rt-" + apinames.ShortHash(key, 12), nil
 }
 
 // clusterTemplateName is the ClusterRunnerTemplate name emitted for a privileged
@@ -91,7 +84,7 @@ func clusterTemplateName(namespace string, spec v2alpha1.RunnerTemplateSpec) (st
 	if err != nil {
 		return "", false, err
 	}
-	name, truncated := cap52("crt-" + namespace + "-" + shortHash(key, 12))
+	name, truncated := cap52("crt-" + namespace + "-" + apinames.ShortHash(key, 12))
 	return name, truncated, nil
 }
 

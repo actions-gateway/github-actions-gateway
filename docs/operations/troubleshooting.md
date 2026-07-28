@@ -913,7 +913,12 @@ kubectl logs -n gmc-system deploy/gmc-controller-manager \
 
 **Likely cause.** The API server rejected the worker pod, so the AGC never got one. The job was acquired at GitHub, no runner ever came online to run it, and the job's lock lapsed. Any create rejection produces this shape: an invalid `metadata.name`, a policy-engine admission webhook, a `PodSecurity` label the pod violates, or a missing `PriorityClass`.
 
-Historically the most confusing instance was a name the AGC itself derived: `runner-<owner>-<jobID>` truncated to the 63-character DNS-label limit could land the cut on one of the job UUID's hyphens, and a name ending in `-` is rejected. That made the failure **deterministic per tenant**: for an affected gateway-name length, *every* worker pod was rejected and *no* job ever ran, while GitHub reported only lost communication. Fixed in Q467 — the AGC now splits the length budget across the name's segments and hashes each truncated tail, so a derived name is always a valid label and still unique per job. If you are on a release without that fix, renaming the gateway to a different length is the workaround.
+The two most confusing instances were names the controllers derived themselves. Both are fixed; both are worth recognising if you are running an older release, and in both the workaround is to rename the gateway to a different length.
+
+- **The worker pod's own name (Q467).** `runner-<owner>-<jobID>` truncated to the 63-character DNS-label limit could land the cut on one of the job UUID's hyphens, and a name ending in `-` is rejected. Deterministic per gateway-name length: for an affected length, *every* worker pod was rejected and *no* job ever ran.
+- **The `RunnerGroup` name used as a label value (Q473, `v1alpha1` only).** The GMC derives `<gateway>-<runner-label>`, and the AGC stamps that on every worker pod as `actions-gateway/runner-group`. Object names may be 253 characters but **label values stop at 63**, so past that the `RunnerGroup` reconciles perfectly while every worker pod create fails. A 15-character gateway with a 40-character runner label was enough. `v2alpha1`/`v2beta1` are unaffected — v2 caps CR names at 52 characters precisely so derived children fit.
+
+Both now derive through one bounded helper: the budget is split across the name's segments and each truncated tail carries a hash, so a derived name is always valid and still unique. **On upgrade, a gateway whose derived `RunnerGroup` name exceeded 63 characters gets a renamed `RunnerGroup`** (the old one is pruned) — that tenant could not place a worker pod before the rename, so nothing working is disturbed.
 
 **Diagnostics.**
 
@@ -934,7 +939,7 @@ kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -i "rejecte
 ```
 
 **Resolution.**
-- Read the API server's message in the event. `metadata.name: Invalid value` means a derived name — upgrade to a release carrying the Q467 fix, or rename the gateway/`RunnerSet` in the meantime. An `admission webhook … denied the request` means a cluster policy engine — see [Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine](#worker--proxy--agc-pods-rejected-by-a-cluster-policy-engine).
+- Read the API server's message in the event. `metadata.name: Invalid value` or `metadata.labels: Invalid value … must be no more than 63 bytes` means a derived name — upgrade to a release carrying the Q467/Q473 fixes, or shorten the gateway name (or its first runner label) in the meantime. An `admission webhook … denied the request` means a cluster policy engine — see [Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine](#worker--proxy--agc-pods-rejected-by-a-cluster-policy-engine).
 - Confirm the pod really is absent rather than reaped: `kubectl get pods -n <namespace> -l actions-gateway/runner-group=<group>` (v1) or `-l actions-gateway.com/runner-set=<set>` (v2).
 - Re-run the workflow once the rejection is resolved; nothing is retried automatically, because the job's GitHub-side lock has already lapsed.
 

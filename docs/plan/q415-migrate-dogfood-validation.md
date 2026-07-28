@@ -480,7 +480,7 @@ one. Both tiers share the one derivation. An envtest at the boundary length pins
 against a real API server, and a `WorkerPodCreateFailed` Warning Event now carries the
 API server's message to the owner object, so the next rejection of any kind is
 diagnosable from `kubectl describe` instead of a live debugging session
-([convention](../development/kubernetes-conventions.md#truncate-a-derived-name-on-a-budget-never-on-the-concatenation-q467) ·
+([convention](../development/kubernetes-conventions.md#derive-every-name-through-apiapinames-q467-q473) ·
 [runbook](../operations/troubleshooting.md#runner-lost-communication-and-no-worker-pod-was-ever-created)).
 The dogfood tenant keeps its short name until a release carrying the fix reaches the
 cluster — restoring it sooner would re-break the tenant against the released image.
