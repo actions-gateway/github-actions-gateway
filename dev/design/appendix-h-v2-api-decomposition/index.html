@@ -3547,6 +3547,14 @@ accepts the downgrade opt-in on either domain <em>and</em> either value keyword.
 migration tool relabels the namespace markers additively (it adds the v2 keys and
 keeps the v1 keys), so a still-running v1 gateway in a relabeled namespace is never
 stranded. The window closes when <code>v1alpha1</code> is removed.</p>
+<p><strong>The migration tool is a dual-read consumer too (Q463).</strong> <code>gag-migrate</code> decides
+whether a tenant holds the privileged-eligibility grant, and it must reach the <em>same</em>
+verdict as admission: a namespace granted on the v2 domain alone is legal and is
+admitted privileged, so a tool reading only v1 reports a live grant as missing and
+prescribes a label the operator already holds. The grant read is therefore a single
+shared function (<code>gmc/internal/webhook/validation.PrivilegedGrantPresent</code>) that the v1
+webhook and the tool both call, rather than two implementations free to drift — the
+same single-source-of-truth rule the Q323 audit established for the versioned webhooks.</p>
 <h2 id="h13-what-adopting-this-changes">H.13. What adopting this changes<a class="headerlink" href="#h13-what-adopting-this-changes" title="Permanent link">&para;</a></h2>
 <p>This proposal, if accepted, touches more than the API types. Non-exhaustive
 impact list, to be turned into plan-doc scope when scheduled:</p>

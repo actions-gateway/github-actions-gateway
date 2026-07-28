@@ -2697,7 +2697,11 @@ label, the domain-migrated <code>privileged-profile</code> grant, and the aligne
   the tool never reads, prints, or copies the credential Secret's contents.</li>
 <li><strong>The eligibility grant is never invented.</strong> A tenant migrating to
   <code>securityProfile: privileged</code> keeps the <em>existing</em> platform grant (domain-migrated);
-  if the namespace holds no grant, the tool warns rather than self-granting one.</li>
+  if the namespace holds no grant, the tool warns rather than self-granting one. The
+  grant is recognized on <strong>either label domain</strong> — <code>actions-gateway.github.com/</code>
+  or <code>actions-gateway.com/</code>, both valued <code>allowed</code> — matching what the v1 admission
+  webhook accepts during coexistence, so a namespace already relabelled onto the v2
+  domain is never reported as ungranted.</li>
 </ul>
 <h3 id="privileged-worker-shapes-dind-become-cluster-scoped-templates">Privileged worker shapes (DinD) become cluster-scoped templates<a class="headerlink" href="#privileged-worker-shapes-dind-become-cluster-scoped-templates" title="Permanent link">&para;</a></h3>
 <p>v2 refuses a privileged container in a <strong>namespaced</strong> <code>RunnerTemplate</code> — a tenant must
@@ -2730,7 +2734,8 @@ is called out in the dry-run with a warning, and there are three things to know:
 the namespaced kind: a privileged worker pod is only admitted in a namespace whose
 <code>actions-gateway.com/security-profile</code> is <code>privileged</code>, which in turn requires the
 platform <code>privileged-profile=allowed</code> grant the migration carries forward and never
-invents. A privileged tenant therefore migrates under exactly the grant it already had.</p>
+invents — held on either label domain. A privileged tenant therefore migrates under
+exactly the grant it already had.</p>
 <h4 id="a-privileged-tenant-needs-the-downgrade-opt-in-for-the-duration-of-the-migration">A privileged tenant needs the downgrade opt-in for the duration of the migration<a class="headerlink" href="#a-privileged-tenant-needs-the-downgrade-opt-in-for-the-duration-of-the-migration" title="Permanent link">&para;</a></h4>
 <p>Relocating <code>securityProfile: privileged</code> onto the namespace is <strong>rejected by default</strong>,
 and every privileged tenant hits this. The <code>namespace-security-profile-guard</code> policy
@@ -2896,9 +2901,19 @@ window keeps both spellings working.</p>
   that — check the GMC deployment is <code>Running</code> with programmed endpoints
   (<code>kubectl -n gag-system get deploy,endpoints</code>) before re-running. Re-running is
   safe: apply is idempotent and skips whatever the aborted run already created.</li>
-<li><strong><code>gag-migrate</code> reports no namespaces.</strong> With <code>--all-namespaces</code> it only targets
-  namespaces holding a v1 <code>ActionsGateway</code>; pass <code>--namespace</code> explicitly otherwise.</li>
+<li><strong>The dry-run warns the namespace "holds no privileged-eligibility grant on either
+  label domain".</strong> The tenant migrates to <code>securityProfile: privileged</code> but carries
+  the grant label on neither domain, or carries it with a value other than <code>allowed</code>
+  (the match is exact — the legacy <code>"true"</code> is <em>not</em> a grant here). Apply the v2 label
+  the warning names, as a platform administrator:</li>
 </ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.com/privileged-profile<span class="o">=</span>allowed
+</code></pre></div>
+<p>The warning fires only when the grant is genuinely absent from both domains: a
+  namespace holding it on either one is recognized, and the tool carries it forward
+  onto the v2 domain without complaint.
+- <strong><code>gag-migrate</code> reports no namespaces.</strong> With <code>--all-namespaces</code> it only targets
+  namespaces holding a v1 <code>ActionsGateway</code>; pass <code>--namespace</code> explicitly otherwise.</p>
 
 
 
