@@ -176,7 +176,10 @@ Safety rails, in all profiles:
   operator-set envelope. Size the ceiling against the namespace
   `ResourceQuota` and any `LimitRange`: derived values are still subject to
   both at admission, and the existing `WorkerQuota*` conditions and quota
-  retries surface a conflict at runtime.
+  retries surface a conflict at runtime. A `LimitRange` that cancels
+  `Throughput` gets its own condition —
+  [`SizingProfileOverridden`](#a-limitrange-cancels-throughput--the-sizingprofileoverridden-condition),
+  because that conflict rejects nothing and would otherwise be invisible.
 
   > **Set `maxRequests` before enabling `Binpack` *or* `Throughput` on a shape
   > whose measured peak approaches node allocatable.** Both derive `requests`
@@ -231,7 +234,7 @@ form is an explicit field under `sizing.nodeShare`, an additive change we held
 back from 1.3 for want of a concrete asker
 ([appendix-h §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission)).
 
-### A `LimitRange` silently cancels `Throughput`
+### A `LimitRange` cancels `Throughput` — the `SizingProfileOverridden` condition
 
 `Throughput` bursts by **removing** the runner container's CPU limit — that is
 its mechanism, not a side effect. A `LimitRange` puts the limit straight back.
@@ -241,9 +244,28 @@ with no `default`, which Kubernetes then uses as the default — applies to any
 container that does not declare one, and the container `Throughput` just built
 declares none. The pod is **not rejected**. It is admitted with a CPU limit the
 profile deliberately removed, `sizingProfileState` still reports `Active`, and
-every other signal looks correct. Jobs simply stop bursting, and nothing says so.
+every other signal looks correct. Jobs simply stop bursting.
 
-Check before you enable it:
+So the gateway reads the `LimitRange` itself and says so. A `RunnerSet` on the
+`Throughput` profile carries the advisory **`SizingProfileOverridden`**
+condition, `True` when a namespace `LimitRange` imposes a container `cpu` limit
+and naming the offending object:
+
+```bash
+kubectl get runnerset <name> -n <ns> -o jsonpath='{.status.conditions[?(@.type=="SizingProfileOverridden")]}' | jq
+```
+
+| `status` / `reason` | Meaning |
+|---|---|
+| `True` / `LimitRangeCPULimit` | A `Container`-type entry supplies a `cpu` limit (its `default`, or a `max` standing in as one). Jobs are capped; the profile has no effect. |
+| `False` / `NoLimitRangeOverride` | No `LimitRange` imposes a container `cpu` limit — the limit-free runner container reaches the kubelet as built. |
+| `False` / `LimitRangesUnreadable` | The gateway could not list `LimitRange`s, so it cannot rule a conflict out. On an install upgraded in place, re-render the chart: `agc-tenant-role` needs the read-only `limitranges` rule. |
+
+The condition is advisory — it never gates `Ready`, and jobs keep running. It is
+evaluated whenever `Throughput` is selected, including while the profile is
+still `AwaitingSamples`, so the conflict is visible before it takes effect; it
+is absent entirely under any other profile. To check a namespace by hand
+(before enabling the profile, say):
 
 ```bash
 kubectl get limitrange -n <ns> -o jsonpath='{range .items[*].spec.limits[*]}{.type}{"\t"}{.default}{"\t"}{.max}{"\n"}{end}'
@@ -261,9 +283,17 @@ burst in that namespace. Three ways out, in order of preference:
 3. **Stay on `Static`** and apply `status.sizingRecommendation` by hand, keeping
    whatever limit the `LimitRange` requires.
 
-This is the one profile whose contract a namespace policy can quietly void. The
-memory side is unaffected: `Throughput` sets a memory limit explicitly, so a
-`LimitRange` default never reaches it.
+This is the one profile whose contract a namespace policy can void — which is
+why it is the one that gets a condition. The memory side is unaffected:
+`Throughput` sets a memory limit explicitly, so a `LimitRange` default never
+reaches it.
+
+The `LimitRange` is platform-owned and can be added *after* the `RunnerSet` is
+written, so this is deliberately a runtime signal rather than an admission
+rejection. The gateway re-reads the namespace's `LimitRange`s on each reconcile
+of the set rather than watching them, so adding or dropping one is reflected on
+the set's next reconcile — continuous while jobs are running (worker-pod events
+drive it), and up to the resync interval on a fully idle set.
 
 ## Troubleshooting
 
@@ -280,6 +310,16 @@ ten minutes.
 faster than the sampling interval. There is no per-job signal to size from at
 15s resolution; size such a RunnerSet by its node-shape share instead (see the
 `NodeShare` idea in the [sizing-profiles plan](../plan/runner-sizing-profiles.md)).
+
+**`Throughput` is `Active` but jobs still run at the old CPU ceiling** — read
+`SizingProfileOverridden` on the `RunnerSet`. `True/LimitRangeCPULimit` means a
+namespace `LimitRange` is re-injecting the CPU limit the profile removes; the
+message names the object, and
+[the three ways out](#a-limitrange-cancels-throughput--the-sizingprofileoverridden-condition)
+are drop the `cpu` default, switch to `Binpack`, or stay on `Static`. On an
+install upgraded in place, `False/LimitRangesUnreadable` means the check itself
+could not run — re-render `agc-tenant-role` from the current chart, which must
+contain a read-only `limitranges` rule.
 
 **Gauges reset after an AGC rollout** — the `…_usage_cpu_peak_cores` /
 `…_usage_memory_peak_bytes` gauges are peaks *since AGC start* by design.

@@ -21,6 +21,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [BREAKING: priorityTiers PriorityClasses now require a platform allowlist; per-tier preemptionPolicy removed](#breaking-prioritytiers-priorityclasses-now-require-a-platform-allowlist-per-tier-preemptionpolicy-removed)
   - [Tenant namespaces now require the actions-gateway.github.com/tenant marker label](#tenant-namespaces-now-require-the-actions-gatewaygithubcomtenant-marker-label)
   - [Worker quota accounting now counts native sidecars, RuntimeClass overhead, and storage](#worker-quota-accounting-now-counts-native-sidecars-runtimeclass-overhead-and-storage)
+  - [Non-breaking: the AGC now reads LimitRanges to report a cancelled Throughput profile](#non-breaking-the-agc-now-reads-limitranges-to-report-a-cancelled-throughput-profile)
   - [Worker pods are now cleaned up automatically (one-time sweep recommended)](#worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended)
   - [AGC Deployment renamed from actions-gateway-agc to actions-gateway-controller](#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller)
   - [GMC manager NetworkPolicy is now enabled by default](#gmc-manager-networkpolicy-is-now-enabled-by-default)
@@ -435,6 +436,31 @@ behave as they did before. Verify after upgrading:
 ```sh
 kubectl auth can-i get runtimeclasses --as=system:serviceaccount:<NAMESPACE>:<AGC_SERVICEACCOUNT>
 ```
+
+### Non-breaking: the AGC now reads `LimitRange`s to report a cancelled `Throughput` profile
+
+A `RunnerSet` on `spec.sizing.profile: Throughput` now carries the advisory
+`SizingProfileOverridden` condition, `True` when a namespace `LimitRange` supplies a
+`Container`-type `cpu` limit default — which admission re-injects as the CPU limit
+that profile removes, cancelling it while every other signal still reads healthy.
+Advisory only: nothing about pod build, scheduling, or `Ready` changes, and sets on
+any other profile do not carry the condition at all.
+
+It needs a read-only `limitranges` grant, added to the `agc-tenant-role` `ClusterRole`
+in the same release — so **upgrade the Helm chart, not just the AGC image**. The read
+is fail-open and deliberately not a watch, so a missing grant degrades rather than
+wedging the AGC: the condition reports `False/LimitRangesUnreadable`. It is not free
+until you fix it, though — expect a bounded 2s stall on every reconcile of a
+`Throughput` set, and repeated `limitranges is forbidden` lines in the AGC log from
+the retrying informer. Verify after upgrading:
+
+```sh
+kubectl auth can-i list limitranges -n <NAMESPACE> --as=system:serviceaccount:<NAMESPACE>:<AGC_SERVICEACCOUNT>
+```
+
+A tenant that gets `SizingProfileOverridden=True` immediately after upgrading was
+already not bursting — the condition is new, the cancellation is not. See
+[the three ways out](worker-rightsizing.md#a-limitrange-cancels-throughput--the-sizingprofileoverridden-condition).
 
 ### Worker pods are now cleaned up automatically (one-time sweep recommended)
 

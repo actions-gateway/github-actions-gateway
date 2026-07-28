@@ -218,6 +218,10 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(r.quotaToRunnerSets),
 			builder.WithPredicates(quotaHardChangedPredicate()),
 		).
+		// NOTE: LimitRanges are deliberately NOT watched here, unlike the quota above
+		// — see applySizingProfileOverride for why an eager informer on a grant an
+		// image-first upgrade may not have yet is the wrong trade for an advisory
+		// condition.
 		// Wake the reconciler when a listener/provisioner goroutine pushes a condition
 		// or event onto conditionCh/eventCh (Q333). Without this the pushed update sits
 		// in the channel until the next worker-Pod event or the resync period drains it,
@@ -381,6 +385,11 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// ask against it (Q359 Phase 2). Advisory only — set before the protocol
 	// routing so both acquisition tiers persist it with their status writes.
 	r.applySizingStatus(&rs, refs.template)
+
+	// Report a namespace LimitRange that re-injects the CPU limit the Throughput
+	// profile removes (Q489) — the one sizing conflict admission does not reject and
+	// no other signal can show. Advisory, and a no-op under every other profile.
+	r.applySizingProfileOverride(ctx, &rs)
 
 	// 2. Recover evicted scale-set workers (Q417). Runs BEFORE the reaper: the
 	// evicted pod is the only record of which run to re-run, and the reaper deletes

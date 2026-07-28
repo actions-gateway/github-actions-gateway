@@ -590,11 +590,23 @@ derived value. Because only cpu/memory are ever written, a CEL rule on
 envelope carrying neither — empty, or the GPU key alone, which is the realistic
 mistake since GPUs are what the profile bin-packs *against* — derives nothing
 while `sizingProfileState` still reports `Active`. That rule is a **within-object**
-invariant, which is why it belongs at admission where the quota conflict below
-does not. Quota/LimitRange conflicts are deliberately a **runtime** signal
-(the existing `WorkerQuota*` conditions and quota retries), not an admission
-gate — cross-object admission validation is exactly what this appendix's §H.7
-philosophy avoids. While a profile is `Active`, `SizingDrift` reports
+invariant, which is why it belongs at admission where the cross-object conflicts
+below do not. Quota/LimitRange conflicts are deliberately a **runtime** signal,
+not an admission gate — cross-object admission validation is exactly what this
+appendix's §H.7 philosophy avoids, and both objects are platform-owned and can
+change after the `RunnerSet` is written. A quota conflict surfaces through the
+existing `WorkerQuota*` conditions and quota retries. A `LimitRange` conflict
+needed its own signal (Q489): the one case that rejects *nothing* is a
+`Container`-type `cpu` limit default, which admission re-injects as the CPU
+limit `Throughput` deliberately removes — the pod is admitted, the state still
+reads `Active`, and bursting is gone. The AGC reads the namespace `LimitRange`
+(read-only grant) on each reconcile and reports the advisory
+`SizingProfileOverridden` condition; it is Throughput-only and removed under
+every other profile. The read is bounded and fail-open rather than watched: an
+informer registered at manager start whose LIST is `403`'d never syncs and
+crash-loops the AGC, which is the wrong price for a diagnostic on an install
+upgraded image-first — the same reasoning as the cluster-scoped `RuntimeClass`
+read (Q450). While a profile is `Active`, `SizingDrift` reports
 `False/SizingProfileActive` (the template ask is not what pods run with).
 
 **Why `profile` bundles two mechanisms deliberately (Q481).** The 1.3

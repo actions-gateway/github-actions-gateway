@@ -441,3 +441,37 @@ const (
 	// pods run with, so judging drift against it would mislead.
 	ReasonSizingProfileActive = "SizingProfileActive"
 )
+
+// Sizing-profile override condition (Q489). The Throughput profile's mechanism is
+// the ABSENCE of a runner-container CPU limit — jobs burst into idle node capacity.
+// A namespace LimitRange with a Container-type cpu default puts that limit straight
+// back at admission: the pod is admitted, status.sizingProfileState still reports
+// Active, and bursting is silently gone. Nothing else in the system can see it, so
+// the AGC reads the platform-owned LimitRange and says so. Advisory
+// (abnormal-is-True): jobs still run, they just do not burst, so it never gates
+// Ready and is not in ImpairingConditionTypes.
+const (
+	// ConditionSizingProfileOverridden is True when a namespace policy overrides
+	// what the selected sizing profile applies. Today that is exactly one case: a
+	// LimitRange re-injecting the CPU limit the Throughput profile removes. The
+	// message names the LimitRange and the cpu limit it imposes. Evaluated
+	// whenever Throughput is selected — including while the profile is still
+	// AwaitingSamples, so the conflict is visible before it takes effect — and
+	// removed entirely under any other profile.
+	ConditionSizingProfileOverridden = "SizingProfileOverridden"
+
+	// ReasonLimitRangeCPULimit is the SizingProfileOverridden=True reason: a
+	// Container-type LimitRange entry supplies a cpu limit default (or a max,
+	// which Kubernetes defaults the limit to) to every container that declares
+	// none — which is precisely what Throughput builds.
+	ReasonLimitRangeCPULimit = "LimitRangeCPULimit"
+	// ReasonNoLimitRangeOverride is the SizingProfileOverridden=False reason: no
+	// namespace LimitRange imposes a container cpu limit, so Throughput's
+	// limit-free runner container reaches the kubelet as built.
+	ReasonNoLimitRangeOverride = "NoLimitRangeOverride"
+	// ReasonLimitRangesUnreadable is the SizingProfileOverridden=False reason when
+	// the LimitRange list failed (RBAC not yet granted on an upgraded install, or
+	// a transient API error). Absence of evidence is not an alarm: the check
+	// fails open and the next reconcile retries.
+	ReasonLimitRangesUnreadable = "LimitRangesUnreadable"
+)

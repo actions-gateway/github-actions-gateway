@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -299,6 +300,99 @@ func TestV2_RunnerSet_NodeShareProfileDividesTheNodeEnvelope(t *testing.T) {
 	assert.Equal(t, "1500m", runner.Resources.Requests.Cpu().String(), "maxRequests clamps the derived cpu share")
 	assert.Equal(t, "1500m", runner.Resources.Limits.Cpu().String(), "the lifted limit follows the clamped request")
 	assert.Equal(t, "8Gi", runner.Resources.Requests.Memory().String(), "memory has no clamp configured")
+}
+
+// TestV2_RunnerSet_ThroughputLimitRangeOverrideIsReported covers Q489 against the
+// real apiserver: a namespace LimitRange with a Container-type cpu default puts the
+// CPU limit Throughput removes straight back at admission — silently, since nothing
+// is rejected. The set must report SizingProfileOverridden=True.
+//
+// LimitRanges are not watched (see applySizingProfileOverride), so each transition
+// below is observed on the set's next reconcile, nudged here by a spec edit rather
+// than waited out — that is the shipped behaviour, not a test shortcut.
+//
+// It also pins the behaviour the detector's max fallback documents: the apiserver
+// defaults a Container entry's `default` to its `max`, so an entry declaring only a
+// cpu max is a cpu limit default by the time anyone reads it.
+func TestV2_RunnerSet_ThroughputLimitRangeOverrideIsReported(t *testing.T) {
+	const ns = "v2-rs-sizing-limitrange"
+	createNSForAGC(t, ns)
+	startRunnerSetReconciler(t)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, ""))) // direct egress
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newRunnerSet("set", ns, "gw")
+	rs.Spec.Sizing = &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileThroughput}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	// An ordinary namespace: nothing overrides the profile.
+	waitForSizingOverride(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonNoLimitRangeOverride)
+
+	// The platform admin adds a LimitRange declaring only a cpu MAX. The apiserver
+	// defaults `default` to it, so every container declaring no CPU limit — which is
+	// exactly what Throughput builds — is admitted with one.
+	lr := &corev1.LimitRange{
+		ObjectMeta: metav1.ObjectMeta{Name: "tenant-defaults", Namespace: ns},
+		Spec: corev1.LimitRangeSpec{Limits: []corev1.LimitRangeItem{{
+			Type: corev1.LimitTypeContainer,
+			Max:  corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2")},
+		}}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, lr))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), lr) })
+
+	var stored corev1.LimitRange
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "tenant-defaults"}, &stored))
+	cpuDefault := stored.Spec.Limits[0].Default[corev1.ResourceCPU]
+	assert.Equal(t, "2", cpuDefault.String(), "the apiserver defaults a Container entry's cpu limit default to its max")
+
+	nudgeRunnerSet(t, ns, "set")
+	waitForSizingOverride(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonLimitRangeCPULimit)
+	var overridden v2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "set"}, &overridden))
+	msg := meta.FindStatusCondition(overridden.Status.Conditions, v2alpha1.ConditionSizingProfileOverridden).Message
+	assert.Contains(t, msg, "tenant-defaults", "the message must name the offending LimitRange")
+
+	// Advisory only: the set is still Ready and still serving.
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	// Dropping the LimitRange clears the alarm.
+	require.NoError(t, k8sClient.Delete(ctx, lr))
+	nudgeRunnerSet(t, ns, "set")
+	waitForSizingOverride(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonNoLimitRangeOverride)
+}
+
+// nudgeRunnerSet triggers a reconcile of the set by writing an annotation, standing
+// in for the worker-pod events a set with jobs in flight generates on its own.
+func nudgeRunnerSet(t *testing.T, ns, name string) {
+	t.Helper()
+	var rs v2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs))
+	if rs.Annotations == nil {
+		rs.Annotations = map[string]string{}
+	}
+	rs.Annotations["test.actions-gateway.com/nudge"] = rs.ResourceVersion
+	require.NoError(t, k8sClient.Update(ctx, &rs))
+}
+
+// waitForSizingOverride blocks until the RunnerSet reports the expected
+// SizingProfileOverridden status/reason.
+func waitForSizingOverride(t *testing.T, ns, name string, wantStatus metav1.ConditionStatus, wantReason string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		var rs v2alpha1.RunnerSet
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
+			return false
+		}
+		c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionSizingProfileOverridden)
+		return c != nil && c.Status == wantStatus && c.Reason == wantReason
+	}, 20*time.Second, 100*time.Millisecond,
+		"RunnerSet %s should report SizingProfileOverridden=%s/%s", name, wantStatus, wantReason)
 }
 
 // workerPodFor enqueues one job on the set's owner session and returns the

@@ -19,6 +19,11 @@
 // resourcequotas read-only: the RunnerGroup reconciler reads the namespace
 // ResourceQuota to compute the WorkerQuota{Pressure,Exceeded} conditions (Q82).
 // +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch
+// limitranges read-only: the RunnerSet reconciler reads the namespace LimitRange to
+// detect a Container-type cpu default that re-injects the CPU limit the Throughput
+// sizing profile removes, and reports it as SizingProfileOverridden (Q489). Like the
+// ResourceQuota it is platform-owned (Q130) — strictly get/list/watch, never written.
+// +kubebuilder:rbac:groups="",resources=limitranges,verbs=get;list;watch
 // pods.metrics.k8s.io read-only: the worker usage sampler lists PodMetrics to
 // aggregate per-RunnerSet CPU/memory peaks for right-sizing (Q359). PodMetrics
 // are namespaced, so the per-tenant RoleBinding scopes this to the tenant

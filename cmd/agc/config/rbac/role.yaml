@@ -16,6 +16,15 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - limitranges
+  - resourcequotas
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - pods
   verbs:
   - create
@@ -29,14 +38,6 @@ rules:
   - pods/status
   verbs:
   - get
-- apiGroups:
-  - ""
-  resources:
-  - resourcequotas
-  verbs:
-  - get
-  - list
-  - watch
 - apiGroups:
   - ""
   resources:

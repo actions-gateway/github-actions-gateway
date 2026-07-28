@@ -21,6 +21,15 @@
 - apiGroups: [""]
   resources: ["resourcequotas"]
   verbs: ["get", "list", "watch"]
+# limitranges (read-only): the RunnerSet reconciler reads the namespace LimitRange
+# to detect a Container-type cpu default, which admission re-injects as the CPU
+# limit the Throughput sizing profile deliberately removes — silently cancelling
+# the profile. Reported as the SizingProfileOverridden condition (Q489). The
+# LimitRange is platform-owned like the quota (Q130); the AGC never creates or
+# mutates it, so this grant is strictly get/list/watch.
+- apiGroups: [""]
+  resources: ["limitranges"]
+  verbs: ["get", "list", "watch"]
 # events: the RunnerGroup reconciler emits Kubernetes Events on credential,
 # agent-pool, listener, and deregistration failures plus Ready transitions
 # and worker-pod reaps. Both groups are required: the AGC's new-style
