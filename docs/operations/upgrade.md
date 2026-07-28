@@ -13,6 +13,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
   - [BREAKING (pre-GA): capacityGate.mode values replaced by On + a gateway-level cluster fact](#breaking-pre-ga-capacitygatemode-values-replaced-by-on--a-gateway-level-cluster-fact)
+  - [Non-breaking: an over-long derived RunnerGroup name is bounded (and renamed)](#non-breaking-an-over-long-derived-runnergroup-name-is-bounded-and-renamed)
   - [Non-breaking: a RunnerSet's agent Secrets and runner names gain an rs- prefix](#non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix)
   - [Non-breaking: v2alpha1 is deprecated and the apiserver now warns](#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns)
   - [Non-breaking: v2alpha1 CRDs ship in a separate, opt-in chart](#non-breaking-v2alpha1-crds-ship-in-a-separate-opt-in-chart)
@@ -118,6 +119,36 @@ simply never gates — you get today's un-gated behavior, never over-gating.
 carrying an old value reports `WorkerCapacityDeclined=False` with
 `reason: GateModeUnsupported` and is not gated — the fail-open direction. See
 [troubleshooting](troubleshooting.md#the-mode-is-reported-as-unsupported).
+
+### Non-breaking: an over-long derived `RunnerGroup` name is bounded (and renamed)
+
+The GMC derives a `RunnerGroup`'s name from its gateway and first runner label
+(`<gateway>-<label>`), and the AGC stamps that name on every worker pod and agent Secret
+as the `actions-gateway/runner-group` label value. Object names may be 253 characters but
+**label values stop at 63**, so a derived name past 63 produced a `RunnerGroup` that
+reconciled perfectly and then rejected every worker pod create. A 15-character gateway
+name with a 40-character runner label was enough to reach it. The derivation is now
+bounded to 63 characters, with a hash replacing whatever is cut (Q473).
+
+`v1alpha1` only. `v2alpha1`/`v2beta1` cap CR names at 52 characters for exactly this
+reason, so v2 tenants are unaffected.
+
+**Almost every install sees no change at all**: a derived name that already fit is
+returned byte for byte as before, so existing `RunnerGroup`s keep their names. Only a
+gateway whose derived name exceeded 63 characters is affected — on the first reconcile
+after the upgrade the GMC creates the correctly-named `RunnerGroup` and prunes the old
+one. That tenant could not place a worker pod before the rename, so no working runner is
+disturbed; it starts working.
+
+To check whether any of your gateways is affected before upgrading:
+
+```sh
+kubectl get runnergroups -A -o json \
+  | jq -r '.items[] | select(.metadata.name | length > 63) | "\(.metadata.namespace)/\(.metadata.name)"'
+```
+
+Anything of yours keyed on such a name — dashboards, alerts, scripts — should move to the
+gateway's own name or a label selector.
 
 ### Non-breaking: a `RunnerSet`'s agent Secrets and runner names gain an `rs-` prefix
 

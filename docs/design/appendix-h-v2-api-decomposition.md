@@ -407,6 +407,19 @@ Service-name path is tightest:
   document it in the CRD field comment so it is discoverable, not a runtime
   surprise.
 
+**Shipped, and the v1 gap this closed.** The 52-char cap is enforced by CEL on every
+v2 CR name, so v2 derivations are bounded at the input. `v1alpha1` has no equivalent
+— an `ActionsGateway` name may be 253 characters — and its derived
+`<gateway>-<runner-label>` `RunnerGroup` name was never bounded at the output either.
+Past 63 characters that name is a legal object name and an **illegal label value**, so
+the `RunnerGroup` reconciled while every worker pod carrying it as
+`actions-gateway/runner-group` was rejected: the tenant ran no jobs and GitHub reported
+only that the runner had lost communication (Q473). v1 therefore applies the bound
+where the name is derived, through the shared `api/apinames` helpers that also own the
+worker-pod budget (Q467). The rule generalises: **budget against the tightest consumer
+of a name (63), not the limit of the object being created (253)** — see
+[kubernetes-conventions.md](../development/kubernetes-conventions.md#derive-every-name-through-apiapinames-q467-q473).
+
 ### Field naming freezes at GA — do the pass now
 
 JSON field names are part of the API contract and become permanent at `v2`. Do

@@ -139,35 +139,52 @@ first reconcile after the rename, copy each old-named object to its new name (pr
 the payload, so no external registration is re-issued) and delete the original, gated on
 a check that the old name is not in use by the *other* kind.
 
-### Truncate a derived name on a budget, never on the concatenation (Q467)
+### Derive every name through `api/apinames` (Q467, Q473)
 
-A Kubernetes name has rules beyond "≤63 characters": it must also start and end with an
-alphanumeric character. Building `<prefix>-<owner>-<id>` and then cutting the result at
-63 satisfies the length rule and violates the other one whenever the cut lands on a
-hyphen — and the hyphens in a UUID sit at fixed indices, so *whether a tenant can run
-any jobs at all* is decided by the character length of its name. The worker-pod
-provisioner shipped exactly that: for four gateway-name lengths the API server rejected
-**every** worker pod, no job ever ran, and the only signal GitHub gave was that the
-runner had "lost communication".
+**All name derivation goes through [`api/apinames`](../../api/apinames/names.go).** It
+lives in the neutral `api` module because the GMC derives the v1 RunnerGroup name,
+`gag-migrate` replicates it, and the AGC consumes it as a label value — three packages
+across two modules that must agree byte for byte. They previously agreed by comment
+("Kept byte-for-byte identical…"), which is not a mechanism.
 
-Three rules, in this order:
+Two shipped bugs came from getting this wrong, and both presented to the operator the
+same way: no worker pod at all, and GitHub reporting that the runner *"lost
+communication"*. Both were deterministic per tenant-name length, not intermittent.
 
-1. **Split the budget before you join the segments.** Compute what each segment may
-   spend (`splitBudget` in `cmd/agc/internal/provisioner/naming.go` gives each half and
-   redistributes what a short segment leaves over), truncate each one, then concatenate.
-   Truncating the assembled string is what makes the separators reachable by the cut.
-2. **Never trade validity for collisions.** Trimming a trailing hyphen is not a fix on
-   its own: it shortens the entropy-bearing suffix, and two workers that collide on a
-   name are a worse failure than one pod the API server rejects. Truncate by replacing
-   the discarded tail with a short hash of the *whole* segment (`truncateSegment`), so
-   every segment stays injective at every budget and the composed name is unique
-   whenever the job identity is.
-3. **Test at the boundary, not just under it.** `assert len(name) <= 63` passes happily
-   on `…-`. Sweep the owner-name lengths that put the cut on each separator, one either
-   side, and the maximum-length case, and assert against
-   `k8s.io/apimachinery/pkg/util/validation.IsDNS1123Label` rather than a length —
-   `cmd/agc/internal/provisioner/naming_internal_test.go` is the worked example, with a
-   fuzz target for the inputs a table misses.
+**Budget against the tightest consumer, not the one you are creating.** An object name
+may be 253 characters, but a **label value and a Service name stop at 63**. The v1
+`<gateway>-<label>` RunnerGroup name was never bounded: past 63 characters the CR is
+still created — it is a legal object name — and then every worker pod carrying it as
+`actions-gateway/runner-group` is rejected. A 15-character gateway with a 40-character
+runner label was enough. v2 avoids this class with a 52-char CEL cap on CR names
+([§H.6](../design/appendix-h-v2-api-decomposition.md#h6-naming-and-length-budgets));
+v1 has no such cap, so the bound is applied where the name is derived.
+
+**Split the budget before you join the segments.** A name has rules beyond "≤63
+characters" — it must also start and end with an alphanumeric character. Building
+`<prefix>-<owner>-<id>` and then cutting the result at 63 satisfies the length rule and
+violates the other one whenever the cut lands on a hyphen, and the hyphens in a UUID sit
+at fixed indices. `apinames.Join` splits the budget first (`apinames.Shares` gives each
+part an equal share and redistributes what a shorter part leaves over), so no cut can
+reach a separator.
+
+**Never trade validity for collisions.** Trimming a trailing hyphen is not a fix on its
+own: it shortens the entropy-bearing suffix, and two objects that collide on a name are
+a worse failure than one the API server rejects. `apinames.Truncate` replaces the
+discarded tail with a hash of the *whole* segment, so every segment stays injective at
+every budget.
+
+**A name that already fits is never changed.** `Join` returns the plain concatenation
+whenever it is within budget. That is what makes the helper adoptable: bounding a
+derivation renames only the tenants that were already broken, never a healthy one.
+
+**Test at the boundary, not just under it.** `assert len(name) <= 63` passes happily on
+`…-`. Sweep the name lengths that put the cut on each separator, one either side, and
+the maximum-length case; assert against `k8s.io/apimachinery/pkg/util/validation`
+(`IsDNS1123Label`, `IsValidLabelValue`) rather than a length; and let a real API server
+judge in an envtest, since it is the authority that rejected these in the first place.
+[`api/apinames/names_test.go`](../../api/apinames/names_test.go) is the worked example,
+with a fuzz target for the inputs a table misses.
 
 A rejected object must also be **legible to an operator**. A create the API server
 refuses is invisible from the outside — nothing to `kubectl describe`, nothing in the
