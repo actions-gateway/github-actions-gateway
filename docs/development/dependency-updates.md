@@ -20,7 +20,8 @@ is automated, by what, and where the manual edges are.
 | buildkit builder image digest (3 files) | `BUILDKIT_IMAGE` in `e2e-reusable.yml`, `security-scan.yml` **and** `publish.yml` | **updatecli** ([`updatecli.d/buildkit.yaml`](../../updatecli.d/buildkit.yaml), weekly — rewrites all three, so they can't drift) |
 | envtest Kubernetes version (3 files) | `ENVTEST_K8S_VERSION` in [`integration-test.yml`](../../.github/workflows/integration-test.yml) **and** `cmd/gmc/Makefile` + `cmd/agc/Makefile` | **updatecli** ([`updatecli.d/envtest.yaml`](../../updatecli.d/envtest.yaml), weekly — rewrites all three, so they can't drift; resolved from controller-tools' `envtest-releases.yaml`, **no auto-merge** since it moves the tested Kubernetes version — keep it on the same minor as `KIND_NODE_IMAGE`. The review-gated PR doubles as a **latest-Kubernetes compatibility canary**: it runs the integration tier against the newest envtest release, so a green PR confirms the project still works on the latest version) |
 | kind node image | `KIND_NODE_IMAGE` in `e2e-reusable.yml` | **manual** (changes the tested Kubernetes version — a deliberate choice; keep the envtest version above on the same Kubernetes minor) |
-| cluster-autoscaler + kwok (drift harness) | `CA_VERSION` / `KWOK_VERSION` in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) | **manual, prompted by the kind bump** — cluster-autoscaler is released per Kubernetes minor and the harness runs kind's *default* node image, so `CA_VERSION`'s minor is whatever kind ships. A kind bump that moves that minor fails the drift gate on skew; bump `CA_VERSION` to the matching CA minor in the same PR. See [testing.md](testing.md#its-cadence-the-version-bump-not-a-clock) |
+| cluster-autoscaler **patch** (drift harness) | `CA_VERSION` in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) | **updatecli** ([`updatecli.d/cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml), weekly — moves the patch *within* the pinned minor only, resolved from the registry's own tag list. **No auto-merge**: the PR edits `scripts/autoscaler-cluster.sh`, which is the [live-autoscaler drift gate's](testing.md#its-cadence-the-version-bump-not-a-clock) path filter, so it exists to run that gate against the new release) |
+| cluster-autoscaler **minor** + kwok (drift harness) | `CA_VERSION`'s minor / `KWOK_VERSION` in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) | **manual, prompted by the kind bump** — cluster-autoscaler is released per Kubernetes minor and the harness runs kind's *default* node image, so `CA_VERSION`'s minor is whatever kind ships. A kind bump that moves that minor fails the drift gate on skew; bump `CA_VERSION` to the matching CA minor in the same PR. See [testing.md](testing.md#its-cadence-the-version-bump-not-a-clock) |
 
 Dependabot config: [`.github/dependabot.yml`](../../.github/dependabot.yml). The
 supply-chain gates that catch drift on any of these (`vendor-check`,
@@ -60,7 +61,7 @@ one run, opening a separate PR per manifest. They share a shape:
      publish no checksum file.
 3. **File targets** — regex-replace each pin in place and open one PR.
 
-Two exceptions to the `githubrelease` source. [`buildkit.yaml`](../../updatecli.d/buildkit.yaml)
+Three exceptions to the `githubrelease` source. [`buildkit.yaml`](../../updatecli.d/buildkit.yaml)
 pins a Docker image *digest*, not a release tarball, so its source is a
 `dockerdigest` (resolving the current digest of the floating `buildx-stable-1`
 tag); it still ends in file targets — rewriting the `@sha256:…` suffix across all
@@ -72,6 +73,23 @@ that reads controller-tools' `envtest-releases.yaml` and prints the latest stabl
 `1.<minor>.x` — guaranteeing the chosen minor has published binaries — then
 rewrites `ENVTEST_K8S_VERSION` across the workflow and both controller Makefiles.
 
+[`cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml) is the
+third, and the only manifest that resolves a version **relative to the pin it is
+replacing**. It reads the current `CA_VERSION` out of
+[`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) with a
+`file` source, then hands it to
+[`scripts/updatecli/latest-cluster-autoscaler-patch.sh`](../../scripts/updatecli/latest-cluster-autoscaler-patch.sh),
+which returns the newest patch published **inside that same Kubernetes minor** —
+never a newer minor, never older than the pin. The minor belongs to the kind bump
+(cluster-autoscaler ships one series per Kubernetes minor, and the harness runs
+kind's default node image), so letting this manifest cross one would manufacture
+exactly the version skew the drift gate exists to report. Both invariants are
+asserted by `scripts/updatecli/latest-cluster-autoscaler-patch-test.sh` under
+`make scripts-test`. Its source is the registry's own OCI tag list rather than
+GitHub releases: the harness pulls `registry.k8s.io/autoscaling/cluster-autoscaler`,
+a git tag exists before its image is published, and the release tags
+(`cluster-autoscaler-1.36.1`) are not semver anyway.
+
 | Manifest | Pins | Checksum strategy |
 |---|---|---|
 | [`kind.yaml`](../../updatecli.d/kind.yaml) | `KIND_VERSION` + `KIND_BINARY_SHA256` in two files | published `.sha256sum` |
@@ -80,11 +98,17 @@ rewrites `ENVTEST_K8S_VERSION` across the workflow and both controller Makefiles
 | [`polaris.yaml`](../../updatecli.d/polaris.yaml) | `POLARIS_VERSION` + `POLARIS_SHA256` | published `checksums.txt` line |
 | [`buildkit.yaml`](../../updatecli.d/buildkit.yaml) | `BUILDKIT_IMAGE` digest in three files | none (`dockerdigest` resolves the digest directly) |
 | [`envtest.yaml`](../../updatecli.d/envtest.yaml) | `ENVTEST_K8S_VERSION` in three files | none (version-only; `shell` source from the envtest-releases index) |
+| [`cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml) | `CA_VERSION` patch in `scripts/autoscaler-cluster.sh` | none (version-only; `file` source reads the current pin, `shell` source resolves the newest patch in its minor from the registry tag list) |
 
 **Gate tools open PRs that may go red.** shellcheck and polaris are lint/scan
 gates: a new release can add findings. The bump PR running CI is
 exactly the point — a human adopts the new version (fixing or justifying the new
-findings) or holds it, instead of the pin silently rotting.
+findings) or holds it, instead of the pin silently rotting. `cluster-autoscaler.yaml`
+is the strongest form of this: the bump is not a refresh with a test attached,
+it *is* the experiment. Its PR exists so the
+[live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock)
+installs the new release and checks whether upstream reworded the event
+vocabulary the capacity gate matches on.
 
 ### Running it locally
 
@@ -112,10 +136,11 @@ with `dry_run: true` runs `diff`.
   `GITHUB_TOKEN`-authored PR (the same constraint [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml)
   documents). The relevant gate must run before merge — e2e for a kind or Calico
   bump, the lint job for shellcheck — so a maintainer re-triggers checks by
-  closing and reopening the PR. **On a kind bump this step is the whole point,
-  not a formality:** the [live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock)
-  has no other trigger, so a kind bump merged without re-running checks is the
-  one path that lets an upstream vocabulary reword through unobserved. A stored App token would remove this step; it is
+  closing and reopening the PR. **On a kind or cluster-autoscaler bump this step
+  is the whole point, not a formality:** those two PRs are the only triggers the
+  [live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock)
+  has, so merging either without re-running checks is the one path that lets an
+  upstream vocabulary reword through unobserved. A stored App token would remove this step; it is
   deliberately not used yet (one more secret to manage), matching the go-sync
   rationale.
 - **Triage cadence.** updatecli is scheduled just after Dependabot so all
@@ -134,19 +159,22 @@ with `dry_run: true` runs `diff`.
 
 ## Deliberately manual pins
 
-This is pinned but **not** on the updatecli cadence, for a concrete reason rather
-than because automation is missing:
+These are pinned but **not** on the updatecli cadence, for a concrete reason
+rather than because automation is missing:
 
 - **`KIND_NODE_IMAGE`** — the node image a kind release recommends lives in its
   release notes, not a clean datasource, and bumping it changes the tested
   Kubernetes version (and the Calico compatibility window). Review and bump it by
   hand in the kind updatecli PR when the Kubernetes version should move.
-- **`CA_VERSION` / `KWOK_VERSION`** in
+- **`CA_VERSION`'s Kubernetes minor, and `KWOK_VERSION`**, in
   [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) — the
   cluster-autoscaler and kwok releases behind the
-  [live-autoscaler drift gate](testing.md#the-live-autoscaler-drift-gate). Bumping
-  `CA_VERSION` is not a routine refresh: it is the experiment that gate exists to
-  run, since a release that reworded cluster-autoscaler's event vocabulary is
-  exactly what would silently disable the capacity gate. Bump it by hand and run
-  `make test-autoscaler` in the same change; keep it on the same Kubernetes minor
-  as `KIND_NODE_IMAGE`, because cluster-autoscaler ships per Kubernetes minor.
+  [live-autoscaler drift gate](testing.md#the-live-autoscaler-drift-gate).
+  cluster-autoscaler ships one release series per Kubernetes minor and the
+  harness runs kind's *default* node image, so the minor is not this pin's to
+  choose: it follows `KIND_NODE_IMAGE`'s and moves by hand, in the kind bump PR,
+  with `make test-autoscaler` run in the same change. Only the **patch** inside
+  that minor is automated
+  ([`cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml)) — the
+  version move is what triggers the gate, so patch releases that no one pinned
+  used to go untested until the next minor came round (Q483).

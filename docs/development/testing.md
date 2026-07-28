@@ -524,14 +524,20 @@ It is deliberately **not** on a cron. A weekly sweep would re-run one fixed expe
 
 What makes that fire without anyone remembering to run it is a coupling worth knowing:
 
-> The harness pins no `KIND_NODE_IMAGE`, so its cluster runs **kind's default node image** — Kubernetes 1.36.1 for kind v0.32.0. cluster-autoscaler is released per Kubernetes minor, so the kind release chooses the Kubernetes minor, which chooses the CA minor. That is why `CA_VERSION` (v1.36.1) tracks kind's default rather than the deliberately-pinned-down `KIND_NODE_IMAGE` the e2e tier uses (v1.35.5).
+> The harness pins no `KIND_NODE_IMAGE`, so its cluster runs **kind's default node image** — Kubernetes 1.36.1 for kind v0.32.0. cluster-autoscaler is released per Kubernetes minor, so the kind release chooses the Kubernetes minor, which chooses the CA minor. That is why `CA_VERSION` (v1.36.x) tracks kind's default rather than the deliberately-pinned-down `KIND_NODE_IMAGE` the e2e tier uses (v1.35.5).
 
 `KIND_VERSION` is pinned in this workflow as well as [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml), and [`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml) rewrites both weekly. So the kind bump PR trips this workflow's `changes` filter and runs the gate; when that bump moves the default node image's minor, `CA_VERSION` must move to the matching CA minor in the same PR — and a CA minor is where a vocabulary reword lands. **A kind bump PR whose autoscaler-drift job fails on version skew is telling you to bump `CA_VERSION`, not to pin the node image.**
+
+#### The patch releases in between (Q483)
+
+The kind coupling only fires on a *minor*, which left every cluster-autoscaler **patch** release untested until the next minor came round — and a patch can reword an event string as easily as a minor can. [`updatecli.d/cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml) closes that: weekly it reads the current `CA_VERSION`, resolves the newest patch published *inside that same minor*, and opens a PR moving the pin. That PR edits `scripts/autoscaler-cluster.sh` — the first path in the `changes` filter above — so the gate runs on it. The manifest is structurally incapable of crossing a minor ([`latest-cluster-autoscaler-patch.sh`](../../scripts/updatecli/latest-cluster-autoscaler-patch.sh) takes the pin and can only return a version in its minor, asserted under `make scripts-test`), because crossing one would manufacture the very node-image skew this gate reports.
+
+This is not the cron the section above rules out. The weekly run resolves a version and opens nothing when the answer is the pin it already has, so what reaches the gate is still a release, never a calendar tick. There are now two version-move triggers and they divide cleanly: **updatecli moves the patch, the kind bump PR moves the minor.**
 
 Two consequences to plan for:
 
 - **The gate is not a required status check.** A failure wants a human decision — adopt the new vocabulary (update the matcher and the recorded unit table) or hold the bump — the same posture as the shellcheck and polaris bump PRs. The workflow still ends in an `autoscaler-drift-gate` job of the usual shape, so it can be required later without restructuring ([required-status-checks.md](../plan/archive/required-status-checks.md)).
-- **An updatecli PR arrives with no checks at all.** GitHub never triggers workflows on a `GITHUB_TOKEN`-authored PR, so the trigger above only pays off if the checks are re-run — close and reopen the PR during the weekly dependency triage pass ([dependency-updates.md](dependency-updates.md#operating-notes)).
+- **An updatecli PR arrives with no checks at all.** GitHub never triggers workflows on a `GITHUB_TOKEN`-authored PR, so both triggers above only pay off if the checks are re-run — close and reopen the PR during the weekly dependency triage pass ([dependency-updates.md](dependency-updates.md#operating-notes)). On a cluster-autoscaler bump that step is the entire PR: nothing else in it needs testing.
 
 What it measured on first run, and the one finding that outlived it, are in [the plan §9c](../plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474).
 

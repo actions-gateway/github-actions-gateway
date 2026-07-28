@@ -1,12 +1,15 @@
 name: updatecli
 
 # Bump version+checksum pins that Dependabot cannot see, because they live as
-# workflow env vars / Makefile variables rather than in a package manifest. One
-# manifest per pin under updatecli.d/ (kind, Calico, shellcheck, polaris, buildkit,
-# envtest); the run below applies them all and opens a PR per manifest. See
+# workflow env vars / Makefile variables / shell-script defaults rather than in a
+# package manifest. One manifest per pin under updatecli.d/ (kind, Calico,
+# shellcheck, polaris, buildkit, envtest, cluster-autoscaler); the run below
+# applies them all and opens a PR per manifest. See
 # docs/development/dependency-updates.md for the rationale, the per-manifest table,
 # and the one-time repo setting this needs. (KIND_NODE_IMAGE stays manual — it has
-# no clean datasource and moves the tested Kubernetes version deliberately.)
+# no clean datasource and moves the tested Kubernetes version deliberately; so
+# does CA_VERSION's *minor*, which follows it — cluster-autoscaler.yaml moves only
+# the patch inside that minor.)
 on:
   schedule:
     # Mondays 06:17 UTC — after Dependabot's weekly wave, so a maintainer triages
