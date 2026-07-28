@@ -1,9 +1,14 @@
 # Release 1.3 Milestone Definition
 
-> **Status: every gating Queue row is closed (2026-07-26).** Q359, Q400, Q404,
-> Q411, Q412, and Q393 all landed, so no `1.3-gate` row remains in
-> [docs/STATUS.md](../STATUS.md). **The tag is not cut**: the Definition of Done
-> also requires the release-candidate dogfood validation in
+> **Status: one gating Queue row is open — [Q481](../STATUS.md#Q481).** The
+> original six closed 2026-07-26 (Q359, Q400, Q404, Q411, Q412, Q393). Q481 was
+> opened afterwards by the [API review](#e-api-review-one-open-gating-row-q481)
+> this release introduced: `sizing.profile`'s shape is frozen by this tag either
+> way, so the choice is made deliberately rather than by default. **Closing it as
+> "ship as-is" is an expected outcome** and does not require an API change.
+>
+> **The tag is not cut** regardless: the Definition of Done also requires the
+> release-candidate dogfood validation in
 > [operations/release.md](../operations/release.md), which can only run against
 > the actual RC image and is not tracked as a Queue row. Residuals deliberately
 > deferred out of 1.3 are listed under
