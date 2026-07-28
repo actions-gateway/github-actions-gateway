@@ -94,15 +94,58 @@ module_dirs() {
 }
 
 # manifests_recipe MODULE — print MODULE's `manifests:` recipe as one line with
-# the line continuations folded away and every tab turned into a space, so a
-# token can be matched as " token " regardless of how the Makefile wraps and
-# indents it.
+# the shell comments stripped, the line continuations folded away, and every tab
+# turned into a space, so a token can be matched as " token " regardless of how
+# the Makefile wraps and indents it.
+#
+# Comments go by the shell's rule, because the shell is what runs a recipe line:
+# an unquoted '#' at the start of a word begins a comment, and a '#' that is
+# quoted, escaped, or mid-word is ordinary text. Everything from that '#' to the
+# end of the physical line is dropped — including a trailing backslash, which
+# continues nothing once it is inside a comment. A line that is nothing but a
+# comment contributes nothing to the fold.
+#
+# Without this, a commented-out call folded in as live text: its '#' and its
+# generators read as generators this gate does not regenerate, so the module was
+# reported unfaithful for running a generator named '#', and a commented-out
+# output: rule satisfied the dir match that the live rule should have (Q464).
 manifests_recipe() {
 	local module="$1"
 	awk '
+		# strip_comment LINE — LINE truncated at its first shell comment. Quote
+		# state is tracked within the line only: a quote left open across a
+		# backslash continuation is not a shape make recipes take here.
+		function strip_comment(line,   i, c, n, quote, prev) {
+			n = length(line)
+			quote = ""
+			prev = " " # start of line is a word boundary
+			for (i = 1; i <= n; i++) {
+				c = substr(line, i, 1)
+				if (quote == "\047") {
+					# Single quotes take everything literally, backslash included.
+					if (c == "\047") { quote = "" }
+				} else if (quote == "\"") {
+					if (c == "\\") { i++; prev = "x"; continue }
+					if (c == "\"") { quote = "" }
+				} else if (c == "\\") {
+					# The escaped character is literal, so it cannot open a comment
+					# and it is not whitespace for the word-start test.
+					i++
+					prev = "x"
+					continue
+				} else if (c == "\047" || c == "\"") {
+					quote = c
+				} else if (c == "#" && (prev == " " || prev == "\t")) {
+					return substr(line, 1, i - 1)
+				}
+				prev = c
+			}
+			return line
+		}
 		/^manifests:/ { inrecipe = 1; next }
 		inrecipe && /^\t/ {
-			line = $0
+			line = strip_comment($0)
+			if (line ~ /^[ \t]*$/) { next }
 			sub(/\\$/, "", line)
 			gsub(/\t/, " ", line)
 			printf "%s ", line
