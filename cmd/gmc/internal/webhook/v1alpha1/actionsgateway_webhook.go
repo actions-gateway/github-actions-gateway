@@ -270,14 +270,10 @@ func (v *ActionsGatewayCustomValidator) validatePrivilegedEligibility(ctx contex
 			ag.Namespace, err, gmcv1alpha1.PrivilegedProfileLabel, gmcv1alpha1.PrivilegedProfileAllowed)
 	}
 	// Dual-read the eligibility grant across both label domains for the v1/v2
-	// coexistence window (§H.12). The M5 migration relabels the namespace's
-	// privileged-profile grant onto the v2 actions-gateway.com domain; a still-running
-	// v1 ActionsGateway in that namespace must still be admitted as privileged, or the
-	// relabel would strand it. This only widens the accepted *spelling* of an existing
-	// platform grant — the value keyword "allowed" is identical on both domains, so no
-	// invariant is relaxed (fail-closed on any other value / absent label is unchanged).
-	if ns.Labels[gmcv1alpha1.PrivilegedProfileLabel] != gmcv1alpha1.PrivilegedProfileAllowed &&
-		ns.Labels[v2alpha1.PrivilegedProfileLabel] != v2alpha1.PrivilegedProfileAllowed {
+	// coexistence window (§H.12) — see validation.PrivilegedGrantPresent, the single
+	// definition this and `gag-migrate` share so the tool and admission can never
+	// disagree about whether a namespace is granted (Q463).
+	if !validation.PrivilegedGrantPresent(ns.Labels) {
 		return fmt.Errorf(
 			"securityProfile: privileged is not eligible in namespace %q: it requires the namespace label %s=%s "+
 				"(or the aligned %s=%s), which only a platform administrator may apply — privileged eligibility is a "+
