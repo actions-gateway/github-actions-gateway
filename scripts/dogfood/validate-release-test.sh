@@ -244,6 +244,33 @@ else
 fi
 check_contains "an unvalidated Throughput is called out" "NOT VALIDATED THIS RUN" "${out}"
 check_contains "the sample counts are printed" "sampleCounts=[4 6]" "${out}"
+# Q488: AwaitingSamples is the ONLY state whose cause is short history, so it is
+# the only one allowed to say so — and it must not repeat the old advice to
+# deploy spec.sizing ahead of the RC window, which sampling never depended on.
+check_contains "an immature history names the sample shortfall" "short of ${MIN_SAMPLES_FOR_DRIFT} samples" "${out}"
+check_contains "an immature history denies the soak requirement" "not a multi-day soak" "${out}"
+
+# Q488: an EMPTY ci state is a different defect — spec.sizing never reached the
+# cluster — and must not be reported as a sample shortfall. The distinction is
+# load-bearing: start.sh cannot deploy a CR edit, so an operator sent to wait for
+# samples would wait forever on a tenant that has no profile configured at all.
+stub_sizing_kubectl "Active" "" ""
+printf '%s' "${EXPECTED_NODESHARE_CPU}" >"${WORKDIR}/e2e-runner-cpu"
+if out="$(sizing_leg 2>&1)"; then
+	echo "ok   an undeployed Throughput does not block the release"
+else
+	echo "FAIL an undeployed Throughput must not block the release" >&2
+	fails=$((fails + 1))
+fi
+check_contains "an undeployed Throughput is called out" "NOT VALIDATED THIS RUN" "${out}"
+check_contains "an undeployed Throughput names the deploy gap" "spec.sizing is not on the live" "${out}"
+check_contains "an undeployed Throughput names start.sh as unable to apply" "never applies CRs" "${out}"
+if [[ "${out}" == *"short of ${MIN_SAMPLES_FOR_DRIFT} samples"* ]]; then
+	echo "FAIL an undeployed Throughput must not be blamed on sample history" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   an undeployed Throughput is not blamed on sample history"
+fi
 
 # --- Q355: failure diagnostics are captured before teardown evicts them ---
 

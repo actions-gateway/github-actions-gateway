@@ -94,6 +94,11 @@ RUNNER_SET_LABEL="actions-gateway.com/runner-set"
 # between the manifest and this gate is a loud failure, not a silent pass.
 EXPECTED_NODESHARE_CPU="1500m"
 
+# usage.MinSamplesForDrift — the per-template-container sample count Throughput
+# needs before it actuates. Mirrored here only for the remediation text; the
+# gate never asserts on it (the Throughput leg reports, never fails).
+MIN_SAMPLES_FOR_DRIFT="20"
+
 # E2E_RESOLVED_RUN_ID is the run id the e2e leg re-runs. resolve_e2e_run_id sets
 # it BEFORE any billable work; e2e_leg only consumes it.
 E2E_RESOLVED_RUN_ID=""
@@ -276,11 +281,20 @@ capture_worker_sizing() {
 #   NodeShare  — hard failure. It needs no sample history, so it MUST be Active
 #                whenever the overlay is applied. Anything else is a defect.
 #   Throughput — reported, never fatal. It needs >=20 samples per template
-#                container (usage.MinSamplesForDrift), which accrues from the
-#                CI tenant's ordinary traffic over days, not from this gate. A
+#                container (usage.MinSamplesForDrift), which the CI tenant's
+#                ordinary traffic supplies, not this gate's ~7-job matrix. A
 #                release must not be blocked on history maturing — but shipping
 #                the profile unvalidated must not be SILENT either.
 # Binpack is already live-validated (2026-07-25) and is not re-asserted here.
+#
+# Sampling is UNCONDITIONAL: the sampler tracks every worker pod carrying
+# provisioner.LabelRunnerSet in the namespace and the reconciler persists
+# status.sizingRecommendation whether or not spec.sizing is set, and the
+# aggregate re-seeds from that status — so history accrues without the profile
+# and survives stop/start rather than being re-earned. That makes the two
+# non-Active states different diagnoses, which is why the report below splits
+# them: an EMPTY state means the CR never reached the cluster, and only
+# AwaitingSamples means history is genuinely short (Q488).
 sizing_leg() {
 	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
 	echo "Asserting the v1.3 sizing profiles actuated on real workers..."
@@ -322,10 +336,25 @@ sizing_leg() {
 	if [[ "${ci_state}" == "Active" ]]; then
 		echo "             Throughput IS actuating — this RC ran CI on derived sizing."
 	else
-		echo "             NOT VALIDATED THIS RUN: Throughput needs >=20 samples per container."
+		echo "             NOT VALIDATED THIS RUN: the profile is not actuating."
+		if [[ -z "${ci_state}" ]]; then
+			echo "             sizingProfileState is EMPTY — spec.sizing is not on the live"
+			echo "             RunnerSet at all, so this is a deploy gap, not a sample gap."
+			echo "             A committed CR edit reaches the cluster ONLY via setup.sh's"
+			echo "             apply_cr or a direct patch: start.sh resizes the pool and routes"
+			echo "             CI but never applies CRs, so no start can deploy it."
+			echo "             Fix: re-run scripts/dogfood/setup.sh, or patch the CR directly:"
+			echo "               kubectl patch runnersets.v2alpha1.actions-gateway.com/ci \\"
+			echo "                 -n gag-dogfood --type=merge -p '{\"spec\":{\"sizing\":{...}}}'"
+		else
+			echo "             sizingProfileState=${ci_state} — spec.sizing IS deployed, but a"
+			echo "             template container is short of ${MIN_SAMPLES_FOR_DRIFT} samples (see the sampleCounts"
+			echo "             above for which one). Sampling does not wait on spec.sizing and the"
+			echo "             aggregate re-seeds from status.sizingRecommendation, so history is"
+			echo "             durable across stop/start and is never re-earned — this wants ~${MIN_SAMPLES_FOR_DRIFT}"
+			echo "             jobs of ordinary CI traffic per container, not a multi-day soak."
+		fi
 		echo "             The RC is not blocked on it, but the profile ships live-unvalidated."
-		echo "             Configure spec.sizing on the ci tenant well before the RC window so"
-		echo "             history accrues; see scripts/dogfood/setup.sh."
 	fi
 }
 

@@ -256,15 +256,22 @@ before it spends anything, not 25 minutes in.
    | Profile | Tenant | Behaviour |
    |---|---|---|
    | `NodeShare` | `gag-dogfood-e2e` | **Hard failure.** It needs no sample history, so it must report `sizingProfileState: Active` and derive the envelope's per-worker share. Anything else is a defect. |
-   | `Throughput` | `gag-dogfood` | **Reported, never fatal.** It needs ≥20 samples per template container, which accrues from the CI tenant's ordinary traffic over days — not from this gate. |
+   | `Throughput` | `gag-dogfood` | **Reported, never fatal.** It needs ≥20 samples per template container, supplied by the CI tenant's ordinary traffic — not by this gate's ~7-job matrix. |
    | `Binpack` | — | Not re-asserted; live-validated 2026-07-25. |
 
-   **Throughput has a pre-condition you cannot satisfy during the gate.** The
-   `ci` tenant must already be carrying ≥20 samples per container when the RC
-   runs, or the leg reports `NOT VALIDATED THIS RUN` and the profile ships
-   live-unvalidated. `scripts/dogfood/setup.sh` configures it, and
-   `status.sizingRecommendation` survives an AGC restart and a re-apply — so
-   deploy that config **well before the RC window**, not during it.
+   **When Throughput reports `NOT VALIDATED THIS RUN`, read the state before
+   reaching for the sample count** — the two non-`Active` states are different
+   problems, and the leg prints which one you have:
+
+   | `sizingProfileState` | What it means | Fix |
+   |---|---|---|
+   | *empty* | `spec.sizing` is not on the live RunnerSet — a deploy gap, not a sample gap. A CR edit reaches the cluster only through `setup.sh`'s `apply_cr` or a direct patch; `scripts/dogfood/start.sh` resizes the pool and routes CI but **never applies CRs**, so no start can deploy it. | Re-run `scripts/dogfood/setup.sh`, or `kubectl patch` `runnersets.v2alpha1.actions-gateway.com/ci` in `gag-dogfood`. |
+   | `AwaitingSamples` | The profile is deployed but a template container is below the threshold. Check the `sampleCounts` the leg prints for which one. | Let ordinary CI traffic run ~20 jobs per container. |
+
+   Sample history needs no advance planning: the sampler tracks every worker pod
+   regardless of `spec.sizing`, and the aggregate re-seeds from the persisted
+   `status.sizingRecommendation` — so samples accrue without the profile
+   configured and survive a stop/start rather than being re-earned.
 
 5. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh`
    (dogfood scales to 0 at rest).
