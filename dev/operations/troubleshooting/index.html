@@ -2284,6 +2284,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#agc-crashloopbackoff-or-not-acquiring-jobs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3286,6 +3297,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#agc-crashloopbackoff-or-not-acquiring-jobs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4030,6 +4052,7 @@
 <li><a href="#actionsgateway-reports-egressrulesstale">ActionsGateway Reports EgressRulesStale</a></li>
 <li><a href="#tenant-namespace-missing-the-managed-tenant-marker-label">Tenant Namespace Missing the Managed-Tenant Marker Label</a></li>
 <li><a href="#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete">ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)</a></li>
+<li><a href="#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers">Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers</a></li>
 <li><a href="#agc-crashloopbackoff-or-not-acquiring-jobs">AGC CrashLoopBackOff or Not Acquiring Jobs</a></li>
 <li><a href="#runnergroup-activesessions-exceeds-maxlisteners">RunnerGroup ActiveSessions Exceeds maxListeners</a></li>
 <li><a href="#runnergroup-stops-serving-jobs-with-stale-readytrue">RunnerGroup Stops Serving Jobs With Stale Ready=True</a></li>
@@ -4618,6 +4641,22 @@ finalizer's explicit deletes reach.</p>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>role,networkpolicy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
+<hr />
+<h2 id="tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers">Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers<a class="headerlink" href="#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> <code>kubectl delete namespace &lt;tenant&gt;</code> never completes. The namespace sits in
+<code>Terminating</code> with nothing left in it, and the remaining objects hold
+<code>actions-gateway.com/agentpool-cleanup</code>, <code>actions-gateway.github.com/agentpool-cleanup</code>,
+or <code>actions-gateway.github.com/gmc-cleanup</code>.</p>
+<p><strong>Cause.</strong> The teardown order was inverted. The AGC Deployments live <em>inside</em> the tenant
+namespace, so deleting the namespace (or an <code>ActionsGateway</code>, which cascades its AGC)
+before the <code>RunnerGroup</code>s and <code>RunnerSet</code>s removes the very controllers whose finalizers
+have to clear. Nothing will clear them afterwards — this is structural, not a slow
+reconcile you can wait out.</p>
+<p><strong>Fix.</strong> Delete in dependency order next time: the CRs first, then the gateways, then
+the namespace. The ordered commands and the manual finalizer-drop recovery (including
+what that recovery skips — the GitHub-side runner deregistration) are in
+<a href="../migration-v1-to-v2/#teardown-order-is-load-bearing-never-delete-the-namespace-first">migration-v1-to-v2.md § Teardown order is load-bearing</a>.
+The same order applies to any tenant teardown, migration or not.</p>
 <hr />
 <h2 id="agc-crashloopbackoff-or-not-acquiring-jobs">AGC CrashLoopBackOff or Not Acquiring Jobs<a class="headerlink" href="#agc-crashloopbackoff-or-not-acquiring-jobs" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> The AGC pod is restarting repeatedly, or it is running but <code>actions_gateway_active_sessions</code> is zero and <code>actions_gateway_jobs_acquired_total</code> is not incrementing even when jobs are queued.</p>

@@ -1601,6 +1601,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Step 3 — coexistence, validation, and rollback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-two-tenants-keep-separate-runners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two tenants keep separate runners
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1611,6 +1628,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Step 4 — decommission v1 (when ready)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#teardown-order-is-load-bearing-never-delete-the-namespace-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Teardown order is load-bearing: never delete the namespace first
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2514,6 +2548,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Step 3 — coexistence, validation, and rollback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-two-tenants-keep-separate-runners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two tenants keep separate runners
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2524,6 +2575,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Step 4 — decommission v1 (when ready)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#teardown-order-is-load-bearing-never-delete-the-namespace-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Teardown order is load-bearing: never delete the namespace first
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2846,15 +2914,62 @@ acquiring jobs exactly as before; the v2 gateway provisions its own AGC and runs
 own <code>RunnerSet</code>s. Validate the v2 path end to end (trigger a workflow that targets the
 v2 runner labels and confirm a worker pod is provisioned and egresses through the
 proxy) before removing v1.</p>
+<h3 id="the-two-tenants-keep-separate-runners">The two tenants keep separate runners<a class="headerlink" href="#the-two-tenants-keep-separate-runners" title="Permanent link">&para;</a></h3>
+<p>The tool keeps each tenant's name, so a namespace normally holds a <code>RunnerGroup</code> and a
+<code>RunnerSet</code> <strong>called the same thing</strong>. They are still two independent tenants, and each
+provisions its own pool of pre-registered runners:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>v1 <code>RunnerGroup</code> <code>web</code></th>
+<th>v2 <code>RunnerSet</code> <code>web</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent Secret</td>
+<td><code>agentpool-web-&lt;index&gt;</code></td>
+<td><code>agentpool-rs-web-&lt;index&gt;</code></td>
+</tr>
+<tr>
+<td>Secret label</td>
+<td><code>actions-gateway/runner-group=web</code></td>
+<td><code>actions-gateway.com/runner-set=web</code></td>
+</tr>
+<tr>
+<td>GitHub runner name</td>
+<td><code>web-&lt;index&gt;</code></td>
+<td><code>rs-web-&lt;index&gt;</code></td>
+</tr>
+</tbody>
+</table>
+<p>So during coexistence you will see <strong>two sets of runners</strong> registered with GitHub for
+one tenant — expected, and the reason both can run at once. Each agent Secret also
+carries an <code>ownerReference</code> to the <code>RunnerGroup</code> or <code>RunnerSet</code> it belongs to, so
+<code>kubectl -n team-a get secret agentpool-web-0 -o jsonpath='{.metadata.ownerReferences}'</code>
+answers "which tenant owns this?" without guessing from the name.</p>
+<p>Upgrading an install that already ran v2 <strong>moves</strong> its existing agent Secrets onto the
+<code>agentpool-rs-</code> names on the first reconcile, carrying each agent's GitHub registration
+with it. Nothing re-registers, and no Secret is left behind — but if you have scripts or
+dashboards that match <code>agentpool-&lt;set&gt;-</code> for a <code>RunnerSet</code>, update them to
+<code>agentpool-rs-&lt;set&gt;-</code>.</p>
 <p><strong>Rollback is "stay on v1."</strong> Nothing about the migration removes v1 capability, so if
 the v2 path misbehaves you simply keep using the v1 gateway and delete the v2 objects:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span>--all
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>--all
+<p>Order matters — the <code>RunnerSet</code>s go <strong>before</strong> the <code>ActionsGateway</code> that owns their AGC,
+because deleting the gateway first removes the controller whose finalizer they are
+waiting on (see <a href="#teardown-order-is-load-bearing-never-delete-the-namespace-first">Teardown order is load-bearing</a>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span>--all
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>egressproxies.actions-gateway.com<span class="w"> </span>--all
 <a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnertemplates.actions-gateway.com<span class="w"> </span>--all
 <a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Cluster-scoped, so NOT covered by the -n team-a deletes above:</span>
 <a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>clusterrunnertemplates<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/migrated-from-namespace<span class="o">=</span>team-a
 </code></pre></div>
+<p>The v1 tenant is unaffected by any of this: its agent Secrets and GitHub runner
+registrations are derived separately from the v2 set's
+(<a href="#the-two-tenants-keep-separate-runners">detail</a>), so removing the v2 objects leaves
+the <code>RunnerGroup</code> exactly as it was.</p>
 <p>The additive namespace labels are harmless to leave in place (the v1 markers are
 untouched), but you may remove the v2 keys if you want a clean rollback.</p>
 <h2 id="step-4--decommission-v1-when-ready">Step 4 — decommission v1 (when ready)<a class="headerlink" href="#step-4--decommission-v1-when-ready" title="Permanent link">&para;</a></h2>
@@ -2865,6 +2980,38 @@ normally — nothing is stranded:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>--all
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># Confirm the v1 RunnerGroups and the singleton AGC/proxy children are gone.</span>
 </code></pre></div>
+<h3 id="teardown-order-is-load-bearing-never-delete-the-namespace-first">Teardown order is load-bearing: never delete the namespace first<a class="headerlink" href="#teardown-order-is-load-bearing-never-delete-the-namespace-first" title="Permanent link">&para;</a></h3>
+<p>Whether you are rolling back, decommissioning v1, or retiring the tenant outright,
+<strong>delete the custom resources while their controllers are still running, and delete the
+namespace last.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># 1. The CRs first — their finalizers run while the AGC is still up.</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnergroups.actions-gateway.github.com<span class="w"> </span>--all
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># 2. Then the gateways, which cascade their AGC, proxy, and RBAC children.</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>--all
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># 3. Only now, if you are retiring the tenant, the namespace.</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>namespace<span class="w"> </span>team-a
+</code></pre></div>
+<p>Deleting the namespace first <strong>deadlocks</strong>, and it is structural rather than a timing
+race: the AGC Deployments live <em>inside</em> the tenant namespace, so namespace deletion
+removes the very controllers whose finalizers must clear. The namespace then sits in
+<code>Terminating</code> indefinitely on</p>
+<ul>
+<li><code>actions-gateway.com/agentpool-cleanup</code> (v2 <code>RunnerSet</code>),</li>
+<li><code>actions-gateway.github.com/agentpool-cleanup</code> (v1 <code>RunnerGroup</code>),</li>
+<li><code>actions-gateway.github.com/gmc-cleanup</code> (v1 <code>ActionsGateway</code>).</li>
+</ul>
+<p>Nothing will clear them on its own. Recovery, once you have confirmed the namespace is
+otherwise empty and no cluster-scoped object depends on it, is to drop the finalizers by
+hand — which <strong>skips the GitHub-side deregistration those finalizers exist to perform</strong>,
+so the tenant's runner records are left registered and must be removed from the GitHub
+runners page afterwards:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>patch<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span>--type<span class="w"> </span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;metadata&quot;:{&quot;finalizers&quot;:[]}}&#39;</span>
+</code></pre></div>
+<p>Repeat per stuck kind. Prefer the ordered teardown above; this is a recovery path, not
+an alternative.</p>
 <p>If you later retire the tenant entirely, remember that any <code>ClusterRunnerTemplate</code> the
 migration emitted is cluster-scoped and survives deleting the namespace — reclaim it by
 its provenance label
@@ -2907,7 +3054,7 @@ window keeps both spellings working.</p>
   (the match is exact — the legacy <code>"true"</code> is <em>not</em> a grant here). Apply the v2 label
   the warning names, as a platform administrator:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.com/privileged-profile<span class="o">=</span>allowed
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.com/privileged-profile<span class="o">=</span>allowed
 </code></pre></div>
 <p>The warning fires only when the grant is genuinely absent from both domains: a
   namespace holding it on either one is recognized, and the tool carries it forward
