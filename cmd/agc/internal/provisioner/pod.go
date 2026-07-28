@@ -97,6 +97,21 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 
 	workerImage := p.resolveWorkerImage(spec)
 
+	// Stamp the worker lifetime cap as activeDeadlineSeconds (Q438). This is the
+	// only deadline that survives the AGC being down: a Running worker whose job
+	// ended while the AGC was unavailable is indistinguishable in cluster state
+	// from one running a long job, so nothing observed later can reclaim it — but
+	// the kubelet enforces activeDeadlineSeconds with no controller involved.
+	//
+	// An explicit value on the tenant's podTemplate wins and is never overwritten,
+	// the same gap-fill-don't-override rule the worker image follows below.
+	if spec.MaxWorkerLifetime > 0 && template.Spec.ActiveDeadlineSeconds == nil {
+		deadline := int64(spec.MaxWorkerLifetime.Seconds())
+		if deadline > 0 {
+			template.Spec.ActiveDeadlineSeconds = &deadline
+		}
+	}
+
 	// Ensure a container named "runner" exists.
 	runnerIdx := -1
 	for i, c := range template.Spec.Containers {

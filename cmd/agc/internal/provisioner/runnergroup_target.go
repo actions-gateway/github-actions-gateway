@@ -111,6 +111,7 @@ func (t *runnerGroupTarget) Resolve(ctx context.Context) (*ResolvedSpec, error) 
 		MaxQuotaRetries:    p.MaxQuotaRetries,
 		QuotaRetryDelay:    p.QuotaRetryDelay,
 		CompletedPodTTL:    CompletedPodTTLOrDefault(rg.Spec.CompletedPodTTL),
+		MaxWorkerLifetime:  MaxWorkerLifetimeOrDefault(rg.Spec.MaxWorkerLifetime),
 		HTTPProxy:          p.HTTPProxy,
 		HTTPSProxy:         p.HTTPSProxy,
 		NoProxy:            p.NoProxy,

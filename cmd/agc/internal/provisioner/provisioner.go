@@ -184,6 +184,27 @@ const (
 	// raise the field on clusters where legitimate scheduling is slow (e.g.
 	// autoscaled GPU node pools).
 	DefaultPendingPodDeadline = 10 * time.Minute
+
+	// DefaultMaxWorkerLifetime is the effective worker-pod lifetime cap when
+	// spec.maxWorkerLifetime is omitted — the provision-time deadline that bounds a
+	// worker orphaned while the AGC was down (Q438). It is applied as the pod's
+	// activeDeadlineSeconds, so the kubelet enforces it with no live AGC.
+	//
+	// Twelve hours is 2× GitHub's own 360-minute default job timeout: a job this
+	// kills has explicitly declared a `timeout-minutes` more than twice the default
+	// it would otherwise have received. That anchor matters because the job's real
+	// timeout never reaches the AGC — neither the scale-set JobAssigned message nor
+	// (on the tier that has one) the classic acquire response carries it, so a
+	// derived deadline is not available and an invented one has to justify itself.
+	//
+	// It also strictly tightens a bound GitHub already imposes: a self-hosted job is
+	// terminated at 5 days regardless. Going lower was considered and rejected —
+	// between 8 and 12 hours the affected job population is effectively identical
+	// (both are far past the 6-hour default), so the extra aggression buys little
+	// while making a legitimate long job likelier to die on a default nobody chose.
+	// Full reasoning: design/03-api-contracts.md (maxWorkerLifetime) and the
+	// operator view in operations/troubleshooting.md.
+	DefaultMaxWorkerLifetime = 12 * time.Hour
 )
 
 // EffectiveCompletedPodTTL returns the group's terminal-pod retention,
@@ -196,6 +217,13 @@ func EffectiveCompletedPodTTL(rg *v1alpha1.RunnerGroup) time.Duration {
 // applying DefaultPendingPodDeadline when the field is omitted.
 func EffectivePendingPodDeadline(rg *v1alpha1.RunnerGroup) time.Duration {
 	return PendingPodDeadlineOrDefault(rg.Spec.PendingPodDeadline)
+}
+
+// EffectiveMaxWorkerLifetime returns the group's worker-pod lifetime cap,
+// applying DefaultMaxWorkerLifetime when the field is omitted. Zero means the
+// operator disabled the cap.
+func EffectiveMaxWorkerLifetime(rg *v1alpha1.RunnerGroup) time.Duration {
+	return MaxWorkerLifetimeOrDefault(rg.Spec.MaxWorkerLifetime)
 }
 
 // Provisioner creates and manages worker pods for acquired GitHub Actions jobs.

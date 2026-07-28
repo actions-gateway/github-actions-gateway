@@ -225,6 +225,7 @@ Differences and quirks an ARC operator should know:
 | **Gateways per namespace** | many scale sets per namespace | many `RunnerSet`s, and many gateways, per namespace | No restructuring needed. (GAG's deprecated v1 API had a one-gateway limit; v2 does not.) |
 | **Quota / RBAC / NetworkPolicy** | hand-assembled per tenant | reconciled from the CRs | Remove your bespoke policy manifests after cutover. |
 | **Worker-pod debugging** | runner pod lingers per HRA config | finished pod kept for `completedPodTTL` (default `5m`), then deleted | Raise `completedPodTTL` if you need a longer `kubectl logs` window. |
+| **Maximum worker lifetime** | none — a wedged runner pod runs until deleted by hand | `maxWorkerLifetime` (default `12h`) as the pod's `activeDeadlineSeconds`, enforced by the kubelet | **Check this before cutover if any job runs longer than 12 hours.** ARC has no equivalent cap, so a long job that worked there is killed here unless you raise the field. GitHub's own default `timeout-minutes` is 360 (6h), so this affects only jobs that explicitly opted past twice that. |
 | **Cluster version** | ARC supports older clusters | **Kubernetes ≥ 1.31** for v2 | The AGC selects its `RunnerSet`s with a server-side CRD field selector that is alpha-off on 1.30. Confirm before you start. |
 
 ### Quotas and scheduling

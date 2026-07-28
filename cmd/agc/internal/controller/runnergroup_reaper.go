@@ -19,7 +19,18 @@ const (
 	// long after its job went terminal at GitHub — a worker that never received its
 	// job, or one held open past the runner's exit (Q420).
 	reapReasonOrphanedRunning = "orphaned_running"
+	// reapReasonLifetimeExceeded labels a pod deleted after the kubelet killed it
+	// for exceeding spec.maxWorkerLifetime (the pod's activeDeadlineSeconds). It is
+	// split out from completed_ttl so an operator debugging a killed long job sees
+	// the lifetime cap as the cause rather than a mystery termination (Q438).
+	reapReasonLifetimeExceeded = "lifetime_exceeded"
 )
+
+// podReasonDeadlineExceeded is the Pod.Status.Reason the kubelet sets when it kills
+// a pod for exceeding activeDeadlineSeconds. It is disjoint from the eviction path's
+// "Evicted" (see eviction_scaleset.go), so a lifetime kill can never be mistaken for
+// a node-pressure eviction and can never trigger a spurious rerun-failed-jobs.
+const podReasonDeadlineExceeded = "DeadlineExceeded"
 
 // reapWorkerPods deletes worker pods the RunnerGroup no longer needs:
 //
@@ -61,6 +72,16 @@ func (r *RunnerGroupReconciler) reapWorkerPods(ctx context.Context, log *slog.Lo
 			r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodOrphanedRunning", "ReapWorkerPods",
 				"worker pod %s was still Running %s after its job completed and has been deleted; "+
 					"the runner never received its job, or a container in the pod outlived it", podName, grace)
+		},
+		func(podName string) {
+			// Operator-visible: say plainly that the lifetime cap killed the pod and
+			// name the field to raise, so a legitimately long job that hit it is a
+			// one-line diagnosis rather than an unexplained failure.
+			r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodLifetimeExceeded", "ReapWorkerPods",
+				"worker pod %s was killed by the kubelet after exceeding the %s worker lifetime "+
+					"(spec.maxWorkerLifetime) and has been deleted; if the job was legitimately "+
+					"this long, raise spec.maxWorkerLifetime on this RunnerGroup or set it to 0s "+
+					"to disable the cap", podName, provisioner.EffectiveMaxWorkerLifetime(rg))
 		})
 }
 

@@ -268,6 +268,7 @@ func (t *runnerSetTarget) Resolve(ctx context.Context) (*provisioner.ResolvedSpe
 		MaxQuotaRetries:    t.prov.MaxQuotaRetries,
 		QuotaRetryDelay:    t.prov.QuotaRetryDelay,
 		CompletedPodTTL:    provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL),
+		MaxWorkerLifetime:  provisioner.MaxWorkerLifetimeOrDefault(rs.Spec.MaxWorkerLifetime),
 		SecurityProfile:    t.prov.SecurityProfile,
 	}
 	// Proxied: wire the worker's egress through the resolved EgressProxy. Direct

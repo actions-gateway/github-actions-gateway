@@ -172,7 +172,8 @@ One residual is worth knowing about but does not gate the removal, because class
 shares it: a worker pod force-deleted with no grace period (or lost with its node)
 leaves no `Failed`/`Evicted` object and no chance for the runner to report, so neither
 tier recovers it. Q435 measured the adjacent orphan-reclaim question and
-[Q438](../STATUS.md#Q438) carries its residual.
+[Q438](archive/q438-worker-lifetime-deadline.md) closed its residual with a
+provision-time worker lifetime cap.
 
 Any further capability found to be classic-only before the cut joins this table and
 gates the same removal.

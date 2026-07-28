@@ -834,6 +834,16 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 			r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodOrphanedRunning", "ReapWorkerPods",
 				"worker pod %s was still Running %s after its job completed and has been deleted; "+
 					"the runner never received its job, or a container in the pod outlived it", podName, grace)
+		},
+		func(podName string) {
+			// Operator-visible: name the cause and the field to raise, so a
+			// legitimately long job killed by the cap diagnoses itself (Q438).
+			r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodLifetimeExceeded", "ReapWorkerPods",
+				"worker pod %s was killed by the kubelet after exceeding the %s worker lifetime "+
+					"(spec.maxWorkerLifetime) and has been deleted; if the job was legitimately "+
+					"this long, raise spec.maxWorkerLifetime on this RunnerSet or set it to 0s "+
+					"to disable the cap", podName,
+				provisioner.MaxWorkerLifetimeOrDefault(rs.Spec.MaxWorkerLifetime))
 		})
 }
 

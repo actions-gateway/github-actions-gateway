@@ -132,6 +132,11 @@ func (in *RunnerGroupSpec) DeepCopyInto(out *RunnerGroupSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.MaxWorkerLifetime != nil {
+		in, out := &in.MaxWorkerLifetime, &out.MaxWorkerLifetime
+		*out = new(v1.Duration)
+		**out = **in
+	}
 	if in.ScaleUp != nil {
 		in, out := &in.ScaleUp, &out.ScaleUp
 		*out = new(ScaleUpRateLimit)

@@ -641,6 +641,38 @@ type RunnerGroupSpec struct {
     //
     // +optional
     PendingPodDeadline *metav1.Duration `json:"pendingPodDeadline,omitempty"`
+
+    // MaxWorkerLifetime is the maximum time a worker pod may be active on its
+    // node, applied as the pod's activeDeadlineSeconds. It is the backstop for
+    // a worker whose job ended while the AGC was down: such a pod is
+    // indistinguishable in cluster state from one running a long job, so no
+    // AGC-side reconciliation can reclaim it and only a deadline stamped when
+    // the pod is created bounds it. Because the KUBELET enforces
+    // activeDeadlineSeconds, the cap holds even while the AGC is unavailable —
+    // which is exactly the failure it exists for, and why a reaper-side
+    // deadline would not do.
+    //
+    // Applies to BOTH acquisition tiers: the cap is stamped in buildPod, which
+    // classic provision() and scale-set ProvisionScaleSetWorker share.
+    //
+    // A pod killed this way lands in Failed with reason DeadlineExceeded, is
+    // reaped under reason "lifetime_exceeded", and emits a
+    // WorkerPodLifetimeExceeded Warning Event. Jobs declaring a
+    // `timeout-minutes` above the cap are killed mid-run, so raise it for a
+    // group that legitimately runs longer.
+    //
+    // The default is 12h — 2x GitHub's own 360-minute default job timeout. The
+    // job's real timeout is NOT available to derive from: no field on the
+    // scale-set JobAssigned message carries it (measured, see
+    // plan/archive/q438-worker-lifetime-deadline.md), so the cap is anchored to the
+    // default every job gets rather than invented.
+    //
+    // An activeDeadlineSeconds set explicitly on spec.podTemplate takes
+    // precedence and is never overwritten. Set to "0s" to disable the cap.
+    // Negative values are rejected at admission. Defaults to "12h" when omitted.
+    //
+    // +optional
+    MaxWorkerLifetime *metav1.Duration `json:"maxWorkerLifetime,omitempty"`
 }
 
 // WorkerPodTemplate is a corev1.PodTemplateSpec that defines the pod configuration
