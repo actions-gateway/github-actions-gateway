@@ -1472,7 +1472,48 @@ fail-closed rather than silently off. The GMC surfaces this as provisioning
 errors on affected gateways; recreate the ConfigMap (or `helm upgrade`) to
 recover. Deleting the ConfigMap does not affect running workloads.
 
+#### Param resolution can break cluster-wide (Q444, open)
+
+There is an open defect in which the apiserver stops resolving this policy's
+parameter ConfigMap. Writes are denied with
+
+```text
+denied request: failed to configure binding: no params found for policy binding
+with `Deny` parameterNotFoundAction
+```
+
+while the ConfigMap plainly exists at the referenced name and namespace. Because
+`parameterNotFoundAction: Deny` resolves parameters **before** any per-object
+matching, this denies *every* matched write — `runnergroups`, `runnersets`,
+`runnertemplates`, class-naming or not — cluster-wide. The GMC surfaces it as
+provisioning failures on every gateway.
+
+Observed on Kubernetes 1.35.5 and 1.36.1, most often after a `helm uninstall`
+followed by a reinstall, though it has also been seen on a fresh install against
+an apiserver that had already entered the broken state. The trigger is not yet
+established; recreating the ConfigMap does not help. Tracking and evidence:
+[`q444-vap-param-resolution.md`](../plan/q444-vap-param-resolution.md).
+
+**Do not confuse it with the benign window.** A reinstall removes the parameter
+ConfigMap and recreates it, and for a second or two in between the guard is
+correctly failing closed with the same message. That clears on its own; the
+defect does not.
+
+**If you hit it**, two options:
+
+- **Restart kube-apiserver.** The only known fix — it clears in seconds with no
+  object changes. Available on self-managed control planes; on EKS/GKE/AKS you
+  cannot do this directly, and a control-plane version upgrade is usually the
+  only lever that recycles the process.
+- **Turn the guard off to restore writes** (`helm upgrade --set
+  admissionPolicy.enabled=false`, or delete the binding by hand). Denials stop
+  immediately because nothing evaluates the policy any more. You lose the
+  defense-in-depth backstop until the apiserver restarts and you re-enable it, so
+  treat it as an incident mitigation and make sure the webhook allowlist is still
+  in force in the meantime.
+
 ---
+
 
 ## License attribution in images
 

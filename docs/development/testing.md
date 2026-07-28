@@ -528,6 +528,20 @@ For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node
 
 **Tier C.** Set `GITHUB_E2E_APP_ID`, `GITHUB_E2E_INSTALLATION_ID`, `GITHUB_E2E_PRIVATE_KEY` (a PEM path or the PEM body), `GITHUB_E2E_ORG`, and `GITHUB_E2E_REPO` in the environment, then run `make e2e` (Tier C specs skip themselves at runtime when any variable is missing). The GitHub App key is in the macOS keychain; see the GitHub App reference memory for the retrieval command.
 
+### The chart uninstall/reinstall reproducer (Q444, open)
+
+Every tier above starts from a cluster that has never had the chart installed, so nothing exercises the day-two operation an operator actually performs: `helm uninstall` followed by a reinstall. That gap hid **Q444** — an apiserver that stops resolving the PriorityClass guard's parameter ConfigMap and denies **every** `runnergroups`/`runnersets`/`runnertemplates` write cluster-wide.
+
+[`scripts/chart-reinstall-check.sh`](../../scripts/chart-reinstall-check.sh) reproduces it. It runs against a cluster that already has the release installed, captures the release's own values, cycles `helm uninstall` -> `helm install`, and probes admission — printing a diagnostic dump (policy, binding, `paramRef` target, the ConfigMap's existence and UID, namespace phase) that separates a broken manifest from a broken apiserver.
+
+```bash
+make chart-reinstall-check KIND_CLUSTER=actions-gateway-e2e
+```
+
+It is **deliberately not wired into CI** while Q444 is open — the defect is unfixed, so it would pin every run red. Wiring it into `e2e-reusable.yml` after the Ginkgo run (`E2E_SKIP_TEARDOWN` leaves the release up, and mutating it is only safe once the suite is done) is part of closing Q444 out.
+
+It does not fire on every run: a clean pass means the defect did not trigger, not that it is fixed. Evidence and open questions: [`q444-vap-param-resolution.md`](../plan/q444-vap-param-resolution.md).
+
 ## CI workflows and scripts
 
 CI must use the same commands as [Running tests](#running-tests) above — per-module invocations or the explicit multi-module patterns `scripts/go-test.sh` builds; never `go test ./...` from the repo root, which does not work with the Go workspace layout.
@@ -655,5 +669,7 @@ It first runs the chart CRD/RBAC drift gates (`make chart-crds-check` + `make ch
 
 - **yamllint** lints the `controller-gen` YAML and the chart metadata against [`.yamllint.yaml`](../../.yamllint.yaml). The config targets real defects (tabs, trailing whitespace, duplicate keys, a missing final newline, truthy typos) and relaxes the purely cosmetic rules that would only ever fire on machine-generated style — `line-length` (CRD `description` lines are verbatim Go doc comments well over 200 chars) and `indentation` (the generated YAML mixes block-sequence indent styles). Helm templates are excluded — they embed `{{ ... }}` and are not parseable YAML; their rendered output is validated below instead.
 - **kubeconform** schema-validates against the cluster API at the chart's `kubeVersion` floor (1.30.0 — validating the oldest supported version catches a field that does not exist there): the controller-gen manifests + the two ValidatingAdmissionPolicies under `cmd/*/config/` (the codegen + envtest substrate; there is no longer a kustomize overlay to render), and `helm template` output in digest-pinned, dev/test opt-out (`allowFloatingImageTags=true`), and all-optional-features form, plus `helm lint` on the chart and a fail-closed check that a render with any of the four image digests (`gmc`/`agc`/`proxy`/`wrapper`) empty is **rejected** — each image is tested independently with the other three pinned (all four required — Q96/Q307 secure-by-default; the check fails if any rejection ever stops happening). `-ignore-missing-schemas` skips only third-party/custom kinds whose schema is not in the upstream Kubernetes set (cert-manager `Certificate`/`Issuer`, the Prometheus Operator `ServiceMonitor`, and our own `ActionsGateway`/`RunnerGroup` CRs); the `CustomResourceDefinition`s that define them **are** validated, since that is a native `apiextensions` kind.
+
+It also asserts that **no `ValidatingAdmissionPolicyBinding` carries `helm.sh/resource-policy: keep`**. A binding is what makes a policy enforce, so retaining one across `helm uninstall` would leave the guard active after the release is gone and make `admissionPolicy.enabled=false` a silent no-op. There is deliberately no matching assertion on the *policies*: retaining the `paramKind`-bearing policy was the first attempted fix for Q444 and it did not work, so asserting it here would re-freeze a wrong answer.
 
 The tool versions are pinned in the workflow (`KUBECONFORM_VERSION`, `YAMLLINT_VERSION`); bump them deliberately, since a new kubeconform can change validation behaviour. CI persists kubeconform's downloaded JSON schemas in an `actions/cache` keyed on the validated Kubernetes version so runs do not re-fetch the schema set from GitHub.

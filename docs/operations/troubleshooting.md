@@ -11,6 +11,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [How to Validate a Fresh Deployment](#how-to-validate-a-fresh-deployment)
 - [Helm Render Fails: gmc.image Must Be Pinned by Digest](#helm-render-fails-gmcimage-must-be-pinned-by-digest)
 - [GMC Pods Rejected: insufficient quota to match these scopes (PriorityClass)](#gmc-pods-rejected-insufficient-quota-to-match-these-scopes-priorityclass)
+- [Every RunnerGroup / RunnerSet Write Denied: no params found for policy binding](#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding)
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
 - [ActionsGateway Reports RunnerGroupsDegraded](#actionsgateway-reports-runnergroupsdegraded)
 - [Runners Never Appear Online — AGC `unknown authority` Through the Egress Proxy](#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy)
@@ -176,6 +177,72 @@ kubectl describe replicaset -n gmc-system -l app.kubernetes.io/name=gmc
   If it is missing, you likely installed with `--set systemCriticalPriorityQuota.enabled=false`. Re-run the install/upgrade without that override (it defaults to `true`). See [install.md § GKE and other restricted-PriorityClass clusters](install.md#gke-and-other-restricted-priorityclass-clusters).
 - **Do not** work around the rejection by clearing `priorityClassName` — that removes the GMC's eviction protection (a security regression). Keep `system-cluster-critical` and let the quota permit it.
 - **If you manage the quota out-of-band** (e.g. a cluster-wide policy), ensure it exists in the install namespace and its `scopeSelector` matches the system-critical classes before installing.
+
+---
+
+## Every `RunnerGroup` / `RunnerSet` Write Denied: `no params found for policy binding`
+
+**Symptoms.** After a `helm uninstall` followed by a reinstall, every write to a
+`runnergroups`, `runnersets`, or `runnertemplates` object is rejected — including
+ones that name no `priorityClassName` at all — while the parameter ConfigMap
+plainly exists at the name and namespace the binding references:
+
+```
+kubectl apply -f runnergroup.yaml
+# Error from server: ... ValidatingAdmissionPolicy 'gmc-priorityclass-allowlist-guard'
+# with binding 'gmc-priorityclass-allowlist-guard-binding' denied request:
+# failed to configure binding: no params found for policy binding with `Deny`
+# parameterNotFoundAction
+
+kubectl get configmap -n gmc-system gmc-priorityclass-allowlist   # it is right there
+```
+
+The GMC surfaces it as provisioning failures on every gateway.
+
+**First, rule out the benign case.** The same message appears for a second or two
+during any reinstall: `helm uninstall` removes the parameter ConfigMap and the
+reinstall recreates it, and the guard correctly fails closed until the apiserver
+observes the new one. That clears on its own. Only a denial that persists past a
+few seconds is the defect below.
+
+**Cause: not yet established (Q444, open).** What is known:
+
+- The broken state belongs to the **kube-apiserver process**, not to any object.
+  A restart clears it in seconds with no object changes at all.
+- Once an apiserver is in this state, ConfigMaps created afterwards stay
+  invisible to parameter resolution — so even a *fresh* install fails, with the
+  binding pointing at a ConfigMap that demonstrably exists. Recreating the
+  ConfigMap does not help.
+- It shows up most often after a `helm uninstall` + reinstall, but that cycle is
+  not required.
+
+Observed on Kubernetes 1.35.5 and 1.36.1. Evidence and open questions:
+[`q444-vap-param-resolution.md`](../plan/q444-vap-param-resolution.md).
+
+**Resolution.**
+
+- **Restore writes immediately** by removing the binding, which is what evaluates
+  the policy:
+
+  ```sh
+  helm upgrade gag charts/actions-gateway --namespace gmc-system --reuse-values \
+    --set admissionPolicy.enabled=false
+  ```
+
+  Denials stop at once. This also disables the PriorityClass backstop, so treat it
+  as mitigation, not a fix — the GMC webhook allowlist still gates the
+  tenant-facing CRs in the meantime.
+- **Fix it properly** by restarting kube-apiserver — the only known recovery.
+  Straightforward on a self-managed control plane; on EKS/GKE/AKS you cannot
+  restart it directly, and a control-plane version upgrade is usually the only
+  lever that recycles the process. Re-enable `admissionPolicy.enabled`
+  afterwards.
+
+There is **no chart-side mitigation today**, and no way to predict which
+apiservers will hit it. If you are running on a managed control plane and cannot
+tolerate the risk, install with `admissionPolicy.enabled=false` and rely on the
+GMC webhook allowlist, which gates the tenant-facing CRs (the policy is a
+defense-in-depth backstop for direct `runnergroups` RBAC).
 
 ---
 

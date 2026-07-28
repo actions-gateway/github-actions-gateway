@@ -17,6 +17,7 @@ The five-milestone delivery from
 
 | Plan | Scope | Status |
 |---|---|---|
+| [q444-vap-param-resolution.md](q444-vap-param-resolution.md) | Q444: VAP param resolution breaks cluster-wide; evidence, ruled-out causes, open questions | 🔲 Open — mechanism not established |
 | [milestone-1.md](milestone-1.md) | Wire-protocol probe; broker + githubapp packages | ✅ Done |
 | [milestone-2.md](milestone-2.md) | AGC controller, reconciler, agent pool, token manager | ✅ Done — full session lifecycle exercised end-to-end by M3's real-GitHub dispatch e2e; goleak coverage landed |
 | [milestone-3.md](milestone-3.md) | Worker pod, Named Pipe handoff, pod provisioner, eviction retry | ✅ Done — Investigation A (Named Pipe) complete; Q6 Tier-C real-GitHub dispatch validated 2026-05-30 |

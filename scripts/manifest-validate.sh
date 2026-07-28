@@ -179,4 +179,54 @@ if ! awk -v want="$psa_sa_name" '/^kind:/{k=$2} k=="ServiceAccount" && $1=="name
 fi
 echo "OK: admission-policy matchConditions bind to the rendered GMC ServiceAccount ($psa_sa_ref)"
 
+echo "==> helm template: no ValidatingAdmissionPolicyBinding survives uninstall"
+# A binding is what makes a policy enforce. Retaining one across `helm uninstall`
+# would leave the guard active after the release is gone, and would make
+# admissionPolicy.enabled=false a silent no-op — the operator turns the guard off
+# and it keeps denying. So bindings must never carry helm.sh/resource-policy: keep.
+#
+# There is deliberately NO matching assertion on the policies. Retaining the
+# paramKind-bearing policy was the first attempted fix for Q444 and it did not
+# work (reverted in 70b4b351); asserting it here would re-freeze a wrong answer.
+# See docs/plan/q444-vap-param-resolution.md.
+# Reuses $psa_render — retention annotations do not vary with --namespace.
+# Line-oriented, not a multi-character RS: BSD awk (the macOS default) supports
+# only a single-character record separator, so `RS = "\n---\n"` silently never
+# splits there and every document folds into one record.
+policy_retention="$(awk '
+	function flush() {
+		if (kind != "") { printf "%s\t%s\t%d\n", kind, name, keep }
+		kind = ""; name = ""; keep = 0
+	}
+	/^---[[:space:]]*$/ { flush(); next }
+	# Skip YAML comments: the templates explain this very annotation in prose, and
+	# a comment mentioning it must not read as the annotation being set.
+	/^[[:space:]]*#/ { next }
+	/^kind: / { kind = substr($0, 7) }
+	name == "" && /^  name: / { name = substr($0, 9) }
+	/^[[:space:]]+helm\.sh\/resource-policy:[[:space:]]*keep[[:space:]]*$/ { keep = 1 }
+	END { flush() }
+' <<<"$psa_render")"
+
+retention_violations=0
+while IFS=$'\t' read -r kind name keep; do
+	[[ -n "$kind" ]] || continue
+	if [[ "$kind" == "ValidatingAdmissionPolicyBinding" && "$keep" == 1 ]]; then
+		echo "ERROR: ValidatingAdmissionPolicyBinding '$name' carries helm.sh/resource-policy: keep." >&2
+		echo "       Bindings are what make a policy enforce; retaining one leaves the guard active after" >&2
+		echo "       uninstall and makes admissionPolicy.enabled=false a silent no-op." >&2
+		retention_violations=$((retention_violations + 1))
+	fi
+done <<<"$policy_retention"
+
+if ((retention_violations > 0)); then
+	exit 1
+fi
+if ! grep -q $'^ValidatingAdmissionPolicyBinding\t' <<<"$policy_retention"; then
+	echo "ERROR: the render contains no ValidatingAdmissionPolicyBinding — this check is no longer" >&2
+	echo "       exercising anything; update it alongside whatever replaced the bindings." >&2
+	exit 1
+fi
+echo "OK: no admission-policy binding survives uninstall"
+
 echo "OK: install artifact validates"

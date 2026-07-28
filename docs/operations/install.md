@@ -477,6 +477,14 @@ kubectl delete crd actionsgateways.actions-gateway.github.com \
                    runnergroups.actions-gateway.github.com
 ```
 
+The `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy` is removed by
+`helm uninstall` along with its binding and parameter ConfigMap. Be aware of
+**Q444** before reinstalling: an apiserver can end up unable to resolve this
+policy's parameters, denying **every** `runnergroups` / `runnersets` /
+`runnertemplates` write cluster-wide even though the ConfigMap is present. The
+only known recovery is a kube-apiserver restart. Symptoms and mitigation:
+[troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
+
 The install namespace (`gmc-system`) is left in place if you created it with
 `--create-namespace`; remove it with `kubectl delete namespace gmc-system` once
 empty.
