@@ -104,8 +104,8 @@ func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server
 		AgentKeyType:    agentpool.KeyTypeEd25519,
 		Provisioner:     p,
 		ScaleSetMetrics: scaleSetTestMetrics,
-		// The uncached reader the capacity gate's AutoscalerVerdict mode reads pod
-		// Events through (Q406), exactly as main.go wires it.
+		// The uncached reader the capacity gate reads pod Events through on a cluster
+		// that can grow (Q406, Q470), exactly as main.go wires it.
 		EventReader: mgr.GetAPIReader(),
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:        brokerStub.URL,

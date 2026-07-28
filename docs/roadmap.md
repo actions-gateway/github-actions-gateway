@@ -39,12 +39,11 @@ tagged chart. Check the release notes for the exact image digests to pin.
   `capacityGate.mode` so the gateway stops taking on jobs while the cluster cannot
   place its worker shape — a drained pool, a changed taint, spot capacity gone.
   Jobs stay queued at GitHub instead of being claimed and cancelled. It bounds the
-  *rate* of wasted claims rather than eliminating the first one. Two modes, because
-  an unschedulable pod means opposite things depending on the cluster:
-  `SchedulerVerdict` for a cluster that cannot grow, and `AutoscalerVerdict` for one
-  that can — the latter gates only when the cluster autoscaler (or Karpenter) has
-  itself recorded that it will not add a node, which carries no such ambiguity. Off
-  by default.
+  *rate* of wasted claims rather than eliminating the first one. The tenant turns it
+  on; the platform states once, on the gateway, whether the cluster has a node
+  autoscaler — because an unschedulable pod means opposite things depending on the
+  answer, and where a node may still arrive the gate waits for the autoscaler (or
+  Karpenter) to say it will not add one. Off by default.
 - **Priority tiers per runner group.** Reserve a guaranteed floor of slots for
   expensive runner types so cheap CPU jobs can't starve critical GPU work.
 - **Worker scale-up rate limiting (opt-in).** An optional per-runner-group token

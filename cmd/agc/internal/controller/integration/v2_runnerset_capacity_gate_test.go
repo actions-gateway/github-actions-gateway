@@ -20,8 +20,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Q405 phase 1 — the capacity gate's SchedulerVerdict mode, proven against a real
-// apiserver on BOTH acquisition tiers.
+// The capacity gate against a real apiserver, on BOTH acquisition tiers and across
+// both cluster facts (Q405, Q406, Q470).
+//
+// The gate takes two inputs from two parties: a tenant's spec.capacityGate.mode on the
+// RunnerSet, and the platform operator's spec.clusterCapacity.nodeAutoscaling on the
+// ActionsGateway. Which signal may be trusted follows from the second, so these tests
+// vary the GATEWAY to reach the two signal paths — a set has no say in it, which is the
+// property Q470 introduced and TestCapacityGate_TheDangerousCombinationIsUnrepresentable
+// pins at the unit level.
 //
 // The unit tests cover the rung's arithmetic and every fail-open path. What only
 // envtest can show is the loop closing: a real Pod carrying a real
@@ -75,24 +82,28 @@ func recordPodEvent(t *testing.T, pod *corev1.Pod, name, eventType, reason, comp
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), e) })
 }
 
-// TestV2_RunnerSet_CapacityGate_AutoscalerVerdictDiscriminatesByReporter is Q406, and
-// it is one test rather than two on purpose: both halves run against the same set, the
-// same reconcile loop, and the same PodScheduled=False/Unschedulable verdict, so the
-// ONLY difference between the pod that closes the gate and the pod that does not is
-// who reported the event.
+// TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter is Q406, and it is
+// one test rather than two on purpose: both halves run against the same set, the same
+// reconcile loop, and the same PodScheduled=False/Unschedulable verdict, so the ONLY
+// difference between the pod that closes the gate and the pod that does not is who
+// reported the event.
 //
-// That is the property the mode rests on. `FailedScheduling` is kube-scheduler's own
-// reason for every ordinary transient placement failure as well as Karpenter's
-// declination, so a matcher keyed on the reason string alone would refuse jobs on an
-// elastic cluster the moment a pod waited — the exact tenant-starving outcome
-// AutoscalerVerdict exists to avoid, and the reason this mode is separate from
-// SchedulerVerdict at all.
+// That is the property the elastic-cluster signal rests on. `FailedScheduling` is
+// kube-scheduler's own reason for every ordinary transient placement failure as well as
+// Karpenter's declination, so a matcher keyed on the reason string alone would refuse
+// jobs the moment a pod waited — the exact tenant-starving outcome this signal exists to
+// avoid, and the reason a cluster that can grow is not gated on the scheduler's verdict
+// at all.
+//
+// The gateway here deliberately leaves spec.clusterCapacity UNSET, so this also pins the
+// default end to end: an operator who has never heard of the field gets the signal that
+// can only under-gate, never the one that can starve a tenant.
 //
 // What only envtest can show, over the unit table: the field-selected UNCACHED Event
 // read works against a real apiserver (the selector is the part a fake client cannot
 // exercise), against Events with the real API's timestamp resolution, and the verdict
 // it produces reaches the published condition that the admission rung reads back.
-func TestV2_RunnerSet_CapacityGate_AutoscalerVerdictDiscriminatesByReporter(t *testing.T) {
+func TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter(t *testing.T) {
 	const ns = "v2-rs-capgate-autoscaler"
 	const setName = "capgate-as-set"
 	createNSForAGC(t, ns)
@@ -101,7 +112,7 @@ func TestV2_RunnerSet_CapacityGate_AutoscalerVerdictDiscriminatesByReporter(t *t
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
 	rs := newRunnerSet(setName, ns, "gw")
 	rs.Spec.MaxWorkers = ptr.To(int32(3))
-	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeAutoscalerVerdict}
+	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeOn}
 	// 30s deadline ⇒ a 15s scheduling grace, and a further 15s before the reaper
 	// deletes the pod. Every assertion below lands inside one such window.
 	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 30 * time.Second}
@@ -178,7 +189,8 @@ func TestV2_RunnerSet_CapacityGate_AutoscalerVerdictDiscriminatesByReporter(t *t
 		"a job no node is coming for must be left queued at GitHub, never claimed by acquirejob")
 }
 
-// TestV2_RunnerSet_CapacityGate_SkipsAcquireOnTheSchedulerVerdict is the classic tier:
+// TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire is the classic tier on a cluster
+// the operator has asserted cannot grow:
 // with the gate closed, a delivered job must be left queued at GitHub rather than
 // claimed.
 //
@@ -190,16 +202,16 @@ func TestV2_RunnerSet_CapacityGate_AutoscalerVerdictDiscriminatesByReporter(t *t
 // maxWorkers is deliberately 3 against a single in-flight pod, so the ceiling rung
 // cannot be what refused. That isolation is what makes the reason label meaningful:
 // a rung misordered behind the ceiling would report reason="ceiling" here.
-func TestV2_RunnerSet_CapacityGate_SkipsAcquireOnTheSchedulerVerdict(t *testing.T) {
+func TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire(t *testing.T) {
 	const ns = "v2-rs-capgate-classic"
 	const setName = "capgate-set"
 	createNSForAGC(t, ns)
 
-	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newFixedSizeGatewayForSet("gw", ns)))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
 	rs := newRunnerSet(setName, ns, "gw")
 	rs.Spec.MaxWorkers = ptr.To(int32(3))
-	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeSchedulerVerdict}
+	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeOn}
 	// A 30s deadline gives a 15s scheduling grace and a further 15s before the reaper
 	// deletes the pod — enough window to observe the closed gate refuse a delivery.
 	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 30 * time.Second}
@@ -270,10 +282,10 @@ func TestV2_RunnerSet_ScaleSet_CapacityGateWithholdsAdvertisedCapacity(t *testin
 	srv := scalesettest.New()
 	t.Cleanup(srv.Close)
 
-	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newFixedSizeGatewayForSet("gw", ns)))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
 	rs := newScaleSetRunnerSet(setName, ns, "gw", label, ceiling)
-	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeSchedulerVerdict}
+	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeOn}
 	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 40 * time.Second}
 	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
 	require.NoError(t, k8sClient.Create(ctx, rs))

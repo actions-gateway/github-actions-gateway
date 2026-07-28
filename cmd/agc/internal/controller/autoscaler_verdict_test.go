@@ -55,7 +55,7 @@ func podWithScheduler(name string) *corev1.Pod {
 	}
 }
 
-// TestAutoscalerDeclination is the whole safety argument of the AutoscalerVerdict mode
+// TestAutoscalerDeclination is the whole safety argument of the elastic-cluster signal
 // in one table. The asymmetry it encodes: a missed declination costs nothing (the gate
 // stays open, which is today's behavior), while a wrongly-read one refuses jobs the
 // cluster would have run. So every ambiguous row must resolve to "not declined".

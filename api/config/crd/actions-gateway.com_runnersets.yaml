@@ -139,19 +139,16 @@ spec:
                   mode:
                     default: "Off"
                     description: |-
-                      Mode selects which capacity signal gates job intake; see the CapacityGateMode*
-                      constants. Off is the default and is today's behavior.
+                      Mode selects how hard this set tries not to claim work it cannot run; see the
+                      CapacityGateMode* constants. Off is the default and is today's behavior.
 
-                      Which of the two gating modes is sound depends on whether the cluster can grow:
-                      SchedulerVerdict on a fixed-size cluster, AutoscalerVerdict where a cluster
-                      autoscaler runs. Choosing the wrong one is safe in one direction only —
-                      AutoscalerVerdict on a cluster with no autoscaler never gates (no declination is
-                      ever recorded), whereas SchedulerVerdict on an elastic cluster gates on pods the
-                      autoscaler was about to rescue.
+                      It does NOT select the signal. Which signal is sound depends on whether the
+                      cluster can grow, which is stated once by the platform operator on
+                      ActionsGateway.spec.clusterCapacity.nodeAutoscaling — so a tenant enabling the
+                      gate cannot pick a signal that is wrong for the cluster they are running in.
                     enum:
                     - "Off"
-                    - SchedulerVerdict
-                    - AutoscalerVerdict
+                    - "On"
                     type: string
                 type: object
               completedPodTTL:
@@ -876,19 +873,16 @@ spec:
                   mode:
                     default: "Off"
                     description: |-
-                      Mode selects which capacity signal gates job intake; see the CapacityGateMode*
-                      constants. Off is the default and is today's behavior.
+                      Mode selects how hard this set tries not to claim work it cannot run; see the
+                      CapacityGateMode* constants. Off is the default and is today's behavior.
 
-                      Which of the two gating modes is sound depends on whether the cluster can grow:
-                      SchedulerVerdict on a fixed-size cluster, AutoscalerVerdict where a cluster
-                      autoscaler runs. Choosing the wrong one is safe in one direction only —
-                      AutoscalerVerdict on a cluster with no autoscaler never gates (no declination is
-                      ever recorded), whereas SchedulerVerdict on an elastic cluster gates on pods the
-                      autoscaler was about to rescue.
+                      It does NOT select the signal. Which signal is sound depends on whether the
+                      cluster can grow, which is stated once by the platform operator on
+                      ActionsGateway.spec.clusterCapacity.nodeAutoscaling — so a tenant enabling the
+                      gate cannot pick a signal that is wrong for the cluster they are running in.
                     enum:
                     - "Off"
-                    - SchedulerVerdict
-                    - AutoscalerVerdict
+                    - "On"
                     type: string
                 type: object
               completedPodTTL:

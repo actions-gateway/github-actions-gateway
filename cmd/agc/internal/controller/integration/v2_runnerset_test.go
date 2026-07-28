@@ -85,8 +85,8 @@ func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Reg
 		Registrar:    reg,
 		AgentKeyType: agentpool.KeyTypeEd25519,
 		Provisioner:  p,
-		// The uncached reader the capacity gate's AutoscalerVerdict mode reads pod
-		// Events through (Q406), exactly as main.go wires it.
+		// The uncached reader the capacity gate reads pod Events through on a cluster
+		// that can grow (Q406, Q470), exactly as main.go wires it.
 		EventReader: mgr.GetAPIReader(),
 		// The same process-wide counters the v1 suite asserts on, so a v2 classic test
 		// can read jobs_admission_rejected_total as a delta against a baseline.
@@ -142,6 +142,18 @@ func newGatewayForSet(name, ns, proxyRef string) *v2alpha1.ActionsGateway {
 	}
 	if proxyRef != "" {
 		ag.Spec.DefaultProxyRef = &v2alpha1.LocalObjectRef{Name: proxyRef}
+	}
+	return ag
+}
+
+// newFixedSizeGatewayForSet is newGatewayForSet plus the platform operator's assertion
+// that nothing in this cluster will add a node (Q470). That fact — not anything on the
+// RunnerSet — is what makes the scheduler's Unschedulable verdict a sound intake signal,
+// so a capacity-gate test that expects scheduler-verdict gating must use this gateway.
+func newFixedSizeGatewayForSet(name, ns string) *v2alpha1.ActionsGateway {
+	ag := newGatewayForSet(name, ns, "")
+	ag.Spec.ClusterCapacity = &v2alpha1.ClusterCapacity{
+		NodeAutoscaling: v2alpha1.NodeAutoscalingAbsent,
 	}
 	return ag
 }

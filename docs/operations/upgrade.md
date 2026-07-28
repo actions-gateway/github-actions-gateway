@@ -12,6 +12,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [BREAKING (pre-GA): capacityGate.mode values replaced by On + a gateway-level cluster fact](#breaking-pre-ga-capacitygatemode-values-replaced-by-on--a-gateway-level-cluster-fact)
   - [Non-breaking: a RunnerSet's agent Secrets and runner names gain an rs- prefix](#non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix)
   - [Non-breaking: v2alpha1 is deprecated and the apiserver now warns](#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns)
   - [Non-breaking: v2alpha1 CRDs ship in a separate, opt-in chart](#non-breaking-v2alpha1-crds-ship-in-a-separate-opt-in-chart)
@@ -71,6 +72,52 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### BREAKING (pre-GA): `capacityGate.mode` values replaced by `On` + a gateway-level cluster fact
+
+**Who is affected:** only a `RunnerSet` that set
+`spec.capacityGate.mode: SchedulerVerdict` or `AutoscalerVerdict`. Those values existed
+for a single release-day window and the field defaults to `Off`, so most installs have
+nothing to do.
+
+The capacity gate's mode enum was carrying two independent things: whether a set should
+refuse work it cannot run (a tenant's choice), and which signal may be trusted (a
+consequence of whether the cluster can grow — a property of the cluster, identical for
+every set in it). Asking each tenant to assert the second meant asking them to speak for
+infrastructure they may not own, and it made the one harmful misconfiguration —
+gating on the scheduler's verdict where an autoscaler was about to add a node —
+reachable by the party least equipped to avoid it.
+
+The two axes are now separate objects, and that combination is unrepresentable:
+
+| Was, on the `RunnerSet` | Now, on the `RunnerSet` | Plus, on its `ActionsGateway` |
+|---|---|---|
+| `mode: SchedulerVerdict` | `mode: On` | `clusterCapacity.nodeAutoscaling: Absent` |
+| `mode: AutoscalerVerdict` | `mode: On` | `clusterCapacity.nodeAutoscaling: Present` (the default — nothing to set) |
+| `mode: Off` | unchanged | — |
+
+```sh
+# 1. If your cluster has NO node autoscaler, state that once per gateway.
+#    Skip this entirely on a cluster that can grow — Present is the default.
+kubectl patch actionsgateway -n <namespace> <gateway> --type=merge \
+  -p '{"spec":{"clusterCapacity":{"nodeAutoscaling":"Absent"}}}'
+```
+
+```sh
+# 2. Move each opted-in runner set to the single mode value.
+kubectl patch runnerset -n <namespace> <runner-set> --type=merge \
+  -p '{"spec":{"capacityGate":{"mode":"On"}}}'
+```
+
+**Order matters on a fixed-size cluster.** Apply the gateway patch first. Between the
+CRD upgrade and the gateway patch, a set that was gating on the scheduler's verdict
+falls back to the autoscaler-declination signal, which on a cluster with no autoscaler
+simply never gates — you get today's un-gated behavior, never over-gating.
+
+**If you upgrade the CRDs before the AGC** (they ship as separate charts), a set still
+carrying an old value reports `WorkerCapacityDeclined=False` with
+`reason: GateModeUnsupported` and is not gated — the fail-open direction. See
+[troubleshooting](troubleshooting.md#the-mode-is-reported-as-unsupported).
 
 ### Non-breaking: a `RunnerSet`'s agent Secrets and runner names gain an `rs-` prefix
 

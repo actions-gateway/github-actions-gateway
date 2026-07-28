@@ -186,6 +186,28 @@ spec:
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
                 type: object
+              clusterCapacity:
+                description: |-
+                  ClusterCapacity states facts about the cluster this gateway runs in that the
+                  AGC cannot safely determine for itself (Q470). It is platform-operator
+                  knowledge, not tenant knowledge, which is why it lives here rather than on the
+                  RunnerSets that consume it.
+                properties:
+                  nodeAutoscaling:
+                    default: Present
+                    description: |-
+                      NodeAutoscaling states whether anything in this cluster adds nodes in response
+                      to unschedulable pods; see the NodeAutoscaling* constants. It selects which
+                      signal an opted-in RunnerSet capacity gate may trust, because an unschedulable
+                      pod means opposite things depending on the answer: where a node may still
+                      arrive, that pod is a REQUEST and only the autoscaler's own declination proves
+                      nothing is coming; where none can, the pod is pure waste and the scheduler's
+                      verdict is enough.
+                    enum:
+                    - Present
+                    - Absent
+                    type: string
+                type: object
               credentials:
                 description: |-
                   Credentials configures how this gateway authenticates to GitHub. It is a
@@ -2076,6 +2098,28 @@ spec:
                       otherwise to an implementation-defined value. Requests cannot exceed Limits.
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
+                type: object
+              clusterCapacity:
+                description: |-
+                  ClusterCapacity states facts about the cluster this gateway runs in that the
+                  AGC cannot safely determine for itself (Q470). It is platform-operator
+                  knowledge, not tenant knowledge, which is why it lives here rather than on the
+                  RunnerSets that consume it.
+                properties:
+                  nodeAutoscaling:
+                    default: Present
+                    description: |-
+                      NodeAutoscaling states whether anything in this cluster adds nodes in response
+                      to unschedulable pods; see the NodeAutoscaling* constants. It selects which
+                      signal an opted-in RunnerSet capacity gate may trust, because an unschedulable
+                      pod means opposite things depending on the answer: where a node may still
+                      arrive, that pod is a REQUEST and only the autoscaler's own declination proves
+                      nothing is coming; where none can, the pod is pure waste and the scheduler's
+                      verdict is enough.
+                    enum:
+                    - Present
+                    - Absent
+                    type: string
                 type: object
               credentials:
                 description: |-

@@ -578,36 +578,63 @@ gate — cross-object admission validation is exactly what this appendix's §H.7
 philosophy avoids. While a profile is `Active`, `SizingDrift` reports
 `False/SizingProfileActive` (the template ask is not what pods run with).
 
-**Opt-in intake gating: `spec.capacityGate` (Q405, Q406).** A `RunnerSet` may opt into
-the placeability rung of the admission ladder — the AGC refuses to take on jobs whose
-worker pod the cluster cannot currently place, instead of claiming them and stalling.
-`capacityGate.mode` selects one of:
+**Opt-in intake gating: `spec.capacityGate` (Q405, Q406, Q470).** A `RunnerSet` may opt
+into the placeability rung of the admission ladder — the AGC refuses to take on jobs
+whose worker pod the cluster cannot currently place, instead of claiming them and
+stalling. `capacityGate.mode` selects `Off` (the default, today's behavior exactly) or
+`On`.
 
-| Mode | Signal | Sound where |
-|---|---|---|
-| `Off` (default) | — | Always; today's behavior exactly. |
-| `SchedulerVerdict` (Q405) | The scheduler's own `PodScheduled=False`/`Unschedulable` verdict — the same fact `WorkersUnschedulable` already publishes. | The cluster **cannot grow**. |
-| `AutoscalerVerdict` (Q406) | The cluster autoscaler's own declination, recorded as an Event on a stuck worker pod. | The cluster **can grow**. |
+**Two axes, two owners.** The mode is deliberately *not* a choice of signal:
 
-`Probe`/`Provision` (Q407) are reserved names on the same enum and are **rejected at
+| Object | Field | Owner | Answers |
+|---|---|---|---|
+| `RunnerSet` | `spec.capacityGate.mode` | The tenant | Should this set refuse work it cannot run? |
+| `ActionsGateway` | `spec.clusterCapacity.nodeAutoscaling` | The platform operator | Does anything in this cluster add nodes? |
+
+The second selects the signal the gate may trust: `Absent` ⇒ the scheduler's
+`PodScheduled=False`/`Unschedulable` verdict (Q405), `Present` (the default) ⇒ the
+cluster autoscaler's own declination, read as an Event on a stuck worker pod (Q406).
+
+This is the shape Q470 corrected. The first version encoded the asymmetry as two modes
+on the `RunnerSet` (`SchedulerVerdict`/`AutoscalerVerdict`), which conflated two
+independent axes in one enum and — worse — asked each *tenant* to assert a fact about
+infrastructure they may not own. In a multi-tenant gateway the person writing the
+`RunnerSet` is routinely not the person who knows the node contract, and the one
+genuinely harmful misconfiguration this feature has (scheduler-verdict gating on an
+elastic cluster) was reachable by exactly that mistake, prevented only by
+documentation. Moving the fact to the object the platform owns makes that combination
+**unrepresentable**: no value a tenant can write produces it. It also stops the enum
+growing on an orthogonal axis — `Probe`/`Provision` (Q407) extend the *same* axis by
+soliciting an answer rather than observing one, and the ProvisioningRequest API's
+availability is another cluster fact that belongs in `clusterCapacity`.
+
+`Probe`/`Provision` are reserved names on the mode enum and are **rejected at
 admission** until they ship: an operator who selects a gate expects gating, and
 silently accepting an unimplemented mode as a no-op is the failure this rung exists to
 remove. An unrecognized mode that nonetheless reaches the reconciler — the CRDs ship as
 their own chart and can be upgraded ahead of the AGC — fails **open** with
 `WorkerCapacityDeclined=False/GateModeUnsupported` rather than falling through to an
-implemented mode, because guessing would apply the wrong signal's semantics.
+implemented mode, because guessing would apply semantics the operator did not ask for.
 
-The mode is an **operator assertion, never an auto-detection**, because the two
+The cluster fact is an **operator assertion, never an auto-detection**, because the two
 readings of an unschedulable pod are opposites and only the operator knows which
 applies. On a fixed-size cluster nothing is waiting on that pod, so it is pure waste;
 on an elastic one the pod *is* the request for a node, and gating on it would suppress
 the very signal that would have rescued the tenant. A wrong auto-detection starves a
 tenant, so the AGC does not attempt one ([§D.8](appendix-d-alternatives-considered.md#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on)).
-The two mistakes are not symmetrical, which is worth stating for operators:
-`SchedulerVerdict` on an elastic cluster holds a tenant back, while
-`AutoscalerVerdict` on a fixed-size cluster is inert (no autoscaler, no declination).
+Nor does it infer the fact from silence: an autoscaler is legitimately quiet during
+backoff, during a cooldown after a failed scale-up, or for a pod it filters out of its
+evaluation, so "no autoscaler events have appeared" is absence of evidence — and the
+rest of this rung treats absence of evidence as *don't gate* everywhere else.
 
-**How `AutoscalerVerdict` reads its signal.** Both open-source autoscaler projects emit
+**`Present` is the default because the two mistakes are not symmetrical.** Under
+`Present` the gate refuses intake only on an explicit declination, so a missing or
+wrong value can only ever under-gate, which is today's behavior. Under `Absent` it
+gates on the scheduler's verdict alone, so a wrong value there refuses jobs a cluster
+was about to grow for. The default therefore has to be the one that fails toward
+today's behavior, per the secure/conservative-default stance.
+
+**How the elastic-cluster signal is read.** Both open-source autoscaler projects emit
 their verdicts from shared core code every cloud provider vendors — cluster-autoscaler
 `NotTriggerScaleUp`/`TriggeredScaleUp`, Karpenter `FailedScheduling`/`Nominated` — so
 ~46 provider implementations collapse to two event vocabularies and no provider
@@ -643,10 +670,10 @@ AGC's intake behavior cannot disagree. Its `reason` names the signal that decide
 `PodsUnschedulable`, `ScaleUpDeclined`, or the `False` reasons `CapacityAvailable` and
 `GateModeUnsupported` — so an operator can tell which rung stopped their jobs and on
 what evidence. It is a **separate** condition from `WorkersUnschedulable` even though
-`SchedulerVerdict` shares its source: it means something different to an operator
-("intake is being refused" versus "pods are stuck"), it stays stable across the modes
-while the signal underneath it changes — `AutoscalerVerdict` is exactly that, a new
-source under an unchanged condition, rung, and metric label — and
+the fixed-size-cluster signal shares its source: it means something different to an
+operator ("intake is being refused" versus "pods are stuck"), it stays stable while the
+signal underneath it changes — the autoscaler-declination source (Q406) is exactly
+that, a new source under an unchanged condition, rung, and metric label — and
 `WorkersUnschedulable` is already an impairing rollup input — so
 `WorkerCapacityDeclined` is deliberately **excluded** from `ImpairingConditionTypes()`,
 which would otherwise double-count one stall into the gateway's `RunnerSetsDegraded`
