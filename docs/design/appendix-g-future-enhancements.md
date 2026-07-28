@@ -834,17 +834,32 @@ would be far too chatty.
    drifts by version (`CapacityAvailable` in the field docs, absent from the v1
    condition constants, which carry `Provisioned`), so a reader must tolerate
    both.
-4. **Nothing in the test estate can answer a probe.** envtest can install the CRD
-   but no autoscaler stamps conditions, so this needs a fake-CA condition
-   stamper; kind has no autoscaler at all; and a real end-to-end proof needs a
-   cluster whose autoscaler implements the class, which is provider-specific and
-   gated. GKE serves the `ProvisioningRequest` API (`v1`, from
-   `1.32.2-gke.1652000`) but
+4. **No test estate answers a probe today, but a local one is plausible.**
+   envtest can install the CRD and no autoscaler stamps conditions, so it needs
+   a fake-CA condition stamper. kind runs no autoscaler *by default*, but
+   upstream ships a
+   [kwok cloud provider](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler/cloudprovider/kwok)
+   whose stated purpose is running real CA against fake nodes, naming a local
+   kind cluster as a use case — and `check-capacity` needs no cloud-provider
+   integration at all, since
+   [it is a scheduling simulation against existing capacity](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/proposals/provisioning-request.md)
+   that reserves nothing (provider APIs matter only for
+   `best-effort-atomic-scale-up`). The negative verdict this rung acts on —
+   *cannot place, do not claim* — therefore needs no scale-up to reproduce.
+   Unverified end-to-end: the kwok provider is `v1alpha1` and its docs are
+   silent on ProvisioningRequests, so proving that pairing is the first step,
+   and it is the local-harness half of [Q474](../STATUS.md#Q474).
+   Provider support is a separate axis from implementation: `check-capacity`
+   ships in the OSS cluster-autoscaler (1.30.1+, behind
+   `--enable-provisioning-requests`), so any self-managed CA can serve it, and
+   the gap is *managed* control planes. GKE serves the `ProvisioningRequest`
+   API (`v1`, from `1.32.2-gke.1652000`) but
    [documents only its own `queued-provisioning.gke.io` class](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/provisioningrequest)
    for flex-start: GPU/TPU-oriented, one `podSet` per request, no documented
    `check-capacity` support as of 2026-07. The dogfood cluster therefore cannot
    validate this class today, which is exactly the provider-support half of the
-   trigger below. Validation, not code, is the dominant cost.
+   trigger below. Validation still dominates code, but a working kind harness
+   would move most of it in-house.
 
 Plus the ordinary surface: a new API dependency (vendor
 `k8s.io/autoscaler/cluster-autoscaler/apis`, or hand-roll ~120 lines of local
