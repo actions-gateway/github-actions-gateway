@@ -179,29 +179,24 @@ if ! awk -v want="$psa_sa_name" '/^kind:/{k=$2} k=="ServiceAccount" && $1=="name
 fi
 echo "OK: admission-policy matchConditions bind to the rendered GMC ServiceAccount ($psa_sa_ref)"
 
-echo "==> helm template: every param-using ValidatingAdmissionPolicy survives uninstall, and no binding does (Q444)"
-# The apiserver keeps ONE param informer per paramKind GVR and tears it down when
-# the last policy naming that GVR is deleted. The teardown is permanent for the
-# life of the apiserver process — the informer is cached by GVR and the cached
-# instance is already stopped — so a policy recreated by a `helm uninstall` +
-# reinstall gets a dead informer with an empty store, and every binding resolving
-# a param of that kind fails with `no params found for policy binding`. Under
-# parameterNotFoundAction: Deny that denies EVERY matched write, cluster-wide,
-# until kube-apiserver restarts (impossible on a managed control plane).
+echo "==> helm template: no ValidatingAdmissionPolicyBinding survives uninstall"
+# A binding is what makes a policy enforce. Retaining one across `helm uninstall`
+# would leave the guard active after the release is gone, and would make
+# admissionPolicy.enabled=false a silent no-op — the operator turns the guard off
+# and it keeps denying. So bindings must never carry helm.sh/resource-policy: keep.
 #
-# So a policy that declares paramKind MUST carry helm.sh/resource-policy: keep.
-# The inverse matters just as much: bindings must NOT carry it. A binding is what
-# makes a policy enforce, so retaining one would leave the guard active after
-# uninstall and make admissionPolicy.enabled=false a silent no-op. Deleting a
-# binding is harmless to the informer, which is keyed to the policy's paramKind.
+# There is deliberately NO matching assertion on the policies. Retaining the
+# paramKind-bearing policy was the first attempted fix for Q444 and it did not
+# work (reverted in 70b4b351); asserting it here would re-freeze a wrong answer.
+# See docs/plan/q444-vap-param-resolution.md.
 # Reuses $psa_render — retention annotations do not vary with --namespace.
 # Line-oriented, not a multi-character RS: BSD awk (the macOS default) supports
 # only a single-character record separator, so `RS = "\n---\n"` silently never
 # splits there and every document folds into one record.
 policy_retention="$(awk '
 	function flush() {
-		if (kind != "") { printf "%s\t%s\t%d\t%d\n", kind, name, keep, param }
-		kind = ""; name = ""; keep = 0; param = 0
+		if (kind != "") { printf "%s\t%s\t%d\n", kind, name, keep }
+		kind = ""; name = ""; keep = 0
 	}
 	/^---[[:space:]]*$/ { flush(); next }
 	# Skip YAML comments: the templates explain this very annotation in prose, and
@@ -210,23 +205,16 @@ policy_retention="$(awk '
 	/^kind: / { kind = substr($0, 7) }
 	name == "" && /^  name: / { name = substr($0, 9) }
 	/^[[:space:]]+helm\.sh\/resource-policy:[[:space:]]*keep[[:space:]]*$/ { keep = 1 }
-	/^  paramKind:/ { param = 1 }
 	END { flush() }
 ' <<<"$psa_render")"
 
 retention_violations=0
-while IFS=$'\t' read -r kind name keep param; do
+while IFS=$'\t' read -r kind name keep; do
 	[[ -n "$kind" ]] || continue
-	if [[ "$kind" == "ValidatingAdmissionPolicy" && "$param" == 1 && "$keep" == 0 ]]; then
-		echo "ERROR: ValidatingAdmissionPolicy '$name' declares paramKind but lacks helm.sh/resource-policy: keep." >&2
-		echo "       A helm uninstall would delete it and permanently break param resolution for that" >&2
-		echo "       paramKind GVR on this apiserver, denying every matched write after a reinstall (Q444)." >&2
-		retention_violations=$((retention_violations + 1))
-	fi
 	if [[ "$kind" == "ValidatingAdmissionPolicyBinding" && "$keep" == 1 ]]; then
 		echo "ERROR: ValidatingAdmissionPolicyBinding '$name' carries helm.sh/resource-policy: keep." >&2
 		echo "       Bindings are what make a policy enforce; retaining one leaves the guard active after" >&2
-		echo "       uninstall and makes admissionPolicy.enabled=false a silent no-op (Q444)." >&2
+		echo "       uninstall and makes admissionPolicy.enabled=false a silent no-op." >&2
 		retention_violations=$((retention_violations + 1))
 	fi
 done <<<"$policy_retention"
@@ -234,11 +222,11 @@ done <<<"$policy_retention"
 if ((retention_violations > 0)); then
 	exit 1
 fi
-if ! grep -q $'^ValidatingAdmissionPolicy\t.*\t1\t1$' <<<"$policy_retention"; then
-	echo "ERROR: the render contains no retained param-using ValidatingAdmissionPolicy — the Q444 check is" >&2
-	echo "       no longer exercising anything; update it alongside whatever replaced the paramKind policy." >&2
+if ! grep -q $'^ValidatingAdmissionPolicyBinding\t' <<<"$policy_retention"; then
+	echo "ERROR: the render contains no ValidatingAdmissionPolicyBinding — this check is no longer" >&2
+	echo "       exercising anything; update it alongside whatever replaced the bindings." >&2
 	exit 1
 fi
-echo "OK: param-using admission policies are retained on uninstall; no binding is"
+echo "OK: no admission-policy binding survives uninstall"
 
 echo "OK: install artifact validates"

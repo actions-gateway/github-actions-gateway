@@ -70,12 +70,10 @@ jobs:
               # target), so a dogfood-only change must not trigger this job.
               - 'scripts/*'
               - 'scripts/!(dogfood)/**'
-              # The chart is the sole cluster-install path (Q142) — this tier
-              # deploys it via `make deploy`, and since Q444 also cycles it
-              # through uninstall/reinstall after the suite. Absent here, a
-              # chart-only change skipped the one job that exercises the chart
-              # against a real apiserver, including the check added to catch
-              # exactly that class of chart regression.
+              # The chart is the sole cluster-install path (Q142) and this tier
+              # deploys it via `make deploy`. Absent here, a chart-only change
+              # skipped the one job that exercises the chart against a real
+              # apiserver — so chart regressions reached main untested.
               - 'charts/**'
               - 'Makefile'
               - 'docker-bake.hcl'

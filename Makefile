@@ -601,11 +601,14 @@ wait-cert-manager: ## Wait for cert-manager deployments to be Available
 install-cert-manager: ## Apply cert-manager and wait for it to be ready
 	$(MAKE) -C cmd/gmc install-cert-manager
 
-# Q444: every other test path starts from a cluster that has never had the chart
-# installed, so nothing exercised `helm uninstall` + reinstall — the day-two
-# operation that permanently broke the PriorityClass allowlist policy's param
-# resolution. Runs against a cluster with the release already installed (CI runs
-# it after the e2e suite, which leaves the release up under E2E_SKIP_TEARDOWN).
+# Q444 reproduction tool — NOT wired into CI, because the defect it detects is
+# still open and it would pin every run red. Use it to reproduce the failure and,
+# once a fix exists, to prove the fix holds; wiring it into e2e-reusable.yml is
+# part of closing Q444. Every other test path starts from a cluster that has
+# never had the chart installed, so nothing else exercises `helm uninstall` +
+# reinstall. Run it against a cluster with the release already installed (after
+# the e2e suite under E2E_SKIP_TEARDOWN, or a manual `make deploy`).
+# See docs/plan/q444-vap-param-resolution.md.
 .PHONY: chart-reinstall-check
 chart-reinstall-check: ## Verify the chart survives a helm uninstall/reinstall cycle (needs the release installed)
 	KIND_CLUSTER=$(KIND_CLUSTER) scripts/chart-reinstall-check.sh

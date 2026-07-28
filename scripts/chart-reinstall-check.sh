@@ -7,17 +7,21 @@
 # `helm uninstall` followed by a reinstall. That gap hid a total outage of the
 # product's CRs.
 #
-# The mechanism: kube-apiserver keeps ONE ValidatingAdmissionPolicy param informer
-# per paramKind GVR and tears it down when the last policy naming that GVR is
-# deleted. The teardown is permanent for the life of the apiserver process — the
-# informer is cached by GVR and the cached instance is already stopped — so a
-# policy recreated by a reinstall gets a dead informer with an empty store. Every
-# binding resolving a param of that kind then fails with `no params found for
-# policy binding`, and under parameterNotFoundAction: Deny that denies EVERY
-# matched write (runnergroups, runnersets, runnertemplates) cluster-wide until
-# kube-apiserver restarts — impossible on a managed control plane. The chart's fix
-# is helm.sh/resource-policy: keep on the paramKind-bearing policy; this script is
-# what proves the fix still holds against a real apiserver.
+# STATUS: Q444 is OPEN and this script is a reproduction tool, not a gate. It is
+# deliberately not wired into CI — the defect is unfixed, so it would pin every
+# run red. Wiring it in is part of closing Q444.
+#
+# What is established (docs/plan/q444-vap-param-resolution.md has the full log):
+#   - The broken state is per-kube-apiserver-process. A genuine restart clears it
+#     in ~3s with zero object changes.
+#   - Once broken, ConfigMaps created afterwards stay invisible to param
+#     resolution, so even a FRESH install fails with the binding pointing at a
+#     ConfigMap that demonstrably exists.
+#   - Under parameterNotFoundAction: Deny, params resolve before per-object
+#     matching, so EVERY matched write is denied cluster-wide — runnergroups,
+#     runnersets and runnertemplates alike, class-naming or not.
+# What is NOT established: what tears the param informer down. Deleting the
+# policy, the binding, or the ConfigMap individually does not reproduce it.
 #
 # Run against a cluster that already has the chart installed (CI runs it after the
 # e2e suite, which leaves the release up under E2E_SKIP_TEARDOWN). The release's
@@ -74,6 +78,33 @@ probe_write() {
 	EOF
 }
 
+# dump_param_state prints everything needed to tell a broken MANIFEST (the binding
+# points somewhere the ConfigMap is not) from a broken APISERVER (all three objects
+# agree and it still cannot resolve them). Without this the failure text alone
+# cannot distinguish the two, which is most of the diagnosis.
+dump_param_state() {
+	echo
+	echo "--- policy / binding / param ConfigMap as the apiserver sees them ---"
+	kc get validatingadmissionpolicy -o custom-columns=\
+'POLICY:.metadata.name,PARAMKIND:.spec.paramKind,KEEP:.metadata.annotations.helm\.sh/resource-policy' \
+		2>&1 | grep -Ei 'POLICY|priorityclass' || echo "  (no policies)"
+	kc get validatingadmissionpolicybinding -o custom-columns=\
+'BINDING:.metadata.name,POLICY:.spec.policyName,PARAM:.spec.paramRef.namespace/.spec.paramRef.name,NOTFOUND:.spec.paramRef.parameterNotFoundAction' \
+		2>&1 | grep -Ei 'BINDING|priorityclass' || echo "  (no bindings)"
+
+	local ref_ns ref_name
+	ref_ns="$(kc get validatingadmissionpolicybinding -o jsonpath='{.items[?(@.spec.paramRef)].spec.paramRef.namespace}' 2>/dev/null | awk '{print $1}')"
+	ref_name="$(kc get validatingadmissionpolicybinding -o jsonpath='{.items[?(@.spec.paramRef)].spec.paramRef.name}' 2>/dev/null | awk '{print $1}')"
+	echo "  binding paramRef -> ${ref_ns:-?}/${ref_name:-?}"
+	if [[ -n "${ref_ns}" && -n "${ref_name}" ]]; then
+		kc get configmap -n "${ref_ns}" "${ref_name}" \
+			-o jsonpath='  that ConfigMap: EXISTS uid={.metadata.uid} data={.data}{"\n"}' 2>&1 ||
+			echo "  that ConfigMap: MISSING -> the manifest is wrong, not the apiserver"
+		echo "  namespace ${ref_ns} phase: $(kc get namespace "${ref_ns}" -o jsonpath='{.status.phase}' 2>&1)"
+	fi
+	echo "---------------------------------------------------------------------"
+}
+
 # assert_params_resolve fails loudly on the Q444 signature and on a silent
 # non-enforcement, so neither a broken guard nor an absent one passes.
 #
@@ -101,8 +132,8 @@ assert_params_resolve() {
 			# the reinstall recreates it, so until the apiserver observes the new
 			# ConfigMap this is the CORRECT fail-closed answer — a couple of seconds
 			# in practice. What distinguishes the Q444 breakage is that it never
-			# recovers: the param informer is dead for the life of the apiserver
-			# process, so every probe in the whole budget below answers this way.
+			# recovers: the state is per-apiserver-process and only a restart of
+			# kube-apiserver clears it, so every probe in the budget answers this way.
 			;;
 		*created*)
 			# Enforcement not propagated yet; drop the object and keep polling.
@@ -115,11 +146,11 @@ assert_params_resolve() {
 	if [[ "${answer}" == *"no params found"* ]]; then
 		echo "FAIL [${phase}]: the policy binding never resolved its param ConfigMap." >&2
 		echo "  ${answer}" >&2
-		echo "  This is Q444: the apiserver's param informer for this paramKind was torn down" >&2
-		echo "  with the policy and cannot be restarted, so it stayed unresolved for the whole" >&2
-		echo "  retry budget rather than recovering once the ConfigMap came back. Every" >&2
-		echo "  runnergroups/runnersets/runnertemplates write is now denied cluster-wide." >&2
-		echo "  Check that the ValidatingAdmissionPolicy still carries helm.sh/resource-policy: keep." >&2
+		echo "  Every runnergroups/runnersets/runnertemplates write is denied cluster-wide in" >&2
+		echo "  this state. It is Q444 if the objects below all look correct — that means the" >&2
+		echo "  apiserver, not the manifest, is failing to resolve them, and only a" >&2
+		echo "  kube-apiserver restart clears it." >&2
+		dump_param_state >&2
 		return 1
 	fi
 	if [[ "${answer}" != *"not in the platform PriorityClass allowlist"* ]]; then
@@ -200,23 +231,19 @@ assert_params_resolve baseline
 echo "==> helm uninstall ${HELM_RELEASE}"
 helm uninstall "${HELM_RELEASE}" --kube-context "${KUBE_CONTEXT}" --namespace "${RELEASE_NS}" >/dev/null
 
-echo "==> asserting the param-using policies survived the uninstall"
-retention_failed=0
+# Informational, NOT an assertion. Whether the paramKind-bearing policies survive
+# the uninstall is a fact worth recording next to the verdict — retaining them was
+# the first attempted fix and it did not work — but it is not itself pass/fail.
+# The functional probe below is the only verdict.
+echo "==> param-using policies after the uninstall:"
 while read -r policy; do
 	[[ -n "${policy}" ]] || continue
 	if kc get validatingadmissionpolicy "${policy}" >/dev/null 2>&1; then
-		echo "     ${policy}: retained"
+		echo "     ${policy}: still present"
 	else
-		echo "FAIL: ValidatingAdmissionPolicy '${policy}' was deleted by helm uninstall." >&2
-		echo "  It declares paramKind, so its deletion permanently tears down the apiserver's param" >&2
-		echo "  informer for that GVR: the policy the reinstall recreates gets a dead informer with an" >&2
-		echo "  empty store, and every runnergroups/runnersets/runnertemplates write is then denied" >&2
-		echo "  cluster-wide with 'no params found for policy binding' until kube-apiserver restarts." >&2
-		echo "  Restore helm.sh/resource-policy: keep on it (Q444)." >&2
-		retention_failed=1
+		echo "     ${policy}: deleted by helm uninstall"
 	fi
 done <<<"${param_policies}"
-((retention_failed == 0)) || exit 1
 
 # Bindings must be gone: they are what make a policy enforce, so a retained one
 # would leave the guard active after uninstall and make admissionPolicy.enabled=false
@@ -236,4 +263,6 @@ helm install "${HELM_RELEASE}" "${CHART_DIR}" \
 echo "==> after reinstall: admission must still work"
 assert_params_resolve reinstall
 
-echo "OK: the chart survives a helm uninstall/reinstall cycle (Q444)"
+echo "OK: this apiserver resolved the policy's params through a full uninstall/reinstall"
+echo "    cycle. Note Q444 does not reproduce on every run — a clean pass does NOT mean"
+echo "    the defect is fixed, only that it did not trigger here."
