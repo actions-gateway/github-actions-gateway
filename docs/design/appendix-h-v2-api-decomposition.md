@@ -591,6 +591,59 @@ gate — cross-object admission validation is exactly what this appendix's §H.7
 philosophy avoids. While a profile is `Active`, `SizingDrift` reports
 `False/SizingProfileActive` (the template ask is not what pods run with).
 
+**Why `profile` bundles two mechanisms deliberately (Q481).** The 1.3
+[pre-release API review](../development/api-review.md) asked of `sizing.profile`
+the question Q470 asked of `capacityGate.mode` — *does this enum answer exactly
+one question?* — and mechanically it does not. Two axes run through it: where the
+request comes from (the template, the usage history, a declared node envelope)
+and what limits follow (the template's, `requests == limits`, or no CPU limit
+plus a memory headroom). The tell the review names is present twice over:
+`nodeShare` is only meaningful under `NodeShare`, `limitHeadroomPercent` only
+under `Throughput`. Two cells of the cross-product have no profile of their own
+and are plausible wants — a **Guaranteed node share** (the GPU case, where
+predictable packing is the whole point) and **history-derived requests under
+hand-set limits**. It ships bundled anyway, on three grounds:
+
+- **The cost that made Q470 worth a break is absent.** What forced the gate's
+  split was *whose fact it was*: `SchedulerVerdict` asked each tenant to assert a
+  property of infrastructure they may not own, putting the feature's one harmful
+  misconfiguration in the hands of the party least equipped to avoid it. Both of
+  `profile`'s axes are the set owner's own choice, so only the two weaker costs
+  (value multiplication, values that read as redundant) remain.
+- **The axes are not orthogonal, so splitting them would not remove the CEL
+  rules.** `Throughput`'s memory limit is *observed peak* × headroom, and an
+  observed peak exists only under the usage source. A split shape still needs
+  `memoryHeadroomPercent is only meaningful when the source is the usage
+  history` — the same tell, relocated — unless the derivation is redefined off
+  the peak, which means re-deriving a rule live-validated on the dogfood tenant
+  days before this tag (Q449).
+- **Both cells are additive, and one of them is already reachable.** Filling
+  either costs one field defaulted to today's behavior (`nodeShare` gaining an
+  opt-in `requests == limits`, say): no conversion shim, no deprecation window,
+  any minor release. Q470 had to beat its tag because its fix *removed* enum
+  values. This one does not, so the tag freezes nothing a later release cannot
+  add. A Guaranteed node share, moreover, is reachable **today** as a side effect
+  of the limit-lift rule: a template limit at or below the derived share is
+  raised to it, so a runner container whose template limits sit under the
+  envelope comes out with `requests == limits`
+  (`TestApplySizingProfileNodeShareLiftedLimitsReachGuaranteed`). That is a
+  side effect of a guard against admission rejection, not an expressed intent —
+  which is the argument for eventually adding the explicit field, and the
+  argument against spending a breaking reshape on it now.
+
+**Read `profile` as an intent enum, not a mechanism enum.** All four values name
+what the operator wants — leave it alone, pack tightly, finish fast, split the
+node — and the mechanism follows from the intent. That is also the rule for
+extending it: a new value must name a *distinct operator intent*; a variation
+that merely recombines existing mechanisms belongs in a sibling field under the
+profile it varies. Nothing is reserved on either axis today, the other contrast
+with the gate, which had `Probe`/`Provision` waiting on axis 1 and
+`ProvisioningRequest` availability on axis 2 before Q470 split it. In-place pod
+resize — the one extension the plan anticipates — changes *when* actuation
+happens, not where values come from or what limits follow, so it is a sibling
+field rather than a fifth profile. If the intent framing ever fails, `v2.0.0` is
+already a scheduled break.
+
 **Opt-in intake gating: `spec.capacityGate` (Q405, Q406, Q470).** A `RunnerSet` may opt
 into the placeability rung of the admission ladder — the AGC refuses to take on jobs
 whose worker pod the cluster cannot currently place, instead of claiming them and

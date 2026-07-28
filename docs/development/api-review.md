@@ -78,14 +78,40 @@ party to assert something they may not know. The tells are mechanical:
 - Values that each activate a *different* sibling field.
 - Cross-field CEL rules shaped `field X is only meaningful when mode == Y`.
 
-Q470 split `capacityGate.mode` for exactly this reason. The same tell is visible
-today in [`WorkerSizing`](../../api/v2beta1/runnerset_types.go), whose three
-`XValidation` rules each tie a sibling field to one `profile` value — which is
-why [Q481](../STATUS.md#Q481) is open against `sizing.profile`.
+Q470 split `capacityGate.mode` for exactly this reason.
 
 When the axes genuinely belong together, the Kubernetes shape for it is a
 discriminated union: a required discriminator field plus optional, pointer union
 members — not one flat enum whose values imply which sibling to read.
+
+**A "yes" to the tells is not automatically a split.** The same tell is visible
+in [`WorkerSizing`](../../api/v2beta1/runnerset_types.go), whose three
+`XValidation` rules each tie a sibling field to one `profile` value. Q481 asked
+the question of `sizing.profile` before 1.3.0 and shipped it bundled anyway.
+Three follow-ups decide it, in ascending order of how much they settle:
+
+1. *Whose facts are the axes?* Q470's split was forced because one axis was the
+   platform operator's and the other the tenant's — [whose fact is
+   it](#ask-whose-fact-it-is) is the argument that made it worth a break. When
+   both axes belong to the same party, that argument is simply unavailable.
+2. *Are the axes actually orthogonal?* If one axis's parameter is defined in
+   terms of the other's mechanism, splitting **relocates** the `only meaningful
+   when` rule rather than removing it, and the cross-product gains undefined
+   cells rather than useful ones. `Throughput`'s headroom multiplies an
+   *observed peak*, which exists only under the usage source.
+3. *Is the missing cell reachable additively?* This is the one that decides
+   whether the question must beat a tag. Q470's fix **removed** enum values, so
+   it had to land first; a gap a later minor can fill with one defaulted field
+   does not. Check whether it is reachable *at all* first — Q481's headline gap,
+   a Guaranteed node share, turned out to be reachable already, by a side effect
+   of an unrelated guard.
+
+When the answer is "ship bundled", record what the enum bundles *on purpose*.
+`sizing.profile` is an **intent** enum — every value names what the operator
+wants, and the mechanism follows — which is a legitimate shape and, more
+usefully, hands the next reviewer the rule for extending it: new values name a
+distinct intent, mechanism recombinations go in a sibling field. Worked example:
+[appendix-h §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission).
 
 ### Name the method, not the on-state
 

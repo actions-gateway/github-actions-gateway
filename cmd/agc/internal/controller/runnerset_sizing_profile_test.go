@@ -185,6 +185,50 @@ func TestApplySizingProfileNodeShare(t *testing.T) {
 	}
 }
 
+// A Guaranteed node share is reachable today without a NodeShare-specific QoS
+// knob: the limit-lift rule (a template limit below the derived request is
+// raised to it, so the apiserver cannot reject the pod) lands requests ==
+// limits on the runner container whenever the template's limits sit at or below
+// the derived share. Q481 decided against adding that knob partly on this
+// property, so it is pinned rather than left to the reader of applyNodeShare —
+// the sibling TestApplySizingProfileNodeShare covers the ordinary case, where a
+// CPU limit ABOVE the share is left alone and the result is Burstable.
+func TestApplySizingProfileNodeShareLiftedLimitsReachGuaranteed(t *testing.T) {
+	tmpl := profileTemplate(false)
+	// Both template limits below the 15 / 4 = 3750m and 60Gi / 4 = 15Gi share.
+	tmpl.PodTemplate.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("1"),
+		corev1.ResourceMemory: resource.MustParse("2Gi"),
+		testGPU:               resource.MustParse("1"),
+	}
+	sizing := &v2alpha1.WorkerSizing{
+		Profile: v2alpha1.SizingProfileNodeShare,
+		NodeShare: &v2alpha1.NodeShareSizing{
+			Allocatable: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("15"),
+				corev1.ResourceMemory: resource.MustParse("60Gi"),
+			},
+			WorkersPerNode: 4,
+		},
+	}
+	out := applySizingProfile(tmpl.PodTemplate, sizing, tmpl, nil)
+
+	res := out.Spec.Containers[0].Resources
+	for _, name := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
+		req, lim := res.Requests[name], res.Limits[name]
+		if req.Cmp(lim) != 0 {
+			t.Fatalf("%s request %s != limit %s, want the lift to reach Guaranteed", name, req.String(), lim.String())
+		}
+	}
+	if q := res.Requests[corev1.ResourceCPU]; q.String() != "3750m" {
+		t.Fatalf("cpu settled at %s, want the derived share 3750m (not the template limit)", q.String())
+	}
+	// The GPU is still byte-identical: the lift only ever touches cpu/memory.
+	if q := res.Limits[testGPU]; q.String() != "1" {
+		t.Fatalf("GPU limit modified: %s", q.String())
+	}
+}
+
 func TestApplySizingProfileClamps(t *testing.T) {
 	tmpl := profileTemplate(false)
 	sizing := &v2alpha1.WorkerSizing{
