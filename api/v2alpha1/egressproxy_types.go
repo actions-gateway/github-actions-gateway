@@ -138,6 +138,14 @@ type EgressProxySpec struct {
 	// Server host included — of every ActionsGateway or RunnerSet that references
 	// this proxy, on both the proxy write and the referrer write.
 	//
+	// The cluster-internal destinations are appended automatically and need not be
+	// listed: svc.cluster.local, localhost and 127.0.0.1 for both the AGC and its
+	// workers, plus kubernetes.default.svc and this cluster's API server ClusterIP
+	// (read from KUBERNETES_SERVICE_HOST) for the AGC, which dials the API server
+	// by IP. Every entry added here bypasses the proxy and so escapes the
+	// per-tenant egress-IP attribution: exempt specific internal destinations,
+	// never a broad range.
+	//
 	// +optional
 	NoProxyCIDRs []string `json:"noProxyCIDRs,omitempty"`
 

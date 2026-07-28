@@ -4,7 +4,7 @@
 blocked** until the smoke workflow reaches `main` (GitHub only dispatches
 `workflow_dispatch` from the default branch), so the GA DoD row stays ⚠️ Unverified
 and **Q415 stays open**. Three defects found and filed:
-Q463 (since fixed), [Q465](../STATUS.md#Q465), [Q466](../STATUS.md#Q466).
+Q463 (since fixed), Q465 (fixed), [Q466](../STATUS.md#Q466).
 Full evidence in [Findings](#findings).
 **Scope:** the last unverified item in the v2 GA Definition of Done —
 [v2-ga.md § Definition of Done audit](v2-ga.md#definition-of-done-audit-as-of-this-change)
@@ -280,7 +280,7 @@ migration itself (independent of the job) as a real-infrastructure rehearsal. Th
 remaining session runs the full ordered sequence — baseline → migrate → job — once
 this PR is merged.
 
-### Defect: the AGC's default `NO_PROXY` only works on kind/kubeadm ([Q465](../STATUS.md#Q465))
+### Defect: the AGC's default `NO_PROXY` only works on kind/kubeadm (Q465)
 
 The most valuable find of the run, and one no existing test could have caught.
 
@@ -306,7 +306,21 @@ Kubernetes offering breaks; only kind/kubeadm works.
 **Why nothing caught it:** the kind e2e runs on a cluster whose Service CIDR *is*
 `10.96.0.0/12`, and both dogfood tenants run `Direct` egress, so `NO_PROXY` is never
 consulted. It takes a proxied tenant on a managed cluster — precisely what this plan
-constructs — to reach the bug. Filed as [Q465](../STATUS.md#Q465).
+constructs — to reach the bug. Filed as Q465.
+
+**Fixed (Q465).** The hardcoded range is gone. The GMC now exempts the API server by
+the address the cluster reports — its own `KUBERNETES_SERVICE_HOST`, which is the
+ClusterIP the AGC pod will dial — falling back to the literal
+`$(KUBERNETES_SERVICE_HOST)` for the kubelet to expand when the GMC itself runs
+out-of-cluster, and bracketing an IPv6 ClusterIP so Go's `NO_PROXY` parser matches
+it. `kubernetes.default.svc` joins the static half for clusters whose cluster domain
+is not `cluster.local`. Worker pods lose the range outright and gain nothing: they
+hold no kubeconfig and never dial the API server. The net effect is a *narrower*
+default on every distribution — one API server address instead of a /12 of
+unrelated hosts. Live re-confirmation is outstanding: the workaround
+`noProxyCIDRs: [34.118.224.0/20]` has been removed from
+[`deploy/dogfood-migrate/resources.yaml`](../../deploy/dogfood-migrate/resources.yaml)
+so that a clean AGC startup at the next dogfood sitting is itself the verification.
 
 ### Defect: v1 and v2 collide during coexistence ([Q466](../STATUS.md#Q466))
 
