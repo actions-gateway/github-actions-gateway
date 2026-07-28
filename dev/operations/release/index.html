@@ -2966,7 +2966,7 @@ before it spends anything, not 25 minutes in.</p>
 <tr>
 <td><code>Throughput</code></td>
 <td><code>gag-dogfood</code></td>
-<td><strong>Reported, never fatal.</strong> It needs ≥20 samples per template container, which accrues from the CI tenant's ordinary traffic over days — not from this gate.</td>
+<td><strong>Reported, never fatal.</strong> It needs ≥20 samples per template container, supplied by the CI tenant's ordinary traffic — not by this gate's ~7-job matrix.</td>
 </tr>
 <tr>
 <td><code>Binpack</code></td>
@@ -2975,12 +2975,34 @@ before it spends anything, not 25 minutes in.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Throughput has a pre-condition you cannot satisfy during the gate.</strong> The
-   <code>ci</code> tenant must already be carrying ≥20 samples per container when the RC
-   runs, or the leg reports <code>NOT VALIDATED THIS RUN</code> and the profile ships
-   live-unvalidated. <code>scripts/dogfood/setup.sh</code> configures it, and
-   <code>status.sizingRecommendation</code> survives an AGC restart and a re-apply — so
-   deploy that config <strong>well before the RC window</strong>, not during it.</p>
+<p><strong>When Throughput reports <code>NOT VALIDATED THIS RUN</code>, read the state before
+   reaching for the sample count</strong> — the two non-<code>Active</code> states are different
+   problems, and the leg prints which one you have:</p>
+<table>
+<thead>
+<tr>
+<th><code>sizingProfileState</code></th>
+<th>What it means</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>empty</em></td>
+<td><code>spec.sizing</code> is not on the live RunnerSet — a deploy gap, not a sample gap. A CR edit reaches the cluster only through <code>setup.sh</code>'s <code>apply_cr</code> or a direct patch; <code>scripts/dogfood/start.sh</code> resizes the pool and routes CI but <strong>never applies CRs</strong>, so no start can deploy it.</td>
+<td>Re-run <code>scripts/dogfood/setup.sh</code>, or <code>kubectl patch</code> <code>runnersets.v2alpha1.actions-gateway.com/ci</code> in <code>gag-dogfood</code>.</td>
+</tr>
+<tr>
+<td><code>AwaitingSamples</code></td>
+<td>The profile is deployed but a template container is below the threshold. Check the <code>sampleCounts</code> the leg prints for which one.</td>
+<td>Let ordinary CI traffic run ~20 jobs per container.</td>
+</tr>
+</tbody>
+</table>
+<p>Sample history needs no advance planning: the sampler tracks every worker pod
+   regardless of <code>spec.sizing</code>, and the aggregate re-seeds from the persisted
+   <code>status.sizingRecommendation</code> — so samples accrue without the profile
+   configured and survive a stop/start rather than being re-earned.</p>
 <ol>
 <li><strong>Tear down.</strong> <code>scripts/dogfood/e2e-stop.sh</code>, then <code>scripts/dogfood/stop.sh</code>
    (dogfood scales to 0 at rest).</li>
