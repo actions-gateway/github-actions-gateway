@@ -1,8 +1,11 @@
 # Q415 — validate `gag-migrate` v1→v2 on the dogfood cluster (plan)
 
-**Status:** ▶ Assets built and rehearsed on `kind` 2026-07-27 (two manifest bugs
-fixed, one tool defect filed as [Q463](../STATUS.md#Q463)); the **live dogfood run
-has not been performed**, so the GA DoD row stays ⚠️ Unverified.
+**Status:** ▶ Migration validated live on GKE 2026-07-27; the **DinD job half is
+blocked** until the smoke workflow reaches `main` (GitHub only dispatches
+`workflow_dispatch` from the default branch), so the GA DoD row stays ⚠️ Unverified
+and **Q415 stays open**. Three defects found and filed:
+[Q463](../STATUS.md#Q463), [Q465](../STATUS.md#Q465), [Q466](../STATUS.md#Q466).
+Full evidence in [Findings](#findings).
 **Scope:** the last unverified item in the v2 GA Definition of Done —
 [v2-ga.md § Definition of Done audit](v2-ga.md#definition-of-done-audit-as-of-this-change)
 row *"≥1 representative tenant migrated v1→v2 with the tool for real"*, today
@@ -122,11 +125,25 @@ export REPO=actions-gateway/github-actions-gateway
    annotation is gone and the set registers a scale set at GitHub.
 10. **Dispatch the smoke workflow again** — same workflow, same `runs-on` label — and
     confirm it goes green on the migrated tenant.
-11. **Tear down:** delete the tenant namespace and the cluster-scoped migration
-    outputs (the `ClusterRunnerTemplate` by its
-    `MigratedFromNamespaceLabel` provenance label and the matching
-    ClusterRoleBinding — namespace deletion does not reclaim them, which is the whole
-    reason the tool stamps the label), then `scripts/dogfood/stop.sh`.
+11. **Tear down, CRs first.** Order is load-bearing and the live run proved it — see
+    [the teardown deadlock](#the-teardown-order-is-load-bearing-and-undocumented)
+    below. Delete the **CRs while their controllers are still running**, exactly as
+    [migration-v1-to-v2.md § Step 4](../operations/migration-v1-to-v2.md) prescribes:
+
+    ```bash
+    kubectl -n gag-dogfood-migrate delete actionsgateways.actions-gateway.github.com --all
+    kubectl -n gag-dogfood-migrate delete actionsgateways.actions-gateway.com --all
+    ```
+
+    Only then delete the namespace, then reclaim the cluster-scoped migration outputs
+    (the `ClusterRunnerTemplate` by its `MigratedFromNamespaceLabel` provenance label
+    and the matching ClusterRoleBinding — namespace deletion does not reclaim them,
+    which is the whole reason the tool stamps the label), then take the system pool
+    back to 0.
+
+    Deleting the namespace *first* strands the tenant in `Terminating` forever,
+    because the AGCs that clear the `agentpool-cleanup` finalizers live inside the
+    namespace being deleted.
 
 ## Acceptance criteria
 
@@ -214,6 +231,116 @@ Working around it is why this plan's tenant grants privileged on the **v1** labe
 domain: that is both the authentic pre-migration shape and the path that actually
 exercises the grant carry-forward.
 
-### Live run
+### Live run on GKE (2026-07-27) — migration validated, job half blocked
 
-*Not yet performed. Nothing is recorded here ahead of the evidence.*
+Executed against the real dogfood cluster with real GitHub App credentials, in an
+isolated `gag-dogfood-migrate` namespace. The always-on `dogfood` CI tenant and the
+on-demand `gag-dogfood-e2e` tenant were untouched and verified healthy afterwards;
+the cluster was returned to 0 nodes.
+
+**Q415 is NOT closed.** Everything except the job ran and passed. The DoD row stays
+⚠️ Unverified until a real DinD job completes on the migrated tenant.
+
+| Acceptance criterion | Result |
+|---|---|
+| `gag-migrate --apply` completes against the live v1 tenant | ✅ Applied the full object set; no error |
+| Migrated AGC + EgressProxy reach Ready | ✅ `dogfood-migrate-agc` 1/1, `dogfood-migrate-egress-proxy` 1/1 |
+| v1 objects survive (coexistence) | ✅ Both v1 Deployments still running — but see the coexistence defect below |
+| After the Q231 recreate, the set is ScaleSet-native and registers at GitHub | ✅ Annotation flipped `Classic`→`ScaleSet`; `scale-set listener active (scaleSetID 10)` |
+| A real DinD job completes green on the migrated tenant | ❌ **Blocked** — see the dispatch constraint below |
+| Teardown leaves no orphaned cluster-scoped objects | ✅ After clearing stranded finalizers — see the teardown finding |
+
+**The namespace patch worked exactly as designed**, and this is the part the v1-domain
+grant label was chosen to exercise: the platform grant was carried *forward* onto the
+v2 domain (`actions-gateway.com/privileged-profile=allowed` added beside the original
+v1 label), `security-profile=privileged` was relocated from the gateway to the
+namespace, the v2 tenant marker was added, and every v1 marker survived.
+
+`noProxyCIDRs` also carried across onto the emitted `EgressProxy`, which is what let
+the migrated AGC start — see the defect immediately below.
+
+### Blocker: the job half cannot run until the workflow is on `main`
+
+`gh workflow run` returns:
+
+> HTTP 404: workflow dogfood-migrate-validate.yml not found on the default branch
+
+GitHub only dispatches a `workflow_dispatch` workflow that exists on the **default
+branch**; the `--ref` selects which *version* runs, it does not register the workflow.
+So the smoke workflow must be merged to `main` before either the baseline or the
+post-migration job can be dispatched.
+
+**Consequence for sequencing:** the live run splits in two. This session validated the
+migration itself (independent of the job) as a real-infrastructure rehearsal. The
+remaining session runs the full ordered sequence — baseline → migrate → job — once
+this PR is merged.
+
+### Defect: the AGC's default `NO_PROXY` only works on kind/kubeadm ([Q465](../STATUS.md#Q465))
+
+The most valuable find of the run, and one no existing test could have caught.
+
+A proxied tenant's AGC gets a generated `NO_PROXY` that defaults to
+`svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12`
+([shared_agc_deployment.go:50](../../cmd/gmc/internal/controller/shared_agc_deployment.go)).
+That last entry is the **kind/kubeadm** Service CIDR. This cluster's is
+`34.118.224.0/20`, so the AGC dialled the API server *through the egress proxy*, could
+not verify the proxy's CA, and `CrashLoopBackOff`ed at startup:
+
+```
+detect actions-gateway.com/v2alpha1 RunnerSet CRD: … Get "https://34.118.224.1:443/api":
+proxyconnect tcp: tls: failed to verify certificate: x509: certificate signed by unknown authority
+```
+
+Adding the real Service CIDR to `noProxyCIDRs` fixed it immediately — root cause
+confirmed by measurement, not inferred.
+
+**This is not GKE-specific.** `10.96.0.0/12` covers `10.96.0.0`–`10.111.255.255`, so
+the default also misses EKS (`172.20.0.0/16`) and AKS (`10.0.0.0/16`). Every managed
+Kubernetes offering breaks; only kind/kubeadm works.
+
+**Why nothing caught it:** the kind e2e runs on a cluster whose Service CIDR *is*
+`10.96.0.0/12`, and both dogfood tenants run `Direct` egress, so `NO_PROXY` is never
+consulted. It takes a proxied tenant on a managed cluster — precisely what this plan
+constructs — to reach the bug. Filed as [Q465](../STATUS.md#Q465).
+
+### Defect: v1 and v2 collide during coexistence ([Q466](../STATUS.md#Q466))
+
+With both control planes live after the migration, the **migrated v2 AGC was clean (0
+warnings/errors) while the v1 AGC errored continuously** (14 errors in 3 minutes),
+in two distinct ways:
+
+1. **Agent-pool Secret collision.** The v1 `RunnerGroup` and the migrated v2
+   `RunnerSet` share a name, so both derive the *same* agent-pool Secret name and both
+   controllers try to manage it:
+   `agentpool: create agent 1: secrets "agentpool-dogfood-migrate-…-1" already exists`.
+   The Secrets carry **no owner references**, so nothing arbitrates — verified
+   directly.
+2. **v1 AGC lacks RBAC for a v2 kind it watches.** `clusterrunnertemplates… is
+   forbidden: User "system:serviceaccount:gag-dogfood-migrate:actions-gateway-controller"
+   cannot list…` — the migration grants the *migrated* AGC's ServiceAccount, not the
+   v1 one.
+
+This matters because coexistence is load-bearing in the migration story: v1 is left
+running specifically so rollback stays possible. In practice the v1 tenant is left in
+a broken reconcile loop the moment v2 comes up, which weakens that guarantee. Filed as
+[Q466](../STATUS.md#Q466).
+
+### The teardown order is load-bearing and undocumented
+
+Deleting the tenant namespace directly left it in `Terminating` indefinitely on three
+finalizers (`actions-gateway.com/agentpool-cleanup`,
+`actions-gateway.github.com/agentpool-cleanup`,
+`actions-gateway.github.com/gmc-cleanup`). The reason is structural: the AGC
+Deployments live *inside* the tenant namespace, so namespace deletion removes the very
+controllers that must clear those finalizers.
+
+[migration-v1-to-v2.md § Step 4](../operations/migration-v1-to-v2.md) does prescribe
+the correct order — delete the CRs first, while the controllers still run — so this
+was a bug in **this plan's runbook**, since corrected in step 11, rather than a
+product defect. What is missing is any warning that the obvious alternative deadlocks;
+that doc gap is folded into [Q466](../STATUS.md#Q466) rather than filed separately.
+
+Recovery, for the record: all namespace content was already deleted and no
+cluster-scoped object was at risk of being orphaned (verified before acting), so the
+three finalizers were cleared with a merge patch and the namespace drained
+immediately.
