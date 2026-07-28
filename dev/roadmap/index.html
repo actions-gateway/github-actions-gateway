@@ -2373,12 +2373,15 @@ tagged chart. Check the release notes for the exact image digests to pin.</p>
   protocol folds live quota headroom into the capacity it advertises to GitHub,
   and the classic tier declines the claim per delivered job.</li>
 <li><strong>Capacity gate for unplaceable workers (opt-in).</strong> A runner set can set
-  <code>capacityGate.mode: SchedulerVerdict</code> so the gateway stops taking on jobs while
-  the cluster cannot place its worker shape — a drained pool, a changed taint,
-  spot capacity gone. Jobs stay queued at GitHub instead of being claimed and
-  cancelled. It bounds the <em>rate</em> of wasted claims rather than eliminating the
-  first one, and it assumes a cluster that cannot grow: elastic clusters should
-  wait for the autoscaler-sourced mode below. Off by default.</li>
+  <code>capacityGate.mode</code> so the gateway stops taking on jobs while the cluster cannot
+  place its worker shape — a drained pool, a changed taint, spot capacity gone.
+  Jobs stay queued at GitHub instead of being claimed and cancelled. It bounds the
+  <em>rate</em> of wasted claims rather than eliminating the first one. Two modes, because
+  an unschedulable pod means opposite things depending on the cluster:
+  <code>SchedulerVerdict</code> for a cluster that cannot grow, and <code>AutoscalerVerdict</code> for one
+  that can — the latter gates only when the cluster autoscaler (or Karpenter) has
+  itself recorded that it will not add a node, which carries no such ambiguity. Off
+  by default.</li>
 <li><strong>Priority tiers per runner group.</strong> Reserve a guaranteed floor of slots for
   expensive runner types so cheap CPU jobs can't starve critical GPU work.</li>
 <li><strong>Worker scale-up rate limiting (opt-in).</strong> An optional per-runner-group token
@@ -2474,13 +2477,6 @@ last gaps an outside operator hits.</p>
   validated, not on a date. The deprecation window opened at v1.1.0, and
   <code>gag-migrate</code> already moves a tenant across without changing how jobs are acquired.
   Detail: the <a href="../operations/v1alpha1-deprecation/">deprecation and removal notice</a>.</li>
-<li><strong>Capacity-aware job intake on elastic clusters.</strong> <!-- q:Q406 --> The
-  scheduler-sourced capacity gate above is unsafe where a cluster autoscaler is
-  running: there, a Pending worker pod <em>is</em> the request for a node, so refusing
-  work on it can hold a tenant back exactly when scale-up would have rescued
-  them. The remaining mode sources the same rung from the autoscaler's own
-  declination — cluster-autoscaler or Karpenter saying it will not add a node —
-  which carries no such ambiguity. Off by default, like every mode.</li>
 </ul>
 <h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
 <p>Directions we expect to pursue as demand and validated evidence accumulate. These
