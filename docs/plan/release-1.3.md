@@ -1,11 +1,13 @@
 # Release 1.3 Milestone Definition
 
-> **Status: two gating Queue rows are open, both from the API review** —
-> [Q484](../STATUS.md#Q484), [Q486](../STATUS.md#Q486). The original six closed
-> 2026-07-26 (Q359, Q400, Q404, Q411, Q412, Q393); Q481 — the first row the
-> [API review](#e-api-review-q481-q485-closed-q484-q486-open) opened — closed
-> 2026-07-28 as **ship `spec.sizing` as-is, deliberately**, no API change; and
-> Q485 closed 2026-07-28 with the rename shipped.
+> **Status: one gating Queue row is open, from the API review** —
+> [Q484](../STATUS.md#Q484). The original six closed 2026-07-26 (Q359, Q400,
+> Q404, Q411, Q412, Q393), and three of the four rows the
+> [API review](#e-api-review-q481-q485-q486-closed-q484-open) opened closed
+> 2026-07-28: Q485 with the `windowStartTime` rename shipped, and Q481
+> (**ship `spec.sizing` as-is, deliberately**) and Q486 (**the two
+> managed-autoscaler opt-ins keep their different shapes, deliberately**) with
+> no API change at all.
 >
 > **Every remaining gate is an API-shape question**, which is the pattern worth
 > noticing: this release's residual risk is not unfinished capability but surface
@@ -193,7 +195,7 @@ filter should have been widened — that judgement is still the reviewer's, and
 the Q400 residual risk above is unaffected. Detail:
 [testing.md § The path-filter gate](../development/testing.md#the-path-filter-gate).
 
-### E. API review (*Q481, Q485 closed; Q484, Q486 open*)
+### E. API review (*Q481, Q485, Q486 closed; Q484 open*)
 
 1.3 is the first release to run the
 [pre-release API review](../development/api-review.md), and it is also the
@@ -254,14 +256,63 @@ operator intent, mechanism recombinations go in a sibling field):
 > `NodeShare` is still envtest-only (Q448) — and it is the profile whose missing
 > cell was the complaint, so the case for reshaping around it is weaker still.
 
-**Found and still open:** a second pass over the same span with the fuller
-checklist filed three more gating rows. Q485 (above) is now closed; two remain —
-[Q484](../STATUS.md#Q484) (a `nodeShare.allocatable` carrying neither cpu nor
-memory is admitted, and `sizingProfileState` then reports `Active` while nothing
-is derived) and [Q486](../STATUS.md#Q486) (the two managed-autoscaler opt-ins
-shipped in one release with different shapes — to be recorded here as a
-deliberate accept, which is that row's work). Each stays cheap only until the
-tag.
+**Also shipped as-is, deliberately:** Q486 — 1.3 publishes two managed-autoscaler
+opt-ins with **different shapes**:
+`EgressProxy.spec.managedAutoscaling` is a `*bool` defaulting `true` (an
+*opt-out* of a managed HorizontalPodAutoscaler, Q173), while
+`ActionsGateway.spec.agcAutoscaling` is a block whose *presence* is the opt-in
+into a managed VerticalPodAutoscaler and which carries its own `mode` enum
+(Q360). An operator meeting both in one changelog can fairly ask why "managed
+autoscaling" is spelled two ways. **Closed 2026-07-28 without an API change**, on
+three grounds, each of which decides its own side independently:
+
+1. **The direction is not a style choice — it follows what already ships.** The
+   proxy pool's HPA was managed *before* 1.3; Q173 adds only the ability to stop
+   managing it, so the field must default to today's behaviour and can only be an
+   opt-out. The AGC VerticalPodAutoscaler is new, with no behaviour to preserve,
+   so it defaults off. Reversing either is the actual defect: an opt-in
+   `managedAutoscaling` deletes the HPA of every pool that upgrades, and a
+   default-on `agcAutoscaling` hands the single AGC pod's requests to an
+   autoscaler nobody asked for. Making them symmetric would mean breaking one of
+   those two, so this difference survives any redesign.
+2. **The container follows whether the opt-in carries knobs.**
+   `managedAutoscaling` is a pure ownership toggle — the HPA's knobs
+   (`minReplicas`, `maxReplicas`, `targetCPUUtilizationPercentage`) already exist
+   as siblings and predate it, so a block would have to either move them (a wire
+   break) or sit next to them holding nothing. `agcAutoscaling` carries `mode`,
+   which is meaningful only when opted in; block presence gives that knob a home
+   *and* is the switch, so there is no `enabled: true` + `mode:` pair to keep
+   consistent — which is exactly the "sibling fields gated by one value" tell
+   under [one field answers one question](../development/api-review.md#one-field-answers-one-question).
+3. **Consistency is owed to the field's neighbours, not to the other CRD.**
+   `managedAutoscaling` sits beside `managedNetworkPolicy` on the same
+   `EgressProxySpec` — same `*bool`, same `+kubebuilder:default=true`, same "the
+   GMC owns this object unless you say otherwise" meaning — and
+   `managedNetworkPolicy` shipped in `v1.1.0`, so that pattern is already
+   published and already learned. Reshaping `managedAutoscaling` to match a field
+   on a different CRD would make it the odd one out in the object an operator
+   actually reads it in.
+
+> **The `*bool` was checked against [prefer a string enum](../development/api-review.md#prefer-a-string-enum-to-a-bool) rather than grandfathered.**
+> It passes because the axis it names is genuinely two-valued: it answers "does
+> the GMC own the `<name>-proxy` HPA?", and *who else* owns scaling is
+> deliberately not our question — an external KEDA, VPA, or custom HPA targets
+> the stable Deployment name without telling us. If we ever manage a second
+> autoscaler flavour, that is a new sibling naming the mechanism, not a third
+> value here — additively, in any later minor.
+
+The accept is a real freeze: `managedAutoscaling` could not become a block later
+without a wire break. What is bought for that is a field that matches its own
+object and preserves upgrade behaviour; what is paid is one cross-CRD asymmetry,
+mitigated by both shapes being documented where operators meet them
+([tenant-onboarding.md](../operations/tenant-onboarding.md#letting-an-autoscaler-size-the-agc-agcautoscaling))
+and by the rule now generalised in
+[api-review.md § Let the opt-in's direction follow what already ships](../development/api-review.md#let-the-opt-ins-direction-follow-what-already-ships).
+
+**Found and still open:** of the three further gating rows that second pass
+filed, one remains — [Q484](../STATUS.md#Q484) (a `nodeShare.allocatable`
+carrying neither cpu nor memory is admitted, and `sizingProfileState` then
+reports `Active` while nothing is derived). It stays cheap only until the tag.
 
 > **Q481 and Q484 both concern `NodeShare`, and do not overlap.** Q481 asked
 > whether the *shape* is right and answered yes; Q484 is a missing validation on
@@ -289,11 +340,10 @@ module consumers only and does not need to beat this tag.
 2026-07-26: both gate-integrity items (Q400, Q404), both halves of the
 deprecation notice (Q411, Q412), and the announce bar (Q393); the API review's
 Q481 closed 2026-07-28 without an API change
-([§ E](#e-api-review-q481-q485-closed-q484-q486-open)), and needed no ordering
-because a no-op decision has no dependents, and Q485 closed the same day with
-the `windowStartTime` rename shipped. The two that remain (Q484, Q486) are
-independent of each other and of everything else here — each is a self-contained
-change to one field — so they can land in any order, or in one PR. Neither half
+([§ E](#e-api-review-q481-q485-q486-closed-q484-open)), as did Q486, and neither
+needed ordering because a no-op decision has no dependents; Q485 closed the same
+day with the `windowStartTime` rename shipped. The one that remains (Q484) is a
+self-contained change to one field, independent of everything else here. Neither half
 of the notice could stand alone:
 Q412 named `v2.0.0` where operators plan from the docs, and Q411 put the same
 release into the apiserver warning, so an operator who never reads the docs still
