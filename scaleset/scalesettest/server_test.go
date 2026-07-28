@@ -323,7 +323,7 @@ func TestServer_CancelRunCompletesItsJobs(t *testing.T) {
 		t.Fatalf("Jobs: %v", err)
 	}
 	if len(entries) != 1 || entries[0].MessageType != scaleset.MessageTypeJobCompleted ||
-		entries[0].JobID != assigned[0].JobID || entries[0].Result != "cancelled" {
+		entries[0].JobID != assigned[0].JobID || entries[0].Result != "canceled" {
 		t.Errorf("unexpected completion message: %+v", entries)
 	}
 

@@ -49,8 +49,9 @@
 //	PROBE_RETENTION_KEEP_ARMED  - "true" to leave a RETAINED experiment open for a
 //	                              longer-gap check instead of concluding it.
 //
-// See docs/plan/q468-jobcompleted-retention.md for the design and for what makes
-// a result invalid.
+// The Q468 plan doc carries the experiment's design and, more importantly, what
+// would make a result invalid; developer-facing entry points are indexed from
+// the credential-gated probe scenarios section of docs/development/testing.md.
 package main
 
 import (

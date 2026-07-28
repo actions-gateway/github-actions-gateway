@@ -1,10 +1,12 @@
 # Q468: how long does GitHub hold a `JobCompleted` when no session exists?
 
-**Status:** harness built, not yet run live. `cmd/probe`'s Investigation F
-(`PROBE_RETENTION_TEST`) arms and checks the experiment; no live run has been
-performed, so **the retention question remains unanswered**. The findings
-section below is empty on purpose — it gets written from a run's output, not
-from expectation.
+**Status:** armed live 2026-07-28, and **the headline question is still open.**
+Both phases of `cmd/probe`'s Investigation F ran against real GitHub and did
+what they claim: an experiment is armed, and one rung is measured — the
+`JobCompleted` was redelivered to a session created **29 seconds** after the
+arming session was deleted. That establishes the replay path exists on the live
+wire; it says nothing yet about the multi-hour gap the Q435 residual is about.
+The experiment is left armed for a long-gap check.
 
 ## Why the question is open
 
@@ -119,17 +121,27 @@ The fixture is [`q468-retention-probe.yml`](../../.github/workflows/q468-retenti
 gh workflow run q468-retention-probe.yml --repo actions-gateway/github-actions-gateway
 ```
 
-Then arm. The App key comes from the macOS keychain, written to a temp file
-rather than an env var:
+Then arm. The App key comes from the macOS keychain and reaches the probe as a
+file path, never as an env-var value:
 
 ```bash
-KEY_FILE=$(mktemp -t gag-probe-key.XXXXXX) && trap 'rm -f "$KEY_FILE"' EXIT INT TERM && security find-generic-password -a actions-gateway-test -s github-app-private-key -w | xxd -r -p > "$KEY_FILE" && GITHUB_APP_ID=3752347 GITHUB_APP_INSTALLATION_ID=135739122 GITHUB_ORG_URL=https://github.com/actions-gateway/github-actions-gateway GITHUB_APP_PRIVATE_KEY="$KEY_FILE" PROBE_RETENTION_TEST=arm go run -C cmd/probe .
+KEY_FILE=./tmp/gag-probe-key.pem; trap 'rm -f ./tmp/gag-probe-key.pem' EXIT INT TERM; install -m 600 /dev/null "$KEY_FILE" && security find-generic-password -a actions-gateway-test -s github-app-private-key -w | xxd -r -p > "$KEY_FILE" && GITHUB_APP_ID=3752347 GITHUB_APP_INSTALLATION_ID=135739122 GITHUB_ORG_URL=https://github.com/actions-gateway/github-actions-gateway GITHUB_APP_PRIVATE_KEY="$PWD/tmp/gag-probe-key.pem" PROBE_RETENTION_TEST=arm PROBE_RETENTION_STATE="$PWD/tmp/q468-retention-state.json" go run -C cmd/probe .
 ```
 
 Wait the gap, then re-run the same command with `PROBE_RETENTION_TEST=check`,
 and when the experiment is over, once more with `PROBE_RETENTION_TEST=cleanup`.
-The state file (`tmp/q468-retention-state.json` by default) carries the
-experiment between them.
+The state file carries the experiment between them.
+
+Two details that cost a run each if missed:
+
+- **The key file goes in the repo-local `./tmp/`, not `mktemp -t`.** The
+  host-wide temp directory is shared across worktrees and outside the project
+  root; `workspace-guard` blocks writes there, and the older Investigation E
+  recipe predates that.
+- **Pass `PROBE_RETENTION_STATE` as an absolute path.** `go run -C cmd/probe .`
+  changes the process's working directory, so the default relative
+  `tmp/q468-retention-state.json` would land under `cmd/probe/` and the next
+  phase would not find it.
 
 `PROBE_RETENTION_KEEP_ARMED=true` on a `RETAINED` check leaves the message
 unacknowledged and appends the result to the state file's check history, so one
@@ -176,16 +188,51 @@ suite here means the harness works, not that the replay path does.**
 
 ## Findings
 
-*(empty — no live run has been performed)*
+### The first rung: RETAINED at 29 s (2026-07-28)
+
+Armed against `actions-gateway/github-actions-gateway`, scale set
+`gag-q468-retention` (id 11), job `2446648c-…`, run `30409332447`.
+
+| Step | Observed |
+|---|---|
+| Assignment | `JobAssigned` delivered ~0.6 s after the session opened (the fixture job was already queued against the label). Carried a complete run identity — `ownerName`, `repositoryName`, `workflowRunId` — corroborating [Q417](scaleset-eviction-recovery.md#the-rerun-target-was-unidentified-on-scale-set--resolved-2026-07-26). |
+| Cancel | `POST …/runs/30409332447/cancel` accepted; the job went terminal with **no runner ever involved**, confirming the arming phase does not need one. |
+| Completion | `JobCompleted` (message `100000002`) appeared ~0.2 s later, `result: canceled`. Left unacknowledged; cursor recorded at `100000001`. |
+| Gap start | Arming session deleted at `23:52:38Z`. |
+| Check at +29 s | Same message id `100000002` redelivered to a **new** session under a different owner name. **RETAINED.** |
+
+What that does and does not establish:
+
+- **Does:** the replay path is real on the live wire, not just in the fake. A
+  session that never saw the job receives its terminal message, which is exactly
+  the mechanism Q435's fourth orphan class depends on. And the harness itself is
+  validated end to end against GitHub rather than only against `scalesettest`.
+- **Does not:** answer the question. 29 s is not a multi-hour outage. The Q434
+  incident's window was 16 hours. A backend that holds a message for a minute
+  and drops it at an hour would produce exactly this result.
+
+**One divergence the live run caught.** GitHub spells the cancelled result
+`canceled`, one L. `scalesettest` had been written with `cancelled`, so the fake
+and the wire disagreed on a field a client can branch on. Corrected in the same
+change — which is the whole argument for driving these probes against the
+shipping client rather than a bespoke one.
 
 ## Open
 
-- The live run itself. It needs Tier C-grade App credentials (`actions: write`
-  on a repo whose workflow can target the probe's scale set) and a multi-hour
-  wall clock, so it is a scheduled operator action rather than something CI can
-  hold open.
-- If the result is `LOST` at a short gap, the replay path stops being a recovery
-  path: [architecture §Worker-Pod Reaper](../design/02-architecture.md) and the
-  [troubleshooting runbook](../operations/troubleshooting.md) both need their
-  redelivery sentences demoted, and Q438's cap becomes the sole recovery
+- **The long-gap check.** The experiment is armed and the state file is at
+  `tmp/q468-retention-state.json`; the scale set stays registered until cleanup.
+  Run `PROBE_RETENTION_TEST=check` after the gap you want to measure — 4 h and
+  12 h are the interesting rungs, 12 h because it brackets Q438's default
+  `maxWorkerLifetime`. Then `PROBE_RETENTION_TEST=cleanup`.
+- **Read a long-gap `RETAINED` with the intervening-session caveat.** The 29 s
+  check created a session. If the backend measures retention from the last
+  session rather than from the message's arrival, that session extended the
+  window, and any later `RETAINED` is optimistic by up to the elapsed time. A
+  later `LOST` is unaffected — it is only ever conservative — so a negative
+  result at 4 h or 12 h is trustworthy as it stands, and a positive one wants a
+  freshly armed confirmation before it is written down as the number.
+- If the result is `LOST` at any gap short of a working day, the replay path
+  stops being a recovery path: [architecture §Worker-Pod Reaper](../design/02-architecture.md)
+  and the [troubleshooting runbook](../operations/troubleshooting.md) both need
+  their redelivery sentences demoted, and Q438's cap becomes the sole recovery
   mechanism rather than a backstop.

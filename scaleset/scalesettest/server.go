@@ -758,6 +758,9 @@ func (s *Server) handleRegistrationToken(w http.ResponseWriter, r *http.Request)
 //
 // A run with nothing left to cancel answers 409, matching the real API's response
 // for an already-terminal run.
+//
+// The result string is "canceled", one L — the spelling observed on a live
+// JobCompleted (Q468, 2026-07-28), not Go's or English's preference.
 func (s *Server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -771,7 +774,7 @@ func (s *Server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
 	for _, ss := range s.scaleSets {
 		for _, j := range ss.jobs {
 			if j.runID == runID && j.state != jobCompleted {
-				s.completeJobLocked(ss, j, "cancelled")
+				s.completeJobLocked(ss, j, "canceled")
 				cancelled++
 			}
 		}

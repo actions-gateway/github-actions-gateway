@@ -4,7 +4,7 @@
 # arm phase (PROBE_RETENTION_TEST=arm) has a real job to be assigned. Nothing
 # ever runs it: the arm phase cancels the run to drive the job terminal, which is
 # how it produces the JobCompleted whose retention across a session gap is the
-# measurement (docs/plan/q468-jobcompleted-retention.md).
+# measurement. See the Q468 plan doc.
 #
 # One job, not two — unlike the Investigation E fixture, this scenario measures a
 # single job's terminal message and a second would only add a second thing to
