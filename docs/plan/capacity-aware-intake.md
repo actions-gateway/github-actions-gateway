@@ -27,12 +27,12 @@ durable rationale in
 | 0 | Design rationale recorded (D.8 asymmetry principle, G.16 deferral + triggers) | S | ✅ Done — this change |
 | 0a | Port the shipped quota rung to the scale-set tier, as the integer form of the ladder | M | ✅ Done ([§9a](#9a-the-shipped-quota-rung-was-classic-only-q443)/[§9b](#9b-what-the-port-shipped), Q443, 2026-07-26) |
 | 1 | `SchedulerVerdict` mode: gate on the scheduler's verdict, for clusters that cannot grow | M | ✅ Done ([§6](#6-phase-1--schedulerverdict-q405), Q405, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
-| 2 | `AutoscalerVerdict` mode: gate on the autoscaler's own declination, for elastic clusters | M | ❌ Open ([Q406](../STATUS.md#Q406)) |
+| 2 | `AutoscalerVerdict` mode: gate on the autoscaler's own declination, for elastic clusters | M | ✅ Done ([§7](#7-phase-2--autoscalerverdict-q406), Q406, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
-Nothing here has been validated on a live cluster, items 0a and 1 included: each
+Nothing here has been validated on a live cluster, items 0a, 1 and 2 included: each
 carries an envtest proof of the mechanism, not a measurement of its effect. §9 is the
-measurement step, and its numbers are the input to the Phase 2/3 decision; no
+measurement step, and its numbers are the input to the Phase 3 decision; no
 effectiveness claim belongs in this doc, or in public copy, before it exists.
 
 ---
@@ -352,6 +352,57 @@ open. `max total nodes in cluster reached` is a cluster-wide verdict that will
 trip every set at once; correct (no node is coming) but worth calling out in the
 operator doc. Unknown until measured: how often CA emits the event for a
 *transient* condition it would have resolved on its next loop.
+
+## 7a. What phase 2 shipped
+
+Shipped 2026-07-27. §7's scope landed as specified; four things were decided during
+implementation that the spec did not settle, and each is a constraint on Q407 rather
+than a local choice.
+
+**The verdict is the newest relevant event, not the presence of a declination.** §7
+specified two declination matchers and stopped there, which would have let a stale
+`NotTriggerScaleUp` gate a set the autoscaler had since started scaling for — the
+transient-declination risk §7 flagged as "unknown until measured", turned from a
+measurement question into a correctness one. So the matcher also recognizes each
+project's *acting* signal (CA `TriggeredScaleUp`, Karpenter `Nominated`) and returns
+the class of the newest event by timestamp, with same-instant ties resolving open.
+Ordering reads every timestamp field an Event may carry, because the two recorder
+generations populate different ones and reading only `LastTimestamp` would sort every
+new-style event at the zero time. This costs nothing — the events are already in hand —
+and removes the failure mode outright rather than deferring it to §9.
+
+**An unrecognized mode fails open, with its own reason.** Q405's condition writer
+treated any non-`Off` mode as `SchedulerVerdict`, which was safe while the enum held
+exactly those two values and is not once it holds three. The CRDs ship as their own
+chart and can be upgraded ahead of the AGC, so a `Probe` selected against an AGC that
+predates Q407 would have silently applied `SchedulerVerdict`'s semantics — on an
+elastic cluster, precisely the tenant-starving outcome the mode split exists to
+prevent. The mode dispatch is now an explicit switch whose default publishes
+`WorkerCapacityDeclined=False/GateModeUnsupported`. **Q407 must add its arm to that
+switch**, not rely on a fallthrough.
+
+**A re-check interval, because nothing watches Events.** The gate's signal lives in
+objects the AGC deliberately does not cache, so neither a declination arriving nor a
+later scale-up would re-trigger a reconcile on its own. A set in `AutoscalerVerdict`
+mode with any stuck pod therefore requeues every 30s while stuck. Both directions
+matter and the second is the safety one: without it the gate would stay closed after
+the autoscaler started acting, which is exactly what §9 step 3 checks for.
+
+**The read budget is bounded and doubly scoped.** Events are read only for pods the
+`WorkersUnschedulable` evaluation already found stuck past the scheduling grace
+(carried out of that evaluation rather than re-derived, so the two cannot disagree),
+oldest-first, field-selected server-side to one pod by name and UID, and capped at 8
+pods per reconcile with the truncation stated in the condition message. A healthy set
+costs zero reads. RBAC is `get`/`list` on core `events` only — **not** `watch`, which
+§7 listed: there is no informer, and granting a verb the code does not use would be a
+gratuitous widening.
+
+**Not measured yet.** §9 owns the live validation and none of it has run for this mode.
+Specifically unmeasured: the event's latency from pod creation (§9 step 4), which sizes
+the condition's staleness bound and is the number that says whether 30s is the right
+re-check; and how often CA emits `NotTriggerScaleUp` for a condition it resolves on its
+next loop — the recency rule bounds the damage of that case but does not tell us how
+common it is.
 
 ## 8. Phase 3 — `Probe`/`Provision` (Q407, deferred)
 

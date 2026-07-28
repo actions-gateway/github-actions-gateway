@@ -383,14 +383,20 @@ remainder of the ceiling.
 
 **Cause.** This is **deliberate, and only ever happens on a set that opted in.**
 The runner set has `spec.capacityGate.mode` set to something other than `Off`
-(Q405), and the signal that mode watches is currently saying the cluster cannot
-place another worker pod of this set's shape. In `SchedulerVerdict` mode that
-signal is the scheduler's own verdict — the same `PodScheduled=False` /
-`Unschedulable` fact behind
-[`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable). The gateway is
-refusing to claim work it cannot run, because each such claim spends a single-use
-JIT runner record, holds a GitHub job lock until `pendingPodDeadline`, and ends in
-a **cancelled** workflow run rather than a redelivered one.
+(Q405, Q406), and the signal that mode watches is currently saying the cluster
+cannot place another worker pod of this set's shape. The gateway is refusing to
+claim work it cannot run, because each such claim spends a single-use JIT runner
+record, holds a GitHub job lock until `pendingPodDeadline`, and ends in a
+**cancelled** workflow run rather than a redelivered one.
+
+The condition's `reason` names which signal said so:
+
+| `reason` | Mode | What was observed |
+|---|---|---|
+| `PodsUnschedulable` | `SchedulerVerdict` | The scheduler's own verdict — the same `PodScheduled=False`/`Unschedulable` fact behind [`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable). |
+| `ScaleUpDeclined` | `AutoscalerVerdict` | The cluster autoscaler itself recorded, on a stuck worker pod, that it will **not** add a node for it. The message carries the autoscaler's own per-node-group text. |
+| `CapacityAvailable` (status `False`) | either | The gate is engaged and is **not** refusing intake. |
+| `GateModeUnsupported` (status `False`) | — | This AGC does not implement the mode the set selected, so no rung is evaluated. See [below](#the-mode-is-reported-as-unsupported). |
 
 A set with no `capacityGate` (the default) never carries this condition at all —
 its absence is not a failure to report, it means the set did not opt in.
@@ -410,15 +416,29 @@ kubectl get runnerset -n <namespace> <runner-set> \
 ```
 
 ```sh
-# The message carries the scheduler's own verdict; confirm it on a stuck pod.
-kubectl describe pod -n <namespace> <worker-pod>   # look for "FailedScheduling"
+# The message carries the verdict; confirm it on a stuck pod. In SchedulerVerdict
+# mode look for "FailedScheduling"; in AutoscalerVerdict mode look for the
+# autoscaler's own event — "NotTriggerScaleUp" (cluster autoscaler) or a
+# "FailedScheduling" whose source is karpenter rather than default-scheduler.
+kubectl describe pod -n <namespace> <worker-pod>
+```
+
+```sh
+# AutoscalerVerdict only: the raw events the gate read, with their reporters.
+kubectl get events -n <namespace> \
+  --field-selector involvedObject.name=<worker-pod> \
+  -o custom-columns='TIME:.lastTimestamp,SOURCE:.source.component,REASON:.reason,MESSAGE:.message'
 ```
 
 **Resolution.** The gate is reporting a real cluster condition, so fix the
 placement problem — the resolutions are the same ones listed under
 [`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable) (allocatable
-capacity, `nodeSelector`/affinity, tolerations). The condition clears on the next
-reconcile once a worker pod schedules.
+capacity, `nodeSelector`/affinity, tolerations). In `AutoscalerVerdict` mode the
+autoscaler has already told you which one in the condition message: a node-group
+ceiling (`max node group size reached`, `max total nodes in cluster reached`), an
+untolerated taint, a cloud quota, or — for Karpenter — no instance type satisfying
+the pod. The condition clears on the next reconcile once a worker pod schedules,
+or once the autoscaler records that it *is* scaling up for one.
 
 **If you need jobs flowing again immediately**, turn the gate off and accept
 today's claim-and-cancel behaviour while you fix the cluster:
@@ -436,9 +456,45 @@ no AGC restart — and the condition is retracted on the next reconcile.
 > create capacity** — a fixed-size cluster with no autoscaler. If this cluster
 > *does* run a cluster autoscaler or Karpenter, the mode is wrong for it: the
 > unschedulable pod was the request for a node, and gating on it can hold a set
-> back exactly when scale-up would have rescued it. Set the mode to `Off` until
-> `AutoscalerVerdict` ships (Q406), which gates on the autoscaler's own
-> declination instead.
+> back exactly when scale-up would have rescued it. Switch the set to
+> `AutoscalerVerdict`, which gates on the autoscaler's own declination instead, or
+> to `Off`.
+
+### A Cluster-Wide Verdict Closes Every Set at Once
+
+In `AutoscalerVerdict` mode, some autoscaler declinations are **cluster-wide rather
+than per-pool** — cluster autoscaler's `max total nodes in cluster reached` is the
+common one. Every runner set with a stuck pod sees it in the same window, so they
+all report `WorkerCapacityDeclined=True` together and every one of them stops
+claiming.
+
+That is correct — no node is coming for any of them — but it looks alarming, and it
+is worth distinguishing from a per-set problem before you start debugging
+individual sets. Read the condition messages: a cluster-wide cause is the same
+sentence on every set, while a drained GPU pool names only the sets pinned to it.
+The remedy is a cluster one (raise the total node ceiling, or free nodes), not a
+per-set one.
+
+### The Mode Is Reported as Unsupported
+
+`WorkerCapacityDeclined=False` with `reason: GateModeUnsupported` means this AGC
+does not implement the mode the set selected, so **no capacity rung is evaluated**
+and intake is exactly as it would be with the gate `Off`.
+
+The usual cause is a version skew: the CRDs ship as their own chart
+(`actions-gateway-crds-v2`) and can be upgraded ahead of the controllers, so a mode
+a newer CRD accepts can reach an AGC that predates it. Failing open is deliberate —
+guessing at an unknown mode would apply the wrong signal's semantics, and
+`SchedulerVerdict`'s semantics on an elastic cluster hold a tenant back.
+
+**Resolution.** Upgrade the AGC to a version that implements the mode (for a
+GMC-provisioned gateway, the AGC image is rolled by the GMC), or set the mode to one
+this AGC accepts. The accepted values are on the CRD:
+
+```sh
+kubectl get crd runnersets.actions-gateway.com \
+  -o jsonpath='{.spec.versions[-1:].schema.openAPIV3Schema.properties.spec.properties.capacityGate.properties.mode.enum}{"\n"}'
+```
 
 ---
 
