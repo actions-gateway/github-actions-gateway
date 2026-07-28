@@ -785,6 +785,16 @@ gh workflow run integration-test.yml -f target_gag=true --ref main --repo "$REPO
 To route **all** production CI to GAG (the Q224 milestone end-state, not a
 day-to-day turn-up), see "Route all CI to GAG" below.
 
+> **Expect one known red: the `shellcheck` job ([Q482](../STATUS.md#Q482)).** It
+> runs `make scripts-test` without a `setup-go` step, and one of those
+> behavioural tests (`scripts/go-vet-tags-test.sh`) shells out to `go` — which
+> the [dogfood runner image](../../scripts/dogfood/runner/Dockerfile) omits
+> on purpose, relying on `setup-go` to supply it. `ubuntu-latest` hides this by
+> preinstalling Go. So the job fails `go: command not found` on **every**
+> `target_gag=true` dispatch, deterministically. It is a job/image mismatch, not
+> a GAG defect and not a flake — don't spend a session re-diagnosing it, and
+> don't read it as the validation burst failing.
+
 ### Stop dogfooding
 
 Opt-in dispatches are one-shot, so there is no standing CI route to revert —
