@@ -477,6 +477,21 @@ kubectl delete crd actionsgateways.actions-gateway.github.com \
                    runnergroups.actions-gateway.github.com
 ```
 
+The `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy` is retained the
+same way, and for a sharper reason: deleting it permanently breaks the
+apiserver's ability to resolve ConfigMap policy parameters, so a later reinstall
+would deny **every** `runnergroups` / `runnersets` / `runnertemplates` write
+cluster-wide. It is inert once its binding is gone (`helm uninstall` removes
+that), so leaving it costs nothing. Delete it only when you are removing the
+product for good — never as a step on the way to a reinstall:
+
+```sh
+kubectl delete validatingadmissionpolicy gmc-priorityclass-allowlist-guard
+```
+
+See [security-operations.md § The policy object survives `helm uninstall`](security-operations.md#the-policy-object-survives-helm-uninstall--on-purpose)
+for the mechanism and the recovery path if you have already hit it.
+
 The install namespace (`gmc-system`) is left in place if you created it with
 `--create-namespace`; remove it with `kubectl delete namespace gmc-system` once
 empty.

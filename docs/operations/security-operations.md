@@ -1472,6 +1472,60 @@ fail-closed rather than silently off. The GMC surfaces this as provisioning
 errors on affected gateways; recreate the ConfigMap (or `helm upgrade`) to
 recover. Deleting the ConfigMap does not affect running workloads.
 
+#### The policy object survives `helm uninstall` — on purpose
+
+The `ValidatingAdmissionPolicy` carries `helm.sh/resource-policy: keep`, so
+`helm uninstall` leaves it in the cluster. Its **binding** and its **parameter
+ConfigMap** do not — those are removed normally, and removing the binding is
+what actually stops enforcement. A policy with no binding evaluates nothing, so
+the retained object is inert.
+
+This is not tidiness; deleting it is destructive in a way that is hard to undo.
+The apiserver runs one admission-policy *parameter informer* per `paramKind`
+GroupVersionResource, shared by every policy naming it, and tears that informer
+down when the last such policy is deleted. The teardown is permanent for the
+life of the apiserver process: the informer is cached by GVR and the cached
+instance is already stopped, so a policy created later gets the dead informer
+back with an empty cache. Its binding then fails every parameter lookup with
+`no params found for policy binding`, and because the apiserver resolves binding
+parameters **before** any per-object matching, that denies *every* matched write
+— `runnergroups`, `runnersets`, `runnertemplates`, class-naming or not —
+cluster-wide, for as long as that apiserver process lives. Verified on
+Kubernetes 1.35.5 and 1.36.1.
+
+Two consequences worth knowing:
+
+- **Removing the product entirely** takes one extra step, alongside the CRD
+  cleanup in [install.md § Uninstall](install.md#uninstall):
+
+  ```sh
+  # gmc- is the default namePrefix, not the release name; adjust if you overrode it.
+  kubectl delete validatingadmissionpolicy gmc-priorityclass-allowlist-guard
+  ```
+
+  Safe once you are done with the release — you are discarding the cluster's
+  ability to resolve ConfigMap policy parameters until its apiserver next
+  restarts, which no longer matters if nothing is installed. Do **not** run it
+  as a step on the way to a reinstall.
+- **`admissionPolicy.enabled=false`** removes the binding on the next
+  `helm upgrade`, so enforcement stops as documented; the policy object stays
+  behind, inert, and is picked back up when you re-enable.
+
+**If you already hit this** — writes denied with `no params found for policy
+binding` while the parameter ConfigMap plainly exists at the referenced name and
+namespace — the parameter informer is dead and recreating the ConfigMap will not
+help. Two options:
+
+- **Restart kube-apiserver.** The only true fix. Available on self-managed
+  control planes; on EKS/GKE/AKS you cannot do this directly, and a control-plane
+  version upgrade is usually the only lever that recycles the process.
+- **Turn the guard off to restore writes** (`helm upgrade --set
+  admissionPolicy.enabled=false`, or delete the binding by hand). Denials stop
+  immediately because nothing evaluates the policy any more. You lose the
+  defense-in-depth backstop until the apiserver restarts and you re-enable it, so
+  treat it as an incident mitigation and make sure the webhook allowlist is still
+  in force in the meantime.
+
 ---
 
 ## License attribution in images
