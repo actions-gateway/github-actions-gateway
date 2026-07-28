@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
 # Unit tests for the make-recipe parsing in scripts/check-codegen-drift.sh (Q457):
-# manifests_recipe (tab folding, line continuations, where a recipe ends),
-# recipe_generators (which tokens count as controller-gen generators), and
-# assert_registry_fidelity, the consumer that turns a parse into a pass or a
-# failure.
+# manifests_recipe (tab folding, line continuations, comment stripping, where a
+# recipe ends), recipe_generators (which tokens count as controller-gen
+# generators), and assert_registry_fidelity, the consumer that turns a parse into
+# a pass or a failure.
 #
 # The gate reads `manifests:` recipes straight out of Makefiles, and make recipes
 # are tab-sensitive — a class of bug that is invisible to review and obvious to a
@@ -161,12 +161,63 @@ expect_recipe target-with-prerequisites \
 	'manifests: $(CONTROLLER_GEN) ## regenerate\n\t$(CONTROLLER_GEN) crd paths="./..."\n' \
 	' $(CONTROLLER_GEN) crd paths="./..." '
 
-# A commented-out call is folded in like any other recipe line — the parser is
-# textual and does not know '#' starts a shell comment. Pinned, not endorsed: see
-# the commented-out-call-leaks-tokens case below for what it costs.
+# --- manifests_recipe: comment stripping (Q464) -------------------------------
+#
+# A recipe line is handed to the shell, so the shell's comment rule is the one
+# that decides what make actually runs: an unquoted '#' at the start of a word
+# begins a comment. manifests_recipe strips exactly that much. Before Q464 it
+# stripped nothing, so a commented-out call contributed its '#' and its
+# generators to the fold as live tokens.
+
+# The motivating shape: a call commented out in favour of a hand-maintained
+# manifest. The whole line is a comment, so it contributes nothing at all —
+# folding it in made assert_registry_fidelity reject the module for running a
+# generator named '#'.
 expect_recipe commented-out-call \
 	'manifests:\n\t# $(CONTROLLER_GEN) crd paths="./..."\n\t@echo "hand-maintained here"\n' \
-	' # $(CONTROLLER_GEN) crd paths="./..."  @echo "hand-maintained here" '
+	' @echo "hand-maintained here" '
+
+# A trailing comment on a live call: the call survives, the note does not.
+expect_recipe trailing-comment \
+	'manifests:\n\t$(CONTROLLER_GEN) crd paths="./..." # webhook is hand-maintained\n' \
+	' $(CONTROLLER_GEN) crd paths="./..."  '
+
+# A quoted '#' is ordinary text, in either quote style — over-stripping would
+# truncate a live call at the first '#' inside an echo.
+expect_recipe hash-in-double-quotes \
+	'manifests:\n\t@echo "roleName=agc-role # not a comment" && $(CONTROLLER_GEN) crd\n' \
+	' @echo "roleName=agc-role # not a comment" && $(CONTROLLER_GEN) crd '
+# Single quotes in a single-quoted bash string: '\'' closes, escapes, reopens.
+expect_recipe hash-in-single-quotes \
+	'manifests:\n\t@echo '\''sharp # sign'\'' && $(CONTROLLER_GEN) crd\n' \
+	' @echo '\''sharp # sign'\'' && $(CONTROLLER_GEN) crd '
+
+# A backslash-escaped '#' is ordinary text too. The body spells it '\\#' because
+# printf '%b' collapses the pair; the wanted output carries the single backslash
+# the fixture Makefile actually holds.
+expect_recipe escaped-hash \
+	'manifests:\n\t@echo \\# && $(CONTROLLER_GEN) crd\n' \
+	' @echo \# && $(CONTROLLER_GEN) crd '
+
+# A '#' mid-word starts no comment — the shell only takes one at a word start.
+expect_recipe hash-mid-word \
+	'manifests:\n\t@echo id#42 && $(CONTROLLER_GEN) crd\n' \
+	' @echo id#42 && $(CONTROLLER_GEN) crd '
+
+# A comment that ends in a backslash does NOT continue: the shell discards
+# everything to the newline, backslash included, and reads the next line as a
+# command. So the commented call vanishes and the live one below it survives.
+expect_recipe comment-swallows-its-continuation \
+	'manifests:\n\t# $(CONTROLLER_GEN) webhook \\\n\t$(CONTROLLER_GEN) crd paths="./..."\n' \
+	' $(CONTROLLER_GEN) crd paths="./..." '
+
+# A make comment at column 0 — no tab — ends the recipe here, though make itself
+# would ignore it and keep reading. Same trade as blank-line-ends-recipe above,
+# and the same reason it is tolerable: it truncates toward a LOUD failure, since
+# the generators on the dropped lines then read as unregistered.
+expect_recipe make-comment-line-ends-recipe \
+	'manifests:\n\t$(CONTROLLER_GEN) crd paths="./..."\n# a make comment\n\t$(CONTROLLER_GEN) webhook paths="./..."\n' \
+	' $(CONTROLLER_GEN) crd paths="./..." '
 
 # --- recipe_generators: token classification ----------------------------------
 
@@ -187,11 +238,12 @@ expect_generators tabs-split-like-spaces $' $(CONTROLLER_GEN)\tcrd\twebhook ' $'
 # An empty recipe yields no generators at all.
 expect_generators empty-recipe '' ''
 
-# A commented-out call leaks its '#' and its generator as live tokens. The '#'
-# then reads as an unregistered generator, so the gate fails loudly rather than
-# silently skipping the commented generator — but the message names '#', which is
-# not the real problem. Queue: Q464.
-expect_generators commented-out-call-leaks-tokens \
+# This classifier is deliberately dumb about comments: by the time it runs,
+# manifests_recipe has already stripped them (Q464), so a '#' can only reach here
+# from a caller passing raw make source. Pinned so the responsibility stays in
+# one place — comment syntax is a line-level concern, and duplicating it in a
+# whitespace-split token filter is where the two would drift apart.
+expect_generators raw-comment-not-filtered-here \
 	' # $(CONTROLLER_GEN) crd paths="./..." ' \
 	$'#\ncrd'
 
@@ -230,6 +282,34 @@ defaulted="$(fixture fidelity-defaulted-output \
 	'manifests:\n\t$(CONTROLLER_GEN) crd webhook paths="./..." \\\n\t\toutput:crd:artifacts:config=config/crd\n')"
 expect_fidelity defaulted-output-kind-allowed pass "$defaulted" \
 	'crd webhook' 'crd=config/crd webhook=config/webhook'
+
+# REGRESSION (Q464), end to end: a commented-out call must contribute nothing.
+# Before the fix the fold made this row unfaithful for omitting the generators
+# '#' and 'webhook' — a gate failing over a call make never runs, and naming a
+# generator that does not exist.
+commented="$(fixture fidelity-commented-out-call \
+	'manifests:\n\t# $(CONTROLLER_GEN) webhook paths="./..."\n\t$(CONTROLLER_GEN) crd paths="./..." \\\n\t\toutput:crd:artifacts:config=config/crd\n')"
+expect_fidelity commented-out-call-ignored pass "$commented" \
+	'crd' 'crd=config/crd'
+
+# The over-coverage direction, and the one the fold silently allowed: the row
+# registers a generator that survives only as a comment. The " $gen " presence
+# grep matched the commented copy, so the gate regenerated webhook output and
+# diffed it against a committed dir `make manifests` no longer writes.
+expect_fidelity commented-generator-is-absent fail "$commented" \
+	'crd webhook' 'crd=config/crd webhook=config/webhook'
+expect_message commented-generator-is-absent 'is registered in'
+
+# The same fold hid a real fault in the other half of the assertion: a
+# commented-out output: rule satisfied the row's dir match, so a row pointing at
+# the wrong committed dir passed and the gate would have diffed against it. The
+# live rule is the only one that counts, so this must fail — and fail with the
+# dir message, not with the '#'-as-generator noise it produced before.
+stale_dir_note="$(fixture fidelity-commented-output-rule \
+	'manifests:\n\t$(CONTROLLER_GEN) crd paths="./..." \\\n\t\toutput:crd:artifacts:config=config/crd/bases # was output:crd:artifacts:config=config/crd\n')"
+expect_fidelity commented-output-rule-ignored fail "$stale_dir_note" \
+	'crd' 'crd=config/crd'
+expect_message commented-output-rule-ignored 'names a different dir'
 
 # A registered module whose manifests: target has gone away.
 gone="$(fixture fidelity-no-target 'generate:\n\t$(CONTROLLER_GEN) object paths="./..."\n')"
