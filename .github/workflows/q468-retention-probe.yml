@@ -24,6 +24,10 @@ on:
     branches: ["claude/**"]
     paths: [".github/workflows/q468-retention-probe.yml"]
 
+# The job exists to be queued against the scale-set label and cancelled; it never
+# touches the repo, so it gets no token scopes at all.
+permissions: {}
+
 # Jobs run only on explicit opt-in: a workflow_dispatch, or a push whose head
 # commit message contains "[q468-probe]". A plain push touching this file (e.g.
 # editing the fixture itself) skips the job, so the run concludes green instead
