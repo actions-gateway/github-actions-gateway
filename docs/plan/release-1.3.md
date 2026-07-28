@@ -1,11 +1,11 @@
 # Release 1.3 Milestone Definition
 
-> **Status: three gating Queue rows are open, all from the API review** —
-> [Q484](../STATUS.md#Q484), [Q485](../STATUS.md#Q485),
-> [Q486](../STATUS.md#Q486). The original six closed 2026-07-26 (Q359, Q400,
-> Q404, Q411, Q412, Q393), and Q481 — the first row the
-> [API review](#e-api-review-q481-closed-q484q486-open) opened — closed
-> 2026-07-28 as **ship `spec.sizing` as-is, deliberately**, no API change.
+> **Status: two gating Queue rows are open, both from the API review** —
+> [Q484](../STATUS.md#Q484), [Q486](../STATUS.md#Q486). The original six closed
+> 2026-07-26 (Q359, Q400, Q404, Q411, Q412, Q393); Q481 — the first row the
+> [API review](#e-api-review-q481-q485-closed-q484-q486-open) opened — closed
+> 2026-07-28 as **ship `spec.sizing` as-is, deliberately**, no API change; and
+> Q485 closed 2026-07-28 with the rename shipped.
 >
 > **Every remaining gate is an API-shape question**, which is the pattern worth
 > noticing: this release's residual risk is not unfinished capability but surface
@@ -193,7 +193,7 @@ filter should have been widened — that judgement is still the reviewer's, and
 the Q400 residual risk above is unaffected. Detail:
 [testing.md § The path-filter gate](../development/testing.md#the-path-filter-gate).
 
-### E. API review (*Q481 closed; Q484–Q486 open*)
+### E. API review (*Q481, Q485 closed; Q484, Q486 open*)
 
 1.3 is the first release to run the
 [pre-release API review](../development/api-review.md), and it is also the
@@ -213,7 +213,14 @@ in a tagged release, so all of them are in the cheap window until this tag.
 **Found and fixed before the tag:** `capacityGate.mode: On` → `Observe` (Q476) —
 the value named *that* the gate was on rather than *how* it decides, which stops
 distinguishing anything once Q407's reserved `Probe`/`Provision` join the same
-axis.
+axis. And `status.sizingRecommendation[].windowStart` → `windowStartTime`
+(Q485, closed 2026-07-28) — upstream spells timestamp fields `somethingTime`
+(`startTime`, `lastTransitionTime`), and this is the API's only project-defined
+`metav1.Time`, so it sets the precedent every later one is read against. The
+rename had to land in **both** v2alpha1 and v2beta1: the spoke↔hub conversion is
+a JSON round-trip (`api/v2alpha1/conversion.go`), so a tag renamed on one side
+only would have silently dropped the field on conversion rather than failing to
+compile.
 
 **Found and shipped as-is, deliberately:** Q481 — `sizing.profile` carries two
 axes (where the request comes from; what limits follow) the same way
@@ -248,14 +255,13 @@ operator intent, mechanism recombinations go in a sibling field):
 > cell was the complaint, so the case for reshaping around it is weaker still.
 
 **Found and still open:** a second pass over the same span with the fuller
-checklist filed three more gating rows — [Q484](../STATUS.md#Q484) (a
-`nodeShare.allocatable` carrying neither cpu nor memory is admitted, and
-`sizingProfileState` then reports `Active` while nothing is derived),
-[Q485](../STATUS.md#Q485) (`windowStart` → `windowStartTime`, the API's first
-project-defined `metav1.Time` and so the precedent), and
-[Q486](../STATUS.md#Q486) (the two managed-autoscaler opt-ins shipped in one
-release with different shapes — to be recorded here as a deliberate accept, which
-is that row's work). Each stays cheap only until the tag.
+checklist filed three more gating rows. Q485 (above) is now closed; two remain —
+[Q484](../STATUS.md#Q484) (a `nodeShare.allocatable` carrying neither cpu nor
+memory is admitted, and `sizingProfileState` then reports `Active` while nothing
+is derived) and [Q486](../STATUS.md#Q486) (the two managed-autoscaler opt-ins
+shipped in one release with different shapes — to be recorded here as a
+deliberate accept, which is that row's work). Each stays cheap only until the
+tag.
 
 > **Q481 and Q484 both concern `NodeShare`, and do not overlap.** Q481 asked
 > whether the *shape* is right and answered yes; Q484 is a missing validation on
@@ -283,8 +289,9 @@ module consumers only and does not need to beat this tag.
 2026-07-26: both gate-integrity items (Q400, Q404), both halves of the
 deprecation notice (Q411, Q412), and the announce bar (Q393); the API review's
 Q481 closed 2026-07-28 without an API change
-([§ E](#e-api-review-q481-closed-q484q486-open)), and needed no ordering because
-a no-op decision has no dependents. The three that remain (Q484, Q485, Q486) are
+([§ E](#e-api-review-q481-q485-closed-q484-q486-open)), and needed no ordering
+because a no-op decision has no dependents, and Q485 closed the same day with
+the `windowStartTime` rename shipped. The two that remain (Q484, Q486) are
 independent of each other and of everything else here — each is a self-contained
 change to one field — so they can land in any order, or in one PR. Neither half
 of the notice could stand alone:

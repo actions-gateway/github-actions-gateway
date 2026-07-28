@@ -81,8 +81,8 @@ func TestSetAggRecommendations(t *testing.T) {
 	if rec.SampleCount != 31 {
 		t.Fatalf("SampleCount = %d, want 31", rec.SampleCount)
 	}
-	if rec.WindowStart.Time != now {
-		t.Fatalf("WindowStart = %v, want %v", rec.WindowStart.Time, now)
+	if rec.WindowStartTime.Time != now {
+		t.Fatalf("WindowStartTime = %v, want %v", rec.WindowStartTime.Time, now)
 	}
 	// CPU request: p95 of peaks ≈ 0.4-0.5 bucket region → rounded up to a 50m step ≥ 400m.
 	cpuReq := rec.Requests[corev1.ResourceCPU]
@@ -107,11 +107,11 @@ func TestSeedFromStatusRoundTrip(t *testing.T) {
 	now := time.Date(2026, 7, 21, 0, 0, 0, 0, time.UTC)
 	windowStart := metav1.NewTime(now.Add(-time.Hour))
 	persisted := []agcv2alpha1.ContainerSizingRecommendation{{
-		Container:    "runner",
-		ObservedP95:  rl("1500m", "1536Mi"),
-		ObservedPeak: rl("2", "3Gi"),
-		SampleCount:  40,
-		WindowStart:  windowStart,
+		Container:       "runner",
+		ObservedP95:     rl("1500m", "1536Mi"),
+		ObservedPeak:    rl("2", "3Gi"),
+		SampleCount:     40,
+		WindowStartTime: windowStart,
 	}}
 
 	a := &setAgg{containers: make(map[string]*containerAgg)}
@@ -125,8 +125,8 @@ func TestSeedFromStatusRoundTrip(t *testing.T) {
 	if rec.SampleCount != 40 {
 		t.Fatalf("SampleCount = %d, want 40", rec.SampleCount)
 	}
-	if rec.WindowStart.Time != windowStart.Time {
-		t.Fatalf("WindowStart = %v, want persisted %v", rec.WindowStart.Time, windowStart.Time)
+	if rec.WindowStartTime.Time != windowStart.Time {
+		t.Fatalf("WindowStartTime = %v, want persisted %v", rec.WindowStartTime.Time, windowStart.Time)
 	}
 	// The persisted max must survive exactly; p95 must stay in its bucket.
 	peak := rec.ObservedPeak[corev1.ResourceCPU]

@@ -57,7 +57,7 @@ kubectl get runnerset <name> -n <ns> -o jsonpath='{.status.sizingRecommendation}
 Each entry carries, per container: recommended `requests` (p95 of per-job
 peaks), a recommended memory `limit` (observed max × 1.4 headroom; no CPU limit
 is ever recommended), the raw `observedPeak`/`observedP95`, and — the
-confidence signal — `sampleCount` plus `windowStart`. Treat a recommendation
+confidence signal — `sampleCount` plus `windowStartTime`. Treat a recommendation
 with a low `sampleCount` as a hint, not a target; it appears from 5 sampled
 jobs and survives AGC restarts (the status field is also the store the sampler
 re-seeds from).

@@ -130,7 +130,7 @@ Decisions taken at pickup (implementation: `cmd/agc/internal/usage/aggregate.go`
   decay.** The sampler keeps fixed-bucket per-job-peak histograms (the Phase 1
   Prometheus bucket edges, shared so the two views can't disagree) per
   RunnerSet × container. No rolling window: sizing wants the whole observed
-  envelope, the operator judges staleness via `windowStart`/`sampleCount`, and
+  envelope, the operator judges staleness via `windowStartTime`/`sampleCount`, and
   a decay policy can arrive with Phase 3's confidence machinery if live use
   shows drift-over-time matters. Memory stays bounded by container-name
   cardinality regardless.
@@ -320,8 +320,10 @@ Two independent things worth recording:
 ### Phase 2 — recommendation in status: confirmed
 
 `status.sizingRecommendation` appeared on the `runner` container at exactly
-`sampleCount: 5` (`MinSamplesForRecommendation`), carrying `windowStart` and
-both raw statistics beside the derived values:
+`sampleCount: 5` (`MinSamplesForRecommendation`), carrying `windowStartTime` and
+both raw statistics beside the derived values (the capture below spells that
+field `windowStart`, its name at observation time; [Q485](../STATUS.md) renamed
+it before the 1.3 tag, values unchanged):
 
 ```json
 {
@@ -361,7 +363,7 @@ means "the template is not wasteful and will not OOM".
 Deleting the AGC pod mid-run (`dogfood-agc-…-227d6` → `…-fstfb`) left
 `status.sizingRecommendation` **byte-identical** across the restart —
 `sampleCount: 10`, the same `observedPeak`/`observedP95`, the same derived
-`requests`/`limits`, and the same `windowStart`. That is the warm-up safety
+`requests`/`limits`, and the same `windowStartTime`. That is the warm-up safety
 rail doing its job: a freshly-started sampler holds an empty aggregate, and the
 reconciler declines to overwrite the persisted store with it.
 

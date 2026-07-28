@@ -90,8 +90,8 @@ func TestV2_RunnerSet_SizingRecommendationAndDrift(t *testing.T) {
 			corev1.ResourceCPU:    resource.MustParse("450m"),
 			corev1.ResourceMemory: resource.MustParse("1Gi"),
 		},
-		SampleCount: 25,
-		WindowStart: windowStart,
+		SampleCount:     25,
+		WindowStartTime: windowStart,
 	}})
 	// Touch the set to trigger a reconcile that picks the seeded snapshot up.
 	//
@@ -129,7 +129,7 @@ func TestV2_RunnerSet_SizingRecommendationAndDrift(t *testing.T) {
 	rec := got.Status.SizingRecommendation[0]
 	require.Equal(t, "runner", rec.Container)
 	require.Equal(t, int64(25), rec.SampleCount)
-	require.True(t, rec.WindowStart.Equal(&windowStart), "windowStart should persist")
+	require.True(t, rec.WindowStartTime.Equal(&windowStart), "windowStartTime should persist")
 	require.Equal(t, "500m", rec.Requests.Cpu().String())
 	require.Equal(t, "1536Mi", rec.ObservedPeak.Memory().String())
 }
