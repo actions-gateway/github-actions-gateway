@@ -616,6 +616,18 @@ install-cert-manager: ## Apply cert-manager and wait for it to be ready
 chart-reinstall-check: ## Verify the chart survives a helm uninstall/reinstall cycle (needs the release installed)
 	KIND_CLUSTER=$(KIND_CLUSTER) scripts/chart-reinstall-check.sh
 
+# Q475 — the day-2 `helm upgrade` gate. `make deploy` runs `helm upgrade
+# --install`, but never against a prior release, so upgrade over a LIVE release
+# was untested; in particular nothing proved that CRD field changes still reach
+# an existing install (they only do because the CRDs ship under templates/crds/,
+# not the chart-root crds/ Helm never upgrades). Unlike chart-reinstall-check
+# this one IS wired into CI (e2e-reusable.yml, after the suite). Run it against a
+# cluster with the release already installed (after the e2e suite under
+# E2E_SKIP_TEARDOWN, or a manual `make deploy`).
+.PHONY: chart-upgrade-check
+chart-upgrade-check: ## Verify `helm upgrade` delivers chart + CRD changes to a live release (needs the release installed)
+	KIND_CLUSTER=$(KIND_CLUSTER) scripts/chart-upgrade-check.sh
+
 .PHONY: e2e-cluster-delete
 e2e-cluster-delete: ## Delete the local e2e kind cluster (no-op if it does not exist)
 	@if kind get clusters 2>/dev/null | grep -qx $(KIND_CLUSTER); then \
