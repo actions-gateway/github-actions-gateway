@@ -2050,6 +2050,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#a-limitrange-silently-cancels-throughput" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A LimitRange silently cancels Throughput
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2410,6 +2421,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#a-limitrange-silently-cancels-throughput" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A LimitRange silently cancels Throughput
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2691,6 +2713,33 @@ that names the intent. If you want it, say so on the issue tracker — the clean
 form is an explicit field under <code>sizing.nodeShare</code>, an additive change we held
 back from 1.3 for want of a concrete asker
 (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix-h §H.7</a>).</p>
+<h3 id="a-limitrange-silently-cancels-throughput">A <code>LimitRange</code> silently cancels <code>Throughput</code><a class="headerlink" href="#a-limitrange-silently-cancels-throughput" title="Permanent link">&para;</a></h3>
+<p><code>Throughput</code> bursts by <strong>removing</strong> the runner container's CPU limit — that is
+its mechanism, not a side effect. A <code>LimitRange</code> puts the limit straight back.</p>
+<p>An entry of type <code>Container</code> carrying a <code>default</code> for <code>limits.cpu</code> — or a <code>max</code>
+with no <code>default</code>, which Kubernetes then uses as the default — applies to any
+container that does not declare one, and the container <code>Throughput</code> just built
+declares none. The pod is <strong>not rejected</strong>. It is admitted with a CPU limit the
+profile deliberately removed, <code>sizingProfileState</code> still reports <code>Active</code>, and
+every other signal looks correct. Jobs simply stop bursting, and nothing says so.</p>
+<p>Check before you enable it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>limitrange<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .items[*].spec.limits[*]}{.type}{&quot;\t&quot;}{.default}{&quot;\t&quot;}{.max}{&quot;\n&quot;}{end}&#39;</span>
+</code></pre></div>
+<p>If a <code>Container</code> row carries a <code>cpu</code> <code>default</code> or <code>max</code>, <code>Throughput</code> will not
+burst in that namespace. Three ways out, in order of preference:</p>
+<ol>
+<li><strong>Drop the <code>cpu</code> default from the <code>LimitRange</code></strong> — the namespace stops
+   dictating a limit and the profile works as designed. Keep <code>maxRequests</code> set,
+   since that is the clamp actually bounding a skewed derivation.</li>
+<li><strong>Use <code>Binpack</code></strong> — it always sets its own limit, so the <code>LimitRange</code> default
+   never applies. You trade burst for predictable packing, which is the choice
+   between the two profiles anyway.</li>
+<li><strong>Stay on <code>Static</code></strong> and apply <code>status.sizingRecommendation</code> by hand, keeping
+   whatever limit the <code>LimitRange</code> requires.</li>
+</ol>
+<p>This is the one profile whose contract a namespace policy can quietly void. The
+memory side is unaffected: <code>Throughput</code> sets a memory limit explicitly, so a
+<code>LimitRange</code> default never reaches it.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <p><strong><code>actions_gateway_worker_usage_poll_errors_total</code> rising steadily</strong> — the AGC
 cannot list <code>PodMetrics</code>. Either metrics-server is not installed (the
