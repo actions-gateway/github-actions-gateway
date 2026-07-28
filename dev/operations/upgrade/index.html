@@ -1454,10 +1454,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#breaking-pre-ga-capacitygatemode-values-replaced-by-on--a-gateway-level-cluster-fact" class="md-nav__link">
+  <a href="#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact" class="md-nav__link">
     <span class="md-ellipsis">
       
-        BREAKING (pre-GA): capacityGate.mode values replaced by On + a gateway-level cluster fact
+        BREAKING (pre-GA): capacityGate.mode values replaced by Observe + a gateway-level cluster fact
       
     </span>
   </a>
@@ -2688,10 +2688,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#breaking-pre-ga-capacitygatemode-values-replaced-by-on--a-gateway-level-cluster-fact" class="md-nav__link">
+  <a href="#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact" class="md-nav__link">
     <span class="md-ellipsis">
       
-        BREAKING (pre-GA): capacityGate.mode values replaced by On + a gateway-level cluster fact
+        BREAKING (pre-GA): capacityGate.mode values replaced by Observe + a gateway-level cluster fact
       
     </span>
   </a>
@@ -3099,7 +3099,7 @@
 <ul>
 <li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
-<li><a href="#breaking-pre-ga-capacitygatemode-values-replaced-by-on--a-gateway-level-cluster-fact">BREAKING (pre-GA): capacityGate.mode values replaced by On + a gateway-level cluster fact</a></li>
+<li><a href="#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact">BREAKING (pre-GA): capacityGate.mode values replaced by Observe + a gateway-level cluster fact</a></li>
 <li><a href="#non-breaking-an-over-long-derived-runnergroup-name-is-bounded-and-renamed">Non-breaking: an over-long derived RunnerGroup name is bounded (and renamed)</a></li>
 <li><a href="#non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix">Non-breaking: a RunnerSet's agent Secrets and runner names gain an rs- prefix</a></li>
 <li><a href="#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns">Non-breaking: v2alpha1 is deprecated and the apiserver now warns</a></li>
@@ -3154,11 +3154,19 @@
 - Behavior changes that require configuration updates before the new binary takes effect.</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
-<h3 id="breaking-pre-ga-capacitygatemode-values-replaced-by-on--a-gateway-level-cluster-fact">BREAKING (pre-GA): <code>capacityGate.mode</code> values replaced by <code>On</code> + a gateway-level cluster fact<a class="headerlink" href="#breaking-pre-ga-capacitygatemode-values-replaced-by-on--a-gateway-level-cluster-fact" title="Permanent link">&para;</a></h3>
-<p><strong>Who is affected:</strong> only a <code>RunnerSet</code> that set
-<code>spec.capacityGate.mode: SchedulerVerdict</code> or <code>AutoscalerVerdict</code>. Those values existed
-for a single release-day window and the field defaults to <code>Off</code>, so most installs have
-nothing to do.</p>
+<h3 id="breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact">BREAKING (pre-GA): <code>capacityGate.mode</code> values replaced by <code>Observe</code> + a gateway-level cluster fact<a class="headerlink" href="#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> only a <code>RunnerSet</code> that set <code>spec.capacityGate.mode</code> to
+<code>SchedulerVerdict</code>, <code>AutoscalerVerdict</code>, or <code>On</code>. None of those values ever appeared in
+a tagged release — they existed only on <code>main</code>, and the field defaults to <code>Off</code> — so an
+install tracking releases has nothing to do here.</p>
+<p><code>Observe</code> is the name the single gating value settled on. <code>On</code> said only <em>that</em> the gate
+was enabled; <code>Observe</code> says <em>how</em> it decides — from evidence an already-stuck worker pod
+produced, rather than by asking. That distinction is invisible with one gating value and
+load-bearing once the reserved <code>Probe</code>/<code>Provision</code> values (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">Q407</a>)
+join the same axis by soliciting an answer instead. Renaming now cost nothing; renaming
+after the value shipped would have needed a conversion shim and a deprecation window.</p>
+<p><code>Observe</code> is <strong>not</strong> an audit or dry-run tier. Every value except <code>Off</code> refuses jobs;
+they differ only in how the AGC learns the cluster cannot place the pod.</p>
 <p>The capacity gate's mode enum was carrying two independent things: whether a set should
 refuse work it cannot run (a tenant's choice), and which signal may be trusted (a
 consequence of whether the cluster can grow — a property of the cluster, identical for
@@ -3178,13 +3186,18 @@ reachable by the party least equipped to avoid it.</p>
 <tbody>
 <tr>
 <td><code>mode: SchedulerVerdict</code></td>
-<td><code>mode: On</code></td>
+<td><code>mode: Observe</code></td>
 <td><code>clusterCapacity.nodeAutoscaling: Absent</code></td>
 </tr>
 <tr>
 <td><code>mode: AutoscalerVerdict</code></td>
-<td><code>mode: On</code></td>
+<td><code>mode: Observe</code></td>
 <td><code>clusterCapacity.nodeAutoscaling: Present</code> (the default — nothing to set)</td>
+</tr>
+<tr>
+<td><code>mode: On</code></td>
+<td><code>mode: Observe</code></td>
+<td>whatever you already set — unchanged</td>
 </tr>
 <tr>
 <td><code>mode: Off</code></td>
@@ -3200,7 +3213,7 @@ reachable by the party least equipped to avoid it.</p>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># 2. Move each opted-in runner set to the single mode value.</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>runnerset<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;runner-set&gt;<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;capacityGate&quot;:{&quot;mode&quot;:&quot;On&quot;}}}&#39;</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;capacityGate&quot;:{&quot;mode&quot;:&quot;Observe&quot;}}}&#39;</span>
 </code></pre></div>
 <p><strong>Order matters on a fixed-size cluster.</strong> Apply the gateway patch first. Between the
 CRD upgrade and the gateway patch, a set that was gating on the scheduler's verdict

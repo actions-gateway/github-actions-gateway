@@ -4479,7 +4479,7 @@ default <code>ScaleSet</code> tier <code>actions_gateway_scaleset_advertised_cap
 and <code>actions_gateway_scaleset_capacity_withheld{reason="capacity"}</code> holds the
 remainder of the ceiling.</p>
 <p><strong>Cause.</strong> This is <strong>deliberate, and only ever happens on a set that opted in.</strong>
-The runner set has <code>spec.capacityGate.mode: On</code> (Q405, Q406, Q470), and the signal
+The runner set has <code>spec.capacityGate.mode: Observe</code> (Q405, Q406, Q470), and the signal
 the gate reads is currently saying the cluster cannot place another worker pod of
 this set's shape. The gateway is refusing to claim work it cannot run, because each
 such claim spends a single-use JIT runner record, holds a GitHub job lock until
@@ -4596,8 +4596,8 @@ and intake is exactly as it would be with the gate <code>Off</code>.</p>
 <p>Two causes. Either a version skew — the CRDs ship as their own chart
 (<code>actions-gateway-crds-v2</code>) and can be upgraded ahead of the controllers, so a mode
 a newer CRD accepts can reach an AGC that predates it — or a set still carrying one
-of the retired <code>SchedulerVerdict</code>/<code>AutoscalerVerdict</code> values, which are now <code>mode: On</code>
-plus a gateway-level fact (<a href="../upgrade/#breaking-pre-ga-capacitygatemode-values-replaced-by-on--a-gateway-level-cluster-fact">upgrade note</a>).</p>
+of the retired <code>SchedulerVerdict</code>/<code>AutoscalerVerdict</code>/<code>On</code> values, which are now
+<code>mode: Observe</code> plus a gateway-level fact (<a href="../upgrade/#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact">upgrade note</a>).</p>
 <p>Failing open is deliberate: an operator who asked to <em>solicit</em> capacity did not ask to
 be gated on an observed verdict, and quietly substituting one for the other is exactly
 the silent wrong-semantics this gate's design is ordered around.</p>
