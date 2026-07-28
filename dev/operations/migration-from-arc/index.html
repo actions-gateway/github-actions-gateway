@@ -2921,7 +2921,9 @@ HPA-managed between <code>spec.minReplicas</code> and <code>maxReplicas</code>.<
   <em>inside</em> the cluster or your network (artifact stores, internal registries)
   must be excluded from the proxy via <code>EgressProxy.spec.noProxyCIDRs</code> (CIDRs, bare
   IPs, or <code>NO_PROXY</code> domain suffixes). Cluster-internal defaults are appended
-  automatically. <strong>Admission rejects any entry that would route GitHub traffic
+  automatically on every distribution — <code>svc.cluster.local</code>,
+  <code>kubernetes.default.svc</code>, <code>localhost</code>, <code>127.0.0.1</code>, and the cluster's API server
+  ClusterIP — so neither the API server nor the service CIDR belongs in this field. <strong>Admission rejects any entry that would route GitHub traffic
   around the proxy</strong> (a host matching <code>githubURL</code> or <code>github.com</code> /
   <code>githubusercontent.com</code> / <code>ghcr.io</code>) — that would break egress-IP attribution.</li>
 <li><strong>The AGC↔proxy hop is HTTPS with a pinned cert.</strong> The GMC issues a per-tenant
