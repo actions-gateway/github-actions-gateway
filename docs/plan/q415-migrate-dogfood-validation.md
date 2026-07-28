@@ -4,7 +4,7 @@
 blocked** until the smoke workflow reaches `main` (GitHub only dispatches
 `workflow_dispatch` from the default branch), so the GA DoD row stays ⚠️ Unverified
 and **Q415 stays open**. Three defects found and filed:
-[Q463](../STATUS.md#Q463), [Q465](../STATUS.md#Q465), [Q466](../STATUS.md#Q466).
+Q463 (since fixed), [Q465](../STATUS.md#Q465), [Q466](../STATUS.md#Q466).
 Full evidence in [Findings](#findings).
 **Scope:** the last unverified item in the v2 GA Definition of Done —
 [v2-ga.md § Definition of Done audit](v2-ga.md#definition-of-done-audit-as-of-this-change)
@@ -224,8 +224,13 @@ present either way, so the skipped carry-forward is a no-op — so this is an
 unactionable, self-contradicting warning rather than a broken migration. It is
 exactly the rough edge Q273 set out to polish, and it surfaces during the one
 operation where an operator is least able to judge whether a warning is safe to
-ignore. Filed as [Q463](../STATUS.md#Q463); **not** fixed here, because changing the
+ignore. Filed as Q463; **not** fixed here, because changing the
 tool's behaviour in the middle of the run that validates it would invalidate the run.
+
+**Fixed under Q463 (after this run).** The grant read is now one shared function,
+`gmc/internal/webhook/validation.PrivilegedGrantPresent`, called by both the v1 webhook
+and the tool, so the two cannot drift again; the warning text names what is actually
+missing (a grant on *either* domain) instead of prescribing the v2 label unconditionally.
 
 Working around it is why this plan's tenant grants privileged on the **v1** label
 domain: that is both the authentic pre-migration shape and the path that actually

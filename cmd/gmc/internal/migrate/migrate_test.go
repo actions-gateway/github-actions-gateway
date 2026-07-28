@@ -213,7 +213,58 @@ func TestFanOut_SecurityProfileRelocation(t *testing.T) {
 		// No ELIGIBILITY warning — the grant is present, so there is nothing to flag.
 		// (The downgrade-guard warning is separate and expected here; it is asserted by
 		// TestFanOut_PrivilegedRelocationWarnsAboutTheDowngradeGuard.)
-		assert.NotContains(t, strings.Join(res.Warnings, "\n"), "holds no "+v2alpha1.PrivilegedProfileLabel)
+		assert.NotContains(t, strings.Join(res.Warnings, "\n"), "privileged-eligibility grant")
+	})
+
+	// The grant is dual-read across both label domains, exactly as the v1 webhook
+	// admits it (§H.12, Q463). A namespace granted on the v2 domain alone is legal and
+	// is admitted privileged, so it must not be reported as ungranted.
+	t.Run("privileged with a v2-domain-only grant is recognized", func(t *testing.T) {
+		gw := newGateway("t", "t")
+		gw.Spec.SecurityProfile = "privileged"
+		res, err := FanOut(Input{
+			Namespace:       "t",
+			NamespaceLabels: map[string]string{v2alpha1.PrivilegedProfileLabel: v2alpha1.PrivilegedProfileAllowed},
+			Gateway:         gw,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, v2alpha1.PrivilegedProfileAllowed, res.NamespacePatch.Labels[v2alpha1.PrivilegedProfileLabel])
+		assert.NotContains(t, strings.Join(res.Warnings, "\n"), "privileged-eligibility grant",
+			"a v2-domain grant is a live grant; warning about it prescribes the label already present")
+	})
+
+	t.Run("privileged with the grant on both domains is recognized", func(t *testing.T) {
+		gw := newGateway("t", "t")
+		gw.Spec.SecurityProfile = "privileged"
+		res, err := FanOut(Input{
+			Namespace: "t",
+			NamespaceLabels: map[string]string{
+				gmcv1alpha1.PrivilegedProfileLabel: gmcv1alpha1.PrivilegedProfileAllowed,
+				v2alpha1.PrivilegedProfileLabel:    v2alpha1.PrivilegedProfileAllowed,
+			},
+			Gateway: gw,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, v2alpha1.PrivilegedProfileAllowed, res.NamespacePatch.Labels[v2alpha1.PrivilegedProfileLabel])
+		assert.NotContains(t, strings.Join(res.Warnings, "\n"), "privileged-eligibility grant")
+	})
+
+	// Fail-closed: dual-reading the domain must not widen the accepted value.
+	t.Run("privileged with a non-grant value on both domains warns", func(t *testing.T) {
+		gw := newGateway("t", "t")
+		gw.Spec.SecurityProfile = "privileged"
+		res, err := FanOut(Input{
+			Namespace: "t",
+			NamespaceLabels: map[string]string{
+				gmcv1alpha1.PrivilegedProfileLabel: "true",
+				v2alpha1.PrivilegedProfileLabel:    "yes",
+			},
+			Gateway: gw,
+		})
+		require.NoError(t, err)
+		_, granted := res.NamespacePatch.Labels[v2alpha1.PrivilegedProfileLabel]
+		assert.False(t, granted, "only the 'allowed' keyword is a grant")
+		assert.Contains(t, strings.Join(res.Warnings, "\n"), "privileged-eligibility grant")
 	})
 
 	t.Run("privileged without grant warns and never invents the grant", func(t *testing.T) {
@@ -225,6 +276,15 @@ func TestFanOut_SecurityProfileRelocation(t *testing.T) {
 		_, granted := res.NamespacePatch.Labels[v2alpha1.PrivilegedProfileLabel]
 		assert.False(t, granted, "the tool never invents an eligibility grant")
 		require.NotEmpty(t, res.Warnings)
+
+		// The warning must name what is actually missing — a grant on EITHER domain —
+		// and prescribe the label the operator does not have. Naming only the v2 label
+		// as "not held" was the Q463 defect: mid-migration, an operator holding the v1
+		// grant was told to apply a label they already had.
+		warning := strings.Join(res.Warnings, "\n")
+		assert.Contains(t, warning, "either label domain")
+		assert.Contains(t, warning, gmcv1alpha1.PrivilegedProfileLabel)
+		assert.Contains(t, warning, v2alpha1.PrivilegedProfileLabel)
 	})
 }
 

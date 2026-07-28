@@ -120,7 +120,11 @@ The fan-out preserves v1 behavior and weakens no security property:
   the tool never reads, prints, or copies the credential Secret's contents.
 - **The eligibility grant is never invented.** A tenant migrating to
   `securityProfile: privileged` keeps the *existing* platform grant (domain-migrated);
-  if the namespace holds no grant, the tool warns rather than self-granting one.
+  if the namespace holds no grant, the tool warns rather than self-granting one. The
+  grant is recognized on **either label domain** — `actions-gateway.github.com/`
+  or `actions-gateway.com/`, both valued `allowed` — matching what the v1 admission
+  webhook accepts during coexistence, so a namespace already relabelled onto the v2
+  domain is never reported as ungranted.
 
 ### Privileged worker shapes (DinD) become cluster-scoped templates
 
@@ -156,7 +160,8 @@ Pod Security Admission remains the runtime enforcement backstop, exactly as it i
 the namespaced kind: a privileged worker pod is only admitted in a namespace whose
 `actions-gateway.com/security-profile` is `privileged`, which in turn requires the
 platform `privileged-profile=allowed` grant the migration carries forward and never
-invents. A privileged tenant therefore migrates under exactly the grant it already had.
+invents — held on either label domain. A privileged tenant therefore migrates under
+exactly the grant it already had.
 
 #### A privileged tenant needs the downgrade opt-in for the duration of the migration
 
@@ -366,5 +371,18 @@ window keeps both spellings working.
   that — check the GMC deployment is `Running` with programmed endpoints
   (`kubectl -n gag-system get deploy,endpoints`) before re-running. Re-running is
   safe: apply is idempotent and skips whatever the aborted run already created.
+- **The dry-run warns the namespace "holds no privileged-eligibility grant on either
+  label domain".** The tenant migrates to `securityProfile: privileged` but carries
+  the grant label on neither domain, or carries it with a value other than `allowed`
+  (the match is exact — the legacy `"true"` is *not* a grant here). Apply the v2 label
+  the warning names, as a platform administrator:
+
+  ```bash
+  kubectl label namespace team-a actions-gateway.com/privileged-profile=allowed
+  ```
+
+  The warning fires only when the grant is genuinely absent from both domains: a
+  namespace holding it on either one is recognized, and the tool carries it forward
+  onto the v2 domain without complaint.
 - **`gag-migrate` reports no namespaces.** With `--all-namespaces` it only targets
   namespaces holding a v1 `ActionsGateway`; pass `--namespace` explicitly otherwise.

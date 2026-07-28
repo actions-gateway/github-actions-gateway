@@ -26,6 +26,7 @@ import (
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 )
 
 // legacyTenantMarkerLabel is the v1 tenant-namespace marker key. It is duplicated
@@ -384,15 +385,24 @@ func buildNamespacePatch(in Input, gw *gmcv1alpha1.ActionsGateway, warnings *[]s
 	// platform admin applied for v1 privileged). If the migrated profile is privileged
 	// but the namespace holds no grant, warn: the v2 namespace-security-profile-guard
 	// VAP will reject the profile label until a platform admin grants eligibility.
-	privGranted := in.NamespaceLabels[gmcv1alpha1.PrivilegedProfileLabel] == gmcv1alpha1.PrivilegedProfileAllowed
+	//
+	// The grant is read across BOTH label domains, exactly as the v1 webhook admits it
+	// (§H.12, Q463): a namespace granted on the v2 domain alone is legal and admitted
+	// privileged, so reading only v1 would report a live grant as missing and prescribe
+	// a label the operator already holds — an unactionable warning at the worst moment.
+	privGranted := validation.PrivilegedGrantPresent(in.NamespaceLabels)
 	if privGranted {
 		patch.Labels[v2alpha1.PrivilegedProfileLabel] = v2alpha1.PrivilegedProfileAllowed
 	}
 	if profile == v2alpha1.SecurityProfilePrivileged && !privGranted {
 		*warnings = append(*warnings, fmt.Sprintf(
-			"namespace %q migrates to securityProfile=privileged but holds no %s=%s grant; "+
-				"a platform administrator must apply the v2 eligibility label or the profile will be rejected",
-			in.Namespace, v2alpha1.PrivilegedProfileLabel, v2alpha1.PrivilegedProfileAllowed))
+			"namespace %q migrates to securityProfile=privileged but holds no privileged-eligibility grant on "+
+				"either label domain (neither %s=%s nor %s=%s); a platform administrator must apply %s=%s "+
+				"or the profile will be rejected",
+			in.Namespace,
+			gmcv1alpha1.PrivilegedProfileLabel, gmcv1alpha1.PrivilegedProfileAllowed,
+			v2alpha1.PrivilegedProfileLabel, v2alpha1.PrivilegedProfileAllowed,
+			v2alpha1.PrivilegedProfileLabel, v2alpha1.PrivilegedProfileAllowed))
 	}
 
 	// Downgrade opt-in alignment (Q147): if the v1 annotation is present, add the v2

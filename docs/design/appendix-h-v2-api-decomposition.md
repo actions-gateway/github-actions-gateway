@@ -925,6 +925,15 @@ migration tool relabels the namespace markers additively (it adds the v2 keys an
 keeps the v1 keys), so a still-running v1 gateway in a relabeled namespace is never
 stranded. The window closes when `v1alpha1` is removed.
 
+**The migration tool is a dual-read consumer too (Q463).** `gag-migrate` decides
+whether a tenant holds the privileged-eligibility grant, and it must reach the *same*
+verdict as admission: a namespace granted on the v2 domain alone is legal and is
+admitted privileged, so a tool reading only v1 reports a live grant as missing and
+prescribes a label the operator already holds. The grant read is therefore a single
+shared function (`gmc/internal/webhook/validation.PrivilegedGrantPresent`) that the v1
+webhook and the tool both call, rather than two implementations free to drift — the
+same single-source-of-truth rule the Q323 audit established for the versioned webhooks.
+
 ## H.13. What adopting this changes
 
 This proposal, if accepted, touches more than the API types. Non-exhaustive
