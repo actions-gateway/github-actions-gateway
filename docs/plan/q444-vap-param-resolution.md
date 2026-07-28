@@ -72,9 +72,22 @@ deleted" nor "the ConfigMap was deleted" is sufficient on its own.
 - Does it need a cluster with many ConfigMaps? The param informer watches
   ConfigMaps cluster-wide, and both CI reproductions were on clusters where the
   full e2e suite had just run.
-- Is this a known upstream apiserver bug? Not yet searched. Worth doing before
-  more black-box bisection — the fix may be a version bump or an upstream issue
-  to track rather than anything the chart can do.
+- **Upstream: this is a kube-apiserver bug, and it is filed.** Our evidence is
+  posted on [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887#issuecomment-5105004944),
+  which reports the same symptom on the same `paramKind` and is open and
+  untriaged. Helm is not involved in param resolution at all; it only did the
+  delete/create churn.
+
+  Related but **not** the same bug:
+  [#122658](https://github.com/kubernetes/kubernetes/issues/122658) /
+  [PR #123003](https://github.com/kubernetes/kubernetes/pull/123003) — there a
+  CRD `paramKind` fails because discovery has not caught up and an apiserver
+  restart *causes* it; the fix (retry a failed paramKind sync) merged for v1.30
+  in Jan 2024, long before the versions we see this on. Ours is a core type that
+  is always discoverable, and a restart *fixes* it.
+
+  So the realistic path to closing Q444 is upstream, not chart-side. Watch
+  #130887; if it moves, re-test and wire the reproducer into CI.
 
 ## Reproducing
 
