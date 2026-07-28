@@ -2036,6 +2036,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Sizing profiles (opt-in auto-apply)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#getting-guaranteed-qos-out-of-nodeshare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting Guaranteed QoS out of NodeShare
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2379,6 +2396,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Sizing profiles (opt-in auto-apply)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#getting-guaranteed-qos-out-of-nodeshare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting Guaranteed QoS out of NodeShare
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2623,6 +2657,35 @@ failure is silent until pods stop scheduling, so clamp first, then enable.
   <code>SizingDrift</code> condition reports <code>False/SizingProfileActive</code> (pods no longer
   run the template ask, so judging it would mislead).</p>
 </blockquote>
+<h3 id="getting-guaranteed-qos-out-of-nodeshare">Getting Guaranteed QoS out of <code>NodeShare</code><a class="headerlink" href="#getting-guaranteed-qos-out-of-nodeshare" title="Permanent link">&para;</a></h3>
+<p><code>Binpack</code> is the profile that sets <code>requests == limits</code> for you. <code>NodeShare</code>
+does not — it derives the runner container's <em>requests</em> and leaves limits to the
+template — so a GPU pool that wants both an even node split <strong>and</strong> Guaranteed
+QoS has to arrange the second part itself. It can:</p>
+<p>Set the runner container's template CPU <strong>and</strong> memory limits at or below the
+share you expect (<code>allocatable ÷ workersPerNode</code>). Each is then raised to the
+derived request by the same rule that stops a too-low template limit being
+rejected at admission, and the container comes out with <code>requests == limits</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># runner container in the RunnerTemplate; envelope 15 CPU / 60Gi ÷ 4 workers</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">limits</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="p p-Indicator">,</span><span class="nt"> memory</span><span class="p">:</span><span class="w"> </span><span class="nv">2Gi</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># both below the 3750m / 15Gi share</span>
+</code></pre></div>
+<p>Two caveats, both easy to trip over:</p>
+<ul>
+<li><strong>A limit <em>above</em> the share is left alone</strong>, and the pod is Burstable. This is
+  the ordinary case — a template CPU limit of <code>4</code> against a <code>3750m</code> share stays
+  <code>4</code>. The values above are deliberately far under the envelope so the outcome
+  does not depend on getting the arithmetic exactly right.</li>
+<li><strong>Pod QoS is Guaranteed only if every container qualifies.</strong> <code>NodeShare</code>
+  touches the runner container only; a <code>dind</code> sidecar keeps its template ask, so
+  give it explicit equal requests and limits or the pod lands Burstable however
+  the runner is sized.</li>
+</ul>
+<p>This works, but it is a side effect of the limit-lift guard rather than a knob
+that names the intent. If you want it, say so on the issue tracker — the clean
+form is an explicit field under <code>sizing.nodeShare</code>, an additive change we held
+back from 1.3 for want of a concrete asker
+(<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix-h §H.7</a>).</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <p><strong><code>actions_gateway_worker_usage_poll_errors_total</code> rising steadily</strong> — the AGC
 cannot list <code>PodMetrics</code>. Either metrics-server is not installed (the
