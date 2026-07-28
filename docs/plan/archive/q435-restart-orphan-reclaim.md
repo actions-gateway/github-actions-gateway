@@ -7,11 +7,11 @@ GitHub still redelivers that job's terminal `JobCompleted` to the restarted
 AGC's new session. Nothing in the AGC decides whether it does.
 
 The durable-deadline fix for the residual shipped as Q438 — see
-[q438-worker-lifetime-deadline.md](archive/q438-worker-lifetime-deadline.md).
+[q438-worker-lifetime-deadline.md](q438-worker-lifetime-deadline.md).
 
 ## Why the question was open
 
-The [architecture doc](../design/02-architecture.md) justifies putting the
+The [architecture doc](../../design/02-architecture.md) justifies putting the
 worker-pod reaper in the reconciler rather than in the session goroutine on the
 grounds that it makes cleanup restart-safe — it "also reaps pods orphaned by an
 AGC crash." That claim had never been measured against the state a crashed AGC
@@ -33,7 +33,7 @@ scale-set workers.
 
 ## What the reaper can see
 
-[`reapWorkerPodsByLabel`](../../cmd/agc/internal/controller/runner_shared.go)
+[`reapWorkerPodsByLabel`](../../../cmd/agc/internal/controller/runner_shared.go)
 gives a pod a reap deadline from two inputs, both read off the pod itself:
 
 | Pod state | Deadline from | Restart-safe? |
@@ -47,14 +47,14 @@ The unstamped `Running` arm is deliberate: an unstamped pod is read as "its job
 is still assigned", and reaping it would kill a live job. The stamp is the only
 thing that distinguishes a busy worker from an abandoned one, and its **only**
 writer is
-[`markJobCompleted`](../../cmd/agc/internal/provisioner/provisioner.go), reached
+[`markJobCompleted`](../../../cmd/agc/internal/provisioner/provisioner.go), reached
 from `CleanupScaleSetJob` when a live scale-set listener processes the job's
 terminal `JobCompleted`. An AGC that was down when the job ended never wrote it.
 
 ## Measurement
 
 Tier B (envtest, real apiserver, real Pod watch and `RequeueAfter` loop) in
-[`cmd/agc/internal/controller/integration/v2_restart_reclaim_test.go`](../../cmd/agc/internal/controller/integration/v2_restart_reclaim_test.go).
+[`cmd/agc/internal/controller/integration/v2_restart_reclaim_test.go`](../../../cmd/agc/internal/controller/integration/v2_restart_reclaim_test.go).
 A restart is modelled the only way that matters to the reaper: worker pods
 already exist in the apiserver and the process has no in-memory state for any of
 them.
@@ -91,7 +91,7 @@ managers against one `scalesettest` fake:
    created.
 
 B stamps the pod. The mechanism is that
-[`completeJob`](../../cmd/agc/internal/scalesetlistener/listener.go) runs its
+[`completeJob`](../../../cmd/agc/internal/scalesetlistener/listener.go) runs its
 reclaim hook on *every* delivery rather than only on jobs the current process
 acquired, and the scale set's queue log is not session-scoped — so a re-created
 session replays the completion, `markJobCompleted` finds the pod by its
@@ -143,10 +143,10 @@ Deriving the deadline from the job's own `timeout-minutes` was the preferred
 shape and turned out to be unavailable: measured against captured live wire
 evidence and the upstream client, no field on the scale-set `JobAssigned` message
 carries the job's timeout. See
-[q438-worker-lifetime-deadline.md](archive/q438-worker-lifetime-deadline.md).
+[q438-worker-lifetime-deadline.md](q438-worker-lifetime-deadline.md).
 
 Two things an operator needs meanwhile are shipped with this measurement: the
-[troubleshooting runbook](../operations/troubleshooting.md) now names the
+[troubleshooting runbook](../../operations/troubleshooting.md) now names the
 hand-delete recovery for this shape, and the architecture doc's restart-safety
 claim is qualified rather than absolute.
 
@@ -159,7 +159,7 @@ claim is qualified rather than absolute.
   **undocumented** — the published contract covers only within-session
   redelivery of unacknowledged messages, not retention across a session gap — so
   it needs a live measurement rather than more reading. Tracked as
-  [Q468](../STATUS.md#Q468). If it turns out GitHub does not redeliver, the
+  [Q468](../../STATUS.md#Q468). If it turns out GitHub does not redeliver, the
   replay path stops being a recovery path at all and Q438's lifetime cap becomes
   the only one; the cap is on by default either way, which is why the answer
   changes confidence rather than design.

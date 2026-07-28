@@ -2,6 +2,7 @@ package scalesettest_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -273,6 +274,80 @@ func TestServer_CloseReleasesParkedPoll(t *testing.T) {
 		t.Fatal("Close hung behind a parked long poll")
 	}
 	<-polling
+}
+
+// TestServer_CancelRunCompletesItsJobs covers the REST run-cancel route: cancelling
+// a run drives its assigned jobs terminal and queues their JobCompleted, which is
+// how the Q468 retention probe produces a completion with no runner in play.
+func TestServer_CancelRunCompletesItsJobs(t *testing.T) {
+	srv := scalesettest.New()
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c := newClient(t, srv)
+	ss, sess := setupSession(t, ctx, c)
+	srv.EnqueueJob(ss.ID)
+
+	// Assign the job so the cancel has something to terminate, and read the run
+	// identity the cancel route is addressed by off the assignment itself.
+	msg, err := c.GetMessage(ctx, sess, 1, 0)
+	if err != nil || msg == nil {
+		t.Fatalf("GetMessage = %v, %v", msg, err)
+	}
+	jobs, err := msg.Jobs()
+	if err != nil {
+		t.Fatalf("Jobs: %v", err)
+	}
+	assigned := scaleset.AssignedJobs(jobs)
+	if len(assigned) != 1 {
+		t.Fatalf("assigned = %d, want 1", len(assigned))
+	}
+	owner, repo, runID, ok := assigned[0].RunIdentity()
+	if !ok {
+		t.Fatalf("assignment carries no run identity: %+v", assigned[0])
+	}
+
+	if status := cancelRun(t, srv, owner, repo, runID); status != http.StatusAccepted {
+		t.Fatalf("cancel status = %d, want %d", status, http.StatusAccepted)
+	}
+	if got := srv.AssignedJobCount(ss.ID); got != 0 {
+		t.Errorf("AssignedJobCount after cancel = %d, want 0", got)
+	}
+
+	completed, err := c.GetMessage(ctx, sess, 1, msg.MessageID)
+	if err != nil || completed == nil {
+		t.Fatalf("JobCompleted must follow a cancel, got %v, %v", completed, err)
+	}
+	entries, err := completed.Jobs()
+	if err != nil {
+		t.Fatalf("Jobs: %v", err)
+	}
+	if len(entries) != 1 || entries[0].MessageType != scaleset.MessageTypeJobCompleted ||
+		entries[0].JobID != assigned[0].JobID || entries[0].Result != "cancelled" {
+		t.Errorf("unexpected completion message: %+v", entries)
+	}
+
+	// A run with nothing left to cancel answers 409, matching the real API for an
+	// already-terminal run — the case the probe treats as success.
+	if status := cancelRun(t, srv, owner, repo, runID); status != http.StatusConflict {
+		t.Errorf("second cancel status = %d, want %d", status, http.StatusConflict)
+	}
+}
+
+// cancelRun issues the REST run-cancel call against the stub and returns its status.
+func cancelRun(t *testing.T, srv *scalesettest.Server, owner, repo, runID string) int {
+	t.Helper()
+	u := srv.URL + "/repos/" + owner + "/" + repo + "/actions/runs/" + runID + "/cancel"
+	req, err := http.NewRequest(http.MethodPost, u, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := srv.HTTPClient().Do(req)
+	if err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return resp.StatusCode
 }
 
 // setupSession registers a scale set on the stub and opens its message-queue session.

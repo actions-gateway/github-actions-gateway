@@ -79,6 +79,27 @@ func run(logger *slog.Logger) error {
 		return runScalesetProbe(ctx, logger, ssCfg, provider, "https://api.github.com")
 	}
 
+	// ── Investigation F (Q468): JobCompleted retention across a session gap ──
+	// One phase per invocation — the gap it measures outlives the process, so the
+	// experiment lives in a state file rather than in memory. See retention.go.
+	if os.Getenv("PROBE_RETENTION_TEST") != "" {
+		rCfg, err := parseRetentionConfig(os.Getenv)
+		if err != nil {
+			return err
+		}
+		provider, err := githubapp.NewInstallationTokenProvider(githubapp.Credentials{
+			AppID:          rCfg.AppID,
+			PrivateKeyPEM:  rCfg.PrivateKeyPEM,
+			InstallationID: rCfg.InstallationID,
+		}, nil, false)
+		if err != nil {
+			return fmt.Errorf("create token provider: %w", err)
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		return runRetentionProbe(ctx, logger, rCfg, provider, "https://api.github.com")
+	}
+
 	// ── 1. Read credentials from environment ────────────────────────────────
 	cfg, err := parseProbeConfig(os.Getenv)
 	if err != nil {
