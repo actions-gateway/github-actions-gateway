@@ -17,10 +17,16 @@
 # Environment:
 #   AUTOSCALER_CLUSTER  — kind cluster name (default: gag-autoscaler)
 #   KIND_NODE_IMAGE     — pin the node image, e.g. kindest/node:vX.Y.Z@sha256:...
-#                         (optional; when unset kind picks its release default)
+#                         (optional; leave UNSET here — riding kind's release
+#                         default is what ties the cluster's Kubernetes minor to
+#                         the kind version, and so to CA_VERSION's minor below.
+#                         The e2e tier pins its node image DOWN; this harness
+#                         must not copy that. See docs/development/testing.md.)
 #   CA_VERSION          — cluster-autoscaler image tag (default below). Bumping
 #                         this is the point: a bump that reworded the vocabulary
-#                         fails `make test-autoscaler`.
+#                         fails `make test-autoscaler`. CI runs the gate on any
+#                         PR that edits this file (.github/workflows/autoscaler-drift.yml),
+#                         so a bump cannot land untested (Q480).
 #   KWOK_VERSION        — kwok release providing the fake kubelet (default below)
 #
 # After this script runs, `make test-autoscaler` drives pods through it.
@@ -34,7 +40,9 @@ cd "$REPO_ROOT"
 AUTOSCALER_CLUSTER=${AUTOSCALER_CLUSTER:-gag-autoscaler}
 # Keep CA_VERSION on the same minor as the node image: cluster-autoscaler is
 # released per Kubernetes minor and its scheduler-framework predicates are the
-# ones from that release.
+# ones from that release. With KIND_NODE_IMAGE unset that minor is kind's
+# default node image (kind v0.32.0 -> kindest/node:v1.36.1), so a kind bump that
+# moves the default is what moves this pin.
 CA_VERSION=${CA_VERSION:-v1.36.1}
 KWOK_VERSION=${KWOK_VERSION:-v0.8.0}
 

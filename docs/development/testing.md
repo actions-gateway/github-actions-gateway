@@ -513,8 +513,25 @@ make autoscaler-cluster-delete # tear down when done
 - **Its own cluster, not the e2e one.** A live autoscaler creating and deleting nodes underneath the e2e suite would perturb every spec in it. `AUTOSCALER_CLUSTER` (default `gag-autoscaler`) names it; `CA_VERSION` and `KWOK_VERSION` pin what gets installed, in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh). Manifests live in [`test/autoscaler/`](../../test/autoscaler/).
 - **Build tag `autoscaler`**, in `cmd/agc/internal/controller/autoscaler_verdict_live_test.go`, in-package so it calls the unexported matcher directly rather than widening its API for a test.
 - **It fails rather than skips when the cluster is absent.** A drift detector that skips itself detects nothing; the failure message names the make target.
-- **Not in `make check` and not in per-PR CI.** What it detects arrives on upstream's schedule, not a pull request's. **Run it when bumping `CA_VERSION`**, and otherwise on a periodic sweep — a bump whose release reworded the vocabulary is exactly the change this catches.
+- **Not in `make check`, and change-triggered rather than scheduled in CI** — see below.
 - **Karpenter is not covered.** Its matcher arm has no live counterpart yet ([Q479](../STATUS.md#Q479)).
+
+### Its cadence: the version bump, not a clock
+
+[`autoscaler-drift.yml`](../../.github/workflows/autoscaler-drift.yml) runs the gate on pull requests that touch the pins (`scripts/autoscaler-cluster.sh`), the manifests (`test/autoscaler/`), or the matcher and its tests — classified by a `changes` job like every other gate here, not by a top-level path filter. Plus `workflow_dispatch`, whose `ca_version` input probes a cluster-autoscaler release without committing to it.
+
+It is deliberately **not** on a cron. A weekly sweep would re-run one fixed experiment: `CA_VERSION` is a pin, so a scheduled run installs the same image and asserts the same strings every week until something in the repo changes. The drift it exists to catch arrives in a cluster-autoscaler *release*, which a pinned sweep never installs. The version move is the event, so the version move is the trigger.
+
+What makes that fire without anyone remembering to run it is a coupling worth knowing:
+
+> The harness pins no `KIND_NODE_IMAGE`, so its cluster runs **kind's default node image** — Kubernetes 1.36.1 for kind v0.32.0. cluster-autoscaler is released per Kubernetes minor, so the kind release chooses the Kubernetes minor, which chooses the CA minor. That is why `CA_VERSION` (v1.36.1) tracks kind's default rather than the deliberately-pinned-down `KIND_NODE_IMAGE` the e2e tier uses (v1.35.5).
+
+`KIND_VERSION` is pinned in this workflow as well as [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml), and [`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml) rewrites both weekly. So the kind bump PR trips this workflow's `changes` filter and runs the gate; when that bump moves the default node image's minor, `CA_VERSION` must move to the matching CA minor in the same PR — and a CA minor is where a vocabulary reword lands. **A kind bump PR whose autoscaler-drift job fails on version skew is telling you to bump `CA_VERSION`, not to pin the node image.**
+
+Two consequences to plan for:
+
+- **The gate is not a required status check.** A failure wants a human decision — adopt the new vocabulary (update the matcher and the recorded unit table) or hold the bump — the same posture as the shellcheck and polaris bump PRs. The workflow still ends in an `autoscaler-drift-gate` job of the usual shape, so it can be required later without restructuring ([required-status-checks.md](../plan/archive/required-status-checks.md)).
+- **An updatecli PR arrives with no checks at all.** GitHub never triggers workflows on a `GITHUB_TOKEN`-authored PR, so the trigger above only pays off if the checks are re-run — close and reopen the PR during the weekly dependency triage pass ([dependency-updates.md](dependency-updates.md#operating-notes)).
 
 What it measured on first run, and the one finding that outlived it, are in [the plan §9c](../plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474).
 
@@ -596,7 +613,7 @@ CI must use the same commands as [Running tests](#running-tests) above — per-m
 
 ### Pinned tool installs: always via `download-verified.sh`
 
-Every CI step that installs a pinned third-party binary — kind (`e2e-reusable.yml`), shellcheck (`unit-test.yml`), kubeconform (`manifest-validate.yml`), polaris (`security-scan.yml`) — and the local `$(COSIGN)` rule fetch it through [`scripts/download-verified.sh`](../../scripts/download-verified.sh) (`<url> <sha256> <output-path>`). Do not hand-roll `curl` + `sha256sum -c` in a new step; use the script, and keep the version and its digest pinned side by side in the workflow `env:` block.
+Every CI step that installs a pinned third-party binary — kind (`e2e-reusable.yml`, `autoscaler-drift.yml`), shellcheck (`unit-test.yml`), kubeconform (`manifest-validate.yml`), polaris (`security-scan.yml`) — and the local `$(COSIGN)` rule fetch it through [`scripts/download-verified.sh`](../../scripts/download-verified.sh) (`<url> <sha256> <output-path>`). Do not hand-roll `curl` + `sha256sum -c` in a new step; use the script, and keep the version and its digest pinned side by side in the workflow `env:` block.
 
 The script exists because both halves of that fetch are easy to get subtly wrong:
 
@@ -615,7 +632,7 @@ One constraint drives its shape, and it is easy to get wrong: **`docker load` ca
 
 ### Path-gated workflows: verify the heavy gates actually ran
 
-Most code-exercising workflows keep unrelated PRs cheap by **skipping their expensive jobs internally** rather than skipping the whole workflow. The build/lint/test/security gates (`unit-test.yml`, `integration-test.yml`, `e2e-test.yml`, `e2e-calico.yml`, `security-scan.yml` — trivy + govulncheck, `manifest-validate.yml`, `license-notices.yml`, plus `status-lint.yml` and `plan-hygiene.yml`) trigger on **every** `pull_request` (no top-level path filter), then a `dorny/paths-filter` `changes` job classifies the diff and each real job's `if:` guard skips it when nothing it covers changed. Each workflow ends with a small **`<workflow>-gate`** job (`unit-test-gate`, `security-scan-gate`, …; `if: always()`, `needs:` every real job) that passes only when each concluded `success` or `skipped` — this is the job whose check context is (or is intended to be) the branch's **required status check**. The ids are unique per workflow on purpose: a normal job's check-run name **is its job id**, GitHub matches required checks by that name, so nine jobs all named `gate` would collapse to one indistinguishable entry in the ruleset UI. See [required-status-checks.md](../plan/archive/required-status-checks.md).
+Most code-exercising workflows keep unrelated PRs cheap by **skipping their expensive jobs internally** rather than skipping the whole workflow. The build/lint/test/security gates (`unit-test.yml`, `integration-test.yml`, `e2e-test.yml`, `e2e-calico.yml`, `security-scan.yml` — trivy + govulncheck, `manifest-validate.yml`, `license-notices.yml`, plus `status-lint.yml`, `plan-hygiene.yml` and `autoscaler-drift.yml`) trigger on **every** `pull_request` (no top-level path filter), then a `dorny/paths-filter` `changes` job classifies the diff and each real job's `if:` guard skips it when nothing it covers changed. Each workflow ends with a small **`<workflow>-gate`** job (`unit-test-gate`, `security-scan-gate`, …; `if: always()`, `needs:` every real job) that passes only when each concluded `success` or `skipped` — this is the job whose check context is (or is intended to be) the branch's **required status check**. The ids are unique per workflow on purpose: a normal job's check-run name **is its job id**, GitHub matches required checks by that name, so nine jobs all named `gate` would collapse to one indistinguishable entry in the ruleset UI. See [required-status-checks.md](../plan/archive/required-status-checks.md).
 
 **Why not the simpler top-level `paths-ignore`:** a workflow skipped by a top-level path filter reports **no check at all**, which leaves a *required* check **Pending forever** and wedges the merge. Triggering on every PR and gating internally means the `gate` context always reports — green (all jobs skipped) on an unrelated PR, red when a real job fails — so it is safe to require.
 

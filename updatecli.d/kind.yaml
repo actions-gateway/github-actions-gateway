@@ -1,16 +1,27 @@
 # Keep the kind binary version and its linux/amd64 checksum in
-# .github/workflows/e2e-reusable.yml current. updatecli resolves the latest kind
-# release, fetches the matching upstream checksum, and opens a PR bumping both
-# KIND_VERSION and KIND_BINARY_SHA256 together — the version+checksum pair that
-# Dependabot cannot track because the pins are workflow env vars, not a
-# package-manifest entry. Run by .github/workflows/updatecli.yml.
+# .github/workflows/e2e-reusable.yml and .github/workflows/autoscaler-drift.yml
+# current. updatecli resolves the latest kind release, fetches the matching
+# upstream checksum, and opens a PR bumping KIND_VERSION and KIND_BINARY_SHA256
+# together in both files — the version+checksum pair that Dependabot cannot
+# track because the pins are workflow env vars, not a package-manifest entry.
+# Rewriting both copies here is what keeps them from drifting. Run by
+# .github/workflows/updatecli.yml.
 #
 # The kind *node* image (KIND_NODE_IMAGE) is deliberately NOT auto-bumped here:
 # the node image a kind release recommends is published in the release notes, not
 # a clean datasource, and bumping it changes the tested Kubernetes version — a
 # deliberate choice. Review and bump it (and CALICO_VERSION compatibility) by
 # hand in the same PR when the Kubernetes version should move.
-name: 'Bump kind (e2e) version + linux-amd64 checksum'
+#
+# This PR is also the live-autoscaler drift gate's trigger (Q480). The autoscaler
+# harness pins no node image, so its cluster's Kubernetes minor is kind's default
+# node image — meaning a kind bump that moves that minor is the moment CA_VERSION
+# in scripts/autoscaler-cluster.sh must move to the matching cluster-autoscaler
+# minor. The KIND_VERSION target below lands this PR in autoscaler-drift.yml's
+# path filter, so the gate runs and says whether upstream reworded. Re-trigger
+# the PR's checks (close + reopen) per docs/development/dependency-updates.md —
+# a GITHUB_TOKEN-authored PR starts with none.
+name: 'Bump kind (e2e + autoscaler drift) version + linux-amd64 checksum'
 
 scms:
   workflow:
@@ -72,5 +83,23 @@ targets:
     scmid: workflow
     spec:
       file: .github/workflows/e2e-reusable.yml
+      matchpattern: '(KIND_BINARY_SHA256: )[0-9a-f]{64}'
+      replacepattern: '${1}{{ source "kindChecksum" }}'
+  driftVersion:
+    name: 'KIND_VERSION in autoscaler-drift.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/autoscaler-drift.yml
+      matchpattern: '(KIND_VERSION: )v\d+\.\d+\.\d+'
+      replacepattern: '${1}{{ source "kindVersion" }}'
+  driftChecksum:
+    name: 'KIND_BINARY_SHA256 in autoscaler-drift.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/autoscaler-drift.yml
       matchpattern: '(KIND_BINARY_SHA256: )[0-9a-f]{64}'
       replacepattern: '${1}{{ source "kindChecksum" }}'
