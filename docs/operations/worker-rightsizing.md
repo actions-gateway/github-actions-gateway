@@ -160,7 +160,12 @@ Safety rails, in all profiles:
 
 - **Extended resources (GPUs) are never modified** — only the cpu/memory keys
   are ever derived; the shape's job-selected identity passes through
-  byte-identical.
+  byte-identical. This is also why `nodeShare.allocatable` must declare `cpu`,
+  `memory`, or both: an envelope naming only extended resources divides nothing,
+  so the apiserver rejects it at admission rather than letting the profile report
+  `Active` over untouched template values
+  ([runbook](troubleshooting.md#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory)).
+  Declaring just one of the two is fine — the other keeps the template's ask.
 - **History-based profiles fall back to `Static` until confident** — `Binpack`
   and `Throughput` apply only once *every* template container has a
   recommendation with ≥20 sampled jobs (whole-pod, so QoS stays predictable).

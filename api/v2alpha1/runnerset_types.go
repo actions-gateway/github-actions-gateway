@@ -441,7 +441,13 @@ type WorkerSizing struct {
 type NodeShareSizing struct {
 	// Allocatable is the node's allocatable cpu/memory to divide (from
 	// `kubectl describe node`, minus any system/sidecar overhead the operator
-	// reserves). Keys other than cpu and memory are ignored.
+	// reserves). Keys other than cpu and memory are ignored, so at least one of
+	// the two must be present: an envelope carrying neither (empty, or GPUs
+	// only) derives nothing while the profile still reports Active (Q484).
+	// Declaring just one is legitimate — the other resource keeps the
+	// template's ask.
+	//
+	// +kubebuilder:validation:XValidation:rule="'cpu' in self || 'memory' in self",message="sizing.nodeShare.allocatable must declare cpu, memory, or both; other resources are ignored"
 	Allocatable corev1.ResourceList `json:"allocatable"`
 
 	// WorkersPerNode is the divisor: the number of worker pods that should pack
