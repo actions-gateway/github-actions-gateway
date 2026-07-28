@@ -30,6 +30,7 @@ type PriorityTier struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.quotaRetryDelay) || duration(self.quotaRetryDelay) >= duration('1s')",message="quotaRetryDelay must be at least 1s"
 // +kubebuilder:validation:XValidation:rule="!has(self.completedPodTTL) || duration(self.completedPodTTL) >= duration('0s')",message="completedPodTTL must not be negative"
 // +kubebuilder:validation:XValidation:rule="!has(self.pendingPodDeadline) || duration(self.pendingPodDeadline) >= duration('1s')",message="pendingPodDeadline must be at least 1s"
+// +kubebuilder:validation:XValidation:rule="!has(self.maxWorkerLifetime) || duration(self.maxWorkerLifetime) >= duration('0s')",message="maxWorkerLifetime must not be negative"
 type RunnerGroupSpec struct {
 	// MaxListeners is the maximum number of concurrent listener goroutines.
 	// Each listener holds one open broker session; additional goroutines spawn
@@ -132,6 +133,26 @@ type RunnerGroupSpec struct {
 	// GPU node pools). Must be at least 1s. Defaults to "10m" when omitted.
 	// +optional
 	PendingPodDeadline *metav1.Duration `json:"pendingPodDeadline,omitempty"`
+
+	// MaxWorkerLifetime is the maximum time a worker pod may be active on its node
+	// before the kubelet kills it, applied as the pod's activeDeadlineSeconds. It is
+	// the backstop for a worker whose job ended while the AGC was down: such a pod is
+	// indistinguishable in cluster state from one running a long job, so nothing the
+	// AGC observes later can reclaim it, and only a deadline stamped when the pod is
+	// created bounds it (Q438). Because the kubelet enforces it, it holds even while
+	// the AGC is unavailable — which is exactly the failure it exists for.
+	//
+	// A pod killed this way lands in Failed with reason DeadlineExceeded, the AGC
+	// reaps it under reason "lifetime_exceeded", and a Warning Event
+	// (WorkerPodLifetimeExceeded) names the pod and the lifetime that killed it.
+	//
+	// Raise this for a RunnerGroup that legitimately runs jobs longer than the
+	// default; jobs declaring a `timeout-minutes` above it will be killed mid-run.
+	// Set to "0s" to disable the cap entirely. An activeDeadlineSeconds set
+	// explicitly on spec.podTemplate takes precedence and is never overwritten.
+	// Must not be negative. Defaults to "12h" when omitted.
+	// +optional
+	MaxWorkerLifetime *metav1.Duration `json:"maxWorkerLifetime,omitempty"`
 
 	// ScaleUp optionally caps the RATE at which the AGC creates new worker pods for
 	// this RunnerGroup, smoothing cold-start stampedes on a shared, rate-sensitive

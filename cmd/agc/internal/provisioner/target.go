@@ -201,6 +201,11 @@ type ResolvedSpec struct {
 	QuotaRetryDelay    time.Duration
 	CompletedPodTTL    time.Duration
 
+	// MaxWorkerLifetime is the worker pod's activeDeadlineSeconds — the
+	// provision-time cap that bounds a worker orphaned while the AGC was down
+	// (Q438). Zero means no cap is stamped (the operator opted out with "0s").
+	MaxWorkerLifetime time.Duration
+
 	// Egress-proxy wiring injected into the worker runner container. In v1 these
 	// come from the process-wide Provisioner fields (the single per-AGC proxy); in
 	// v2 from the RunnerSet's resolved EgressProxy.
@@ -257,6 +262,23 @@ func PendingPodDeadlineOrDefault(d *metav1.Duration) time.Duration {
 		return d.Duration
 	}
 	return DefaultPendingPodDeadline
+}
+
+// MaxWorkerLifetimeOrDefault returns the worker-pod lifetime cap for the given
+// spec value, applying DefaultMaxWorkerLifetime when nil. An explicit "0s" is
+// honoured as "no cap" rather than defaulted, so an operator can opt out; a
+// negative value (which the CRD rejects) is likewise treated as no cap rather
+// than stamped, since a negative activeDeadlineSeconds is invalid to the
+// apiserver and would fail every pod create. Shared by the v1 and v2 adapters so
+// the cap is computed one way.
+func MaxWorkerLifetimeOrDefault(d *metav1.Duration) time.Duration {
+	if d == nil {
+		return DefaultMaxWorkerLifetime
+	}
+	if d.Duration <= 0 {
+		return 0
+	}
+	return d.Duration
 }
 
 // WorkerCeilingFromTiers returns the maximum concurrent worker pods implied by a

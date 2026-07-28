@@ -6,8 +6,8 @@ worker whose job ended while the AGC was down — is reclaimed **if and only if*
 GitHub still redelivers that job's terminal `JobCompleted` to the restarted
 AGC's new session. Nothing in the AGC decides whether it does.
 
-The durable-deadline fix for the residual is tracked as
-[Q438](../STATUS.md#Q438).
+The durable-deadline fix for the residual shipped as Q438 — see
+[q438-worker-lifetime-deadline.md](archive/q438-worker-lifetime-deadline.md).
 
 ## Why the question was open
 
@@ -132,8 +132,18 @@ Closing it needs a deadline that does not depend on a live listener, e.g. a
 maximum worker lifetime stamped at provision time. That is a real design
 decision, not a mechanical fix: a default low enough to have bounded the 16-hour
 incident is also low enough to kill a legitimate long job, so the safe default
-and the useful one point in opposite directions. Tracked as
-[Q438](../STATUS.md#Q438).
+and the useful one point in opposite directions.
+
+**Closed by Q438 (2026-07-27).** The residual is now bounded by
+`maxWorkerLifetime`, default 12h, stamped on every worker pod at provision time
+as its `activeDeadlineSeconds`. The mechanism is deliberately not the reaper: in
+this incident the AGC was down for the whole 16 hours, so a reaper-side deadline
+would not have bounded it either — the kubelet is the only actor still running.
+Deriving the deadline from the job's own `timeout-minutes` was the preferred
+shape and turned out to be unavailable: measured against captured live wire
+evidence and the upstream client, no field on the scale-set `JobAssigned` message
+carries the job's timeout. See
+[q438-worker-lifetime-deadline.md](archive/q438-worker-lifetime-deadline.md).
 
 Two things an operator needs meanwhile are shipped with this measurement: the
 [troubleshooting runbook](../operations/troubleshooting.md) now names the
@@ -145,6 +155,11 @@ claim is qualified rather than absolute.
 - **Does GitHub redeliver a `JobCompleted` after a multi-hour gap with no
   session?** Tier A / live only. The fake's queue log is deliberately
   session-independent, which is the *permissive* assumption; real retention is
-  unknown and could be shorter. If it turns out GitHub does not redeliver, the
-  replay path stops being a recovery path at all and [Q438](../STATUS.md#Q438)
-  becomes the only one.
+  unknown and could be shorter. Q438's research confirmed this is genuinely
+  **undocumented** — the published contract covers only within-session
+  redelivery of unacknowledged messages, not retention across a session gap — so
+  it needs a live measurement rather than more reading. Tracked as
+  [Q468](../STATUS.md#Q468). If it turns out GitHub does not redeliver, the
+  replay path stops being a recovery path at all and Q438's lifetime cap becomes
+  the only one; the cap is on by default either way, which is why the answer
+  changes confidence rather than design.

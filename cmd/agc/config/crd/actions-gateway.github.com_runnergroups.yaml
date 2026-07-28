@@ -122,6 +122,26 @@ spec:
                 maximum: 20
                 minimum: 0
                 type: integer
+              maxWorkerLifetime:
+                description: |-
+                  MaxWorkerLifetime is the maximum time a worker pod may be active on its node
+                  before the kubelet kills it, applied as the pod's activeDeadlineSeconds. It is
+                  the backstop for a worker whose job ended while the AGC was down: such a pod is
+                  indistinguishable in cluster state from one running a long job, so nothing the
+                  AGC observes later can reclaim it, and only a deadline stamped when the pod is
+                  created bounds it (Q438). Because the kubelet enforces it, it holds even while
+                  the AGC is unavailable — which is exactly the failure it exists for.
+
+                  A pod killed this way lands in Failed with reason DeadlineExceeded, the AGC
+                  reaps it under reason "lifetime_exceeded", and a Warning Event
+                  (WorkerPodLifetimeExceeded) names the pod and the lifetime that killed it.
+
+                  Raise this for a RunnerGroup that legitimately runs jobs longer than the
+                  default; jobs declaring a `timeout-minutes` above it will be killed mid-run.
+                  Set to "0s" to disable the cap entirely. An activeDeadlineSeconds set
+                  explicitly on spec.podTemplate takes precedence and is never overwritten.
+                  Must not be negative. Defaults to "12h" when omitted.
+                type: string
               maxWorkers:
                 description: |-
                   MaxWorkers caps the number of worker pods this RunnerGroup may run concurrently.
@@ -8731,6 +8751,9 @@ spec:
             - message: pendingPodDeadline must be at least 1s
               rule: '!has(self.pendingPodDeadline) || duration(self.pendingPodDeadline)
                 >= duration(''1s'')'
+            - message: maxWorkerLifetime must not be negative
+              rule: '!has(self.maxWorkerLifetime) || duration(self.maxWorkerLifetime)
+                >= duration(''0s'')'
           status:
             description: RunnerGroupStatus defines the observed state of a RunnerGroup.
             properties:

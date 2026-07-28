@@ -30,6 +30,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
 - [Worker Pod Reaped While Running (WorkerPodOrphanedRunning)](#worker-pod-reaped-while-running-workerpodorphanedrunning)
 - [Workers Left Behind by an AGC That Was Down](#workers-left-behind-by-an-agc-that-was-down)
+- [Worker Killed by the Lifetime Cap (WorkerPodLifetimeExceeded)](#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded)
 - [Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409)
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
 - [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
@@ -999,9 +1000,11 @@ The five-minute grace is a fixed constant, not a CRD field: it measures runner s
 
 **What happened.** The reap above needs a *live* AGC. If the AGC itself was down when a job ended — evicted, `Pending` with nowhere to schedule, `CrashLoopBackOff` — nothing stamped its workers, and those pods have no reap deadline at all. They keep `Running`, hold their concurrency and quota slots, and because every worker carries `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` (deliberately — a worker mid-job has no replacement) the autoscaler will not reclaim their nodes either. One dogfood incident stranded five workers and 82 spot node-hours this way.
 
-Restarting the AGC clears most of this on its own. Workers that already reached a terminal phase, workers stuck `Pending`, and workers stamped before the AGC died are all reclaimed within their normal deadlines with no action from you. A still-`Running` worker whose job ended during the outage is reclaimed only if GitHub redelivers that job's completion to the restarted AGC — usually it does, and the pod is stamped and then reaped five minutes later.
+Restarting the AGC clears most of this on its own. Workers that already reached a terminal phase, workers stuck `Pending`, and workers stamped before the AGC died are all reclaimed within their normal deadlines with no action from you. A still-`Running` worker whose job ended during the outage is reclaimed if GitHub redelivers that job's completion to the restarted AGC — usually it does, and the pod is stamped and then reaped five minutes later.
 
-So: **bring the AGC back first, then wait for one reap cycle before deleting anything by hand.**
+**The unconditional backstop is `maxWorkerLifetime` (default 12h).** Every worker pod is created with that value as its `activeDeadlineSeconds`, so the **kubelet** — not the AGC — kills a worker that outlives it. That is what bounds this failure even when the AGC never comes back at all: the incident above ran 16 hours precisely because nothing was running to notice. A pod killed this way goes `Failed`/`DeadlineExceeded`, is reaped under `reason="lifetime_exceeded"`, and emits a `WorkerPodLifetimeExceeded` Warning Event. See [Worker Killed by the Lifetime Cap](#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded) if that is what you are looking at.
+
+So: **bring the AGC back first, then wait for one reap cycle before deleting anything by hand.** Hand-deletion is now the impatient path, not the only one — an untouched pod is reclaimed within `maxWorkerLifetime` regardless.
 
 ```sh
 # 1. Is the AGC actually running? A Pending/CrashLoop AGC reaps nothing.
@@ -1024,6 +1027,41 @@ kubectl delete pod <pod> -n <namespace>
 ```
 
 Prevention is on the teardown side: never scale down the pool carrying the AGCs while jobs are in flight. For the dogfood cluster, `scripts/dogfood/stop.sh` drains in-flight workers before resizing and fails the stop rather than stranding them.
+
+---
+
+## Worker Killed by the Lifetime Cap (WorkerPodLifetimeExceeded)
+
+**Symptoms.** A job that used to finish now fails partway through, always at roughly the same elapsed time. The worker pod is `Failed` with `reason: DeadlineExceeded`, a `Warning` Event with reason `WorkerPodLifetimeExceeded` appears on the `RunnerGroup`/`RunnerSet`, and `actions_gateway_worker_pods_reaped_total{reason="lifetime_exceeded"}` increments.
+
+```sh
+kubectl get pod <pod> -n <namespace> -o jsonpath='{.status.phase}{"\t"}{.status.reason}{"\n"}'
+# Failed	DeadlineExceeded
+```
+
+**What happened.** Every worker pod is created with `spec.maxWorkerLifetime` (default **12h**) as its `activeDeadlineSeconds`, and the **kubelet** killed this one for exceeding it. The cap exists because a worker whose job ended while the AGC was down carries no other deadline — and in the incident that motivated it the AGC was down for the whole 16 hours, so an AGC-side deadline would not have helped. The kubelet is the one actor still running in that failure.
+
+There are two possibilities, and they are worth telling apart before changing anything:
+
+- **The job was genuinely stuck** — the cap did its job. Check whether GitHub shows the run as still executing at the time of the kill, or whether the runner had been sitting at `Listening for Jobs`.
+- **The job was legitimately that long.** GitHub's own default `timeout-minutes` is 360 (6 h), so a job running past 12 h has explicitly declared a `timeout-minutes` more than twice that default. GAG cannot read that declaration — the job's timeout is not carried on the acquisition wire — so it cannot distinguish a 14-hour job from a wedged one, which is exactly why the cap is a blunt fixed value with an override.
+
+**Resolution for a legitimately long job.** Raise the cap on that group or set:
+
+```sh
+kubectl patch runnerset <name> -n <namespace> --type=merge \
+  -p '{"spec":{"maxWorkerLifetime":"24h"}}'
+```
+
+```sh
+# v1: the same field on the RunnerGroup
+kubectl patch runnergroup <name> -n <namespace> --type=merge \
+  -p '{"spec":{"maxWorkerLifetime":"24h"}}'
+```
+
+Set it to `"0s"` to disable the cap entirely — that restores the pre-cap behaviour, including the orphan risk above, so prefer a raised value over an opt-out. A negative value is rejected at admission. An `activeDeadlineSeconds` set explicitly on the pod template takes precedence over this field and is never overwritten, which is the escape hatch for a per-template exception.
+
+Note the ceiling you cannot raise past: GitHub terminates any job on a self-hosted runner at **5 days** regardless of this setting.
 
 ---
 

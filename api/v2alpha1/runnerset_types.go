@@ -47,6 +47,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="!has(self.quotaRetryDelay) || duration(self.quotaRetryDelay) >= duration('1s')",message="quotaRetryDelay must be at least 1s"
 // +kubebuilder:validation:XValidation:rule="!has(self.completedPodTTL) || duration(self.completedPodTTL) >= duration('0s')",message="completedPodTTL must not be negative"
 // +kubebuilder:validation:XValidation:rule="!has(self.pendingPodDeadline) || duration(self.pendingPodDeadline) >= duration('1s')",message="pendingPodDeadline must be at least 1s"
+// +kubebuilder:validation:XValidation:rule="!has(self.maxWorkerLifetime) || duration(self.maxWorkerLifetime) >= duration('0s')",message="maxWorkerLifetime must not be negative"
 // +kubebuilder:validation:XValidation:rule="self.acquisitionProtocol != 'ScaleSet' || size(self.runnerLabels) == 1",message="a ScaleSet-protocol runner set must declare exactly one runnerLabel: the scale set's name is its single runs-on match target (Q264)"
 type RunnerSetSpec struct {
 	// GatewayRef names the ActionsGateway that supplies this runner set's GitHub
@@ -210,6 +211,22 @@ type RunnerSetSpec struct {
 	//
 	// +optional
 	PendingPodDeadline *metav1.Duration `json:"pendingPodDeadline,omitempty"`
+
+	// MaxWorkerLifetime is the maximum time a worker pod may be active on its node
+	// before the kubelet kills it, applied as the pod's activeDeadlineSeconds. It
+	// bounds a worker whose job ended while the AGC was down — a pod nothing the AGC
+	// observes later can distinguish from one running a long job (Q438). The kubelet
+	// enforces it, so it holds even while the AGC is unavailable.
+	//
+	// A pod killed this way lands in Failed with reason DeadlineExceeded and is
+	// reaped under reason "lifetime_exceeded", with a Warning Event
+	// (WorkerPodLifetimeExceeded). Jobs declaring a `timeout-minutes` above this will
+	// be killed mid-run. Set to "0s" to disable. An activeDeadlineSeconds set
+	// explicitly on the RunnerTemplate's podTemplate takes precedence. Must not be
+	// negative. Defaults to "12h" when omitted.
+	//
+	// +optional
+	MaxWorkerLifetime *metav1.Duration `json:"maxWorkerLifetime,omitempty"`
 
 	// ScaleUp optionally caps the RATE at which the AGC creates new worker pods for
 	// this RunnerSet, smoothing cold-start stampedes on a shared, rate-sensitive

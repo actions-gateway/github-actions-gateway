@@ -749,6 +749,11 @@ func (in *RunnerSetSpec) DeepCopyInto(out *RunnerSetSpec) {
 		*out = new(metav1.Duration)
 		**out = **in
 	}
+	if in.MaxWorkerLifetime != nil {
+		in, out := &in.MaxWorkerLifetime, &out.MaxWorkerLifetime
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	if in.ScaleUp != nil {
 		in, out := &in.ScaleUp, &out.ScaleUp
 		*out = new(ScaleUpRateLimit)

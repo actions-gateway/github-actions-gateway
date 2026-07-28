@@ -212,10 +212,10 @@ const completedJobRunningGrace = 5 * time.Minute
 // Pending pods older than deadline, and Running pods still alive more than
 // completedJobRunningGrace after their job completed. It returns the time until the
 // earliest retained pod becomes due (0 = none), pod counts by phase (for status), and
-// any error. metrics may be nil; emitStuckPending and emitOrphanedRunning (both may be
-// nil) record the owning-CR typed Event on a pending-deadline and an orphaned-running
-// reap respectively. Shared by both reconcilers' reapers so the reap logic is defined
-// once.
+// any error. metrics may be nil; emitStuckPending, emitOrphanedRunning and
+// emitLifetimeExceeded (all may be nil) record the owning-CR typed Event on a
+// pending-deadline, an orphaned-running and a lifetime-cap reap respectively. Shared by
+// both reconcilers' reapers so the reap logic is defined once.
 func reapWorkerPodsByLabel(
 	ctx context.Context,
 	c client.Client,
@@ -226,6 +226,7 @@ func reapWorkerPodsByLabel(
 	metrics *runnercore.Metrics,
 	emitStuckPending func(podName string, deadline time.Duration),
 	emitOrphanedRunning func(podName string, grace time.Duration),
+	emitLifetimeExceeded func(podName string),
 ) (time.Duration, workerPodCounts, error) {
 	var pods corev1.PodList
 	if err := c.List(ctx, &pods,
@@ -262,6 +263,13 @@ func reapWorkerPodsByLabel(
 		case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
 			due = podTerminalTime(pod).Add(ttl)
 			reason = reapReasonCompletedTTL
+			// A pod the kubelet killed for exceeding activeDeadlineSeconds is
+			// retained and reaped exactly like any other terminal pod — only its
+			// label and Event differ, so the lifetime cap firing is legible instead
+			// of arriving as a mystery termination under completed_ttl (Q438).
+			if pod.Status.Reason == podReasonDeadlineExceeded {
+				reason = reapReasonLifetimeExceeded
+			}
 		case corev1.PodPending:
 			counts.pending++
 			due = pod.CreationTimestamp.Add(deadline)
@@ -292,6 +300,9 @@ func reapWorkerPodsByLabel(
 		}
 		if reason == reapReasonOrphanedRunning && emitOrphanedRunning != nil {
 			emitOrphanedRunning(pod.Name, completedJobRunningGrace)
+		}
+		if reason == reapReasonLifetimeExceeded && emitLifetimeExceeded != nil {
+			emitLifetimeExceeded(pod.Name)
 		}
 	}
 	return next, counts, nil
