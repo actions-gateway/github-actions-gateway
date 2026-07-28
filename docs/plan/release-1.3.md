@@ -1,17 +1,22 @@
 # Release 1.3 Milestone Definition
 
-> **Status: one gating Queue row is open — [Q481](../STATUS.md#Q481).** The
-> original six closed 2026-07-26 (Q359, Q400, Q404, Q411, Q412, Q393). Q481 was
-> opened afterwards by the [API review](#e-api-review-one-open-gating-row-q481)
-> this release introduced: `sizing.profile`'s shape is frozen by this tag either
-> way, so the choice is made deliberately rather than by default. **Closing it as
-> "ship as-is" is an expected outcome** and does not require an API change.
+> **Status: three gating Queue rows are open, all from the API review** —
+> [Q484](../STATUS.md#Q484), [Q485](../STATUS.md#Q485),
+> [Q486](../STATUS.md#Q486). The original six closed 2026-07-26 (Q359, Q400,
+> Q404, Q411, Q412, Q393), and Q481 — the first row the
+> [API review](#e-api-review-q481-closed-q484q486-open) opened — closed
+> 2026-07-28 as **ship `spec.sizing` as-is, deliberately**, no API change.
 >
-> **The tag is not cut** regardless: the Definition of Done also requires the
-> release-candidate dogfood validation in
+> **Every remaining gate is an API-shape question**, which is the pattern worth
+> noticing: this release's residual risk is not unfinished capability but surface
+> about to be frozen. Each is cheap now and needs a conversion shim or a version
+> bump once the tag publishes it.
+>
+> **The tag is not cut even when they close.** The Definition of Done also
+> requires the release-candidate dogfood validation in
 > [operations/release.md](../operations/release.md), which can only run against
-> the actual RC image and is not tracked as a Queue row. Residuals deliberately
-> deferred out of 1.3 are listed under
+> the actual RC image and is deliberately not tracked as a Queue row. Residuals
+> deferred out of 1.3 are under
 > [Explicitly out of scope](#explicitly-out-of-scope).
 
 The scope and Definition of Done for the `v1.3.0` tag. Queue rows that block this
@@ -188,7 +193,7 @@ filter should have been widened — that judgement is still the reviewer's, and
 the Q400 residual risk above is unaffected. Detail:
 [testing.md § The path-filter gate](../development/testing.md#the-path-filter-gate).
 
-### E. API review (*one open gating row: Q481*)
+### E. API review (*Q481 closed; Q484–Q486 open*)
 
 1.3 is the first release to run the
 [pre-release API review](../development/api-review.md), and it is also the
@@ -210,12 +215,53 @@ the value named *that* the gate was on rather than *how* it decides, which stops
 distinguishing anything once Q407's reserved `Probe`/`Provision` join the same
 axis.
 
-**Found and open:** [Q481](../STATUS.md#Q481) — `sizing.profile` carries two
-axes the same way `capacityGate.mode` did before Q470, making
-NodeShare-with-Guaranteed unrepresentable. Gating because the tag freezes the
-shape either way; **shipping as-is deliberately is an acceptable close**, since
-the sizing model itself is not yet live-validated (Q449) and reshaping around an
-unproven model has its own cost.
+**Found and shipped as-is, deliberately:** Q481 — `sizing.profile` carries two
+axes (where the request comes from; what limits follow) the same way
+`capacityGate.mode` did before Q470, leaving a Guaranteed node share and
+history-derived-requests-under-hand-set-limits without a profile of their own.
+Gating because
+the tag freezes the shape either way. **Closed 2026-07-28 without an API
+change**, on three grounds: the cost that made Q470 worth a break is absent
+here — both axes are the set owner's own choice, so nothing asks a tenant to
+assert a fact they do not own; the axes are not orthogonal, so a split shape
+still needs a `only meaningful when …` CEL rule for the headroom percent (which
+is defined off the *observed peak*, and a peak exists only under the usage
+source); and both cells are reachable **additively** in any later minor, which is
+the difference that matters — Q470 had to beat its tag because its fix removed
+enum values, and this one does not. The review also found the Guaranteed node
+share is reachable *today*, as a side effect of the limit-lift guard rather than
+by design — verified, pinned by
+`TestApplySizingProfileNodeShareLiftedLimitsReachGuaranteed`, and written up for
+operators in
+[worker-rightsizing.md](../operations/worker-rightsizing.md#getting-guaranteed-qos-out-of-nodeshare).
+Full rationale, and the rule for
+extending the enum (`profile` is an intent enum: new values name a distinct
+operator intent, mechanism recombinations go in a sibling field):
+[appendix-h §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission).
+
+> The premise the row was filed under — "the sizing model is unvalidated" —
+> **expired before the close, and in the direction that made shipping as-is
+> easier, not harder.** `Binpack` was live-validated 2026-07-25 and `Throughput`
+> on the dogfood `ci` tenant days later (Q449), which turns the derivation the
+> split would have had to redefine from an unproven rule into a measured one.
+> `NodeShare` is still envtest-only (Q448) — and it is the profile whose missing
+> cell was the complaint, so the case for reshaping around it is weaker still.
+
+**Found and still open:** a second pass over the same span with the fuller
+checklist filed three more gating rows — [Q484](../STATUS.md#Q484) (a
+`nodeShare.allocatable` carrying neither cpu nor memory is admitted, and
+`sizingProfileState` then reports `Active` while nothing is derived),
+[Q485](../STATUS.md#Q485) (`windowStart` → `windowStartTime`, the API's first
+project-defined `metav1.Time` and so the precedent), and
+[Q486](../STATUS.md#Q486) (the two managed-autoscaler opt-ins shipped in one
+release with different shapes — to be recorded here as a deliberate accept, which
+is that row's work). Each stays cheap only until the tag.
+
+> **Q481 and Q484 both concern `NodeShare`, and do not overlap.** Q481 asked
+> whether the *shape* is right and answered yes; Q484 is a missing validation on
+> a field that shape already has. Closing Q481 as ship-as-is neither fixes nor
+> blocks it — worth stating because "the sizing shape was reviewed and accepted"
+> is easy to misread as covering both.
 
 **Accepted without change:** the bare-`string` enum fields
 (`capacityGate.mode`, `sizing.profile`, `clusterCapacity.nodeAutoscaling`,
@@ -233,9 +279,15 @@ module consumers only and does not need to beat this tag.
 
 ## Critical path & ordering
 
-**Nothing is left to order.** Every gating item closed 2026-07-26: both
-gate-integrity items (Q400, Q404), both halves of the deprecation notice (Q411,
-Q412), and the announce bar (Q393). Neither half of the notice could stand alone:
+**Nothing left is ordered against anything else.** Six gating items closed
+2026-07-26: both gate-integrity items (Q400, Q404), both halves of the
+deprecation notice (Q411, Q412), and the announce bar (Q393); the API review's
+Q481 closed 2026-07-28 without an API change
+([§ E](#e-api-review-q481-closed-q484q486-open)), and needed no ordering because
+a no-op decision has no dependents. The three that remain (Q484, Q485, Q486) are
+independent of each other and of everything else here — each is a self-contained
+change to one field — so they can land in any order, or in one PR. Neither half
+of the notice could stand alone:
 Q412 named `v2.0.0` where operators plan from the docs, and Q411 put the same
 release into the apiserver warning, so an operator who never reads the docs still
 gets told.
@@ -245,9 +297,10 @@ immediately before tagging" so it named the version being cut. Q393 made its
 version derive from the tag list at build time, so it no longer needs a place in
 the ordering at all.
 
-What remains before the tag is not a Queue item: the release-candidate dogfood
+One thing that remains is not a Queue item at all: the release-candidate dogfood
 validation in [§ A](#a-headline-feature-complete-satisfied), which can only be run
-against the actual RC image.
+against the actual RC image. It is last regardless — it validates the RC the
+other rows have already shaped.
 
 ## Guardrails
 

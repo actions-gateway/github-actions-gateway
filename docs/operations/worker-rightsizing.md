@@ -186,6 +186,41 @@ Safety rails, in all profiles:
   `SizingDrift` condition reports `False/SizingProfileActive` (pods no longer
   run the template ask, so judging it would mislead).
 
+### Getting Guaranteed QoS out of `NodeShare`
+
+`Binpack` is the profile that sets `requests == limits` for you. `NodeShare`
+does not — it derives the runner container's *requests* and leaves limits to the
+template — so a GPU pool that wants both an even node split **and** Guaranteed
+QoS has to arrange the second part itself. It can:
+
+Set the runner container's template CPU **and** memory limits at or below the
+share you expect (`allocatable ÷ workersPerNode`). Each is then raised to the
+derived request by the same rule that stops a too-low template limit being
+rejected at admission, and the container comes out with `requests == limits`.
+
+```yaml
+# runner container in the RunnerTemplate; envelope 15 CPU / 60Gi ÷ 4 workers
+resources:
+  limits: { cpu: "1", memory: 2Gi }   # both below the 3750m / 15Gi share
+```
+
+Two caveats, both easy to trip over:
+
+- **A limit *above* the share is left alone**, and the pod is Burstable. This is
+  the ordinary case — a template CPU limit of `4` against a `3750m` share stays
+  `4`. The values above are deliberately far under the envelope so the outcome
+  does not depend on getting the arithmetic exactly right.
+- **Pod QoS is Guaranteed only if every container qualifies.** `NodeShare`
+  touches the runner container only; a `dind` sidecar keeps its template ask, so
+  give it explicit equal requests and limits or the pod lands Burstable however
+  the runner is sized.
+
+This works, but it is a side effect of the limit-lift guard rather than a knob
+that names the intent. If you want it, say so on the issue tracker — the clean
+form is an explicit field under `sizing.nodeShare`, an additive change we held
+back from 1.3 for want of a concrete asker
+([appendix-h §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission)).
+
 ## Troubleshooting
 
 **`actions_gateway_worker_usage_poll_errors_total` rising steadily** — the AGC
