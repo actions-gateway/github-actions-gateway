@@ -1,20 +1,19 @@
 # Release 1.3 Milestone Definition
 
-> **Status: one gating Queue row is open, from the API review** —
-> [Q484](../STATUS.md#Q484). The original six closed 2026-07-26 (Q359, Q400,
-> Q404, Q411, Q412, Q393), and three of the four rows the
-> [API review](#e-api-review-q481-q485-q486-closed-q484-open) opened closed
-> 2026-07-28: Q485 with the `windowStartTime` rename shipped, and Q481
-> (**ship `spec.sizing` as-is, deliberately**) and Q486 (**the two
-> managed-autoscaler opt-ins keep their different shapes, deliberately**) with
-> no API change at all.
+> **Status: no gating Queue row remains.** The original six closed 2026-07-26
+> (Q359, Q400, Q404, Q411, Q412, Q393), and all four rows the
+> [API review](#e-api-review-satisfied) opened closed 2026-07-28:
+> Q485 with the `windowStartTime` rename shipped, Q484 with a CEL rule requiring
+> `nodeShare.allocatable` to declare cpu, memory, or both, and Q481 (**ship
+> `spec.sizing` as-is, deliberately**) and Q486 (**the two managed-autoscaler
+> opt-ins keep their different shapes, deliberately**) with no API change at all.
 >
-> **Every remaining gate is an API-shape question**, which is the pattern worth
-> noticing: this release's residual risk is not unfinished capability but surface
-> about to be frozen. Each is cheap now and needs a conversion shim or a version
-> bump once the tag publishes it.
+> **The last gates to clear were all API-shape questions**, which is the pattern
+> worth noticing: once the capability work landed, this release's residual risk
+> was not anything unfinished but surface about to be frozen — cheap to fix until
+> the tag, a conversion shim or a version bump afterwards.
 >
-> **The tag is not cut even when they close.** The Definition of Done also
+> **The tag is still not cut.** The Definition of Done also
 > requires the release-candidate dogfood validation in
 > [operations/release.md](../operations/release.md), which can only run against
 > the actual RC image and is deliberately not tracked as a Queue row. Residuals
@@ -195,7 +194,7 @@ filter should have been widened — that judgement is still the reviewer's, and
 the Q400 residual risk above is unaffected. Detail:
 [testing.md § The path-filter gate](../development/testing.md#the-path-filter-gate).
 
-### E. API review (*Q481, Q485, Q486 closed; Q484 open*)
+### E. API review (*satisfied*)
 
 1.3 is the first release to run the
 [pre-release API review](../development/api-review.md), and it is also the
@@ -309,15 +308,26 @@ mitigated by both shapes being documented where operators meet them
 and by the rule now generalised in
 [api-review.md § Let the opt-in's direction follow what already ships](../development/api-review.md#let-the-opt-ins-direction-follow-what-already-ships).
 
-**Found and still open:** of the three further gating rows that second pass
-filed, one remains — [Q484](../STATUS.md#Q484) (a `nodeShare.allocatable`
-carrying neither cpu nor memory is admitted, and `sizingProfileState` then
-reports `Active` while nothing is derived). It stays cheap only until the tag.
+**Found by the second pass, and now closed too:** the three further gating rows
+that second pass filed were Q485 and Q486 above, and one last one:
 
-> **Q481 and Q484 both concern `NodeShare`, and do not overlap.** Q481 asked
-> whether the *shape* is right and answered yes; Q484 is a missing validation on
-> a field that shape already has. Closing Q481 as ship-as-is neither fixes nor
-> blocks it — worth stating because "the sizing shape was reviewed and accepted"
+- **Q484 — fixed 2026-07-28.** A `nodeShare.allocatable`
+  carrying neither cpu nor memory was admitted, and `sizingProfileState` then
+  reported `Active` while nothing was derived. Fixed with the CEL rule the row
+  scoped — `'cpu' in self || 'memory' in self`, on the `allocatable` field
+  itself rather than on `sizing`, so ratcheting suppresses it on every write
+  that does not touch the envelope. Declaring one of the two stays valid: the
+  other resource keeps the template's ask. Rationale in
+  [appendix-h §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission);
+  the rejection has an
+  [operator runbook](../operations/troubleshooting.md#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory).
+  This was a **validation tightening**, which is wire-breaking after a tag — the
+  reason the row was 1.3-gating rather than ordinary backlog.
+
+> **Q481 and Q484 both concerned `NodeShare`, and did not overlap.** Q481 asked
+> whether the *shape* is right and answered yes; Q484 was a missing validation on
+> a field that shape already has. Closing Q481 as ship-as-is neither fixed nor
+> blocked it — worth stating because "the sizing shape was reviewed and accepted"
 > is easy to misread as covering both.
 
 **Accepted without change:** the bare-`string` enum fields
@@ -336,15 +346,15 @@ module consumers only and does not need to beat this tag.
 
 ## Critical path & ordering
 
-**Nothing left is ordered against anything else.** Six gating items closed
+**Nothing is left to order.** Six gating items closed
 2026-07-26: both gate-integrity items (Q400, Q404), both halves of the
 deprecation notice (Q411, Q412), and the announce bar (Q393); the API review's
 Q481 closed 2026-07-28 without an API change
-([§ E](#e-api-review-q481-q485-q486-closed-q484-open)), as did Q486, and neither
+([§ E](#e-api-review-satisfied)), as did Q486, and neither
 needed ordering because a no-op decision has no dependents; Q485 closed the same
-day with the `windowStartTime` rename shipped. The one that remains (Q484) is a
-self-contained change to one field, independent of everything else here. Neither half
-of the notice could stand alone:
+day with the `windowStartTime` rename shipped, and Q484 with a CEL rule on
+`nodeShare.allocatable`. Each of the four was a self-contained change to one
+field or none, independent of everything else here. Neither half
 Q412 named `v2.0.0` where operators plan from the docs, and Q411 put the same
 release into the apiserver warning, so an operator who never reads the docs still
 gets told.

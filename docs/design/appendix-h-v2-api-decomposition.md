@@ -585,7 +585,13 @@ only cpu/memory keys are ever written (extended resources byte-identical);
 `Binpack`/`Throughput` are whole-pod and fall back to `Static` until every
 template container is drift-confident (`status.sizingProfileState`:
 `Active`/`AwaitingSamples`); optional `minRequests`/`maxRequests` clamp every
-derived value. Quota/LimitRange conflicts are deliberately a **runtime** signal
+derived value. Because only cpu/memory are ever written, a CEL rule on
+`nodeShare.allocatable` requires at least one of the two keys (Q484): an
+envelope carrying neither — empty, or the GPU key alone, which is the realistic
+mistake since GPUs are what the profile bin-packs *against* — derives nothing
+while `sizingProfileState` still reports `Active`. That rule is a **within-object**
+invariant, which is why it belongs at admission where the quota conflict below
+does not. Quota/LimitRange conflicts are deliberately a **runtime** signal
 (the existing `WorkerQuota*` conditions and quota retries), not an admission
 gate — cross-object admission validation is exactly what this appendix's §H.7
 philosophy avoids. While a profile is `Active`, `SizingDrift` reports

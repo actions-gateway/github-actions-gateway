@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
@@ -184,6 +185,65 @@ func TestV2_RunnerSet_ScaleUpRejectsZeroRate(t *testing.T) {
 	err := k8sClient.Create(ctx, rs)
 	require.Error(t, err)
 	assert.True(t, apierrors.IsInvalid(err), "expected Invalid for maxPerSecond: 0, got %v", err)
+}
+
+// TestV2_RunnerSet_NodeShareAllocatableRequiresCPUOrMemory pins Q484. The
+// NodeShare profile only ever derives the cpu and memory keys, so an envelope
+// carrying neither — empty, or extended resources only — actuates nothing while
+// status.sizingProfileState still reports Active. The CEL rule makes that state
+// unreachable at admission. It must not over-tighten: declaring one of the two
+// is a legitimate envelope (the other resource keeps the template's ask), and
+// both served versions carry the rule.
+func TestV2_RunnerSet_NodeShareAllocatableRequiresCPUOrMemory(t *testing.T) {
+	const ns = "v2-runnerset-nodeshare-envelope"
+	createNSForAGC(t, ns)
+
+	nodeShare := func(alloc corev1.ResourceList) *agcv2alpha1.WorkerSizing {
+		return &agcv2alpha1.WorkerSizing{
+			Profile:   agcv2alpha1.SizingProfileNodeShare,
+			NodeShare: &agcv2alpha1.NodeShareSizing{Allocatable: alloc, WorkersPerNode: 4},
+		}
+	}
+
+	empty := newV2RunnerSet(ns, "empty-envelope", "acme", "default")
+	empty.Spec.Sizing = nodeShare(corev1.ResourceList{})
+	err := k8sClient.Create(ctx, empty)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err), "an empty allocatable should be Invalid, got %v", err)
+
+	// The realistic mistake: an operator declares the envelope in terms of the
+	// resource the profile exists to bin-pack against, which is the one key it
+	// never divides.
+	gpuOnly := newV2RunnerSet(ns, "gpu-only-envelope", "acme", "default")
+	gpuOnly.Spec.Sizing = nodeShare(corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("4")})
+	err = k8sClient.Create(ctx, gpuOnly)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err), "a GPU-only allocatable should be Invalid, got %v", err)
+
+	cpuOnly := newV2RunnerSet(ns, "cpu-only-envelope", "acme", "default")
+	cpuOnly.Spec.Sizing = nodeShare(corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("8")})
+	require.NoError(t, k8sClient.Create(ctx, cpuOnly),
+		"an envelope declaring only cpu divides cpu and leaves memory to the template")
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, cpuOnly) })
+
+	betaGPUOnly := &agcv2beta1.RunnerSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "beta-gpu-only-envelope", Namespace: ns},
+		Spec: agcv2beta1.RunnerSetSpec{
+			GatewayRef:   agcv2beta1.ObjectRef{Name: "acme"},
+			TemplateRef:  &agcv2beta1.ObjectRef{Name: "default"},
+			RunnerLabels: []string{"self-hosted"},
+			Sizing: &agcv2beta1.WorkerSizing{
+				Profile: agcv2beta1.SizingProfileNodeShare,
+				NodeShare: &agcv2beta1.NodeShareSizing{
+					Allocatable:    corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("4")},
+					WorkersPerNode: 4,
+				},
+			},
+		},
+	}
+	err = k8sClient.Create(ctx, betaGPUOnly)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err), "v2beta1 must carry the same rule, got %v", err)
 }
 
 func TestV2_RunnerSet_AcquisitionProtocolDefaultsScaleSet(t *testing.T) {

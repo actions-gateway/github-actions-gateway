@@ -64,6 +64,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
 - [`RunnerTemplate` Rejected: Reserved Pod Field (`v2alpha1`)](#runnertemplate-rejected-reserved-pod-field-v2alpha1)
 - [`RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)](#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)
+- [`RunnerSet` Rejected: `nodeShare.allocatable` Declares Neither cpu Nor memory](#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory)
 - [`RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)](#runnerset-stuck-readyfalse-with-a-notfound-reason-v2alpha1)
 - [v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)](#v2-actionsgateway-stuck-readyfalse-credentialunavailable--proxynotfound)
 - [`AGCAutoscalingUnavailable` — the VPA CRDs are not installed](#agcautoscalingunavailable--the-vpa-crds-are-not-installed)
@@ -2651,6 +2652,57 @@ set's name is its single runs-on match target (Q264)
   scale-set name at GitHub and collide. Give each `ScaleSet` set a distinct label.
   (Two `Classic` sets, or the same label under a *different* gateway or namespace, are
   unaffected — they register no colliding scale set.)
+
+---
+
+## `RunnerSet` Rejected: `nodeShare.allocatable` Declares Neither cpu Nor memory
+
+**Symptoms.** Creating or updating a `RunnerSet` that selects the `NodeShare`
+sizing profile is rejected:
+
+```
+RunnerSet.actions-gateway.com "gpu-linux" is invalid: spec.sizing.nodeShare.allocatable:
+Invalid value: sizing.nodeShare.allocatable must declare cpu, memory, or both; other
+resources are ignored
+```
+
+**Likely cause.** The envelope names only resources the profile never divides —
+most often the GPU key, because that is the resource the profile exists to
+bin-pack *against*:
+
+```yaml
+spec:
+  sizing:
+    profile: NodeShare
+    nodeShare:
+      allocatable: { nvidia.com/gpu: "4" }   # rejected: no cpu, no memory
+      workersPerNode: 4
+```
+
+`NodeShare` only ever derives the `cpu` and `memory` requests — extended
+resources pass through from the template byte-identical, because the GPU count
+is part of the shape's job-selected identity. An envelope carrying neither key
+therefore derives nothing at all, and before this rule it was admitted:
+`status.sizingProfileState` reported `Active` while every worker pod ran the
+template's untouched ask.
+
+**Resolution.** Declare the node's allocatable `cpu` and/or `memory` — the
+envelope the profile actually divides — and keep the GPU count in
+`workersPerNode`, which is the divisor:
+
+```yaml
+spec:
+  sizing:
+    profile: NodeShare
+    nodeShare:
+      allocatable: { cpu: "15", memory: 60Gi }   # from `kubectl describe node`
+      workersPerNode: 4                          # the node's GPU count
+```
+
+Declaring only one of the two is valid: the other resource keeps the template's
+ask. Take the numbers from `kubectl describe node <a-node-of-that-shape>` and
+subtract whatever system or sidecar overhead you reserve. Full walkthrough:
+[worker right-sizing](worker-rightsizing.md#sizing-profiles-opt-in-auto-apply).
 
 ---
 
