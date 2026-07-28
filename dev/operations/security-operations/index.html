@@ -2555,6 +2555,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Defense-in-depth: the priorityclass-allowlist-guard policy (Q289)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#param-resolution-can-break-cluster-wide-q444-open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Param resolution can break cluster-wide (Q444, open)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -3146,6 +3163,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Defense-in-depth: the priorityclass-allowlist-guard policy (Q289)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#param-resolution-can-break-cluster-wide-q444-open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Param resolution can break cluster-wide (Q444, open)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -4737,6 +4771,39 @@ parameter ConfigMap is <strong>deleted</strong>, every matched write — <code>r
 fail-closed rather than silently off. The GMC surfaces this as provisioning
 errors on affected gateways; recreate the ConfigMap (or <code>helm upgrade</code>) to
 recover. Deleting the ConfigMap does not affect running workloads.</p>
+<h4 id="param-resolution-can-break-cluster-wide-q444-open">Param resolution can break cluster-wide (Q444, open)<a class="headerlink" href="#param-resolution-can-break-cluster-wide-q444-open" title="Permanent link">&para;</a></h4>
+<p>There is an open defect in which the apiserver stops resolving this policy's
+parameter ConfigMap. Writes are denied with</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>denied request: failed to configure binding: no params found for policy binding
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>with `Deny` parameterNotFoundAction
+</code></pre></div>
+<p>while the ConfigMap plainly exists at the referenced name and namespace. Because
+<code>parameterNotFoundAction: Deny</code> resolves parameters <strong>before</strong> any per-object
+matching, this denies <em>every</em> matched write — <code>runnergroups</code>, <code>runnersets</code>,
+<code>runnertemplates</code>, class-naming or not — cluster-wide. The GMC surfaces it as
+provisioning failures on every gateway.</p>
+<p>Observed on Kubernetes 1.35.5 and 1.36.1, most often after a <code>helm uninstall</code>
+followed by a reinstall, though it has also been seen on a fresh install against
+an apiserver that had already entered the broken state. The trigger is not yet
+established; recreating the ConfigMap does not help. Tracking and evidence:
+<a href="../../plan/q444-vap-param-resolution/"><code>q444-vap-param-resolution.md</code></a>.</p>
+<p><strong>Do not confuse it with the benign window.</strong> A reinstall removes the parameter
+ConfigMap and recreates it, and for a second or two in between the guard is
+correctly failing closed with the same message. That clears on its own; the
+defect does not.</p>
+<p><strong>If you hit it</strong>, two options:</p>
+<ul>
+<li><strong>Restart kube-apiserver.</strong> The only known fix — it clears in seconds with no
+  object changes. Available on self-managed control planes; on EKS/GKE/AKS you
+  cannot do this directly, and a control-plane version upgrade is usually the
+  only lever that recycles the process.</li>
+<li><strong>Turn the guard off to restore writes</strong> (<code>helm upgrade --set
+  admissionPolicy.enabled=false</code>, or delete the binding by hand). Denials stop
+  immediately because nothing evaluates the policy any more. You lose the
+  defense-in-depth backstop until the apiserver restarts and you re-enable it, so
+  treat it as an incident mitigation and make sure the webhook allowlist is still
+  in force in the meantime.</li>
+</ul>
 <hr />
 <h2 id="license-attribution-in-images">License attribution in images<a class="headerlink" href="#license-attribution-in-images" title="Permanent link">&para;</a></h2>
 <p>The compiled binaries statically link third-party Go modules (MIT/BSD/Apache/ISC/…),
@@ -4763,11 +4830,11 @@ label every image already carries.</p>
   worker image ships a shell + coreutils + tar, so <code>exec</code>-cat and <code>kubectl cp</code>
   work on a worker pod:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>/licenses/LICENSE
-<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;tenant-ns&gt;/&lt;worker-pod&gt;:/licenses/THIRD-PARTY-NOTICES<span class="w"> </span>./THIRD-PARTY-NOTICES
-<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># The agc/gmc/proxy images are distroless (no shell, cat, or tar), so neither</span>
-<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># exec-cat nor kubectl cp works on them — read their /licenses from the repo</span>
-<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="c1"># root (THIRD-PARTY-NOTICES) or from the image with an OCI tool (crane/skopeo).</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>/licenses/LICENSE
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;tenant-ns&gt;/&lt;worker-pod&gt;:/licenses/THIRD-PARTY-NOTICES<span class="w"> </span>./THIRD-PARTY-NOTICES
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="c1"># The agc/gmc/proxy images are distroless (no shell, cat, or tar), so neither</span>
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="c1"># exec-cat nor kubectl cp works on them — read their /licenses from the repo</span>
+<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="c1"># root (THIRD-PARTY-NOTICES) or from the image with an OCI tool (crane/skopeo).</span>
 </code></pre></div>
 <ul>
 <li><strong>How it is kept current.</strong> <code>THIRD-PARTY-NOTICES</code> lives at the repo root and is
@@ -4820,12 +4887,12 @@ swap (the "Verify the image" step in the
 <a href="#suspected-compromised-agc-tenant-scoped">compromised-AGC</a> and
 <a href="#suspected-compromised-gmc-cluster-scoped-tier-0">compromised-GMC</a> playbooks) —
 confirm the image was signed by <em>this project's</em> publish workflow:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Pin the identity to the publish workflow on a release tag, and the issuer to</span>
-<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="c1"># GitHub&#39;s OIDC provider. A signature from any other identity (or none) fails.</span>
-<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Pin the identity to the publish workflow on a release tag, and the issuer to</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># GitHub&#39;s OIDC provider. A signature from any other identity (or none) fails.</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;
 </code></pre></div>
 <ul>
 <li><strong>A <code>cosign verify</code> failure is a stop-ship / incident signal.</strong> It means the
@@ -4847,20 +4914,20 @@ confirm the image was signed by <em>this project's</em> publish workflow:</p>
 the complement to the signature's <em>who signed it</em>. It is bound to the <strong>index</strong>
 digest (unlike the per-arch SBOM attestations), so a tag or index-digest
 reference verifies directly. The one-command check uses the GitHub CLI:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Confirms the signed SLSA provenance was minted by this project&#39;s publish</span>
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># workflow. Resolve the tag to the index digest first for a workload check.</span>
-<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Confirms the signed SLSA provenance was minted by this project&#39;s publish</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="c1"># workflow. Resolve the tag to the index digest first for a workload check.</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
 </code></pre></div>
 <p><code>cosign</code> verifies the same attestation against the keyless identity, matching the
 signature/SBOM commands above (the predicate type is the SLSA provenance v1
 in-toto type):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>slsaprovenance1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate.buildDefinition.externalParameters&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>slsaprovenance1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate.buildDefinition.externalParameters&#39;</span>
 </code></pre></div>
 <ul>
 <li><strong>A provenance verification failure is a stop-ship / incident signal</strong>, exactly
@@ -4877,19 +4944,19 @@ attached to that architecture's manifest digest</strong> (not to the index, so t
 SBOM you audit is exactly what your nodes run) — and are also uploaded as build
 artifacts on each publish run. To pull and inspect one from the registry,
 resolve the per-arch digest from the index first:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Resolve the manifest digest for the architecture you are auditing.</span>
-<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.manifests[] | select(.platform.os == &quot;linux&quot; and .platform.architecture == &quot;amd64&quot;) | .digest&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
-<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>
-<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="c1"># Download that arch&#39;s SPDX-JSON SBOM attestation, verifying its keyless signature first.</span>
-<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a><span class="w">  </span><span class="s2">&quot;ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>gmc.spdx.json
-<a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a>
-<a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a><span class="c1"># Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:</span>
-<a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.packages[].name&#39;</span><span class="w"> </span>gmc.spdx.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Resolve the manifest digest for the architecture you are auditing.</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.manifests[] | select(.platform.os == &quot;linux&quot; and .platform.architecture == &quot;amd64&quot;) | .digest&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>
+<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="c1"># Download that arch&#39;s SPDX-JSON SBOM attestation, verifying its keyless signature first.</span>
+<a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-8" name="__codelineno-32-8" href="#__codelineno-32-8"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-9" name="__codelineno-32-9" href="#__codelineno-32-9"></a><span class="w">  </span><span class="s2">&quot;ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-10" name="__codelineno-32-10" href="#__codelineno-32-10"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>gmc.spdx.json
+<a id="__codelineno-32-11" name="__codelineno-32-11" href="#__codelineno-32-11"></a>
+<a id="__codelineno-32-12" name="__codelineno-32-12" href="#__codelineno-32-12"></a><span class="c1"># Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:</span>
+<a id="__codelineno-32-13" name="__codelineno-32-13" href="#__codelineno-32-13"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.packages[].name&#39;</span><span class="w"> </span>gmc.spdx.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
 </code></pre></div>
 <p>PR CI (<a href="../../.github/workflows/security-scan.yml"><code>security-scan.yml</code></a>) builds
 each image and generates the same SBOM as a build artifact, so SBOM generation is

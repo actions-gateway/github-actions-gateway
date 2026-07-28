@@ -3066,6 +3066,13 @@ tenant CRs first, then the CRDs explicitly:</p>
 <a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">                   </span>runnergroups.actions-gateway.github.com
 </code></pre></div>
+<p>The <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code> is removed by
+<code>helm uninstall</code> along with its binding and parameter ConfigMap. Be aware of
+<strong>Q444</strong> before reinstalling: an apiserver can end up unable to resolve this
+policy's parameters, denying <strong>every</strong> <code>runnergroups</code> / <code>runnersets</code> /
+<code>runnertemplates</code> write cluster-wide even though the ConfigMap is present. The
+only known recovery is a kube-apiserver restart. Symptoms and mitigation:
+<a href="../troubleshooting/#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding">troubleshooting.md</a>.</p>
 <p>The install namespace (<code>gmc-system</code>) is left in place if you created it with
 <code>--create-namespace</code>; remove it with <code>kubectl delete namespace gmc-system</code> once
 empty.</p>
