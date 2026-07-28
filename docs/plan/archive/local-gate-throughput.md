@@ -39,7 +39,7 @@ Two facts follow:
 
 ## Finding: `-trimpath` makes the test-result cache path-independent
 
-[testing.md § Build and lint caches across worktrees](../development/testing.md#build-and-lint-caches-across-worktrees)
+[testing.md § Build and lint caches across worktrees](../../development/testing.md#build-and-lint-caches-across-worktrees)
 (Q343) recorded that the `go test` result cache is path-keyed and concluded
 "there is no supported knob to share test *results* across paths". That
 conclusion was measured at the default flags and is wrong once `-trimpath` is in
@@ -58,7 +58,7 @@ unaffected. `broker` reproduces the same result: without `-trimpath` worktree B
 re-runs the suite; with it, B prints `(cached)` on its first invocation.
 
 **`-trimpath` must not be set globally** (`go env -w GOFLAGS`, or the e2e
-targets): [`cmd/gmc/test/e2e/e2e_suite_test.go`](../../cmd/gmc/test/e2e/e2e_suite_test.go)
+targets): [`cmd/gmc/test/e2e/e2e_suite_test.go`](../../../cmd/gmc/test/e2e/e2e_suite_test.go)
 resolves the v2 CRD chart directory from `runtime.Caller(0)`, which returns a
 trimmed, non-existent path under the flag. It is applied in the unit-tier
 scripts only (`scripts/go-test.sh`, `scripts/coverage.sh`), which the e2e and
@@ -74,10 +74,11 @@ integration tiers do not use. The release images already build with `-trimpath`
 at an already-tested commit pays ~0 for the unit suite instead of ~19 min; only
 the packages whose content actually changed re-run.
 
-This largely subsumes [Q377](../STATUS.md) (change-scope `make test`/coverage to
+This retires Q377's *original* framing (change-scope `make test`/coverage to
 affected modules): content-keyed caching skips unchanged modules *soundly*,
 where scoping has to reason about which module a diff can affect and leaves the
-unscoped modules' coverage floors ungated.
+unscoped modules' coverage floors ungated. What remained of Q377 — the coverage
+tier's shape — is [change 6](#change-6-the-coverage-loop-adopts-make-tests-shape--q377).
 
 ### 2. Heavy-build lock becomes an N-slot semaphore ✓
 
@@ -114,7 +115,7 @@ constraint.
 
 ### Step 1 — what each prefix can reach
 
-[`scripts/qos-cluster-probe.sh`](../../scripts/qos-cluster-probe.sh) saturates one
+[`scripts/qos-cluster-probe.sh`](../../../scripts/qos-cluster-probe.sh) saturates one
 thread per logical CPU under a candidate prefix and samples per-cluster HW active
 residency and clock with `powermetrics`, reporting effective compute as
 `sum(residency × cores × clock)`:
@@ -148,8 +149,8 @@ pure-CPU synthetic load, not as the ceiling for real builds.
 Spin threads generate no I/O, no memory pressure, and no process churn, so the
 sweep cannot show whether a faster prefix keeps the desktop responsive — and
 `-d throttle` gives up CPU priority, which is the protection being traded.
-[`scripts/validate-throttle.sh`](../../scripts/validate-throttle.sh) runs a real
-gate phase under each candidate while [`scripts/uijitter.c`](../../scripts/uijitter.c)
+[`scripts/validate-throttle.sh`](../../../scripts/validate-throttle.sh) runs a real
+gate phase under each candidate while [`scripts/uijitter.c`](../../../scripts/uijitter.c)
 samples scheduling latency at `QOS_CLASS_USER_INTERACTIVE`, where the compositor
 runs. Idle floor on this machine: p50 2.9 ms, p99 4.1 ms.
 
@@ -200,12 +201,12 @@ that then exists. Done below.
 ## Change 4: the prefix switches, and the two knobs are re-derived ✓
 
 The macOS prefix is now `nice -n 10 taskpolicy -d throttle`
-([`scripts/local-throttle.sh`](../../scripts/local-throttle.sh)), on the evidence
+([`scripts/local-throttle.sh`](../../../scripts/local-throttle.sh)), on the evidence
 above. Linux is untouched — `nice -n 19` + `ionice -c 3` already expresses the
 two demotions separately, which is exactly what macOS was missing.
 
 With the ceiling lifted, both parallelism knobs were re-measured against it.
-[`scripts/validate-throttle.sh`](../../scripts/validate-throttle.sh) grew the two
+[`scripts/validate-throttle.sh`](../../../scripts/validate-throttle.sh) grew the two
 axes needed for that: `GAG_THROTTLE_CANDIDATES` entries take `|jobs=N` (so a
 parallelism sweep interleaves within a trial, and thermal drift hits every level
 equally) and `|holders=M` (M copies run concurrently, as M sessions holding M
@@ -325,7 +326,7 @@ left for a second to claim. Under `-c utility` a single run took ~37 %, and the
 second slot was dividing a ceiling; now it is competing for a nearly-full one.
 
 The throughput column also understates what slot 2 is for. The problem it was
-added to solve ([Q376](../STATUS.md)) was *queue depth* — a sibling session
+added to solve ([Q376](../../STATUS.md)) was *queue depth* — a sibling session
 blocked for a full run before it could start. Two holders finish in 36.7 s where
 strict serialization needs 23.0 + 23.0 = 46 s, so the second session both starts
 immediately and finishes sooner. That is the argument for slot 2, and it does not
@@ -384,7 +385,7 @@ cold gate's tens — because the gates that validate the docs work (`lint-backlo
 and take **no** heavy-build slot, while the three heavy phases re-queue cache-warm.
 
 Landed as process in
-[parallel-dispatch.md § Run the local gate in the background](../development/parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path)
+[parallel-dispatch.md § Run the local gate in the background](../../development/parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path)
 (worker prompt skeleton and the `/goal` template, so future runs actually get it),
 plus one supporting code change: `serialize_heavy_build` now heartbeats every 30 s
 while queued and prints its total on acquire. A backgrounded gate's log is the
@@ -396,21 +397,88 @@ change is stderr-only: lock paths, slot count, and the acquire protocol are
 untouched, so worktrees still on older code contend on the same files exactly as
 before.
 
+## Change 6: the coverage loop adopts `make test`'s shape ✓ (Q377)
+
+`scripts/coverage.sh` ran its 10 modules one at a time, where `make test` issues
+a single workspace-wide invocation. It now issues the same single invocation —
+one `./<module>/...` pattern per go.work module — and **splits the merged
+profile back per module by import path** to recover the per-module numbers the
+ratchet is keyed by.
+
+The alternative on the table was to keep the per-module invocations and run C of
+them concurrently. Adopting `make test`'s shape wins on three counts and costs
+nothing the other buys: Go schedules the whole workspace as one build graph (so
+small modules overlap the big `cmd/agc`/`cmd/gmc` dependency compiles instead of
+queueing behind them, which a concurrent loop of independent invocations cannot
+do — each would recompile the shared dependencies in its own process); the
+throttle budget stays one `-p`/`GOMAXPROCS` pair rather than C of them
+multiplying against a cap that exists for desktop safety; and there is no new
+concurrency knob to size, so nothing here needs re-deriving on the next machine.
+
+### What it measured
+
+M5 Max, 18 physical cores, `jobs = 16`, prefix `nice -n 10 taskpolicy -d
+throttle`. Candidates interleave within a trial, 2 trials per regime:
+
+| Regime | Shape | Wall (2 trials) | Mean | CPU% | Speed-up |
+|---|---|---|---:|---:|---:|
+| Cold `GOCACHE` | serial loop | 89.2 / 95.9 | 92.5 s | 277 / 272 % | — |
+| Cold `GOCACHE` | **one invocation** | 54.9 / 56.4 | **55.7 s** | 435 / 442 % | **1.66×** |
+| Warm build cache, `-count=1` | serial loop | 76.7 / 71.2 | 74.0 s | 77 / 91 % | — |
+| Warm build cache, `-count=1` | **one invocation** | 43.7 / 41.4 | **42.5 s** | 125 / 132 % | **1.74×** |
+
+Both regimes gain, and the CPU column says why: the serial loop left the machine
+idle. Warm it ran at **84 % mean CPU — under one core of eighteen** — because
+each module's test binaries wait on timers and envtest while the next module's
+compile has not started. The single invocation fills that with other modules'
+work (129 %). The same holds cold at a higher absolute level (274 % → 439 %).
+This is one more regime in this document where the throttle knobs were not the
+binding constraint; here it was the inter-module barrier.
+
+Note the ordering against [the `jobs` sweep](#the-unit-tier-had-to-go-cold-too--the-fourth-null): that sweep found no throughput anywhere in 8–24 for the
+*unit tier*, and this change is why — with the modules serialized, `-p` had
+nothing to schedule across them. The barrier, not the cap, was the ceiling.
+
+### The split agrees; three blocks in the suite are race-dependent
+
+Every module reported the same percentage as the per-module loop it replaced, and
+8 of 10 modules' filtered profiles are line-for-line identical. The other two
+differ on **three individual blocks**, and none of them is a split defect —
+each is a race the test deliberately tolerates, resolved differently on a
+busier machine:
+
+| Block | serial ×2 | single ×2 | What it is |
+|---|---|---|---|
+| `probe/main.go:501` | 0, 0 | 0, **1** | `deadline.Err()` at the top of `investigateJobDelivery`'s poll loop |
+| `agc/internal/token/manager.go:147` | **0, 1** | 0, 0 | varies between two *serial* runs — unrelated to the shape |
+| `agc/internal/listener/renew.go:86` | 1, 1 | 0, 0 | `stopCtx.Err() != nil` — a renewal aborted by `stop()` landing mid-call |
+
+The `probe` one is self-documenting: `TestInvestigateJobDelivery_RealTimeoutNoJobArrives`'s
+own doc comment says it confirms a prompt exit "via **either** the top-of-loop
+deadline check **or** a deadline-exceeded GetMessage error". `manager.go:147`
+flips between two runs of the *same* shape, which is the cleanest evidence that
+this population is pre-existing. `renew.go:86` is the only one that tracked the
+shape across all four runs (n=2 each, so weak) — plausibly because the single
+invocation runs the machine at 439 % rather than 274 %, and a shutdown-mid-call
+race resolves differently under that load.
+
+Effect on the ratchet: `cmd/agc` did not move at all (78.9 % both ways — two
+statements against thousands), and `cmd/probe` moved 81.8 % → 82.0 % in one run
+of four. ±0.2 pp is well inside the 0.5 pp tolerance, and is exactly the benign
+drift that tolerance was sized for, so nothing here needs fixing. It is worth
+knowing that a few floors carry ±0.2 pp of load-dependent noise rather than
+being exact.
+
+The split rule (longest module import path, `/`-bounded, then the same
+`EXCLUDE_RE` filter) is asserted by
+[`scripts/coverage-test.sh`](../../../scripts/coverage-test.sh) under `make
+scripts-test`: the per-module invocation could not get attribution wrong by
+construction, and the split can, so the boundary and exclusion cases are pinned
+rather than left to a full coverage run to notice.
+
 ## Follow-ups (not in this change)
 
-- **The coverage loop is sequential.** `scripts/coverage.sh` runs its 10 modules
-  one at a time at `-p 2`, where `make test` issues a single workspace-wide
-  invocation that parallelizes across modules. Worth measuring whether the
-  coverage tier should adopt the same shape (or run modules concurrently under
-  the slot budget) now that caching makes the common case cheap.
-
-  Per-module execution with the result cache forced off (`-count=1`, warm build
-  cache) is dominated by four modules — `cmd/agc` 52 s, `cmd/proxy` 37 s,
-  `cmd/gmc` 30 s, `cmd/probe` 15 s, every other module ≤ 6 s, 162 s total. A
-  head-to-head against the single-invocation shape in the same session measured
-  322 s, but the two phases ran back to back and the second inherited
-  dependency compiles from the first, so that number is **confounded and should
-  not be quoted** — re-measure in separate cold worktrees before acting on it.
-- **Worktree hygiene.** 58 live worktrees × ~226 MB ≈ 13 GB, all Spotlight-indexed.
-  `git worktree prune` plus a Spotlight exclusion on `.claude/worktrees` removes
-  background I/O contention that the QoS demotion cannot help with.
+- **Worktree hygiene** ([Q491](../../STATUS.md#Q491)). 58 live worktrees × ~226 MB ≈ 13 GB,
+  all Spotlight-indexed. `git worktree prune` plus a Spotlight exclusion on
+  `.claude/worktrees` removes background I/O contention that the QoS demotion
+  cannot help with.
