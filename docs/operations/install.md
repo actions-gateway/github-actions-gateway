@@ -404,12 +404,42 @@ digests. The knobs an operator is most likely to override:
 | `networkPolicy.enabled` | `true` | Leave on; needs an enforcing CNI (see prerequisites). |
 | `vpa.enabled` | `false` | Set `true` to let a Vertical Pod Autoscaler right-size the GMC instead of tuning `resources` by hand. Requires the Kubernetes vertical-pod-autoscaler installed (the `autoscaling.k8s.io` CRDs) — enabling it without them fails `helm install`, same as `metrics.serviceMonitor.enabled`. `vpa.updateMode` defaults to `Off` (recommendation only); it moves requests only, so `resources.limits` stays your hard ceiling. The per-tenant equivalent is `ActionsGateway.spec.agcAutoscaling` ([tenant-onboarding](tenant-onboarding.md#letting-an-autoscaler-size-the-agc-agcautoscaling)). |
 | `systemCriticalPriorityQuota.enabled` | `true` | Leave on; ships the scoped `ResourceQuota` that lets the GMC's `system-cluster-critical` pods schedule under GKE's restricted PriorityClass admission (see [GKE and other restricted-PriorityClass clusters](#gke-and-other-restricted-priorityclass-clusters)). Set `false` only if you provision that quota out-of-band. |
+| `admissionPolicy.enabled` | `true` | Leave on where you can. It ships the `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy`, the backstop that gates direct `runnergroups` writes (which have no webhook) against the PriorityClass allowlist. **Weigh [Q444](#known-defect-q444-the-policy-can-stop-resolving-its-parameters) first on a managed control plane**: the apiserver can stop resolving the policy's parameter ConfigMap and deny every `runnergroups`/`runnersets`/`runnertemplates` write cluster-wide, and the only known recovery is a kube-apiserver restart, which EKS/GKE/AKS do not offer. Set `false` to rely on the GMC webhook allowlist alone. |
 
 A `values.schema.json` validates these at install/lint time (digest format,
 enum values, etc.). The **full reference** — every value with its default and
 description — lives in the
 [chart README](../../charts/actions-gateway/README.md#values); this table is
 only the common subset, not a duplicate.
+
+### Known defect (Q444): the policy can stop resolving its parameters
+
+`admissionPolicy.enabled` is on by default because a cluster-wide PriorityClass
+escalation is the more serious risk of the two. Make the call deliberately
+though, because the failure mode is severe and currently has no chart-side
+mitigation.
+
+An apiserver can enter a state where it stops resolving the guard's parameter
+ConfigMap and answers every matched write with `no params found for policy
+binding`, even though the ConfigMap is present at exactly the referenced name
+and namespace. Parameters resolve before any per-object matching, so this denies
+**every** `runnergroups`, `runnersets` and `runnertemplates` write cluster-wide,
+not only the ones the policy would have rejected.
+
+The state belongs to the kube-apiserver process, so restarting kube-apiserver
+clears it in seconds. **On EKS/GKE/AKS you cannot do that**, and a control-plane
+version upgrade is usually the only lever that recycles the process. It is most
+often seen after a `helm uninstall` followed by a reinstall, but that cycle is
+not required.
+
+If you run on a managed control plane and cannot carry that risk, install with
+`admissionPolicy.enabled=false`. You keep the GMC validating webhooks, which
+gate the tenant-facing CRs (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`);
+what you give up is the backstop for principals granted direct `runnergroups`
+RBAC, and stored-object re-validation on update.
+
+Upstream: [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887).
+Symptoms and recovery: [troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
 
 ---
 

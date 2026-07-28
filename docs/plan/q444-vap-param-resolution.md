@@ -124,3 +124,12 @@ This exposure is why the item stays in the Queue rather than moving to
 Deferred. Parking it would mean waiting on an upstream issue that has carried
 `sig/api-machinery` since 2025-03 and is still `needs-triage`, while we hold
 the risk.
+
+**Surface this in the next release's notes.** While Q444 is open it is exactly
+the "upgrade caveat" the curated-notes path in
+[`../operations/release.md`](../operations/release.md) exists for. An operator
+upgrading to a release that ships `admissionPolicy.enabled: true` should learn
+about it from the notes, not from a denied write. The install-time decision is
+documented at
+[install.md § Known defect (Q444)](../operations/install.md#known-defect-q444-the-policy-can-stop-resolving-its-parameters);
+the release notes only need a line and that link.
