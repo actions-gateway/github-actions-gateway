@@ -12,8 +12,24 @@ import (
 
 // The real messages the two autoscaler projects emit, so the matcher is exercised
 // against the strings an operator will actually see rather than against placeholders.
+//
+// These are recorded samples, and recorded samples rot: upstream owns them. The
+// matcher never parses a message body — it switches on Reason and the reporting
+// controller, and carries the body verbatim into the condition — so a reword can
+// only change what an operator reads, not what the gate decides. That is why both
+// taint spellings below must classify identically. What a reword CAN break is the
+// Reason itself, and nothing in this file would notice; the live gate that does is
+// `make test-autoscaler` (autoscaler_verdict_live_test.go, Q474).
 const (
+	// As emitted by cluster-autoscaler v1.36.1, measured 2026-07-28 against the live
+	// harness. Note the bare "taint(s)": the taint's key and value are NOT in the
+	// message, so the condition names the node-group ceiling but not the taint.
 	caDeclineMsg = "pod didn't trigger scale-up: 1 max node group size reached, " +
+		"1 node(s) had untolerated taint(s)"
+	// The other spelling in the field, where the predicate's message carries the taint
+	// inline. Kept as its own row because an operator reading the condition sees one
+	// or the other depending on their autoscaler's release.
+	caDeclineTaintNamedMsg = "pod didn't trigger scale-up: 1 max node group size reached, " +
 		"2 node(s) had untolerated taint {dedicated: gpu}"
 	caScaleUpMsg     = "pod triggered scale-up: [{gpu-pool 1->2 (max: 8)}]"
 	karpenterDecline = "Failed to schedule pod, incompatible with nodepool \"default\", " +
@@ -75,8 +91,17 @@ func TestAutoscalerDeclination(t *testing.T) {
 			pod:    podWithScheduler(""),
 			events: []corev1.Event{legacyEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineMsg, t0)},
 			// The per-node-group text is what makes the condition actionable rather
-			// than merely true: it names the taint and the node-group ceiling.
+			// than merely true: it names the node-group ceiling that stopped the
+			// scale-up.
 			wantDeclined: true, wantDetail: caDeclineMsg,
+		},
+		{
+			// The same verdict in the spelling that carries the taint inline. The
+			// matcher must not care which one it got.
+			name:         "the same declination with the taint named inline",
+			pod:          podWithScheduler(""),
+			events:       []corev1.Event{legacyEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineTaintNamedMsg, t0)},
+			wantDeclined: true, wantDetail: caDeclineTaintNamedMsg,
 		},
 		{
 			// NotTriggerScaleUp is unique to cluster-autoscaler, so unlike

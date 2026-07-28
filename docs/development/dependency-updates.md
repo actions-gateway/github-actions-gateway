@@ -137,3 +137,12 @@ than because automation is missing:
   release notes, not a clean datasource, and bumping it changes the tested
   Kubernetes version (and the Calico compatibility window). Review and bump it by
   hand in the kind updatecli PR when the Kubernetes version should move.
+- **`CA_VERSION` / `KWOK_VERSION`** in
+  [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) — the
+  cluster-autoscaler and kwok releases behind the
+  [live-autoscaler drift gate](testing.md#the-live-autoscaler-drift-gate). Bumping
+  `CA_VERSION` is not a routine refresh: it is the experiment that gate exists to
+  run, since a release that reworded cluster-autoscaler's event vocabulary is
+  exactly what would silently disable the capacity gate. Bump it by hand and run
+  `make test-autoscaler` in the same change; keep it on the same Kubernetes minor
+  as `KIND_NODE_IMAGE`, because cluster-autoscaler ships per Kubernetes minor.

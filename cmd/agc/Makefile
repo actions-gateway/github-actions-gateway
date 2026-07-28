@@ -37,6 +37,18 @@ test-integration: manifests $(SETUP_ENVTEST) ## Run envtest-backed integration t
 	KUBEBUILDER_ASSETS="$(shell "$(SETUP_ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" \
 		go test -race -timeout 5m -tags integration ./...
 
+# The live-autoscaler drift gate (Q474). Runs against the kind cluster
+# `make autoscaler-cluster` stands up, and fails rather than skips when that
+# cluster is absent — a drift detector that skips itself detects nothing.
+#
+# No -race: this test drives a cluster and asserts on its replies; the code under
+# test is one pure function, and the concurrency core it would instrument is not
+# on this path. -count=1 because the answer is the cluster's, not the build
+# cache's. The timeout covers three cases at up to 3m of autoscaler-loop waiting.
+.PHONY: test-autoscaler
+test-autoscaler: ## Assert the autoscaler matcher against a live cluster-autoscaler (needs `make autoscaler-cluster`)
+	go test -v -count=1 -timeout 15m -tags autoscaler -run 'TestLiveClusterAutoscaler' ./internal/controller/...
+
 ##@ Load test
 
 # The in-process AGC load harness (Q13, cmd/agc/test/load). It needs no cluster
