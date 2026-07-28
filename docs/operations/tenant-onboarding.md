@@ -342,30 +342,44 @@ It coexists with the cluster autoscaler / Karpenter: bounding pod-admission rate
 ```yaml
 spec:
   capacityGate:
-    mode: SchedulerVerdict   # Off (default) | SchedulerVerdict | AutoscalerVerdict
+    mode: On   # Off (default) | On
 ```
 
-**Pick the mode from your cluster, not from your runner set.** "Can this pod be placed" has two different sound answers depending on whether anything is waiting on the unplaceable pod to make capacity appear, so the two gating modes read different signals:
+**You turn it on; the platform decides what it reads.** "Can this pod be placed" has two different sound answers depending on whether anything is waiting on the unplaceable pod to make capacity appear — and that is a fact about the *cluster*, not about your runner set. So the gate takes one input from each party, and a runner set cannot choose a signal that is wrong for the cluster it runs in:
 
-| Mode | Gates when | Use it when |
+| Set by | Field | Says |
 |---|---|---|
-| `SchedulerVerdict` | The **scheduler** reports the set's worker pods `Unschedulable` past the scheduling grace. | Your cluster **cannot grow**: a fixed-size or on-prem cluster with no autoscaler. Nothing is waiting on that Pending pod, so it is pure waste. |
-| `AutoscalerVerdict` | The **cluster autoscaler itself** records, on a stuck worker pod, that it will not add a node for it. | Your cluster **can grow**: cluster autoscaler (including GKE's, EKS's, AKS's, OpenShift's `MachineAutoscaler`) or Karpenter / AKS Node Auto Provisioning. |
+| The **tenant**, per runner set | `RunnerSet.spec.capacityGate.mode` | Whether this set should refuse work it cannot run. |
+| The **platform operator**, per gateway | `ActionsGateway.spec.clusterCapacity.nodeAutoscaling` | Whether anything in this cluster adds nodes. |
 
-Choosing the mode is your assertion about your node contract — the AGC does not auto-detect it, because a wrong guess starves a tenant. **Do not set `SchedulerVerdict` on an elastic cluster:** there the Pending pod *is* the request for a node, and refusing work on it can hold the set back exactly when scale-up would have rescued it. The reverse mistake is harmless: `AutoscalerVerdict` on a cluster with no autoscaler simply never gates, because no declination is ever recorded.
+The second selects the signal:
 
-Three more things to know about `AutoscalerVerdict` specifically:
+| `nodeAutoscaling` | The gate refuses intake when | Set it when |
+|---|---|---|
+| `Present` (default) | The **cluster autoscaler itself** records, on a stuck worker pod, that it will not add a node for it. | Your cluster **can grow**: cluster autoscaler (including GKE's, EKS's, AKS's, OpenShift's `MachineAutoscaler`) or Karpenter / AKS Node Auto Provisioning. |
+| `Absent` | The **scheduler** reports the set's worker pods `Unschedulable` past the scheduling grace. | Your cluster **cannot grow**: a fixed-size or on-prem cluster with no autoscaler. Nothing is waiting on that Pending pod, so it is pure waste. |
+
+```yaml
+# On the ActionsGateway — platform-operator config, not tenant config.
+spec:
+  clusterCapacity:
+    nodeAutoscaling: Absent   # Present (default) | Absent
+```
+
+**The default is the safe direction, not the common one.** Under `Present` the gate refuses intake only on an explicit autoscaler declination, so leaving it unset — or getting it wrong — can only ever *under*-gate, which is the behaviour you already have. `Absent` gates on the scheduler's verdict alone, so setting it on a cluster that *can* grow refuses jobs on pods the autoscaler was about to rescue. **Only set `Absent` if you own the node contract and it is fixed.** The AGC never infers this: an autoscaler is legitimately silent during backoff, during a cooldown after a failed scale-up, or for a pod it filters out, so "no autoscaler events appeared" is absence of evidence, and reading it as evidence of absence would starve a tenant.
+
+Three things to know about the `Present` (elastic) signal specifically:
 
 - **Recognition is narrow on purpose.** It reads cluster autoscaler's `NotTriggerScaleUp` and Karpenter's `FailedScheduling`, and nothing else. `FailedScheduling` counts only when it came from a reporter that is **not** your scheduler — that reason is kube-scheduler's own for every ordinary transient placement failure, and reading those as declinations would refuse jobs your cluster was about to run. A commercial optimizer (CAST AI, Spot Ocean, Zesty) emits its own vocabulary, so the gate simply never closes for it, which is today's behavior.
 - **It reads Events, and Events expire.** The AGC reads a stuck pod's Events directly (no Event watch, and only for pods already past the scheduling grace). Events are garbage-collected on the apiserver's `--event-ttl`, commonly one hour; that is well outside the `pendingPodDeadline` window the gate consults, and an expired Event means the gate opens rather than errors.
-- **It needs `get`/`list` on `events` in the tenant namespace.** The shipped `agc-tenant-role` grants them. On a hand-built Role without them, the mode fails open — it never gates — rather than erroring.
+- **It needs `get`/`list` on `events` in the tenant namespace.** The shipped `agc-tenant-role` grants them. On a hand-built Role without them, the gate fails open — it never closes — rather than erroring.
 
-Two things to expect once either mode is on:
+Two things to expect once a set turns it on:
 
 - **It throttles, it does not seal.** The signal comes from a stuck worker pod, so the reaper deleting that pod at `pendingPodDeadline` reopens intake for one job; if the shape is still unplaceable, that job's pod closes the gate again. Budget for roughly one wasted claim per `pendingPodDeadline` window, not zero.
 - **A gated set says so.** It reports `WorkerCapacityDeclined=True` with a Warning event, and either `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` (default tier) or `actions_gateway_jobs_admission_rejected_total{reason="capacity"}` (classic) moves. Diagnosis and the one-line rollback: [troubleshooting](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs).
 
-Everything about it fails **open**: an unreadable set, an unresolved template, an unreadable pod list, an unreadable Event list, and a mode this AGC does not implement all leave intake exactly as it is today. v1 `RunnerGroup` has no equivalent field and never will — v1 is terminal.
+Everything about it fails **open**: an unreadable set, an unresolved gateway or template, an unreadable pod list, an unreadable Event list, an unset `clusterCapacity`, and a mode this AGC does not implement all leave intake exactly as it is today. v1 `RunnerGroup` has no equivalent field and never will — v1 is terminal.
 
 **Changing `runnerGroups` later.** Editing `spec.runnerGroups` on an existing `ActionsGateway` reconciles to the desired set: added entries create new `RunnerGroup` CRs, and **removing an entry deletes its `RunnerGroup`** (which stops its listeners and cascades to its worker pods). Reordering entries is safe — the GMC keys pruning on owner labels, not list position, so a reorder never deletes or recreates a group. Removing an entry is the way to retire a runner group; `maxListeners` has a minimum of `1`, so there is no in-place scale-to-zero.
 

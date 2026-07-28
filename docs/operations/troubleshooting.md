@@ -385,19 +385,21 @@ and `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` holds the
 remainder of the ceiling.
 
 **Cause.** This is **deliberate, and only ever happens on a set that opted in.**
-The runner set has `spec.capacityGate.mode` set to something other than `Off`
-(Q405, Q406), and the signal that mode watches is currently saying the cluster
-cannot place another worker pod of this set's shape. The gateway is refusing to
-claim work it cannot run, because each such claim spends a single-use JIT runner
-record, holds a GitHub job lock until `pendingPodDeadline`, and ends in a
-**cancelled** workflow run rather than a redelivered one.
+The runner set has `spec.capacityGate.mode: On` (Q405, Q406, Q470), and the signal
+the gate reads is currently saying the cluster cannot place another worker pod of
+this set's shape. The gateway is refusing to claim work it cannot run, because each
+such claim spends a single-use JIT runner record, holds a GitHub job lock until
+`pendingPodDeadline`, and ends in a **cancelled** workflow run rather than a
+redelivered one.
 
-The condition's `reason` names which signal said so:
+Which signal it read follows from the gateway's
+`spec.clusterCapacity.nodeAutoscaling`, not from anything on the set. The
+condition's `reason` names it:
 
-| `reason` | Mode | What was observed |
+| `reason` | Gateway says | What was observed |
 |---|---|---|
-| `PodsUnschedulable` | `SchedulerVerdict` | The scheduler's own verdict — the same `PodScheduled=False`/`Unschedulable` fact behind [`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable). |
-| `ScaleUpDeclined` | `AutoscalerVerdict` | The cluster autoscaler itself recorded, on a stuck worker pod, that it will **not** add a node for it. The message carries the autoscaler's own per-node-group text. |
+| `ScaleUpDeclined` | `nodeAutoscaling: Present` (default) | The cluster autoscaler itself recorded, on a stuck worker pod, that it will **not** add a node for it. The message carries the autoscaler's own per-node-group text. |
+| `PodsUnschedulable` | `nodeAutoscaling: Absent` | The scheduler's own verdict — the same `PodScheduled=False`/`Unschedulable` fact behind [`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable). |
 | `CapacityAvailable` (status `False`) | either | The gate is engaged and is **not** refusing intake. |
 | `GateModeUnsupported` (status `False`) | — | This AGC does not implement the mode the set selected, so no rung is evaluated. See [below](#the-mode-is-reported-as-unsupported). |
 
@@ -413,21 +415,27 @@ its absence is not a failure to report, it means the set did not opt in.
 **Diagnostics.**
 
 ```sh
-# Which mode is this set gating on, and is the gate currently closed?
+# Is the gate on, and is it currently closed?
 kubectl get runnerset -n <namespace> <runner-set> \
   -o jsonpath='{.spec.capacityGate.mode}{"\n"}{range .status.conditions[?(@.type=="WorkerCapacityDeclined")]}{.status} {.reason}: {.message}{"\n"}{end}'
 ```
 
 ```sh
-# The message carries the verdict; confirm it on a stuck pod. In SchedulerVerdict
-# mode look for "FailedScheduling"; in AutoscalerVerdict mode look for the
+# Which signal is it reading? This is the gateway's answer, not the set's.
+kubectl get actionsgateway -n <namespace> <gateway> \
+  -o jsonpath='{.spec.clusterCapacity.nodeAutoscaling}{"\n"}'   # empty ⇒ Present
+```
+
+```sh
+# The message carries the verdict; confirm it on a stuck pod. Under
+# nodeAutoscaling: Absent look for "FailedScheduling"; under Present look for the
 # autoscaler's own event — "NotTriggerScaleUp" (cluster autoscaler) or a
 # "FailedScheduling" whose source is karpenter rather than default-scheduler.
 kubectl describe pod -n <namespace> <worker-pod>
 ```
 
 ```sh
-# AutoscalerVerdict only: the raw events the gate read, with their reporters.
+# nodeAutoscaling: Present only — the raw events the gate read, with their reporters.
 kubectl get events -n <namespace> \
   --field-selector involvedObject.name=<worker-pod> \
   -o custom-columns='TIME:.lastTimestamp,SOURCE:.source.component,REASON:.reason,MESSAGE:.message'
@@ -436,8 +444,8 @@ kubectl get events -n <namespace> \
 **Resolution.** The gate is reporting a real cluster condition, so fix the
 placement problem — the resolutions are the same ones listed under
 [`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable) (allocatable
-capacity, `nodeSelector`/affinity, tolerations). In `AutoscalerVerdict` mode the
-autoscaler has already told you which one in the condition message: a node-group
+capacity, `nodeSelector`/affinity, tolerations). Under `nodeAutoscaling: Present`
+the autoscaler has already told you which one in the condition message: a node-group
 ceiling (`max node group size reached`, `max total nodes in cluster reached`), an
 untolerated taint, a cloud quota, or — for Karpenter — no instance type satisfying
 the pod. The condition clears on the next reconcile once a worker pod schedules,
@@ -454,21 +462,26 @@ kubectl patch runnerset -n <namespace> <runner-set> --type=merge \
 The next delivered job (classic) or the next long-poll (`ScaleSet`) picks that up —
 no AGC restart — and the condition is retracted on the next reconcile.
 
-> **Check this first if you did not expect the gate to be closed.**
-> `SchedulerVerdict` is sound **only where nothing will act on a Pending pod to
-> create capacity** — a fixed-size cluster with no autoscaler. If this cluster
-> *does* run a cluster autoscaler or Karpenter, the mode is wrong for it: the
-> unschedulable pod was the request for a node, and gating on it can hold a set
-> back exactly when scale-up would have rescued it. Switch the set to
-> `AutoscalerVerdict`, which gates on the autoscaler's own declination instead, or
-> to `Off`.
+> **Check this first if the reason is `PodsUnschedulable` and you did not expect
+> the gate to be closed.** That reason means the gateway reports
+> `clusterCapacity.nodeAutoscaling: Absent` — an assertion that nothing will add a
+> node. It is sound **only** on a fixed-size cluster. If this cluster *does* run a
+> cluster autoscaler or Karpenter, the assertion is wrong: the unschedulable pod was
+> the request for a node, and gating on it can hold every set under this gateway
+> back exactly when scale-up would have rescued them. Fix it **on the gateway**, not
+> on the set:
+>
+> ```sh
+> kubectl patch actionsgateway -n <namespace> <gateway> --type=merge \
+>   -p '{"spec":{"clusterCapacity":{"nodeAutoscaling":"Present"}}}'
+> ```
 
 ### A Cluster-Wide Verdict Closes Every Set at Once
 
-In `AutoscalerVerdict` mode, some autoscaler declinations are **cluster-wide rather
-than per-pool** — cluster autoscaler's `max total nodes in cluster reached` is the
-common one. Every runner set with a stuck pod sees it in the same window, so they
-all report `WorkerCapacityDeclined=True` together and every one of them stops
+Under `nodeAutoscaling: Present`, some autoscaler declinations are **cluster-wide
+rather than per-pool** — cluster autoscaler's `max total nodes in cluster reached`
+is the common one. Every runner set with a stuck pod sees it in the same window, so
+they all report `WorkerCapacityDeclined=True` together and every one of them stops
 claiming.
 
 That is correct — no node is coming for any of them — but it looks alarming, and it
@@ -484,11 +497,15 @@ per-set one.
 does not implement the mode the set selected, so **no capacity rung is evaluated**
 and intake is exactly as it would be with the gate `Off`.
 
-The usual cause is a version skew: the CRDs ship as their own chart
+Two causes. Either a version skew — the CRDs ship as their own chart
 (`actions-gateway-crds-v2`) and can be upgraded ahead of the controllers, so a mode
-a newer CRD accepts can reach an AGC that predates it. Failing open is deliberate —
-guessing at an unknown mode would apply the wrong signal's semantics, and
-`SchedulerVerdict`'s semantics on an elastic cluster hold a tenant back.
+a newer CRD accepts can reach an AGC that predates it — or a set still carrying one
+of the retired `SchedulerVerdict`/`AutoscalerVerdict` values, which are now `mode: On`
+plus a gateway-level fact ([upgrade note](upgrade.md#breaking-pre-ga-capacitygatemode-values-replaced-by-on--a-gateway-level-cluster-fact)).
+
+Failing open is deliberate: an operator who asked to *solicit* capacity did not ask to
+be gated on an observed verdict, and quietly substituting one for the other is exactly
+the silent wrong-semantics this gate's design is ordered around.
 
 **Resolution.** Upgrade the AGC to a version that implements the mode (for a
 GMC-provisioned gateway, the AGC image is rolled by the GMC), or set the mode to one

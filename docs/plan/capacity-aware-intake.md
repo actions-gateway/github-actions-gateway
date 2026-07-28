@@ -26,8 +26,9 @@ durable rationale in
 |---|---|---|---|
 | 0 | Design rationale recorded (D.8 asymmetry principle, G.16 deferral + triggers) | S | ✅ Done — this change |
 | 0a | Port the shipped quota rung to the scale-set tier, as the integer form of the ladder | M | ✅ Done ([§9a](#9a-the-shipped-quota-rung-was-classic-only-q443)/[§9b](#9b-what-the-port-shipped), Q443, 2026-07-26) |
-| 1 | `SchedulerVerdict` mode: gate on the scheduler's verdict, for clusters that cannot grow | M | ✅ Done ([§6](#6-phase-1--schedulerverdict-q405), Q405, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
-| 2 | `AutoscalerVerdict` mode: gate on the autoscaler's own declination, for elastic clusters | M | ✅ Done ([§7](#7-phase-2--autoscalerverdict-q406), Q406, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
+| 1 | Gate on the scheduler's verdict, for clusters that cannot grow | M | ✅ Done ([§6](#6-phase-1--the-scheduler-verdict-signal-q405), Q405, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
+| 2 | Gate on the autoscaler's own declination, for elastic clusters | M | ✅ Done ([§7](#7-phase-2--the-autoscaler-declination-signal-q406), Q406, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
+| 2a | Split the mode enum's two axes: tenant policy on the set, cluster fact on the gateway | S | ✅ Done ([§5a](#5a-the-single-enum-was-two-axes-q470), Q470, 2026-07-27) |
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
 Nothing here has been validated on a live cluster, items 0a, 1 and 2 included: each
@@ -112,7 +113,7 @@ simply **right** there, and it needs no new signal, no new CRD, and no new
 dependency, because the condition is already computed in the tree.
 
 The corollary matters for the other two phases: on a fixed-size cluster,
-`AutoscalerVerdict` would never fire (no autoscaler, no event) and
+the autoscaler-declination signal would never fire (no autoscaler, no event) and
 `Probe`/`Provision` would fail open (no CRD, nothing to answer), so both degrade
 to today's behavior. A plan that shipped only those two would deliver **nothing**
 to the fixed-size deployment. Hence the ordering below.
@@ -121,7 +122,7 @@ Two nuances worth keeping straight:
 
 * **"Fixed-size" is a property of the cluster, not of the signal.** Soundness
   therefore has to be established out of band. This plan takes it as an operator
-  assertion (choosing the mode *is* the assertion), not an auto-detection: a
+  assertion — the gateway's `clusterCapacity.nodeAutoscaling` IS that assertion (§5a) — not an auto-detection: a
   wrong auto-detection starves a tenant, and the operator knows their node
   contract. §10 keeps a detected-autoscaler *warning* as an open question.
 * **An elastic cluster at its contracted ceiling reports itself.** Cluster
@@ -165,18 +166,26 @@ Consequences to record:
 
 ## 5. Design shared by all phases
 
-**One API field, one enum, additive across phases.** `RunnerSet.spec.capacityGate.mode`:
+**Two fields on two objects, one axis each.** Revised by Q470; the original
+single-enum design and why it was wrong are in [§5a](#5a-the-single-enum-was-two-axes-q470).
+
+`RunnerSet.spec.capacityGate.mode` — the tenant's policy:
 
 | Value | Meaning | Phase |
 |---|---|---|
 | `Off` | Default. No capacity rung; today's behavior exactly. | — |
-| `SchedulerVerdict` | Gate when the scheduler has declared this set's worker pods unplaceable. Sound only where no autoscaler will act on them. | 1 |
-| `AutoscalerVerdict` | Gate when the cluster autoscaler has itself declined to scale up for them. | 2 |
+| `On` | Refuse jobs this set cannot run, on whichever signal is sound for the cluster. | 1, 2 |
 | `Probe` / `Provision` | Ask before claiming, via `ProvisioningRequest` `check-capacity` / `best-effort-atomic-scale-up`. | 3 |
 
-A single growing enum avoids a second field when a later phase lands, and makes
-the choice mutually exclusive, which it is. v2 only: v1 `RunnerGroup` is terminal
-(Q273/Q264), so its adapter gets a no-op method.
+`ActionsGateway.spec.clusterCapacity.nodeAutoscaling` — the platform operator's fact,
+which selects the signal:
+
+| Value | Meaning | Signal |
+|---|---|---|
+| `Present` | Default. Something may add nodes. | The autoscaler's own declination (phase 2). |
+| `Absent` | Nothing will add a node. | The scheduler's verdict (phase 1). |
+
+v2 only: v1 `RunnerGroup` is terminal (Q273/Q264), so its adapter gets a no-op method.
 
 **One rung, one condition, one metric label.**
 
@@ -229,7 +238,73 @@ chain, an unreadable pod list, an absent autoscaler, a missing CRD: all yield
 the backstops. The gate may under-gate freely (that is today's behavior); it must
 never over-gate, because over-gating starves a tenant.
 
-## 6. Phase 1 — `SchedulerVerdict` (Q405)
+## 5a. The single enum was two axes (Q470)
+
+Shipped 2026-07-27, immediately after phase 2, while the field was still pre-GA and
+one day old. Recorded rather than silently rewritten, because §5's original decision
+was deliberate and the reason it was wrong is the durable part.
+
+**What §5 chose.** One growing enum on the `RunnerSet`: `Off` |
+`SchedulerVerdict` | `AutoscalerVerdict` | `Probe` | `Provision`. The stated rationale
+— avoid a second field, keep the choice mutually exclusive — is true as far as it goes.
+
+**Why it was the wrong cut.** The enum was carrying two independent things:
+
+1. *Should this set refuse work it cannot run?* — a policy choice, and the tenant's.
+2. *Which signal may be trusted here?* — a consequence of whether the cluster can
+   grow, which is a property of the **cluster**, identical for every set in it.
+
+Conflating them has three costs, in ascending order of seriousness. It multiplies
+values (phase 3 adds two more on axis 1, and `ProvisioningRequest` availability is a
+third fact on axis 2). It makes two of the values the same policy with different
+evidence, which reads as redundancy. And — the one that actually matters — it asks
+each **tenant** to assert a fact about infrastructure they may not own. In a
+multi-tenant gateway the person writing the `RunnerSet` is routinely not the person who
+knows the node contract, and `SchedulerVerdict` on an elastic cluster is the single
+genuinely harmful misconfiguration this feature has. Under the enum it was reachable by
+exactly the party least equipped to avoid it, prevented only by documentation.
+
+**The cut Q470 made.** Axis 1 stays on the `RunnerSet` as `mode: Off|On`. Axis 2 moves
+to `ActionsGateway.spec.clusterCapacity.nodeAutoscaling` (`Present`|`Absent`, default
+`Present`), the object the platform operator owns. The AGC picks the signal from the
+fact. The harmful combination is now **unrepresentable**: no value a tenant can write
+produces scheduler-verdict gating where a node may still arrive
+(`TestCapacityGate_TheDangerousCombinationIsUnrepresentable`).
+
+**What it cost.** Almost nothing, because the gateway is already resolved on both call
+sites of `applyWorkerCapacityConditions` — it was a parameter, not a new lookup — and
+the mechanism (matcher, condition, rung, metric) was untouched. The API break was free
+too: pre-GA on two alpha/beta versions, default `Off`, and `SchedulerVerdict` had
+existed for one day. Doing it later would have meant a conversion shim and a
+deprecation window.
+
+**What it costs going forward.** A `RunnerSet` is no longer self-describing — reading
+one no longer tells you which signal gates it, and an operator has to look at the
+gateway too. That is a real loss, mitigated by the condition's `reason` naming the
+signal on the set itself, and it is the price of putting the assertion where the
+knowledge is.
+
+**Constraint on Q407.** `Probe`/`Provision` extend axis 1 (solicit rather than observe),
+not axis 2. Their cluster-side prerequisite — whether the `ProvisioningRequest` API is
+available — is another `clusterCapacity` fact, not another mode. And the mode dispatch
+is an explicit switch whose default fails open on an unknown value, so phase 3 must add
+its own arm rather than rely on a fallthrough.
+
+**Rejected on the way.** Deleting axis 2 entirely by inferring elasticity — gate on the
+scheduler's verdict unless an autoscaler is acting, treating *silence* from any
+autoscaler as "no autoscaler here". It looks like the bigger simplification and is a
+trap: cluster-autoscaler is legitimately silent during backoff, during a cooldown after
+a failed scale-up, and for pods it filters out of its evaluation, so silence is absence
+of evidence. Gating on it would starve a tenant, and it would invert the rule the rest
+of this rung follows — an unreadable pod list, a missing Event, an unrecognized
+vocabulary all resolve to *don't gate*. §10 already ruled auto-detection out of scope;
+this is the same call, restated because the collapsed enum makes it tempting again.
+
+## 6. Phase 1 — the scheduler-verdict signal (Q405)
+
+> The mode name `SchedulerVerdict` in this section is historical: Q470 replaced it with
+> `mode: On` plus `clusterCapacity.nodeAutoscaling: Absent` on the gateway ([§5a](#5a-the-single-enum-was-two-axes-q470)).
+> The signal, the rung, and the condition are unchanged.
 
 The gateable signal already exists as a published condition, so this phase is
 mostly API surface and wiring.
@@ -275,7 +350,11 @@ for the new condition is deliberately out of scope: exporting v2 RunnerSet
 capacity conditions as gauges is already tracked as
 [Q319](../STATUS.md#Q319) and should land once for all of them.
 
-## 7. Phase 2 — `AutoscalerVerdict` (Q406)
+## 7. Phase 2 — the autoscaler-declination signal (Q406)
+
+> The mode name `AutoscalerVerdict` in this section is historical: Q470 replaced it with
+> `mode: On` plus the gateway default `clusterCapacity.nodeAutoscaling: Present`
+> ([§5a](#5a-the-single-enum-was-two-axes-q470)). The signal is unchanged.
 
 Same rung, different source: the autoscaler's own declination, read from Events
 on the stuck pod. Verified upstream 2026-07-25:
