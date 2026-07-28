@@ -3048,6 +3048,18 @@ Service-name path is tightest:</p>
   document it in the CRD field comment so it is discoverable, not a runtime
   surprise.</li>
 </ul>
+<p><strong>Shipped, and the v1 gap this closed.</strong> The 52-char cap is enforced by CEL on every
+v2 CR name, so v2 derivations are bounded at the input. <code>v1alpha1</code> has no equivalent
+— an <code>ActionsGateway</code> name may be 253 characters — and its derived
+<code>&lt;gateway&gt;-&lt;runner-label&gt;</code> <code>RunnerGroup</code> name was never bounded at the output either.
+Past 63 characters that name is a legal object name and an <strong>illegal label value</strong>, so
+the <code>RunnerGroup</code> reconciled while every worker pod carrying it as
+<code>actions-gateway/runner-group</code> was rejected: the tenant ran no jobs and GitHub reported
+only that the runner had lost communication (Q473). v1 therefore applies the bound
+where the name is derived, through the shared <code>api/apinames</code> helpers that also own the
+worker-pod budget (Q467). The rule generalises: <strong>budget against the tightest consumer
+of a name (63), not the limit of the object being created (253)</strong> — see
+<a href="../../development/kubernetes-conventions/#derive-every-name-through-apiapinames-q467-q473">kubernetes-conventions.md</a>.</p>
 <h3 id="field-naming-freezes-at-ga--do-the-pass-now">Field naming freezes at GA — do the pass now<a class="headerlink" href="#field-naming-freezes-at-ga--do-the-pass-now" title="Permanent link">&para;</a></h3>
 <p>JSON field names are part of the API contract and become permanent at <code>v2</code>. Do
 the naming pass during M1 while names are still cheap to change under <code>v2alpha1</code>:</p>
