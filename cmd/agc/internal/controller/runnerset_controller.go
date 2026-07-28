@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
@@ -21,6 +22,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -55,6 +57,12 @@ const runnerSetFinalizer = "actions-gateway.com/agentpool-cleanup"
 // pod shape and proxy differ.
 type RunnerSetReconciler struct {
 	client.Client
+	// APIReader is the manager's uncached reader, used for the one read that must not
+	// establish an informer: the v1alpha1 RunnerGroup probe that gates adoption of
+	// pre-Q466 agent Secrets. A v2-only install may not serve v1alpha1 at all, and a
+	// cached Get on an unserved kind wedges the manager's cache. Nil falls back to the
+	// cached client (tests, where the CRD is always installed).
+	APIReader    client.Reader
 	TokenManager *token.Manager
 	Registrar    agentpool.Registrar
 	BrokerConfig BrokerConfig
@@ -227,6 +235,12 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// registers it; a v2 AGC does, and a RunnerSet referencing a ClusterRunnerTemplate
 	// flips Ready the moment it syncs (§H.7). The namespace-scoped manager cache
 	// serves cluster-scoped kinds from a cluster-wide informer.
+	//
+	// Production no longer reaches this guard with an empty GatewayName — main.go
+	// declines to register the whole reconciler on an unscoped AGC (Q466), since a
+	// RunnerSet belongs to the AGC of the gateway it names. It stays because the guard
+	// is also what keeps unscoped test harnesses off the cluster-scoped informer, and
+	// because a cache-sync crash is a bad way to learn the invariant changed.
 	if r.GatewayName != "" {
 		b = b.Watches(
 			&v2alpha1.ClusterRunnerTemplate{},
@@ -414,8 +428,13 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// 5. Ensure agent pool Secrets.
-	pool := r.getOrCreatePool(req.NamespacedName, rs.Namespace, rs.Name, rs.Spec.RunnerLabels)
+	// 5. Ensure agent pool Secrets. Carry any pre-Q466 Secrets across the rename first,
+	// so an upgraded install keeps its existing agents instead of orphaning them.
+	if err := r.adoptLegacyAgentSecrets(ctx, log, &rs); err != nil {
+		log.Error("failed to adopt pre-existing agent Secrets", "error", err)
+		return ctrl.Result{}, err
+	}
+	pool := r.getOrCreatePool(req.NamespacedName, &rs)
 	if err := pool.EnsureAgents(ctx, rs.Spec.MaxListeners, instToken); err != nil {
 		log.Error("EnsureAgents failed", "error", err)
 		r.recordEvent(&rs, corev1.EventTypeWarning, "AgentPoolError", "EnsureAgents",
@@ -548,18 +567,73 @@ func (r *RunnerSetReconciler) recordEvent(rs *v2alpha1.RunnerSet, eventtype, rea
 	r.Recorder.Eventf(rs, nil, eventtype, reason, action, note, args...)
 }
 
-func (r *RunnerSetReconciler) getOrCreatePool(key types.NamespacedName, namespace, name string, runnerLabels []string) *agentpool.Pool {
+// getOrCreatePool returns the Pool for the given RunnerSet, creating it if needed.
+// The pool uses the RunnerSet naming scheme, which is disjoint from the RunnerGroup
+// one so a same-named v1 group and v2 set can coexist through a migration; the owner
+// reference is refreshed on every call so a set deleted and recreated under the same
+// name cannot leave the pool stamping a dead UID (Q466).
+func (r *RunnerSetReconciler) getOrCreatePool(key types.NamespacedName, rs *v2alpha1.RunnerSet) *agentpool.Pool {
 	r.poolsMu.Lock()
 	defer r.poolsMu.Unlock()
-	if p, ok := r.pools[key]; ok {
-		return p
+	p, ok := r.pools[key]
+	if !ok {
+		p = agentpool.NewRunnerSetPool(r.Client, rs.Namespace, rs.Name, r.BrokerConfig.RunnerVersion,
+			rs.Spec.RunnerLabels, r.Registrar, r.AgentKeyType)
+		if r.Metrics != nil {
+			p.Metrics = r.Metrics
+		}
+		r.pools[key] = p
 	}
-	p := agentpool.NewPool(r.Client, namespace, name, r.BrokerConfig.RunnerVersion, runnerLabels, r.Registrar, r.AgentKeyType)
-	if r.Metrics != nil {
-		p.Metrics = r.Metrics
-	}
-	r.pools[key] = p
+	p.SetOwner(runnerSetOwnerRef(rs.Name, rs.UID))
 	return p
+}
+
+// adoptLegacyAgentSecrets carries a RunnerSet's agent Secrets across the Q466 rename,
+// so upgrading an install that already ran v2 neither orphans its agent Secrets nor
+// leaks the GitHub runner records they hold. It is a no-op once the set has Secrets
+// under the RunnerSet scheme, which is the steady state after the first reconcile.
+//
+// The gate is the reason this lives in the reconciler rather than in the pool: a
+// legacy Secret is indistinguishable from a v1 RunnerGroup's, so adoption only
+// proceeds when no RunnerGroup of the same name exists in the namespace. Taking a live
+// RunnerGroup's Secrets would break the v1 tenant that the coexistence window exists to
+// keep rollback-able.
+func (r *RunnerSetReconciler) adoptLegacyAgentSecrets(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) error {
+	n, err := agentpool.AdoptLegacyRunnerSetSecrets(ctx, r.Client, rs.Namespace, rs.Name,
+		[]metav1.OwnerReference{runnerSetOwnerRef(rs.Name, rs.UID)},
+		func(ctx context.Context) (bool, error) { return r.runnerGroupExists(ctx, rs.Namespace, rs.Name) },
+	)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		log.Info("adopted pre-existing agent Secrets onto the runner-set naming scheme", "count", n)
+	}
+	return nil
+}
+
+// runnerGroupExists reports whether a v1alpha1 RunnerGroup of this name lives in the
+// namespace — i.e. whether the legacy-named agent Secrets belong to a v1 tenant.
+//
+// The read goes through APIReader (uncached) when one is wired, because a v2-only
+// install may not have the v1alpha1 CRD at all: a cached Get would try to start an
+// informer for a kind the API server does not serve and wedge the manager's cache, the
+// same failure mode the cluster-scoped ClusterRunnerTemplate watch is gated against.
+// An absent CRD means no RunnerGroup can exist, so it answers false.
+func (r *RunnerSetReconciler) runnerGroupExists(ctx context.Context, namespace, name string) (bool, error) {
+	reader := client.Reader(r.Client)
+	if r.APIReader != nil {
+		reader = r.APIReader
+	}
+	var rg v1alpha1.RunnerGroup
+	switch err := reader.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &rg); {
+	case err == nil:
+		return true, nil
+	case apierrors.IsNotFound(err), meta.IsNoMatchError(err), runtime.IsNotRegisteredError(err):
+		return false, nil
+	default:
+		return false, err
+	}
 }
 
 func (r *RunnerSetReconciler) getPool(key types.NamespacedName) *agentpool.Pool {

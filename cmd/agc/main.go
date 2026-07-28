@@ -454,20 +454,44 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("detect actions-gateway.com/v2alpha1 RunnerSet CRD: %w", err)
 	}
-	if !v2Enabled {
+	switch {
+	case !v2Enabled:
 		ctrl.Log.Info("actions-gateway.com/v2alpha1 RunnerSet CRD not installed; " +
 			"v1-only mode, v2 RunnerSet reconciler disabled " +
 			"(install the actions-gateway-crds-v2 chart and restart the AGC to enable it)")
-	} else {
+
+	case gatewayName == "":
+		// A RunnerSet is always served by the AGC of the gateway its spec.gatewayRef
+		// names, and the GMC stamps GATEWAY_NAME on every one of those AGC Deployments
+		// (§H.16 #1). An AGC without it is the v1 singleton, and it must not reconcile
+		// RunnerSets: during a v1→v2 migration the tenant namespace holds both, so an
+		// unscoped RunnerSet reconciler here would run a second listener pool and a
+		// second set of GitHub registrations for a set the migrated gateway's own AGC
+		// is already serving — two controllers on one object, which no amount of
+		// naming can separate. It is also what drove the v1 AGC to list the
+		// cluster-scoped ClusterRunnerTemplate kind it holds no grant for, error-looping
+		// on `clusterrunnertemplates … is forbidden` for the whole coexistence window
+		// (Q466, measured live). Declining the work is the least-privilege fix: the v1
+		// AGC needs no cluster-scoped grant because it has no cluster-scoped read to do.
+		ctrl.Log.Info("no GATEWAY_NAME set; this AGC serves v1alpha1 RunnerGroups only " +
+			"(v2 RunnerSets are reconciled by their own gateway's AGC)")
+
+	default:
 		ctrl.Log.Info("actions-gateway.com/v2alpha1 RunnerSet CRD detected; enabling v2 RunnerSet reconciler")
 
-		// Runs alongside the v1 RunnerGroup reconciler during coexistence; in a v2
-		// tenant namespace there are no RunnerGroups and in a v1 namespace there are
-		// no RunnerSets, so the two never act on the same objects. It shares the
+		// Runs alongside the v1 RunnerGroup reconciler during coexistence: a migrated
+		// tenant namespace holds both a v1 RunnerGroup and the v2 RunnerSet it became,
+		// often under the same name. They never act on the same objects — the two
+		// reconcilers key off different kinds and their agent pools derive disjoint
+		// Secret names, labels, and GitHub runner names (Q466). It shares the
 		// process-wide TokenManager, Registrar, Metrics, and Provisioner (the
 		// provisioner Target seam own-refs the real RunnerSet).
 		rsr := &controller.RunnerSetReconciler{
-			Client:          mgr.GetClient(),
+			Client: mgr.GetClient(),
+			// Uncached: the v1alpha1 RunnerGroup probe that gates adoption of pre-Q466
+			// agent Secrets must not establish an informer for a kind a v2-only install
+			// may not serve.
+			APIReader:       mgr.GetAPIReader(),
 			Log:             slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnerset"))),
 			TokenManager:    tokenMgr,
 			Registrar:       registrar,

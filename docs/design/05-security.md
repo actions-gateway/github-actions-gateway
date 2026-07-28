@@ -103,6 +103,19 @@ to it is high. Three properties keep the surface acceptable:
   behave as they did before Q450. The grant buys accuracy, so losing it costs
   accuracy — never availability.
 
+**Only a gateway-scoped AGC holds this binding, and only it needs one.** The
+`ClusterRoleBinding` is per-gateway, created by the v2 `ActionsGateway` reconciler for
+the AGC it provisions. The v1 singleton AGC gets no such binding, and gets by without
+one because it does not reconcile `RunnerSet`s at all: a `RunnerSet` is served by the
+AGC of the gateway its `gatewayRef` names, which is the one carrying `GATEWAY_NAME`.
+During a v1→v2 migration the tenant namespace holds both AGCs, and an unscoped v1 AGC
+that reconciled the migrated set anyway would resolve its `templateRef` — reaching for a
+cluster-scoped kind it holds no grant for, and error-looping on `clusterrunnertemplates
+… is forbidden` for the whole coexistence window, as measured live on the dogfood
+cluster (Q466). The fix was to stop the read, not to widen the grant: declining work
+that belongs to another controller is what keeps this table as short as it is, and it
+also stops the two AGCs from running competing listener pools for one `RunnerSet`.
+
 The table above is enforced, not just documented. The shipped rules
 (`charts/actions-gateway/files/agc-clusterrunnertemplate-reader-rules.yaml`) and the
 `+kubebuilder:rbac` markers that declare the AGC's needs

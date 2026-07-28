@@ -39,11 +39,19 @@ func (t *runnerGroupTarget) Key() client.ObjectKey {
 // require update on the owner's finalizers under the
 // OwnerReferencesPermissionEnforcement admission plugin.
 func (t *runnerGroupTarget) OwnerRef() metav1.OwnerReference {
+	return RunnerGroupOwnerRef(t.snapshot)
+}
+
+// RunnerGroupOwnerRef returns the controller OwnerReference to rg that every object
+// the AGC derives from a RunnerGroup carries — worker pods and job Secrets via the
+// Target above, agent-pool Secrets via the RunnerGroup reconciler. It is exported so
+// the two paths cannot drift into two spellings of the same reference.
+func RunnerGroupOwnerRef(rg *v1alpha1.RunnerGroup) metav1.OwnerReference {
 	return metav1.OwnerReference{
 		APIVersion: v1alpha1.GroupVersion.String(),
 		Kind:       "RunnerGroup",
-		Name:       t.snapshot.Name,
-		UID:        t.snapshot.UID,
+		Name:       rg.Name,
+		UID:        rg.UID,
 		Controller: ptr.To(true),
 	}
 }

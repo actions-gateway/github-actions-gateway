@@ -4,7 +4,7 @@
 blocked** until the smoke workflow reaches `main` (GitHub only dispatches
 `workflow_dispatch` from the default branch), so the GA DoD row stays ⚠️ Unverified
 and **Q415 stays open**. Three defects found and filed:
-Q463 (since fixed), Q465 (fixed), [Q466](../STATUS.md#Q466).
+Q463 (since fixed), Q465 (fixed), Q466 (fixed — [not yet re-validated live](#defect-v1-and-v2-collide-during-coexistence-q466)).
 Full evidence in [Findings](#findings).
 **Scope:** the last unverified item in the v2 GA Definition of Done —
 [v2-ga.md § Definition of Done audit](v2-ga.md#definition-of-done-audit-as-of-this-change)
@@ -322,7 +322,7 @@ unrelated hosts. Live re-confirmation is outstanding: the workaround
 [`deploy/dogfood-migrate/resources.yaml`](../../deploy/dogfood-migrate/resources.yaml)
 so that a clean AGC startup at the next dogfood sitting is itself the verification.
 
-### Defect: v1 and v2 collide during coexistence ([Q466](../STATUS.md#Q466))
+### Defect: v1 and v2 collide during coexistence (Q466)
 
 With both control planes live after the migration, the **migrated v2 AGC was clean (0
 warnings/errors) while the v1 AGC errored continuously** (14 errors in 3 minutes),
@@ -342,7 +342,30 @@ in two distinct ways:
 This matters because coexistence is load-bearing in the migration story: v1 is left
 running specifically so rollback stays possible. In practice the v1 tenant is left in
 a broken reconcile loop the moment v2 comes up, which weakens that guarantee. Filed as
-[Q466](../STATUS.md#Q466).
+Q466.
+
+**Fixed.** The agent pool now derives its Secret name, selector label, and GitHub runner
+name from the owner's *kind* as well as its name, so the two pools are disjoint; each
+agent Secret carries an owner reference (back-filled onto existing ones); and an
+existing v2 install's Secrets are moved onto the new names on first reconcile rather
+than orphaned. Splitting the Kubernetes name alone would not have been enough — GitHub
+runner names are unique per registration scope, so the two pools would have gone on
+deregistering each other's live records through the 409-conflict path.
+
+The second symptom had a different root cause than the row's framing implies, found
+while fixing it: the v1 singleton AGC reconciles **every** `RunnerSet` (its
+`GATEWAY_NAME` is empty, which disables gateway scoping), so it was resolving the
+migrated set's `templateRef` and reaching for a cluster-scoped kind it is not bound to.
+The fix is to stop the read rather than widen the grant — a `RunnerSet` belongs to the
+AGC of the gateway its `gatewayRef` names, so an AGC with no `GATEWAY_NAME` no longer
+registers the reconciler at all. That also closes an exposure the RBAC error had been
+masking: with the grant added and the scoping left alone, the v1 AGC would have run a
+second listener pool and a second set of GitHub registrations for a set the migrated
+gateway's AGC was already serving. Convention written up in
+[kubernetes-conventions.md § Derive a per-owner name from the owner's kind](../development/kubernetes-conventions.md#derive-a-per-owner-name-from-the-owners-kind-not-just-its-name-q466).
+
+Still to confirm live: the fix is covered by envtest coexistence suites, not yet by a
+re-run on the dogfood cluster. Re-validate at the next dogfood sitting.
 
 ### The teardown order is load-bearing and undocumented
 
@@ -357,7 +380,16 @@ controllers that must clear those finalizers.
 the correct order — delete the CRs first, while the controllers still run — so this
 was a bug in **this plan's runbook**, since corrected in step 11, rather than a
 product defect. What is missing is any warning that the obvious alternative deadlocks;
-that doc gap is folded into [Q466](../STATUS.md#Q466) rather than filed separately.
+that doc gap is folded into Q466 rather than filed separately.
+
+**Fixed.** [migration-v1-to-v2.md § Teardown order is load-bearing](../operations/migration-v1-to-v2.md#teardown-order-is-load-bearing-never-delete-the-namespace-first)
+now states the order, names the three finalizers, explains why the deadlock is
+structural rather than a slow reconcile, and gives the recovery — including what the
+recovery skips (the GitHub-side deregistration). A
+[troubleshooting entry](../operations/troubleshooting.md#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers)
+points there from the symptom. The rollback snippet in Step 3 was also reordered: it
+deleted the v2 `ActionsGateway` before its `RunnerSet`s, which cascades away the AGC
+whose finalizer they wait on — the same deadlock, in the doc that prescribes it.
 
 Recovery, for the record: all namespace content was already deleted and no
 cluster-scoped object was at risk of being orphaned (verified before acting), so the

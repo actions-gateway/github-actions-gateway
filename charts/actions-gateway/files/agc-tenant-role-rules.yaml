@@ -43,9 +43,16 @@
 # never credential bodies). watch is deliberately omitted (no Secret informer).
 # update: the single-use JIT agent recycle (Q114) rewrites an agent's Secret
 # in place after re-registering it post-job.
+# patch (Q466): the agent pool back-fills its owner reference onto agent Secrets
+# written before owner references existed, so every one of them names exactly one
+# owner and is garbage-collected with it. It is deliberately a patch and not an
+# update: a merge patch built from an empty Secret shell writes metadata only, where
+# an update would have to read and re-send the credential body to change one
+# metadata field. The role already grants update, so this adds no authority the AGC
+# did not have — it buys a narrower write.
 - apiGroups: [""]
   resources: ["secrets"]
-  verbs: ["get", "list", "create", "update", "delete"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
 - apiGroups: ["actions-gateway.github.com"]
   resources: ["runnergroups"]
   verbs: ["get", "list", "watch", "update", "patch"]
