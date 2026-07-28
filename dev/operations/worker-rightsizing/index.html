@@ -2519,7 +2519,7 @@ it on the <code>RunnerSet</code> itself — check there before reaching for Prom
 <p>Each entry carries, per container: recommended <code>requests</code> (p95 of per-job
 peaks), a recommended memory <code>limit</code> (observed max × 1.4 headroom; no CPU limit
 is ever recommended), the raw <code>observedPeak</code>/<code>observedP95</code>, and — the
-confidence signal — <code>sampleCount</code> plus <code>windowStart</code>. Treat a recommendation
+confidence signal — <code>sampleCount</code> plus <code>windowStartTime</code>. Treat a recommendation
 with a low <code>sampleCount</code> as a hint, not a target; it appears from 5 sampled
 jobs and survives AGC restarts (the status field is also the store the sampler
 re-seeds from).</p>
