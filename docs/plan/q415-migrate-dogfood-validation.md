@@ -5,15 +5,16 @@
 DinD job green on the migrated tenant, on the scale-set path, with a green baseline
 before the migration for attribution. The v2 GA Definition of Done row
 *"≥1 representative tenant migrated v1→v2 with the tool for real"* moves from
-⚠️ Unverified to ✅. Four defects found: Q463, Q465 and Q466 have all since been
-**fixed** by parallel sessions (#911, #912, #915); [Q467](../STATUS.md#Q467) remains
-open. Full evidence in [Findings](#findings).
+⚠️ Unverified to ✅. All four defects found — Q463, Q465, Q466 and Q467 — have since
+been **fixed** by parallel sessions (#911, #912, #915, and the Q467 fix). Full
+evidence in [Findings](#findings).
 
-> **This run confirms none of those three fixes.** It ran against dogfood's released
+> **This run confirms none of those fixes.** It ran against dogfood's released
 > `agc` image, which predates all of them, and with `noProxyCIDRs` pinned as the Q465
-> workaround. The [Q466 coexistence fix](#defect-v1-and-v2-collide-during-coexistence-q466)
-> and the Q465 default are both still unconfirmed live; re-validating them needs a
-> new image on the cluster.
+> workaround and a deliberately short gateway name as the Q467 one. The
+> [Q466 coexistence fix](#defect-v1-and-v2-collide-during-coexistence-q466), the Q465
+> default and the Q467 pod-name fix are all still unconfirmed live; re-validating them
+> — and restoring the tenant's natural name — needs a new image on the cluster.
 **Scope:** the last unverified item in the v2 GA Definition of Done —
 [v2-ga.md § Definition of Done audit](v2-ga.md#definition-of-done-audit-as-of-this-change)
 row *"≥1 representative tenant migrated v1→v2 with the tool for real"*, today
@@ -419,7 +420,7 @@ gateway's AGC was already serving. Convention written up in
 Still to confirm live: the fix is covered by envtest coexistence suites, not yet by a
 re-run on the dogfood cluster. Re-validate at the next dogfood sitting.
 
-### Defect: a truncated worker pod name can be invalid, and then no job ever runs ([Q467](../STATUS.md#Q467))
+### Defect: a truncated worker pod name can be invalid, and then no job ever runs (Q467)
 
 The most serious find of the exercise, and the one that made the first baseline job
 fail. The provisioner derives the worker pod name and truncates it to the 63-char DNS
@@ -464,12 +465,25 @@ lost communication* to green, with a valid 63-char pod name ending in `4`.
 Truncation is effectively unavoidable — `runner-` + key + `-` + a 36-char UUID
 exceeds 63 for any realistic tenant name — so every tenant is rolling against the
 hyphen positions. The kind e2e tenants and the dogfood CI tenant happen to land
-safely, which is why nothing caught it. Filed as [Q467](../STATUS.md#Q467); the fix
+safely, which is why nothing caught it. Filed as Q467; the fix
 belongs in `provisioner.go` in its own PR, and cannot be validated here anyway
 because dogfood runs the released `agc` image, not a branch build.
 
 The tenant manifest pins a deliberately short gateway name as the workaround, with
-the arithmetic inline. Restore a natural name once Q467 lands.
+the arithmetic inline.
+
+**Fixed.** The provisioner now splits the 63-char budget across the name's segments
+before joining them and replaces each truncated tail with a hash of that whole
+segment, so a derived name is always a valid DNS label *and* still unique per job —
+trimming the trailing hyphen alone would have traded a rejected pod for a colliding
+one. Both tiers share the one derivation. An envtest at the boundary length pins it
+against a real API server, and a `WorkerPodCreateFailed` Warning Event now carries the
+API server's message to the owner object, so the next rejection of any kind is
+diagnosable from `kubectl describe` instead of a live debugging session
+([convention](../development/kubernetes-conventions.md#truncate-a-derived-name-on-a-budget-never-on-the-concatenation-q467) ·
+[runbook](../operations/troubleshooting.md#runner-lost-communication-and-no-worker-pod-was-ever-created)).
+The dogfood tenant keeps its short name until a release carrying the fix reaches the
+cluster — restoring it sooner would re-break the tenant against the released image.
 
 ### The teardown order is load-bearing and undocumented
 

@@ -139,6 +139,42 @@ first reconcile after the rename, copy each old-named object to its new name (pr
 the payload, so no external registration is re-issued) and delete the original, gated on
 a check that the old name is not in use by the *other* kind.
 
+### Truncate a derived name on a budget, never on the concatenation (Q467)
+
+A Kubernetes name has rules beyond "≤63 characters": it must also start and end with an
+alphanumeric character. Building `<prefix>-<owner>-<id>` and then cutting the result at
+63 satisfies the length rule and violates the other one whenever the cut lands on a
+hyphen — and the hyphens in a UUID sit at fixed indices, so *whether a tenant can run
+any jobs at all* is decided by the character length of its name. The worker-pod
+provisioner shipped exactly that: for four gateway-name lengths the API server rejected
+**every** worker pod, no job ever ran, and the only signal GitHub gave was that the
+runner had "lost communication".
+
+Three rules, in this order:
+
+1. **Split the budget before you join the segments.** Compute what each segment may
+   spend (`splitBudget` in `cmd/agc/internal/provisioner/naming.go` gives each half and
+   redistributes what a short segment leaves over), truncate each one, then concatenate.
+   Truncating the assembled string is what makes the separators reachable by the cut.
+2. **Never trade validity for collisions.** Trimming a trailing hyphen is not a fix on
+   its own: it shortens the entropy-bearing suffix, and two workers that collide on a
+   name are a worse failure than one pod the API server rejects. Truncate by replacing
+   the discarded tail with a short hash of the *whole* segment (`truncateSegment`), so
+   every segment stays injective at every budget and the composed name is unique
+   whenever the job identity is.
+3. **Test at the boundary, not just under it.** `assert len(name) <= 63` passes happily
+   on `…-`. Sweep the owner-name lengths that put the cut on each separator, one either
+   side, and the maximum-length case, and assert against
+   `k8s.io/apimachinery/pkg/util/validation.IsDNS1123Label` rather than a length —
+   `cmd/agc/internal/provisioner/naming_internal_test.go` is the worked example, with a
+   fuzz target for the inputs a table misses.
+
+A rejected object must also be **legible to an operator**. A create the API server
+refuses is invisible from the outside — nothing to `kubectl describe`, nothing in the
+tenant's namespace at all — so surface the API server's own message as a `Warning` Event
+on the owner (`WorkerPodCreateFailed`) rather than leaving it in a controller log the
+tenant cannot read.
+
 ### Own every object you derive
 
 Every Secret, pod, or child object a controller derives from a CR carries a controller

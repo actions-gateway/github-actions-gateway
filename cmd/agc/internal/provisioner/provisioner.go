@@ -414,13 +414,10 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	}
 	start := time.Now()
 
-	safePlanID := safeName(planID)
-	secretName := "job-" + safePlanID
-	podName := fmt.Sprintf("runner-%s-%s", safeName(key.Name), safePlanID)
-	// Keep pod names ≤63 chars (Kubernetes DNS label limit).
-	if len(podName) > 63 {
-		podName = podName[:63]
-	}
+	secretName := "job-" + safeName(planID)
+	// workerPodName owns the 63-char DNS-label budget and the validity of the
+	// result; never truncate the assembled name here (Q467).
+	podName := workerPodName(key.Name, planID)
 	// Scope every line for this job to its worker pod (atop namespace/owner
 	// from logForKey), so a session→job→pod trail is followable (Q87, Theme F).
 	log = log.With("podName", podName)
@@ -739,16 +736,18 @@ const secretCleanupTimeout = 10 * time.Second
 func scaleSetSecretName(jobID string) string { return "job-ss-" + safeName(jobID) }
 
 // scaleSetPodName is the deterministic per-job worker-pod name for the scale-set
-// path, derived from the owning set's name and the job ID (truncated to the 63-char
-// Kubernetes DNS label limit). Like scaleSetSecretName it is the single derivation
-// site, so the creating side (ProvisionScaleSetWorker) and the completion-stamping
-// side (CleanupScaleSetJob) cannot drift apart.
+// path, derived from the owning set's name and the job ID. Like scaleSetSecretName
+// it is the single derivation site, so the creating side (ProvisionScaleSetWorker)
+// and the completion-stamping side (CleanupScaleSetJob) cannot drift apart.
+//
+// It shares workerPodName with the v1 path, which owns the 63-char DNS-label budget:
+// this tier truncated the assembled name identically, so the invalid-name defect did
+// not disappear when a tenant migrated to v2 (Q467). Renaming does mean an AGC
+// upgraded mid-job computes a different name for a v1-era in-flight pod than the one
+// that created it; markJobCompleted treats that as NotFound and skips the stamp, so
+// the worker still runs to completion and completedPodTTL still reaps it.
 func scaleSetPodName(ownerName, jobID string) string {
-	name := fmt.Sprintf("runner-%s-%s", safeName(ownerName), safeName(jobID))
-	if len(name) > 63 {
-		name = name[:63]
-	}
-	return name
+	return workerPodName(ownerName, jobID)
 }
 
 // CleanupScaleSetJob deletes the per-job JIT-config Secret staged for jobID by
