@@ -5,6 +5,7 @@ package integration_test
 import (
 	"context"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -296,6 +297,14 @@ func TestGMC_TenantProvisioning_NoResourceQuotaCreated(t *testing.T) {
 
 func TestGMC_TenantProvisioning_NoProxyMergesDefaults(t *testing.T) {
 	const nsName = "team-noproxy"
+	// The API server ClusterIP of the GKE cluster where Q465 was measured — outside
+	// 10.96.0.0/12, the kind/kubeadm Service CIDR the default used to hardcode. On a
+	// cluster like this one, a proxied AGC dialled the API server through the tenant's
+	// egress proxy, could not verify the proxy CA, and CrashLoopBackOffed. Set before
+	// the reconciler starts so the Deployment it emits is composed against it.
+	const gkeAPIServerIP = "34.118.224.1"
+	t.Setenv("KUBERNETES_SERVICE_HOST", gkeAPIServerIP)
+
 	createNamespace(t, nsName)
 	createGitHubAppSecret(t, nsName, "github-app")
 
@@ -327,6 +336,11 @@ func TestGMC_TenantProvisioning_NoProxyMergesDefaults(t *testing.T) {
 	}
 	require.Contains(t, noProxy, "192.168.1.0/24")
 	require.Contains(t, noProxy, "svc.cluster.local")
+	// Q465: the exemption follows this cluster's API server, not a hardcoded range.
+	require.Contains(t, strings.Split(noProxy, ","), gkeAPIServerIP,
+		"NO_PROXY must exempt the cluster's own API server ClusterIP")
+	require.NotContains(t, noProxy, "10.96.0.0/12",
+		"the kubeadm Service CIDR must not be hardcoded into NO_PROXY")
 }
 
 func TestGMC_TenantProvisioning_GitHubAppRefDefaultsToOwnNamespace(t *testing.T) {

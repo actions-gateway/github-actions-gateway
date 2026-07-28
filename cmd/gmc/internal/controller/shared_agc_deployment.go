@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"net"
+	"os"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -44,18 +46,73 @@ const (
 	// stale read.
 	vaultTokenExpirationSeconds int64 = 600
 
-	// defaultNoProxy excludes cluster-internal traffic from the proxy. svc.cluster.local
-	// covers all Kubernetes Services (e.g. fakegithub.e2e-infra.svc.cluster.local) so
-	// the proxy is only used for external (GitHub.com) traffic as intended.
-	defaultNoProxy = "svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12"
+	// defaultNoProxy is the static half of the AGC's cluster-internal proxy
+	// exclusions. NO_PROXY is an egress-control surface — everything listed here
+	// leaves the tenant's egress proxy unused, and so escapes the per-tenant
+	// egress-IP attribution that isolates tenants (§H.8) — so the list is kept to
+	// destinations that are cluster-internal by construction:
+	//
+	//   - svc.cluster.local     every in-cluster Service reached by FQDN (the
+	//                           EgressProxy Service itself, fakegithub in e2e).
+	//   - kubernetes.default.svc the API server's short in-cluster DNS name, which
+	//                           svc.cluster.local does not cover on a cluster whose
+	//                           cluster domain is not "cluster.local".
+	//   - localhost/127.0.0.1   the pod's own loopback.
+	//
+	// The API server's ClusterIP is deliberately absent: it is per-cluster, so
+	// apiServerNoProxyEntry derives it instead of guessing a Service CIDR (Q465).
+	defaultNoProxy = "kubernetes.default.svc,svc.cluster.local,localhost,127.0.0.1"
+
+	// apiServerHostEnv is the API server ClusterIP env var the kubelet injects into
+	// every pod from the "kubernetes" Service in the default namespace, regardless
+	// of the pod's enableServiceLinks setting.
+	apiServerHostEnv = "KUBERNETES_SERVICE_HOST"
 )
 
-// buildNoProxy merges user-provided CIDRs with mandatory cluster-internal exclusions.
-func buildNoProxy(userCIDRs []string) string {
-	if len(userCIDRs) > 0 {
-		return strings.Join(userCIDRs, ",") + "," + defaultNoProxy
+// apiServerNoProxyEntry returns the NO_PROXY entry that keeps the AGC's Kubernetes
+// API traffic off the tenant's egress proxy.
+//
+// client-go's in-cluster config dials the API server by ClusterIP (read from
+// KUBERNETES_SERVICE_HOST), never by DNS name, so the DNS entries in
+// defaultNoProxy do not cover it: a proxied AGC CONNECTs to the API server through
+// the tenant proxy, cannot verify the proxy's CA, and CrashLoopBackOffs at startup.
+// That ClusterIP is the first address of the cluster's Service CIDR and differs per
+// distribution — 10.96.0.1 on kind/kubeadm, 172.20.0.1 on EKS, 10.0.0.1 on AKS,
+// 34.118.224.1 on the GKE cluster where this was measured — so the exemption must
+// come from the cluster rather than from a hardcoded range (Q465).
+//
+// The GMC provisions AGCs into its own cluster, so the ClusterIP it reads from its
+// own environment is the one the AGC pod will dial. When the variable is unset (a
+// GMC run out-of-cluster: `make run`, envtest) the literal "$(KUBERNETES_SERVICE_HOST)"
+// is emitted instead and the kubelet expands it from the AGC pod's own service env,
+// which yields the same value at pod start.
+//
+// An IPv6 ClusterIP is bracketed: Go's NO_PROXY parser reads a bare "fd00::1" as
+// host "fd00:" port "1" and the entry would never match.
+func apiServerNoProxyEntry() string {
+	host := strings.TrimSpace(os.Getenv(apiServerHostEnv))
+	if host == "" {
+		return "$(" + apiServerHostEnv + ")"
 	}
-	return defaultNoProxy
+	if strings.HasPrefix(host, "[") {
+		return host
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
+		return "[" + host + "]"
+	}
+	return host
+}
+
+// buildNoProxy merges user-provided CIDRs with the mandatory cluster-internal
+// exclusions: the static defaultNoProxy names plus this cluster's API server
+// address (apiServerNoProxyEntry). User entries come first, matching the order
+// operators see today; NO_PROXY matching is order-independent.
+func buildNoProxy(userCIDRs []string) string {
+	mandatory := defaultNoProxy + "," + apiServerNoProxyEntry()
+	if len(userCIDRs) > 0 {
+		return strings.Join(userCIDRs, ",") + "," + mandatory
+	}
+	return mandatory
 }
 
 // agcWorkloadNames carries the per-gateway derived names for the AGC

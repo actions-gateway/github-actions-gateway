@@ -43,6 +43,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Sessions Stuck in 401/EOF GetMessage Loops (Tenant Throughput Decays to Zero)](#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero)
 - [Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)](#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner)
 - [Network Connectivity Failures](#network-connectivity-failures)
+- [AGC Crash-Loops Dialling the API Server Through the Egress Proxy](#agc-crash-loops-dialling-the-api-server-through-the-egress-proxy)
 - [AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)](#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch)
 - [DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)](#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)
 - [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
@@ -1604,7 +1605,68 @@ kubectl describe networkpolicy -n <namespace>
 **Resolution.**
 - If the proxy pod is down: check its logs and restart if necessary.
 - If the `NetworkPolicy` egress rules are stale: trigger a manual refresh by temporarily setting `spec.proxy.managedNetworkPolicy: false` and back to `true`, or wait for the 24-hour automatic refresh cycle. Check the GitHub meta API for current IP ranges: `curl https://api.github.com/meta | jq .actions`.
-- If the `NO_PROXY` list is missing the cluster service CIDR: update `spec.proxy.noProxyCIDRs` to include your cluster's service CIDR (see the `noProxyCIDRs` field documentation in [§3.1](../design/03-api-contracts.md#31-kubernetes-crd-schemas)).
+- If an internal destination is being sent through the proxy: add it to `spec.proxy.noProxyCIDRs` (v1) / the `EgressProxy`'s `spec.noProxyCIDRs` (v2). The cluster-internal exemptions — including the API server — are appended automatically, so a missing service CIDR is not the cause; see [AGC Crash-Loops Dialling the API Server Through the Egress Proxy](#agc-crash-loops-dialling-the-api-server-through-the-egress-proxy) and the `noProxyCIDRs` field documentation in [§3.1](../design/03-api-contracts.md#31-kubernetes-crd-schemas).
+
+---
+
+## AGC Crash-Loops Dialling the API Server Through the Egress Proxy
+
+**Symptoms.** A **proxied** tenant's AGC never reaches Ready and `CrashLoopBackOff`s
+at startup. The log shows a Kubernetes API call — not a GitHub call — failing at the
+proxy, addressed to an **IP**, not a hostname:
+
+```
+detect actions-gateway.com/v2alpha1 RunnerSet CRD: … Get "https://34.118.224.1:443/api":
+proxyconnect tcp: tls: failed to verify certificate:
+x509: certificate signed by unknown authority
+```
+
+Two things distinguish it from [Runners Never Appear Online — AGC `unknown authority` Through the Egress Proxy](#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy),
+which produces a near-identical TLS error: the destination is the API server's
+ClusterIP rather than `api.github.com`, and the AGC dies during startup instead of
+running with failing registrations. Direct-egress tenants never hit it, because
+`NO_PROXY` is not consulted when no proxy is set.
+
+**Cause.** The AGC's Kubernetes client dials the API server by the ClusterIP in
+`KUBERNETES_SERVICE_HOST`, never by DNS name, so the API server must be exempted
+from `NO_PROXY` **by address**. Before Q465 the generated `NO_PROXY` exempted the
+fixed range `10.96.0.0/12` — the kind/kubeadm Service CIDR. That range is wrong on
+every managed distribution (EKS `172.20.0.0/16`, AKS `10.0.0.0/16`, GKE
+provider-assigned), so on those clusters the AGC CONNECTed to the API server through
+the tenant's egress proxy and could not verify the proxy's self-signed CA.
+
+**Applies to.** GMC releases before the Q465 fix, on any cluster whose API server
+ClusterIP falls outside `10.96.0.0/12` — that is, every managed Kubernetes offering.
+Current releases derive the exemption from the cluster's own
+`KUBERNETES_SERVICE_HOST`, so no configuration is needed on any distribution.
+
+**Diagnostics.**
+
+```sh
+# 1. This cluster's API server ClusterIP — the address the AGC will dial.
+kubectl get svc kubernetes -n default -o jsonpath='{.spec.clusterIP}{"\n"}'
+
+# 2. The NO_PROXY the GMC generated for the tenant's AGC. It must contain the
+#    address from step 1 (distroless image — read the spec, not the process).
+kubectl get deploy -n <namespace> -l app=actions-gateway-controller \
+  -o jsonpath='{range .items[0].spec.template.spec.containers[0].env[?(@.name=="NO_PROXY")]}{.value}{"\n"}{end}'
+```
+
+**Resolution.**
+
+- **Upgrade the GMC** to a release carrying the Q465 fix and let the tenant's AGC
+  Deployment be re-reconciled (`kubectl rollout restart deploy -n <namespace> <agc>`
+  if it does not roll on its own). The exemption then follows the cluster.
+- **Workaround on an older GMC**: name the API server's ClusterIP in the tenant's
+  `noProxyCIDRs` (v1 `spec.proxy.noProxyCIDRs`, v2 `EgressProxy.spec.noProxyCIDRs`) —
+  the single address from step 1, or that cluster's Service CIDR if you prefer
+  (`kubectl cluster-info dump | grep -m1 service-cluster-ip-range`). Prefer the
+  single address: every entry bypasses the tenant's egress proxy, and a CIDR exempts
+  hosts you did not name.
+- If `NO_PROXY` shows the literal `$(KUBERNETES_SERVICE_HOST)` unexpanded inside the
+  **running container**, the GMC was running outside the cluster when it composed
+  the Deployment and the kubelet did not expand it. Run the GMC in-cluster (the
+  supported deployment) and re-reconcile.
 
 ---
 

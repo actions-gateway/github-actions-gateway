@@ -198,7 +198,9 @@ Differences and quirks an ARC operator should know:
   *inside* the cluster or your network (artifact stores, internal registries)
   must be excluded from the proxy via `EgressProxy.spec.noProxyCIDRs` (CIDRs, bare
   IPs, or `NO_PROXY` domain suffixes). Cluster-internal defaults are appended
-  automatically. **Admission rejects any entry that would route GitHub traffic
+  automatically on every distribution — `svc.cluster.local`,
+  `kubernetes.default.svc`, `localhost`, `127.0.0.1`, and the cluster's API server
+  ClusterIP — so neither the API server nor the service CIDR belongs in this field. **Admission rejects any entry that would route GitHub traffic
   around the proxy** (a host matching `githubURL` or `github.com` /
   `githubusercontent.com` / `ghcr.io`) — that would break egress-IP attribution.
 - **The AGC↔proxy hop is HTTPS with a pinned cert.** The GMC issues a per-tenant

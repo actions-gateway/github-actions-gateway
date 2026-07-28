@@ -33,10 +33,22 @@ const (
 	proxyPort = 8080
 
 	// defaultNoProxy excludes cluster-internal traffic from the egress proxy so the
-	// proxy is only used for external (GitHub) traffic. Mirrors the GMC builder's
-	// defaultNoProxy; the GMC sets the AGC's own NO_PROXY from the same list, and
-	// the AGC sets each worker's NO_PROXY here from the resolved EgressProxy.
-	defaultNoProxy = "svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12"
+	// proxy is only used for external (GitHub) traffic. The GMC sets the AGC's own
+	// NO_PROXY from the static half of the same list (its buildNoProxy in
+	// cmd/gmc/internal/controller/shared_agc_deployment.go); the AGC sets each
+	// worker's NO_PROXY here from the resolved EgressProxy.
+	//
+	// Worker pods reach in-cluster Services by DNS name only, and never talk to the
+	// API server — they run with automountServiceAccountToken: false and hold no
+	// kubeconfig — so this list is DNS plus loopback and nothing else. It is
+	// deliberately narrower than the AGC's, which additionally exempts the API
+	// server's ClusterIP because client-go dials it by IP (Q465). It no longer
+	// carries the kubeadm Service CIDR 10.96.0.0/12: that range is not the Service
+	// CIDR on any managed distribution, and on a cluster whose pod or node
+	// addresses fall inside it, it exempted arbitrary traffic from the tenant's
+	// egress attribution for no benefit. An operator who does need a ClusterIP
+	// range exempted names it in the EgressProxy's spec.noProxyCIDRs.
+	defaultNoProxy = "svc.cluster.local,localhost,127.0.0.1"
 )
 
 // egressProxyServiceName / egressProxyTLSSecretName derive an EgressProxy's child

@@ -73,13 +73,17 @@ type ProxyConfig struct {
     // defeats egress-IP attribution. Never list GitHub here. A CIDR/IP covering
     // GitHub's rotating ranges is not detected and stays the operator's
     // responsibility.
-    // Cluster-internal destinations are appended automatically by the GMC
-    // (svc.cluster.local, localhost, 127.0.0.1, 10.96.0.0/12); set this field only
-    // to add a non-default service CIDR.
-    // NOTE: 10.96.0.0/12 is the kubeadm default service CIDR. EKS uses 10.100.0.0/16;
-    // GKE and other providers may differ. Operators must override this field (with a
-    // CIDR) when the cluster service CIDR does not fall within 10.96.0.0/12.
-    // To discover the value: kubectl cluster-info dump | grep -m1 service-cluster-ip-range
+    // Cluster-internal destinations are appended automatically by the GMC:
+    // svc.cluster.local, kubernetes.default.svc, localhost, 127.0.0.1, and this
+    // cluster's API server ClusterIP (read from KUBERNETES_SERVICE_HOST). Neither
+    // the API server nor the service CIDR needs to be named here on any
+    // distribution; set this field only to exempt an additional internal
+    // destination of your own.
+    // NOTE: the API server exemption is derived, not hardcoded. It has to be — the
+    // ClusterIP is 10.96.0.1 on kind/kubeadm, 172.20.0.1 on EKS, 10.0.0.1 on AKS and
+    // provider-assigned on GKE, and client-go dials it by IP, so a fixed CIDR (or a
+    // DNS-only exemption) sends the AGC's own API traffic through the tenant proxy
+    // and crash-loops it (Q465).
     // +optional
     NoProxyCIDRs []string `json:"noProxyCIDRs,omitempty"`
 

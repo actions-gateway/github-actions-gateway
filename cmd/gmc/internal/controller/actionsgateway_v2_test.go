@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"testing"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -600,6 +601,9 @@ func hasDNSEgress(np *networkingv1.NetworkPolicy) bool {
 }
 
 func TestBuildAGCDeploymentV2_TracingAndNoProxyWiring(t *testing.T) {
+	// A managed-distribution API server ClusterIP (Q465): the v2 path must exempt it
+	// too, or a proxied v2 tenant's AGC dials the API server through the proxy.
+	t.Setenv(apiServerHostEnv, gkeAPIServerIP)
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
 	ag.Spec.Tracing = gmcv2alpha1.TracingConfig{Endpoint: "otel:4317", Sampler: "always_on"}
 	proxy := &gmcv2alpha1.EgressProxy{
@@ -613,6 +617,8 @@ func TestBuildAGCDeploymentV2_TracingAndNoProxyWiring(t *testing.T) {
 	// NO_PROXY merges the EgressProxy's CIDRs with the cluster-internal exclusions.
 	assert.Contains(t, env["NO_PROXY"], "10.20.0.0/16")
 	assert.Contains(t, env["NO_PROXY"], "svc.cluster.local")
+	assert.Contains(t, strings.Split(env["NO_PROXY"], ","), gkeAPIServerIP)
+	assert.NotContains(t, env["NO_PROXY"], "10.96.0.0/12")
 	// Proxied: the AGC's own egress is wired through the EgressProxy Service.
 	assert.Contains(t, env["HTTPS_PROXY"], "shared-proxy.team-a.svc.cluster.local")
 	assert.Equal(t, "shared-proxy-tls", env["PROXY_TLS_SECRET_NAME"])

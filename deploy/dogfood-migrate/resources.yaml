@@ -58,17 +58,18 @@ spec:
   proxy:
     minReplicas: 1
     maxReplicas: 2
-    # REQUIRED on GKE, and the live run proved it (Q465). The AGC's generated
-    # NO_PROXY defaults to `svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12` —
-    # the kind/kubeadm Service CIDR. This cluster's is 34.118.224.0/20, so without
-    # this entry the AGC dials the API server (34.118.224.1:443) THROUGH the egress
-    # proxy, fails to verify the proxy's CA, and CrashLoopBackOffs at startup:
+    # noProxyCIDRs is deliberately UNSET, and that is the point of the next live run.
+    # The first one needed `34.118.224.0/20` here: the AGC's generated NO_PROXY
+    # hardcoded the kind/kubeadm Service CIDR `10.96.0.0/12`, this cluster's is
+    # 34.118.224.0/20, so the AGC dialled the API server (34.118.224.1:443) THROUGH
+    # the egress proxy, could not verify the proxy's CA, and CrashLoopBackOffed:
     #   detect actions-gateway.com/v2alpha1 RunnerSet CRD: … proxyconnect tcp:
     #   tls: failed to verify certificate: x509: certificate signed by unknown authority
-    # buildNoProxy prepends user CIDRs to the default, so naming the real Service
-    # CIDR here is the supported workaround until Q465 fixes the default.
-    noProxyCIDRs:
-      - 34.118.224.0/20
+    # Q465 replaced that hardcoded range with the cluster's own API server ClusterIP,
+    # read from KUBERNETES_SERVICE_HOST. Keeping the workaround here would mask the
+    # fix, so it is removed: a clean AGC startup on this cluster IS the live
+    # confirmation of Q465. If the AGC crash-loops with the error above, the fix
+    # regressed — re-add `noProxyCIDRs: [34.118.224.0/20]` to unblock and reopen it.
   runnerGroups:
     # Exactly ONE label, deliberately. v1 Classic permits many and v2beta1 ScaleSet
     # permits exactly one, so a single-label v1 tenant migrates without the

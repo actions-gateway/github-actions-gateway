@@ -322,6 +322,12 @@ func TestRunnerSetTarget_ResolveAndCeiling(t *testing.T) {
 	assert.Equal(t, "shared-proxy-tls", spec.ProxyTLSSecretName)
 	assert.Equal(t, "restricted", spec.SecurityProfile)
 	assert.Contains(t, spec.NoProxy, "10.0.0.0/8")
+	// Worker exemptions are DNS + loopback only: workers hold no kubeconfig and
+	// never dial the API server, so nothing here may be an IP range (Q465). The
+	// kubeadm Service CIDR that used to be appended was wrong off kind and, on a
+	// managed cluster, exempted arbitrary pod/node addresses from the tenant's
+	// egress attribution.
+	assert.Equal(t, "10.0.0.0/8,svc.cluster.local,localhost,127.0.0.1", spec.NoProxy)
 
 	// A missing referent fails Resolve closed (no pod would be created).
 	require.NoError(t, c.Delete(context.Background(), ep))

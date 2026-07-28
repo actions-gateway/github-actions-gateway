@@ -160,11 +160,13 @@ spec:
                       githubusercontent.com, ghcr.io, …) — because that would silently defeat
                       per-tenant egress-IP attribution; never list GitHub here. A CIDR/IP that
                       happens to cover GitHub's (rotating) ranges is not detected and remains the
-                      operator's responsibility. Cluster-internal destinations (the service CIDR,
-                      localhost, svc.cluster.local) are appended automatically by the GMC and
-                      need not be set here; override only to add a non-default service CIDR
-                      (discover it via `kubectl cluster-info dump | grep -m1
-                      service-cluster-ip-range`).
+                      operator's responsibility. The GMC appends the cluster-internal destinations
+                      automatically — svc.cluster.local, kubernetes.default.svc, localhost,
+                      127.0.0.1, and this cluster's API server ClusterIP, read from
+                      KUBERNETES_SERVICE_HOST — so neither the API server nor the service CIDR
+                      needs to be named here. Set this field only to exempt an additional internal
+                      destination of your own; every entry bypasses the tenant's egress proxy and
+                      so escapes its per-tenant egress-IP attribution, so keep the list short.
                     items:
                       type: string
                     type: array
