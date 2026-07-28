@@ -486,6 +486,18 @@ jobs:
           E2E_SKIP_TEARDOWN: "true"
         run: make e2e KIND_CLUSTER=actions-gateway-e2e
 
+      - name: Chart uninstall/reinstall check
+        # Q444. Every other path in CI starts from a cluster that has never had
+        # the chart installed, so nothing exercised the day-two operation that
+        # broke admission outright: `helm uninstall` followed by a reinstall.
+        # Deleting the paramKind-bearing ValidatingAdmissionPolicy permanently
+        # kills the apiserver's param informer for that GVR, and the reinstalled
+        # binding then denies EVERY runnergroups/runnersets/runnertemplates write
+        # cluster-wide. Runs here because E2E_SKIP_TEARDOWN leaves the release
+        # installed, so the check has a real release to cycle; it mutates the
+        # release, which is safe only after the suite is done.
+        run: make chart-reinstall-check KIND_CLUSTER=actions-gateway-e2e
+
       - name: Upload e2e test report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

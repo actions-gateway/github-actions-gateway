@@ -601,6 +601,15 @@ wait-cert-manager: ## Wait for cert-manager deployments to be Available
 install-cert-manager: ## Apply cert-manager and wait for it to be ready
 	$(MAKE) -C cmd/gmc install-cert-manager
 
+# Q444: every other test path starts from a cluster that has never had the chart
+# installed, so nothing exercised `helm uninstall` + reinstall — the day-two
+# operation that permanently broke the PriorityClass allowlist policy's param
+# resolution. Runs against a cluster with the release already installed (CI runs
+# it after the e2e suite, which leaves the release up under E2E_SKIP_TEARDOWN).
+.PHONY: chart-reinstall-check
+chart-reinstall-check: ## Verify the chart survives a helm uninstall/reinstall cycle (needs the release installed)
+	KIND_CLUSTER=$(KIND_CLUSTER) scripts/chart-reinstall-check.sh
+
 .PHONY: e2e-cluster-delete
 e2e-cluster-delete: ## Delete the local e2e kind cluster (no-op if it does not exist)
 	@if kind get clusters 2>/dev/null | grep -qx $(KIND_CLUSTER); then \
