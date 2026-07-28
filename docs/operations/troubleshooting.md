@@ -505,10 +505,22 @@ kubectl describe pod -n <namespace> <worker-pod>
 
 ```sh
 # nodeAutoscaling: Present only — the raw events the gate read, with their reporters.
+# Both timestamp columns are printed because the two recorder generations populate
+# different ones: cluster autoscaler sets lastTimestamp, Karpenter sets eventTime.
 kubectl get events -n <namespace> \
   --field-selector involvedObject.name=<worker-pod> \
-  -o custom-columns='TIME:.lastTimestamp,SOURCE:.source.component,REASON:.reason,MESSAGE:.message'
+  -o custom-columns='TIME:.lastTimestamp,MICROTIME:.eventTime,SOURCE:.source.component,REASON:.reason,MESSAGE:.message'
 ```
+
+> **A declination is not always the last word, even when it is the last event.** One
+> autoscaler loop can record a scale-up and *then* a declination for the same pod,
+> milliseconds apart — the first round found a plan, a second round still could not
+> place the pod even with the node that is now on its way. So the gate reads a
+> declination as superseding a scale-up only when it lands more than a second after
+> it; anything closer is one loop's own output and leaves the gate open, because a
+> node is in fact arriving. If the events above show a `NotTriggerScaleUp` (or
+> Karpenter `FailedScheduling`) close behind a `TriggeredScaleUp`/`Nominated` while
+> the condition reads `False`, that is the rule working, not a stale condition.
 
 **Resolution.** The gate is reporting a real cluster condition, so fix the
 placement problem — the resolutions are the same ones listed under
