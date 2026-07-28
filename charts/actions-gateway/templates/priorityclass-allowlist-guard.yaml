@@ -21,6 +21,31 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
   name: {{ include "actions-gateway.namePrefix" . }}-priorityclass-allowlist-guard
+  annotations:
+    # Q444 — this policy MUST outlive `helm uninstall`, and the reason is an
+    # apiserver constraint, not a Helm one.
+    #
+    # The apiserver runs ONE param informer per paramKind GVR, shared by every
+    # policy that names it, and tears it down when the last such policy is
+    # deleted. That teardown is permanent for the life of the apiserver process:
+    # the informer is cached by GVR, and the cached instance is already stopped,
+    # so a later policy naming the same paramKind gets the dead informer back
+    # with an empty store. Every binding that resolves a ConfigMap param then
+    # fails with `no params found for policy binding` — and with
+    # parameterNotFoundAction: Deny that denies EVERY matched write
+    # (runnergroups, runnersets, runnertemplates), cluster-wide, forever.
+    # Measured on Kubernetes 1.35.5 and 1.36.1; only a kube-apiserver restart
+    # clears it, which is not an option on a managed control plane.
+    #
+    # So `helm uninstall` + reinstall must not delete this object. Retaining it
+    # is safe: a ValidatingAdmissionPolicy enforces NOTHING without a binding,
+    # and the binding below is deliberately NOT retained — it is deleted on
+    # uninstall (and when admissionPolicy.enabled is set to false), which is what
+    # actually stops enforcement. The param ConfigMap is likewise not retained;
+    # with the policy alive the informer keeps observing its deletion and
+    # recreation normally. See docs/operations/security-operations.md
+    # § The policy object survives `helm uninstall` — on purpose.
+    helm.sh/resource-policy: keep
   labels:
     {{- include "actions-gateway.labels" . | nindent 4 }}
 spec:
@@ -70,6 +95,12 @@ spec:
         + ' is not in the platform PriorityClass allowlist ConfigMap; a PriorityClass sets cluster-wide scheduling preemption order, so the platform admin must pre-create it and add it to the allowlist'
       reason: Forbidden
 ---
+# Deliberately NOT annotated helm.sh/resource-policy: keep — unlike the policy
+# above, the binding is the object that makes the policy enforce, so it must be
+# removed by `helm uninstall` and by admissionPolicy.enabled=false. Deleting a
+# binding does not disturb the apiserver's param informer (that is keyed to the
+# policy's paramKind), so the uninstall/reinstall cycle stays safe. Read the Q444
+# note on the policy's annotation before adding a retention policy here.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
