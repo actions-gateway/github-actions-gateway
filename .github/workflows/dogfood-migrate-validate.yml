@@ -40,10 +40,18 @@ jobs:
         # The migration rewrites the gateway identity and re-registers the runner.
         # Recording which runner actually picked the job up is what makes a green
         # run attributable to the migrated tenant rather than to a stale session.
+        #
+        # The input comes in through `env`, NOT interpolated into the script.
+        # `${{ }}` inside a run block is substituted as raw text before bash sees
+        # it, so a crafted input would execute as shell — the standard Actions
+        # expression-injection shape. Dispatching needs repo write access, so the
+        # practical risk is small, but the safe form costs nothing.
+        env:
+          REQUESTED_RUNNER: ${{ inputs.runner }}
         run: |
           echo "runner name:   ${RUNNER_NAME:-<unset>}"
           echo "runner os:     ${RUNNER_OS:-<unset>}"
-          echo "requested via: ${{ inputs.runner }}"
+          echo "requested via: ${REQUESTED_RUNNER}"
 
       - name: Wait for the DinD daemon to accept connections
         # The dockerd native sidecar and the runner container start together, so
