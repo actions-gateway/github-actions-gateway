@@ -1511,6 +1511,13 @@ Two consequences worth knowing:
   `helm upgrade`, so enforcement stops as documented; the policy object stays
   behind, inert, and is picked back up when you re-enable.
 
+Expect a **brief window of denials during a reinstall**, and do not mistake it
+for the failure above. `helm uninstall` removes the parameter ConfigMap and the
+reinstall recreates it; between the two the guard is correctly failing closed, so
+writes are denied with the same `no params found for policy binding` text for the
+second or two before the apiserver observes the new ConfigMap. The difference is
+that this clears on its own — the broken state never does.
+
 **If you already hit this** — writes denied with `no params found for policy
 binding` while the parameter ConfigMap plainly exists at the referenced name and
 namespace — the parameter informer is dead and recreating the ConfigMap will not

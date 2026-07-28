@@ -200,6 +200,12 @@ The GMC surfaces it as provisioning failures on every gateway. Fresh installs ar
 unaffected — only an install that followed an uninstall on the same apiserver
 process.
 
+**First, rule out the benign case.** The same message appears for a second or two
+during any reinstall: `helm uninstall` removes the parameter ConfigMap and the
+reinstall recreates it, and the guard correctly fails closed until the apiserver
+observes the new one. That clears on its own. Only a denial that persists past a
+few seconds is the defect below.
+
 **Cause.** The apiserver keeps one admission-policy parameter informer per
 `paramKind` GroupVersionResource and tears it down when the last policy naming
 that GVR is deleted. That teardown is permanent for the life of the apiserver

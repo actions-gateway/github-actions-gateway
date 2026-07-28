@@ -78,12 +78,13 @@ probe_write() {
 # non-enforcement, so neither a broken guard nor an absent one passes.
 #
 # The gating probe is the class-NAMING one, because it is the only write whose
-# answer distinguishes all three states: the allowlist denial proves the param
-# resolved AND the binding is live, `no params found` is the Q444 failure, and an
-# admitted write means enforcement has not propagated yet (a binding recreated by
-# the reinstall takes a moment to take effect). A class-free write is admitted
-# whether or not the guard is bound, so it can only be a follow-up check that
-# ordinary writes are not collateral — never the gate.
+# answer distinguishes every state: the allowlist denial proves the param resolved
+# AND the binding is live; `no params found` is unresolved (benign while the
+# recreated ConfigMap propagates, the Q444 defect once it persists for the whole
+# budget); an admitted write means enforcement has not propagated yet (a binding
+# recreated by the reinstall takes a moment to take effect). A class-free write is
+# admitted whether or not the guard is bound, so it can only be a follow-up check
+# that ordinary writes are not collateral — never the gate.
 #
 # Names carry the phase and the attempt: a fixed name would turn every retry after
 # the first success into AlreadyExists and mask the real answer.
@@ -92,17 +93,16 @@ assert_params_resolve() {
 	for ((i = 1; i <= 45; i++)); do
 		answer="$(probe_write "probe-${phase}-class-${i}" "system-cluster-critical")"
 		case "${answer}" in
-		*"no params found"*)
-			echo "FAIL [${phase}]: the policy binding cannot resolve its param ConfigMap." >&2
-			echo "  ${answer}" >&2
-			echo "  This is Q444: the apiserver's param informer for this paramKind was torn down" >&2
-			echo "  with the policy and cannot be restarted. Every runnergroups/runnersets/" >&2
-			echo "  runnertemplates write is now denied cluster-wide. Check that the" >&2
-			echo "  ValidatingAdmissionPolicy still carries helm.sh/resource-policy: keep." >&2
-			return 1
-			;;
 		*"not in the platform PriorityClass allowlist"*)
 			break
+			;;
+		*"no params found"*)
+			# NOT fatal on its own. `helm uninstall` deletes the param ConfigMap and
+			# the reinstall recreates it, so until the apiserver observes the new
+			# ConfigMap this is the CORRECT fail-closed answer — a couple of seconds
+			# in practice. What distinguishes the Q444 breakage is that it never
+			# recovers: the param informer is dead for the life of the apiserver
+			# process, so every probe in the whole budget below answers this way.
 			;;
 		*created*)
 			# Enforcement not propagated yet; drop the object and keep polling.
@@ -112,6 +112,16 @@ assert_params_resolve() {
 		esac
 		sleep 2
 	done
+	if [[ "${answer}" == *"no params found"* ]]; then
+		echo "FAIL [${phase}]: the policy binding never resolved its param ConfigMap." >&2
+		echo "  ${answer}" >&2
+		echo "  This is Q444: the apiserver's param informer for this paramKind was torn down" >&2
+		echo "  with the policy and cannot be restarted, so it stayed unresolved for the whole" >&2
+		echo "  retry budget rather than recovering once the ConfigMap came back. Every" >&2
+		echo "  runnergroups/runnersets/runnertemplates write is now denied cluster-wide." >&2
+		echo "  Check that the ValidatingAdmissionPolicy still carries helm.sh/resource-policy: keep." >&2
+		return 1
+	fi
 	if [[ "${answer}" != *"not in the platform PriorityClass allowlist"* ]]; then
 		echo "FAIL [${phase}]: the guard never denied an off-allowlist PriorityClass; last answer:" >&2
 		echo "  ${answer}" >&2
