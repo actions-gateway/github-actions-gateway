@@ -613,7 +613,15 @@ make chart-reinstall-check KIND_CLUSTER=actions-gateway-e2e
 
 It is **deliberately not wired into CI** while Q444 is open — the defect is unfixed, so it would pin every run red. Wiring it into `e2e-reusable.yml` after the Ginkgo run (`E2E_SKIP_TEARDOWN` leaves the release up, and mutating it is only safe once the suite is done) is part of closing Q444 out.
 
-It does not fire on every run: a clean pass means the defect did not trigger, not that it is fixed. Evidence and open questions: [`q444-vap-param-resolution.md`](../plan/q444-vap-param-resolution.md).
+It does not fire on every run, and it can also pass *while* broken — if the torn-down informer's cache still holds the old ConfigMap, resolution succeeds against an object that no longer exists. A clean pass is not proof of health.
+
+For the defect itself, use [`scripts/vap-param-informer-check.sh`](../../scripts/vap-param-informer-check.sh) instead — it reproduces the apiserver behaviour deterministically, with no chart and no product CRDs, by running two arms on one apiserver that differ only in whether the `paramKind`'s binding set is ever emptied:
+
+```bash
+KUBE_CONTEXT=kind-q444-lab scripts/vap-param-informer-check.sh
+```
+
+**Disposable clusters only** — it permanently breaks ConfigMap param resolution for the target apiserver process, and refuses a non-`kind-` context unless `ALLOW_NON_KIND=1`. Mechanism and measurements: [`q444-vap-param-resolution.md`](../plan/q444-vap-param-resolution.md).
 
 ### The chart `helm upgrade` gate (Q475)
 

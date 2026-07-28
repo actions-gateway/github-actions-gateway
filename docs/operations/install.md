@@ -426,11 +426,20 @@ and namespace. Parameters resolve before any per-object matching, so this denies
 **every** `runnergroups`, `runnersets` and `runnertemplates` write cluster-wide,
 not only the ones the policy would have rejected.
 
+The trigger is **deleting the policy's binding**, which is exactly what `helm
+uninstall` does. The apiserver tears down the shared parameter informer as soon
+as no binding names the ConfigMap `paramKind`, and never restarts it; ConfigMaps
+created afterwards are invisible, so the reinstall cannot repair it. `helm
+upgrade` never removes the binding and is safe — **upgrade in place rather than
+uninstalling and reinstalling.**
+
 The state belongs to the kube-apiserver process, so restarting kube-apiserver
 clears it in seconds. **On EKS/GKE/AKS you cannot do that**, and a control-plane
-version upgrade is usually the only lever that recycles the process. It is most
-often seen after a `helm uninstall` followed by a reinstall, but that cycle is
-not required.
+version upgrade is usually the only lever that recycles the process.
+
+There is a second, quieter mode: if the torn-down informer's cache still holds
+the old ConfigMap, the guard silently keeps enforcing a **stale allowlist** with
+no error anywhere. Allowlist edits appear to apply and do nothing.
 
 If you run on a managed control plane and cannot carry that risk, install with
 `admissionPolicy.enabled=false`. You keep the GMC validating webhooks, which
@@ -508,11 +517,15 @@ kubectl delete crd actionsgateways.actions-gateway.github.com \
 ```
 
 The `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy` is removed by
-`helm uninstall` along with its binding and parameter ConfigMap. Be aware of
-**Q444** before reinstalling: an apiserver can end up unable to resolve this
-policy's parameters, denying **every** `runnergroups` / `runnersets` /
-`runnertemplates` write cluster-wide even though the ConfigMap is present. The
-only known recovery is a kube-apiserver restart. Symptoms and mitigation:
+`helm uninstall` along with its binding and parameter ConfigMap. **Removing that
+binding is the trigger for Q444**: the apiserver can be left permanently unable
+to resolve the policy's parameters, denying **every** `runnergroups` /
+`runnersets` / `runnertemplates` write cluster-wide even though the ConfigMap is
+present — and a reinstall does not repair it, because the new ConfigMap is
+invisible to the torn-down informer. The only recovery is a kube-apiserver
+restart, which managed control planes do not offer. If you are reinstalling
+rather than removing for good, use `helm upgrade` instead. Symptoms and
+mitigation:
 [troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
 
 The install namespace (`gmc-system`) is left in place if you created it with

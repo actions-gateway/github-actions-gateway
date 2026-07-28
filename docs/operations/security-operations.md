@@ -1488,10 +1488,21 @@ matching, this denies *every* matched write — `runnergroups`, `runnersets`,
 `runnertemplates`, class-naming or not — cluster-wide. The GMC surfaces it as
 provisioning failures on every gateway.
 
-Observed on Kubernetes 1.35.5 and 1.36.1, most often after a `helm uninstall`
-followed by a reinstall, though it has also been seen on a fresh install against
-an apiserver that had already entered the broken state. The trigger is not yet
-established; recreating the ConfigMap does not help. Tracking and evidence:
+Observed on Kubernetes 1.35.5 and 1.36.1. The trigger is **deleting the policy's
+binding** — the apiserver tears down the shared parameter informer as soon as no
+binding names the ConfigMap `paramKind`, and never restarts it. `helm uninstall`
+deletes the guard's only binding; a later reinstall cannot repair it, because the
+new ConfigMap is invisible to the torn-down informer. `helm upgrade` never
+removes the binding and is safe. Recreating the ConfigMap does not help; only a
+kube-apiserver restart does.
+
+**It can also fail open.** If the torn-down informer's cache still holds the
+previous ConfigMap, there is no error — the guard keeps enforcing a **stale
+allowlist**, and edits to the allowlist silently do nothing. Treat any suspected
+occurrence as a reason to verify the guard rejects a class you have just removed,
+rather than assuming your current allowlist is in force.
+
+Mechanism, measurements and reproducer:
 [`q444-vap-param-resolution.md`](../plan/q444-vap-param-resolution.md).
 
 **Do not confuse it with the benign window.** A reinstall removes the parameter
