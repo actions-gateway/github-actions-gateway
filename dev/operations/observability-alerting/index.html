@@ -2397,6 +2397,11 @@
 <td>ScaleSet worker still Running five minutes after GitHub reported its job terminal — it never received the job, or a sidecar outlived the runner; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a></td>
 </tr>
 <tr>
+<td>Workers killed by the lifetime cap</td>
+<td><code>worker_pods_reaped_total{reason="lifetime_exceeded"}</code></td>
+<td>A worker outlived <code>maxWorkerLifetime</code> (default 12h) and the kubelet killed it. Either a wedged worker the cap correctly bounded, or a legitimately long job that needs the field raised — tell them apart before changing anything; see the <a href="../troubleshooting/#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded">runbook</a></td>
+</tr>
+<tr>
 <td>Jobs running but <code>ACTIVEJOBS</code> shows 0</td>
 <td>Check pod phase with <code>kubectl get pods -l actions-gateway/runner-group=&lt;name&gt;</code> (v1) or <code>-l actions-gateway.com/runner-set=&lt;name&gt;</code> (v2)</td>
 <td><code>ACTIVEJOBS</code> is updated on pod phase-change events; the column reflects the last reconcile snapshot — not a real-time gauge. A pod that changed phase after the last reconcile will show up after the next event fires.</td>

@@ -3015,6 +3015,12 @@ HPA-managed between <code>spec.minReplicas</code> and <code>maxReplicas</code>.<
 <td>Raise <code>completedPodTTL</code> if you need a longer <code>kubectl logs</code> window.</td>
 </tr>
 <tr>
+<td><strong>Maximum worker lifetime</strong></td>
+<td>none — a wedged runner pod runs until deleted by hand</td>
+<td><code>maxWorkerLifetime</code> (default <code>12h</code>) as the pod's <code>activeDeadlineSeconds</code>, enforced by the kubelet</td>
+<td><strong>Check this before cutover if any job runs longer than 12 hours.</strong> ARC has no equivalent cap, so a long job that worked there is killed here unless you raise the field. GitHub's own default <code>timeout-minutes</code> is 360 (6h), so this affects only jobs that explicitly opted past twice that.</td>
+</tr>
+<tr>
 <td><strong>Cluster version</strong></td>
 <td>ARC supports older clusters</td>
 <td><strong>Kubernetes ≥ 1.31</strong> for v2</td>
