@@ -226,6 +226,40 @@ form is an explicit field under `sizing.nodeShare`, an additive change we held
 back from 1.3 for want of a concrete asker
 ([appendix-h §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission)).
 
+### A `LimitRange` silently cancels `Throughput`
+
+`Throughput` bursts by **removing** the runner container's CPU limit — that is
+its mechanism, not a side effect. A `LimitRange` puts the limit straight back.
+
+An entry of type `Container` carrying a `default` for `limits.cpu` — or a `max`
+with no `default`, which Kubernetes then uses as the default — applies to any
+container that does not declare one, and the container `Throughput` just built
+declares none. The pod is **not rejected**. It is admitted with a CPU limit the
+profile deliberately removed, `sizingProfileState` still reports `Active`, and
+every other signal looks correct. Jobs simply stop bursting, and nothing says so.
+
+Check before you enable it:
+
+```bash
+kubectl get limitrange -n <ns> -o jsonpath='{range .items[*].spec.limits[*]}{.type}{"\t"}{.default}{"\t"}{.max}{"\n"}{end}'
+```
+
+If a `Container` row carries a `cpu` `default` or `max`, `Throughput` will not
+burst in that namespace. Three ways out, in order of preference:
+
+1. **Drop the `cpu` default from the `LimitRange`** — the namespace stops
+   dictating a limit and the profile works as designed. Keep `maxRequests` set,
+   since that is the clamp actually bounding a skewed derivation.
+2. **Use `Binpack`** — it always sets its own limit, so the `LimitRange` default
+   never applies. You trade burst for predictable packing, which is the choice
+   between the two profiles anyway.
+3. **Stay on `Static`** and apply `status.sizingRecommendation` by hand, keeping
+   whatever limit the `LimitRange` requires.
+
+This is the one profile whose contract a namespace policy can quietly void. The
+memory side is unaffected: `Throughput` sets a memory limit explicitly, so a
+`LimitRange` default never reaches it.
+
 ## Troubleshooting
 
 **`actions_gateway_worker_usage_poll_errors_total` rising steadily** — the AGC
