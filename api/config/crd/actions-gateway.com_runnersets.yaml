@@ -139,8 +139,10 @@ spec:
                   mode:
                     default: "Off"
                     description: |-
-                      Mode selects how hard this set tries not to claim work it cannot run; see the
-                      CapacityGateMode* constants. Off is the default and is today's behavior.
+                      Mode selects how hard this set tries not to claim work it cannot run, by naming
+                      how the AGC learns the cluster cannot place a worker; see the CapacityGateMode*
+                      constants. Off is the default and is today's behavior. Observe gates on evidence
+                      an already-stuck pod produced — it is not a report-only tier.
 
                       It does NOT select the signal. Which signal is sound depends on whether the
                       cluster can grow, which is stated once by the platform operator on
@@ -148,7 +150,7 @@ spec:
                       gate cannot pick a signal that is wrong for the cluster they are running in.
                     enum:
                     - "Off"
-                    - "On"
+                    - Observe
                     type: string
                 type: object
               completedPodTTL:
@@ -873,8 +875,10 @@ spec:
                   mode:
                     default: "Off"
                     description: |-
-                      Mode selects how hard this set tries not to claim work it cannot run; see the
-                      CapacityGateMode* constants. Off is the default and is today's behavior.
+                      Mode selects how hard this set tries not to claim work it cannot run, by naming
+                      how the AGC learns the cluster cannot place a worker; see the CapacityGateMode*
+                      constants. Off is the default and is today's behavior. Observe gates on evidence
+                      an already-stuck pod produced — it is not a report-only tier.
 
                       It does NOT select the signal. Which signal is sound depends on whether the
                       cluster can grow, which is stated once by the platform operator on
@@ -882,7 +886,7 @@ spec:
                       gate cannot pick a signal that is wrong for the cluster they are running in.
                     enum:
                     - "Off"
-                    - "On"
+                    - Observe
                     type: string
                 type: object
               completedPodTTL:

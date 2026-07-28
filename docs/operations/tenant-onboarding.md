@@ -342,7 +342,7 @@ It coexists with the cluster autoscaler / Karpenter: bounding pod-admission rate
 ```yaml
 spec:
   capacityGate:
-    mode: On   # Off (default) | On
+    mode: Observe   # Off (default) | Observe — Observe gates, it is not a dry-run tier
 ```
 
 **You turn it on; the platform decides what it reads.** "Can this pod be placed" has two different sound answers depending on whether anything is waiting on the unplaceable pod to make capacity appear — and that is a fact about the *cluster*, not about your runner set. So the gate takes one input from each party, and a runner set cannot choose a signal that is wrong for the cluster it runs in:

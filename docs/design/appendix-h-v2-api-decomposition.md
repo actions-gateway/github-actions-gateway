@@ -595,7 +595,12 @@ philosophy avoids. While a profile is `Active`, `SizingDrift` reports
 into the placeability rung of the admission ladder — the AGC refuses to take on jobs
 whose worker pod the cluster cannot currently place, instead of claiming them and
 stalling. `capacityGate.mode` selects `Off` (the default, today's behavior exactly) or
-`On`.
+`Observe`.
+
+The values name *how the AGC learns* the cluster cannot place a worker, not merely
+whether the gate is enabled (Q476). `Observe` decides from evidence an already-stuck
+pod produced; the reserved `Probe`/`Provision` (Q407) solicit an answer instead. Every
+value but `Off` refuses jobs — there is no report-only tier on this axis.
 
 **Two axes, two owners.** The mode is deliberately *not* a choice of signal:
 

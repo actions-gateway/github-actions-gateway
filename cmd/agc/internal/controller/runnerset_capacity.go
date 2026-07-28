@@ -141,7 +141,7 @@ func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs
 // newer CRD accepts can reach an older AGC; treating it as "some gate, near enough"
 // would apply semantics the operator did not ask for.
 func (r *RunnerSetReconciler) evalCapacityGate(ctx context.Context, mode string, unsched workersUnschedulable, gw *v2alpha1.ActionsGateway) (declined bool, reason, message string, recheck time.Duration) {
-	if mode != v2alpha1.CapacityGateModeOn {
+	if mode != v2alpha1.CapacityGateModeObserve {
 		return false, v2alpha1.ReasonGateModeUnsupported, fmt.Sprintf(
 			"capacity gate mode %q is not implemented by this AGC; job intake is not gated", mode), 0
 	}
