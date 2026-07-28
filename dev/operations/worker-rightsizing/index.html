@@ -2652,7 +2652,12 @@ restart. The template stays authoritative unless you opt in.</p>
 <ul>
 <li><strong>Extended resources (GPUs) are never modified</strong> — only the cpu/memory keys
   are ever derived; the shape's job-selected identity passes through
-  byte-identical.</li>
+  byte-identical. This is also why <code>nodeShare.allocatable</code> must declare <code>cpu</code>,
+  <code>memory</code>, or both: an envelope naming only extended resources divides nothing,
+  so the apiserver rejects it at admission rather than letting the profile report
+  <code>Active</code> over untouched template values
+  (<a href="../troubleshooting/#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory">runbook</a>).
+  Declaring just one of the two is fine — the other keeps the template's ask.</li>
 <li><strong>History-based profiles fall back to <code>Static</code> until confident</strong> — <code>Binpack</code>
   and <code>Throughput</code> apply only once <em>every</em> template container has a
   recommendation with ≥20 sampled jobs (whole-pod, so QoS stays predictable).
