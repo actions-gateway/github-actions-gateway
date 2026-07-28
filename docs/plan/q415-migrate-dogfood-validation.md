@@ -4,7 +4,7 @@
 blocked** until the smoke workflow reaches `main` (GitHub only dispatches
 `workflow_dispatch` from the default branch), so the GA DoD row stays ⚠️ Unverified
 and **Q415 stays open**. Three defects found and filed:
-Q463 (since fixed), Q465 (fixed), [Q466](../STATUS.md#Q466).
+Q463 (since fixed), Q465 (fixed), Q466 (fixed — [not yet re-validated live](#defect-v1-and-v2-collide-during-coexistence-q466)).
 Full evidence in [Findings](#findings).
 **Scope:** the last unverified item in the v2 GA Definition of Done —
 [v2-ga.md § Definition of Done audit](v2-ga.md#definition-of-done-audit-as-of-this-change)
@@ -322,7 +322,7 @@ unrelated hosts. Live re-confirmation is outstanding: the workaround
 [`deploy/dogfood-migrate/resources.yaml`](../../deploy/dogfood-migrate/resources.yaml)
 so that a clean AGC startup at the next dogfood sitting is itself the verification.
 
-### Defect: v1 and v2 collide during coexistence ([Q466](../STATUS.md#Q466))
+### Defect: v1 and v2 collide during coexistence (Q466)
 
 With both control planes live after the migration, the **migrated v2 AGC was clean (0
 warnings/errors) while the v1 AGC errored continuously** (14 errors in 3 minutes),
@@ -342,7 +342,7 @@ in two distinct ways:
 This matters because coexistence is load-bearing in the migration story: v1 is left
 running specifically so rollback stays possible. In practice the v1 tenant is left in
 a broken reconcile loop the moment v2 comes up, which weakens that guarantee. Filed as
-[Q466](../STATUS.md#Q466).
+Q466.
 
 **Fixed.** The agent pool now derives its Secret name, selector label, and GitHub runner
 name from the owner's *kind* as well as its name, so the two pools are disjoint; each
@@ -380,7 +380,7 @@ controllers that must clear those finalizers.
 the correct order — delete the CRs first, while the controllers still run — so this
 was a bug in **this plan's runbook**, since corrected in step 11, rather than a
 product defect. What is missing is any warning that the obvious alternative deadlocks;
-that doc gap is folded into [Q466](../STATUS.md#Q466) rather than filed separately.
+that doc gap is folded into Q466 rather than filed separately.
 
 **Fixed.** [migration-v1-to-v2.md § Teardown order is load-bearing](../operations/migration-v1-to-v2.md#teardown-order-is-load-bearing-never-delete-the-namespace-first)
 now states the order, names the three finalizers, explains why the deadlock is
