@@ -676,10 +676,16 @@ spec:
   # can be validated live: it needs >=20 sampled jobs per template container
   # (usage.MinSamplesForDrift) before it actuates, and the ~7-job e2e matrix in
   # the release gate cannot reach that in one run. The always-on CI tenant
-  # accumulates samples organically — it reached 36 on 2026-07-25 — and
-  # status.sizingRecommendation survives an AGC restart and a re-apply, so the
-  # history is here when the RC gate looks. Configure it well BEFORE the RC
-  # window; configure it during, and the gate sees AwaitingSamples.
+  # accumulates samples organically — it reached 36 on 2026-07-25.
+  #
+  # That history does NOT depend on this stanza and does not have to be earned
+  # ahead of an RC: the sampler tracks every worker pod regardless of spec.sizing
+  # and the aggregate re-seeds from the persisted status.sizingRecommendation, so
+  # samples accrue from ordinary CI traffic and survive stop/start. What DOES
+  # gate the RC is deployment — a CR edit here reaches the cluster only when
+  # setup.sh runs (or via a direct patch); start.sh never applies CRs, so
+  # editing this and starting the tenant leaves the profile inert and the
+  # release gate reporting an empty sizingProfileState.
   #
   # Throughput rather than Binpack because it is what this template already
   # encodes by hand: requests-only CPU (a limit just throttles bursty Go
