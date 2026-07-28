@@ -136,6 +136,18 @@ func (m *countingMetrics) completedCount() int {
 	defer m.mu.Unlock()
 	return m.completed
 }
+
+// provisionedCount returns the provisioned-worker metric. A test that asserts on this
+// counter must also *synchronize* on it — never on the provisioner stub, which records a
+// job at Provision entry while the listener counts the metric only after Provision
+// returns. Waiting on the stub and then reading the metric races the gap between the two
+// (Q350); waiting on the metric implies the stub already recorded, so the stub-side
+// assertions stay valid.
+func (m *countingMetrics) provisionedCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.provisionedC
+}
 func (m *countingMetrics) snapshot() (assigned, provisioned, errs int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -234,7 +246,7 @@ func TestListener_ProvisionsOneWorkerPerAssignedJob(t *testing.T) {
 		srv.EnqueueJob(ssID)
 	}
 
-	require.Eventually(t, func() bool { return prov.count() >= n }, 5*time.Second, 10*time.Millisecond,
+	require.Eventually(t, func() bool { return m.provisionedCount() >= n }, 5*time.Second, 10*time.Millisecond,
 		"every queued job must provision a worker")
 
 	ids := prov.jobIDs()
@@ -476,7 +488,7 @@ func TestListener_RunnerNameConflictReclaimsBaseNameByDeregister(t *testing.T) {
 	srv.FailJITConfigName("linux-" + jobID)
 	capVal.set(5)
 
-	require.Eventually(t, func() bool { return prov.count() == 1 }, 5*time.Second, 10*time.Millisecond,
+	require.Eventually(t, func() bool { return m.provisionedCount() == 1 }, 5*time.Second, 10*time.Millisecond,
 		"the stale record must be deleted and the base name reclaimed so the job provisions")
 	assert.Equal(t, []string{jobID}, prov.jobIDs(), "the job provisions exactly once")
 	assert.Equal(t, []string{"linux-" + jobID}, prov.runnerNames(),
@@ -511,7 +523,7 @@ func TestListener_RunnerNameConflictBusyRecordFallsBackToFreshName(t *testing.T)
 	srv.SetRunnerBusy("linux-" + jobID)
 	capVal.set(5)
 
-	require.Eventually(t, func() bool { return prov.count() == 1 }, 5*time.Second, 10*time.Millisecond,
+	require.Eventually(t, func() bool { return m.provisionedCount() == 1 }, 5*time.Second, 10*time.Millisecond,
 		"a busy stale record must not block the job — the fresh-name fallback provisions it")
 	assert.Equal(t, []string{jobID}, prov.jobIDs(), "the job provisions exactly once")
 	assert.Equal(t, []string{"linux-" + jobID + "-1"}, prov.runnerNames(),
