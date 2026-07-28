@@ -107,7 +107,7 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 	// tier provisions the same worker pods (one per assigned job), so a namespace-quota
 	// or scheduling stall must surface here too rather than hiding behind rising
 	// pendingJobs with Ready=True.
-	unschedRequeue := r.applyWorkerCapacityConditions(ctx, rs, refs.template)
+	unschedRequeue := r.applyWorkerCapacityConditions(ctx, rs, refs.template, refs.gateway)
 
 	if err := r.Status().Update(ctx, rs); err != nil && !apierrors.IsConflict(err) {
 		return ctrl.Result{}, err

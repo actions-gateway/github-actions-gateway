@@ -30,7 +30,7 @@ type workersUnschedulable struct {
 	// stuckPods are the worker pods that produced the verdict: Pending past the
 	// scheduling grace with the scheduler reporting Unschedulable, oldest first.
 	//
-	// Carried out so the AutoscalerVerdict capacity gate (Q406) reads pod Events for
+	// Carried out so the capacity gate (Q406) reads pod Events for
 	// exactly these pods and no others — the same "actually stuck" definition the
 	// condition itself uses. Scoping matters: an Event read is uncached, and a broad
 	// Event watch on a busy cluster is a real load problem, so the mode must only ever

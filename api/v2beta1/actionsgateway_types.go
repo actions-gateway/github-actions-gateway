@@ -119,6 +119,61 @@ type ActionsGatewaySpec struct {
 	//
 	// +optional
 	Scheduling *PodScheduling `json:"scheduling,omitempty"`
+
+	// ClusterCapacity states facts about the cluster this gateway runs in that the
+	// AGC cannot safely determine for itself (Q470). It is platform-operator
+	// knowledge, not tenant knowledge, which is why it lives here rather than on the
+	// RunnerSets that consume it.
+	//
+	// +optional
+	ClusterCapacity *ClusterCapacity `json:"clusterCapacity,omitempty"`
+}
+
+// Node-autoscaler presence, selectable via ClusterCapacity.NodeAutoscaling (Q470).
+const (
+	// NodeAutoscalingPresent is the default: something in this cluster may add nodes
+	// in response to an unschedulable pod — cluster-autoscaler, Karpenter, GKE/EKS/AKS
+	// node autoscaling, OpenShift MachineAutoscaler, or a commercial optimizer.
+	//
+	// It is the default because it is the safe direction, not the common one: under
+	// Present, an intake gate refuses jobs only on an explicit autoscaler declination,
+	// so a wrong answer here can only ever under-gate (today's behavior). Under Absent
+	// it gates on the scheduler's verdict alone, so a wrong answer there refuses jobs a
+	// cluster was about to grow for.
+	NodeAutoscalingPresent = "Present"
+	// NodeAutoscalingAbsent asserts that NOTHING will add a node to this cluster: a
+	// fixed-size or on-prem cluster with a contracted node count and no autoscaler.
+	//
+	// This is an assertion about the node contract, and only the platform operator can
+	// make it. The AGC never infers it: an autoscaler is legitimately silent during
+	// backoff, during a cooldown after a failed scale-up, or for a pod it filters out
+	// of its evaluation, so "no autoscaler events have appeared" is absence of evidence
+	// rather than evidence of absence — and reading it as the latter would starve a
+	// tenant (docs/design/appendix-d-alternatives-considered.md §D.8).
+	NodeAutoscalingAbsent = "Absent"
+)
+
+// ClusterCapacity carries the cluster-level facts a capacity decision depends on
+// (Q470). Today that is one fact — whether a node autoscaler runs — with room for
+// the ProvisioningRequest API's availability to join it when that mode ships (Q407).
+//
+// The block exists because these are properties of the CLUSTER, identical for every
+// RunnerSet in it, and known to whoever owns the nodes. Asking each RunnerSet to
+// assert them would ask tenants to speak for infrastructure they may not own, and
+// would let two sets in one cluster disagree about a fact that has one answer.
+type ClusterCapacity struct {
+	// NodeAutoscaling states whether anything in this cluster adds nodes in response
+	// to unschedulable pods; see the NodeAutoscaling* constants. It selects which
+	// signal an opted-in RunnerSet capacity gate may trust, because an unschedulable
+	// pod means opposite things depending on the answer: where a node may still
+	// arrive, that pod is a REQUEST and only the autoscaler's own declination proves
+	// nothing is coming; where none can, the pod is pure waste and the scheduler's
+	// verdict is enough.
+	//
+	// +kubebuilder:default=Present
+	// +kubebuilder:validation:Enum=Present;Absent
+	// +optional
+	NodeAutoscaling string `json:"nodeAutoscaling,omitempty"`
 }
 
 // VPAUpdateMode selects how a managed VerticalPodAutoscaler actuates its

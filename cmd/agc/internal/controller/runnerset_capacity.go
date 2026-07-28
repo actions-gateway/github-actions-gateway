@@ -33,11 +33,12 @@ import (
 // WorkersUnschedulable condition onto the RunnerSet status, emitting a Warning Event
 // on a genuine WorkersUnschedulable False→True transition (never every reconcile).
 // It is called on both acquisition paths (classic and scale-set) after references
-// resolve, with the resolved worker template supplying the quota footprint. It
-// returns the soonest re-check needed for a still-within-grace Pending worker pod to
-// cross its scheduling grace (0 = none), which the caller folds into RequeueAfter so
-// WorkersUnschedulable flips without waiting for a phase-changing Pod event (Q157).
-func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context, rs *v2alpha1.RunnerSet, tmpl *v2alpha1.RunnerTemplateSpec) time.Duration {
+// resolve, with the resolved worker template supplying the quota footprint and the
+// resolved gateway supplying the cluster facts the capacity gate depends on (Q470).
+// It returns the soonest re-check needed for a still-within-grace Pending worker pod
+// to cross its scheduling grace (0 = none), which the caller folds into RequeueAfter
+// so WorkersUnschedulable flips without waiting for a phase-changing Pod event (Q157).
+func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context, rs *v2alpha1.RunnerSet, tmpl *v2alpha1.RunnerTemplateSpec, gw *v2alpha1.ActionsGateway) time.Duration {
 	wq := r.evalRunnerSetWorkerQuota(ctx, rs, tmpl)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
 		Type:               v2alpha1.ConditionWorkerQuotaPressure,
@@ -67,7 +68,7 @@ func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context,
 		r.recordEvent(rs, corev1.EventTypeWarning, "WorkersUnschedulable", "Reconcile", unsched.message)
 	}
 
-	gateRecheck := r.applyCapacityGateCondition(ctx, rs, unsched)
+	gateRecheck := r.applyCapacityGateCondition(ctx, rs, unsched, gw)
 	return soonest(unsched.requeueAfter, gateRecheck)
 }
 
@@ -88,8 +89,8 @@ func soonest(a, b time.Duration) time.Duration {
 // into RequeueAfter.
 //
 // Every mode is fed by the WorkersUnschedulable evaluation the caller just computed
-// rather than by a second pod list: SchedulerVerdict IS that evaluation, and
-// AutoscalerVerdict reads Events for exactly the pods it found stuck. Computing the
+// rather than by a second pod list: on a fixed-size cluster the gate IS that evaluation,
+// and on an elastic one it reads Events for exactly the pods it found stuck. Computing the
 // stuck set twice would let the two disagree across a single reconcile, and would
 // double the pod-list cost of the rung.
 //
@@ -97,14 +98,14 @@ func soonest(a, b time.Duration) time.Duration {
 // than published False. Absence is what the default costs — no cost, no stale alarm
 // after opting out, and the condition's presence is itself the "this set has a
 // capacity gate" signal.
-func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs *v2alpha1.RunnerSet, unsched workersUnschedulable) time.Duration {
+func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs *v2alpha1.RunnerSet, unsched workersUnschedulable, gw *v2alpha1.ActionsGateway) time.Duration {
 	mode := runnerSetCapacityGateMode(rs)
 	if mode == v2alpha1.CapacityGateModeOff {
 		meta.RemoveStatusCondition(&rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
 		return 0
 	}
 
-	declined, reason, message, recheck := r.evalCapacityGate(ctx, mode, unsched)
+	declined, reason, message, recheck := r.evalCapacityGate(ctx, mode, unsched, gw)
 
 	wasDeclined := meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
@@ -124,32 +125,58 @@ func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs
 	return recheck
 }
 
-// evalCapacityGate resolves the set's selected mode to a verdict, the condition reason
-// and message that explain it, and the re-check interval that mode's signal needs.
+// evalCapacityGate resolves an enabled gate to a verdict, the condition reason and
+// message that explain it, and the re-check interval its signal needs.
 //
-// An unrecognized mode fails OPEN rather than falling through to any implemented one.
+// Two inputs, from two parties (Q470). The MODE is the tenant's: how hard should this
+// set try not to claim work it cannot run. The SIGNAL is chosen from the platform
+// operator's cluster fact, because whether an unschedulable pod is waste or a pending
+// request is a property of the cluster, not of the set — and a tenant asked to assert
+// it would be speaking for infrastructure they may not own. Splitting them is what
+// makes the dangerous combination (gating on the scheduler's verdict where an
+// autoscaler was about to add a node) unrepresentable rather than merely documented.
+//
+// An unrecognized mode fails OPEN rather than falling through to an implemented one.
 // The CRDs ship as their own chart and can be upgraded ahead of the AGC, so a mode a
 // newer CRD accepts can reach an older AGC; treating it as "some gate, near enough"
-// would apply the wrong signal's semantics, and applying SchedulerVerdict's semantics
-// on an elastic cluster is precisely the tenant-starving outcome the mode split exists
-// to prevent.
-func (r *RunnerSetReconciler) evalCapacityGate(ctx context.Context, mode string, unsched workersUnschedulable) (declined bool, reason, message string, recheck time.Duration) {
-	switch mode {
-	case v2alpha1.CapacityGateModeSchedulerVerdict:
+// would apply semantics the operator did not ask for.
+func (r *RunnerSetReconciler) evalCapacityGate(ctx context.Context, mode string, unsched workersUnschedulable, gw *v2alpha1.ActionsGateway) (declined bool, reason, message string, recheck time.Duration) {
+	if mode != v2alpha1.CapacityGateModeOn {
+		return false, v2alpha1.ReasonGateModeUnsupported, fmt.Sprintf(
+			"capacity gate mode %q is not implemented by this AGC; job intake is not gated", mode), 0
+	}
+	if gatewayNodeAutoscaling(gw) == v2alpha1.NodeAutoscalingAbsent {
+		// The operator asserts nothing will add a node, so the scheduler's verdict is
+		// final and a stuck pod is pure waste.
 		if unsched.unschedulable {
 			return true, v2alpha1.ReasonPodsUnschedulable, "job intake is gated: " + unsched.message, 0
 		}
 		return false, v2alpha1.ReasonCapacityAvailable,
 			"the cluster can place this runner set's worker pods; job intake is not gated", 0
-	case v2alpha1.CapacityGateModeAutoscalerVerdict:
-		return r.evalAutoscalerVerdictGate(ctx, unsched)
-	default:
-		return false, v2alpha1.ReasonGateModeUnsupported, fmt.Sprintf(
-			"capacity gate mode %q is not implemented by this AGC; job intake is not gated", mode), 0
 	}
+	// A node may still arrive, so only the autoscaler's own declination proves one is
+	// not coming. This is also the default, and it is the safe one: it can only ever
+	// under-gate relative to the scheduler's verdict.
+	return r.evalAutoscalerVerdictGate(ctx, unsched)
 }
 
-// autoscalerVerdictRecheck is how often a set in mode AutoscalerVerdict re-reads its
+// gatewayNodeAutoscaling returns the gateway's effective node-autoscaling fact,
+// applying the Present default for an unset spec.clusterCapacity (an older object
+// stored before the field existed, or a gateway the AGC could not resolve).
+//
+// Present is the fail-safe direction rather than the common one: under it the gate
+// refuses intake only on an explicit autoscaler declination, so a missing or wrong
+// value can only under-gate — which is today's behavior — whereas defaulting to
+// Absent would gate on the scheduler's verdict alone and refuse jobs on any elastic
+// cluster that had not set the field.
+func gatewayNodeAutoscaling(gw *v2alpha1.ActionsGateway) string {
+	if gw == nil || gw.Spec.ClusterCapacity == nil || gw.Spec.ClusterCapacity.NodeAutoscaling == "" {
+		return v2alpha1.NodeAutoscalingPresent
+	}
+	return gw.Spec.ClusterCapacity.NodeAutoscaling
+}
+
+// autoscalerVerdictRecheck is how often a gated set on an elastic cluster re-reads its
 // stuck pods' Events while any pod is stuck.
 //
 // A periodic re-check is required rather than merely nice: the signal lives in Event
@@ -167,7 +194,7 @@ const autoscalerVerdictRecheck = 30 * time.Second
 // truncation can only under-gate, which is the safe direction.
 const maxAutoscalerVerdictPodReads = 8
 
-// evalAutoscalerVerdictGate is the Q406 mode: gate only when the cluster autoscaler
+// evalAutoscalerVerdictGate is the elastic-cluster path (Q406): gate only when the autoscaler
 // itself has recorded, against one of this set's stuck worker pods, that it will not
 // add a node for it.
 //

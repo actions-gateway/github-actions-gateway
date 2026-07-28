@@ -6,12 +6,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// The AutoscalerVerdict capacity-gate mode (Q406) reads the cluster autoscaler's OWN
+// On a cluster that can grow, the capacity gate (Q406) reads the cluster autoscaler's OWN
 // declination off a stuck worker pod's Events, rather than the scheduler's verdict.
 //
 // # Why the source has to change on an elastic cluster
 //
-// SchedulerVerdict (Q405) gates on PodScheduled=False/Unschedulable, which is sound
+// Where nothing can add a node, the gate reads PodScheduled=False/Unschedulable (Q405), sound
 // only where nothing will act on that pod. Where an autoscaler runs, an unschedulable
 // pod IS the request for a node, so gating on it suppresses the very signal that would
 // have rescued the tenant. Only the autoscaler declaring that it will not act is

@@ -234,7 +234,7 @@ func TestApplyWorkerCapacityConditions_SetsAllThree(t *testing.T) {
 	r := capReconciler(t, now, quota, pod)
 	r.Recorder = rec
 
-	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate("500m"))
+	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate("500m"), nil)
 	assert.Zero(t, requeue, "pod already past grace ⇒ no scheduled re-check")
 
 	exceeded := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerQuotaExceeded)
@@ -268,9 +268,9 @@ func TestApplyWorkerCapacityConditions_NoEventWhenStable(t *testing.T) {
 	r := capReconciler(t, now, pod)
 	r.Recorder = rec
 
-	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), nil)
 	<-rec.Events // drain the first-transition event
-	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), nil)
 	select {
 	case ev := <-rec.Events:
 		t.Fatalf("no Event expected while the condition stays True, got %q", ev)

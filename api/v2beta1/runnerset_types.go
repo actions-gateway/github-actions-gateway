@@ -196,56 +196,48 @@ type RunnerSetSpec struct {
 	CapacityGate *CapacityGate `json:"capacityGate,omitempty"`
 }
 
-// Capacity-gate modes selectable via CapacityGate.Mode (Q405, Q406). The enum is
-// deliberately additive: each mode names the SIGNAL the rung reads, because "can
-// this pod be placed" has different sound answers depending on whether another
-// actor — a cluster autoscaler — is waiting on the unplaceable pod to make
-// capacity appear (docs/design/appendix-d-alternatives-considered.md §D.8).
+// Capacity-gate modes selectable via CapacityGate.Mode (Q405, Q406, Q470). The enum
+// answers ONE question — how hard should this set try not to claim work it cannot
+// run — and deliberately says nothing about which signal answers it.
 //
-// The two gating modes are the two sides of that asymmetry, so the choice between
-// them is a statement about the CLUSTER, not about the runner set: SchedulerVerdict
-// where nothing can add a node, AutoscalerVerdict where something can.
+// That split is the correction Q470 made. "Can this pod be placed" has different
+// sound answers depending on whether a cluster autoscaler is waiting on the
+// unplaceable pod to make capacity appear
+// (docs/design/appendix-d-alternatives-considered.md §D.8), and the first shape of
+// this enum encoded that asymmetry as two modes — SchedulerVerdict and
+// AutoscalerVerdict. But which of those is sound is a property of the CLUSTER,
+// identical for every set in it and known to whoever owns the nodes, so it now lives
+// on ActionsGateway.spec.clusterCapacity.nodeAutoscaling and the AGC picks the signal
+// from it. A tenant declares intent here; the platform declares the cluster there.
 //
 // Reserved but NOT YET IMPLEMENTED, and therefore not accepted by the enum:
 // Probe/Provision (ask before claiming via a ProvisioningRequest capacity check —
-// Q407). They are rejected at admission rather than accepted as no-ops: an operator
-// who selects a gate expects gating, and silently doing nothing is the failure mode
-// this rung exists to remove.
+// Q407), which extend this same axis by soliciting an answer rather than observing
+// one. They are rejected at admission rather than accepted as no-ops: an operator who
+// selects a gate expects gating, and silently doing nothing is the failure mode this
+// rung exists to remove.
 const (
 	// CapacityGateModeOff is the default: no capacity rung, today's behavior.
 	CapacityGateModeOff = "Off"
-	// CapacityGateModeSchedulerVerdict gates intake on the scheduler's own verdict —
-	// the set's worker pods have sat Pending past the scheduling grace reporting
-	// PodScheduled=False/Unschedulable, which is what the WorkersUnschedulable
-	// condition already publishes.
+	// CapacityGateModeOn refuses to take on jobs while the cluster cannot place this
+	// set's worker pods, using whichever signal is sound for the cluster:
 	//
-	// Sound ONLY where nothing will act on those Pending pods to create capacity,
-	// i.e. a fixed-size cluster with no autoscaler. On an elastic cluster the Pending
-	// pod IS the request for a node, and gating on it would suppress the very signal
-	// that would have rescued the tenant. Selecting this mode is the operator's
-	// assertion that their cluster cannot grow; the AGC does not auto-detect it,
-	// because a wrong detection starves a tenant.
-	CapacityGateModeSchedulerVerdict = "SchedulerVerdict"
-	// CapacityGateModeAutoscalerVerdict gates intake on the cluster autoscaler's OWN
-	// declination instead of the scheduler's verdict (Q406): a worker pod has sat
-	// Pending past the scheduling grace AND the autoscaler has recorded on that pod
-	// that it will not add a node for it — cluster-autoscaler's NotTriggerScaleUp, or
-	// Karpenter's FailedScheduling.
+	//   - nodeAutoscaling: Absent — the scheduler's own verdict, i.e. worker pods sat
+	//     Pending past the scheduling grace reporting PodScheduled=False/Unschedulable.
+	//     Nothing is waiting on those pods, so the verdict is final and they are pure
+	//     waste.
+	//   - nodeAutoscaling: Present (the default) — the cluster autoscaler's OWN
+	//     declination, recorded as an Event on a stuck worker pod. Where a node may
+	//     still arrive, the Pending pod is a REQUEST that may yet be granted, so only
+	//     the autoscaler saying it will not act proves nothing is coming.
 	//
-	// This is the mode for an ELASTIC cluster, and the reason it is a separate mode
-	// rather than a refinement of SchedulerVerdict: where an autoscaler runs, an
-	// unschedulable pod is a *request* that may yet be granted, so only the autoscaler
-	// itself saying no is evidence that no node is coming. A cluster with no autoscaler
-	// records no such verdict, so this mode simply never gates there — that cluster
-	// wants SchedulerVerdict.
-	//
-	// Recognition is deliberately narrow, and the asymmetry is the whole safety
-	// argument: a missed declination costs nothing (the gate stays open, which is
-	// today's behavior) while a wrongly-read one starves a tenant. An autoscaler whose
-	// declination the AGC does not recognize — a proprietary optimizer, or none at all
-	// — therefore never closes this gate, and a later positive signal from the same
-	// autoscaler reopens it.
-	CapacityGateModeAutoscalerVerdict = "AutoscalerVerdict"
+	// Recognition of a declination is deliberately narrow, and the asymmetry is the
+	// safety argument: a missed one costs nothing (the gate stays open, which is
+	// today's behavior) while a wrongly-read one starves a tenant. So on a cluster
+	// whose autoscaler the AGC does not recognize — a proprietary optimizer — this
+	// mode simply never gates, and a later positive signal from a recognized one
+	// reopens it.
+	CapacityGateModeOn = "On"
 )
 
 // CapacityGate configures the placeability rung of the admission ladder (Q405).
@@ -267,18 +259,16 @@ const (
 // may under-gate freely; it must never over-gate, because over-gating starves a
 // tenant.
 type CapacityGate struct {
-	// Mode selects which capacity signal gates job intake; see the CapacityGateMode*
-	// constants. Off is the default and is today's behavior.
+	// Mode selects how hard this set tries not to claim work it cannot run; see the
+	// CapacityGateMode* constants. Off is the default and is today's behavior.
 	//
-	// Which of the two gating modes is sound depends on whether the cluster can grow:
-	// SchedulerVerdict on a fixed-size cluster, AutoscalerVerdict where a cluster
-	// autoscaler runs. Choosing the wrong one is safe in one direction only —
-	// AutoscalerVerdict on a cluster with no autoscaler never gates (no declination is
-	// ever recorded), whereas SchedulerVerdict on an elastic cluster gates on pods the
-	// autoscaler was about to rescue.
+	// It does NOT select the signal. Which signal is sound depends on whether the
+	// cluster can grow, which is stated once by the platform operator on
+	// ActionsGateway.spec.clusterCapacity.nodeAutoscaling — so a tenant enabling the
+	// gate cannot pick a signal that is wrong for the cluster they are running in.
 	//
 	// +kubebuilder:default=Off
-	// +kubebuilder:validation:Enum=Off;SchedulerVerdict;AutoscalerVerdict
+	// +kubebuilder:validation:Enum=Off;On
 	// +optional
 	Mode string `json:"mode,omitempty"`
 }

@@ -9,7 +9,7 @@
 // events: both the core ("") and events.k8s.io grants are required — the
 // new-style recorder (mgr.GetEventRecorder) writes events.k8s.io/v1 Events.
 // get/list on the core group additionally serve the capacity gate's
-// AutoscalerVerdict mode (Q406), which reads a stuck worker pod's Events to learn
+// gate on a cluster that can grow (Q406), which reads a stuck worker pod's Events to learn
 // whether the cluster autoscaler declined to add a node for it. Read-only, and
 // core-only because the two groups serve one underlying store; watch is
 // deliberately withheld — the reads are field-selected to a single pod and there is

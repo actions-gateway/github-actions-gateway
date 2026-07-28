@@ -18,13 +18,36 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// gateOn returns a RunnerSet mutator that opts the set into a capacity-gate mode.
+// The capacity gate reads two inputs from two parties (Q470): the tenant's mode on the
+// RunnerSet, and the platform operator's cluster fact on the ActionsGateway. These
+// helpers keep the two visibly separate in every test, because the point of the split
+// is that a set cannot pick a signal — it can only ask to be gated.
+
+// gateOn returns a RunnerSet mutator that opts the set into the capacity gate.
 func gateOn(mode string) func(*v2alpha1.RunnerSet) {
 	return func(r *v2alpha1.RunnerSet) {
 		r.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: mode}
 		r.Spec.PendingPodDeadline = &metav1.Duration{Duration: 10 * time.Minute}
 	}
 }
+
+// gwAutoscaling builds the resolved ActionsGateway the reconciler passes down, carrying
+// the platform operator's assertion about whether anything can add a node.
+func gwAutoscaling(nodeAutoscaling string) *v2alpha1.ActionsGateway {
+	return &v2alpha1.ActionsGateway{
+		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "ns"},
+		Spec: v2alpha1.ActionsGatewaySpec{
+			ClusterCapacity: &v2alpha1.ClusterCapacity{NodeAutoscaling: nodeAutoscaling},
+		},
+	}
+}
+
+// gwFixed is a cluster the operator has asserted cannot grow — the only configuration
+// in which the scheduler's verdict alone may gate intake.
+func gwFixed() *v2alpha1.ActionsGateway { return gwAutoscaling(v2alpha1.NodeAutoscalingAbsent) }
+
+// gwElastic is a cluster that can grow, which is also the default for an unset field.
+func gwElastic() *v2alpha1.ActionsGateway { return gwAutoscaling(v2alpha1.NodeAutoscalingPresent) }
 
 // TestCapacityGate_ModeOffCarriesNoCondition is the no-cost-for-the-default assertion.
 // The default must not merely report False — it must publish nothing at all, so an
@@ -48,7 +71,7 @@ func TestCapacityGate_ModeOffCarriesNoCondition(t *testing.T) {
 			rs := rsObj("set", "ns", tt.mut)
 			r := capReconciler(t, now, pod)
 
-			r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+			r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
 			// The sibling condition still fires — the pod really is unschedulable. Only
 			// the intake decision is absent, which is what "the gate is off" means.
@@ -61,19 +84,20 @@ func TestCapacityGate_ModeOffCarriesNoCondition(t *testing.T) {
 	}
 }
 
-// TestCapacityGate_SchedulerVerdictDeclinesOnAnUnschedulablePod is the Phase 1 signal
-// path: the scheduler's own verdict, already published as WorkersUnschedulable,
-// becomes the intake decision.
-func TestCapacityGate_SchedulerVerdictDeclinesOnAnUnschedulablePod(t *testing.T) {
+// TestCapacityGate_FixedClusterDeclinesOnAnUnschedulablePod: where the operator has
+// asserted nothing can add a node, the scheduler's own verdict — already published as
+// WorkersUnschedulable — becomes the intake decision, because no actor is waiting on
+// that pod and it is pure waste.
+func TestCapacityGate_FixedClusterDeclinesOnAnUnschedulablePod(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeSchedulerVerdict))
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 	rec := events.NewFakeRecorder(16)
 	r := capReconciler(t, now, pod)
 	r.Recorder = rec
 
-	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
 	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
@@ -98,20 +122,20 @@ func TestCapacityGate_SchedulerVerdictDeclinesOnAnUnschedulablePod(t *testing.T)
 // TestCapacityGate_ClearsWhenThePodIsReaped is the trickle property at the condition
 // layer: the gate is derived from the existence of a stuck pod, so the reaper deleting
 // that pod at pendingPodDeadline is what reopens intake. Without this the first close
-// would be permanent and the mode would starve a tenant rather than throttle them.
+// would be permanent and the gate would starve a tenant rather than throttle them.
 func TestCapacityGate_ClearsWhenThePodIsReaped(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeSchedulerVerdict))
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 
 	r := capReconciler(t, now, pod)
-	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
 
 	// The reaper deletes the stuck pod; nothing else about the set changes.
 	require.NoError(t, r.Delete(context.Background(), pod))
-	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
 	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
@@ -124,16 +148,16 @@ func TestCapacityGate_ClearsWhenThePodIsReaped(t *testing.T) {
 // condition, so a stale True would keep intake gated forever.
 func TestCapacityGate_OptingOutRetractsTheCondition(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeSchedulerVerdict))
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 	r := capReconciler(t, now, pod)
 
-	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
 
 	rs.Spec.CapacityGate.Mode = v2alpha1.CapacityGateModeOff
-	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
 	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined),
 		"opting out must retract the condition, not leave a stale True gating intake")
@@ -143,7 +167,7 @@ func TestCapacityGate_OptingOutRetractsTheCondition(t *testing.T) {
 // worker pods being provisioned, a lingering True would gate a set that is already
 // stopped for a louder reason.
 func TestCapacityGate_ClearedWhenReferencesDoNotResolve(t *testing.T) {
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeSchedulerVerdict))
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
 		Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
 		Reason: v2alpha1.ReasonPodsUnschedulable, Message: "stale",
@@ -155,12 +179,12 @@ func TestCapacityGate_ClearedWhenReferencesDoNotResolve(t *testing.T) {
 	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
 }
 
-// --- mode AutoscalerVerdict (Q406) -------------------------------------------
+// --- an elastic cluster: the autoscaler's own declination (Q406) --------------
 
-// eventReaderStub stands in for the uncached apiserver reader the AutoscalerVerdict
-// mode reads pod Events through. The fake client cannot serve an arbitrary field
-// selector, and the selector is exactly what these tests need to assert: the mode must
-// read Events for stuck pods only, one pod at a time.
+// eventReaderStub stands in for the uncached apiserver reader the gate reads pod Events
+// through. The fake client cannot serve an arbitrary field selector, and the selector is
+// exactly what these tests need to assert: the gate must read Events for stuck pods
+// only, one pod at a time.
 type eventReaderStub struct {
 	byPod map[string][]corev1.Event
 	err   error
@@ -197,12 +221,12 @@ func (s *eventReaderStub) List(_ context.Context, list client.ObjectList, opts .
 	return nil
 }
 
-// autoscalerGate runs one reconcile's worth of capacity-condition evaluation for a set
-// in mode AutoscalerVerdict against the given pods and Event stub, returning the
-// published condition and the re-check the gate asked for.
+// autoscalerGate runs one reconcile's worth of capacity-condition evaluation for a
+// gate-enabled set on an ELASTIC cluster against the given pods and Event stub,
+// returning the published condition and the re-check the gate asked for.
 func autoscalerGate(t *testing.T, now time.Time, reader client.Reader, pods ...*corev1.Pod) (*v2alpha1.RunnerSet, *metav1.Condition, time.Duration) {
 	t.Helper()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeAutoscalerVerdict))
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
 	objs := make([]client.Object, 0, len(pods))
 	for _, p := range pods {
 		objs = append(objs, p)
@@ -210,7 +234,7 @@ func autoscalerGate(t *testing.T, now time.Time, reader client.Reader, pods ...*
 	r := capReconciler(t, now, objs...)
 	r.EventReader = reader
 
-	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
 	return rs, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined), requeue
 }
 
@@ -221,10 +245,10 @@ func stuckPod(name string, now time.Time) *corev1.Pod {
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "0/3 nodes are available: 3 Insufficient cpu")
 }
 
-// TestCapacityGate_AutoscalerVerdictGatesOnADeclination is the mode's positive path:
+// TestCapacityGate_ElasticClusterGatesOnADeclination is the mode's positive path:
 // the cluster autoscaler's own "I will not add a node for this" becomes the intake
 // decision, and its per-node-group text reaches the operator.
-func TestCapacityGate_AutoscalerVerdictGatesOnADeclination(t *testing.T) {
+func TestCapacityGate_ElasticClusterGatesOnADeclination(t *testing.T) {
 	now := time.Now()
 	pod := stuckPod("worker-stuck", now)
 	reader := &eventReaderStub{byPod: map[string][]corev1.Event{
@@ -246,12 +270,12 @@ func TestCapacityGate_AutoscalerVerdictGatesOnADeclination(t *testing.T) {
 			"later scale-up would never reopen it")
 }
 
-// TestCapacityGate_AutoscalerVerdictIgnoresATransientSchedulerFailure is THE test for
+// TestCapacityGate_ElasticClusterIgnoresATransientSchedulerFailure is THE test for
 // this mode. FailedScheduling is kube-scheduler's own reason as well as Karpenter's,
 // so a matcher keyed on the reason string alone would gate every set on an elastic
 // cluster the moment a pod waited on an ordinary transient placement failure —
 // refusing jobs the cluster was about to run.
-func TestCapacityGate_AutoscalerVerdictIgnoresATransientSchedulerFailure(t *testing.T) {
+func TestCapacityGate_ElasticClusterIgnoresATransientSchedulerFailure(t *testing.T) {
 	now := time.Now()
 	pod := stuckPod("worker-stuck", now)
 	reader := &eventReaderStub{byPod: map[string][]corev1.Event{
@@ -267,17 +291,17 @@ func TestCapacityGate_AutoscalerVerdictIgnoresATransientSchedulerFailure(t *test
 	assert.Equal(t, v2alpha1.ReasonCapacityAvailable, c.Reason)
 
 	// The two conditions genuinely disagree on the same reconcile, and that disagreement
-	// IS the mode: the pod really is unschedulable — SchedulerVerdict would have gated
-	// on exactly this — and AutoscalerVerdict declines to draw the same conclusion
-	// because no autoscaler has said no.
+	// IS the point: the pod really is unschedulable — the same set on a cluster reporting
+	// nodeAutoscaling: Absent would have gated on exactly this — and here the gate
+	// declines to draw the same conclusion because no autoscaler has said no.
 	assert.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable),
 		"the sibling condition must still report the stuck pod")
 }
 
-// TestCapacityGate_AutoscalerVerdictFailsOpen covers every way the signal can be
+// TestCapacityGate_ElasticClusterFailsOpen covers every way the signal can be
 // missing or unreadable. Each must leave intake exactly as it is today: under-gating is
 // this rung's default behavior, over-gating starves a tenant.
-func TestCapacityGate_AutoscalerVerdictFailsOpen(t *testing.T) {
+func TestCapacityGate_ElasticClusterFailsOpen(t *testing.T) {
 	now := time.Now()
 
 	t.Run("no events recorded for the stuck pod", func(t *testing.T) {
@@ -320,11 +344,11 @@ func TestCapacityGate_AutoscalerVerdictFailsOpen(t *testing.T) {
 	})
 }
 
-// TestCapacityGate_AutoscalerVerdictReadsStuckPodsOnly is the load bound the row calls
+// TestCapacityGate_ElasticClusterReadsStuckPodsOnly is the load bound the row calls
 // for. Events are the highest-churn object in a cluster, so the mode must read them
 // only for pods that have already earned a verdict — never for healthy or
 // still-within-grace pods, and never at all for a set with nothing stuck.
-func TestCapacityGate_AutoscalerVerdictReadsStuckPodsOnly(t *testing.T) {
+func TestCapacityGate_ElasticClusterReadsStuckPodsOnly(t *testing.T) {
 	now := time.Now()
 
 	t.Run("a healthy set costs no Event reads at all", func(t *testing.T) {
@@ -400,16 +424,17 @@ func TestCapacityGate_AutoscalerVerdictReadsStuckPodsOnly(t *testing.T) {
 }
 
 // TestCapacityGate_UnrecognizedModeFailsOpen: the CRDs ship as their own chart and can
-// be upgraded ahead of the AGC, so a mode a newer CRD accepts can reach an older AGC.
-// It must fail open rather than fall through to an implemented mode — applying
-// SchedulerVerdict's semantics on an elastic cluster is exactly the tenant-starving
-// outcome the mode split exists to prevent.
+// be upgraded ahead of the AGC, so a mode a newer CRD accepts (Q407's Probe/Provision)
+// can reach an older AGC. It must fail open rather than fall through to an implemented
+// mode — an operator who asked to *solicit* capacity did not ask to be gated on an
+// observed verdict, and quietly substituting one for the other is the class of silent
+// wrong-semantics this gate's design is ordered around.
 func TestCapacityGate_UnrecognizedModeFailsOpen(t *testing.T) {
 	now := time.Now()
 	rs := rsObj("set", "ns", gateOn("Provision"))
 	r := capReconciler(t, now, stuckPod("worker-stuck", now))
 
-	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
 	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c, "the condition is still published: the set asked for a gate, and its absence "+
@@ -417,6 +442,71 @@ func TestCapacityGate_UnrecognizedModeFailsOpen(t *testing.T) {
 	assert.Equal(t, metav1.ConditionFalse, c.Status)
 	assert.Equal(t, v2alpha1.ReasonGateModeUnsupported, c.Reason)
 	assert.Contains(t, c.Message, `"Provision"`)
+}
+
+// TestCapacityGate_TheDangerousCombinationIsUnrepresentable is the whole reason for the
+// two-axis split (Q470).
+//
+// Before it, a RunnerSet could name its own signal, and naming SchedulerVerdict on an
+// elastic cluster meant refusing jobs on pods the autoscaler was about to rescue — the
+// one genuinely harmful misconfiguration this feature has, prevented only by
+// documentation. Now the signal is chosen from the gateway's cluster fact, so no value a
+// tenant can write produces scheduler-verdict gating where a node may still arrive.
+//
+// The set below does everything it can to be gated: it enables the gate and it has a
+// worker pod that has been Pending and Unschedulable for well past the grace. On an
+// elastic cluster it still must not gate, because nothing has said a node is not coming.
+func TestCapacityGate_TheDangerousCombinationIsUnrepresentable(t *testing.T) {
+	now := time.Now()
+	pod := stuckPod("worker-stuck", now)
+
+	for _, tt := range []struct {
+		name string
+		gw   *v2alpha1.ActionsGateway
+	}{
+		{"the operator declared the cluster elastic", gwElastic()},
+		// The safe direction has to be the DEFAULT, not merely available: an operator who
+		// has never heard of this field must not get scheduler-verdict gating by omission.
+		{"clusterCapacity is unset", &v2alpha1.ActionsGateway{}},
+		{"nodeAutoscaling is empty", gwAutoscaling("")},
+		// An unresolvable gateway is the same question in its most degraded form.
+		{"the gateway could not be resolved at all", nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
+			r := capReconciler(t, now, pod)
+			// A reader that returns no events: no autoscaler has recorded anything.
+			r.EventReader = &eventReaderStub{}
+
+			r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), tt.gw)
+
+			require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable),
+				"precondition: the pod really is stuck, so scheduler-verdict gating WOULD fire here")
+			c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+			require.NotNil(t, c)
+			assert.Equal(t, metav1.ConditionFalse, c.Status,
+				"a set must not be able to gate on the scheduler's verdict where a node may still arrive")
+			assert.Equal(t, v2alpha1.ReasonCapacityAvailable, c.Reason)
+		})
+	}
+}
+
+// TestCapacityGate_FixedClusterReadsNoEvents: the two cluster facts select genuinely
+// different code paths, not the same path with different thresholds. Where nothing can
+// add a node there is no autoscaler to consult, so the gate must not spend an uncached
+// Event read asking — and must not requeue waiting for an answer that will never come.
+func TestCapacityGate_FixedClusterReadsNoEvents(t *testing.T) {
+	now := time.Now()
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
+	reader := &eventReaderStub{}
+	r := capReconciler(t, now, stuckPod("worker-stuck", now))
+	r.EventReader = reader
+
+	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+
+	assert.Empty(t, reader.calls, "a cluster that cannot grow has no autoscaler verdict to read")
+	assert.Zero(t, requeue, "and no Event to wait for, so no re-check is owed")
+	assert.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
 }
 
 // --- the Target adapter -----------------------------------------------------
@@ -440,20 +530,20 @@ func TestRunnerSetTarget_CapacityDeclined(t *testing.T) {
 		mut          func(*v2alpha1.RunnerSet)
 		wantDeclined bool
 	}{
-		{"a declining gate", declining(v2alpha1.CapacityGateModeSchedulerVerdict), true},
+		{"a declining gate", declining(v2alpha1.CapacityGateModeOn), true},
 		{"gate on, condition False", func(r *v2alpha1.RunnerSet) {
-			gateOn(v2alpha1.CapacityGateModeSchedulerVerdict)(r)
+			gateOn(v2alpha1.CapacityGateModeOn)(r)
 			meta.SetStatusCondition(&r.Status.Conditions, metav1.Condition{
 				Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionFalse,
 				Reason: v2alpha1.ReasonCapacityAvailable, Message: "fine",
 			})
 		}, false},
-		{"gate on, condition not computed yet", gateOn(v2alpha1.CapacityGateModeSchedulerVerdict), false},
+		{"gate on, condition not computed yet", gateOn(v2alpha1.CapacityGateModeOn), false},
 		// The load-bearing one: a set whose mode flipped to Off must stop gating on the
 		// very next delivered job, without waiting for a reconcile to retract a
 		// condition it is still carrying.
 		{"mode Off with a stale True condition", func(r *v2alpha1.RunnerSet) {
-			declining(v2alpha1.CapacityGateModeSchedulerVerdict)(r)
+			declining(v2alpha1.CapacityGateModeOn)(r)
 			r.Spec.CapacityGate.Mode = v2alpha1.CapacityGateModeOff
 		}, false},
 		{"no capacity gate at all", nil, false},
@@ -493,7 +583,7 @@ func TestRunnerSetTarget_CapacityDeclined(t *testing.T) {
 func TestRunnerSetTarget_DeclinedCapacity(t *testing.T) {
 	ctx := context.Background()
 	declining := func(r *v2alpha1.RunnerSet) {
-		gateOn(v2alpha1.CapacityGateModeSchedulerVerdict)(r)
+		gateOn(v2alpha1.CapacityGateModeOn)(r)
 		meta.SetStatusCondition(&r.Status.Conditions, metav1.Condition{
 			Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
 			Reason: v2alpha1.ReasonPodsUnschedulable, Message: "gated",
@@ -542,7 +632,7 @@ func TestRunnerSetTarget_DeclinedCapacity(t *testing.T) {
 	})
 
 	t.Run("a gate that is not declining imposes no bound", func(t *testing.T) {
-		rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeSchedulerVerdict))
+		rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
 		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs).Build()
 		target := &runnerSetTarget{client: c, key: keyOf(rs)}
 
