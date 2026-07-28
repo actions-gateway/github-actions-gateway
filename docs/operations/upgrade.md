@@ -539,12 +539,21 @@ helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
 helm rollback gag --namespace gmc-system
 ```
 
-Five upgrade-time behaviors are specific to this chart:
+Six upgrade-time behaviors are specific to this chart:
 
 - **All four image digests are required at render time.** Both `helm install` and `helm upgrade` fail with `<image>.image must be pinned by digest …` (naming `gmc`/`agc`/`proxy`/`wrapper`) when the release values carry no digest for one of the four — e.g. a values file that omits it, or `--reset-values`. `--reuse-values` (as in the example above) carries the previously pinned digests forward; pass `--set <image>.image.digest=sha256:<new>` for each image you are moving to the new release's build. See the [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest). Dev/test only: `allowFloatingImageTags=true` opts out.
 - **CRDs upgrade with the release.** The `ActionsGateway` and `RunnerGroup` CRDs ship as templates under `templates/crds/` with `helm.sh/resource-policy: keep`, **not** the chart-root `crds/` directory — Helm never upgrades resources in `crds/`. So a `helm upgrade` applies additive CRD field changes automatically, and `helm uninstall` preserves the CRDs (and every tenant's `ActionsGateway`/`RunnerGroup` object) rather than cascade-deleting them. You do not run a separate CRD apply step. The `RunnerGroup` CRD is sourced from the AGC authoritative copy.
 - **The webhook cert path depends on `certManager.enabled`.** With the default `certManager.enabled=true`, cert-manager issues and rotates the serving cert; nothing to do on upgrade. With `certManager.enabled=false`, the chart generates a self-signed serving cert and wires the webhook `caBundle` itself. On an in-place `helm upgrade` the chart **reuses the existing `webhook-server-cert` Secret** (it looks the Secret up), so the cert does not rotate; it only regenerates if that Secret is missing (a fresh install, or after you delete it to force rotation). A `helm template` (no cluster) cannot look the Secret up and therefore renders a fresh cert each time — expected for offline rendering only.
 - **A reinstall can leave the `priorityclass-allowlist-guard` policy unable to resolve its parameters (Q444, open).** Every `runnergroups`/`runnersets`/`runnertemplates` write is then denied cluster-wide with `no params found for policy binding`, even though the parameter ConfigMap is present at the referenced name and namespace. The only known recovery is a kube-apiserver restart, which is not available on a managed control plane. The trigger is not yet established and there is no chart-side mitigation; if you cannot tolerate the risk on EKS/GKE/AKS, run with `admissionPolicy.enabled=false`. Symptoms, mitigation and recovery: [troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
+- **A hand-patched release blocks the next `helm upgrade`.** Helm 4 applies server-side, so a field owned by a different field manager is a hard conflict rather than a silent overwrite. If you have `kubectl patch`ed or `kubectl edit`ed a chart-owned object — the GMC Deployment's container `args` is the usual one — the next upgrade fails outright:
+
+  ```text
+  Error: UPGRADE FAILED: conflict occurred while applying object gmc-system/gmc-controller-manager
+  apps/v1, Kind=Deployment: Apply failed with 1 conflict: conflict with "kubectl-patch" using
+  apps/v1: .spec.template.spec.containers[name="manager"].args
+  ```
+
+  Re-run the upgrade with `--force-conflicts` to hand the field back to Helm — your manual edit is reverted, which is the point of the flag. The durable fix is to express the change in chart values so it survives every upgrade instead of being reapplied by hand. Do **not** reach for `--force-replace`: it replaces objects wholesale and is destructive.
 - **The `namespace-psa-guard` and `gmc-tenant-resource-guard` bindings deny by default.** If you are upgrading a cluster whose existing tenant namespaces are not yet labeled `actions-gateway.github.com/tenant=true`, label them **before** the upgrade (see the migration note above), or the GMC's namespace patches *and all tenant-resource writes* will be denied. To stage the rollout you can temporarily set both bindings to `Audit` by editing `validationActions` on each `ValidatingAdmissionPolicyBinding`, then flip them back to `Deny` once the labels are in place.
 
 `helm upgrade` rolls the GMC Deployment (and carries additive CRD field changes —

@@ -111,6 +111,12 @@ jobs:
       # rollout to cluster bring-up, and the egress-negative specs that self-skip
       # on kindnet actually run here. Image pre-pull keeps this comfortable.
       timeout_minutes: 60
+      # Skip the day-2 `helm upgrade` check here (Q475). What it asserts — that
+      # `helm upgrade` delivers CRD and template changes to a live release — has
+      # nothing to do with the CNI, so the kindnet leg (which runs on every
+      # e2e-relevant PR, whereas this one is path-gated) is the one that pays for
+      # it. Running it on both legs would buy a duplicate verdict, not coverage.
+      chart_upgrade_check: false
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`e2e-calico-gate`) required in the branch ruleset — never the path-gated

@@ -542,6 +542,29 @@ It is **deliberately not wired into CI** while Q444 is open — the defect is un
 
 It does not fire on every run: a clean pass means the defect did not trigger, not that it is fixed. Evidence and open questions: [`q444-vap-param-resolution.md`](../plan/q444-vap-param-resolution.md).
 
+### The chart `helm upgrade` gate (Q475)
+
+The other half of the same gap. `make deploy` runs `helm upgrade --install`, but only ever against a cluster with no prior release, so the `--install` half was the only half any tier exercised — day-2 upgrade over a **live** release was untested.
+
+What rests on it: the chart ships its CRDs under `templates/crds/` rather than the chart-root `crds/` directory **because Helm installs `crds/` once and never upgrades it**. Move them, and every existing installation silently stops receiving CRD field changes — a failure with no error message and no symptom until a tenant sets a field the apiserver then prunes.
+
+[`scripts/chart-upgrade-check.sh`](../../scripts/chart-upgrade-check.sh) closes it. Against a cluster that already has the release installed, it captures the release's own values and upgrades to a copy of the chart that differs in exactly two deliberate ways, then upgrades back:
+
+| Injected change | What its arrival proves |
+|---|---|
+| A new optional property on the RunnerGroup v1alpha1 spec schema | `helm upgrade` delivers CRD field changes to an existing install. Asserted end-to-end — a RunnerGroup carrying the field is pruned before the upgrade and round-trips after — so it fails closed if the CRDs ever move to `crds/`, and also if the CRD object updates but the served schema does not. |
+| A pod-template annotation on the GMC Deployment | An ordinary template change reaches an existing release, and the manager rollout it forces comes back healthy. |
+
+It also asserts a pre-existing RunnerGroup survives with its **UID** intact (an upgrade that recreated CRs would destroy tenant state), that the validating webhook still denies an `ActionsGateway` in a reserved namespace at every step, and that upgrading back to the real chart **removes** both markers — so the cluster is left as it was found.
+
+```bash
+make chart-upgrade-check KIND_CLUSTER=actions-gateway-e2e
+```
+
+Unlike the Q444 reproducer above, this one **is** wired into CI: `e2e-reusable.yml` runs it after the Ginkgo suite, which leaves the release up under `E2E_SKIP_TEARDOWN`. It runs only on the kindnet leg — `helm upgrade` semantics are CNI-independent, so `e2e-calico.yml` passes `chart_upgrade_check: false` and the calico leg pays nothing for it. The step is `if: success()`: on a suite failure the diagnostic dump matters more, and mutating the release first would destroy it.
+
+The script fails loudly rather than silently injecting nothing if the controller-gen CRD layout or the Deployment's anchor annotation ever moves — the error names the awk anchors to re-point.
+
 ## CI workflows and scripts
 
 CI must use the same commands as [Running tests](#running-tests) above — per-module invocations or the explicit multi-module patterns `scripts/go-test.sh` builds; never `go test ./...` from the repo root, which does not work with the Go workspace layout.
