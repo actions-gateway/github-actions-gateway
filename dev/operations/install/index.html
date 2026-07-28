@@ -1466,6 +1466,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Key values an operator sets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#known-defect-q444-the-policy-can-stop-resolving-its-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known defect (Q444): the policy can stop resolving its parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2535,6 +2552,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Key values an operator sets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#known-defect-q444-the-policy-can-stop-resolving-its-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known defect (Q444): the policy can stop resolving its parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3006,6 +3040,11 @@ digests. The knobs an operator is most likely to override:</p>
 <td><code>true</code></td>
 <td>Leave on; ships the scoped <code>ResourceQuota</code> that lets the GMC's <code>system-cluster-critical</code> pods schedule under GKE's restricted PriorityClass admission (see <a href="#gke-and-other-restricted-priorityclass-clusters">GKE and other restricted-PriorityClass clusters</a>). Set <code>false</code> only if you provision that quota out-of-band.</td>
 </tr>
+<tr>
+<td><code>admissionPolicy.enabled</code></td>
+<td><code>true</code></td>
+<td>Leave on where you can. It ships the <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code>, the backstop that gates direct <code>runnergroups</code> writes (which have no webhook) against the PriorityClass allowlist. <strong>Weigh <a href="#known-defect-q444-the-policy-can-stop-resolving-its-parameters">Q444</a> first on a managed control plane</strong>: the apiserver can stop resolving the policy's parameter ConfigMap and deny every <code>runnergroups</code>/<code>runnersets</code>/<code>runnertemplates</code> write cluster-wide, and the only known recovery is a kube-apiserver restart, which EKS/GKE/AKS do not offer. Set <code>false</code> to rely on the GMC webhook allowlist alone.</td>
+</tr>
 </tbody>
 </table>
 <p>A <code>values.schema.json</code> validates these at install/lint time (digest format,
@@ -3013,6 +3052,29 @@ enum values, etc.). The <strong>full reference</strong> — every value with its
 description — lives in the
 <a href="../../charts/actions-gateway/README.md#values">chart README</a>; this table is
 only the common subset, not a duplicate.</p>
+<h3 id="known-defect-q444-the-policy-can-stop-resolving-its-parameters">Known defect (Q444): the policy can stop resolving its parameters<a class="headerlink" href="#known-defect-q444-the-policy-can-stop-resolving-its-parameters" title="Permanent link">&para;</a></h3>
+<p><code>admissionPolicy.enabled</code> is on by default because a cluster-wide PriorityClass
+escalation is the more serious risk of the two. Make the call deliberately
+though, because the failure mode is severe and currently has no chart-side
+mitigation.</p>
+<p>An apiserver can enter a state where it stops resolving the guard's parameter
+ConfigMap and answers every matched write with <code>no params found for policy
+binding</code>, even though the ConfigMap is present at exactly the referenced name
+and namespace. Parameters resolve before any per-object matching, so this denies
+<strong>every</strong> <code>runnergroups</code>, <code>runnersets</code> and <code>runnertemplates</code> write cluster-wide,
+not only the ones the policy would have rejected.</p>
+<p>The state belongs to the kube-apiserver process, so restarting kube-apiserver
+clears it in seconds. <strong>On EKS/GKE/AKS you cannot do that</strong>, and a control-plane
+version upgrade is usually the only lever that recycles the process. It is most
+often seen after a <code>helm uninstall</code> followed by a reinstall, but that cycle is
+not required.</p>
+<p>If you run on a managed control plane and cannot carry that risk, install with
+<code>admissionPolicy.enabled=false</code>. You keep the GMC validating webhooks, which
+gate the tenant-facing CRs (<code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>);
+what you give up is the backstop for principals granted direct <code>runnergroups</code>
+RBAC, and stored-object re-validation on update.</p>
+<p>Upstream: <a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a>.
+Symptoms and recovery: <a href="../troubleshooting/#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding">troubleshooting.md</a>.</p>
 <hr />
 <h2 id="verify-a-healthy-install">Verify a healthy install<a class="headerlink" href="#verify-a-healthy-install" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># 1. Both GMC replicas are Running and Ready (HA default replicaCount=2).</span>
