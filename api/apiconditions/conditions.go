@@ -244,11 +244,35 @@ const (
 	ReasonWorkersSchedulable = "WorkersSchedulable"
 	// ReasonCapacityAvailable is the WorkerCapacityDeclined=False reason (Q405): the
 	// gate is engaged and is not refusing intake. The True reasons name the SIGNAL the
-	// gate read, so the operator can tell which rung stopped their jobs — today only
+	// gate read, so the operator can tell which rung stopped their jobs —
 	// ReasonPodsUnschedulable (mode SchedulerVerdict, reusing the reason the sibling
-	// WorkersUnschedulable condition already publishes). Q406 adds ScaleUpDeclined and
-	// Q407 CapacityUnavailable; neither is declared until its mode ships.
+	// WorkersUnschedulable condition already publishes) and ReasonScaleUpDeclined (mode
+	// AutoscalerVerdict). Q407 adds CapacityUnavailable; it is not declared until its
+	// mode ships.
 	ReasonCapacityAvailable = "CapacityAvailable"
+	// ReasonScaleUpDeclined is the WorkerCapacityDeclined=True reason for mode
+	// AutoscalerVerdict (Q406): the cluster autoscaler itself recorded, on a worker pod
+	// stuck past the scheduling grace, that it will not add a node for that pod. The
+	// autoscaler's own per-node-group text is carried into the condition message, which
+	// is what makes this condition actionable rather than merely true — it names the
+	// taint, the quota, or the node-group ceiling that stopped the scale-up.
+	//
+	// Distinct from ReasonPodsUnschedulable on purpose: both mean "intake is gated",
+	// but they answer to different evidence and only one of them is sound on an elastic
+	// cluster, so an operator reading the reason learns which assertion their set is
+	// resting on.
+	ReasonScaleUpDeclined = "ScaleUpDeclined"
+	// ReasonGateModeUnsupported is a WorkerCapacityDeclined=False reason (Q406): the set
+	// selected a capacity-gate mode this AGC does not implement, so no rung is evaluated
+	// and intake is exactly today's behavior.
+	//
+	// It exists because the CRDs ship as their own chart and can be upgraded ahead of
+	// the AGC: an operator who selects a mode a newer CRD accepts, against an AGC that
+	// predates it, must get the fail-open direction. Treating an unrecognized mode as
+	// "some gate, near enough" would silently apply the wrong signal's semantics — the
+	// one failure this rung's whole design is ordered around, since SchedulerVerdict's
+	// semantics on an elastic cluster starve a tenant.
+	ReasonGateModeUnsupported = "GateModeUnsupported"
 	// Ready=False reasons for classic-path runtime provisioning failures (Q308). Unlike
 	// the reference-resolution reasons above (a missing referent), these are transient
 	// failures *after* resolution: the set holds Ready=False with the failing step named

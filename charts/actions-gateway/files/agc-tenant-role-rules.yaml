@@ -26,9 +26,15 @@
 # and worker-pod reaps. Both groups are required: the AGC's new-style
 # recorder (mgr.GetEventRecorder) writes events.k8s.io/v1 Events — with only
 # the core ("") grant those writes are silently 403'd.
+# get/list on the core group additionally serve the capacity gate's
+# AutoscalerVerdict mode (Q406): it reads a stuck worker pod's own Events to
+# learn whether the cluster autoscaler declined to add a node for it. Without
+# them that mode fails open — it never gates — rather than erroring. watch is
+# deliberately withheld: the reads are field-selected to one pod at a time and
+# the AGC runs no Event informer.
 - apiGroups: [""]
   resources: ["events"]
-  verbs: ["create", "patch"]
+  verbs: ["get", "list", "create", "patch"]
 - apiGroups: ["events.k8s.io"]
   resources: ["events"]
   verbs: ["create", "patch"]

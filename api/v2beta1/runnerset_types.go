@@ -179,18 +179,21 @@ type RunnerSetSpec struct {
 	CapacityGate *CapacityGate `json:"capacityGate,omitempty"`
 }
 
-// Capacity-gate modes selectable via CapacityGate.Mode (Q405). The enum is
+// Capacity-gate modes selectable via CapacityGate.Mode (Q405, Q406). The enum is
 // deliberately additive: each mode names the SIGNAL the rung reads, because "can
 // this pod be placed" has different sound answers depending on whether another
 // actor — a cluster autoscaler — is waiting on the unplaceable pod to make
 // capacity appear (docs/design/appendix-d-alternatives-considered.md §D.8).
 //
+// The two gating modes are the two sides of that asymmetry, so the choice between
+// them is a statement about the CLUSTER, not about the runner set: SchedulerVerdict
+// where nothing can add a node, AutoscalerVerdict where something can.
+//
 // Reserved but NOT YET IMPLEMENTED, and therefore not accepted by the enum:
-// AutoscalerVerdict (gate on the cluster autoscaler's own declination, for elastic
-// clusters — Q406) and Probe/Provision (ask before claiming via a
-// ProvisioningRequest capacity check — Q407). They are rejected at admission
-// rather than accepted as no-ops: an operator who selects a gate expects gating,
-// and silently doing nothing is the failure mode this rung exists to remove.
+// Probe/Provision (ask before claiming via a ProvisioningRequest capacity check —
+// Q407). They are rejected at admission rather than accepted as no-ops: an operator
+// who selects a gate expects gating, and silently doing nothing is the failure mode
+// this rung exists to remove.
 const (
 	// CapacityGateModeOff is the default: no capacity rung, today's behavior.
 	CapacityGateModeOff = "Off"
@@ -206,6 +209,26 @@ const (
 	// assertion that their cluster cannot grow; the AGC does not auto-detect it,
 	// because a wrong detection starves a tenant.
 	CapacityGateModeSchedulerVerdict = "SchedulerVerdict"
+	// CapacityGateModeAutoscalerVerdict gates intake on the cluster autoscaler's OWN
+	// declination instead of the scheduler's verdict (Q406): a worker pod has sat
+	// Pending past the scheduling grace AND the autoscaler has recorded on that pod
+	// that it will not add a node for it — cluster-autoscaler's NotTriggerScaleUp, or
+	// Karpenter's FailedScheduling.
+	//
+	// This is the mode for an ELASTIC cluster, and the reason it is a separate mode
+	// rather than a refinement of SchedulerVerdict: where an autoscaler runs, an
+	// unschedulable pod is a *request* that may yet be granted, so only the autoscaler
+	// itself saying no is evidence that no node is coming. A cluster with no autoscaler
+	// records no such verdict, so this mode simply never gates there — that cluster
+	// wants SchedulerVerdict.
+	//
+	// Recognition is deliberately narrow, and the asymmetry is the whole safety
+	// argument: a missed declination costs nothing (the gate stays open, which is
+	// today's behavior) while a wrongly-read one starves a tenant. An autoscaler whose
+	// declination the AGC does not recognize — a proprietary optimizer, or none at all
+	// — therefore never closes this gate, and a later positive signal from the same
+	// autoscaler reopens it.
+	CapacityGateModeAutoscalerVerdict = "AutoscalerVerdict"
 )
 
 // CapacityGate configures the placeability rung of the admission ladder (Q405).
@@ -230,8 +253,15 @@ type CapacityGate struct {
 	// Mode selects which capacity signal gates job intake; see the CapacityGateMode*
 	// constants. Off is the default and is today's behavior.
 	//
+	// Which of the two gating modes is sound depends on whether the cluster can grow:
+	// SchedulerVerdict on a fixed-size cluster, AutoscalerVerdict where a cluster
+	// autoscaler runs. Choosing the wrong one is safe in one direction only —
+	// AutoscalerVerdict on a cluster with no autoscaler never gates (no declination is
+	// ever recorded), whereas SchedulerVerdict on an elastic cluster gates on pods the
+	// autoscaler was about to rescue.
+	//
 	// +kubebuilder:default=Off
-	// +kubebuilder:validation:Enum=Off;SchedulerVerdict
+	// +kubebuilder:validation:Enum=Off;SchedulerVerdict;AutoscalerVerdict
 	// +optional
 	Mode string `json:"mode,omitempty"`
 }

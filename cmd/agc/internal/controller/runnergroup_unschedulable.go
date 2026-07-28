@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,6 +27,15 @@ type workersUnschedulable struct {
 	// the Pod watch fires only on phase changes, so a PodScheduled flip while the
 	// pod stays Pending would otherwise never re-trigger a reconcile.
 	requeueAfter time.Duration
+	// stuckPods are the worker pods that produced the verdict: Pending past the
+	// scheduling grace with the scheduler reporting Unschedulable, oldest first.
+	//
+	// Carried out so the AutoscalerVerdict capacity gate (Q406) reads pod Events for
+	// exactly these pods and no others — the same "actually stuck" definition the
+	// condition itself uses. Scoping matters: an Event read is uncached, and a broad
+	// Event watch on a busy cluster is a real load problem, so the mode must only ever
+	// look at pods that have already earned a verdict.
+	stuckPods []*corev1.Pod
 }
 
 // evalWorkersUnschedulable computes the WorkersUnschedulable condition (Q157) for
@@ -85,8 +95,15 @@ func evalWorkersUnschedulableForPods(pods []corev1.Pod, now time.Time, grace tim
 		}
 		if unsched, schedMsg := podUnschedulable(pod); unsched {
 			stuck = append(stuck, fmt.Sprintf("%s (%s)", pod.Name, truncate(schedMsg, 160)))
+			st.stuckPods = append(st.stuckPods, pod)
 		}
 	}
+	// Oldest first: a pod that has been stuck longest is the one an autoscaler has had
+	// the most time to reach a verdict on, so the Q406 gate reads the settled ones
+	// first and its per-reconcile read budget is spent where it is most informative.
+	slices.SortStableFunc(st.stuckPods, func(a, b *corev1.Pod) int {
+		return a.CreationTimestamp.Time.Compare(b.CreationTimestamp.Time)
+	})
 
 	st.requeueAfter = next
 	if len(stuck) > 0 {

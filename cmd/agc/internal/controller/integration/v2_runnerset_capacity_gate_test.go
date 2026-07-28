@@ -38,15 +38,144 @@ import (
 // count — hence capacity_withheld{reason="capacity"} is its counterpart.
 
 // waitForCapacityDeclined blocks until the named RunnerSet's WorkerCapacityDeclined
-// condition is True, which is both the operator's signal and the value the admission
-// rung reads.
-func waitForCapacityDeclined(t *testing.T, ns, name string, within time.Duration) {
+// condition is True for the given reason, which is both the operator's signal and the
+// value the admission rung reads.
+func waitForCapacityDeclined(t *testing.T, ns, name, reason string, within time.Duration) {
 	t.Helper()
 	require.Eventually(t, func() bool {
 		c := setCondition(t, ns, name, v2alpha1.ConditionWorkerCapacityDeclined)
-		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == v2alpha1.ReasonPodsUnschedulable
+		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == reason
 	}, within, 100*time.Millisecond,
-		"an unschedulable worker pod must close the capacity gate on RunnerSet %s/%s", ns, name)
+		"an unplaceable worker pod must close the capacity gate on RunnerSet %s/%s with reason %s",
+		ns, name, reason)
+}
+
+// recordPodEvent writes a real core/v1 Event against a worker pod, in the legacy
+// recorder's shape — Source.Component plus First/LastTimestamp — which is how both
+// cluster-autoscaler and Karpenter record. `at` is explicit because Event timestamps
+// carry one-second resolution and the matcher orders verdicts by time.
+func recordPodEvent(t *testing.T, pod *corev1.Pod, name, eventType, reason, component, message string, at time.Time) {
+	t.Helper()
+	stamp := metav1.NewTime(at)
+	e := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: pod.Namespace},
+		InvolvedObject: corev1.ObjectReference{
+			APIVersion: "v1", Kind: "Pod",
+			Namespace: pod.Namespace, Name: pod.Name, UID: pod.UID,
+		},
+		Reason:         reason,
+		Message:        message,
+		Source:         corev1.EventSource{Component: component},
+		Type:           eventType,
+		Count:          1,
+		FirstTimestamp: stamp,
+		LastTimestamp:  stamp,
+	}
+	require.NoError(t, k8sClient.Create(ctx, e))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), e) })
+}
+
+// TestV2_RunnerSet_CapacityGate_AutoscalerVerdictDiscriminatesByReporter is Q406, and
+// it is one test rather than two on purpose: both halves run against the same set, the
+// same reconcile loop, and the same PodScheduled=False/Unschedulable verdict, so the
+// ONLY difference between the pod that closes the gate and the pod that does not is
+// who reported the event.
+//
+// That is the property the mode rests on. `FailedScheduling` is kube-scheduler's own
+// reason for every ordinary transient placement failure as well as Karpenter's
+// declination, so a matcher keyed on the reason string alone would refuse jobs on an
+// elastic cluster the moment a pod waited — the exact tenant-starving outcome
+// AutoscalerVerdict exists to avoid, and the reason this mode is separate from
+// SchedulerVerdict at all.
+//
+// What only envtest can show, over the unit table: the field-selected UNCACHED Event
+// read works against a real apiserver (the selector is the part a fake client cannot
+// exercise), against Events with the real API's timestamp resolution, and the verdict
+// it produces reaches the published condition that the admission rung reads back.
+func TestV2_RunnerSet_CapacityGate_AutoscalerVerdictDiscriminatesByReporter(t *testing.T) {
+	const ns = "v2-rs-capgate-autoscaler"
+	const setName = "capgate-as-set"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newRunnerSet(setName, ns, "gw")
+	rs.Spec.MaxWorkers = ptr.To(int32(3))
+	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeAutoscalerVerdict}
+	// 30s deadline ⇒ a 15s scheduling grace, and a further 15s before the reaper
+	// deletes the pod. Every assertion below lands inside one such window.
+	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 30 * time.Second}
+	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconciler(t)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	// --- half one: an ordinary scheduler failure must NOT close the gate -------
+	//
+	// The pod is unschedulable and stays unschedulable; kube-scheduler says so on the
+	// pod and again in an Event. On an elastic cluster this is a pod the autoscaler may
+	// still be about to rescue.
+	stuck := createV2WorkerPod(t, ns, setName, "worker-transient")
+	markUnschedulable(t, stuck, "0/3 nodes are available: 3 Insufficient cpu")
+	recordPodEvent(t, stuck, "worker-transient.sched", corev1.EventTypeWarning,
+		"FailedScheduling", "default-scheduler",
+		"0/3 nodes are available: 3 Insufficient cpu.", time.Now())
+
+	// WorkersUnschedulable going True is the proof the pod crossed the grace and the
+	// gate had its chance to read that pod's Events — without it, "the gate is open"
+	// would be indistinguishable from "the gate has not looked yet".
+	require.Eventually(t, func() bool {
+		c := setCondition(t, ns, setName, v2alpha1.ConditionWorkersUnschedulable)
+		return c != nil && c.Status == metav1.ConditionTrue
+	}, 25*time.Second, 100*time.Millisecond,
+		"the worker pod must age past the scheduling grace before the gate can be judged")
+
+	gate := setCondition(t, ns, setName, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, gate, "an opted-in set must publish the condition even when the gate is open")
+	require.Equal(t, metav1.ConditionFalse, gate.Status,
+		"a transient FailedScheduling from the scheduler is not an autoscaler declination; "+
+			"gating on it would starve a tenant whose cluster was about to grow")
+	require.Equal(t, v2alpha1.ReasonCapacityAvailable, gate.Reason)
+
+	// --- half two: the autoscaler's own declination DOES close it -------------
+	//
+	// Same set, same shape of stuck pod, one difference: cluster-autoscaler itself
+	// records that it will not add a node.
+	acquiresBefore := brokerStub.AcquireJobCalls()
+	capacityBefore := admissionRejections(ns, setName, runnercore.AdmitReasonCapacity)
+
+	declined := createV2WorkerPod(t, ns, setName, "worker-declined")
+	markUnschedulable(t, declined, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
+	recordPodEvent(t, declined, "worker-declined.ca", corev1.EventTypeNormal,
+		"NotTriggerScaleUp", "cluster-autoscaler",
+		"pod didn't trigger scale-up: 1 max node group size reached, 2 node(s) had untolerated taint {dedicated: gpu}",
+		time.Now())
+
+	waitForCapacityDeclined(t, ns, setName, v2alpha1.ReasonScaleUpDeclined, 25*time.Second)
+
+	gate = setCondition(t, ns, setName, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.Contains(t, gate.Message, "max node group size reached",
+		"the autoscaler's own per-node-group text must reach the operator — that is what makes "+
+			"this condition actionable rather than merely true")
+
+	// End to end: the closed gate refuses a delivered job rather than claiming it.
+	// maxWorkers is 3 against two in-flight pods, so the ceiling rung cannot be what
+	// refused — which is what makes the reason label meaningful here.
+	id := enqueueJobOnOwnerSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, id, "a session for %s should be active", setName)
+
+	require.Eventually(t, func() bool {
+		return admissionRejections(ns, setName, runnercore.AdmitReasonCapacity) > capacityBefore
+	}, 20*time.Second, 25*time.Millisecond,
+		"a delivery under an autoscaler-declined capacity gate must be rejected with reason=capacity")
+	require.Equal(t, acquiresBefore, brokerStub.AcquireJobCalls(),
+		"a job no node is coming for must be left queued at GitHub, never claimed by acquirejob")
 }
 
 // TestV2_RunnerSet_CapacityGate_SkipsAcquireOnTheSchedulerVerdict is the classic tier:
@@ -93,7 +222,7 @@ func TestV2_RunnerSet_CapacityGate_SkipsAcquireOnTheSchedulerVerdict(t *testing.
 	// The scheduler cannot place this set's worker shape.
 	pod := createV2WorkerPod(t, ns, setName, "worker-unplaceable")
 	markUnschedulable(t, pod, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
-	waitForCapacityDeclined(t, ns, setName, 25*time.Second)
+	waitForCapacityDeclined(t, ns, setName, v2alpha1.ReasonPodsUnschedulable, 25*time.Second)
 
 	id := enqueueJobOnOwnerSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
 	require.NotEmpty(t, id, "a session for %s should be active", setName)
@@ -176,7 +305,7 @@ func TestV2_RunnerSet_ScaleSet_CapacityGateWithholdsAdvertisedCapacity(t *testin
 
 	pod := createV2WorkerPod(t, ns, setName, "worker-unplaceable")
 	markUnschedulable(t, pod, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
-	waitForCapacityDeclined(t, ns, setName, 35*time.Second)
+	waitForCapacityDeclined(t, ns, setName, v2alpha1.ReasonPodsUnschedulable, 35*time.Second)
 
 	require.Eventually(t, func() bool {
 		advertised := testutil.ToFloat64(scaleSetTestMetrics.AdvertisedCapacity.WithLabelValues(ns, setName))
