@@ -183,6 +183,41 @@ filter should have been widened — that judgement is still the reviewer's, and
 the Q400 residual risk above is unaffected. Detail:
 [testing.md § The path-filter gate](../development/testing.md#the-path-filter-gate).
 
+### E. API review (*one open gating row: Q481*)
+
+1.3 is the first release to run the
+[pre-release API review](../development/api-review.md), and it is also the
+release that motivated it: Q476 renamed `capacityGate.mode: On` to `Observe`
+days before this tag would have published it, caught by an unrelated
+conversation rather than by any step.
+
+**Reviewed:** the surface `scripts/api-surface-since.sh v1.2.0` reports — the
+`RunnerSet` additions (`spec.sizing`, `spec.capacityGate`,
+`spec.maxWorkerLifetime`, `status.sizingRecommendation`,
+`status.sizingProfileState`), the `ActionsGateway` additions
+(`spec.agcAutoscaling`, `spec.clusterCapacity`), `EgressProxy`'s
+`spec.managedAutoscaling`, thirteen new condition types/reasons, and the
+`actions-gateway.com/migrated-from-namespace` label. None of these has appeared
+in a tagged release, so all of them are in the cheap window until this tag.
+
+**Found and fixed before the tag:** `capacityGate.mode: On` → `Observe` (Q476) —
+the value named *that* the gate was on rather than *how* it decides, which stops
+distinguishing anything once Q407's reserved `Probe`/`Provision` join the same
+axis.
+
+**Found and open:** [Q481](../STATUS.md#Q481) — `sizing.profile` carries two
+axes the same way `capacityGate.mode` did before Q470, making
+NodeShare-with-Guaranteed unrepresentable. Gating because the tag freezes the
+shape either way; **shipping as-is deliberately is an acceptable close**, since
+the sizing model itself is not yet live-validated (Q449) and reshaping around an
+unproven model has its own cost.
+
+**Accepted without change:** the bare-`string` enum fields
+(`capacityGate.mode`, `sizing.profile`, `clusterCapacity.nodeAutoscaling`,
+`status.sizingProfileState`) versus the named types used by `VPAUpdateMode` and
+`EgressPolicyMode`. Wire-identical either way, so it is a Go-API break for `api`
+module consumers only and does not need to beat this tag.
+
 ## Explicitly out of scope
 
 | Deferred | Was | Why out of 1.3 |

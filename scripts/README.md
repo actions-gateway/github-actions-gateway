@@ -38,6 +38,7 @@ Other helpers:
 
 | Script | Purpose |
 |---|---|
+| [api-surface-since.sh](api-surface-since.sh) | Enumerate the API surface a release would publish for the first time — new wire fields, enum constraints, defaults, condition types/reasons, label keys — between a ref (default: the newest tag) and `HEAD`. The input-gathering half of the [pre-release API review](../docs/development/api-review.md); reports, never fails, because every question the review asks needs a human. Condition and label sections compare value *sets* rather than diff lines, so a refactor that relocates the vocabulary does not read as a hundred new conditions. |
 | [check-tools.sh](check-tools.sh) | Verify the CLI tools the project needs (required / e2e / extended tiers) are installed and on PATH; for each miss, print a per-OS install command or the exact dir to add to PATH. Cross-platform (brew/apt/url). Backs `make doctor`. Exits nonzero if a required tool is missing. |
 | [setup.sh](setup.sh) | One-time post-clone setup: initialise Go module dependencies and verify the build. Re-run after any dependency change. |
 | [go-work-tidy.sh](go-work-tidy.sh) | Run `go mod tidy` across every module in the Go workspace sequentially. See [docs/development/go-workspaces.md](../docs/development/go-workspaces.md). |

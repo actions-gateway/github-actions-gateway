@@ -111,6 +111,27 @@ The maintainer's job is to cut the tag and verify the result.
   the commit you are about to tag. Run `make check` locally as a final gate.
 - Choose the version `vX.Y.Z` (semver). The tag **must** match `v*` or
   `publish.yml` will refuse to publish.
+- **Review the API surface this tag publishes for the first time.** A field,
+  enum value, or default costs a rename to change before it ships and a
+  conversion shim plus a deprecation window afterwards, so the tag is the moment
+  the cheap window closes. Nothing lints this — it is judgement, not a gate that
+  can pass or fail mechanically.
+
+  ```bash
+  scripts/api-surface-since.sh
+  ```
+
+  Apply the checklist in
+  [api-review.md](../development/api-review.md#step-2--ask-these-of-each-addition)
+  to each addition it lists, record the verdict in the release's plan doc, and
+  file anything deferred as a Queue row carrying this release's gate label.
+  **"Ship as-is, deliberately" is a valid and common outcome** — the point is
+  that the shape is chosen rather than frozen by default.
+
+  This step exists because it nearly did not happen: Q476 renamed
+  `capacityGate.mode: On` days before 1.3.0 would have published it, and only
+  because the question came up in an unrelated conversation.
+
 - **Reconcile [`docs/roadmap.md`](../roadmap.md) against
   [`docs/STATUS.md`](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md)
   before you tag.** The same freeze that applies to the announce bar applies
