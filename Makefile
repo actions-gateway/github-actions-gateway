@@ -108,7 +108,7 @@ CHECK_FAST_GATES := lint-backlog roadmap-check plan-index-check no-plan-refs-che
                     claude-usage-test doc-links
 
 .PHONY: check
-check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + controller-gen manifest drift + scripts-test + claude-usage tests + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + controller-gen manifest/DeepCopy drift + scripts-test + claude-usage tests + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
 	scripts/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")
 	$(MAKE) build-tags-check
 	$(MAKE) lint
@@ -274,27 +274,30 @@ generate: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests and DeepCopy method
 	$(MAKE) -C cmd/agc generate
 
 # The manifests half alone, for a change that alters no Go type — adding or
-# removing a +kubebuilder:rbac / +kubebuilder:webhook marker. Running this is
-# exactly what makes `make codegen-check` pass: that gate regenerates these same
-# three modules' manifests into a scratch tree and diffs them against the
-# committed copies. Prefer `make generate` when a type changed; DeepCopy is not
-# regenerated here.
+# removing a +kubebuilder:rbac / +kubebuilder:webhook marker. Prefer `make
+# generate` when a type changed: `make codegen-check` regenerates BOTH halves for
+# these same three modules and diffs them against the committed copies, so this
+# target alone no longer makes that gate pass after a type change.
 .PHONY: manifests
 manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC/webhook manifests for all modules (the `codegen-check` remedy; `generate` supersets this)
 	$(MAKE) -C api manifests
 	$(MAKE) -C cmd/gmc manifests
 	$(MAKE) -C cmd/agc manifests
 
-# Fail if a committed controller-gen manifest is stale relative to the Go types
-# behind it (Q440). Nothing ran `make manifests` on a contributor's behalf, and
+# Fail if committed controller-gen output — CRD/RBAC/webhook manifests, or a
+# zz_generated.deepcopy.go — is stale relative to the Go types behind it (Q440,
+# Q477). Nothing ran `make generate` on a contributor's behalf, and for manifests
 # the gap is worst ACROSS modules: cmd/gmc's ActionsGateway CRD embeds AGC types,
 # so a doc comment edited in cmd/agc/api reaches the GMC manifest only when
 # someone runs the GMC's own manifests target — #793 edited one and the GMC CRD
 # never caught up, handing every later GMC contributor that hunk as diff noise.
+# The DeepCopy half was left out on the reasoning that missing DeepCopy fails to
+# compile; it does not for an ADDED type, and ClusterCapacity (#917) shipped with
+# none, so ActionsGateway.DeepCopy() aliased the informer cache (Q477).
 # The script regenerates into a scratch tree, so it never mutates the working
-# tree. Fast: three controller-gen runs, ~2s.
+# tree. Fast: six controller-gen runs plus one ~30 MB tree copy, ~4s.
 .PHONY: codegen-check
-codegen-check: $(CONTROLLER_GEN) ## Fail if a committed CRD/RBAC/webhook manifest drifted from the Go types controller-gen generates it from (Q440)
+codegen-check: $(CONTROLLER_GEN) ## Fail if committed CRD/RBAC/webhook manifests or zz_generated.deepcopy.go drifted from the Go types controller-gen generates them from (Q440, Q477)
 	CONTROLLER_GEN=$(CONTROLLER_GEN) scripts/check-codegen-drift.sh
 
 .PHONY: build
