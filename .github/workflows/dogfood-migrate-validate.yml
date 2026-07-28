@@ -1,0 +1,90 @@
+# Q415 — the DinD smoke job that proves a MIGRATED tenant can still run work.
+#
+# Dispatched by hand against the throwaway v1→v2 migration tenant
+# (deploy/dogfood-migrate), before and after `gag-migrate --apply`, with the same
+# `runs-on` label both times. Green after the migration is the evidence the v2 GA
+# Definition of Done asks for and does not currently have.
+#
+# Deliberately workflow_dispatch ONLY: it targets a tenant that exists for one
+# validation window, so a push- or PR-triggered run would queue against a runner
+# label with nothing behind it. It routes no real CI and gates nothing.
+#
+# Deleted with the rest of the v1 surface at v2.0.0. Plan:
+# docs/plan/q415-migrate-dogfood-validation.md
+name: dogfood-migrate-validate
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: >-
+          Runner label to target. Defaults to the migration tenant's label, which
+          is unchanged across the migration by design. Set to ubuntu-latest to
+          sanity-check this workflow itself without a tenant.
+        required: false
+        default: gag-migrate-v1
+        type: string
+
+# Read-only. The smoke job builds and runs a container; it publishes nothing and
+# needs no write scope anywhere.
+permissions:
+  contents: read
+
+jobs:
+  dind-smoke:
+    name: DinD smoke on ${{ inputs.runner }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 15
+    steps:
+      - name: Report where this is running
+        # The migration rewrites the gateway identity and re-registers the runner.
+        # Recording which runner actually picked the job up is what makes a green
+        # run attributable to the migrated tenant rather than to a stale session.
+        #
+        # The input comes in through `env`, NOT interpolated into the script.
+        # `${{ }}` inside a run block is substituted as raw text before bash sees
+        # it, so a crafted input would execute as shell — the standard Actions
+        # expression-injection shape. Dispatching needs repo write access, so the
+        # practical risk is small, but the safe form costs nothing.
+        env:
+          REQUESTED_RUNNER: ${{ inputs.runner }}
+        run: |
+          echo "runner name:   ${RUNNER_NAME:-<unset>}"
+          echo "runner os:     ${RUNNER_OS:-<unset>}"
+          echo "requested via: ${REQUESTED_RUNNER}"
+
+      - name: Wait for the DinD daemon to accept connections
+        # The dockerd native sidecar and the runner container start together, so
+        # the daemon can still be coming up when the first step runs. Bounded wait
+        # rather than a fixed sleep: a real failure surfaces as a timeout with the
+        # daemon's own error, not as a confusing failure in the build step below.
+        run: |
+          for i in $(seq 1 30); do
+            if docker info >/dev/null 2>&1; then
+              echo "dockerd up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "dockerd did not come up within 30s" >&2
+          docker info || true
+          exit 1
+
+      - name: Build an image inside the migrated tenant's DinD worker
+        # Exercises the full chain the migration has to preserve: the privileged
+        # sidecar, egress to Docker Hub through the migrated tenant's proxy, and
+        # the runner's DOCKER_HOST wiring. A build (not just a pull) is the point —
+        # it is what a real tenant uses DinD for.
+        run: |
+          cat > Dockerfile <<'EOF'
+          FROM alpine:3.20
+          RUN echo "built inside the migrated tenant" > /proof.txt
+          CMD ["cat", "/proof.txt"]
+          EOF
+          docker build -t migrate-smoke:local .
+
+      - name: Run the image and check its output
+        run: |
+          out="$(docker run --rm migrate-smoke:local)"
+          echo "container said: ${out}"
+          test "${out}" = "built inside the migrated tenant"
