@@ -1,11 +1,19 @@
 # Q415 — validate `gag-migrate` v1→v2 on the dogfood cluster (plan)
 
-**Status:** ▶ Migration validated live on GKE 2026-07-27; the **DinD job half is
-blocked** until the smoke workflow reaches `main` (GitHub only dispatches
-`workflow_dispatch` from the default branch), so the GA DoD row stays ⚠️ Unverified
-and **Q415 stays open**. Three defects found and filed:
-Q463 (since fixed), Q465 (fixed), Q466 (fixed — [not yet re-validated live](#defect-v1-and-v2-collide-during-coexistence-q466)).
-Full evidence in [Findings](#findings).
+**Status:** ✅ **COMPLETE — validated end to end on the live GKE dogfood cluster
+2026-07-28.** Every acceptance criterion passed, including a real GitHub Actions
+DinD job green on the migrated tenant, on the scale-set path, with a green baseline
+before the migration for attribution. The v2 GA Definition of Done row
+*"≥1 representative tenant migrated v1→v2 with the tool for real"* moves from
+⚠️ Unverified to ✅. Four defects found: Q463, Q465 and Q466 have all since been
+**fixed** by parallel sessions (#911, #912, #915); [Q467](../STATUS.md#Q467) remains
+open. Full evidence in [Findings](#findings).
+
+> **This run confirms none of those three fixes.** It ran against dogfood's released
+> `agc` image, which predates all of them, and with `noProxyCIDRs` pinned as the Q465
+> workaround. The [Q466 coexistence fix](#defect-v1-and-v2-collide-during-coexistence-q466)
+> and the Q465 default are both still unconfirmed live; re-validating them needs a
+> new image on the cluster.
 **Scope:** the last unverified item in the v2 GA Definition of Done —
 [v2-ga.md § Definition of Done audit](v2-ga.md#definition-of-done-audit-as-of-this-change)
 row *"≥1 representative tenant migrated v1→v2 with the tool for real"*, today
@@ -130,9 +138,13 @@ export REPO=actions-gateway/github-actions-gateway
     below. Delete the **CRs while their controllers are still running**, exactly as
     [migration-v1-to-v2.md § Step 4](../operations/migration-v1-to-v2.md) prescribes:
 
+    **RunnerSets before gateways** — the v2 `RunnerSet` is not gateway-owned, so
+    deleting the gateway first cascades the AGC away and strands the set's finalizer:
+
     ```bash
-    kubectl -n gag-dogfood-migrate delete actionsgateways.actions-gateway.github.com --all
+    kubectl -n gag-dogfood-migrate delete runnersets.actions-gateway.com --all
     kubectl -n gag-dogfood-migrate delete actionsgateways.actions-gateway.com --all
+    kubectl -n gag-dogfood-migrate delete actionsgateways.actions-gateway.github.com --all
     ```
 
     Only then delete the namespace, then reclaim the cluster-scoped migration outputs
@@ -141,23 +153,25 @@ export REPO=actions-gateway/github-actions-gateway
     which is the whole reason the tool stamps the label), then take the system pool
     back to 0.
 
-    Deleting the namespace *first* strands the tenant in `Terminating` forever,
-    because the AGCs that clear the `agentpool-cleanup` finalizers live inside the
-    namespace being deleted.
+    Both orderings were learned the hard way here — deleting the namespace first, and
+    deleting the gateway before its RunnerSet, each deadlock in their own way. See
+    [the teardown findings](#the-teardown-order-is-load-bearing-and-undocumented).
 
 ## Acceptance criteria
 
 The run closes Q415 only if all of these hold, each recorded with its evidence in
-Findings below:
+Findings below. **All met 2026-07-28.**
 
-- [ ] `gag-migrate --apply` completes without error against the live v1 tenant.
-- [ ] The migrated `<gateway>-agc` and `<gateway>-egress-proxy` Deployments reach
+- [x] `gag-migrate --apply` completes without error against the live v1 tenant.
+- [x] The migrated `<gateway>-agc` and `<gateway>-egress-proxy` Deployments reach
       Ready.
-- [ ] The v1 objects survive the migration (coexistence, so rollback stays possible).
-- [ ] After the Q231 recreate, the `RunnerSet` is ScaleSet-native (no
+- [x] The v1 objects survive the migration (coexistence, so rollback stays possible).
+- [x] After the Q231 recreate, the `RunnerSet` is ScaleSet-native (no
       `acquisition-protocol: Classic` annotation) and registers at GitHub.
-- [ ] A real GitHub Actions DinD job completes **green** on the migrated tenant.
-- [ ] Teardown leaves no orphaned cluster-scoped objects.
+- [x] A real GitHub Actions DinD job completes **green** on the migrated tenant —
+      confirmed on the scale-set path from the AGC's own provisioning log, with a
+      green baseline beforehand for attribution.
+- [x] Teardown leaves no orphaned cluster-scoped objects.
 
 Anything that fails is a finding to fix, not a reason to soften the criterion — this
 is the run that decides whether the DoD row is honest.
@@ -264,7 +278,45 @@ namespace, the v2 tenant marker was added, and every v1 marker survived.
 `noProxyCIDRs` also carried across onto the emitted `EgressProxy`, which is what let
 the migrated AGC start — see the defect immediately below.
 
-### Blocker: the job half cannot run until the workflow is on `main`
+### Part 2 — the job half, run after the workflow reached `main` (2026-07-28)
+
+With the smoke workflow on the default branch the dispatch blocker cleared and the
+full ordered sequence ran. **All acceptance criteria pass.**
+
+| Criterion | Result |
+|---|---|
+| Baseline DinD job green *before* migrating | ✅ [run 30324549361](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30324549361), ~200 s |
+| `gag-migrate --apply` on the live v1 tenant | ✅ two expected warnings, four v2 kinds emitted |
+| Migrated AGC + EgressProxy reach Ready | ✅ `dfmigrate-agc`, `dfmigrate-egress-proxy` |
+| v1 survives `--apply` (coexistence) | ✅ |
+| Q231 recreate → ScaleSet-native | ✅ annotation `Classic` → `ScaleSet` |
+| **Real DinD job green on the migrated tenant** | ✅ [run 30326208300](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30326208300), ~220 s |
+| Teardown leaves nothing orphaned | ✅ after clearing a stranded finalizer — second trap, below |
+
+**The job is confirmed to have run on the migrated tenant's scale-set path**, not
+inferred from the green tick. The migrated AGC logged it at
+`provisioner.go:646`:
+
+```
+"scale-set worker pod created" owner=dfmigrate-gag-migrate-v1-18c32e1
+  podName=runner-dfmigrate-gag-migrate-v1-18c32e1-8b9a78b-9e56291d-225d-5
+  jobID=9e56291d-225d-52b2-9e97-219aa94380ce
+```
+
+The worker pod was observed `Pending` → `2/2 Running` → `Completed`, i.e. the runner
+container plus the privileged DinD native sidecar, which is the shape the whole
+exercise is about.
+
+**Method note — v1 was decommissioned before the post-migration dispatch.** Both
+tenants advertise the same `gag-migrate-v1` label, so with both live GitHub could
+route the job to either and a green result would not have proven the *migrated*
+tenant ran it. Coexistence was already verified independently at the `--apply` step,
+so v1 was removed first — which is
+[migration-v1-to-v2.md § Step 4](../operations/migration-v1-to-v2.md) anyway — making
+the final job unambiguous. Deleting the v1 gateway cascaded its AGC and proxy away
+cleanly, confirming that guide's "nothing is stranded" claim for v1.
+
+### Blocker (part 1, since cleared): the job half could not run until the workflow was on `main`
 
 `gh workflow run` returns:
 
@@ -367,6 +419,58 @@ gateway's AGC was already serving. Convention written up in
 Still to confirm live: the fix is covered by envtest coexistence suites, not yet by a
 re-run on the dogfood cluster. Re-validate at the next dogfood sitting.
 
+### Defect: a truncated worker pod name can be invalid, and then no job ever runs ([Q467](../STATUS.md#Q467))
+
+The most serious find of the exercise, and the one that made the first baseline job
+fail. The provisioner derives the worker pod name and truncates it to the 63-char DNS
+label limit **without trimming a trailing hyphen**
+([provisioner.go:391](../../cmd/agc/internal/provisioner/provisioner.go)):
+
+```go
+podName := fmt.Sprintf("runner-%s-%s", safeName(key.Name), safePlanID)
+if len(podName) > 63 {
+    podName = podName[:63]   // may land on '-'
+}
+```
+
+The plan ID is a UUID, whose hyphens sit at indices 8, 13, 18 and 23. If the cut
+lands on one, the apiserver rejects **every** worker pod:
+
+```
+provisioner: create Pod runner-dogfood-migrate-gag-migrate-v1-18c32e1-d4766d0-a20852f8-:
+  metadata.name: Invalid value: "…-": a lowercase RFC 1123 subdomain must … end with
+  an alphanumeric character
+```
+
+Three things make this worse than a naming nit:
+
+1. **Deterministic, not flaky.** Whether a tenant can run jobs at all is fixed by the
+   character lengths of its gateway name and runner label. The original tenant landed
+   exactly on index 8 and could never have run a single job.
+2. **Both tiers.** `scaleSetPodName`
+   ([provisioner.go:718](../../cmd/agc/internal/provisioner/provisioner.go)) does the
+   identical naive truncation, so this does **not** disappear when classic is removed
+   at `v2.0.0`.
+3. **The symptom points the wrong way.** No worker pod is ever created, and GitHub
+   reports *"The self-hosted runner lost communication with the server… verify the
+   machine is running and has a healthy network connection."* An operator debugs
+   networking, not name validation.
+
+**Proof by controlled change.** The only variable altered was the gateway name —
+`dogfood-migrate` (cut at index 8, a hyphen) → `dfmigrate` (cut at index 14, a hex
+digit). Same tenant, same workflow, same label: the job went from *no pod, runner
+lost communication* to green, with a valid 63-char pod name ending in `4`.
+
+Truncation is effectively unavoidable — `runner-` + key + `-` + a 36-char UUID
+exceeds 63 for any realistic tenant name — so every tenant is rolling against the
+hyphen positions. The kind e2e tenants and the dogfood CI tenant happen to land
+safely, which is why nothing caught it. Filed as [Q467](../STATUS.md#Q467); the fix
+belongs in `provisioner.go` in its own PR, and cannot be validated here anyway
+because dogfood runs the released `agc` image, not a branch build.
+
+The tenant manifest pins a deliberately short gateway name as the workaround, with
+the arithmetic inline. Restore a natural name once Q467 lands.
+
 ### The teardown order is load-bearing and undocumented
 
 Deleting the tenant namespace directly left it in `Terminating` indefinitely on three
@@ -395,3 +499,32 @@ Recovery, for the record: all namespace content was already deleted and no
 cluster-scoped object was at risk of being orphaned (verified before acting), so the
 three finalizers were cleared with a merge patch and the namespace drained
 immediately.
+
+**A second, different ordering trap on the v2 side (part 2).** Following the
+corrected "CRs first" rule was still not enough, because *which* CR comes first
+matters:
+
+```bash
+kubectl delete actionsgateways.actions-gateway.com --all   # cascades away the AGC…
+kubectl delete runnersets.actions-gateway.com --all        # …now this hangs forever
+```
+
+Deleting the `ActionsGateway` cascades its AGC Deployment away, but a **v2
+`RunnerSet` is not owned by the gateway** — [backup-restore.md](../operations/backup-restore.md)
+says so explicitly ("they are never deleted by gateway teardown"). So the RunnerSet
+survives the cascade and is then left holding `actions-gateway.com/agentpool-cleanup`
+with no controller alive to clear it. Observed: the set sat `Terminating` from
+03:40:22 with `dfmigrate-agc` already gone.
+
+This is not the same bug as the namespace deadlock, and the existing docs do not
+cover it. [migration-v1-to-v2.md § Step 4](../operations/migration-v1-to-v2.md) says
+`delete actionsgateways --all` and states children cascade — **true for v1**, where
+`RunnerGroup`s *are* gateway-owned (confirmed here: deleting the v1 gateway removed
+its AGC, proxy and RunnerGroup cleanly), and **false for v2**.
+
+**The correct v2 order is RunnerSets first, then the ActionsGateway, then the
+namespace, then the cluster-scoped outputs.** Both deadlocks are now documented for
+operators — the Q466 fix (#915) added
+[Teardown order is load-bearing: never delete the namespace first](../operations/migration-v1-to-v2.md#teardown-order-is-load-bearing-never-delete-the-namespace-first)
+to the migration guide, covering the namespace-first case *and* the
+gateway-before-RunnerSet case this run found. Nothing further outstanding here.

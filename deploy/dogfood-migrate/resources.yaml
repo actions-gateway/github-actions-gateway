@@ -43,7 +43,16 @@ spec:
 apiVersion: actions-gateway.github.com/v1alpha1
 kind: ActionsGateway
 metadata:
-  name: dogfood-migrate
+  # Deliberately short, and NOT cosmetic: this is a Q467 workaround. The AGC
+  # derives the worker pod name as `runner-<key>-<planID>` and truncates it to 63
+  # chars WITHOUT trimming a trailing hyphen, so if char 63 lands on one of the
+  # planID UUID's hyphens (indices 8/13/18/23) the apiserver rejects every worker
+  # pod and no job can ever run. The original `dogfood-migrate` put it exactly on
+  # index 8 — reproducibly, for every job. `dfmigrate` lands on 14.
+  #
+  # Restore a natural name once Q467 lands; the length only matters because of
+  # the bug. Arithmetic in the plan doc's findings.
+  name: dfmigrate
   namespace: gag-dogfood-migrate
 spec:
   # Note the capital H: v1alpha1 spells these `gitHubAppRef`/`gitHubURL`, unlike

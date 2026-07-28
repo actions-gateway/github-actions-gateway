@@ -63,7 +63,7 @@ none of them is a calendar check.
 | Graduated `v2alpha1` → `v2beta1` (webhook + storage migration) | ✅ Satisfied — Q74 |
 | Graduated `v2beta1` → `v2` | ❌ This plan, Phase 2 |
 | `v1alpha1` deprecated **with a named removal release** | ✅ Satisfied: Q412 (2026-07-26) names `v2.0.0` across the operator and design docs, for `v1alpha1`, `v2alpha1`, and classic together. The notice ships with `v1.3.0`, one release ahead. |
-| ≥1 representative tenant migrated v1→v2 with the tool for real | ⚠️ **Unverified.** Dogfood runs v2, but whether a v1→v2 `gag-migrate` run was ever exercised end-to-end on a real tenant needs confirming before GA, not asserting. Phase 1 item. |
+| ≥1 representative tenant migrated v1→v2 with the tool for real | ✅ **Satisfied: Q415 (2026-07-28).** A live `v1alpha1` privileged-DinD tenant on the GKE dogfood cluster was migrated with `gag-migrate --apply` and then ran a real GitHub Actions DinD job green on the scale-set path, with a green baseline before the migration for attribution. Evidence: [q415-migrate-dogfood-validation.md](q415-migrate-dogfood-validation.md#part-2--the-job-half-run-after-the-workflow-reached-main-2026-07-28). Found four defects — Q463, Q465, Q466, Q467 — none of which gate this row. |
 | Operator docs updated | ❌ Phase 4 |
 | Cross-namespace sharing (M4), direct egress | Not GA gates, by the DoD |
 
