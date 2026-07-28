@@ -85,11 +85,19 @@ func (t *runnerSetTarget) Key() client.ObjectKey { return t.key }
 // its namespace) cascade-GCs the worker pods and job Secrets. BlockOwnerDeletion
 // is left unset, matching the v1 RunnerGroup owner-ref.
 func (t *runnerSetTarget) OwnerRef() metav1.OwnerReference {
+	return runnerSetOwnerRef(t.key.Name, t.uid)
+}
+
+// runnerSetOwnerRef returns the controller OwnerReference to a RunnerSet that every
+// object the AGC derives from it carries — worker pods and job Secrets via the Target
+// above, agent-pool Secrets via the RunnerSet reconciler — so the two paths cannot
+// drift into two spellings of the same reference.
+func runnerSetOwnerRef(name string, uid types.UID) metav1.OwnerReference {
 	return metav1.OwnerReference{
 		APIVersion: v2alpha1.GroupVersion.String(),
 		Kind:       "RunnerSet",
-		Name:       t.key.Name,
-		UID:        t.uid,
+		Name:       name,
+		UID:        uid,
 		Controller: ptr.To(true),
 	}
 }

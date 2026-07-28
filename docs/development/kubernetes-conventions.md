@@ -105,9 +105,58 @@ package. Controller-set v2 labels:
   operators can `kubectl get -l actions-gateway.com/gateway=<name>` a gateway's
   resources.
 - `actions-gateway.com/runner-set: <name>` (`provisioner.LabelRunnerSet`) — stamped
-  on every v2 worker pod and job Secret; the AGC `RunnerSet` controller's Pod watch
-  and reaper filter on it. Distinct from the v1 `actions-gateway/runner-group` key so
-  the v1 and v2 controllers' Pod watches never cross-wire during coexistence.
+  on every v2 worker pod, job Secret, and **agent-pool Secret**; the AGC `RunnerSet`
+  controller's Pod watch, reaper, and agent pool filter on it. Distinct from the v1
+  `actions-gateway/runner-group` key so the v1 and v2 controllers never cross-wire
+  during coexistence.
+
+### Derive a per-owner name from the owner's *kind*, not just its name (Q466)
+
+A v1 `RunnerGroup` and a v2 `RunnerSet` of the same name share one namespace for the
+whole coexistence window of a migration — that is what makes rollback to v1 possible.
+So **any** name or selector an AGC derives from an owner's name must carry the kind too,
+or the two controllers silently manage one object. The agent pool is the worked example
+and the one that got this wrong: identical Secret names, identical selector labels, and
+identical GitHub runner names left the v1 tenant in a permanent
+`secrets "agentpool-<name>-<index>" already exists` loop the moment v2 came up.
+
+| | v1 `RunnerGroup` | v2 `RunnerSet` |
+|---|---|---|
+| Agent Secret | `agentpool-<name>-<index>` | `agentpool-rs-<name>-<index>` |
+| Selector label | `actions-gateway/runner-group` | `actions-gateway.com/runner-set` |
+| GitHub runner name | `<name>-<index>` | `rs-<name>-<index>` |
+
+Two rules follow. **The v1 spelling never moves** — v1 is the rollback target, so it has
+to keep finding the objects and registrations it already owns; v2 is the side that gets
+the discriminator. And **splitting the Kubernetes name is not enough on its own**: the
+GitHub runner name is unique per registration scope, so two pools sharing one take turns
+deregistering each other's live record through the 409-conflict path. Split every
+derived identity or none of them.
+
+Renaming a derived object in a shipped release also has to carry the existing ones
+across, not orphan them. `agentpool.AdoptLegacyRunnerSetSecrets` is the pattern: on the
+first reconcile after the rename, copy each old-named object to its new name (preserving
+the payload, so no external registration is re-issued) and delete the original, gated on
+a check that the old name is not in use by the *other* kind.
+
+### Own every object you derive
+
+Every Secret, pod, or child object a controller derives from a CR carries a controller
+`OwnerReference` to it, built from a single exported helper per kind
+(`provisioner.RunnerGroupOwnerRef`, `runnerSetOwnerRef`) so the paths that stamp it
+cannot drift into two spellings. Two properties come from that:
+
+- **Lifecycle is unambiguous.** With no owner reference, nothing arbitrates between two
+  controllers that reach for the same object — which is exactly what turned the name
+  collision above into a permanent error loop rather than a caught mistake.
+- **Cleanup survives a dead controller.** The finalizer path is the primary cleanup; the
+  owner reference is the backstop when the AGC crashed or the namespace went away first.
+
+Refresh the reference on **every reconcile**, not once when the cached pool or helper is
+built: an owner deleted and recreated under the same name has a new UID, and an object
+written with a UID that no longer exists is garbage-collected the instant it lands.
+Leave `BlockOwnerDeletion` unset — setting it would require `update` on the owner's
+finalizers under the `OwnerReferencesPermissionEnforcement` admission plugin.
 
 One further v2 label is set by the **migration tool**, not by a controller:
 

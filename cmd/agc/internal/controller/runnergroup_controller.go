@@ -370,7 +370,7 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// 6. Ensure agent pool Secrets.
-	pool := r.getOrCreatePool(req.NamespacedName, rg.Namespace, rg.Name, rg.Spec.RunnerLabels)
+	pool := r.getOrCreatePool(req.NamespacedName, &rg)
 	if err := pool.EnsureAgents(ctx, rg.Spec.MaxListeners, instToken); err != nil {
 		log.Error("EnsureAgents failed", "error", err)
 		r.recordEvent(&rg, corev1.EventTypeWarning, "AgentPoolError", "EnsureAgents",
@@ -549,17 +549,22 @@ func (r *RunnerGroupReconciler) recordEvent(rg *v1alpha1.RunnerGroup, eventtype,
 }
 
 // getOrCreatePool returns the Pool for the given RunnerGroup, creating it if needed.
-func (r *RunnerGroupReconciler) getOrCreatePool(key types.NamespacedName, namespace, groupName string, runnerLabels []string) *agentpool.Pool {
+// The owner reference is refreshed on every call, not only on creation: the pool is
+// cached for the lifetime of the RunnerGroup key, so a group deleted and recreated
+// under the same name must not leave the pool stamping the old UID (Q466).
+func (r *RunnerGroupReconciler) getOrCreatePool(key types.NamespacedName, rg *v1alpha1.RunnerGroup) *agentpool.Pool {
 	r.poolsMu.Lock()
 	defer r.poolsMu.Unlock()
-	if p, ok := r.pools[key]; ok {
-		return p
+	p, ok := r.pools[key]
+	if !ok {
+		p = agentpool.NewPool(r.Client, rg.Namespace, rg.Name, r.BrokerConfig.RunnerVersion,
+			rg.Spec.RunnerLabels, r.Registrar, r.AgentKeyType)
+		if r.Metrics != nil {
+			p.Metrics = r.Metrics
+		}
+		r.pools[key] = p
 	}
-	p := agentpool.NewPool(r.Client, namespace, groupName, r.BrokerConfig.RunnerVersion, runnerLabels, r.Registrar, r.AgentKeyType)
-	if r.Metrics != nil {
-		p.Metrics = r.Metrics
-	}
-	r.pools[key] = p
+	p.SetOwner(provisioner.RunnerGroupOwnerRef(rg))
 	return p
 }
 

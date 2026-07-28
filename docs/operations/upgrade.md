@@ -12,6 +12,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: a RunnerSet's agent Secrets and runner names gain an rs- prefix](#non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix)
   - [Non-breaking: v2alpha1 is deprecated and the apiserver now warns](#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns)
   - [Non-breaking: v2alpha1 CRDs ship in a separate, opt-in chart](#non-breaking-v2alpha1-crds-ship-in-a-separate-opt-in-chart)
   - [BREAKING: spec.namespaceQuota removed — the ResourceQuota is now platform-owned](#breaking-specnamespacequota-removed--the-resourcequota-is-now-platform-owned)
@@ -70,6 +71,40 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: a `RunnerSet`'s agent Secrets and runner names gain an `rs-` prefix
+
+A v2 `RunnerSet`'s pre-registered agents now derive their identity from the kind as well
+as the name, so a `RunnerSet` and a same-named v1 `RunnerGroup` can run side by side
+through a migration without fighting over one pool (Q466):
+
+| | Before | After |
+|---|---|---|
+| Agent Secret | `agentpool-<set>-<index>` | `agentpool-rs-<set>-<index>` |
+| Secret label | `actions-gateway/runner-group=<set>` | `actions-gateway.com/runner-set=<set>` |
+| GitHub runner name | `<set>-<index>` | `rs-<set>-<index>` |
+
+The v1 `RunnerGroup` derivation is **unchanged** — a v1-only install sees nothing.
+
+**The upgrade needs no action, and orphans nothing.** On its first reconcile after the
+upgrade, each `RunnerSet` moves its existing agent Secrets to the new names, carrying
+each agent's GitHub registration along, then deletes the old copies. Nothing
+re-registers, so no runner record is stranded and no runner goes offline for the move.
+The old runner *name* survives at GitHub until that agent is next recycled (which
+happens after its next job), at which point the old record is deregistered and the
+`rs-`-prefixed one replaces it — expect the names to change over gradually, not at once.
+
+The one thing to check is **anything of yours that matches those names**: dashboards,
+alerts, scripts, or GitHub runner-name filters keyed on `agentpool-<set>-` or on a
+`RunnerSet`'s runner names. Prefer the label selector, which is stable:
+
+```sh
+kubectl -n <tenant> get secret -l actions-gateway.com/runner-set=<set>
+```
+
+Agent Secrets also now carry an `ownerReference` to their `RunnerGroup` or `RunnerSet`,
+back-filled onto existing ones during the same reconcile, so deleting the owner reclaims
+them even if its finalizer never runs.
 
 ### Non-breaking: `v2alpha1` is deprecated and the apiserver now warns
 

@@ -306,17 +306,50 @@ own `RunnerSet`s. Validate the v2 path end to end (trigger a workflow that targe
 v2 runner labels and confirm a worker pod is provisioned and egresses through the
 proxy) before removing v1.
 
+### The two tenants keep separate runners
+
+The tool keeps each tenant's name, so a namespace normally holds a `RunnerGroup` and a
+`RunnerSet` **called the same thing**. They are still two independent tenants, and each
+provisions its own pool of pre-registered runners:
+
+| | v1 `RunnerGroup` `web` | v2 `RunnerSet` `web` |
+|---|---|---|
+| Agent Secret | `agentpool-web-<index>` | `agentpool-rs-web-<index>` |
+| Secret label | `actions-gateway/runner-group=web` | `actions-gateway.com/runner-set=web` |
+| GitHub runner name | `web-<index>` | `rs-web-<index>` |
+
+So during coexistence you will see **two sets of runners** registered with GitHub for
+one tenant — expected, and the reason both can run at once. Each agent Secret also
+carries an `ownerReference` to the `RunnerGroup` or `RunnerSet` it belongs to, so
+`kubectl -n team-a get secret agentpool-web-0 -o jsonpath='{.metadata.ownerReferences}'`
+answers "which tenant owns this?" without guessing from the name.
+
+Upgrading an install that already ran v2 **moves** its existing agent Secrets onto the
+`agentpool-rs-` names on the first reconcile, carrying each agent's GitHub registration
+with it. Nothing re-registers, and no Secret is left behind — but if you have scripts or
+dashboards that match `agentpool-<set>-` for a `RunnerSet`, update them to
+`agentpool-rs-<set>-`.
+
 **Rollback is "stay on v1."** Nothing about the migration removes v1 capability, so if
 the v2 path misbehaves you simply keep using the v1 gateway and delete the v2 objects:
 
+Order matters — the `RunnerSet`s go **before** the `ActionsGateway` that owns their AGC,
+because deleting the gateway first removes the controller whose finalizer they are
+waiting on (see [Teardown order is load-bearing](#teardown-order-is-load-bearing-never-delete-the-namespace-first)):
+
 ```bash
-kubectl -n team-a delete actionsgateways.actions-gateway.com --all
 kubectl -n team-a delete runnersets.actions-gateway.com --all
+kubectl -n team-a delete actionsgateways.actions-gateway.com --all
 kubectl -n team-a delete egressproxies.actions-gateway.com --all
 kubectl -n team-a delete runnertemplates.actions-gateway.com --all
 # Cluster-scoped, so NOT covered by the -n team-a deletes above:
 kubectl delete clusterrunnertemplates -l actions-gateway.com/migrated-from-namespace=team-a
 ```
+
+The v1 tenant is unaffected by any of this: its agent Secrets and GitHub runner
+registrations are derived separately from the v2 set's
+([detail](#the-two-tenants-keep-separate-runners)), so removing the v2 objects leaves
+the `RunnerGroup` exactly as it was.
 
 The additive namespace labels are harmless to leave in place (the v1 markers are
 untouched), but you may remove the v2 keys if you want a clean rollback.
@@ -332,6 +365,46 @@ normally — nothing is stranded:
 kubectl -n team-a delete actionsgateways.actions-gateway.github.com --all
 # Confirm the v1 RunnerGroups and the singleton AGC/proxy children are gone.
 ```
+
+### Teardown order is load-bearing: never delete the namespace first
+
+Whether you are rolling back, decommissioning v1, or retiring the tenant outright,
+**delete the custom resources while their controllers are still running, and delete the
+namespace last.**
+
+```bash
+# 1. The CRs first — their finalizers run while the AGC is still up.
+kubectl -n team-a delete runnersets.actions-gateway.com --all
+kubectl -n team-a delete runnergroups.actions-gateway.github.com --all
+# 2. Then the gateways, which cascade their AGC, proxy, and RBAC children.
+kubectl -n team-a delete actionsgateways.actions-gateway.com --all
+kubectl -n team-a delete actionsgateways.actions-gateway.github.com --all
+# 3. Only now, if you are retiring the tenant, the namespace.
+kubectl delete namespace team-a
+```
+
+Deleting the namespace first **deadlocks**, and it is structural rather than a timing
+race: the AGC Deployments live *inside* the tenant namespace, so namespace deletion
+removes the very controllers whose finalizers must clear. The namespace then sits in
+`Terminating` indefinitely on
+
+- `actions-gateway.com/agentpool-cleanup` (v2 `RunnerSet`),
+- `actions-gateway.github.com/agentpool-cleanup` (v1 `RunnerGroup`),
+- `actions-gateway.github.com/gmc-cleanup` (v1 `ActionsGateway`).
+
+Nothing will clear them on its own. Recovery, once you have confirmed the namespace is
+otherwise empty and no cluster-scoped object depends on it, is to drop the finalizers by
+hand — which **skips the GitHub-side deregistration those finalizers exist to perform**,
+so the tenant's runner records are left registered and must be removed from the GitHub
+runners page afterwards:
+
+```bash
+kubectl -n team-a patch runnersets.actions-gateway.com <name> \
+  --type merge -p '{"metadata":{"finalizers":[]}}'
+```
+
+Repeat per stuck kind. Prefer the ordered teardown above; this is a recovery path, not
+an alternative.
 
 If you later retire the tenant entirely, remember that any `ClusterRunnerTemplate` the
 migration emitted is cluster-scoped and survives deleting the namespace — reclaim it by

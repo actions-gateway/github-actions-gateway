@@ -24,8 +24,44 @@ import (
 const (
 	labelManagedBy   = "app.kubernetes.io/managed-by"
 	labelRunnerGroup = "actions-gateway/runner-group"
-	labelAgentIndex  = "actions-gateway/agent-index"
-	managedByValue   = names.ControllerName
+	// labelRunnerSet is the v2 owner-identity label on a RunnerSet's agent Secrets,
+	// and the key half of the selector that enumerates them. It mirrors
+	// provisioner.LabelRunnerSet, which stamps the same key on v2 worker pods and job
+	// Secrets; it is re-declared here rather than imported because provisioner
+	// imports listener, which imports this package. TestLabelRunnerSetMatchesProvisioner
+	// fails if the two ever drift.
+	labelRunnerSet  = "actions-gateway.com/runner-set"
+	labelAgentIndex = "actions-gateway/agent-index"
+	managedByValue  = names.ControllerName
+)
+
+// Scheme selects how a Pool derives every identity it owns from its owner's name:
+// the agent Secret names, the label selector that enumerates them, and the runner
+// name each agent registers with GitHub.
+//
+// The two schemes are disjoint by construction, because a v1alpha1 RunnerGroup and a
+// v2 RunnerSet of the same name share one namespace for the whole coexistence window
+// of a v1→v2 migration. Before Q466 both derived the same Secret names under the same
+// labels and the same GitHub runner names, so the two controllers fought over one
+// agent pool: measured live on the dogfood cluster, the v1 tenant error-looped on
+// `secrets "agentpool-<name>-<index>" already exists` from the moment v2 came up —
+// exactly when rollback to v1 has to stay possible.
+type Scheme string
+
+const (
+	// SchemeRunnerGroup is the v1alpha1 RunnerGroup derivation: Secret
+	// "agentpool-<name>-<index>", selector actions-gateway/runner-group=<name>,
+	// runner name "<name>-<index>". It is byte-for-byte the shipped v1 layout and
+	// must stay that way: v1 is the rollback target of a migration, so it has to keep
+	// finding the Secrets and GitHub registrations it already owns.
+	SchemeRunnerGroup Scheme = "RunnerGroup"
+	// SchemeRunnerSet is the v2 RunnerSet derivation: Secret
+	// "agentpool-rs-<name>-<index>", selector actions-gateway.com/runner-set=<name>,
+	// runner name "rs-<name>-<index>". v2 is the side that moves, because the v1
+	// layout must stay put. An install that already has v2 agent Secrets under the
+	// old shared derivation is carried across by AdoptLegacyRunnerSetSecrets rather
+	// than left behind.
+	SchemeRunnerSet Scheme = "RunnerSet"
 )
 
 // Recycle retry policy for the transient GitHub 422 "runner is currently
@@ -136,9 +172,14 @@ type Agent struct {
 // Pool manages the lifecycle of pre-registered runner agents for one RunnerGroup.
 // It creates, loads, and deregisters agent Secrets.
 type Pool struct {
-	client        client.Client
-	namespace     string
-	groupName     string
+	client client.Client
+	// scheme selects the derivation for this pool's Secret names, selector labels,
+	// and GitHub runner names. See Scheme.
+	scheme    Scheme
+	namespace string
+	// ownerName is the owning CR's name: the RunnerGroup (v1) or RunnerSet (v2)
+	// this pool belongs to. Every derived identity is built from it.
+	ownerName     string
 	runnerVersion string
 	runnerLabels  []string
 	registrar     Registrar
@@ -148,7 +189,12 @@ type Pool struct {
 	// nil disables recording. Set once before first use (not guarded by mu).
 	Metrics RecycleMetrics
 
-	mu        sync.Mutex
+	mu sync.Mutex
+	// ownerRef is the controller OwnerReference stamped on every agent Secret this
+	// pool creates, and back-filled onto the ones it already manages. Nil until the
+	// reconciler calls SetOwner. Guarded by mu because Recycle runs from listener
+	// goroutines while a reconcile may be refreshing it.
+	ownerRef  *metav1.OwnerReference
 	agents    []*Agent       // sorted by index; populated by LoadAgents or EnsureAgents
 	byIndex   map[int]*Agent // index → pooled agent, mirrors agents
 	available []*Agent       // agents not currently claimed
@@ -178,14 +224,27 @@ type Pool struct {
 	sleep              func(ctx context.Context, d time.Duration) error
 }
 
-// NewPool creates a Pool for the given RunnerGroup.
+// NewPool creates a Pool for the given v1alpha1 RunnerGroup, using SchemeRunnerGroup.
 // runnerLabels is the label set passed to GitHub during runner registration.
 // keyType selects the algorithm for newly-generated agent keys; empty defaults to KeyTypeRSA (the secure default).
 func NewPool(c client.Client, namespace, groupName, runnerVersion string, runnerLabels []string, registrar Registrar, keyType KeyType) *Pool {
+	return newPool(SchemeRunnerGroup, c, namespace, groupName, runnerVersion, runnerLabels, registrar, keyType)
+}
+
+// NewRunnerSetPool creates a Pool for the given v2 RunnerSet, using SchemeRunnerSet.
+// It is the v2 counterpart of NewPool and differs from it only in the derivation:
+// keeping the two schemes apart is what lets a RunnerGroup and a RunnerSet of the
+// same name coexist in one namespace during a migration (Q466).
+func NewRunnerSetPool(c client.Client, namespace, setName, runnerVersion string, runnerLabels []string, registrar Registrar, keyType KeyType) *Pool {
+	return newPool(SchemeRunnerSet, c, namespace, setName, runnerVersion, runnerLabels, registrar, keyType)
+}
+
+func newPool(scheme Scheme, c client.Client, namespace, ownerName, runnerVersion string, runnerLabels []string, registrar Registrar, keyType KeyType) *Pool {
 	return &Pool{
 		client:        c,
+		scheme:        scheme,
 		namespace:     namespace,
-		groupName:     groupName,
+		ownerName:     ownerName,
 		runnerVersion: runnerVersion,
 		runnerLabels:  runnerLabels,
 		registrar:     registrar,
@@ -193,8 +252,82 @@ func NewPool(c client.Client, namespace, groupName, runnerVersion string, runner
 	}
 }
 
+// secretName is the name of the agent Secret at index, per the pool's Scheme.
 func (p *Pool) secretName(index int) string {
-	return fmt.Sprintf("agentpool-%s-%d", p.groupName, index)
+	if p.scheme == SchemeRunnerSet {
+		return runnerSetSecretName(p.ownerName, index)
+	}
+	return runnerGroupSecretName(p.ownerName, index)
+}
+
+func runnerGroupSecretName(name string, index int) string {
+	return fmt.Sprintf("agentpool-%s-%d", name, index)
+}
+
+func runnerSetSecretName(name string, index int) string {
+	return fmt.Sprintf("agentpool-rs-%s-%d", name, index)
+}
+
+// agentName is the runner name registered with GitHub for the agent at index.
+//
+// It is disambiguated by Scheme for the same reason the Secret name is: runner names
+// are unique per registration scope (org or repo), so a RunnerGroup and a RunnerSet
+// sharing one would take turns deregistering each other's live record — a 409 on
+// register, resolved by deleting the incumbent — leaving both tenants' listeners
+// unauthorized in a loop. Splitting the Secret name alone would have moved that fight
+// from Kubernetes to GitHub rather than ending it.
+func (p *Pool) agentName(index int) string {
+	if p.scheme == SchemeRunnerSet {
+		return fmt.Sprintf("rs-%s-%d", p.ownerName, index)
+	}
+	return fmt.Sprintf("%s-%d", p.ownerName, index)
+}
+
+// ownerLabels is the selector identifying this pool's agent Secrets, per its Scheme.
+func (p *Pool) ownerLabels() map[string]string {
+	if p.scheme == SchemeRunnerSet {
+		return runnerSetOwnerLabels(p.ownerName)
+	}
+	return map[string]string{labelManagedBy: managedByValue, labelRunnerGroup: p.ownerName}
+}
+
+func runnerSetOwnerLabels(name string) map[string]string {
+	return map[string]string{labelManagedBy: managedByValue, labelRunnerSet: name}
+}
+
+// agentLabels is the full label set written on the agent Secret at index: the
+// selector plus the stable agent index.
+func (p *Pool) agentLabels(index int) map[string]string {
+	l := p.ownerLabels()
+	l[labelAgentIndex] = strconv.Itoa(index)
+	return l
+}
+
+// SetOwner records the controller OwnerReference stamped on every agent Secret this
+// pool creates and back-filled onto the ones it already manages, so an agent Secret's
+// lifecycle is unambiguous: it names exactly one owner, and it is garbage-collected
+// with that owner even when the finalizer path never runs (an AGC that crashed, or a
+// namespace torn down out from under it).
+//
+// Call it on every reconcile, before EnsureAgents. A Pool outlives a single reconcile
+// — it is cached per owner key — so an owner deleted and recreated under the same name
+// would otherwise leave the pool stamping a UID that no longer exists, and a Secret
+// whose owner UID is gone is garbage-collected the moment it is written.
+func (p *Pool) SetOwner(ref metav1.OwnerReference) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.ownerRef = &ref
+}
+
+// ownerRefs returns the OwnerReference list for a Secret this pool writes, or nil
+// when no owner has been set (unit-test pools, and the load harness).
+func (p *Pool) ownerRefs() []metav1.OwnerReference {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.ownerRef == nil {
+		return nil
+	}
+	return []metav1.OwnerReference{*p.ownerRef}
 }
 
 // EnsureAgents reconciles the pool to exactly count agents.
@@ -216,6 +349,12 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 		}
 		existingIdx[idx] = true
 	}
+
+	// Back-fill the owner reference onto agent Secrets written before Q466 added one.
+	// Best-effort and metadata-only: the reference is a garbage-collection backstop
+	// behind the owner's finalizer, so a failure here must not stop the pool from
+	// serving jobs.
+	p.backfillOwnerRefs(ctx, existing)
 
 	// Create missing agents.
 	for i := int32(0); i < count; i++ {
@@ -280,12 +419,12 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 			slog.Warn("agentpool: recycle of parked consumed agent failed; will retry next reconcile",
 				"index", a.Index, "error", err)
 			if p.Metrics != nil {
-				p.Metrics.IncAgentRecycleError(p.namespace, p.groupName)
+				p.Metrics.IncAgentRecycleError(p.namespace, p.ownerName)
 			}
 			continue
 		}
 		if p.Metrics != nil {
-			p.Metrics.IncAgentRecycle(p.namespace, p.groupName, "reconcile_repair")
+			p.Metrics.IncAgentRecycle(p.namespace, p.ownerName, "reconcile_repair")
 		}
 	}
 
@@ -305,13 +444,10 @@ func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
 
 	sec := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      p.secretName(index),
-			Namespace: p.namespace,
-			Labels: map[string]string{
-				labelManagedBy:   managedByValue,
-				labelRunnerGroup: p.groupName,
-				labelAgentIndex:  strconv.Itoa(index),
-			},
+			Name:            p.secretName(index),
+			Namespace:       p.namespace,
+			Labels:          p.agentLabels(index),
+			OwnerReferences: p.ownerRefs(),
 		},
 		Data: p.secretDataFor(index, creds, privKeyPEM),
 	}
@@ -325,12 +461,12 @@ func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
 // deleted out-of-band) — is resolved by looking up the surviving record's ID,
 // deregistering it, and retrying once.
 func (p *Pool) registerAgent(ctx context.Context, token string, index int) (*AgentCredentials, []byte, error) {
-	agentName := fmt.Sprintf("%s-%d", p.groupName, index)
+	agentName := p.agentName(index)
 	params := RegisterParams{
 		Name:      agentName,
 		Version:   p.runnerVersion,
 		Labels:    p.runnerLabels,
-		GroupName: p.groupName,
+		GroupName: p.ownerName,
 		GroupID:   1,
 	}
 	creds, err := p.registrar.Register(ctx, token, params)
@@ -665,13 +801,10 @@ func (p *Pool) Recycle(ctx context.Context, a *Agent, token string) (*Agent, err
 		// fresh registration is not orphaned.
 		sec = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      p.secretName(idx),
-				Namespace: p.namespace,
-				Labels: map[string]string{
-					labelManagedBy:   managedByValue,
-					labelRunnerGroup: p.groupName,
-					labelAgentIndex:  strconv.Itoa(idx),
-				},
+				Name:            p.secretName(idx),
+				Namespace:       p.namespace,
+				Labels:          p.agentLabels(idx),
+				OwnerReferences: p.ownerRefs(),
 			},
 			Data: p.secretDataFor(idx, creds, privKeyPEM),
 		}
@@ -764,10 +897,7 @@ func (p *Pool) listSecretMeta(ctx context.Context) ([]metav1.PartialObjectMetada
 	list.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("SecretList"))
 	if err := p.client.List(ctx, &list,
 		client.InNamespace(p.namespace),
-		client.MatchingLabels{
-			labelManagedBy:   managedByValue,
-			labelRunnerGroup: p.groupName,
-		},
+		client.MatchingLabels(p.ownerLabels()),
 	); err != nil {
 		return nil, err
 	}
@@ -784,6 +914,49 @@ func (p *Pool) getSecret(ctx context.Context, name string) (*corev1.Secret, erro
 		return nil, err
 	}
 	return &sec, nil
+}
+
+// backfillOwnerRefs stamps this pool's owner reference onto any agent Secret in
+// metas that does not already carry it — the ones written before Q466, and any
+// written while no owner was set.
+//
+// It patches metadata only: the merge patch is built from an empty Secret shell, so
+// no agent private key or JIT config is ever fetched, preserving the bulk-path
+// property listSecretMeta exists for. Errors are logged and swallowed: the reference
+// is a GC backstop behind the owner's own finalizer, and failing the reconcile over
+// it would take a working tenant down for a metadata cleanup.
+func (p *Pool) backfillOwnerRefs(ctx context.Context, metas []metav1.PartialObjectMetadata) {
+	refs := p.ownerRefs()
+	if len(refs) == 0 {
+		return
+	}
+	for _, m := range metas {
+		if hasOwnerRef(m.OwnerReferences, refs[0]) {
+			continue
+		}
+		patch := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            m.Name,
+				Namespace:       p.namespace,
+				OwnerReferences: refs,
+			},
+		}
+		if err := p.client.Patch(ctx, patch, client.Merge); err != nil && !errors.IsNotFound(err) {
+			slog.Warn("agentpool: failed to back-fill owner reference on agent Secret",
+				"namespace", p.namespace, "secret", m.Name, "error", err)
+		}
+	}
+}
+
+// hasOwnerRef reports whether refs already contains want, matched on the identity
+// fields the API server persists (UID alone is enough to be the same object).
+func hasOwnerRef(refs []metav1.OwnerReference, want metav1.OwnerReference) bool {
+	for _, r := range refs {
+		if r.UID == want.UID && r.Kind == want.Kind && r.Name == want.Name {
+			return true
+		}
+	}
+	return false
 }
 
 func secretToAgent(s corev1.Secret) (*Agent, error) {

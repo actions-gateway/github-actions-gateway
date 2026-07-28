@@ -20,6 +20,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [ActionsGateway Reports EgressRulesStale](#actionsgateway-reports-egressrulesstale)
 - [Tenant Namespace Missing the Managed-Tenant Marker Label](#tenant-namespace-missing-the-managed-tenant-marker-label)
 - [ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)
+- [Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers](#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
 - [RunnerGroup ActiveSessions Exceeds maxListeners](#runnergroup-activesessions-exceeds-maxlisteners)
 - [RunnerGroup Stops Serving Jobs With Stale Ready=True](#runnergroup-stops-serving-jobs-with-stale-readytrue)
@@ -656,6 +657,27 @@ kubectl get clusterrolebinding -l app.kubernetes.io/managed-by=actions-gateway-g
 ```sh
 kubectl get role,networkpolicy -n <namespace>
 ```
+
+---
+
+## Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers
+
+**Symptoms.** `kubectl delete namespace <tenant>` never completes. The namespace sits in
+`Terminating` with nothing left in it, and the remaining objects hold
+`actions-gateway.com/agentpool-cleanup`, `actions-gateway.github.com/agentpool-cleanup`,
+or `actions-gateway.github.com/gmc-cleanup`.
+
+**Cause.** The teardown order was inverted. The AGC Deployments live *inside* the tenant
+namespace, so deleting the namespace (or an `ActionsGateway`, which cascades its AGC)
+before the `RunnerGroup`s and `RunnerSet`s removes the very controllers whose finalizers
+have to clear. Nothing will clear them afterwards — this is structural, not a slow
+reconcile you can wait out.
+
+**Fix.** Delete in dependency order next time: the CRs first, then the gateways, then
+the namespace. The ordered commands and the manual finalizer-drop recovery (including
+what that recovery skips — the GitHub-side runner deregistration) are in
+[migration-v1-to-v2.md § Teardown order is load-bearing](migration-v1-to-v2.md#teardown-order-is-load-bearing-never-delete-the-namespace-first).
+The same order applies to any tenant teardown, migration or not.
 
 ---
 

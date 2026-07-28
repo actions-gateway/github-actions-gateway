@@ -601,9 +601,13 @@ func TestRunnerSetLocalState_PoolLifecycle(t *testing.T) {
 	r.ensureMaps()
 	key := types.NamespacedName{Namespace: "team-a", Name: "set"}
 
-	pool := r.getOrCreatePool(key, "team-a", "set", []string{"self-hosted"})
+	rs := &v2alpha1.RunnerSet{
+		ObjectMeta: metav1.ObjectMeta{Namespace: key.Namespace, Name: key.Name, UID: "set-uid"},
+		Spec:       v2alpha1.RunnerSetSpec{RunnerLabels: []string{"self-hosted"}},
+	}
+	pool := r.getOrCreatePool(key, rs)
 	require.NotNil(t, pool)
-	assert.Same(t, pool, r.getOrCreatePool(key, "team-a", "set", nil), "pool is cached")
+	assert.Same(t, pool, r.getOrCreatePool(key, rs), "pool is cached")
 	assert.Same(t, pool, r.getPool(key))
 
 	// cleanupLocalState drops it (and is a no-op on the absent multiplexer / a re-call).
