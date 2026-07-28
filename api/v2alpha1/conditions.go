@@ -78,6 +78,8 @@ const (
 	ReasonPodsUnschedulable       = apiconditions.ReasonPodsUnschedulable
 	ReasonWorkersSchedulable      = apiconditions.ReasonWorkersSchedulable
 	ReasonCapacityAvailable       = apiconditions.ReasonCapacityAvailable
+	ReasonScaleUpDeclined         = apiconditions.ReasonScaleUpDeclined
+	ReasonGateModeUnsupported     = apiconditions.ReasonGateModeUnsupported
 	ReasonAgentProvisioningFailed = apiconditions.ReasonAgentProvisioningFailed
 	ReasonListenerStartFailed     = apiconditions.ReasonListenerStartFailed
 	ReasonRunnerSetsImpaired      = apiconditions.ReasonRunnerSetsImpaired

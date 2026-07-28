@@ -8,7 +8,13 @@
 // +kubebuilder:rbac:groups="",resources=pods/status,verbs=get
 // events: both the core ("") and events.k8s.io grants are required — the
 // new-style recorder (mgr.GetEventRecorder) writes events.k8s.io/v1 Events.
-// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// get/list on the core group additionally serve the capacity gate's
+// AutoscalerVerdict mode (Q406), which reads a stuck worker pod's Events to learn
+// whether the cluster autoscaler declined to add a node for it. Read-only, and
+// core-only because the two groups serve one underlying store; watch is
+// deliberately withheld — the reads are field-selected to a single pod and there is
+// no Event informer, which is the whole point of doing them uncached.
+// +kubebuilder:rbac:groups="",resources=events,verbs=get;list;create;patch
 // +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 // resourcequotas read-only: the RunnerGroup reconciler reads the namespace
 // ResourceQuota to compute the WorkerQuota{Pressure,Exceeded} conditions (Q82).

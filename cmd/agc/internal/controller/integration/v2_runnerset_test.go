@@ -85,6 +85,9 @@ func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Reg
 		Registrar:    reg,
 		AgentKeyType: agentpool.KeyTypeEd25519,
 		Provisioner:  p,
+		// The uncached reader the capacity gate's AutoscalerVerdict mode reads pod
+		// Events through (Q406), exactly as main.go wires it.
+		EventReader: mgr.GetAPIReader(),
 		// The same process-wide counters the v1 suite asserts on, so a v2 classic test
 		// can read jobs_admission_rejected_total as a delta against a baseline.
 		Metrics: sharedListenerMetrics(),

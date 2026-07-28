@@ -67,38 +67,44 @@ func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context,
 		r.recordEvent(rs, corev1.EventTypeWarning, "WorkersUnschedulable", "Reconcile", unsched.message)
 	}
 
-	r.applyCapacityGateCondition(rs, unsched)
-	return unsched.requeueAfter
+	gateRecheck := r.applyCapacityGateCondition(ctx, rs, unsched)
+	return soonest(unsched.requeueAfter, gateRecheck)
+}
+
+// soonest returns the earliest non-zero of two re-check intervals (0 = none), so a
+// caller can fold several independent "look again at" answers into one RequeueAfter.
+func soonest(a, b time.Duration) time.Duration {
+	if a == 0 || (b != 0 && b < a) {
+		return b
+	}
+	return a
 }
 
 // applyCapacityGateCondition publishes the WorkerCapacityDeclined condition — the
 // decision the admission ladder's placeability rung reads back (Q405). The rung does
 // not re-derive the verdict; this condition IS the decision, so an operator's
-// `kubectl describe` and the AGC's intake behavior cannot disagree.
+// `kubectl describe` and the AGC's intake behavior cannot disagree. It returns the
+// re-check interval the gate's own signal needs (0 = none), which the caller folds
+// into RequeueAfter.
 //
-// It reuses the WorkersUnschedulable evaluation the caller just computed rather than
-// re-deriving from the pod list: in mode SchedulerVerdict the two read the same
-// underlying fact (a worker pod Pending past the scheduling grace with
-// PodScheduled=False/Unschedulable), and computing it twice would let them disagree
-// across a single reconcile. Later modes (Q406/Q407) change the source feeding this
-// condition without changing the condition or the rung.
+// Every mode is fed by the WorkersUnschedulable evaluation the caller just computed
+// rather than by a second pod list: SchedulerVerdict IS that evaluation, and
+// AutoscalerVerdict reads Events for exactly the pods it found stuck. Computing the
+// stuck set twice would let the two disagree across a single reconcile, and would
+// double the pod-list cost of the rung.
 //
 // A set that did not opt in carries NO such condition at all: it is removed rather
 // than published False. Absence is what the default costs — no cost, no stale alarm
 // after opting out, and the condition's presence is itself the "this set has a
 // capacity gate" signal.
-func (r *RunnerSetReconciler) applyCapacityGateCondition(rs *v2alpha1.RunnerSet, unsched workersUnschedulable) {
-	if runnerSetCapacityGateMode(rs) == v2alpha1.CapacityGateModeOff {
+func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs *v2alpha1.RunnerSet, unsched workersUnschedulable) time.Duration {
+	mode := runnerSetCapacityGateMode(rs)
+	if mode == v2alpha1.CapacityGateModeOff {
 		meta.RemoveStatusCondition(&rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
-		return
+		return 0
 	}
 
-	declined, reason, message := unsched.unschedulable, v2alpha1.ReasonCapacityAvailable,
-		"the cluster can place this runner set's worker pods; job intake is not gated"
-	if declined {
-		reason = v2alpha1.ReasonPodsUnschedulable
-		message = "job intake is gated: " + unsched.message
-	}
+	declined, reason, message, recheck := r.evalCapacityGate(ctx, mode, unsched)
 
 	wasDeclined := meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
@@ -115,6 +121,132 @@ func (r *RunnerSetReconciler) applyCapacityGateCondition(rs *v2alpha1.RunnerSet,
 	if declined && !wasDeclined {
 		r.recordEvent(rs, corev1.EventTypeWarning, "WorkerCapacityDeclined", "Reconcile", message)
 	}
+	return recheck
+}
+
+// evalCapacityGate resolves the set's selected mode to a verdict, the condition reason
+// and message that explain it, and the re-check interval that mode's signal needs.
+//
+// An unrecognized mode fails OPEN rather than falling through to any implemented one.
+// The CRDs ship as their own chart and can be upgraded ahead of the AGC, so a mode a
+// newer CRD accepts can reach an older AGC; treating it as "some gate, near enough"
+// would apply the wrong signal's semantics, and applying SchedulerVerdict's semantics
+// on an elastic cluster is precisely the tenant-starving outcome the mode split exists
+// to prevent.
+func (r *RunnerSetReconciler) evalCapacityGate(ctx context.Context, mode string, unsched workersUnschedulable) (declined bool, reason, message string, recheck time.Duration) {
+	switch mode {
+	case v2alpha1.CapacityGateModeSchedulerVerdict:
+		if unsched.unschedulable {
+			return true, v2alpha1.ReasonPodsUnschedulable, "job intake is gated: " + unsched.message, 0
+		}
+		return false, v2alpha1.ReasonCapacityAvailable,
+			"the cluster can place this runner set's worker pods; job intake is not gated", 0
+	case v2alpha1.CapacityGateModeAutoscalerVerdict:
+		return r.evalAutoscalerVerdictGate(ctx, unsched)
+	default:
+		return false, v2alpha1.ReasonGateModeUnsupported, fmt.Sprintf(
+			"capacity gate mode %q is not implemented by this AGC; job intake is not gated", mode), 0
+	}
+}
+
+// autoscalerVerdictRecheck is how often a set in mode AutoscalerVerdict re-reads its
+// stuck pods' Events while any pod is stuck.
+//
+// A periodic re-check is required rather than merely nice: the signal lives in Event
+// objects, which nothing in the AGC watches (a cluster-wide Event informer is the load
+// problem this mode is designed around), so neither the autoscaler's declination
+// arriving nor its later scale-up would otherwise re-trigger a reconcile. Both
+// directions matter — without it the gate would close late, and, worse, would stay
+// closed after the autoscaler started acting.
+const autoscalerVerdictRecheck = 30 * time.Second
+
+// maxAutoscalerVerdictPodReads bounds the uncached Event reads one reconcile may spend.
+// One recognized declination is enough to close the gate, and the pods are sorted
+// oldest-first, so a set with a hundred stuck pods pays the same bounded cost as one
+// with eight and still reads the pods most likely to carry a settled verdict. The
+// truncation can only under-gate, which is the safe direction.
+const maxAutoscalerVerdictPodReads = 8
+
+// evalAutoscalerVerdictGate is the Q406 mode: gate only when the cluster autoscaler
+// itself has recorded, against one of this set's stuck worker pods, that it will not
+// add a node for it.
+//
+// Reads are scoped twice over — only for pods the WorkersUnschedulable evaluation
+// already found stuck past the scheduling grace, and only up to
+// maxAutoscalerVerdictPodReads of them — so a healthy set costs nothing at all and a
+// badly-stuck one costs a bounded handful of field-selected reads per re-check.
+//
+// Fail-open at every step: no stuck pods, no wired Event reader, an unreadable Event
+// list, and an autoscaler whose vocabulary is not recognized all leave intake exactly
+// as it is today. A read error does not abort the scan — a later pod may still carry a
+// recognized declination — but it is reported in the message when nothing gated, so an
+// operator sees "the gate could not evaluate" rather than a bare "capacity available".
+func (r *RunnerSetReconciler) evalAutoscalerVerdictGate(ctx context.Context, unsched workersUnschedulable) (bool, string, string, time.Duration) {
+	if len(unsched.stuckPods) == 0 {
+		return false, v2alpha1.ReasonCapacityAvailable,
+			"no worker pod is waiting on the cluster autoscaler; job intake is not gated", 0
+	}
+	if r.EventReader == nil {
+		return false, v2alpha1.ReasonCapacityAvailable,
+			"cannot read worker pod Events (no direct API reader is wired); job intake is not gated",
+			autoscalerVerdictRecheck
+	}
+
+	pods := unsched.stuckPods
+	truncated := 0
+	if len(pods) > maxAutoscalerVerdictPodReads {
+		truncated = len(pods) - maxAutoscalerVerdictPodReads
+		pods = pods[:maxAutoscalerVerdictPodReads]
+	}
+
+	var readErr error
+	for _, pod := range pods {
+		evts, err := r.podEvents(ctx, pod)
+		if err != nil {
+			if readErr == nil {
+				readErr = err
+			}
+			continue
+		}
+		if declined, detail := autoscalerDeclination(pod, evts); declined {
+			return true, v2alpha1.ReasonScaleUpDeclined, fmt.Sprintf(
+				"job intake is gated: the cluster autoscaler declined to add a node for worker pod %s: %s",
+				pod.Name, detail), autoscalerVerdictRecheck
+		}
+	}
+
+	if readErr != nil {
+		return false, v2alpha1.ReasonCapacityAvailable, fmt.Sprintf(
+			"could not read worker pod Events (%v); job intake is not gated", readErr), autoscalerVerdictRecheck
+	}
+	msg := fmt.Sprintf("%d worker pod(s) are unschedulable, but no cluster autoscaler has declined to add a node "+
+		"for them; job intake is not gated", len(unsched.stuckPods))
+	if truncated > 0 {
+		msg += fmt.Sprintf(" (Events checked for the %d oldest; %d not checked this pass)", len(pods), truncated)
+	}
+	return false, v2alpha1.ReasonCapacityAvailable, msg, autoscalerVerdictRecheck
+}
+
+// podEvents lists the Events recorded against one pod, field-selected server-side to
+// that pod alone and read through the UNCACHED EventReader.
+//
+// Uncached is the point: the alternative is an Event informer, and Events are the
+// highest-churn object in a busy cluster, so caching them would trade a bounded
+// per-stuck-pod read for an unbounded steady-state memory and watch cost on every AGC
+// — including the vast majority that never enable this mode. The UID is part of the
+// selector so a recycled pod name cannot inherit a previous pod's verdict.
+func (r *RunnerSetReconciler) podEvents(ctx context.Context, pod *corev1.Pod) ([]corev1.Event, error) {
+	var list corev1.EventList
+	if err := r.EventReader.List(ctx, &list,
+		client.InNamespace(pod.Namespace),
+		client.MatchingFields{
+			"involvedObject.name": pod.Name,
+			"involvedObject.uid":  string(pod.UID),
+		},
+	); err != nil {
+		return nil, err
+	}
+	return list.Items, nil
 }
 
 // clearWorkerCapacityConditions resets the worker-capacity conditions to their benign

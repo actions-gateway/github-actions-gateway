@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -151,6 +153,270 @@ func TestCapacityGate_ClearedWhenReferencesDoNotResolve(t *testing.T) {
 	r.clearWorkerCapacityConditions(rs)
 
 	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+}
+
+// --- mode AutoscalerVerdict (Q406) -------------------------------------------
+
+// eventReaderStub stands in for the uncached apiserver reader the AutoscalerVerdict
+// mode reads pod Events through. The fake client cannot serve an arbitrary field
+// selector, and the selector is exactly what these tests need to assert: the mode must
+// read Events for stuck pods only, one pod at a time.
+type eventReaderStub struct {
+	byPod map[string][]corev1.Event
+	err   error
+	// calls records the pod names the gate asked about, in order, so a test can assert
+	// both what was read and — more importantly — what was not.
+	calls []string
+}
+
+func (s *eventReaderStub) Get(context.Context, client.ObjectKey, client.Object, ...client.GetOption) error {
+	return errors.New("eventReaderStub: unexpected Get")
+}
+
+func (s *eventReaderStub) List(_ context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	var lo client.ListOptions
+	for _, o := range opts {
+		o.ApplyToList(&lo)
+	}
+	if lo.FieldSelector == nil {
+		return errors.New("eventReaderStub: the gate must field-select Events to one pod, not list a namespace")
+	}
+	name, ok := lo.FieldSelector.RequiresExactMatch("involvedObject.name")
+	if !ok {
+		return errors.New("eventReaderStub: no involvedObject.name in the field selector")
+	}
+	s.calls = append(s.calls, name)
+	if s.err != nil {
+		return s.err
+	}
+	el, ok := list.(*corev1.EventList)
+	if !ok {
+		return errors.New("eventReaderStub: not an EventList")
+	}
+	el.Items = s.byPod[name]
+	return nil
+}
+
+// autoscalerGate runs one reconcile's worth of capacity-condition evaluation for a set
+// in mode AutoscalerVerdict against the given pods and Event stub, returning the
+// published condition and the re-check the gate asked for.
+func autoscalerGate(t *testing.T, now time.Time, reader client.Reader, pods ...*corev1.Pod) (*v2alpha1.RunnerSet, *metav1.Condition, time.Duration) {
+	t.Helper()
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeAutoscalerVerdict))
+	objs := make([]client.Object, 0, len(pods))
+	for _, p := range pods {
+		objs = append(objs, p)
+	}
+	r := capReconciler(t, now, objs...)
+	r.EventReader = reader
+
+	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+	return rs, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined), requeue
+}
+
+// stuckPod is a worker pod the scheduler has given up on, aged past the scheduling
+// grace (half of the 10m pendingPodDeadline gateOn sets).
+func stuckPod(name string, now time.Time) *corev1.Pod {
+	return capWorkerPod("ns", "set", name, corev1.PodPending, now.Add(-6*time.Minute),
+		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "0/3 nodes are available: 3 Insufficient cpu")
+}
+
+// TestCapacityGate_AutoscalerVerdictGatesOnADeclination is the mode's positive path:
+// the cluster autoscaler's own "I will not add a node for this" becomes the intake
+// decision, and its per-node-group text reaches the operator.
+func TestCapacityGate_AutoscalerVerdictGatesOnADeclination(t *testing.T) {
+	now := time.Now()
+	pod := stuckPod("worker-stuck", now)
+	reader := &eventReaderStub{byPod: map[string][]corev1.Event{
+		"worker-stuck": {legacyEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineMsg, now.Add(-time.Minute))},
+	}}
+
+	_, c, requeue := autoscalerGate(t, now, reader, pod)
+
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionTrue, c.Status)
+	assert.Equal(t, v2alpha1.ReasonScaleUpDeclined, c.Reason,
+		"the reason must name the autoscaler's declination, not the scheduler's verdict")
+	assert.Contains(t, c.Message, "job intake is gated")
+	assert.Contains(t, c.Message, "worker-stuck")
+	assert.Contains(t, c.Message, "max node group size reached",
+		"the autoscaler's own per-node-group text is what makes the condition actionable")
+	assert.Equal(t, autoscalerVerdictRecheck, requeue,
+		"nothing watches Events, so the gate must schedule its own re-check — otherwise a "+
+			"later scale-up would never reopen it")
+}
+
+// TestCapacityGate_AutoscalerVerdictIgnoresATransientSchedulerFailure is THE test for
+// this mode. FailedScheduling is kube-scheduler's own reason as well as Karpenter's,
+// so a matcher keyed on the reason string alone would gate every set on an elastic
+// cluster the moment a pod waited on an ordinary transient placement failure —
+// refusing jobs the cluster was about to run.
+func TestCapacityGate_AutoscalerVerdictIgnoresATransientSchedulerFailure(t *testing.T) {
+	now := time.Now()
+	pod := stuckPod("worker-stuck", now)
+	reader := &eventReaderStub{byPod: map[string][]corev1.Event{
+		"worker-stuck": {legacyEvent(reasonFailedScheduling, defaultSchedulerName, schedulerFailMsg, now.Add(-time.Minute))},
+	}}
+
+	rs, c, _ := autoscalerGate(t, now, reader, pod)
+
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionFalse, c.Status,
+		"an ordinary scheduling failure is not an autoscaler declination; gating on it would "+
+			"starve a tenant whose cluster was about to grow")
+	assert.Equal(t, v2alpha1.ReasonCapacityAvailable, c.Reason)
+
+	// The two conditions genuinely disagree on the same reconcile, and that disagreement
+	// IS the mode: the pod really is unschedulable — SchedulerVerdict would have gated
+	// on exactly this — and AutoscalerVerdict declines to draw the same conclusion
+	// because no autoscaler has said no.
+	assert.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable),
+		"the sibling condition must still report the stuck pod")
+}
+
+// TestCapacityGate_AutoscalerVerdictFailsOpen covers every way the signal can be
+// missing or unreadable. Each must leave intake exactly as it is today: under-gating is
+// this rung's default behavior, over-gating starves a tenant.
+func TestCapacityGate_AutoscalerVerdictFailsOpen(t *testing.T) {
+	now := time.Now()
+
+	t.Run("no events recorded for the stuck pod", func(t *testing.T) {
+		reader := &eventReaderStub{}
+		_, c, _ := autoscalerGate(t, now, reader, stuckPod("worker-stuck", now))
+
+		require.NotNil(t, c)
+		assert.Equal(t, metav1.ConditionFalse, c.Status)
+		assert.Contains(t, c.Message, "no cluster autoscaler has declined")
+	})
+
+	t.Run("the Event read fails", func(t *testing.T) {
+		reader := &eventReaderStub{err: errors.New("events forbidden")}
+		_, c, requeue := autoscalerGate(t, now, reader, stuckPod("worker-stuck", now))
+
+		require.NotNil(t, c)
+		assert.Equal(t, metav1.ConditionFalse, c.Status)
+		assert.Contains(t, c.Message, "events forbidden",
+			"the operator must see that the gate could not evaluate, not a bare 'capacity available'")
+		assert.Equal(t, autoscalerVerdictRecheck, requeue, "a failed read must still be retried")
+	})
+
+	t.Run("no Event reader is wired", func(t *testing.T) {
+		_, c, _ := autoscalerGate(t, now, nil, stuckPod("worker-stuck", now))
+
+		require.NotNil(t, c)
+		assert.Equal(t, metav1.ConditionFalse, c.Status)
+		assert.Contains(t, c.Message, "no direct API reader is wired")
+	})
+
+	t.Run("an unrecognized autoscaler vocabulary", func(t *testing.T) {
+		reader := &eventReaderStub{byPod: map[string][]corev1.Event{
+			"worker-stuck": {legacyEvent("OptimizerDeferred", "cast-ai", "waiting for a cheaper node", now)},
+		}}
+		_, c, _ := autoscalerGate(t, now, reader, stuckPod("worker-stuck", now))
+
+		require.NotNil(t, c)
+		assert.Equal(t, metav1.ConditionFalse, c.Status,
+			"a proprietary autoscaler the matcher does not know must look exactly like no autoscaler")
+	})
+}
+
+// TestCapacityGate_AutoscalerVerdictReadsStuckPodsOnly is the load bound the row calls
+// for. Events are the highest-churn object in a cluster, so the mode must read them
+// only for pods that have already earned a verdict — never for healthy or
+// still-within-grace pods, and never at all for a set with nothing stuck.
+func TestCapacityGate_AutoscalerVerdictReadsStuckPodsOnly(t *testing.T) {
+	now := time.Now()
+
+	t.Run("a healthy set costs no Event reads at all", func(t *testing.T) {
+		running := capWorkerPod("ns", "set", "worker-running", corev1.PodRunning, now.Add(-time.Hour),
+			corev1.ConditionTrue, "", "")
+		reader := &eventReaderStub{}
+
+		_, c, requeue := autoscalerGate(t, now, reader, running)
+
+		assert.Empty(t, reader.calls, "the default cost of an enabled gate on a healthy set must be zero reads")
+		require.NotNil(t, c)
+		assert.Equal(t, metav1.ConditionFalse, c.Status)
+		assert.Zero(t, requeue, "with nothing stuck there is no Event to wait for")
+	})
+
+	t.Run("a pod still inside the scheduling grace is not read", func(t *testing.T) {
+		// Unschedulable, but only just: the grace is 5m (half of the 10m deadline).
+		fresh := capWorkerPod("ns", "set", "worker-fresh", corev1.PodPending, now.Add(-time.Minute),
+			corev1.ConditionFalse, corev1.PodReasonUnschedulable, "0/3 nodes are available")
+		reader := &eventReaderStub{}
+
+		_, _, requeue := autoscalerGate(t, now, reader, fresh)
+
+		assert.Empty(t, reader.calls,
+			"an autoscaler has not had time to reach a verdict inside the grace, and reading "+
+				"early would spend a read to learn nothing")
+		assert.NotZero(t, requeue, "the reconciler must still come back when the pod crosses the grace")
+	})
+
+	t.Run("only the stuck pod of a mixed set is read", func(t *testing.T) {
+		running := capWorkerPod("ns", "set", "worker-running", corev1.PodRunning, now.Add(-time.Hour),
+			corev1.ConditionTrue, "", "")
+		reader := &eventReaderStub{}
+
+		autoscalerGate(t, now, reader, running, stuckPod("worker-stuck", now))
+
+		assert.Equal(t, []string{"worker-stuck"}, reader.calls)
+	})
+
+	t.Run("the per-reconcile read budget is bounded", func(t *testing.T) {
+		var pods []*corev1.Pod
+		for i := range maxAutoscalerVerdictPodReads + 5 {
+			// Staggered ages so the oldest-first ordering is observable.
+			p := capWorkerPod("ns", "set", fmt.Sprintf("worker-%02d", i), corev1.PodPending,
+				now.Add(-time.Duration(30-i)*time.Minute),
+				corev1.ConditionFalse, corev1.PodReasonUnschedulable, "0/3 nodes are available")
+			pods = append(pods, p)
+		}
+		reader := &eventReaderStub{}
+
+		_, c, _ := autoscalerGate(t, now, reader, pods...)
+
+		assert.Len(t, reader.calls, maxAutoscalerVerdictPodReads,
+			"a badly-stuck set must not turn one reconcile into an unbounded read fan-out")
+		assert.Equal(t, "worker-00", reader.calls[0], "the oldest stuck pod is read first")
+		require.NotNil(t, c)
+		assert.Contains(t, c.Message, "not checked this pass",
+			"a bounded scan must say what it skipped rather than imply it saw everything")
+	})
+
+	t.Run("one declination is enough — the scan stops there", func(t *testing.T) {
+		older := stuckPod("worker-a", now)
+		older.CreationTimestamp = metav1.NewTime(now.Add(-20 * time.Minute))
+		newer := stuckPod("worker-b", now)
+		reader := &eventReaderStub{byPod: map[string][]corev1.Event{
+			"worker-a": {legacyEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineMsg, now)},
+		}}
+
+		autoscalerGate(t, now, reader, newer, older)
+
+		assert.Equal(t, []string{"worker-a"}, reader.calls)
+	})
+}
+
+// TestCapacityGate_UnrecognizedModeFailsOpen: the CRDs ship as their own chart and can
+// be upgraded ahead of the AGC, so a mode a newer CRD accepts can reach an older AGC.
+// It must fail open rather than fall through to an implemented mode — applying
+// SchedulerVerdict's semantics on an elastic cluster is exactly the tenant-starving
+// outcome the mode split exists to prevent.
+func TestCapacityGate_UnrecognizedModeFailsOpen(t *testing.T) {
+	now := time.Now()
+	rs := rsObj("set", "ns", gateOn("Provision"))
+	r := capReconciler(t, now, stuckPod("worker-stuck", now))
+
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""))
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c, "the condition is still published: the set asked for a gate, and its absence "+
+		"would read as 'no gate configured'")
+	assert.Equal(t, metav1.ConditionFalse, c.Status)
+	assert.Equal(t, v2alpha1.ReasonGateModeUnsupported, c.Reason)
+	assert.Contains(t, c.Message, `"Provision"`)
 }
 
 // --- the Target adapter -----------------------------------------------------

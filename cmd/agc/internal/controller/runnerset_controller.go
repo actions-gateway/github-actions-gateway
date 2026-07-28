@@ -80,6 +80,20 @@ type RunnerSetReconciler struct {
 	// unit tests; callers must nil-check before use.
 	Recorder events.EventRecorder
 
+	// EventReader reads Events straight from the apiserver, bypassing the controller
+	// cache (production wires mgr.GetAPIReader()). It serves the capacity gate's
+	// AutoscalerVerdict mode (Q406), which reads a stuck worker pod's Events to learn
+	// whether the cluster autoscaler declined to add a node for it.
+	//
+	// Uncached deliberately: Events are the highest-churn object in a busy cluster, so
+	// an informer would impose an unbounded steady-state cost on every AGC to serve an
+	// opt-in mode most sets never enable. The reads are instead field-selected to one
+	// pod and only happen for pods already stuck past the scheduling grace.
+	//
+	// Nil (unit tests, or an AGC wired without it) makes that mode fail open — the gate
+	// never closes and intake is exactly today's behavior.
+	EventReader client.Reader
+
 	// Now is the clock used by the worker-pod reaper. Nil means time.Now.
 	Now func() time.Time
 

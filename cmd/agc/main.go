@@ -477,6 +477,7 @@ func run() error {
 			AgentKeyType:    agentKeyType,
 			GatewayName:     gatewayName,
 			Recorder:        mgr.GetEventRecorder("runnerset-controller"),
+			EventReader:     mgr.GetAPIReader(),
 			BrokerConfig:    r.BrokerConfig,
 			Sizing:          usageSampler,
 		}
