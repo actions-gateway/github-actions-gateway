@@ -1,15 +1,21 @@
 # Worker Right-Sizing Profiles (Recommendations First)
 
-> **Status: ✅ Complete — Phases 1–3 shipped 2026-07-21/22 and fully
-> live-validated 2026-07-25. The one residual is deferred as
-> [Q416](../STATUS.md#Q416).** Usage observability, the status recommendation and
+> **Status: ✅ Complete — Phases 1–3 shipped 2026-07-21/22 and live-validated
+> across three dogfood sessions (two on 2026-07-25, one on 2026-07-28).
+> Residuals:
+> [Q416](../STATUS.md#Q416) and, for the one profile still short of a live run,
+> [Q448](../STATUS.md#Q448).** Usage observability, the status recommendation and
 > its derivation, restart persistence, and the below-confidence fallback were
 > confirmed in the first dogfood session. The two behaviours gated on 20 sampled
 > jobs, the `SizingDrift` verdict and `Binpack` actuating, were confirmed in a
 > second session after Q399 migrated the tenant off the Classic protocol (which
-> had orphaned 81% of the jobs it acquired, capping samples at 10). See
+> had orphaned 81% of the jobs it acquired, capping samples at 10);
+> [`Throughput` actuated live](#throughput-actuating-live-2026-07-28) on the same
+> tenant three days later. See
 > [Live validation](#live-validation-2026-07-25) and
 > [Both ≥20-sample paths confirmed](#both-20-sample-paths-confirmed-2026-07-25-second-session).
+> **`NodeShare` is the one actuating profile with no live run yet** — it carries
+> envtest confidence only, tracked as Q448.
 > Both bugs this validation surfaced are Classic-tier defects rather than sizing
 > gaps: [Q398](#editing-a-classic-runnerset-needed-an-explicit-version-fixed) is
 > fixed, and Q416 waits on a Classic operator report.
@@ -179,11 +185,12 @@ Each assertion was confirmed to fail against a mutated implementation before
 being trusted (headroom constant, the CPU-limit `delete`, the runner-container
 guard, and the clamp call each removed in turn).
 
-**Still true after this:** neither profile has run on a live cluster. Only
-`Binpack` has ([Live validation](#live-validation-2026-07-25)), so `Throughput`
-and `NodeShare` carry envtest confidence, not dogfood confidence. `NodeShare` is
-the more consequential of the two to leave there, since it needs no warm-up and
-so is the profile an operator can enable on day one. The live path is below.
+**Resolved for `Throughput` on 2026-07-28** ([Throughput actuating
+live](#throughput-actuating-live-2026-07-28), Q449). `Binpack` was already live
+([Live validation](#live-validation-2026-07-25)), so `NodeShare` is now the only
+profile carrying envtest confidence rather than dogfood confidence — and the more
+consequential one to leave there, since it needs no warm-up and so is the profile
+an operator can enable on day one. The live path is below.
 
 ### The live path, and why the RC gate could not have found this
 
@@ -199,7 +206,7 @@ Three changes close it, and they are asymmetric because the profiles are:
 
 | Profile | Where | Why there |
 |---|---|---|
-| `Throughput` | `ci` tenant (`scripts/dogfood/setup.sh`) | Needs ≥20 samples/container. The ~7-job e2e matrix cannot reach that in one run; the always-on CI tenant accrues them organically (it hit 36 on 07-25) and `status.sizingRecommendation` survives restart and re-apply. Must be configured **before** the RC window. |
+| `Throughput` | `ci` tenant (`scripts/dogfood/setup.sh`) | Needs ≥20 samples/container. The ~7-job e2e matrix cannot reach that in one run; the always-on CI tenant accrues them organically (it hit 36 on 07-25) and `status.sizingRecommendation` survives restart and re-apply. **Deployed and live-validated 2026-07-28** (Q449) — see [below](#throughput-actuating-live-2026-07-28). |
 | `NodeShare` | e2e tenant (`deploy/dogfood-e2e/base/resources.yaml`) | Needs no history, so it actuates on the first job — the only profile a single gate run can validate outright. |
 | `Binpack` | — | Already live-validated; not re-run. |
 
@@ -601,6 +608,79 @@ condition reports `SizingProfileActive` instead of a verdict.
   AGC restart, and set-once semantics keep a completion replayed to a re-created
   session from pushing it back. Flow:
   [04-operational-flows.md](../design/04-operational-flows.md#orphaned-running-worker-pod-scaleset-tier).
+
+## `Throughput` actuating live (2026-07-28)
+
+Q449: the committed `spec.sizing` block reached the live `ci` tenant, and
+`Throughput` provisioned real worker pods. Same cluster and control-plane image
+(`e0acd60`) as the 07-25 run.
+
+**Derivation, end to end.** From a 36-sample history (`observedPeak` `cpu 3751m` /
+`memory 2399Mi`, `requests` `cpu 3800m` / `memory 2432Mi`), every post-patch worker
+pod provisioned:
+
+| Field | Value | Why |
+|---|---|---|
+| `requests.cpu` | `3` | Derived 3800m **clamped** by `maxRequests.cpu: "3"`. |
+| `requests.memory` | `2432Mi` | Derived; the `1Gi` `minRequests` floor is not binding. |
+| `limits.cpu` | *absent* | Throughput deletes it so jobs burst. |
+| `limits.memory` | `3598Mi` | `observedPeak` 2399Mi × the 150% default headroom. |
+| QoS | `Burstable` | Not Guaranteed — the property separating it from `Binpack`. |
+
+`status.sizingProfileState` → `Active` and `SizingDrift` → `False` /
+`SizingProfileActive` the moment the spec landed; the template's single `runner`
+container was already past 20 samples, so the whole-pod confidence gate passed
+with no warm-up. Seven pods actuated, all scheduled (none `Pending`), and a real
+CI job ran to completion on one (`Completed`, exit 0) — so `cpu: 3` schedules on
+an `e2-standard-4` and the memory envelope holds under the repo's own load.
+
+**The `maxRequests` clamp is load-bearing for `Throughput` too**, not just
+`Binpack`: the raw 3800m derivation exceeds an `e2-standard-4`'s ~3.4 vCPU
+allocatable. Throughput dropping the *CPU limit* does not help — schedulability is
+decided by the *request*. The operator doc's clamp warning was scoped to `Binpack`
+and has been broadened to both history-based profiles.
+
+**Pods created before the patch stayed `Static`** (`cpu 2` / `memory 2Gi`, limit
+`3Gi`) — actuation is a pod-build transform, not retroactive, matching the 07-25
+`Binpack` observation.
+
+### Why this could not be deployed until now
+
+The cluster was at **0 nodes across every pool** (normal at-rest state after
+`stop.sh`), so the GMC pod had been `Pending` ~10h and `webhook-service` had no
+endpoints. The `RunnerSet` CRD stores `v2beta1` with `Webhook` conversion, and
+`vrunnerset-v2alpha1.kb.io` is `failurePolicy: Fail` with `matchPolicy:
+Equivalent` — so a write to *either* served version is routed through the down
+webhook. **No CR write of any kind can land while the dogfood cluster is
+stopped.** Bring the cluster up first; there is no offline path.
+
+### The multi-day soak was not needed
+
+Q449 was filed expecting a days-long accrual before the RC. It was not required:
+the aggregate is **cumulative with no TTL or eviction**, and `seedFromStatus`
+([`aggregate.go`](../../cmd/agc/internal/usage/aggregate.go)) rebuilds it from
+persisted `status.sizingRecommendation`. All 36 samples from 07-25 were still
+counted after the stop, so the deploy was a single short window — start, patch,
+verify, stop — rather than a soak. **Any future sizing deploy on this tenant
+inherits the same property**: history is durable across stop/start, so it never
+has to be re-earned.
+
+What survives is the *summary*, not the raw distribution, and that is by
+design: `seed` reconstructs the histogram from the persisted `(sampleCount,
+observedP95, observedPeak)` triple by putting 95% of the mass at the p95 and the
+rest at the max. Sample count and peak come back exact and the p95 to bucket
+resolution — precisely the three statistics the recommendation reads — while the
+shape below the p95 is deliberately not persisted. So "durable" means the
+*derivation* is reproducible across a stop, not that the tenant's job history is
+archived; a stop still costs the sub-p95 detail, which nothing downstream uses.
+
+### `start.sh` does not re-apply the CRs
+
+The reason the committed config sat undeployed: `start.sh` resizes the pool,
+waits for readiness, and dispatches workflows — it never calls `apply_cr`, which
+lives only in `setup.sh`'s `main`. A CR-only change therefore reaches the cluster
+via a `setup.sh` re-run or a targeted patch, never via a start. Worth knowing
+before assuming a committed CR edit is live.
 
 ## Non-goals
 
