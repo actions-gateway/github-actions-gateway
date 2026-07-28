@@ -196,9 +196,7 @@ kubectl apply -f runnergroup.yaml
 kubectl get configmap -n gmc-system gmc-priorityclass-allowlist   # it is right there
 ```
 
-The GMC surfaces it as provisioning failures on every gateway. Fresh installs are
-unaffected — only an install that followed an uninstall on the same apiserver
-process.
+The GMC surfaces it as provisioning failures on every gateway.
 
 **First, rule out the benign case.** The same message appears for a second or two
 during any reinstall: `helm uninstall` removes the parameter ConfigMap and the
@@ -206,20 +204,19 @@ reinstall recreates it, and the guard correctly fails closed until the apiserver
 observes the new one. That clears on its own. Only a denial that persists past a
 few seconds is the defect below.
 
-**Cause.** The apiserver keeps one admission-policy parameter informer per
-`paramKind` GroupVersionResource and tears it down when the last policy naming
-that GVR is deleted. That teardown is permanent for the life of the apiserver
-process — the informer is cached by GVR and the cached instance is already
-stopped — so the policy recreated by the reinstall gets a dead informer with an
-empty cache. Parameter resolution happens *before* per-object matching, so every
-matched write is denied. Recreating the ConfigMap does not help; the informer,
-not the ConfigMap, is what is missing. Verified on Kubernetes 1.35.5 and 1.36.1.
+**Cause: not yet established (Q444, open).** What is known:
 
-Charts from the version that added `helm.sh/resource-policy: keep` to the policy
-no longer trigger this: `helm uninstall` leaves the policy in place (inert,
-because its binding is removed), so the informer is never torn down. You can hit
-it on an older chart, or by deleting the policy by hand — including via a GitOps
-prune.
+- The broken state belongs to the **kube-apiserver process**, not to any object.
+  A restart clears it in seconds with no object changes at all.
+- Once an apiserver is in this state, ConfigMaps created afterwards stay
+  invisible to parameter resolution — so even a *fresh* install fails, with the
+  binding pointing at a ConfigMap that demonstrably exists. Recreating the
+  ConfigMap does not help.
+- It shows up most often after a `helm uninstall` + reinstall, but that cycle is
+  not required.
+
+Observed on Kubernetes 1.35.5 and 1.36.1. Evidence and open questions:
+[`q444-vap-param-resolution.md`](../plan/q444-vap-param-resolution.md).
 
 **Resolution.**
 
@@ -234,21 +231,17 @@ prune.
   Denials stop at once. This also disables the PriorityClass backstop, so treat it
   as mitigation, not a fix — the GMC webhook allowlist still gates the
   tenant-facing CRs in the meantime.
-- **Fix it properly** by restarting kube-apiserver, the only thing that rebuilds
-  the informer. Straightforward on a self-managed control plane; on EKS/GKE/AKS
-  you cannot restart it directly, and a control-plane version upgrade is usually
-  the only lever that recycles the process. Re-enable `admissionPolicy.enabled`
+- **Fix it properly** by restarting kube-apiserver — the only known recovery.
+  Straightforward on a self-managed control plane; on EKS/GKE/AKS you cannot
+  restart it directly, and a control-plane version upgrade is usually the only
+  lever that recycles the process. Re-enable `admissionPolicy.enabled`
   afterwards.
-- **Confirm the policy is retained** on the chart you are running, so the next
-  uninstall does not repeat it:
 
-  ```sh
-  kubectl get validatingadmissionpolicy gmc-priorityclass-allowlist-guard \
-    -o jsonpath='{.metadata.annotations.helm\.sh/resource-policy}'
-  # keep
-  ```
-
-Background and the retention rationale: [security-operations.md § The policy object survives `helm uninstall`](security-operations.md#the-policy-object-survives-helm-uninstall--on-purpose).
+There is **no chart-side mitigation today**, and no way to predict which
+apiservers will hit it. If you are running on a managed control plane and cannot
+tolerate the risk, install with `admissionPolicy.enabled=false` and rely on the
+GMC webhook allowlist, which gates the tenant-facing CRs (the policy is a
+defense-in-depth backstop for direct `runnergroups` RBAC).
 
 ---
 
