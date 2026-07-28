@@ -5,10 +5,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/actions-gateway/github-actions-gateway/api/apinames"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/validation"
 )
+
+// maxDNSLabelLen is the budget workerPodName derives against. apinames owns the
+// constant and the truncation helpers; what stays here is the pod-name behaviour
+// built on top of them.
+const maxDNSLabelLen = apinames.MaxLabelValue
 
 // requireValidPodName asserts that name is a valid DNS-1123 label. Pod names are
 // validated by the apiserver as DNS-1123 *subdomains*, which are laxer (dots
@@ -198,111 +204,6 @@ func TestWorkerPodNameDeterministic(t *testing.T) {
 	}
 }
 
-func TestTruncateSegment(t *testing.T) {
-	const (
-		uuidSeg  = "a20852f8-1e2b-4c3d-9f10-77b6d4c1a9e5"
-		hyphenAt = 8 // the first hyphen in uuidSeg
-		// allHyphens can never reach truncateSegment through workerPodName (safeName
-		// strips leading hyphens first); it pins the defensive branch that would
-		// otherwise emit a leading "-".
-		allHyphens = "----------abc"
-	)
-
-	cases := []struct {
-		name string
-		in   string
-		max  int
-		want string
-	}{
-		{"fits exactly", "abcdefg", 7, "abcdefg"},
-		{"shorter than budget", "abc", 40, "abc"},
-		{"cut on a hyphen trims it", uuidSeg, hyphenAt + 1 + hashLen, "a20852f8" + "-" + shortHash(uuidSeg)},
-		{"cut just before a hyphen", uuidSeg, hyphenAt + hashLen, "a20852f" + "-" + shortHash(uuidSeg)},
-		{"hash only when no head survives", allHyphens, hashLen + 2, shortHash(allHyphens)},
-		{"hash only at exactly the hash length", uuidSeg, hashLen, shortHash(uuidSeg)[:hashLen]},
-		{"hash prefix below the hash length", uuidSeg, 3, shortHash(uuidSeg)[:3]},
-		{"clamped to one char", uuidSeg, 0, shortHash(uuidSeg)[:1]},
-		{"clamped from negative", uuidSeg, -5, shortHash(uuidSeg)[:1]},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := truncateSegment(tc.in, tc.max)
-			assert.Equal(t, tc.want, got)
-			assert.NotEmpty(t, got)
-			assert.LessOrEqual(t, len(got), max(tc.max, 1))
-			assert.False(t, strings.HasSuffix(got, "-"), "must never end on a hyphen")
-			assert.False(t, strings.HasPrefix(got, "-"), "must never start with a hyphen")
-		})
-	}
-}
-
-// TestTruncateSegmentInjective checks the property the pod-name uniqueness argument
-// rests on: segments sharing a visible prefix but differing past the cut still
-// produce distinct results. Budgets below hashLen+2 cannot hold a whole hash and so
-// cannot promise this; splitBudget never hands out one that small (see
-// TestSplitBudgetTruncatingShareFloor).
-func TestTruncateSegmentInjective(t *testing.T) {
-	for _, budget := range []int{9, 12, 27, 28, 44, 48} {
-		seen := map[string]int{}
-		for i := range 500 {
-			s := safeName(fmt.Sprintf("%s-%d", strings.Repeat("p", 30), i))
-			got := truncateSegment(s, budget)
-			if prev, dup := seen[got]; dup {
-				t.Errorf("budget %d: collision between %d and %d: %q", budget, prev, i, got)
-			}
-			seen[got] = i
-		}
-	}
-}
-
-func TestSplitBudget(t *testing.T) {
-	cases := []struct {
-		name         string
-		a, b, avail  int
-		wantA, wantB int
-	}{
-		{"both fit", 10, 20, 55, 10, 20},
-		{"exactly fits", 25, 30, 55, 25, 30},
-		{"both over half share evenly", 46, 44, 55, 27, 28},
-		{"short a keeps its length", 9, 48, 55, 9, 46},
-		{"short b keeps its length", 48, 9, 55, 46, 9},
-		{"both at the maximum", 48, 48, 55, 27, 28},
-		{"odd budget", 40, 40, 41, 20, 21},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			gotA, gotB := splitBudget(tc.a, tc.b, tc.avail)
-			assert.Equal(t, tc.wantA, gotA, "owner share")
-			assert.Equal(t, tc.wantB, gotB, "id share")
-			assert.LessOrEqual(t, gotA+gotB, tc.avail)
-			assert.Positive(t, gotA)
-			assert.Positive(t, gotB)
-		})
-	}
-}
-
-// TestSplitBudgetTruncatingShareFloor pins the floor the uniqueness argument needs:
-// a segment is only ever cut short of its natural length when it still gets at least
-// half the budget — so a truncated worker-pod segment is never shorter than 27 chars,
-// leaving room for a readable head *and* the whole hash.
-func TestSplitBudgetTruncatingShareFloor(t *testing.T) {
-	avail := maxDNSLabelLen - len(workerPodPrefix) - 2
-	half := avail / 2
-	// safeName output is 9..48 chars, so those are the only natural lengths reachable.
-	for a := hashLen + 2; a <= 48; a++ {
-		for b := hashLen + 2; b <= 48; b++ {
-			gotA, gotB := splitBudget(a, b, avail)
-			assert.LessOrEqual(t, gotA+gotB, avail)
-			if gotA < a {
-				assert.GreaterOrEqualf(t, gotA, half, "owner share for natural (%d, %d)", a, b)
-			}
-			if gotB < b {
-				assert.GreaterOrEqualf(t, gotB, half, "id share for natural (%d, %d)", a, b)
-			}
-		}
-	}
-}
-
 // TestSafeNameAlwaysValid guards the per-segment invariant workerPodName builds on.
 func TestSafeNameAlwaysValid(t *testing.T) {
 	inputs := []string{"", "-", "---", "..", "a", "ABC", "ランナー", strings.Repeat("-a", 100),
@@ -311,7 +212,7 @@ func TestSafeNameAlwaysValid(t *testing.T) {
 		got := safeName(in)
 		requireValidPodName(t, got)
 		assert.LessOrEqual(t, len(got), 48)
-		assert.GreaterOrEqual(t, len(got), hashLen+2)
+		assert.GreaterOrEqual(t, len(got), apinames.HashLen+2)
 	}
 }
 

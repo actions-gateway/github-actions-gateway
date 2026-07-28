@@ -18,12 +18,13 @@ package migrate
 import (
 	"fmt"
 	"sort"
-	"strings"
+	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/apinames"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
@@ -316,42 +317,24 @@ func authoritativeGroups(gw *gmcv1alpha1.ActionsGateway, standalone []agcv1alpha
 
 // runnerGroupName replicates the GMC's v1 derived name for an inline runnerGroups[]
 // entry (controller.runnerGroupName): a content-derived name from the first runner
-// label, or an index-based fallback. Replicated (not imported — it is unexported in
-// the controller package) so the synthesized standalone name matches what the GMC
-// would have materialized, making the standalone-vs-inline dedup exact.
+// label, or an index-based fallback, bounded to the 63-char label-value budget.
+// Replicated (not imported — it is unexported in the controller package) so the
+// synthesized standalone name matches what the GMC would have materialized, making
+// the standalone-vs-inline dedup exact. Both sides now derive through apinames, so
+// that equality is enforced by the shared helper rather than by keeping two copies
+// in step by hand.
 func runnerGroupName(gatewayName string, spec agcv1alpha1.RunnerGroupSpec, i int) string {
 	if len(spec.RunnerLabels) > 0 {
-		return fmt.Sprintf("%s-%s", gatewayName, labelSafe(spec.RunnerLabels[0]))
+		return apinames.Join(apinames.MaxLabelValue, gatewayName, labelSafe(spec.RunnerLabels[0]))
 	}
-	return fmt.Sprintf("%s-%d", gatewayName, i)
+	return apinames.Join(apinames.MaxLabelValue, gatewayName, strconv.Itoa(i))
 }
 
-// labelSafe replicates controller.labelSafe: a deterministic, RFC-1123-label-safe
-// segment derived from an arbitrary runner label, suffixed with a 7-hex hash for
-// uniqueness. Kept byte-for-byte identical so a synthesized inline-group name equals
-// the standalone CR the GMC materialized.
-func labelSafe(s string) string {
-	hash := shortHash(s, 7)
-	out := make([]byte, 0, len(s))
-	for _, c := range []byte(s) {
-		switch {
-		case (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-':
-			out = append(out, c)
-		case c >= 'A' && c <= 'Z':
-			out = append(out, c+32)
-		default:
-			out = append(out, '-')
-		}
-	}
-	seg := strings.Trim(string(out), "-")
-	if len(seg) > 40 {
-		seg = strings.TrimRight(seg[:40], "-")
-	}
-	if seg == "" {
-		seg = "label"
-	}
-	return seg + "-" + hash
-}
+// labelSafe is controller.labelSafe: a deterministic, RFC-1123-label-safe segment
+// derived from an arbitrary runner label, suffixed with a 7-hex hash for uniqueness.
+// The two must agree exactly or a synthesized inline-group name would not equal the
+// standalone CR the GMC materialized, so both call the one shared implementation.
+func labelSafe(s string) string { return apinames.Segment(s, "label") }
 
 // buildNamespacePatch computes the additive v2 namespace metadata: the relocated
 // securityProfile label, the aligned tenant marker, the domain-migrated
