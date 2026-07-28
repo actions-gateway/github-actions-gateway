@@ -178,8 +178,8 @@ func (a *setAgg) seedFromStatus(recs []agcv2alpha1.ContainerSizingRecommendation
 			continue
 		}
 		start := now
-		if !rec.WindowStart.IsZero() {
-			start = rec.WindowStart.Time
+		if !rec.WindowStartTime.IsZero() {
+			start = rec.WindowStartTime.Time
 		}
 		c := newContainerAgg(start)
 		c.cpu.seed(cpuBucketEdges, uint64(rec.SampleCount),
@@ -220,8 +220,8 @@ func (a *setAgg) recommendations() []agcv2alpha1.ContainerSizingRecommendation {
 				corev1.ResourceCPU:    roundUpCores(cpuP95, 1),
 				corev1.ResourceMemory: roundUpBytes(memP95, observedMemStep),
 			},
-			SampleCount: int64(c.cpu.total),
-			WindowStart: metav1.NewTime(c.windowStart),
+			SampleCount:     int64(c.cpu.total),
+			WindowStartTime: metav1.NewTime(c.windowStart),
 		})
 	}
 	sort.Slice(recs, func(i, j int) bool { return recs[i].Container < recs[j].Container })

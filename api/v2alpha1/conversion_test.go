@@ -80,11 +80,26 @@ func fullRunnerSet(protocol string, labels ...string) *v2alpha1.RunnerSet {
 				Message:            "all good",
 				LastTransitionTime: fixedTime,
 			}},
-			ActiveSessions:     2,
-			ActiveJobs:         1,
-			PendingJobs:        0,
-			ProxyMode:          "Proxied",
-			TemplateSource:     "TemplateRef",
+			ActiveSessions: 2,
+			ActiveJobs:     1,
+			PendingJobs:    0,
+			ProxyMode:      "Proxied",
+			TemplateSource: "TemplateRef",
+			// The sizing recommendation is carried here because the spoke↔hub
+			// conversion is a JSON round-trip: a field whose json tag is renamed on
+			// one version only is dropped silently rather than failing to compile.
+			// Q485 renamed windowStart → windowStartTime across both versions; this
+			// fixture is what makes the next such rename fail loudly.
+			SizingProfileState: v2alpha1.SizingProfileStateActive,
+			SizingRecommendation: []v2alpha1.ContainerSizingRecommendation{{
+				Container:       "runner",
+				Requests:        corev1.ResourceList{corev1.ResourceCPU: mustQuantity("500m"), corev1.ResourceMemory: mustQuantity("1Gi")},
+				Limits:          corev1.ResourceList{corev1.ResourceMemory: mustQuantity("2Gi")},
+				ObservedPeak:    corev1.ResourceList{corev1.ResourceCPU: mustQuantity("800m"), corev1.ResourceMemory: mustQuantity("1536Mi")},
+				ObservedP95:     corev1.ResourceList{corev1.ResourceCPU: mustQuantity("450m"), corev1.ResourceMemory: mustQuantity("1Gi")},
+				SampleCount:     25,
+				WindowStartTime: fixedTime,
+			}},
 			ObservedGeneration: 7,
 		},
 	}

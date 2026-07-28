@@ -613,11 +613,11 @@ type ContainerSizingRecommendation struct {
 	// sampling interval are not counted (see the worker usage metrics).
 	SampleCount int64 `json:"sampleCount"`
 
-	// WindowStart is when this container's observation window began (first
+	// WindowStartTime is when this container's observation window began (first
 	// sampled job, surviving AGC restarts via the re-seed).
 	//
 	// +optional
-	WindowStart metav1.Time `json:"windowStart,omitempty"`
+	WindowStartTime metav1.Time `json:"windowStartTime,omitempty"`
 }
 
 // RunnerSet is a namespace-scoped CRD reconciled by the AGC. It binds a worker pod

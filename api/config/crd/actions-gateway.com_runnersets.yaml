@@ -742,9 +742,9 @@ spec:
                         sampling interval are not counted (see the worker usage metrics).
                       format: int64
                       type: integer
-                    windowStart:
+                    windowStartTime:
                       description: |-
-                        WindowStart is when this container's observation window began (first
+                        WindowStartTime is when this container's observation window began (first
                         sampled job, surviving AGC restarts via the re-seed).
                       format: date-time
                       type: string
@@ -1472,9 +1472,9 @@ spec:
                         sampling interval are not counted (see the worker usage metrics).
                       format: int64
                       type: integer
-                    windowStart:
+                    windowStartTime:
                       description: |-
-                        WindowStart is when this container's observation window began (first
+                        WindowStartTime is when this container's observation window began (first
                         sampled job, surviving AGC restarts via the re-seed).
                       format: date-time
                       type: string
