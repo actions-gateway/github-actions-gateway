@@ -110,3 +110,17 @@ Recovery is a kube-apiserver restart, which is **not available on a managed
 control plane** (GKE/EKS/AKS). There is no chart-side workaround today. The
 blast radius and the recovery step are documented in
 [`../operations/troubleshooting.md`](../operations/troubleshooting.md).
+
+**Our own dogfood is exposed.** [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh)
+runs `helm upgrade --install gag charts/actions-gateway` with no
+`admissionPolicy` override, and the chart defaults `admissionPolicy.enabled:
+true`. Dogfood is GKE, so if that cluster ever enters this state we cannot
+restart its apiserver: every `runnergroups`/`runnersets` write stays denied
+until a control-plane version upgrade happens to recycle the process. The
+mitigation available there is the same one operators get, `admissionPolicy.enabled=false`
+plus the GMC webhook allowlist.
+
+This exposure is why the item stays in the Queue rather than moving to
+Deferred. Parking it would mean waiting on an upstream issue that has carried
+`sig/api-machinery` since 2025-03 and is still `needs-triage`, while we hold
+the risk.
