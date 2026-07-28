@@ -1,15 +1,21 @@
 # Worker Right-Sizing Profiles (Recommendations First)
 
-> **Status: ✅ Complete — Phases 1–3 shipped 2026-07-21/22 and fully
-> live-validated 2026-07-25. The one residual is deferred as
-> [Q416](../STATUS.md#Q416).** Usage observability, the status recommendation and
+> **Status: ✅ Complete — Phases 1–3 shipped 2026-07-21/22 and live-validated
+> across three dogfood sessions (two on 2026-07-25, one on 2026-07-28).
+> Residuals:
+> [Q416](../STATUS.md#Q416) and, for the one profile still short of a live run,
+> [Q448](../STATUS.md#Q448).** Usage observability, the status recommendation and
 > its derivation, restart persistence, and the below-confidence fallback were
 > confirmed in the first dogfood session. The two behaviours gated on 20 sampled
 > jobs, the `SizingDrift` verdict and `Binpack` actuating, were confirmed in a
 > second session after Q399 migrated the tenant off the Classic protocol (which
-> had orphaned 81% of the jobs it acquired, capping samples at 10). See
+> had orphaned 81% of the jobs it acquired, capping samples at 10);
+> [`Throughput` actuated live](#throughput-actuating-live-2026-07-28) on the same
+> tenant three days later. See
 > [Live validation](#live-validation-2026-07-25) and
 > [Both ≥20-sample paths confirmed](#both-20-sample-paths-confirmed-2026-07-25-second-session).
+> **`NodeShare` is the one actuating profile with no live run yet** — it carries
+> envtest confidence only, tracked as Q448.
 > Both bugs this validation surfaced are Classic-tier defects rather than sizing
 > gaps: [Q398](#editing-a-classic-runnerset-needed-an-explicit-version-fixed) is
 > fixed, and Q416 waits on a Classic operator report.
@@ -653,11 +659,20 @@ stopped.** Bring the cluster up first; there is no offline path.
 Q449 was filed expecting a days-long accrual before the RC. It was not required:
 the aggregate is **cumulative with no TTL or eviction**, and `seedFromStatus`
 ([`aggregate.go`](../../cmd/agc/internal/usage/aggregate.go)) rebuilds it from
-persisted `status.sizingRecommendation`. The 36 samples from 07-25 survived the
-stop untouched, so the deploy was a single short window — start, patch, verify,
-stop — rather than a soak. **Any future sizing deploy on this tenant inherits the
-same property**: history is durable across stop/start, so it never has to be
-re-earned.
+persisted `status.sizingRecommendation`. All 36 samples from 07-25 were still
+counted after the stop, so the deploy was a single short window — start, patch,
+verify, stop — rather than a soak. **Any future sizing deploy on this tenant
+inherits the same property**: history is durable across stop/start, so it never
+has to be re-earned.
+
+What survives is the *summary*, not the raw distribution, and that is by
+design: `seed` reconstructs the histogram from the persisted `(sampleCount,
+observedP95, observedPeak)` triple by putting 95% of the mass at the p95 and the
+rest at the max. Sample count and peak come back exact and the p95 to bucket
+resolution — precisely the three statistics the recommendation reads — while the
+shape below the p95 is deliberately not persisted. So "durable" means the
+*derivation* is reproducible across a stop, not that the tenant's job history is
+archived; a stop still costs the sub-p95 detail, which nothing downstream uses.
 
 ### `start.sh` does not re-apply the CRs
 
