@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 #
-# Unit tests for the make-recipe parsing in scripts/check-codegen-drift.sh (Q457):
-# manifests_recipe (tab folding, line continuations, comment stripping, where a
-# recipe ends), recipe_generators (which tokens count as controller-gen
-# generators), and assert_registry_fidelity, the consumer that turns a parse into
-# a pass or a failure.
+# Unit tests for the make-recipe parsing in scripts/check-codegen-drift.sh (Q457,
+# Q477): module_recipe (tab folding, line continuations, comment stripping, which
+# target a recipe belongs to, where a recipe ends), recipe_generators (which
+# tokens count as controller-gen generators), deepcopy_generator (turning the
+# registered `object` call into the argument controller-gen receives), and
+# assert_registry_fidelity, the consumer that turns a parse into a pass or a
+# failure.
 #
-# The gate reads `manifests:` recipes straight out of Makefiles, and make recipes
+# The gate reads `manifests:` and `deepcopy:` recipes straight out of Makefiles,
+# and make recipes
 # are tab-sensitive — a class of bug that is invisible to review and obvious to a
 # fixture. #886, the PR that added the gate, nearly shipped a parser that folded
 # continuation lines without converting their tabs, which hides every generator
@@ -51,13 +54,14 @@ fixture() {
 	printf '%s' "$dir"
 }
 
-# expect_recipe NAME BODY WANT — assert manifests_recipe folds BODY to exactly
-# WANT. WANT carries the folded line's leading and trailing spaces; the report
-# brackets both sides so a whitespace-only mismatch is legible.
+# expect_recipe NAME BODY WANT [TARGET] — assert module_recipe folds BODY's
+# TARGET recipe (default `manifests`) to exactly WANT. WANT carries the folded
+# line's leading and trailing spaces; the report brackets both sides so a
+# whitespace-only mismatch is legible.
 expect_recipe() {
-	local name="$1" body="$2" want="$3" dir got
+	local name="$1" body="$2" want="$3" target="${4:-manifests}" dir got
 	dir="$(fixture "$name" "$body")"
-	got="$(manifests_recipe "$dir")"
+	got="$(module_recipe "$dir" "$target")"
 	if [[ "$got" == "$want" ]]; then
 		printf 'ok   recipe %-30s\n' "$name"
 	else
@@ -80,16 +84,22 @@ expect_generators() {
 	fi
 }
 
-# expect_fidelity NAME WANT DIR GENERATORS OUTPUTS — run assert_registry_fidelity
-# over a fixture module and assert it passed or failed. WANT is 'pass' or 'fail'.
+# expect_fidelity NAME WANT DIR TARGET GENERATORS OUTPUTS — run
+# assert_registry_fidelity over a fixture module's TARGET recipe and assert it
+# passed or failed. WANT is 'pass' or 'fail'. The registry label is the one main()
+# passes for that target, so the messages read as an operator would see them.
 # The call is NOT wrapped in $(...): it reports through the global RC, which a
 # subshell would discard. Its stderr lands in a file so expect_message can grep
 # the operator-facing text.
 expect_fidelity() {
-	local name="$1" want="$2" dir="$3" generators="$4" outputs="$5" got
+	local name="$1" want="$2" dir="$3" target="$4" generators="$5" outputs="$6" got registry
+	case "$target" in
+	deepcopy) registry=DEEPCOPY_MODULES ;;
+	*) registry="the MODULES row" ;;
+	esac
 	LAST_ERR="$FIXTURE_ROOT/$name.err"
 	RC=0
-	assert_registry_fidelity "$dir" "$generators" "$outputs" 2>"$LAST_ERR"
+	assert_registry_fidelity "$dir" "$target" "$registry" "$generators" "$outputs" 2>"$LAST_ERR"
 	if ((RC == 0)); then got=pass; else got=fail; fi
 	if [[ "$got" == "$want" ]]; then
 		printf 'ok   fidelity %-28s -> %s\n' "$name" "$got"
@@ -254,25 +264,25 @@ expect_generators raw-comment-not-filtered-here \
 # gsub — with it, 'rbac:roleName=agc-role' is invisible and the row is rejected.
 wrapped="$(fixture fidelity-tab-wrapped \
 	'manifests:\n\t$(CONTROLLER_GEN) crd \\\n\t\trbac:roleName=agc-role paths="./..." \\\n\t\toutput:crd:artifacts:config=config/crd \\\n\t\toutput:rbac:artifacts:config=config/rbac\n')"
-expect_fidelity tab-wrapped-row-is-faithful pass "$wrapped" \
+expect_fidelity tab-wrapped-row-is-faithful pass "$wrapped" manifests \
 	'crd rbac:roleName=agc-role' 'crd=config/crd rbac=config/rbac'
 
 # A generator registered in MODULES but absent from the recipe: the row claims
 # output this gate would regenerate and `make manifests` would not.
-expect_fidelity registered-generator-absent fail "$wrapped" \
+expect_fidelity registered-generator-absent fail "$wrapped" manifests \
 	'crd rbac:roleName=agc-role webhook' 'crd=config/crd rbac=config/rbac'
 expect_message registered-generator-absent 'is registered in'
 
 # The reverse hole, and the dangerous one: the recipe runs a generator the row
 # omits, so the gate would never regenerate its output and its drift would go
 # unseen.
-expect_fidelity recipe-generator-unregistered fail "$wrapped" \
+expect_fidelity recipe-generator-unregistered fail "$wrapped" manifests \
 	'crd' 'crd=config/crd rbac=config/rbac'
 expect_message recipe-generator-unregistered 'omits'
 
 # An output rule pointing somewhere the row does not name: the gate would diff
 # against the wrong committed dir.
-expect_fidelity output-dir-mismatch fail "$wrapped" \
+expect_fidelity output-dir-mismatch fail "$wrapped" manifests \
 	'crd rbac:roleName=agc-role' 'crd=config/crd/bases rbac=config/rbac'
 expect_message output-dir-mismatch 'names a different dir'
 
@@ -280,7 +290,7 @@ expect_message output-dir-mismatch 'names a different dir'
 # controller-gen's default) is still allowed to name its committed dir.
 defaulted="$(fixture fidelity-defaulted-output \
 	'manifests:\n\t$(CONTROLLER_GEN) crd webhook paths="./..." \\\n\t\toutput:crd:artifacts:config=config/crd\n')"
-expect_fidelity defaulted-output-kind-allowed pass "$defaulted" \
+expect_fidelity defaulted-output-kind-allowed pass "$defaulted" manifests \
 	'crd webhook' 'crd=config/crd webhook=config/webhook'
 
 # REGRESSION (Q464), end to end: a commented-out call must contribute nothing.
@@ -289,14 +299,14 @@ expect_fidelity defaulted-output-kind-allowed pass "$defaulted" \
 # generator that does not exist.
 commented="$(fixture fidelity-commented-out-call \
 	'manifests:\n\t# $(CONTROLLER_GEN) webhook paths="./..."\n\t$(CONTROLLER_GEN) crd paths="./..." \\\n\t\toutput:crd:artifacts:config=config/crd\n')"
-expect_fidelity commented-out-call-ignored pass "$commented" \
+expect_fidelity commented-out-call-ignored pass "$commented" manifests \
 	'crd' 'crd=config/crd'
 
 # The over-coverage direction, and the one the fold silently allowed: the row
 # registers a generator that survives only as a comment. The " $gen " presence
 # grep matched the commented copy, so the gate regenerated webhook output and
 # diffed it against a committed dir `make manifests` no longer writes.
-expect_fidelity commented-generator-is-absent fail "$commented" \
+expect_fidelity commented-generator-is-absent fail "$commented" manifests \
 	'crd webhook' 'crd=config/crd webhook=config/webhook'
 expect_message commented-generator-is-absent 'is registered in'
 
@@ -307,26 +317,119 @@ expect_message commented-generator-is-absent 'is registered in'
 # dir message, not with the '#'-as-generator noise it produced before.
 stale_dir_note="$(fixture fidelity-commented-output-rule \
 	'manifests:\n\t$(CONTROLLER_GEN) crd paths="./..." \\\n\t\toutput:crd:artifacts:config=config/crd/bases # was output:crd:artifacts:config=config/crd\n')"
-expect_fidelity commented-output-rule-ignored fail "$stale_dir_note" \
+expect_fidelity commented-output-rule-ignored fail "$stale_dir_note" manifests \
 	'crd' 'crd=config/crd'
 expect_message commented-output-rule-ignored 'names a different dir'
 
 # A registered module whose manifests: target has gone away.
 gone="$(fixture fidelity-no-target 'generate:\n\t$(CONTROLLER_GEN) object paths="./..."\n')"
-expect_fidelity no-manifests-recipe fail "$gone" 'crd' 'crd=config/crd'
+expect_fidelity no-manifests-recipe fail "$gone" manifests 'crd' 'crd=config/crd'
 expect_message no-manifests-recipe "no 'manifests:' recipe"
+
+# --- the deepcopy half (Q477) -------------------------------------------------
+#
+# The DeepCopy half reuses the same parser and the same fidelity assertion against
+# each module's `deepcopy:` recipe. That reuse is the whole reason these cases
+# exist: before Q477 the parser was hardcoded to `^manifests:`, so a second target
+# could only be read by teaching it which target it is being asked for — and a
+# parser that returns the wrong target's recipe fails silently, by regenerating
+# something plausible.
+
+# The real shape, as all three modules spell it.
+expect_recipe deepcopy-recipe \
+	'deepcopy:\n\tGOWORK=$(CURDIR)/go.work.gen $(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="./..."\n' \
+	' GOWORK=$(CURDIR)/go.work.gen $(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="./..." ' \
+	deepcopy
+
+# REGRESSION (Q477): each target must yield ITS OWN recipe out of a Makefile that
+# defines both, in either order. A parser that ignored the requested target would
+# hand the deepcopy half the crd call — which regenerates cleanly and diffs
+# against nothing, so the gate would pass while checking the wrong thing.
+both='manifests:\n\t$(CONTROLLER_GEN) crd paths="./..."\n\ndeepcopy:\n\t$(CONTROLLER_GEN) object paths="./..."\n'
+expect_recipe both-targets-manifests "$both" ' $(CONTROLLER_GEN) crd paths="./..." '
+expect_recipe both-targets-deepcopy "$both" ' $(CONTROLLER_GEN) object paths="./..." ' deepcopy
+# The same, with deepcopy declared first: the match is by name, not by position.
+reversed='deepcopy:\n\t$(CONTROLLER_GEN) object paths="./..."\n\nmanifests:\n\t$(CONTROLLER_GEN) crd paths="./..."\n'
+expect_recipe reversed-order-deepcopy "$reversed" ' $(CONTROLLER_GEN) object paths="./..." ' deepcopy
+
+# The target name is matched whole: a `deepcopy-<something>:` target above the
+# real one must not be picked up in its place.
+expect_recipe prefixed-target-not-matched \
+	'deepcopy-only:\n\t$(CONTROLLER_GEN) webhook paths="./..."\n\ndeepcopy:\n\t$(CONTROLLER_GEN) object paths="./..."\n' \
+	' $(CONTROLLER_GEN) object paths="./..." ' \
+	deepcopy
+
+# The generators of a real deepcopy recipe reduce to the single `object` call,
+# quoting and $(YEAR) intact — that literal is what DEEPCOPY_GENERATOR holds, so
+# fidelity is a text match against the Makefile.
+expect_generators deepcopy-shape \
+	' GOWORK=$(CURDIR)/go.work.gen "$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="./..." ' \
+	'object:headerFile="hack/boilerplate.go.txt",year=$(YEAR)'
+
+# A faithful deepcopy registration over the real recipe shape.
+dc="$(fixture fidelity-deepcopy \
+	'deepcopy:\n\tGOWORK=$(CURDIR)/go.work.gen "$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="./..."\n')"
+expect_fidelity deepcopy-row-is-faithful pass "$dc" deepcopy "$DEEPCOPY_GENERATOR" ''
+
+# A module whose `object` call has drifted from the shared one — a different
+# headerFile here, but any argument change lands the same way. DEEPCOPY_MODULES
+# registers one call for all three modules, so a module that needs its own must
+# make that a per-module field rather than leave the gate running a call `make
+# deepcopy` does not.
+drifted="$(fixture fidelity-deepcopy-drifted \
+	'deepcopy:\n\t$(CONTROLLER_GEN) object:headerFile="hack/other.go.txt",year=$(YEAR) paths="./..."\n')"
+expect_fidelity deepcopy-generator-drifted fail "$drifted" deepcopy "$DEEPCOPY_GENERATOR" ''
+expect_message deepcopy-generator-drifted 'is registered in'
+expect_message deepcopy-generator-drifted 'DEEPCOPY_MODULES'
+
+# A registered module whose deepcopy: target has gone away.
+expect_fidelity no-deepcopy-recipe fail "$gone" deepcopy "$DEEPCOPY_GENERATOR" ''
+expect_message no-deepcopy-recipe "no 'deepcopy:' recipe"
+
+# --- deepcopy_generator: the argument controller-gen receives -----------------
+
+# make expands $(YEAR) and the shell strips the quotes, so this is what the
+# recipe actually runs. Asserted against `date` rather than a literal: a hardcoded
+# year in the gate would pass every test written in the year it was written and
+# fail every build the following January.
+want_gen="object:headerFile=hack/boilerplate.go.txt,year=$(date +%Y)"
+got_gen="$(deepcopy_generator)"
+if [[ "$got_gen" == "$want_gen" ]]; then
+	printf 'ok   gen      %-28s -> [%s]\n' deepcopy-generator-expanded "$got_gen"
+else
+	printf 'FAIL gen      %-28s\n  want=[%s]\n  got =[%s]\n' \
+		deepcopy-generator-expanded "$want_gen" "$got_gen" >&2
+	fails=$((fails + 1))
+fi
+
+# The registered form keeps $(YEAR) unexpanded — that is what makes the fidelity
+# text match against the Makefile possible, and it is the half of the split that
+# keeps the year out of the constant.
+if [[ "$DEEPCOPY_GENERATOR" == *'$(YEAR)'* ]]; then
+	printf 'ok   gen      %-28s keeps $(YEAR) unexpanded\n' deepcopy-generator-registered
+else
+	printf 'FAIL gen      %-28s DEEPCOPY_GENERATOR must keep $(YEAR) literal: [%s]\n' \
+		deepcopy-generator-registered "$DEEPCOPY_GENERATOR" >&2
+	fails=$((fails + 1))
+fi
 
 # --- the tracked tree ---------------------------------------------------------
 
-# Every real MODULES row still describes its module's real recipe, and every
-# first-party Makefile with a manifests: target is registered. This is the gate's
+# Every real MODULES row still describes its module's real recipe, every module in
+# DEEPCOPY_MODULES still runs the registered `object` call, and every first-party
+# Makefile with a manifests: or deepcopy: target is registered. This is the gate's
 # own assertions 1 and 2 over the committed tree — assertion 3 (drift) needs
 # controller-gen and stays in `make codegen-check`.
 RC=0
 assert_registry_complete 2>"$FIXTURE_ROOT/tree.err"
 for row in "${MODULES[@]}"; do
 	IFS='|' read -r module generators outputs <<<"$row"
-	assert_registry_fidelity "$module" "$generators" "$outputs" 2>>"$FIXTURE_ROOT/tree.err"
+	assert_registry_fidelity "$module" manifests "the MODULES row" "$generators" "$outputs" \
+		2>>"$FIXTURE_ROOT/tree.err"
+done
+for module in "${DEEPCOPY_MODULES[@]}"; do
+	assert_registry_fidelity "$module" deepcopy DEEPCOPY_MODULES "$DEEPCOPY_GENERATOR" '' \
+		2>>"$FIXTURE_ROOT/tree.err"
 done
 if ((RC == 0)); then
 	printf 'ok   tree     %-28s %s\n' registry-matches-makefiles "$(module_dirs | tr '\n' ' ')"

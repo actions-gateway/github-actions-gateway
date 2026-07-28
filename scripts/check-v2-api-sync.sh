@@ -44,7 +44,7 @@ declare -A EXEMPT=(
     [conversion.go]="genuinely versioned: v2alpha1 is the spoke, v2beta1 the hub, so the conversion bodies are inverses"
     [groupversion_info.go]="genuinely versioned: per-version GroupVersion, SchemeBuilder, and served/storage markers"
     [types_test.go]="genuinely versioned: pins each version's own surface (v2beta1's dropped fields, v2alpha1's protocol enum)"
-    [zz_generated.deepcopy.go]="controller-gen output derived from the versioned *_types.go; its cross-version identity is a consequence of today's field shapes, not a contract, and \`make generate\` drift-checking already guards it"
+    [zz_generated.deepcopy.go]="controller-gen output derived from the versioned *_types.go; its cross-version identity is a consequence of today's field shapes, not a contract, and \`make codegen-check\` regenerates and diffs both copies (Q477)"
 )
 
 alpha_dir='api/v2alpha1'
