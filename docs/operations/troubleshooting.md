@@ -519,6 +519,15 @@ untolerated taint, a cloud quota, or — for Karpenter — no instance type sati
 the pod. The condition clears on the next reconcile once a worker pod schedules,
 or once the autoscaler records that it *is* scaling up for one.
 
+> **The taint case names a category, not a key.** Cluster-autoscaler aggregates its
+> per-node-group reasons into counts, so the message reads
+> `1 node(s) had untolerated taint(s)` — *which* taint stopped the scale-up is in the
+> autoscaler's own logs, not in the condition. Read it there:
+>
+> ```sh
+> kubectl logs -n kube-system deploy/cluster-autoscaler | grep untoleratedTaint
+> ```
+
 **If you need jobs flowing again immediately**, turn the gate off and accept
 today's claim-and-cancel behaviour while you fix the cluster:
 

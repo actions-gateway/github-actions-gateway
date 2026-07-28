@@ -687,6 +687,37 @@ e2e: $(GINKGO) ## Run e2e tests; SUITE=standard|multi-node selects a subset, uns
 e2e-clean: e2e-cluster-delete e2e-registry-delete ## Tear down the e2e cluster and registry, and delete .build/
 	rm -rf .build
 
+##@ Live autoscaler
+
+# The capacity gate's elastic-cluster signal recognizes cluster-autoscaler by
+# upstream's Event reasons, pinned in our unit table from recorded samples. A
+# reword upstream fails open — the gate just stops closing, silently, on every
+# elastic cluster — so nothing in the fast tiers can notice. These targets run
+# the matcher against a REAL cluster-autoscaler (kwok cloud provider, fake nodes)
+# in its own throwaway kind cluster, which is what makes that drift a failure.
+# Separate from the e2e cluster on purpose: a live autoscaler creating and
+# deleting nodes underneath the e2e suite would perturb every spec in it.
+# Detail: docs/development/testing.md § The live-autoscaler drift gate.
+AUTOSCALER_CLUSTER ?= gag-autoscaler
+
+.PHONY: autoscaler-cluster
+autoscaler-cluster: ## Create the kind cluster running a real cluster-autoscaler on kwok nodes (no-op if it exists)
+	AUTOSCALER_CLUSTER=$(AUTOSCALER_CLUSTER) KIND_NODE_IMAGE=$(KIND_NODE_IMAGE) \
+		scripts/autoscaler-cluster.sh
+
+.PHONY: test-autoscaler
+test-autoscaler: ## Assert the autoscaler matcher against a live cluster-autoscaler's events (needs autoscaler-cluster)
+	AUTOSCALER_CLUSTER=$(AUTOSCALER_CLUSTER) $(MAKE) -C cmd/agc test-autoscaler
+
+.PHONY: autoscaler-cluster-delete
+autoscaler-cluster-delete: ## Delete the live-autoscaler kind cluster (no-op if it does not exist)
+	@if kind get clusters 2>/dev/null | grep -qx $(AUTOSCALER_CLUSTER); then \
+		echo "==> deleting kind cluster $(AUTOSCALER_CLUSTER)"; \
+		kind delete cluster --name $(AUTOSCALER_CLUSTER); \
+	else \
+		echo "==> kind cluster $(AUTOSCALER_CLUSTER) does not exist"; \
+	fi
+
 ##@ Tools
 
 .PHONY: tools

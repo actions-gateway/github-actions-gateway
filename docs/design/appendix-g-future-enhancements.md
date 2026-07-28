@@ -846,9 +846,13 @@ would be far too chatty.
    that reserves nothing (provider APIs matter only for
    `best-effort-atomic-scale-up`). The negative verdict this rung acts on —
    *cannot place, do not claim* — therefore needs no scale-up to reproduce.
-   Unverified end-to-end: the kwok provider is `v1alpha1` and its docs are
-   silent on ProvisioningRequests, so proving that pairing is the first step,
-   and it is the local-harness half of [Q474](../STATUS.md#Q474).
+   **The kwok harness now exists** — Q474 shipped it as the capacity gate's
+   live drift gate ([plan §9c](../plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474),
+   `make autoscaler-cluster`), so a cluster with a real cluster-autoscaler in it
+   is one `--enable-provisioning-requests` away. Still unverified end-to-end:
+   the kwok provider is `v1alpha1` and its docs are silent on
+   ProvisioningRequests, so proving that pairing remains the first step of this
+   item rather than a prerequisite it lacks a place to run.
    Provider support is a separate axis from implementation: `check-capacity`
    ships in the OSS cluster-autoscaler (1.30.1+, behind
    `--enable-provisioning-requests`), so any self-managed CA can serve it, and

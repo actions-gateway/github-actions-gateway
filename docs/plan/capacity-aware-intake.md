@@ -29,12 +29,16 @@ durable rationale in
 | 1 | Gate on the scheduler's verdict, for clusters that cannot grow | M | ✅ Done ([§6](#6-phase-1--the-scheduler-verdict-signal-q405), Q405, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
 | 2 | Gate on the autoscaler's own declination, for elastic clusters | M | ✅ Done ([§7](#7-phase-2--the-autoscaler-declination-signal-q406), Q406, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
 | 2a | Split the mode enum's two axes: tenant policy on the set, cluster fact on the gateway | S | ✅ Done ([§5a](#5a-the-single-enum-was-two-axes-q470), Q470, 2026-07-27) |
+| 2b | Assert phase 2's matcher against a real autoscaler's events, in kind | M | ✅ Done ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), Q474, 2026-07-28) — cluster-autoscaler only |
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
-Nothing here has been validated on a live cluster, items 0a, 1 and 2 included: each
-carries an envtest proof of the mechanism, not a measurement of its effect. §9 is the
-measurement step, and its numbers are the input to the Phase 3 decision; no
-effectiveness claim belongs in this doc, or in public copy, before it exists.
+**No rung's *effect* has been measured on a live cluster** — items 0a, 1 and 2
+included: each carries an envtest proof of the mechanism, not a measurement of what
+it removes. §9 is that measurement step, still unrun, and its numbers are the input
+to the Phase 3 decision; no effectiveness claim belongs in this doc, or in public
+copy, before it exists. What item 2b added is narrower and does not substitute for
+it: phase 2's *input* — the strings a real cluster-autoscaler emits — is now
+asserted against a live autoscaler on every run of the drift gate ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474)).
 
 ---
 
@@ -160,9 +164,12 @@ Consequences to record:
   (§10); it would need a namespace-level shared verdict and is not worth the
   coupling until measured.
 * **The autoscaler's message is per-pool and worth surfacing.** CA aggregates
-  rejection reasons per node group ("2 node(s) had untolerated taint", "1 max
-  node group size reached"), which is what makes the Phase 2 condition
-  *actionable* rather than merely true. Put it in the condition message.
+  rejection reasons per node group ("1 node(s) had untolerated taint(s)", "1 max
+  node group size reached" — measured, [§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474)),
+  which is what makes the Phase 2 condition *actionable* rather than merely true.
+  Put it in the condition message. Note what the sample does *not* contain: the
+  taint's key and value stay in CA's logs, so the condition names the ceiling but
+  only the category of taint.
 
 ## 5. Design shared by all phases
 
@@ -674,6 +681,90 @@ rung; it is tracked as [Q462](../STATUS.md#Q462). Specifically unmeasured: the d
 recovery latency is noticeable to a tenant whose quota frees up mid-burst. The envtest
 proof asserts the mechanism (a quota-blocked job is never assigned, and assignment
 resumes when headroom returns), not its behaviour at scale.
+
+## 9c. The live-autoscaler harness, and what it measured (Q474)
+
+Shipped 2026-07-28. §9 above is about the gate's *effect* and still needs a real
+burst on dogfood ([Q469](../STATUS.md#Q469)). This is the other half, and it is
+about the gate's *input*: phase 2 recognizes cluster-autoscaler by strings
+upstream owns, pinned in `autoscaler_verdict_test.go` from recorded samples.
+
+**Why a reword is the dangerous kind of drift.** Everywhere else in this rung,
+fail-open is the safety property. Here it is also the concealment: an
+unrecognized vocabulary yields `declined=false`, which is exactly today's
+ungated behavior, so a reword does not break a test, raise an alarm, or change a
+metric — it silently turns the mode into a no-op on every elastic cluster. No
+tier that runs against recorded samples can notice, by construction.
+
+**The harness.** `make autoscaler-cluster` stands up a throwaway kind cluster
+running a real upstream cluster-autoscaler on its
+[kwok cloud provider](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler/cloudprovider/kwok),
+whose stated purpose is exactly this: real CA, real scheduler-framework
+evaluation, real events, fake machines. `make test-autoscaler` then drives three
+pods through it and asserts the matcher's verdict on the events that come back
+(`autoscaler_verdict_live_test.go`, build tag `autoscaler`). It is its own
+cluster rather than the e2e one because an autoscaler creating and deleting
+nodes underneath the e2e suite would perturb every spec in it. Run cadence and
+commands: [testing.md](../development/testing.md#the-live-autoscaler-drift-gate).
+
+Three cases, chosen so each asserts something the recorded table cannot:
+
+1. **A declination is still recognized** — and the kube-scheduler
+   `FailedScheduling` that always accompanies a stuck pod is in the same list, so
+   the pass also shows the matcher picking the autoscaler's verdict out of a list
+   it does not control, rather than matching "some event exists".
+2. **A scale-up still keeps the gate open** — §9 step 3 in miniature, and the
+   only case here whose failure would be a regression rather than a stale sample.
+   It asserts the outcome, not just the event: the pod must land on a node that
+   did not exist when it was created.
+3. **The node-group ceiling is still named** — the one part of the message body
+   the operator docs promise by name.
+
+**Measured against cluster-autoscaler v1.36.1 / Kubernetes 1.36.1, 2026-07-28.**
+
+* **The vocabulary holds.** `NotTriggerScaleUp`, `TriggeredScaleUp`, the
+  `pod didn't trigger scale-up:` / `pod triggered scale-up:` prefixes, and
+  `max node group size reached` are all intact.
+* **The reporter is attributed on both fields.** CA sets `source.component` *and*
+  `reportingComponent` to `cluster-autoscaler`, so `reportedByScheduler`'s
+  new-style-then-legacy fallback reads the same answer either way.
+* **CA still records through the legacy recorder** — `firstTimestamp`/
+  `lastTimestamp` set, `eventTime` null. `eventTime()`'s decision to take the
+  latest of *every* timestamp field is therefore load-bearing today, not
+  defensive: reading only `EventTime` would sort every CA event at the zero time.
+* **The taint is no longer named, the ceiling still is.** v1.36.1 emits
+  `1 node(s) had untolerated taint(s)` — the key and value are in CA's *logs*
+  (`debugInfo`), not in the event. The recorded sample in the unit table said
+  `2 node(s) had untolerated taint {dedicated: gpu}`; both spellings are now
+  rows, because the matcher never parses a body and must classify them
+  identically. No operator-doc claim had to be withdrawn: the troubleshooting
+  page promises the *category*, and §4's parenthetical sample is now the
+  measured one.
+* **A real autoscaler emitted both verdicts for one pod inside one loop.** With
+  three pods contending for a two-node group, CA recorded `TriggeredScaleUp` for
+  pod `big-a` at `14:05:19.348` and `NotTriggerScaleUp` for the *same* pod at
+  `14:05:19.352` — the first scale-up round found a plan, and a second round with
+  the upcoming node still could not place it. §7a introduced the newest-wins rule
+  precisely for a declination the autoscaler had superseded; this is the case it
+  did not anticipate, where the *declination is the later one* and a node is
+  nonetheless arriving. Today it resolves correctly, but only because CA's legacy
+  recorder has one-second resolution, so the two events tie and the tie resolves
+  open. The recency rule alone would have said "declined". That makes the
+  tie-break the thing carrying correctness here, and it does not carry it for a
+  microsecond-resolution recorder — which is the generation Karpenter uses.
+  Tracked as [Q478](../STATUS.md#Q478); not fixed here, because Q474 is a test
+  and the fix is a behavior change to a shipped gate that wants its own negative
+  control.
+
+**What this still does not cover.** Karpenter. Its matcher arm — the one that
+genuinely needs reporter discrimination, since it shares kube-scheduler's reason
+string — has no live counterpart, and
+[karpenter-provider-kwok](https://github.com/kubernetes-sigs/karpenter/tree/main/kwok)
+is the equivalent harness for it ([Q479](../STATUS.md#Q479)). And the harness is
+also the thing [G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)
+named as the local-half prerequisite for ever validating `Probe`/`Provision`
+(Q407): a cluster with a real CA in it is where `--enable-provisioning-requests`
+could be turned on.
 
 ## 10. Non-goals
 

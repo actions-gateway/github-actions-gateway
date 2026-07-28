@@ -1,0 +1,145 @@
+# Cluster-autoscaler's kwok cloud provider configuration (Q474).
+#
+# The kwok provider lets a REAL cluster-autoscaler run against fake nodes, which
+# is what makes an upstream reword of its event vocabulary observable in kind.
+# Two ConfigMaps, both read by cluster-autoscaler at startup:
+#
+#   kwok-provider-config     — the provider's own config (data key `config`, a
+#                              constant in cluster-autoscaler's kwok_config.go).
+#   kwok-provider-templates  — the node shapes each node group would create.
+#
+# Neither is read by the AGC. This whole namespace of objects exists to give the
+# matcher in cmd/agc/internal/controller/autoscaler_verdict.go a real autoscaler
+# to be asserted against.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kwok-provider-config
+  namespace: kube-system
+data:
+  config: |
+    apiVersion: v1alpha1
+    readNodesFrom: configmap
+    nodegroups:
+      # One node group per distinct value of this label across the templates
+      # below. Grouping by a label (rather than by annotation) keeps the pool a
+      # test pod selects and the node group cluster-autoscaler reasons about the
+      # same string.
+      fromNodeLabelKey: "gag-test/pool"
+    nodes:
+      # Upstream taints every fake node with `kwok-provider: true` so a provider
+      # accidentally left running in a production cluster cannot attract real
+      # work. This cluster exists only for this test, and leaving the taint on
+      # would make EVERY pod's declination read "had untolerated taint
+      # {kwok-provider: true}" — drowning the per-node-group reasons the test is
+      # there to observe.
+      skipTaint: true
+    configmap:
+      name: kwok-provider-templates
+      # Named explicitly rather than relying on the provider's `config` default,
+      # so the two ConfigMaps do not both hinge on the same implicit key.
+      key: templates
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kwok-provider-templates
+  namespace: kube-system
+data:
+  # One template Node per node group. cluster-autoscaler simulates placement
+  # against these shapes to decide whether growing a group would help the pod,
+  # and kwok materializes a copy (renamed `kwok-fake-*`) when it does.
+  #
+  # Three groups, one per case the live test drives, kept separate so no case can
+  # consume the capacity another one is asserting on:
+  #
+  #   standard — room to grow (max 2). A pod selecting it is RESCUED, which is the
+  #              case that proves the gate is not suppressing a scale-up.
+  #   gpu      — carries a taint no test pod tolerates, so selecting it is
+  #              declined without the group's size ever being the reason.
+  #   capped   — max 1, and one pod large enough to fill the single node it can
+  #              create. The next pod's declination is the node-group ceiling,
+  #              which is the reason the operator doc promises by name.
+  templates: |
+    apiVersion: v1
+    kind: List
+    items:
+    - apiVersion: v1
+      kind: Node
+      metadata:
+        name: standard
+        annotations:
+          cluster-autoscaler.kwok.nodegroup/min-count: "0"
+          cluster-autoscaler.kwok.nodegroup/max-count: "2"
+        labels:
+          gag-test/pool: standard
+          kubernetes.io/os: linux
+          kubernetes.io/hostname: standard
+      spec: {}
+      status:
+        allocatable:
+          cpu: "4"
+          memory: 8Gi
+          pods: "110"
+        capacity:
+          cpu: "4"
+          memory: 8Gi
+          pods: "110"
+        conditions:
+        - status: "True"
+          type: Ready
+        phase: Running
+    - apiVersion: v1
+      kind: Node
+      metadata:
+        name: gpu
+        annotations:
+          cluster-autoscaler.kwok.nodegroup/min-count: "0"
+          cluster-autoscaler.kwok.nodegroup/max-count: "1"
+        labels:
+          gag-test/pool: gpu
+          kubernetes.io/os: linux
+          kubernetes.io/hostname: gpu
+      spec:
+        taints:
+        - key: dedicated
+          value: gpu
+          effect: NoSchedule
+      status:
+        allocatable:
+          cpu: "4"
+          memory: 8Gi
+          pods: "110"
+        capacity:
+          cpu: "4"
+          memory: 8Gi
+          pods: "110"
+        conditions:
+        - status: "True"
+          type: Ready
+        phase: Running
+    - apiVersion: v1
+      kind: Node
+      metadata:
+        name: capped
+        annotations:
+          cluster-autoscaler.kwok.nodegroup/min-count: "0"
+          cluster-autoscaler.kwok.nodegroup/max-count: "1"
+        labels:
+          gag-test/pool: capped
+          kubernetes.io/os: linux
+          kubernetes.io/hostname: capped
+      spec: {}
+      status:
+        allocatable:
+          cpu: "4"
+          memory: 8Gi
+          pods: "110"
+        capacity:
+          cpu: "4"
+          memory: 8Gi
+          pods: "110"
+        conditions:
+        - status: "True"
+          type: Ready
+        phase: Running

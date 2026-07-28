@@ -9,6 +9,7 @@ Shared test fixtures and configuration used by integration and end-to-end tests.
 | [fakegithub/](fakegithub/) | Deployable HTTP stub implementing the GitHub App token exchange and the Actions broker v2 protocol. Lets the AGC start and process jobs in Tier B e2e tests without real GitHub credentials. Jobs are injected via a pod-local control API. |
 | [kind-config-1worker.yaml](kind-config-1worker.yaml) | `kind` cluster config with one worker node. Default for Tier A specs. |
 | [kind-config-2worker.yaml](kind-config-2worker.yaml) | `kind` cluster config with two worker nodes. Used by specs that need scheduling across nodes. |
+| [autoscaler/](autoscaler/) | Manifests for the live-autoscaler drift gate: a real upstream cluster-autoscaler on its kwok cloud provider, plus the fake node groups it scales. Applied by [`scripts/autoscaler-cluster.sh`](../scripts/autoscaler-cluster.sh) into a cluster of its own — a live autoscaler adding and removing nodes underneath the e2e suite would perturb every spec in it. |
 
 ## Test tiers
 
@@ -19,6 +20,7 @@ Shared test fixtures and configuration used by integration and end-to-end tests.
 | Tier A (kind) | Local `kind` cluster | GMC infrastructure: real CNI, kube-proxy DNAT, kubelet image-pull, NetworkPolicy, TLS-over-tunnel | [docs/design/07-test-plan.md §7.3](../docs/design/07-test-plan.md#73-end-to-end-tests) |
 | Tier B (kind + fakegithub) | Local `kind` cluster | AGC lifecycle against the in-cluster `fakegithub/` server — no real GitHub quota burned | [docs/design/07-test-plan.md §7.3](../docs/design/07-test-plan.md#73-end-to-end-tests) |
 | Tier C (live) | Real cluster + real GitHub App | Real workflow dispatch end-to-end against `actions-gateway-test` | [docs/design/07-test-plan.md §7.3](../docs/design/07-test-plan.md#73-end-to-end-tests) |
+| Live autoscaler (kind + kwok) | Its own `kind` cluster | That an **upstream** vocabulary we fail open on is still the one we recognize — the class no recorded sample can observe, because a reword there leaves every test green | [docs/development/testing.md](../docs/development/testing.md#the-live-autoscaler-drift-gate) |
 
 For operational details (Make targets, running a single spec, the `multi-node` label and `SUITE` filter, Tier C env vars), see [docs/development/testing.md](../docs/development/testing.md). For iterating on Tier A/B locally (image-tag caching, distroless debugging, sub-minute inner loop), see [docs/development/kind-iteration.md](../docs/development/kind-iteration.md).
 

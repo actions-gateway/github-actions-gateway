@@ -33,18 +33,21 @@ cd "$REPO_ROOT"
 source "$REPO_ROOT/scripts/lib/common.sh"
 
 # Every custom build tag first-party Go files constrain on, comma-separated for
-# `go`'s -tags flag. Enabling them all at once is sound here because they select
-# DISJOINT package trees (envtest suites, e2e suites, the load harness) rather
-# than alternative implementations of one package: no file is constrained on the
-# negation of another's tag, so no combination conflicts. Keep it that way. If a
-# tag ever needs a `!tag` counterpart file, this one-shot strategy stops working
-# and the gate has to vet each tag separately.
+# `go`'s -tags flag. Enabling them all at once is sound here because every tagged
+# file ADDS to a build rather than replacing part of one: no file is constrained
+# on the negation of another's tag, so no combination conflicts. Most select
+# whole package trees of their own (envtest suites, e2e suites, the load
+# harness); `autoscaler` instead adds one live test to a package the default
+# build already compiles, which is fine for the same reason — it only has to not
+# collide with the identifiers already there. Keep it that way. If a tag ever
+# needs a `!tag` counterpart file, this one-shot strategy stops working and the
+# gate has to vet each tag separately.
 #
 # Assertion 1 keeps this list honest in the add direction: a new tag makes the
 # gate fail with instructions. GOOS/GOARCH/go1.x constraints do NOT belong here,
 # because they are environment-controlled, and forcing e.g. `linux` on a darwin
 # host would build files for the wrong platform.
-BUILD_TAGS="integration,e2e,load"
+BUILD_TAGS="integration,e2e,load,autoscaler"
 
 # assert_tags_cover_tree TAGS PATTERN... — fail unless TAGS make every first-party
 # .go file under PATTERNs buildable. go list reports the files a package's build

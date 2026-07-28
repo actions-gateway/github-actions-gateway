@@ -359,6 +359,7 @@ Prefer the narrowest tier that can actually *observe* the bug class — but no n
 - **Unit (fake client)** — pure logic and field-level behavior. The fake client (`sigs.k8s.io/controller-runtime/pkg/client/fake`) reproduces none of the real-apiserver semantics below, so a fake-client test cannot prove claims that depend on them.
 - **envtest (integration)** — any claim that depends on real-apiserver semantics: schema/admission defaulting, server-side no-op-write dedup (the apiserver skips the `resourceVersion` bump when a patch's defaulted result is unchanged), admission/validation webhooks and CEL, and `IsConflict` handling. Both `cmd/agc` and `cmd/gmc` already have envtest suites at `internal/controller/integration/` (build tag `integration`, see [Integration tests](#integration-tests)) — add to them rather than concluding none exists; confirm with a directory listing before deciding a tier is missing. Example: PR #143 (Q65) migrated the GMC `apply*` helpers to `CreateOrPatch`; a fake-client test could verify field-level behavior, but only `apply_nochurn_test.go` (envtest, asserting `resourceVersion` stability across periodic reconciles) could prove the whole-`Spec` helpers don't churn.
 - **Tier-A kind e2e** — behaviors that emerge from real Container Network Interface (CNI), kube-proxy Destination NAT (DNAT), kubelet image-pull policy, or TLS-over-tunnel. When a feature crosses one of those boundaries, the Tier-A test (see [design §7.3](../design/07-test-plan.md#73-end-to-end-tests) and [End-to-end tests](#end-to-end-tests)) is the only thing that proves it works. Example: PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented Tier-A test (`E2E_GMC_TenantProvisioning_ProxyConnectWorks`) would have caught 4 of them locally.
+- **Live autoscaler (kind + kwok)** — claims about a string, verb, or field an **upstream project** emits, where our side fails open and therefore stays green when upstream changes it. Recorded samples cannot observe that class at all. Today that is the capacity gate's autoscaler vocabulary; see [The live-autoscaler drift gate](#the-live-autoscaler-drift-gate).
 - **Load (in-process)** — scaling claims about the AGC's own goroutine/memory/throughput footprint, not a functional bug class. The load harness (build tag `load`, see [Load tests](#load-tests)) drives the real listener-multiplexing core at thousands of concurrent virtual sessions without a cluster. Use it to pin a capacity claim or guard against a concurrency-core regression (goroutine leak, sustained-session collapse); it cannot speak to anything downstream of the AGC process (real pods, apiserver/GitHub latency).
 
 Before concluding a test failure is a code bug, check whether the problem is in the test expectations, the test setup, or the code itself — the intent of the test must match the implementation.
@@ -492,6 +493,26 @@ make load-test-full    # same scale, realistic job hold; writes results/latest.m
 ```
 
 Both run under the same desktop-safety throttle as the rest of the suite (a no-op on CI). The Service Level Objectives (SLOs) it asserts — sustained concurrent sessions, ≈1 re-registration per job, no goroutine leak — are the faithful results; absolute throughput and recycle latency are bounded by the in-process control-plane stand-ins and are reported for trend, not as production figures (see the README's fidelity boundaries). It is **not** wired into `make check` or per-PR CI — run it when changing the concurrency core (listener/multiplexer/agentpool) or validating a capacity claim.
+
+## The live-autoscaler drift gate
+
+One tier exists to catch a change **upstream**, not a change here: the capacity gate's elastic-cluster signal (Q406) recognizes cluster-autoscaler by two Event reasons and a reporter name, pinned in a unit table from recorded samples. Those strings belong to upstream, and a reword there fails *open* — an unrecognized vocabulary yields "not declined", which is exactly the ungated behaviour — so the mode would silently become a no-op on every elastic cluster with every existing test still green. Nothing that runs against recorded samples can observe that, by construction.
+
+`make test-autoscaler` runs the same matcher against events a **real** upstream cluster-autoscaler emits, using its [kwok cloud provider](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler/cloudprovider/kwok): the autoscaler, its scheduler-framework evaluation, and its events are genuine, only the nodes are fake, so the whole thing fits in a kind cluster on a laptop.
+
+```bash
+make autoscaler-cluster        # one-time: kind cluster + kwok + cluster-autoscaler (~2 min)
+make test-autoscaler           # three cases, ~30 s
+make autoscaler-cluster-delete # tear down when done
+```
+
+- **Its own cluster, not the e2e one.** A live autoscaler creating and deleting nodes underneath the e2e suite would perturb every spec in it. `AUTOSCALER_CLUSTER` (default `gag-autoscaler`) names it; `CA_VERSION` and `KWOK_VERSION` pin what gets installed, in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh). Manifests live in [`test/autoscaler/`](../../test/autoscaler/).
+- **Build tag `autoscaler`**, in `cmd/agc/internal/controller/autoscaler_verdict_live_test.go`, in-package so it calls the unexported matcher directly rather than widening its API for a test.
+- **It fails rather than skips when the cluster is absent.** A drift detector that skips itself detects nothing; the failure message names the make target.
+- **Not in `make check` and not in per-PR CI.** What it detects arrives on upstream's schedule, not a pull request's. **Run it when bumping `CA_VERSION`**, and otherwise on a periodic sweep — a bump whose release reworded the vocabulary is exactly the change this catches.
+- **Karpenter is not covered.** Its matcher arm has no live counterpart yet ([Q479](../STATUS.md#Q479)).
+
+What it measured on first run, and the one finding that outlived it, are in [the plan §9c](../plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474).
 
 ## End-to-end tests
 
