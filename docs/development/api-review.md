@@ -179,6 +179,28 @@ The zero value is a default whether or not you chose it. A non-pointer `string`
 with no `+kubebuilder:default` means `""` reaches your code; decide what `""`
 means before someone else's `switch` decides for you.
 
+### Let the opt-in's direction follow what already ships
+
+Opt-in or opt-out is decided by the behaviour that is already published, not by
+taste. A switch that turns *off* behaviour operators already have must default to
+keeping it (`EgressProxy.spec.managedAutoscaling` and `managedNetworkPolicy`,
+both `*bool` defaulting `true`); a switch that turns *on* new behaviour must
+default to off (`ActionsGateway.spec.agcAutoscaling` unset ⇒ no
+`VerticalPodAutoscaler`). Two features on one axis therefore look asymmetric when
+one predates the other, and that is the correct outcome — forcing them to match
+either deletes something on upgrade or turns something on that nobody asked for
+(Q486).
+
+The *container* answers a second question: does the opt-in carry knobs of its
+own? A pure ownership toggle whose knobs already exist as siblings is a `*bool`;
+an opt-in with settings meaningful only while it is on is a block whose presence
+**is** the switch — never a block with an `enabled` field, which is two fields
+answering one question. Match the neighbours on the same object before matching a
+different CRD: an operator meets the field in the object it lives in. Worked
+example, including why the `*bool` survives
+[prefer a string enum](#prefer-a-string-enum-to-a-bool):
+§ E of [release-1.3.md](../plan/release-1.3.md).
+
 ### Decide optional, required, pointer, and default together
 
 They are one decision with four outputs, and getting a corner wrong is silent.
@@ -359,6 +381,7 @@ directions.
 | Does the name collide with an established convention? | The word already means something in PSA, Gatekeeper, or core Kubernetes | [Don't collide](#dont-collide-with-an-established-meaning) |
 | Whose fact is this? | A tenant asserting something about the cluster or raising their own cap | [Ask whose fact it is](#ask-whose-fact-it-is) |
 | Does the default fail safe? | The wrong answer costs isolation, capacity, or a security layer | [Fail in the safe direction](#make-the-default-fail-in-the-safe-direction) |
+| Is it an opt-in or an opt-out, and does the shape match its neighbours? | A new switch defaulting against today's behaviour; a block with an `enabled` field | [Direction follows what ships](#let-the-opt-ins-direction-follow-what-already-ships) |
 | Are optional/required/pointer/default consistent? | `+optional` without `omitempty`; a CRD default we may want to move | [Decide them together](#decide-optional-required-pointer-and-default-together) |
 | Is the list type right? | A new list with no `listType` marker | [List semantics](#choose-the-list-semantics-deliberately) |
 | Is each rule on the narrowest field? | A spec-level `XValidation` naming one field | [Narrowest field](#put-a-constraint-on-the-narrowest-field-that-expresses-it) |
