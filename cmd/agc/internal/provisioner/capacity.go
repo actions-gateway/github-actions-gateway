@@ -22,8 +22,19 @@ func (p *Provisioner) createPodWithQuotaRetry(ctx context.Context, target Target
 		if err == nil {
 			return nil
 		}
-		// Non-quota errors are never retried.
+		// Non-quota errors are never retried. Surface them on the owner object:
+		// a worker pod the apiserver refuses is invisible at GitHub, which reports
+		// only that the runner "lost communication" and points the operator at
+		// networking (Q467). The apiserver's own message — an invalid name, a
+		// rejecting admission webhook, a denied security profile — is the shortest
+		// path to the real cause. An AlreadyExists is a replayed delivery finding
+		// its own pod, which is success on the v2 path, so it is not reported.
 		if !isQuotaError(err) {
+			if !apierrors.IsAlreadyExists(err) {
+				log.Warn("apiserver rejected worker pod", "pod", pod.Name, "error", err)
+				target.RecordEvent(corev1.EventTypeWarning, "WorkerPodCreateFailed", "ProvisionWorker",
+					fmt.Sprintf("the apiserver rejected worker pod %s: %v", pod.Name, err))
+			}
 			return err
 		}
 		// maxRetries==0 means quota retry is disabled; return immediately without

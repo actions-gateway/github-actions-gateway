@@ -26,6 +26,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [RunnerGroup Stops Serving Jobs With Stale Ready=True](#runnergroup-stops-serving-jobs-with-stale-readytrue)
 - [Orphaned RunnerGroup After Removing It From the Spec](#orphaned-runnergroup-after-removing-it-from-the-spec)
 - [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
+- ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created)
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
 - [Worker Pod Reaped While Running (WorkerPodOrphanedRunning)](#worker-pod-reaped-while-running-workerpodorphanedrunning)
@@ -906,6 +907,39 @@ kubectl logs -n gmc-system deploy/gmc-controller-manager \
 
 ---
 
+## "Runner Lost Communication" and No Worker Pod Was Ever Created
+
+**Symptoms.** GitHub fails the job with *"The self-hosted runner: … lost communication with the server. Verify the machine is running and has a healthy network connection."* On the cluster there is **no worker pod at all** for that job — not `Pending`, not `Failed`, absent — and `kubectl get events` in the tenant namespace shows nothing about it unless you look at the owner object. The message points at networking, but nothing is wrong with the network.
+
+**Likely cause.** The API server rejected the worker pod, so the AGC never got one. The job was acquired at GitHub, no runner ever came online to run it, and the job's lock lapsed. Any create rejection produces this shape: an invalid `metadata.name`, a policy-engine admission webhook, a `PodSecurity` label the pod violates, or a missing `PriorityClass`.
+
+Historically the most confusing instance was a name the AGC itself derived: `runner-<owner>-<jobID>` truncated to the 63-character DNS-label limit could land the cut on one of the job UUID's hyphens, and a name ending in `-` is rejected. That made the failure **deterministic per tenant**: for an affected gateway-name length, *every* worker pod was rejected and *no* job ever ran, while GitHub reported only lost communication. Fixed in Q467 — the AGC now splits the length budget across the name's segments and hashes each truncated tail, so a derived name is always a valid label and still unique per job. If you are on a release without that fix, renaming the gateway to a different length is the workaround.
+
+**Diagnostics.**
+
+```sh
+# The AGC records a WorkerPodCreateFailed Warning on the owner, carrying the API
+# server's own message. This is the shortest path to the real cause.
+kubectl describe runnergroup -n <namespace> <name>          # v1alpha1
+kubectl describe runnerset   -n <namespace> <name>          # v2alpha1
+```
+
+```sh
+kubectl get events -n <namespace> --field-selector reason=WorkerPodCreateFailed
+```
+
+```sh
+# The same rejection in the AGC log, with the pod name it tried to create.
+kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -i "rejected worker pod"
+```
+
+**Resolution.**
+- Read the API server's message in the event. `metadata.name: Invalid value` means a derived name — upgrade to a release carrying the Q467 fix, or rename the gateway/`RunnerSet` in the meantime. An `admission webhook … denied the request` means a cluster policy engine — see [Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine](#worker--proxy--agc-pods-rejected-by-a-cluster-policy-engine).
+- Confirm the pod really is absent rather than reaped: `kubectl get pods -n <namespace> -l actions-gateway/runner-group=<group>` (v1) or `-l actions-gateway.com/runner-set=<set>` (v2).
+- Re-run the workflow once the rejection is resolved; nothing is retried automatically, because the job's GitHub-side lock has already lapsed.
+
+---
+
 ## Worker Pods Stuck Pending
 
 **Symptoms.** Jobs are acquired (`actions_gateway_jobs_acquired_total` increments) but worker pods remain in `Pending` state for more than 60 seconds. `pod_creation_latency_seconds` p95 exceeds the 15s SLO target.
@@ -1162,6 +1196,7 @@ few seconds; the metric is the real-time signal.
 | `RunnerVersionTooOld` | Warning | Session creation was rejected permanently because the runner version is too old for GitHub. Also sets the `RunnerVersionTooOld` condition. | [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs) |
 | `SessionUnauthorized` | Warning | Session creation was rejected as unauthorized — the agent credentials are invalid or revoked. Also sets the `Degraded` condition. | [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration) |
 | `QuotaRetriesExhausted` | Warning | Worker pod creation was abandoned after exhausting the namespace `ResourceQuota` retry budget (`maxQuotaRetries`). | [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion) |
+| `WorkerPodCreateFailed` | Warning | The API server refused to create a worker pod (invalid name, admission webhook, pod-security policy). The note carries the API server's own message. No pod exists, so GitHub reports only that the runner lost communication. | ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created) |
 | `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, which share one per-run budget. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) |
 
 **Diagnostics.**
