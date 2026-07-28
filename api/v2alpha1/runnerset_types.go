@@ -277,6 +277,15 @@ type RunnerSetSpec struct {
 // on ActionsGateway.spec.clusterCapacity.nodeAutoscaling and the AGC picks the signal
 // from it. A tenant declares intent here; the platform declares the cluster there.
 //
+// EVERY VALUE EXCEPT Off REFUSES JOBS. They differ in how the AGC learns the cluster
+// cannot place the pod, never in whether it acts on the answer: there is no
+// report-only mode here, and Off is the single value that does nothing. That is why
+// the values are named for the method rather than as on/off (Q476) — Observe reads
+// evidence a stuck pod has already produced, where the reserved values below solicit
+// an answer instead, and a bare "On" would stop distinguishing them the moment the
+// axis grew. Do not read Observe as the audit/dry-run tier some enforcement APIs
+// spell that way; it gates.
+//
 // Reserved but NOT YET IMPLEMENTED, and therefore not accepted by the enum:
 // Probe/Provision (ask before claiming via a ProvisioningRequest capacity check —
 // Q407), which extend this same axis by soliciting an answer rather than observing
@@ -286,8 +295,9 @@ type RunnerSetSpec struct {
 const (
 	// CapacityGateModeOff is the default: no capacity rung, today's behavior.
 	CapacityGateModeOff = "Off"
-	// CapacityGateModeOn refuses to take on jobs while the cluster cannot place this
-	// set's worker pods, using whichever signal is sound for the cluster:
+	// CapacityGateModeObserve refuses to take on jobs while the cluster cannot place
+	// this set's worker pods, deciding from evidence a stuck worker pod has ALREADY
+	// produced rather than by asking — whichever signal is sound for the cluster:
 	//
 	//   - nodeAutoscaling: Absent — the scheduler's own verdict, i.e. worker pods sat
 	//     Pending past the scheduling grace reporting PodScheduled=False/Unschedulable.
@@ -304,7 +314,7 @@ const (
 	// whose autoscaler the AGC does not recognize — a proprietary optimizer — this
 	// mode simply never gates, and a later positive signal from a recognized one
 	// reopens it.
-	CapacityGateModeOn = "On"
+	CapacityGateModeObserve = "Observe"
 )
 
 // CapacityGate configures the placeability rung of the admission ladder (Q405).
@@ -326,8 +336,10 @@ const (
 // may under-gate freely; it must never over-gate, because over-gating starves a
 // tenant.
 type CapacityGate struct {
-	// Mode selects how hard this set tries not to claim work it cannot run; see the
-	// CapacityGateMode* constants. Off is the default and is today's behavior.
+	// Mode selects how hard this set tries not to claim work it cannot run, by naming
+	// how the AGC learns the cluster cannot place a worker; see the CapacityGateMode*
+	// constants. Off is the default and is today's behavior. Observe gates on evidence
+	// an already-stuck pod produced — it is not a report-only tier.
 	//
 	// It does NOT select the signal. Which signal is sound depends on whether the
 	// cluster can grow, which is stated once by the platform operator on
@@ -335,7 +347,7 @@ type CapacityGate struct {
 	// gate cannot pick a signal that is wrong for the cluster they are running in.
 	//
 	// +kubebuilder:default=Off
-	// +kubebuilder:validation:Enum=Off;On
+	// +kubebuilder:validation:Enum=Off;Observe
 	// +optional
 	Mode string `json:"mode,omitempty"`
 }

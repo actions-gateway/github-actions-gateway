@@ -174,8 +174,14 @@ single-enum design and why it was wrong are in [§5a](#5a-the-single-enum-was-tw
 | Value | Meaning | Phase |
 |---|---|---|
 | `Off` | Default. No capacity rung; today's behavior exactly. | — |
-| `On` | Refuse jobs this set cannot run, on whichever signal is sound for the cluster. | 1, 2 |
+| `Observe` | Refuse jobs this set cannot run, deciding from evidence an already-stuck worker pod produced — on whichever signal is sound for the cluster. | 1, 2 |
 | `Probe` / `Provision` | Ask before claiming, via `ProvisioningRequest` `check-capacity` / `best-effort-atomic-scale-up`. | 3 |
+
+Every value but `Off` refuses jobs; they differ in *how the AGC learns* the cluster
+cannot place the pod, which is why they are named for the method (Q476). `Observe`
+reads evidence that already exists; `Probe`/`Provision` solicit an answer. A bare
+`On` stopped distinguishing those the moment the axis grew, and it was renamed while
+the value was days old and unreleased.
 
 `ActionsGateway.spec.clusterCapacity.nodeAutoscaling` — the platform operator's fact,
 which selects the signal:
@@ -303,7 +309,7 @@ this is the same call, restated because the collapsed enum makes it tempting aga
 ## 6. Phase 1 — the scheduler-verdict signal (Q405)
 
 > The mode name `SchedulerVerdict` in this section is historical: Q470 replaced it with
-> `mode: On` plus `clusterCapacity.nodeAutoscaling: Absent` on the gateway ([§5a](#5a-the-single-enum-was-two-axes-q470)).
+> `mode: Observe` plus `clusterCapacity.nodeAutoscaling: Absent` on the gateway ([§5a](#5a-the-single-enum-was-two-axes-q470)).
 > The signal, the rung, and the condition are unchanged.
 
 The gateable signal already exists as a published condition, so this phase is
@@ -353,7 +359,7 @@ capacity conditions as gauges is already tracked as
 ## 7. Phase 2 — the autoscaler-declination signal (Q406)
 
 > The mode name `AutoscalerVerdict` in this section is historical: Q470 replaced it with
-> `mode: On` plus the gateway default `clusterCapacity.nodeAutoscaling: Present`
+> `mode: Observe` plus the gateway default `clusterCapacity.nodeAutoscaling: Present`
 > ([§5a](#5a-the-single-enum-was-two-axes-q470)). The signal is unchanged.
 
 Same rung, different source: the autoscaler's own declination, read from Events

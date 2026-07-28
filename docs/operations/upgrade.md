@@ -12,7 +12,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
-  - [BREAKING (pre-GA): capacityGate.mode values replaced by On + a gateway-level cluster fact](#breaking-pre-ga-capacitygatemode-values-replaced-by-on--a-gateway-level-cluster-fact)
+  - [BREAKING (pre-GA): capacityGate.mode values replaced by Observe + a gateway-level cluster fact](#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact)
   - [Non-breaking: an over-long derived RunnerGroup name is bounded (and renamed)](#non-breaking-an-over-long-derived-runnergroup-name-is-bounded-and-renamed)
   - [Non-breaking: a RunnerSet's agent Secrets and runner names gain an rs- prefix](#non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix)
   - [Non-breaking: v2alpha1 is deprecated and the apiserver now warns](#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns)
@@ -74,12 +74,22 @@ Also check the release notes for the new version before upgrading, particularly:
 
 ## Migration Notes
 
-### BREAKING (pre-GA): `capacityGate.mode` values replaced by `On` + a gateway-level cluster fact
+### BREAKING (pre-GA): `capacityGate.mode` values replaced by `Observe` + a gateway-level cluster fact
 
-**Who is affected:** only a `RunnerSet` that set
-`spec.capacityGate.mode: SchedulerVerdict` or `AutoscalerVerdict`. Those values existed
-for a single release-day window and the field defaults to `Off`, so most installs have
-nothing to do.
+**Who is affected:** only a `RunnerSet` that set `spec.capacityGate.mode` to
+`SchedulerVerdict`, `AutoscalerVerdict`, or `On`. None of those values ever appeared in
+a tagged release — they existed only on `main`, and the field defaults to `Off` — so an
+install tracking releases has nothing to do here.
+
+`Observe` is the name the single gating value settled on. `On` said only *that* the gate
+was enabled; `Observe` says *how* it decides — from evidence an already-stuck worker pod
+produced, rather than by asking. That distinction is invisible with one gating value and
+load-bearing once the reserved `Probe`/`Provision` values ([Q407](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity))
+join the same axis by soliciting an answer instead. Renaming now cost nothing; renaming
+after the value shipped would have needed a conversion shim and a deprecation window.
+
+`Observe` is **not** an audit or dry-run tier. Every value except `Off` refuses jobs;
+they differ only in how the AGC learns the cluster cannot place the pod.
 
 The capacity gate's mode enum was carrying two independent things: whether a set should
 refuse work it cannot run (a tenant's choice), and which signal may be trusted (a
@@ -93,8 +103,9 @@ The two axes are now separate objects, and that combination is unrepresentable:
 
 | Was, on the `RunnerSet` | Now, on the `RunnerSet` | Plus, on its `ActionsGateway` |
 |---|---|---|
-| `mode: SchedulerVerdict` | `mode: On` | `clusterCapacity.nodeAutoscaling: Absent` |
-| `mode: AutoscalerVerdict` | `mode: On` | `clusterCapacity.nodeAutoscaling: Present` (the default — nothing to set) |
+| `mode: SchedulerVerdict` | `mode: Observe` | `clusterCapacity.nodeAutoscaling: Absent` |
+| `mode: AutoscalerVerdict` | `mode: Observe` | `clusterCapacity.nodeAutoscaling: Present` (the default — nothing to set) |
+| `mode: On` | `mode: Observe` | whatever you already set — unchanged |
 | `mode: Off` | unchanged | — |
 
 ```sh
@@ -107,7 +118,7 @@ kubectl patch actionsgateway -n <namespace> <gateway> --type=merge \
 ```sh
 # 2. Move each opted-in runner set to the single mode value.
 kubectl patch runnerset -n <namespace> <runner-set> --type=merge \
-  -p '{"spec":{"capacityGate":{"mode":"On"}}}'
+  -p '{"spec":{"capacityGate":{"mode":"Observe"}}}'
 ```
 
 **Order matters on a fixed-size cluster.** Apply the gateway patch first. Between the

@@ -112,7 +112,7 @@ func TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter(t *test
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
 	rs := newRunnerSet(setName, ns, "gw")
 	rs.Spec.MaxWorkers = ptr.To(int32(3))
-	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeOn}
+	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeObserve}
 	// 30s deadline ⇒ a 15s scheduling grace, and a further 15s before the reaper
 	// deletes the pod. Every assertion below lands inside one such window.
 	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 30 * time.Second}
@@ -211,7 +211,7 @@ func TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
 	rs := newRunnerSet(setName, ns, "gw")
 	rs.Spec.MaxWorkers = ptr.To(int32(3))
-	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeOn}
+	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeObserve}
 	// A 30s deadline gives a 15s scheduling grace and a further 15s before the reaper
 	// deletes the pod — enough window to observe the closed gate refuse a delivery.
 	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 30 * time.Second}
@@ -285,7 +285,7 @@ func TestV2_RunnerSet_ScaleSet_CapacityGateWithholdsAdvertisedCapacity(t *testin
 	require.NoError(t, k8sClient.Create(ctx, newFixedSizeGatewayForSet("gw", ns)))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
 	rs := newScaleSetRunnerSet(setName, ns, "gw", label, ceiling)
-	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeOn}
+	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeObserve}
 	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 40 * time.Second}
 	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
 	require.NoError(t, k8sClient.Create(ctx, rs))

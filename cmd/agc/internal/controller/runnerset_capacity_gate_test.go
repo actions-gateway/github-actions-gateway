@@ -90,7 +90,7 @@ func TestCapacityGate_ModeOffCarriesNoCondition(t *testing.T) {
 // that pod and it is pure waste.
 func TestCapacityGate_FixedClusterDeclinesOnAnUnschedulablePod(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 	rec := events.NewFakeRecorder(16)
@@ -125,7 +125,7 @@ func TestCapacityGate_FixedClusterDeclinesOnAnUnschedulablePod(t *testing.T) {
 // would be permanent and the gate would starve a tenant rather than throttle them.
 func TestCapacityGate_ClearsWhenThePodIsReaped(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 
@@ -148,7 +148,7 @@ func TestCapacityGate_ClearsWhenThePodIsReaped(t *testing.T) {
 // condition, so a stale True would keep intake gated forever.
 func TestCapacityGate_OptingOutRetractsTheCondition(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 	r := capReconciler(t, now, pod)
@@ -167,7 +167,7 @@ func TestCapacityGate_OptingOutRetractsTheCondition(t *testing.T) {
 // worker pods being provisioned, a lingering True would gate a set that is already
 // stopped for a louder reason.
 func TestCapacityGate_ClearedWhenReferencesDoNotResolve(t *testing.T) {
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
 		Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
 		Reason: v2alpha1.ReasonPodsUnschedulable, Message: "stale",
@@ -226,7 +226,7 @@ func (s *eventReaderStub) List(_ context.Context, list client.ObjectList, opts .
 // returning the published condition and the re-check the gate asked for.
 func autoscalerGate(t *testing.T, now time.Time, reader client.Reader, pods ...*corev1.Pod) (*v2alpha1.RunnerSet, *metav1.Condition, time.Duration) {
 	t.Helper()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
 	objs := make([]client.Object, 0, len(pods))
 	for _, p := range pods {
 		objs = append(objs, p)
@@ -473,7 +473,7 @@ func TestCapacityGate_TheDangerousCombinationIsUnrepresentable(t *testing.T) {
 		{"the gateway could not be resolved at all", nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
+			rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
 			r := capReconciler(t, now, pod)
 			// A reader that returns no events: no autoscaler has recorded anything.
 			r.EventReader = &eventReaderStub{}
@@ -497,7 +497,7 @@ func TestCapacityGate_TheDangerousCombinationIsUnrepresentable(t *testing.T) {
 // Event read asking — and must not requeue waiting for an answer that will never come.
 func TestCapacityGate_FixedClusterReadsNoEvents(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
 	reader := &eventReaderStub{}
 	r := capReconciler(t, now, stuckPod("worker-stuck", now))
 	r.EventReader = reader
@@ -530,20 +530,20 @@ func TestRunnerSetTarget_CapacityDeclined(t *testing.T) {
 		mut          func(*v2alpha1.RunnerSet)
 		wantDeclined bool
 	}{
-		{"a declining gate", declining(v2alpha1.CapacityGateModeOn), true},
+		{"a declining gate", declining(v2alpha1.CapacityGateModeObserve), true},
 		{"gate on, condition False", func(r *v2alpha1.RunnerSet) {
-			gateOn(v2alpha1.CapacityGateModeOn)(r)
+			gateOn(v2alpha1.CapacityGateModeObserve)(r)
 			meta.SetStatusCondition(&r.Status.Conditions, metav1.Condition{
 				Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionFalse,
 				Reason: v2alpha1.ReasonCapacityAvailable, Message: "fine",
 			})
 		}, false},
-		{"gate on, condition not computed yet", gateOn(v2alpha1.CapacityGateModeOn), false},
+		{"gate on, condition not computed yet", gateOn(v2alpha1.CapacityGateModeObserve), false},
 		// The load-bearing one: a set whose mode flipped to Off must stop gating on the
 		// very next delivered job, without waiting for a reconcile to retract a
 		// condition it is still carrying.
 		{"mode Off with a stale True condition", func(r *v2alpha1.RunnerSet) {
-			declining(v2alpha1.CapacityGateModeOn)(r)
+			declining(v2alpha1.CapacityGateModeObserve)(r)
 			r.Spec.CapacityGate.Mode = v2alpha1.CapacityGateModeOff
 		}, false},
 		{"no capacity gate at all", nil, false},
@@ -583,7 +583,7 @@ func TestRunnerSetTarget_CapacityDeclined(t *testing.T) {
 func TestRunnerSetTarget_DeclinedCapacity(t *testing.T) {
 	ctx := context.Background()
 	declining := func(r *v2alpha1.RunnerSet) {
-		gateOn(v2alpha1.CapacityGateModeOn)(r)
+		gateOn(v2alpha1.CapacityGateModeObserve)(r)
 		meta.SetStatusCondition(&r.Status.Conditions, metav1.Condition{
 			Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
 			Reason: v2alpha1.ReasonPodsUnschedulable, Message: "gated",
@@ -632,7 +632,7 @@ func TestRunnerSetTarget_DeclinedCapacity(t *testing.T) {
 	})
 
 	t.Run("a gate that is not declining imposes no bound", func(t *testing.T) {
-		rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeOn))
+		rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
 		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs).Build()
 		target := &runnerSetTarget{client: c, key: keyOf(rs)}
 
