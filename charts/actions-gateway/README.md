@@ -97,7 +97,7 @@ cannot reuse the existing Secret — see [upgrade](../../docs/operations/upgrade
 ## Upgrade
 
 ```sh
-helm upgrade gag charts/actions-gateway --namespace gmc-system --reuse-values
+helm upgrade gag charts/actions-gateway --namespace gmc-system --reset-then-reuse-values
 ```
 
 CRDs ship as templates, so field changes are applied on upgrade. The

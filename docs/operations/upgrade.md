@@ -531,17 +531,29 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --set wrapper.image.digest=sha256:<wrapper>
 
 # Upgrade in place to a newer published chart version (carries CRD field changes — see below)
+# --reset-then-reuse-values, NOT --reuse-values: see the values-reuse note below
 helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version <new-chart-version> --namespace gmc-system --reuse-values \
+  --version <new-chart-version> --namespace gmc-system --reset-then-reuse-values \
   --set gmc.image.digest=sha256:<new-gmc>
 
 # Roll back to the previous release
 helm rollback gag --namespace gmc-system
 ```
 
-Six upgrade-time behaviors are specific to this chart:
+The following upgrade-time behaviors are specific to this chart:
 
-- **All four image digests are required at render time.** Both `helm install` and `helm upgrade` fail with `<image>.image must be pinned by digest …` (naming `gmc`/`agc`/`proxy`/`wrapper`) when the release values carry no digest for one of the four — e.g. a values file that omits it, or `--reset-values`. `--reuse-values` (as in the example above) carries the previously pinned digests forward; pass `--set <image>.image.digest=sha256:<new>` for each image you are moving to the new release's build. See the [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest). Dev/test only: `allowFloatingImageTags=true` opts out.
+- **Use `--reset-then-reuse-values`, not `--reuse-values`.** `--reuse-values` replays the *old* release's values over the *old* chart's defaults, so any values key introduced after your release was created is simply absent — and a template reading a field under it fails the render with an opaque Go error naming a file you did not touch:
+
+  ```text
+  Error: UPGRADE FAILED: actions-gateway/templates/vpa.yaml:1:14
+    executing "actions-gateway/templates/vpa.yaml" at <.Values.vpa.enabled>:
+      nil pointer evaluating interface {}.enabled
+  ```
+
+  `--reset-then-reuse-values` (Helm ≥ 3.14) starts from the *new* chart's defaults and layers your release's values on top, so new keys get their intended defaults and everything you set is preserved. It is the correct flag for every upgrade of this chart, not just ones that hit the error.
+
+  The chart deliberately does **not** paper over this by making templates tolerate a missing block. A missing block would then render as "unset", and for a security-relevant key — `admissionPolicy`, `networkPolicy` — that silently disables a guard on upgrade. Failing the render loudly is the safe direction; reaching for the right flag is the fix. See the [troubleshooting runbook](troubleshooting.md#helm-upgrade-fails-with-nil-pointer-evaluating-interface-field).
+- **All four image digests are required at render time.** Both `helm install` and `helm upgrade` fail with `<image>.image must be pinned by digest …` (naming `gmc`/`agc`/`proxy`/`wrapper`) when the release values carry no digest for one of the four — e.g. a values file that omits it, or `--reset-values`. `--reset-then-reuse-values` and `--reuse-values` both carry the previously pinned digests forward; pass `--set <image>.image.digest=sha256:<new>` for each image you are moving to the new release's build. See the [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest). Dev/test only: `allowFloatingImageTags=true` opts out.
 - **CRDs upgrade with the release.** The `ActionsGateway` and `RunnerGroup` CRDs ship as templates under `templates/crds/` with `helm.sh/resource-policy: keep`, **not** the chart-root `crds/` directory — Helm never upgrades resources in `crds/`. So a `helm upgrade` applies additive CRD field changes automatically, and `helm uninstall` preserves the CRDs (and every tenant's `ActionsGateway`/`RunnerGroup` object) rather than cascade-deleting them. You do not run a separate CRD apply step. The `RunnerGroup` CRD is sourced from the AGC authoritative copy.
 - **The webhook cert path depends on `certManager.enabled`.** With the default `certManager.enabled=true`, cert-manager issues and rotates the serving cert; nothing to do on upgrade. With `certManager.enabled=false`, the chart generates a self-signed serving cert and wires the webhook `caBundle` itself. On an in-place `helm upgrade` the chart **reuses the existing `webhook-server-cert` Secret** (it looks the Secret up), so the cert does not rotate; it only regenerates if that Secret is missing (a fresh install, or after you delete it to force rotation). A `helm template` (no cluster) cannot look the Secret up and therefore renders a fresh cert each time — expected for offline rendering only.
 - **A reinstall can leave the `priorityclass-allowlist-guard` policy unable to resolve its parameters (Q444, open).** Every `runnergroups`/`runnersets`/`runnertemplates` write is then denied cluster-wide with `no params found for policy binding`, even though the parameter ConfigMap is present at the referenced name and namespace. The trigger is deleting the policy's binding, which `helm uninstall` does: the apiserver tears down the shared parameter informer and never restarts it, so the reinstall's ConfigMap is invisible to it. **Upgrade in place — `helm upgrade` never removes the binding and is safe.** The only recovery is a kube-apiserver restart, which is not available on a managed control plane, and there is no chart-side mitigation; if you cannot tolerate the risk on EKS/GKE/AKS, run with `admissionPolicy.enabled=false`. Symptoms, mitigation and recovery: [troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
