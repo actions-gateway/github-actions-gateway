@@ -435,13 +435,22 @@ rather than inferred: `scripts/vap-param-informer-check.sh` runs the identical
 empty-binding-set transition against both kinds on one apiserver, and
 `scripts/chart-reinstall-check.sh` drives a real uninstall/reinstall in CI.
 
-**One install-time consequence.** This CRD ships in the chart-root `crds/`
-directory rather than `templates/crds/` like the others, because the same release
-also creates a `PriorityClassAllowlist` object and Helm resolves REST mappings for
-the whole manifest before applying any of it. Helm never *upgrades* `crds/`, so a
-release that changes this CRD's schema will say so in its notes with an explicit
-`kubectl apply` step. It also means `helm uninstall` leaves the CRD behind, which
-is the same end state as the `helm.sh/resource-policy: keep` the other CRDs carry.
+**One consequence, and it is not install-time.** This CRD ships in the chart-root
+`crds/` directory rather than `templates/crds/` like the others, because the same
+release also creates a `PriorityClassAllowlist` object and Helm resolves REST
+mappings for the whole manifest before applying any of it — a CR whose CRD is a
+template in the same release fails the install outright. A **fresh `helm install`
+handles this for you**; `crds/` is applied first.
+
+An **upgrade does not**. Helm skips `crds/` entirely on upgrade, so any release
+created before this CRD existed needs one `kubectl apply` before it can take this
+version. The chart detects that and fails with the exact command rather than
+letting Helm emit a bare `no matches for kind`. Steps:
+[upgrade.md](upgrade.md#priorityclass-allowlist-configmap-to-cr). The same is true
+of any future release that changes this CRD's schema — its notes will say so.
+
+`helm uninstall` leaves the CRD behind, which is the same end state as the
+`helm.sh/resource-policy: keep` the other CRDs carry.
 
 Upstream, for the underlying apiserver bug:
 [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887).

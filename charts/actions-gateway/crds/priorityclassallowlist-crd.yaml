@@ -14,11 +14,11 @@ metadata:
     # template in the same release fails the install outright with "no matches for
     # kind". Only crds/ is installed ahead of that resolution.
     #
-    # The cost is that `helm upgrade` does NOT carry schema changes to this one
-    # CRD (Helm never upgrades crds/). Adding a field here therefore needs a
-    # documented manual `kubectl apply` step in the release notes, or the
-    # apiserver silently prunes the new field from the rendered CR. See
-    # docs/operations/upgrade.md.
+    # The cost lands on UPGRADES, which skip crds/ entirely: a release created
+    # before this CRD existed needs a one-time `kubectl apply -f crds/` (the chart
+    # preflights that and fails with the command), and adding a field here later
+    # needs the same step in the release notes, or the apiserver silently prunes
+    # the new field from the rendered CR. See docs/operations/upgrade.md.
   name: priorityclassallowlists.actions-gateway.com
 spec:
   group: actions-gateway.com

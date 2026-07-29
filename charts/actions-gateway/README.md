@@ -22,12 +22,17 @@ not chart resources.
   carries CRD field changes (Helm never upgrades the chart-root `crds/` dir) and
   `helm uninstall` preserves tenant objects.
 - The `PriorityClassAllowlist` CRD, uniquely, under the chart-root **`crds/`**
-  dir: the chart also creates a `PriorityClassAllowlist` object, and Helm
-  resolves REST mappings for the whole manifest before applying any of it, so a
-  CR whose CRD is a template in the same release fails the install with `no
-  matches for kind`. The trade-off is that `helm upgrade` does not carry schema
-  changes to that one CRD — a release that changes it says so in its notes with
-  an explicit `kubectl apply` step.
+  dir: the chart also renders a `PriorityClassAllowlist` CR (the
+  `priorityclass-allowlist-guard` policy's param). Helm resolves REST mappings
+  for the entire manifest before applying any of it, so a CR whose CRD is a
+  template in the same release fails the install with `no matches for kind`.
+  Only `crds/` is installed ahead of that resolution.
+
+  The cost lands on **upgrades**: Helm skips `crds/` there entirely. A release
+  created before this CRD existed needs one `kubectl apply -f crds/` before it can
+  take this version (the chart fails with that command rather than a bare mapping
+  error), and any later schema change to it needs the same. Fresh installs are
+  unaffected.
 
   **All CRD files here are generated** from the authoritative controller-gen
   sources (`cmd/*/config/crd`, `api/config/crd`) by `make chart-crds` — do not
