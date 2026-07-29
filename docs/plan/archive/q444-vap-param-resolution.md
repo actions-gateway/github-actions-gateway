@@ -223,11 +223,22 @@ recovery for that case remain documented in
 migration off it is
 [upgrade.md § PriorityClass allowlist: ConfigMap to CR](../../operations/upgrade.md#priorityclass-allowlist-configmap-to-cr).
 
-**The release notes need an upgrade caveat** — not for the defect any more, but
-for the **breaking values change**: `priorityClassAllowlist.configMapName` is
-removed and a release that sets it fails the Helm render. That is exactly the
-curated-notes path in [`../operations/release.md`](../../operations/release.md), and
-it should link the upgrade.md section above.
+**The release notes need three upgrade caveats**, all on the curated-notes path in
+[`../operations/release.md`](../../operations/release.md), each linking the
+upgrade.md section above:
+
+1. A **new pre-upgrade step for everyone** — `helm show crds <chart> | kubectl
+   apply -f -`. Helm never installs the chart-root `crds/` dir on upgrade, so
+   unattended pipelines fail on the first upgrade across this change until they
+   add it.
+2. The **breaking values change**: `priorityClassAllowlist.configMapName` is
+   removed and a release that sets it fails the Helm render.
+3. **Rollback past this release is not safe on a running cluster.** Measured: the
+   rollback recreates a ConfigMap-`paramKind` binding whose informer this very
+   upgrade killed, so it re-arms the Q444 outage and does not self-clear. Roll
+   forward, or upgrade down with `admissionPolicy.enabled=false`. This is the
+   caveat most likely to be discovered the hard way, because `helm rollback`
+   reports success.
 
 ## Where this goes next
 
