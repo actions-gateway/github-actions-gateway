@@ -204,3 +204,67 @@ func TestSweepEvictionCounts_RefreshKeepsLiveRunPinned(t *testing.T) {
 	_, ok = p.reserveEvictionRetry("live", maxRetries)
 	assert.False(t, ok, "budget must not refill while the run is live")
 }
+
+// TestRerunFailedJobs_RequiresAnExplicitBaseURL is the Q504 regression test.
+//
+// The bug was not a wrong URL — it was an UNSET field with a silent default. Nothing
+// in cmd/agc ever assigned Provisioner.GitHubAPIURL, so rerunFailedJobs quietly used
+// api.github.com no matter what GITHUB_API_BASE_URL said. On a GHES deployment that
+// meant posting an installation token to a host that had never issued it, and the
+// only symptom was a 401 naming a server the operator had not configured.
+//
+// A test that merely asserted "the configured URL is used" would have passed
+// throughout, because the tests all configure it. What was missing is this: an
+// unconfigured provisioner must REFUSE rather than guess, so the misconfiguration
+// surfaces at the call instead of as someone else's authentication error.
+func TestRerunFailedJobs_RequiresAnExplicitBaseURL(t *testing.T) {
+	var called atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called.Store(true)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	p := &Provisioner{
+		TokenFunc:  func(context.Context) (string, error) { return "tok", nil },
+		HTTPClient: srv.Client(),
+		// GitHubAPIURL deliberately left unset — the production shape of the bug.
+	}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	err := p.rerunFailedJobs(context.Background(), "owner", "repo", "123", log)
+	require.Error(t, err, "an unset base URL must be an error, not a silent fall back to api.github.com")
+	assert.Contains(t, err.Error(), "GitHubAPIURL is not configured")
+	assert.False(t, called.Load(), "no request may be issued when the endpoint is unknown")
+}
+
+// TestRerunFailedJobs_UsesTheConfiguredBaseURL is the other half: a configured
+// endpoint is addressed verbatim, so a GHES base URL reaches GHES rather than being
+// replaced by the public API.
+func TestRerunFailedJobs_UsesTheConfiguredBaseURL(t *testing.T) {
+	gotPath := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case gotPath <- r.URL.Path:
+		default:
+		}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	p := &Provisioner{
+		TokenFunc:    func(context.Context) (string, error) { return "tok", nil },
+		GitHubAPIURL: srv.URL + "/api/v3",
+		HTTPClient:   srv.Client(),
+	}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	require.NoError(t, p.rerunFailedJobs(context.Background(), "myorg", "myrepo", "77", log))
+	select {
+	case path := <-gotPath:
+		assert.Equal(t, "/api/v3/repos/myorg/myrepo/actions/runs/77/rerun-failed-jobs", path,
+			"the configured base path must be preserved; a GHES endpoint carries a /api/v3 prefix")
+	default:
+		t.Fatal("the rerun call never reached the configured endpoint")
+	}
+}

@@ -166,11 +166,8 @@ func NewInstallationTokenProviderWithSigner(appID, installationID int64, signer 
 		return nil, fmt.Errorf("githubapp: signer must not be nil")
 	}
 
-	apiBase := os.Getenv("GITHUB_API_BASE_URL")
-	if apiBase == "" {
-		apiBase = defaultAPIBaseURL
-	}
-	if err := validateAPIBaseURL(apiBase, allowInsecureBaseURL); err != nil {
+	apiBase, err := ResolveAPIBaseURL(allowInsecureBaseURL)
+	if err != nil {
 		return nil, err
 	}
 
@@ -184,6 +181,33 @@ func NewInstallationTokenProviderWithSigner(appID, installationID int64, signer 
 		httpClient:     httpClient,
 		apiBaseURL:     apiBase,
 	}, nil
+}
+
+// ResolveAPIBaseURL returns the GitHub REST API base URL every caller in this
+// process must address: GITHUB_API_BASE_URL, or https://api.github.com when it is
+// unset — validated under the same HTTPS rule the token exchange uses.
+//
+// It is exported because the token exchange is NOT the only GitHub REST call the
+// control plane makes, and resolving the base URL in one place is what keeps the
+// others from silently defaulting past a GHES deployment's configured endpoint.
+// Q504 was exactly that: the AGC's eviction/preemption auto-retry built its
+// rerun-failed-jobs URL from a field nothing ever assigned, so it addressed
+// api.github.com even when GITHUB_API_BASE_URL pointed somewhere else — the
+// recovery could never work on GHES, and the failure surfaced only as a 401 from
+// a host the operator never configured.
+//
+// allowInsecure is the explicit dev/test opt-in for a plaintext base URL; callers
+// must gate it on a signal production never carries (the AGC uses STUB_AUTH_URL).
+// Passing false is always safe.
+func ResolveAPIBaseURL(allowInsecure bool) (string, error) {
+	apiBase := os.Getenv("GITHUB_API_BASE_URL")
+	if apiBase == "" {
+		apiBase = defaultAPIBaseURL
+	}
+	if err := validateAPIBaseURL(apiBase, allowInsecure); err != nil {
+		return "", err
+	}
+	return apiBase, nil
 }
 
 // validateAPIBaseURL enforces HTTPS for the token-exchange base URL. A plaintext

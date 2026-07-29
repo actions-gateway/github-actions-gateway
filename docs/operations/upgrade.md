@@ -13,6 +13,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
   - [Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)](#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github)
+  - [Non-breaking: eviction auto-retry now honours GITHUB_API_BASE_URL (it never did on GHES)](#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes)
   - [BREAKING (pre-GA): capacityGate.mode values replaced by Observe + a gateway-level cluster fact](#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact)
   - [Non-breaking: an over-long derived RunnerGroup name is bounded (and renamed)](#non-breaking-an-over-long-derived-runnergroup-name-is-bounded-and-renamed)
   - [Non-breaking: a RunnerSet's agent Secrets and runner names gain an rs- prefix](#non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix)
@@ -74,6 +75,47 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: eviction auto-retry now honours `GITHUB_API_BASE_URL` (it never did on GHES)
+
+**Who is affected:** any deployment that sets `GITHUB_API_BASE_URL` — that is, every
+GitHub Enterprise Server install. Deployments against `github.com` (the default) are
+unaffected: the endpoint they were reaching is the one they were meant to reach.
+**No action is required, and nothing you configured was wrong.**
+
+Before this version the AGC resolved `GITHUB_API_BASE_URL` for the App **token
+exchange** but not for the `rerun-failed-jobs` call that eviction and preemption
+recovery make. That call read a provisioner field nothing ever assigned, so it fell
+back to `https://api.github.com` unconditionally. On GHES it therefore posted a valid
+installation token — minted against *your* endpoint — to a host that had never issued
+it, and the recovery failed with:
+
+```text
+disruption auto-retry failed; manual rerun may be required ... rerun API returned 401: Bad credentials
+```
+
+The 401 names `api.github.com`, a server the operator never configured, which is why
+this read as a credential problem rather than a routing one. Recovery on GHES could
+not work, whatever `maxEvictionRetries` was set to.
+
+After the upgrade:
+
+- The rerun call addresses `GITHUB_API_BASE_URL`, the same endpoint the token was
+  minted against, so recovery works on GHES.
+- `actions_gateway_eviction_retries_total` starts moving on GHES clusters that evict
+  or preempt workers. A rise here is the fix working, not a new fault.
+- An **unset** base URL is now a startup error on the recovery path rather than a
+  silent guess. It cannot occur in a GMC-provisioned AGC (the value is always
+  resolved), but a hand-rolled deployment that removed the variable will now be told
+  so instead of quietly addressing the wrong host.
+
+The HTTPS rule is unchanged: a plaintext `GITHUB_API_BASE_URL` is still rejected
+unless the dev/test opt-in is present, and this call now inherits exactly that rule
+rather than having none of its own.
+
+**Rolling back** re-arms the gap: recovery on GHES silently returns to calling
+`api.github.com` and failing with a 401. There is no configuration that restores the
+behaviour on an older image.
 
 ### Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)
 

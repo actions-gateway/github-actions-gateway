@@ -239,12 +239,18 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 		return fmt.Errorf("get installation token: %w", err)
 	}
 
-	apiBase := p.GitHubAPIURL
-	if apiBase == "" {
-		apiBase = "https://api.github.com"
+	// No silent default (Q504). This used to fall back to https://api.github.com when
+	// unset, which is how the field being unassigned went unnoticed for so long: on a
+	// GHES deployment the recovery posted a perfectly valid installation token — minted
+	// against the configured endpoint — to a host that had never issued it, and the only
+	// symptom was a 401 naming a server the operator had not configured. Sending an
+	// installation credential somewhere it was not issued for is worth failing loudly
+	// over, so an unset base URL is now a configuration error rather than a guess.
+	if p.GitHubAPIURL == "" {
+		return fmt.Errorf("GitHubAPIURL is not configured; refusing to guess an endpoint for the rerun call")
 	}
 	apiURL := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%s/rerun-failed-jobs",
-		apiBase,
+		p.GitHubAPIURL,
 		neturl.PathEscape(owner),
 		neturl.PathEscape(repo),
 		neturl.PathEscape(runID))

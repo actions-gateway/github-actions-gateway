@@ -314,8 +314,13 @@ type Provisioner struct {
 	// If nil, eviction auto-retry is logged but the rerun API is not called.
 	TokenFunc func(ctx context.Context) (string, error)
 
-	// GitHubAPIURL is the base URL for the GitHub REST API.
-	// Defaults to "https://api.github.com"; override in tests.
+	// GitHubAPIURL is the base URL for the GitHub REST API — the same endpoint the
+	// installation token was minted against.
+	//
+	// REQUIRED for the disruption auto-retry path; there is deliberately no default
+	// (Q504). Resolve it with githubapp.ResolveAPIBaseURL so it cannot drift from the
+	// token exchange's endpoint: the two disagreeing is what made recovery unusable on
+	// GHES, silently, for as long as the field went unassigned.
 	GitHubAPIURL string
 
 	// HTTPClient is used for GitHub API calls. nil uses a bounded
