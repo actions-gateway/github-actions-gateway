@@ -250,8 +250,17 @@ tier):
 - `actions-gateway.com/workflow` — workflow file name. Classic only; the
   scale-set protocol delivers no workflow name.
 
+**On the classic tier, read the identity out of the payload's serialised `github`
+context — never out of `variables`.** A real AcquireJob body carries
+`contextData.github.run_id` and `.repository` and no `system.github.run_id` at all;
+reading the variables instead is how these annotations came to be absent from every
+real worker pod, taking classic-tier eviction recovery with them (Q495). The
+ground truth is `testdata/job_payload.json`, a redacted capture of a live response,
+and `payload_groundtruth_test.go` asserts against it — extend that test rather than
+a hand-written payload when this parsing changes.
+
 These are best-effort: absent if GitHub omitted the corresponding field
-(`system.github.*` variables on classic;
+(`contextData.github.run_id`/`.repository`/`.workflow` on classic;
 `ownerName`/`repositoryName`/`workflowRunId` on scale-set). Never use them for
 security enforcement — they are informational annotations for operator
 visibility, **except** that on the scale-set tier `run-id` and `repository` are

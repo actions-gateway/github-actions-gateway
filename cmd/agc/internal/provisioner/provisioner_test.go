@@ -154,15 +154,26 @@ func stubPayload(runID int64) []byte {
 	return b
 }
 
-// stubPayloadFull returns a payload with variables matching the GitHub Actions format,
-// including all job-annotation fields.
+// stubPayloadFull returns a payload carrying a complete run identity in the shape a
+// real AcquireJob response uses: the identity in the serialised `github` context,
+// the job name as a variable. Deliberately NOT the variables-only shape the tests
+// used to build — that shape is one GitHub never sends, and building it here is what
+// let the classic tier ship unable to read a real payload's run identity (Q495).
+// testdata/job_payload.json is the capture this mirrors.
 func stubPayloadFull(owner, repo string, runID int64) []byte {
 	b, _ := json.Marshal(map[string]interface{}{
 		"variables": map[string]interface{}{
-			"system.github.run_id":     map[string]interface{}{"value": fmt.Sprintf("%d", runID)},
-			"system.github.repository": map[string]interface{}{"value": owner + "/" + repo},
-			"system.github.job":        map[string]interface{}{"value": "build"},
-			"system.github.workflow":   map[string]interface{}{"value": "CI"},
+			"system.github.job": map[string]interface{}{"value": "build"},
+		},
+		"contextData": map[string]interface{}{
+			"github": map[string]interface{}{
+				"t": 2,
+				"d": []map[string]interface{}{
+					{"k": "run_id", "v": fmt.Sprintf("%d", runID)},
+					{"k": "repository", "v": owner + "/" + repo},
+					{"k": "workflow", "v": "CI"},
+				},
+			},
 		},
 	})
 	return b
@@ -912,7 +923,7 @@ func TestProvisioner_EvictionAutoRetry(t *testing.T) {
 
 	pod := findPod(ctx, t, fc, "team-a")
 
-	// Job annotations must be stamped on the pod from the payload variables.
+	// Job annotations must be stamped on the pod from the payload.
 	assert.Equal(t, "99", pod.Annotations["actions-gateway.com/run-id"])
 	assert.Equal(t, "myorg/myrepo", pod.Annotations["actions-gateway.com/repository"])
 	assert.Equal(t, "build", pod.Annotations["actions-gateway.com/job-name"])
@@ -1482,7 +1493,7 @@ func TestBuildPod_NoProxyCAWhenSecretNameEmpty(t *testing.T) {
 }
 
 // TestProvisioner_RerunURLRejectsAdversarialRepository verifies that adversarial
-// system.github.repository values do not reach the GitHub API. The rerun path
+// repository values from the payload do not reach the GitHub API. The rerun path
 // is exercised end-to-end via pod eviction so the full owner/repo extraction and
 // validation chain is covered.
 func TestProvisioner_RerunURLRejectsAdversarialRepository(t *testing.T) {

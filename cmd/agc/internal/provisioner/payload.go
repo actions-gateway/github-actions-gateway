@@ -1,41 +1,116 @@
 package provisioner
 
 import (
-	"fmt"
+	"encoding/json"
+	"strconv"
 	"strings"
 )
 
 // acquirePayload extracts eviction-retry fields from the raw AcquireJob response.
-// GitHub Actions embeds workflow context in the "variables" map as
-// {"system.github.run_id": {"value":"12345"}, "system.github.repository": {"value":"owner/repo"}}.
+//
+// Run identity travels in the serialised `github` context, not in the job
+// variables: a real acquirejob body carries contextData.github.run_id and
+// contextData.github.repository, and no system.github.run_id at all. That is
+// measured, not assumed — testdata/job_payload.json is a redacted capture of a live
+// response, and payload_groundtruth_test.go asserts against it (Q495). The
+// variables map and the top-level run_id are retained as tolerated fallbacks for
+// payload shapes that do carry them (the fakes, and any protocol variant that
+// populates them).
 type acquirePayload struct {
-	RunID     int64                       `json:"run_id"` // top-level field; may be absent
-	Variables map[string]variableEnvValue `json:"variables"`
+	RunID       int64                       `json:"run_id"` // top-level field; may be absent
+	Variables   map[string]variableEnvValue `json:"variables"`
+	ContextData struct {
+		GitHub dictionaryContextData `json:"github"`
+	} `json:"contextData"`
 }
 
 type variableEnvValue struct {
 	Value string `json:"value"`
 }
 
+// dictionaryContextData is the wire form of the runner SDK's DictionaryContextData:
+// a type tag plus an ordered key/value list — {"t":2,"d":[{"k":"run_id","v":"123"}]}
+// — rather than a plain JSON object. Values are heterogeneous (most are strings,
+// but `event` is a nested dictionary and `ref_protected` a bool), so each is held
+// raw and coerced on read.
+type dictionaryContextData struct {
+	Pairs []contextDataPair `json:"d"`
+}
+
+type contextDataPair struct {
+	Key   string          `json:"k"`
+	Value json.RawMessage `json:"v"`
+}
+
+// str returns the string held under key, or "" when the key is absent or its value
+// is not a scalar. A number is accepted and rendered in its JSON form, so a run_id
+// sent unquoted still resolves.
+func (d dictionaryContextData) str(key string) string {
+	for i := range d.Pairs {
+		if d.Pairs[i].Key != key {
+			continue
+		}
+		var s string
+		if err := json.Unmarshal(d.Pairs[i].Value, &s); err == nil {
+			return s
+		}
+		var n json.Number
+		if err := json.Unmarshal(d.Pairs[i].Value, &n); err == nil {
+			return n.String()
+		}
+		return ""
+	}
+	return ""
+}
+
+// runIdentity resolves the run ID and "owner/repo" that name this job's workflow
+// run, trying each known source in turn and taking the first that answers.
+//
+// Both the eviction-retry path (repoInfo) and the worker-pod annotations
+// (jobMetaFrom) read it, so the two cannot again disagree about where identity
+// comes from — they previously read the same two sources independently, and when
+// neither source turned out to exist in a real payload, real worker pods carried no
+// run-id annotation and eviction recovery had no run to re-run (Q495).
+func (ap *acquirePayload) runIdentity() (runID, repository string) {
+	runID = runIDCandidate(ap.ContextData.GitHub.str("run_id"))
+	repository = ap.ContextData.GitHub.str("repository")
+	if ap.Variables != nil {
+		if runID == "" {
+			runID = runIDCandidate(ap.Variables["system.github.run_id"].Value)
+		}
+		if repository == "" {
+			repository = ap.Variables["system.github.repository"].Value
+		}
+	}
+	if runID == "" && ap.RunID != 0 {
+		runID = strconv.FormatInt(ap.RunID, 10)
+	}
+	return
+}
+
+// runIDCandidate returns s when it is a plausible GitHub run ID — a run of digits —
+// and "" otherwise. A malformed value is dropped rather than carried, so it neither
+// displaces a good value from a later source nor reaches the pod annotation the
+// scale-set tier reads back as a run identity.
+func runIDCandidate(s string) string {
+	if _, err := strconv.ParseUint(s, 10, 64); err != nil {
+		return ""
+	}
+	return s
+}
+
 // repoInfo extracts the owner, repo, and run ID from the parsed payload.
 // Returns empty strings/zero if the fields are not present.
 func (ap *acquirePayload) repoInfo() (owner, repo string, runID int64) {
-	if ap.Variables != nil {
-		if v, ok := ap.Variables["system.github.repository"]; ok {
-			parts := strings.SplitN(v.Value, "/", 2)
-			if len(parts) == 2 {
-				owner, repo = parts[0], parts[1]
-			}
-		}
-		if v, ok := ap.Variables["system.github.run_id"]; ok {
-			// A malformed run_id leaves runID at 0, falling back to ap.RunID below.
-			if _, err := fmt.Sscanf(v.Value, "%d", &runID); err != nil {
-				runID = 0
-			}
-		}
+	rawRunID, repository := ap.runIdentity()
+	if parts := strings.SplitN(repository, "/", 2); len(parts) == 2 {
+		owner, repo = parts[0], parts[1]
 	}
-	if runID == 0 {
-		runID = ap.RunID
+	// runIdentity has already rejected anything non-numeric, so a parse failure
+	// here means "absent" and leaves runID at 0 — what handleEviction treats as
+	// an unknown run.
+	if n, err := strconv.ParseInt(rawRunID, 10, 64); err == nil {
+		runID = n
 	}
 	return
 }
@@ -53,22 +128,18 @@ type jobMeta struct {
 // jobMetaFrom extracts the job annotation fields from a parsed AcquireJob payload.
 func jobMetaFrom(ap acquirePayload) jobMeta {
 	var m jobMeta
+	m.runID, m.repository = ap.runIdentity()
 	if ap.Variables != nil {
-		if v, ok := ap.Variables["system.github.run_id"]; ok {
-			m.runID = v.Value
-		}
-		if v, ok := ap.Variables["system.github.repository"]; ok {
-			m.repository = v.Value
-		}
-		if v, ok := ap.Variables["system.github.job"]; ok {
-			m.jobName = v.Value
-		}
-		if v, ok := ap.Variables["system.github.workflow"]; ok {
-			m.workflow = v.Value
-		}
+		m.jobName = ap.Variables["system.github.job"].Value
+		m.workflow = ap.Variables["system.github.workflow"].Value
 	}
-	if m.runID == "" && ap.RunID != 0 {
-		m.runID = fmt.Sprintf("%d", ap.RunID)
+	// The two cosmetic fields have their own fallbacks: a real payload carries the
+	// job name as a variable but the workflow only in the github context.
+	if m.jobName == "" {
+		m.jobName = ap.ContextData.GitHub.str("job")
+	}
+	if m.workflow == "" {
+		m.workflow = ap.ContextData.GitHub.str("workflow")
 	}
 	return m
 }

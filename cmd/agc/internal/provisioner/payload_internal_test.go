@@ -1,10 +1,91 @@
 package provisioner
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// githubContext builds the wire form of the serialised `github` context — the
+// type-tagged key/value list the runner SDK emits for a DictionaryContextData,
+// which is where a real AcquireJob response keeps the run identity (Q495).
+func githubContext(t *testing.T, kv map[string]any) acquirePayload {
+	t.Helper()
+	pairs := make([]map[string]any, 0, len(kv))
+	for k, v := range kv {
+		pairs = append(pairs, map[string]any{"k": k, "v": v})
+	}
+	raw, err := json.Marshal(map[string]any{
+		"contextData": map[string]any{"github": map[string]any{"t": 2, "d": pairs}},
+	})
+	require.NoError(t, err)
+	var ap acquirePayload
+	require.NoError(t, json.Unmarshal(raw, &ap))
+	return ap
+}
+
+func TestRunIdentity_FromGitHubContext(t *testing.T) {
+	ap := githubContext(t, map[string]any{
+		"run_id":     "12345678",
+		"repository": "myorg/myrepo",
+	})
+	runID, repository := ap.runIdentity()
+	assert.Equal(t, "12345678", runID)
+	assert.Equal(t, "myorg/myrepo", repository)
+
+	owner, repo, numericRunID := ap.repoInfo()
+	assert.Equal(t, "myorg", owner)
+	assert.Equal(t, "myrepo", repo)
+	assert.Equal(t, int64(12345678), numericRunID)
+}
+
+// A context whose run_id arrives unquoted still resolves: the value is coerced from
+// its JSON form rather than requiring a string.
+func TestRunIdentity_NumericContextValue(t *testing.T) {
+	ap := githubContext(t, map[string]any{"run_id": 42})
+	runID, _ := ap.runIdentity()
+	assert.Equal(t, "42", runID)
+}
+
+// Non-scalar and non-numeric values are ignored rather than stringified: the github
+// context holds a nested dictionary under `event`, and a garbage run_id must not
+// reach the annotation the scale-set tier reads back as a run identity.
+func TestRunIdentity_IgnoresUnusableContextValues(t *testing.T) {
+	ap := githubContext(t, map[string]any{
+		"run_id":     "not-a-number",
+		"repository": map[string]any{"t": 2, "d": []any{}},
+	})
+	runID, repository := ap.runIdentity()
+	assert.Empty(t, runID)
+	assert.Empty(t, repository)
+}
+
+// The github context is the source a real payload populates, so it wins over the
+// tolerated fallbacks when a payload somehow carries both.
+func TestRunIdentity_ContextWinsOverVariables(t *testing.T) {
+	ap := githubContext(t, map[string]any{"run_id": "111", "repository": "ctx/repo"})
+	ap.RunID = 333
+	ap.Variables = map[string]variableEnvValue{
+		"system.github.run_id":     {Value: "222"},
+		"system.github.repository": {Value: "var/repo"},
+	}
+	runID, repository := ap.runIdentity()
+	assert.Equal(t, "111", runID)
+	assert.Equal(t, "ctx/repo", repository)
+}
+
+// A malformed run_id from one source is dropped rather than carried, so a later
+// source still answers — the behaviour repoInfo had before the sources were shared.
+func TestRunIdentity_MalformedVariableFallsBackToTopLevel(t *testing.T) {
+	ap := acquirePayload{
+		RunID:     99,
+		Variables: map[string]variableEnvValue{"system.github.run_id": {Value: "bogus"}},
+	}
+	runID, _ := ap.runIdentity()
+	assert.Equal(t, "99", runID)
+}
 
 func TestJobMetaFrom_FullVariables(t *testing.T) {
 	ap := acquirePayload{

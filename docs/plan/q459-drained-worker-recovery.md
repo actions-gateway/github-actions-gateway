@@ -179,12 +179,44 @@ the run to re-run against real GitHub, so it cannot fire. Every test that exerci
 uses a fakegithub payload carrying the identity explicitly — Q421's own Tier B drain
 spec had to *inject* it, recording that "the default fakegithub response carries no run
 identity, and handleEviction returns early without one". The fake was adjusted to make
-the test pass; the real payload was never checked. Confirming it needs one run that
-evicts a real job and looks for the skip. [Q495](../STATUS.md#Q495) carries that.
+the test pass; the real payload was never checked. Confirming it looked like it needed
+one run that evicts a real job and looks for the skip; Q495 carried that, and the
+section below records what confirming it actually took.
 
 It also bears on this plan's decision: closing the drained-worker gap by calling
 `rerun-failed-jobs` buys nothing on classic if the run ID is unavailable in the first
 place. Q495 is therefore a prerequisite for the "close" branch, not a side finding.
+
+### Confirmed and fixed, 2026-07-29 (Q495)
+
+The inference held, and confirming it needed no Tier C run after all. The repo
+already contained the answer: `testdata/job_payload.json` is a redacted capture of a
+**live** `acquirejob` response, taken by `cmd/probe` and committed as ground truth for
+Milestone 3's handoff — and nothing had ever read it back. Parsed, it carries no
+top-level `run_id`, no `system.github.run_id`, and no `system.github.repository`. Its
+run identity is in `contextData.github`, as `run_id` and `repository` entries of the
+serialised `github` context. Milestone 3's own plan doc had said so all along:
+"`contextData.github.run_id` (a string)".
+
+So both readers were looking somewhere the identity has never been, and the two
+symptoms are one cause: `repoInfo()` returned `("", "", 0)` and `jobMetaFrom()`
+returned an empty `jobMeta`.
+
+The fix reads the `github` context, keeps the variables and top-level `run_id` as
+tolerated fallbacks, and routes both readers through one `runIdentity()` so they
+cannot diverge again. `payload_groundtruth_test.go` asserts against the capture —
+against the unfixed parser it fails with exactly the observed symptom (owner `""`,
+repo `""`, run `0`), which is what makes it a guard rather than a restatement. The
+synthetic payloads in the provisioner unit tests, the envtest eviction and drain
+specs, and Q421's Tier B drain spec were all moved onto the real shape, since a fake
+carrying a field GitHub does not send is what kept this invisible.
+
+Two consequences for this plan. The "close" branch's prerequisite is met at the level
+it was blocked on — classic can name the run it would re-run. And the exact-worker
+lookup question 2 wanted should now be available, since the annotation is stamped from
+the same resolved identity; that it lands on a real worker pod is the one thing here
+still owed a Tier C observation, and un-pending
+`E2E_GitHub_CancelledRunLeavesNoDeletionMark` is where it gets one.
 
 ## Question 2 is written but not yet measured
 
@@ -204,7 +236,9 @@ Two things stand between it and a result, both understood:
 - **No exact disambiguator.** The run-id annotation that would resolve it outright is
   the one Q495 found missing. Fixing Q495 makes the worker lookup exact and dissolves
   the contention, which is why it is the natural prerequisite rather than more
-  scaffolding here.
+  scaffolding here. That fix has since landed (see above); whether the annotation
+  actually appears on a real worker is the first thing the next Tier C run should
+  check, since it is also what this spec's lookup will rest on.
 
 Earlier attempts were blocked before even reaching it, by the
 PriorityClass VAP param-resolution failure that
@@ -243,13 +277,14 @@ that is already written, on a cluster whose apiserver has been restarted.
 
 **In progress.** Question 1 is answered and recorded above. Question 2 is specified,
 implemented as a spec, and unrun. No close-or-accept decision has been taken, and no
-production code has been changed.
+production code has been changed *for this plan* — Q495, the defect this plan's
+measurement turned up, has been fixed on its own.
 
 Next step, in order:
 
-1. **[Q495](../STATUS.md#Q495) first.** It is both the more serious defect and the
-   unblocker here: restoring the run identity makes the worker lookup exact, which
-   removes the contention that keeps question 2 pending.
+1. ~~**Q495 first.**~~ Done — the run identity is read from the payload's `github`
+   context, so the worker lookup can be made exact. The Tier C confirmation that a
+   real worker pod now carries the annotation rides along with the next step.
 2. Un-pend `E2E_GitHub_CancelledRunLeavesNoDeletionMark` and run it.
 3. If a cancelled run's worker publishes a terminal phase with no `deletionTimestamp`,
    take the decision table's first row — close, gated on the deletion mark — and note

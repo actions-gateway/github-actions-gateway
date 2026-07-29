@@ -12,6 +12,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)](#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github)
   - [BREAKING (pre-GA): capacityGate.mode values replaced by Observe + a gateway-level cluster fact](#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact)
   - [Non-breaking: an over-long derived RunnerGroup name is bounded (and renamed)](#non-breaking-an-over-long-derived-runnergroup-name-is-bounded-and-renamed)
   - [Non-breaking: a RunnerSet's agent Secrets and runner names gain an rs- prefix](#non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix)
@@ -73,6 +74,42 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)
+
+**Who is affected:** any tenant on the classic acquisition tier — a `RunnerGroup`, or
+a `RunnerSet` with `spec.acquisitionProtocol: Classic`. Scale-set tenants are
+unaffected; that tier takes its run identity from the assignment message and has
+always worked. **No action is required, and nothing you configured was wrong.**
+
+Before this version the AGC looked for a classic job's workflow run in the
+`system.github.run_id` and `system.github.repository` job variables. A real
+`acquirejob` response carries neither: the run identity lives in the payload's
+serialised `github` context. The run therefore resolved to `0`, and every eviction of
+a classic worker took `handleEviction`'s early return — logging `pod evicted but
+run_id unknown; skipping auto-retry` and calling nothing. `maxEvictionRetries` was
+configurable but unreachable. The same lookup fed the worker-pod annotations, so real
+classic worker pods also carried no `actions-gateway.com/run-id`,
+`/repository`, or `/workflow`.
+
+After the upgrade, on the classic tier:
+
+- An evicted worker's run is re-run automatically, within the run's
+  `maxEvictionRetries` budget (default 2) — the behaviour the docs have always
+  described.
+- `actions_gateway_eviction_retries_total{tier="classic"}` starts moving. If you
+  alert on it being flat, or on `EvictionRetriesExhausted` events, expect first
+  signal from clusters that evict workers. A rise here is the fix working, not a new
+  fault.
+- New worker pods carry the run-identity annotations. Existing pods are not
+  back-filled; they are replaced as jobs turn over.
+
+The budget is shared per run across both tiers, so a run whose workers span tiers now
+consumes slots from the classic side too.
+
+**Rolling back** re-arms the gap: a rolled-back AGC returns to reading the variables,
+and classic evictions stop being re-run again, silently. There is no configuration
+that restores the behaviour on an older image.
 
 ### BREAKING (pre-GA): `capacityGate.mode` values replaced by `Observe` + a gateway-level cluster fact
 

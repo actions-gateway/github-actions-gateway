@@ -129,12 +129,8 @@ func TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun(t *testing.T) {
 	// A complete run identity, so a missing rerun cannot be explained away as
 	// handleEviction's runID == "" early return.
 	brokerStub.SetAcquireJobResponse(map[string]interface{}{
-		"plan":   map[string]string{"planId": "drain-plan-1"},
-		"run_id": 4210,
-		"variables": map[string]interface{}{
-			"system.github.repository": map[string]string{"value": "owner/repo"},
-			"system.github.run_id":     map[string]string{"value": "4210"},
-		},
+		"plan":        map[string]string{"planId": "drain-plan-1"},
+		"contextData": runIdentityContext("owner/repo", "4210"),
 	})
 	t.Cleanup(func() { brokerStub.SetAcquireJobResponse(nil) })
 

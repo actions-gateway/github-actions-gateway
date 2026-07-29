@@ -122,12 +122,8 @@ func TestAGC_FailureRecovery_EvictionTriggersRequeue(t *testing.T) {
 	// provisioner is the raw AcquireJobResponse from the broker fake. To embed the
 	// runID, we set the AcquireJob response to include eviction retry info.
 	brokerStub.SetAcquireJobResponse(map[string]interface{}{
-		"plan":   map[string]string{"planId": "evict-plan-1"},
-		"run_id": 12345,
-		"variables": map[string]interface{}{
-			"system.github.repository": map[string]string{"value": "owner/repo"},
-			"system.github.run_id":     map[string]string{"value": "12345"},
-		},
+		"plan":        map[string]string{"planId": "evict-plan-1"},
+		"contextData": runIdentityContext("owner/repo", "12345"),
 	})
 	t.Cleanup(func() { brokerStub.SetAcquireJobResponse(nil) })
 	sid := enqueueJobOnOwnerSession(15*time.Second, "eviction-rg", map[string]bool{}, broker.RunnerJobRequestBody{})
@@ -192,12 +188,8 @@ func TestAGC_FailureRecovery_EvictionBudgetExhausted(t *testing.T) {
 	}, 15*time.Second, 1*time.Millisecond, "budget-rg session should register")
 
 	brokerStub.SetAcquireJobResponse(map[string]interface{}{
-		"plan":   map[string]string{"planId": "budget-plan-1"},
-		"run_id": 99999,
-		"variables": map[string]interface{}{
-			"system.github.repository": map[string]string{"value": "owner/repo"},
-			"system.github.run_id":     map[string]string{"value": "99999"},
-		},
+		"plan":        map[string]string{"planId": "budget-plan-1"},
+		"contextData": runIdentityContext("owner/repo", "99999"),
 	})
 	t.Cleanup(func() { brokerStub.SetAcquireJobResponse(nil) })
 	sid := enqueueJobOnOwnerSession(15*time.Second, "budget-rg", map[string]bool{}, broker.RunnerJobRequestBody{})
