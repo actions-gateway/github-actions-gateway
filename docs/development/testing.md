@@ -409,6 +409,14 @@ Q378 is the worked example. Pinning `BaselineRecheckInterval` in the reaper test
 
 The [structural-ceiling triage](technical-debt.md#distinguish-a-fixable-defect-from-an-external-structural-ceiling) is the same principle at a larger scale: when fixes stop converging, isolate and *measure* the external actor instead of asserting the next on-our-side cause.
 
+### Synchronize on the signal you assert on
+
+"[Wait on the condition, not the clock](#avoiding-shared-stub-flakes-in-the-agc-suite)" has a sharper form: wait on **the same signal you are about to assert on**. Two observable effects of one operation almost never land together, and a test that blocks on the earlier one and then reads the later one races the gap between them — a real race, not a slow machine, so no amount of extra timeout closes it.
+
+A stub is the usual trap, because it is the most convenient thing to wait on and it typically fires *first*. In Q350 the scale-set listener's `recordingProvisioner` recorded a job at `Provision` **entry**, while the listener counted `IncJobProvisioned` only after `Provision` **returned**; three tests blocked on the stub's count and then asserted the metric, which was still one behind whenever the poll loop was descheduled in between. Waiting on the metric fixed all three — and is safe in the other direction, since the metric strictly follows the stub, so the stub-side assertions still hold.
+
+Reach for the ordering deliberately: identify which effect the code emits **last**, synchronize on that, and let the earlier ones be implied.
+
 ## Where each tier can physically run (and what it costs)
 
 The tier above says *what* observes a bug; this says *where that tier can run*. Most validation is local on a dev machine; a short list needs real GitHub, real cloud, or real scale. The **environment definitions** below are durable; the **Q-item mapping** is a snapshot of the [backlog](../STATUS.md) as of 2026-06 and may lag.
