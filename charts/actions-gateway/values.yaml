@@ -116,26 +116,26 @@ allowedPriorityClasses: []
 # e.g. allowedInfraPriorityClasses: ["gag-infra-critical"]
 allowedInfraPriorityClasses: []
 
-# priorityClassAllowlist optionally lets the GMC ALSO source the PriorityClass
-# allowlist from a watched ConfigMap, so a platform admin can add an allowed class
-# without editing allowedPriorityClasses and rolling out the GMC (Q188). It is
-# additive to (never a replacement for) the static flag above, and fail-safe: a
-# missing or malformed ConfigMap leaves the static flag allowlist in force.
+# priorityClassAllowlist.configMapName is REMOVED as of Q492 — setting it now fails
+# the render with a migration message. The watched allowlist is no longer a
+# ConfigMap: the chart always renders a cluster-scoped PriorityClassAllowlist CR
+# from allowedPriorityClasses above, and that one object is BOTH the GMC's watched
+# dynamic source (Q188, passed as --priority-class-allowlist-name) and the
+# priorityclass-allowlist-guard policy's paramKind. One object, two consumers, no
+# drift and no superset discipline to remember.
+#
+# Why it moved: a kube-apiserver defect (Q444) permanently kills param resolution
+# for any CORE-type paramKind once the set of bindings naming it goes empty for one
+# refresh tick — which `helm uninstall` does — leaving every runnergroups /
+# runnersets / runnertemplates write denied cluster-wide, recoverable only by an
+# apiserver restart (impossible on GKE/EKS/AKS). A CRD paramKind is structurally
+# immune. See docs/operations/upgrade.md, "PriorityClass allowlist: ConfigMap to CR".
+#
+# To add a class without a GMC rollout, edit the CR in place:
+#   kubectl edit priorityclassallowlist <release-prefix>-priorityclass-allowlist
+# `helm upgrade` reasserts allowedPriorityClasses over it, so persist additions
+# there. See docs/operations/security-operations.md § Priority classes.
 priorityClassAllowlist:
-  # configMapName names a ConfigMap in the GMC's own namespace whose
-  # `data.allowedPriorityClasses` value (comma/newline-separated names) augments
-  # the static allowlist, passed to the GMC as --priority-class-allowlist-configmap.
-  # Setting it also renders a namespaced Role/RoleBinding granting the GMC
-  # get/list/watch on that one ConfigMap (no cluster-wide ConfigMap read). Empty
-  # (default) disables the watch — flag-only behavior, unchanged.
-  #
-  # When admissionPolicy.enabled is true, this ConfigMap (when set) is ALSO the
-  # priorityclass-allowlist-guard policy's parameter — the apiserver cannot read
-  # the GMC flag — so keep it a SUPERSET of allowedPriorityClasses, or direct
-  # RunnerGroup writes naming flag-only classes will be denied by the policy.
-  # (Unset, the chart renders its own parameter ConfigMap from
-  # allowedPriorityClasses and no superset discipline is needed.) See
-  # docs/operations/security-operations.md § Priority classes.
   configMapName: ""
 
 # allowedEgressFQDNs / allowedEgressCIDRs are the platform allowlist of non-GitHub
@@ -269,10 +269,10 @@ certManager:
 # and tenant-resource-guard confine the GMC's cluster-wide write grants to marked
 # tenant namespaces, and priorityclass-allowlist-guard backstops the PriorityClass
 # allowlist on direct runnergroups writes that bypass the GMC webhooks (Q289 /
-# design Appendix G §G.7) — its allowlist parameter is a ConfigMap rendered from
-# allowedPriorityClasses above (or the priorityClassAllowlist ConfigMap when
-# configured; see there). ON by default (secure-by-default). Requires
-# Kubernetes >= 1.30 (GA ValidatingAdmissionPolicy).
+# design Appendix G §G.7) — its allowlist parameter is the PriorityClassAllowlist
+# CR rendered from allowedPriorityClasses above (see priorityClassAllowlist). ON by
+# default (secure-by-default). Requires Kubernetes >= 1.30 (GA
+# ValidatingAdmissionPolicy).
 admissionPolicy:
   enabled: true
 

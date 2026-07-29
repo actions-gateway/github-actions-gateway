@@ -118,7 +118,9 @@ func TestMain(m *testing.M) {
 		CRDDirectoryPaths: []string{
 			"../../../config/crd/bases",
 			"../../../../agc/config/crd",
-			// The five v2 (actions-gateway.com) CRDs live in the neutral api module.
+			// The v2 (actions-gateway.com) CRDs live in the neutral api module —
+			// the five tenant kinds plus the cluster-scoped PriorityClassAllowlist
+			// the priorityclass-allowlist-guard policy uses as its paramKind (Q492).
 			"../../../../../api/config/crd",
 			// Stub Cilium/Calico CRDs (Q208) so the FQDN-mode unstructured apply lands
 			// against the test apiserver. Minimal preserve-unknown-fields schemas — real

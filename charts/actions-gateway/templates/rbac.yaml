@@ -30,45 +30,47 @@ subjects:
 - kind: ServiceAccount
   name: {{ $sa }}
   namespace: {{ .Release.Namespace }}
-{{- if .Values.priorityClassAllowlist.configMapName }}
 ---
-# priority-class-allowlist (Q188) — namespaced read of the single watched
-# ConfigMap that augments the static --allowed-priority-classes flag. Scoped to
-# the GMC's own namespace and to get/list/watch only, so enabling the watch never
-# grants cluster-wide ConfigMap read. Rendered only when the watch is configured.
+# priority-class-allowlist (Q188, Q492) — read of the single watched
+# PriorityClassAllowlist that augments the static --allowed-priority-classes flag.
+# The kind is cluster-scoped, so this is necessarily a ClusterRole; it is confined
+# to get/list/watch on that one resource type and grants no write, so the GMC can
+# never widen its own allowlist. Rendered unconditionally: the chart always ships
+# the object and always points the GMC at it, whether or not the
+# priorityclass-allowlist-guard policy backstop is enabled.
+#
+# Was a namespaced Role over one ConfigMap until Q492 moved the object off a core
+# type; see charts/actions-gateway/templates/priorityclass-allowlist.yaml.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: {{ $prefix }}-priority-class-allowlist-role
-  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "actions-gateway.labels" . | nindent 4 }}
 rules:
 - apiGroups:
-  - ""
+  - actions-gateway.com
   resources:
-  - configmaps
+  - priorityclassallowlists
   verbs:
   - get
   - list
   - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
   name: {{ $prefix }}-priority-class-allowlist-rolebinding
-  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "actions-gateway.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: Role
+  kind: ClusterRole
   name: {{ $prefix }}-priority-class-allowlist-role
 subjects:
 - kind: ServiceAccount
   name: {{ $sa }}
   namespace: {{ .Release.Namespace }}
-{{- end }}
 {{- if .Values.egressDestinationAllowlist.configMapName }}
 ---
 # egress-destination-allowlist (Q242 G.1) — namespaced read of the single watched

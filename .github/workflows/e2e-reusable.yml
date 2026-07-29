@@ -26,6 +26,10 @@ on:
         description: 'Run the day-2 `helm upgrade` check after the suite (Q475). CNI-independent, so only one lane needs to pay for it.'
         type: boolean
         default: true
+      chart_reinstall_check:
+        description: 'Run the day-2 uninstall/reinstall check after the suite (Q444/Q492). Destroys and recreates the release, so it runs last.'
+        type: boolean
+        default: true
 
 jobs:
   e2e:
@@ -509,6 +513,29 @@ jobs:
         # what matters, and mutating the release first would destroy them.
         if: success() && inputs.chart_upgrade_check
         run: make chart-upgrade-check KIND_CLUSTER=actions-gateway-e2e
+
+      - name: Chart uninstall/reinstall check
+        # The other day-two path no fresh-cluster test covers: `helm uninstall`
+        # followed by a reinstall (Q444). That cycle used to be a cluster-wide
+        # outage — deleting the guard's only ValidatingAdmissionPolicyBinding
+        # emptied the binding set for its ConfigMap paramKind, and the apiserver
+        # tore down the shared param informer permanently, denying EVERY
+        # runnergroups/runnersets/runnertemplates write with `no params found for
+        # policy binding`. Q492 moved the paramKind to the cluster-scoped
+        # PriorityClassAllowlist CRD, which gets a fresh dynamic informer per
+        # context and survives the transition; this step is what keeps that true.
+        #
+        # It was deliberately NOT wired in while the defect was open, because it
+        # would have pinned every run red. Wiring it in was part of closing Q492.
+        #
+        # Runs AFTER chart-upgrade-check because it destroys and recreates the
+        # release, and after the suite for the same reason that one does —
+        # E2E_SKIP_TEARDOWN leaves the release up for both.
+        #
+        # `if: success()` — not always(): on a failure the diagnostics the suite
+        # left behind are what matters, and reinstalling would destroy them.
+        if: success() && inputs.chart_reinstall_check
+        run: make chart-reinstall-check KIND_CLUSTER=actions-gateway-e2e
 
       - name: Upload e2e test report
         if: always()

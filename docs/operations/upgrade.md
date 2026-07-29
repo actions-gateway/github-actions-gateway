@@ -556,7 +556,8 @@ The following upgrade-time behaviors are specific to this chart:
 - **All four image digests are required at render time.** Both `helm install` and `helm upgrade` fail with `<image>.image must be pinned by digest …` (naming `gmc`/`agc`/`proxy`/`wrapper`) when the release values carry no digest for one of the four — e.g. a values file that omits it, or `--reset-values`. `--reset-then-reuse-values` and `--reuse-values` both carry the previously pinned digests forward; pass `--set <image>.image.digest=sha256:<new>` for each image you are moving to the new release's build. See the [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest). Dev/test only: `allowFloatingImageTags=true` opts out.
 - **CRDs upgrade with the release.** The `ActionsGateway` and `RunnerGroup` CRDs ship as templates under `templates/crds/` with `helm.sh/resource-policy: keep`, **not** the chart-root `crds/` directory — Helm never upgrades resources in `crds/`. So a `helm upgrade` applies additive CRD field changes automatically, and `helm uninstall` preserves the CRDs (and every tenant's `ActionsGateway`/`RunnerGroup` object) rather than cascade-deleting them. You do not run a separate CRD apply step. The `RunnerGroup` CRD is sourced from the AGC authoritative copy.
 - **The webhook cert path depends on `certManager.enabled`.** With the default `certManager.enabled=true`, cert-manager issues and rotates the serving cert; nothing to do on upgrade. With `certManager.enabled=false`, the chart generates a self-signed serving cert and wires the webhook `caBundle` itself. On an in-place `helm upgrade` the chart **reuses the existing `webhook-server-cert` Secret** (it looks the Secret up), so the cert does not rotate; it only regenerates if that Secret is missing (a fresh install, or after you delete it to force rotation). A `helm template` (no cluster) cannot look the Secret up and therefore renders a fresh cert each time — expected for offline rendering only.
-- **A reinstall can leave the `priorityclass-allowlist-guard` policy unable to resolve its parameters (Q444, open).** Every `runnergroups`/`runnersets`/`runnertemplates` write is then denied cluster-wide with `no params found for policy binding`, even though the parameter ConfigMap is present at the referenced name and namespace. The trigger is deleting the policy's binding, which `helm uninstall` does: the apiserver tears down the shared parameter informer and never restarts it, so the reinstall's ConfigMap is invisible to it. **Upgrade in place — `helm upgrade` never removes the binding and is safe.** The only recovery is a kube-apiserver restart, which is not available on a managed control plane, and there is no chart-side mitigation; if you cannot tolerate the risk on EKS/GKE/AKS, run with `admissionPolicy.enabled=false`. Symptoms, mitigation and recovery: [troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
+- **The PriorityClass allowlist moved from a ConfigMap to a CR (Q492).** This is a **breaking values change** and it fixes the reinstall outage that used to live here (Q444). If your release sets `priorityClassAllowlist.configMapName`, the upgrade **fails at render** until you migrate — see [PriorityClass allowlist: ConfigMap to CR](#priorityclass-allowlist-configmap-to-cr) below.
+- **`PriorityClassAllowlist`'s CRD does not upgrade with the release.** It is the one CRD this chart ships in the chart-root `crds/` directory instead of `templates/crds/`, because the same release also creates a `PriorityClassAllowlist` object and Helm resolves REST mappings for the whole manifest before applying any of it. Helm never upgrades `crds/`, so a release that *changes that CRD's schema* will say so in its release notes with an explicit `kubectl apply` step. No action on an upgrade whose notes do not mention it.
 - **A hand-patched release blocks the next `helm upgrade`.** Helm 4 applies server-side, so a field owned by a different field manager is a hard conflict rather than a silent overwrite. If you have `kubectl patch`ed or `kubectl edit`ed a chart-owned object — the GMC Deployment's container `args` is the usual one — the next upgrade fails outright:
 
   ```text
@@ -567,6 +568,75 @@ The following upgrade-time behaviors are specific to this chart:
 
   Re-run the upgrade with `--force-conflicts` to hand the field back to Helm — your manual edit is reverted, which is the point of the flag. The durable fix is to express the change in chart values so it survives every upgrade instead of being reapplied by hand. Do **not** reach for `--force-replace`: it replaces objects wholesale and is destructive.
 - **The `namespace-psa-guard` and `gmc-tenant-resource-guard` bindings deny by default.** If you are upgrading a cluster whose existing tenant namespaces are not yet labeled `actions-gateway.github.com/tenant=true`, label them **before** the upgrade (see the migration note above), or the GMC's namespace patches *and all tenant-resource writes* will be denied. To stage the rollout you can temporarily set both bindings to `Audit` by editing `validationActions` on each `ValidatingAdmissionPolicyBinding`, then flip them back to `Deny` once the labels are in place.
+
+### PriorityClass allowlist: ConfigMap to CR
+
+**Who this affects:** any release with `priorityClassAllowlist.configMapName` set.
+Everyone else upgrades with no action — the chart creates the new object from
+`allowedPriorityClasses`, which it already rendered the old ConfigMap from.
+
+**What changed.** The watched allowlist is now a cluster-scoped
+`PriorityClassAllowlist` CR named `<release>-priorityclass-allowlist`, rendered by
+the chart from `allowedPriorityClasses`. It is both the GMC's restart-free dynamic
+source (Q188) and the `priorityclass-allowlist-guard` policy's `paramKind`.
+
+**Why it had to move.** A `paramKind` on a *core* type such as `ConfigMap` is
+permanently broken for the rest of a kube-apiserver process once the set of
+bindings naming it goes empty for one refresh tick — which `helm uninstall` does.
+That was the Q444 cluster-wide outage: every `runnergroups`/`runnersets`/
+`runnertemplates` write denied with `no params found for policy binding`, and no
+recovery short of a kube-apiserver restart. A CRD `paramKind` gets a fresh dynamic
+informer per context and survives the same transition, so this removes the
+exposure rather than mitigating it.
+
+**Migrating.** The upgrade fails at render with a message naming your ConfigMap:
+
+```text
+Error: execution error at (actions-gateway/templates/priorityclass-allowlist.yaml):
+priorityClassAllowlist.configMapName ("gmc-priority-class-allowlist") is removed as
+of Q492. ...
+```
+
+1. Read the names your ConfigMap currently carries — including any added
+   self-service since install, which will **not** be in your values file:
+
+   ```bash
+   kubectl get configmap -n gmc-system gmc-priority-class-allowlist -o jsonpath='{.data.allowedPriorityClasses}'
+   ```
+
+2. Put the **union** of those names and your existing `allowedPriorityClasses`
+   into `allowedPriorityClasses`, and unset `priorityClassAllowlist.configMapName`:
+
+   ```yaml
+   allowedPriorityClasses:
+     - runner-standard      # was already in values
+     - runner-bursty        # was ConfigMap-only
+     - runner-batch         # was ConfigMap-only
+   priorityClassAllowlist:
+     configMapName: ""
+   ```
+
+   Getting this wrong fails **closed**, not open: a name you drop stops being
+   admitted, denying writes that name it. Nothing becomes permitted that was not
+   permitted before.
+
+3. Run the upgrade, then confirm the object carries what you expect:
+
+   ```bash
+   kubectl get priorityclassallowlist gmc-priorityclass-allowlist -o jsonpath='{.spec.allowedPriorityClasses}'
+   ```
+
+4. Delete the old ConfigMap once you are satisfied. Nothing reads it any more:
+
+   ```bash
+   kubectl delete configmap -n gmc-system gmc-priority-class-allowlist
+   ```
+
+The GMC's RBAC for this watch changed shape too — a namespaced `Role` over one
+ConfigMap became a `ClusterRole` with `get`/`list`/`watch` on
+`priorityclassallowlists` (the kind is cluster-scoped). It carries no write verb,
+so the GMC still cannot widen its own allowlist. The chart handles this; no manual
+RBAC step.
 
 `helm upgrade` rolls the GMC Deployment (and carries additive CRD field changes —
 no separate CRD apply step). Watch the rollout:

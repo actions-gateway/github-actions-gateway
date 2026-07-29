@@ -1,12 +1,5 @@
 {{- if .Values.admissionPolicy.enabled }}
-{{- /*
-The param ConfigMap the policy binding references: the admin-owned watched
-allowlist ConfigMap when priorityClassAllowlist.configMapName is set (keep it a
-superset of allowedPriorityClasses — the apiserver cannot read the GMC flag), else
-a chart-rendered ConfigMap holding exactly .Values.allowedPriorityClasses, so the
-webhook flag and this policy stay in lockstep from one values entry.
-*/ -}}
-{{- $paramCM := .Values.priorityClassAllowlist.configMapName | default (printf "%s-priorityclass-allowlist" (include "actions-gateway.namePrefix" .)) }}
+{{- $paramName := printf "%s-priorityclass-allowlist" (include "actions-gateway.namePrefix" .) }}
 # ValidatingAdmissionPolicy backstop for the platform PriorityClass allowlist
 # (Q289 / Appendix G §G.7). RunnerGroup CRs have no webhook of their own — they are
 # normally authored only by the GMC from an already-validated ActionsGateway — so a
@@ -17,6 +10,16 @@ webhook flag and this policy stay in lockstep from one values entry.
 # defense-in-depth for the webhook-gated v2 kinds: webhook-outage/bypass coverage
 # plus stored-object re-validation. Requires Kubernetes >= 1.30. See
 # docs/operations/security-operations.md § Priority classes.
+#
+# The paramKind is the cluster-scoped PriorityClassAllowlist CR, NOT a ConfigMap
+# (Q492). A core-type paramKind is permanently broken for the rest of that
+# kube-apiserver process the moment the set of bindings naming it goes empty for one
+# refresh tick — which `helm uninstall` does, leaving either a silently stale
+# allowlist or a cluster-wide denial of every matched write, recoverable only by an
+# apiserver restart (impossible on GKE/EKS/AKS). A CRD paramKind gets a fresh
+# dynamic informer per context and survives the same transition; the contrast is
+# measured by scripts/vap-param-informer-check.sh. See
+# docs/development/kubernetes-conventions.md (paramKind: never a core type).
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -26,8 +29,8 @@ metadata:
 spec:
   failurePolicy: Fail
   paramKind:
-    apiVersion: v1
-    kind: ConfigMap
+    apiVersion: actions-gateway.com/v2beta1
+    kind: PriorityClassAllowlist
   matchConstraints:
     resourceRules:
       - apiGroups: ["actions-gateway.github.com"]
@@ -43,14 +46,16 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["runnersets", "runnertemplates"]
   variables:
-    # The allowlist: the param ConfigMap's allowedPriorityClasses value, split on
-    # the same separators the GMC's ConfigMap watcher accepts. A missing key or
-    # empty value denies every named class — the secure default.
+    # The allowlist, read straight off the param CR. The CRD schema already
+    # constrains each entry to a DNS 1123 subdomain and the list to a set, so
+    # unlike the ConfigMap this replaced there is no string to split and no
+    # malformed-value case to defend against — the apiserver rejects those at
+    # write time. An absent or empty list denies every named class: the secure
+    # default, unchanged.
     - name: allowed
       expression: >-
-        (has(params.data) && 'allowedPriorityClasses' in params.data)
-        ? params.data['allowedPriorityClasses'].replace('\n', ',').replace('\r', ',').replace('\t', ',').replace(' ', ',').split(',').filter(s, s != '')
-        : []
+        has(params.spec) && has(params.spec.allowedPriorityClasses)
+        ? params.spec.allowedPriorityClasses : []
     - name: tierClasses
       expression: "has(object.spec.priorityTiers) ? object.spec.priorityTiers.map(t, t.priorityClassName) : []"
     - name: podClass
@@ -62,12 +67,12 @@ spec:
     - expression: "variables.tierClasses.all(c, c in variables.allowed)"
       messageExpression: >-
         'priorityTiers priorityClassName ' + variables.tierClasses.filter(c, !(c in variables.allowed)).join(', ')
-        + ' is not in the platform PriorityClass allowlist ConfigMap; a PriorityClass sets cluster-wide scheduling preemption order, so the platform admin must pre-create it and add it to the allowlist'
+        + ' is not in the platform PriorityClassAllowlist; a PriorityClass sets cluster-wide scheduling preemption order, so the platform admin must pre-create it and add it to the allowlist'
       reason: Forbidden
     - expression: "variables.podClass == '' || variables.podClass in variables.allowed"
       messageExpression: >-
         'podTemplate.spec.priorityClassName ' + variables.podClass
-        + ' is not in the platform PriorityClass allowlist ConfigMap; a PriorityClass sets cluster-wide scheduling preemption order, so the platform admin must pre-create it and add it to the allowlist'
+        + ' is not in the platform PriorityClassAllowlist; a PriorityClass sets cluster-wide scheduling preemption order, so the platform admin must pre-create it and add it to the allowlist'
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -79,31 +84,12 @@ metadata:
 spec:
   policyName: {{ include "actions-gateway.namePrefix" . }}-priorityclass-allowlist-guard
   # Deny is the secure default. The apiserver resolves params before any
-  # per-object filtering, so a missing param ConfigMap denies EVERY matched
-  # write until it is recreated — fail closed, never silently off. The ConfigMap
-  # ships below (or is the admin-owned watched one), so that state is an
-  # explicit deletion.
+  # per-object filtering, so a missing param CR denies EVERY matched write until
+  # it is recreated — fail closed, never silently off. The CR ships unconditionally
+  # from priorityclass-allowlist.yaml, so that state is an explicit deletion.
   validationActions: [Deny]
   paramRef:
-    name: {{ $paramCM }}
-    namespace: {{ .Release.Namespace }}
+    # Cluster-scoped param: name only, no namespace.
+    name: {{ $paramName }}
     parameterNotFoundAction: Deny
-{{- if not .Values.priorityClassAllowlist.configMapName }}
----
-# The chart-rendered allowlist parameter, generated from
-# .Values.allowedPriorityClasses — the same list passed to the GMC as
-# --allowed-priority-classes — so the webhook and this policy cannot drift. Empty
-# (the default) permits no named class. When priorityClassAllowlist.configMapName
-# is set, that admin-owned ConfigMap is the param instead and this one is not
-# rendered.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ $paramCM }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "actions-gateway.labels" . | nindent 4 }}
-data:
-  allowedPriorityClasses: {{ join "," .Values.allowedPriorityClasses | quote }}
-{{- end }}
 {{- end }}

@@ -603,27 +603,39 @@ Both register a scale set against the repo, not the org: this repo is public and
 
 The App private key stays in the macOS keychain and reaches the probe as a **file path**, never as an env-var value or a process argument ([github-app-credentials.md](github-app-credentials.md)).
 
-### The chart uninstall/reinstall reproducer (Q444, open)
+### The chart uninstall/reinstall gate (Q444/Q492)
 
-Every tier above starts from a cluster that has never had the chart installed, so nothing exercises the day-two operation an operator actually performs: `helm uninstall` followed by a reinstall. That gap hid **Q444** — an apiserver that stops resolving the PriorityClass guard's parameter ConfigMap and denies **every** `runnergroups`/`runnersets`/`runnertemplates` write cluster-wide.
+Every tier above starts from a cluster that has never had the chart installed, so nothing exercises the day-two operation an operator actually performs: `helm uninstall` followed by a reinstall. That gap hid **Q444** — an apiserver that stops resolving the PriorityClass guard's parameter and denies **every** `runnergroups`/`runnersets`/`runnertemplates` write cluster-wide.
 
-[`scripts/chart-reinstall-check.sh`](../../scripts/chart-reinstall-check.sh) reproduces it. It runs against a cluster that already has the release installed, captures the release's own values, cycles `helm uninstall` -> `helm install`, and probes admission — printing a diagnostic dump (policy, binding, `paramRef` target, the ConfigMap's existence and UID, namespace phase) that separates a broken manifest from a broken apiserver.
+[`scripts/chart-reinstall-check.sh`](../../scripts/chart-reinstall-check.sh) closes it. It runs against a cluster that already has the release installed, captures the release's own values, cycles `helm uninstall` -> `helm install`, and probes admission — printing a diagnostic dump (policy, binding, `paramRef` target, the param object's existence and UID) that separates a broken manifest from a broken apiserver.
 
 ```bash
 make chart-reinstall-check KIND_CLUSTER=actions-gateway-e2e
 ```
 
-It is **deliberately not wired into CI** while Q444 is open — the defect is unfixed, so it would pin every run red. Wiring it into `e2e-reusable.yml` after the Ginkgo run (`E2E_SKIP_TEARDOWN` leaves the release up, and mutating it is only safe once the suite is done) is part of closing Q444 out.
+It ran as a **reproducer, not a gate**, while Q444 was open — the defect was unfixed, so wiring it in would have pinned every run red. **Q492 made it a gate**: the guard's `paramKind` moved from a `ConfigMap` to the cluster-scoped `PriorityClassAllowlist` CRD, for which the apiserver allocates a fresh dynamic informer per context rather than tearing down a shared one, so the cycle is now expected to pass. `e2e-reusable.yml` runs it after the Ginkgo suite and after the `helm upgrade` gate — `E2E_SKIP_TEARDOWN` leaves the release up, and this step destroys and recreates it, so it must go last. Kindnet only (`e2e-calico.yml` passes `chart_reinstall_check: false`): the property is a kube-apiserver informer behaviour, not a CNI one.
 
-It does not fire on every run, and it can also pass *while* broken — if the torn-down informer's cache still holds the old ConfigMap, resolution succeeds against an object that no longer exists. A clean pass is not proof of health.
+**What it protects.** A regression to any core-type `paramKind` — in this policy or a new one — brings the outage back. This is where that surfaces.
 
-For the defect itself, use [`scripts/vap-param-informer-check.sh`](../../scripts/vap-param-informer-check.sh) instead — it reproduces the apiserver behaviour deterministically, with no chart and no product CRDs, by running two arms on one apiserver that differ only in whether the `paramKind`'s binding set is ever emptied:
+Note the historical caveat, which still shapes how to read a pass on an old release: in the ConfigMap era this check could pass *while* broken, because a torn-down informer's frozen cache could still answer for an object that no longer existed. That ambiguity is why the deterministic reproducer below exists alongside it.
+
+#### The deterministic reproducer
+
+For the apiserver defect itself, use [`scripts/vap-param-informer-check.sh`](../../scripts/vap-param-informer-check.sh) — no chart, no product CRDs, three arms on one apiserver:
+
+| arm | `paramKind` | binding set | expected |
+|---|---|---|---|
+| 1 | ConfigMap | a second binding held throughout | `FRESH-PARAM` |
+| 3 | cluster-scoped CRD | emptied for the gap | `FRESH-PARAM` — the Q492 shape |
+| 2 | ConfigMap | emptied for the gap | `STALE-PARAM` or `NO-PARAMS` |
+
+Arm 1 vs arm 2 isolates the trigger to the empty-set transition. **Arm 3 vs arm 2** — the byte-identical transition one GVK apart — is the measured evidence that moving the `paramKind` to a CRD is a fix rather than an inference from reading the apiserver source. Arm 3 runs before arm 2 so a pass cannot be attributed to contamination.
 
 ```bash
 KUBE_CONTEXT=kind-q444-lab scripts/vap-param-informer-check.sh
 ```
 
-**Disposable clusters only** — it permanently breaks ConfigMap param resolution for the target apiserver process, and refuses a non-`kind-` context unless `ALLOW_NON_KIND=1`. Mechanism and measurements: [`q444-vap-param-resolution.md`](../plan/q444-vap-param-resolution.md).
+**Disposable clusters only** — arm 2 permanently breaks ConfigMap param resolution for the target apiserver process, and the script refuses a non-`kind-` context unless `ALLOW_NON_KIND=1`. It stays out of CI for that reason, and because it pins an *upstream* defect our own code no longer depends on; re-run it by hand on a new Kubernetes minor to confirm arm 3 still holds. Mechanism and measurements: [`q444-vap-param-resolution.md`](../plan/archive/q444-vap-param-resolution.md).
 
 ### The chart `helm upgrade` gate (Q475)
 
@@ -644,7 +656,7 @@ It also asserts a pre-existing RunnerGroup survives with its **UID** intact (an 
 make chart-upgrade-check KIND_CLUSTER=actions-gateway-e2e
 ```
 
-Unlike the Q444 reproducer above, this one **is** wired into CI: `e2e-reusable.yml` runs it after the Ginkgo suite, which leaves the release up under `E2E_SKIP_TEARDOWN`. It runs only on the kindnet leg — `helm upgrade` semantics are CNI-independent, so `e2e-calico.yml` passes `chart_upgrade_check: false` and the calico leg pays nothing for it. The step is `if: success()`: on a suite failure the diagnostic dump matters more, and mutating the release first would destroy it.
+Like the reinstall gate above, this one is wired into CI: `e2e-reusable.yml` runs it after the Ginkgo suite, which leaves the release up under `E2E_SKIP_TEARDOWN`, and before the reinstall gate (which destroys the release). It runs only on the kindnet leg — `helm upgrade` semantics are CNI-independent, so `e2e-calico.yml` passes `chart_upgrade_check: false` and the calico leg pays nothing for it. The step is `if: success()`: on a suite failure the diagnostic dump matters more, and mutating the release first would destroy it.
 
 The script fails loudly rather than silently injecting nothing if the controller-gen CRD layout or the Deployment's anchor annotation ever moves — the error names the awk anchors to re-point.
 

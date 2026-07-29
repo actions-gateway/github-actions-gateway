@@ -117,6 +117,13 @@ jobs:
       # e2e-relevant PR, whereas this one is path-gated) is the one that pays for
       # it. Running it on both legs would buy a duplicate verdict, not coverage.
       chart_upgrade_check: false
+      # Skip the day-2 uninstall/reinstall check here too (Q444/Q492), on the same
+      # reasoning. What it asserts — that the guard's CRD paramKind still resolves
+      # after `helm uninstall` empties its binding set — is a kube-apiserver
+      # informer property, entirely independent of the CNI. Q444 did originally
+      # reproduce on both legs, but that reflected the defect being ambient, not
+      # the CNI mattering; the mechanism is now established and CNI-free.
+      chart_reinstall_check: false
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`e2e-calico-gate`) required in the branch ruleset — never the path-gated

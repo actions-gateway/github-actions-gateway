@@ -319,6 +319,54 @@ annotations are not copied onto worker pods. The markers live on the pod, so the
 release automatically when the pod is torn down on job completion. Operator-facing
 detail in [observability.md](../operations/observability-metrics.md#node-disruption-safety-annotations).
 
+## ValidatingAdmissionPolicy `paramKind`: never a core type (Q444/Q492)
+
+**Rule: a `paramKind` must be a CRD. Never `ConfigMap`, `Secret`, or any other
+built-in.** This is not a style preference — a core type is load-bearing broken.
+
+The apiserver keeps one parameter informer per `paramKind` GVK, shared by every
+policy naming it. When the set of `ValidatingAdmissionPolicyBinding`s naming that
+GVK becomes empty for even one policy-refresh tick (default 1s), it calls the
+informer's cancel func. For a **core type** that informer came from the shared
+`SharedInformerFactory`, which records `startedInformers[type] = true` and never
+clears it — so the informer stops and `Start()` will never run it again *for the
+life of that kube-apiserver process*. Its store freezes rather than emptying. For
+a **CRD** the apiserver allocates a fresh dynamic informer per context instead,
+so the same transition is harmless.
+
+Deleting a binding is an ordinary operation — `helm uninstall` does it. The two
+outcomes, both bad:
+
+| frozen store | symptom |
+|---|---|
+| lost the param, or never saw it | `no params found for policy binding` — and because `parameterNotFoundAction: Deny` resolves params *before* per-object matching, **every** matched write is denied cluster-wide |
+| still holds the old object | the policy silently validates against an object that **no longer exists**, enforcing a stale allowlist with no error anywhere |
+
+The only recovery is restarting kube-apiserver, which managed control planes
+(GKE/EKS/AKS) do not offer.
+
+Measured, not inferred: [`scripts/vap-param-informer-check.sh`](../../scripts/vap-param-informer-check.sh)
+runs the identical empty-binding-set transition against a ConfigMap `paramKind`
+and a CRD one on a single apiserver — the ConfigMap arm breaks, the CRD arm stays
+fresh. Upstream: [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887)
+(unfixed; do not wait for it). `scripts/chart-reinstall-check.sh` gates the
+product-level cycle in CI.
+
+**Corollaries for a new policy:**
+
+- Give the policy a small, purpose-built cluster-scoped CRD for its params.
+  `PriorityClassAllowlist` (`api/v2beta1`) is the worked example.
+- Keep `parameterNotFoundAction: Deny`. It is the fail-closed default and the
+  reason a broken `paramKind` is so loud; the fix is the CRD, not weakening this.
+- Do **not** try to fix it by retaining the binding across uninstall
+  (`helm.sh/resource-policy: keep`). `scripts/manifest-validate.sh` forbids that
+  on a VAPB, because a retained binding keeps enforcing after the release is gone
+  and makes `admissionPolicy.enabled=false` a silent no-op.
+- A chart that renders both a CRD and a CR of it must ship that CRD in the
+  chart-root `crds/` dir: Helm resolves REST mappings for the whole manifest
+  before applying any of it, so a CR whose CRD is a template in the same release
+  fails the install with `no matches for kind`.
+
 ## Status conditions & alertable condition metrics
 
 The CRDs report observed state with standard Kubernetes conditions

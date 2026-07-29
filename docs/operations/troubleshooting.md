@@ -222,10 +222,9 @@ error is deliberate rather than a bug to route around.
 
 ## Every `RunnerGroup` / `RunnerSet` Write Denied: `no params found for policy binding`
 
-**Symptoms.** After a `helm uninstall` followed by a reinstall, every write to a
-`runnergroups`, `runnersets`, or `runnertemplates` object is rejected — including
-ones that name no `priorityClassName` at all — while the parameter ConfigMap
-plainly exists at the name and namespace the binding references:
+**Symptoms.** Every write to a `runnergroups`, `runnersets`, or `runnertemplates`
+object is rejected — including ones that name no `priorityClassName` at all —
+while the parameter object plainly exists at the name the binding references:
 
 ```
 kubectl apply -f runnergroup.yaml
@@ -234,23 +233,39 @@ kubectl apply -f runnergroup.yaml
 # failed to configure binding: no params found for policy binding with `Deny`
 # parameterNotFoundAction
 
-kubectl get configmap -n gmc-system gmc-priorityclass-allowlist   # it is right there
+kubectl get priorityclassallowlist gmc-priorityclass-allowlist   # it is right there
 ```
 
 The GMC surfaces it as provisioning failures on every gateway.
 
 **First, rule out the benign case.** The same message appears for a second or two
-during any reinstall: `helm uninstall` removes the parameter ConfigMap and the
+during any reinstall: `helm uninstall` removes the parameter object and the
 reinstall recreates it, and the guard correctly fails closed until the apiserver
-observes the new one. That clears on its own. Only a denial that persists past a
-few seconds is the defect below.
+observes the new one. That clears on its own.
 
-**Cause (Q444, kube-apiserver defect).** The apiserver caches one parameter
-informer per `paramKind`, shared by every policy naming it. That informer is torn
-down as soon as no `ValidatingAdmissionPolicyBinding` in the cluster names the
-`paramKind` any more — and because the guard's ConfigMap is a *core* type, the
-teardown stops a **shared** informer that the apiserver will never restart. The
-state belongs to the process, so:
+**If it persists, check what your release uses as the parameter.**
+
+```sh
+kubectl get validatingadmissionpolicy gmc-priorityclass-allowlist-guard \
+  -o jsonpath='{.spec.paramKind}{"\n"}'
+```
+
+- `{"apiVersion":"actions-gateway.com/v2beta1","kind":"PriorityClassAllowlist"}` —
+  current. The apiserver defect below does not apply. A persistent denial means
+  the object really is missing or the binding names the wrong one: compare
+  `kubectl get validatingadmissionpolicybinding gmc-priorityclass-allowlist-guard-binding -o jsonpath='{.spec.paramRef.name}'`
+  against `kubectl get priorityclassallowlist`, and recreate the object (or re-run
+  the chart upgrade) to recover.
+- `{"apiVersion":"v1","kind":"ConfigMap"}` — a release predating Q492, exposed to
+  the defect below.
+
+### Cause on pre-Q492 releases (Q444, kube-apiserver defect)
+
+The apiserver caches one parameter informer per `paramKind`, shared by every
+policy naming it. That informer is torn down as soon as no
+`ValidatingAdmissionPolicyBinding` in the cluster names the `paramKind` any more —
+and because a ConfigMap is a *core* type, the teardown stops a **shared** informer
+that the apiserver will never restart. The state belongs to the process, so:
 
 - Deleting the binding — which is what `helm uninstall` does — is the trigger.
   The guard has exactly one binding, so removing it empties the set. One second
@@ -258,8 +273,7 @@ state belongs to the process, so:
 - Afterwards the informer's cache is **frozen**, not emptied. ConfigMaps created
   later are invisible, which is why even a *fresh* install fails with the binding
   pointing at a ConfigMap that demonstrably exists.
-- `helm upgrade` never removes the binding and is safe. Uninstall-then-reinstall
-  is the cycle to avoid.
+- `helm upgrade` never removes the binding and is safe.
 
 **The quieter failure mode.** If the frozen cache happens to still hold the old
 ConfigMap, there is no error at all — the policy keeps validating against an
@@ -272,18 +286,20 @@ actually rejected.
 Observed on Kubernetes 1.35.5 and 1.36.1. Upstream:
 [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887).
 Full mechanism and the reproducer:
-[`q444-vap-param-resolution.md`](../plan/q444-vap-param-resolution.md).
-
-**Prevention.** Upgrade the release in place; never `helm uninstall` and
-reinstall on a cluster whose apiserver you cannot restart. If you must fully
-reinstall on a managed control plane, accept that the guard may be unrecoverable
-until the next control-plane version upgrade, and plan to run with
-`admissionPolicy.enabled=false` in the meantime.
+[`q444-vap-param-resolution.md`](../plan/archive/q444-vap-param-resolution.md).
 
 **Resolution.**
 
-- **Restore writes immediately** by removing the binding, which is what evaluates
-  the policy:
+- **Upgrade the release.** The parameter is now a cluster-scoped
+  `PriorityClassAllowlist` CR, and the apiserver allocates a fresh dynamic
+  informer per context for a CRD `paramKind` — so the transition that breaks a
+  ConfigMap parameter is survivable. Migration steps:
+  [upgrade.md](upgrade.md#priorityclass-allowlist-configmap-to-cr). Note the
+  upgrade does **not** by itself un-break an apiserver that is already in the
+  broken state for the ConfigMap kind; the breakage is per-kind, so pointing the
+  policy at the new kind is what restores resolution.
+- **Restore writes immediately**, if you cannot upgrade right now, by removing the
+  binding — that is what evaluates the policy:
 
   ```sh
   helm upgrade gag charts/actions-gateway --namespace gmc-system --reset-then-reuse-values \
@@ -293,24 +309,15 @@ until the next control-plane version upgrade, and plan to run with
   Denials stop at once. This also disables the PriorityClass backstop, so treat it
   as mitigation, not a fix — the GMC webhook allowlist still gates the
   tenant-facing CRs in the meantime.
-- **Fix it properly** by restarting kube-apiserver — the only recovery that
-  restores the shipped guard. Straightforward on a self-managed control plane; on
-  EKS/GKE/AKS you cannot restart it directly, and a control-plane version upgrade
-  is usually the only lever that recycles the process. Re-enable
-  `admissionPolicy.enabled` afterwards.
+- **Restarting kube-apiserver** also clears it, and was the only recovery before
+  Q492. Straightforward on a self-managed control plane; on EKS/GKE/AKS you cannot
+  restart it directly, and a control-plane version upgrade is usually the only
+  lever that recycles the process.
 
   Restart the container itself (`crictl stop` on the apiserver container, then
   confirm its `createdAt` changed). `kubectl delete pod -n kube-system
   kube-apiserver-…` does **not** work — it recreates the static pod's mirror
   object while the container keeps running.
-
-Only the ConfigMap `paramKind` is affected — the breakage is per-kind, and a
-policy pointing at a different kind resolves normally on the same apiserver.
-There is **no chart-side mitigation today**; the chart ships a ConfigMap
-parameter. If you are on a managed control plane and cannot carry the risk,
-install with `admissionPolicy.enabled=false` and rely on the GMC webhook
-allowlist, which gates the tenant-facing CRs (the policy is a defense-in-depth
-backstop for direct `runnergroups` RBAC).
 
 ---
 
