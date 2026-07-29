@@ -233,6 +233,16 @@ would cancel it.
 | Cancel → worker pod reaches a terminal phase | **10m02s** — the fixture's full 600s sleep |
 | `deletionTimestamp` at terminal publish | **absent** |
 
+Reproduced the same day on a second cluster, with the whole Tier C container running
+in order rather than this spec alone
+([run 30459264313](https://github.com/actions-gateway/gateway-test/actions/runs/30459264313)):
+the identical `Running//deleting=` → `Failed//deleting=` sequence, GitHub concluding at
+**5m01s**, the pod at **10m04s**. That run also re-measured the graceful-deletion half
+independently — `deletionGracePeriodSeconds` 30 with the mark set, `Running/` →
+`Failed/`, conclusion `failure` in **16s**, `rerun-failed-jobs` **201**, second attempt
+reaching a runner — so both halves of the discriminator come from two runs each, not
+one.
+
 **Question 2 is answered, and the discriminator holds.** Put beside the
 graceful-deletion result above, the three cases separate exactly where the candidate
 said they would:
@@ -302,6 +312,15 @@ nothing to re-run — and it has since been fixed.
   `helm upgrade` conflict on server-side-apply field ownership. Create a throwaway
   cluster: `make e2e-cluster KIND_CLUSTER=<name>`, and point the run at it with a
   private `KUBECONFIG` rather than the ambient context.
+- **Read the spec summary, not the wall clock.** The 2026-07-29 full-container run
+  finished its four specs in 19m04s inside a `ginkgo` process that lived 94 minutes,
+  with the tenant namespace still up 75 minutes after the last spec ended — because
+  the host slept mid-run, not because anything hung. A Tier C run is long enough to
+  straddle a laptop sleep, and every in-cluster age and process elapsed time then
+  reads as a stall. `Ran N of M Specs` and the per-spec `• [N seconds]` line are
+  measured from the suite's own clock and stay trustworthy; `ps` elapsed, pod `AGE`,
+  and "no output for a while" do not. Check the summary before concluding a spec is
+  wedged.
 - **Two concurrent Tier C sessions collide on the fixture repo.** Both dispatch the
   same `drain-probe.yml` in `actions-gateway/gateway-test` and both register a runner
   named `real-ag-e2e-6d8749c-0`. Two such runs were in flight simultaneously on
