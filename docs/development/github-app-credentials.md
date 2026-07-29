@@ -19,28 +19,40 @@ repository.
 
 ## Storing the private key (one-time setup)
 
-Download the `.pem` file from the GitHub App settings page. Keep it on disk
-(don't read it into a shell variable or command-line argument) and import it
-into the login Keychain with an interactive prompt — `security add-generic-password`
-does not accept a file as input, so the safest one-time handoff is to paste
-the key into the prompt rather than pass it on the command line (which would
-leak it via `ps` and shell history):
+Download the `.pem` file from the GitHub App settings page and keep it on disk.
+`security add-generic-password` takes no file argument, so the key has to reach
+it some other way — and the two obvious routes are both wrong. Feed the command
+below its input on **stdin**, which is neither:
 
 ```bash
-# Prompts for the password — paste the entire PEM (including BEGIN/END lines),
-# then press Ctrl-D on a new line to finish.
-security add-generic-password \
-  -a "actions-gateway-test" \
-  -s "github-app-private-key" \
-  -w
+umask 077
+KEY_FILE=$(mktemp -t gag-app-key.XXXXXX)
+trap 'rm -f "$KEY_FILE"' EXIT INT TERM
+cp ~/Downloads/actions-gateway-test.*.private-key.pem "$KEY_FILE"
+
+{ printf 'add-generic-password -U -a "actions-gateway-test" -s "github-app-private-key" -X ';
+  xxd -p -c 1000000 "$KEY_FILE"; } | security -i
 ```
 
-If pasting a multi-line PEM into the prompt is impractical, the fallback is to
-pass the key via `-w "$(cat <file>)"`. This briefly exposes the key as a
-process argument; only use it on a trusted single-user workstation and delete
-the downloaded file immediately after.
+`security -i` reads *commands* from stdin, so the key never becomes a process
+argument: `xxd` is invoked with only a filename and writes the hex to its
+stdout, and `security` is invoked with only `-i`. `xxd` is what makes this
+possible at all — `-X` wants one hex string, and hex is single-line.
 
-Delete the downloaded file once the import succeeds:
+Keep the two halves as a literal `printf` and a separate `xxd`. Collapsing them
+into `printf '… -X %s' "$(xxd …)"` happens to avoid a leak only because
+`printf` is a shell builtin and no process is spawned; with `/usr/bin/printf`
+the key is back in `ps`.
+
+> **Do not use the `-w` prompt for this key.** It is line-oriented — a
+> multi-line PEM's second line is consumed as the "retype" and the command
+> fails — and it silently truncates input at **128 characters**, which a
+> 2048-bit key exceeds many times over. It exits 0 and stores a fragment; the
+> only symptom is authentication failing later. `-w "$(cat <file>)"` avoids the
+> truncation but puts the key in `ps`.
+
+Delete the downloaded file once the import succeeds (the `trap` already removes
+the temp copy):
 
 ```bash
 rm ~/Downloads/actions-gateway-test.*.private-key.pem
@@ -50,9 +62,13 @@ To verify the key is present:
 
 ```bash
 security find-generic-password -a "actions-gateway-test" -s "github-app-private-key" -w \
-  | xxd -r -p | head -1
-# should print: -----BEGIN RSA PRIVATE KEY-----
+  | xxd -r -p | openssl rsa -check -noout
+# should print: RSA key ok
 ```
+
+Check the whole key parses, not just that the first line looks right: a
+truncated entry still starts with `-----BEGIN RSA PRIVATE KEY-----`, so
+`head -1` cannot tell a good key from a broken one.
 
 > **Note:** `security find-generic-password -w` outputs the password as ASCII
 > hex. Pipe through `xxd -r -p` to convert it back to the raw PEM bytes before
@@ -100,19 +116,20 @@ spec:
 ## Rotating the private key
 
 1. Generate a new private key on the [GitHub App settings page](https://github.com/organizations/actions-gateway/settings/apps/actions-gateway-test).
-2. Import it with `security add-generic-password` (add `-U` to update the existing entry).
-   Prefer the interactive `-w` prompt so the key is never on the command line:
-
-   ```bash
-   security add-generic-password -U \
-     -a "actions-gateway-test" \
-     -s "github-app-private-key" \
-     -w
-   # Paste the PEM contents, then Ctrl-D.
-   ```
-
-3. Delete the downloaded `.pem` file from `~/Downloads`.
-4. Recreate the Kubernetes Secret using the `mktemp` + `--from-file` flow
+2. Import it with the `security -i` flow from
+   [Storing the private key](#storing-the-private-key-one-time-setup) — `-U`
+   updates the existing entry in place, so there is no window with no key.
+3. Verify it round-trips with the `openssl rsa -check` command from that same
+   section. Do this **before** step 6: a silently truncated entry and a revoked
+   old key together leave no working credential.
+4. Delete the downloaded `.pem` file from `~/Downloads`.
+5. Recreate the Kubernetes Secret using the `mktemp` + `--from-file` flow
    from the previous section (the `trap` ensures the temp file is removed
-   even if `kubectl` fails).
-5. Delete the old key from the GitHub App settings page.
+   even if `kubectl` fails), then restart the consumers so they re-read it —
+   for the dogfood tenant, `kubectl rollout restart deployment/actions-gateway-controller`.
+   Worker pods are single-job and interrupting one costs a job, so check
+   `kubectl get pods -l app.kubernetes.io/managed-by=actions-gateway-controller`
+   first and roll during a quiet window.
+6. Delete the old key from the GitHub App settings page. **This is the step that
+   actually ends the exposure** — everything before it only migrates you onto
+   the new key. Do it even if the rest is deferred.
