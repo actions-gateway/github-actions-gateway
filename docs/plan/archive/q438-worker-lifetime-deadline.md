@@ -128,7 +128,12 @@ after a long outage and this item's deadline is the *only* one — which is an
 argument for the default being **on**, not opt-in.
 
 Filed as **Q468** for a live measurement; it needs Tier A / live credentials and
-does not belong in this PR.
+does not belong in this PR. **Measured 2026-07-29**
+([q468-jobcompleted-retention.md](q468-jobcompleted-retention.md)): retention is
+*not* far shorter — a `JobCompleted` was still redelivered to a new session after
+13 h 3 m with no session in between. That is past this item's 12 h default, so
+the two mechanisms overlap: the cap fires while redelivery is still live, rather
+than either leaving a window uncovered.
 
 ### 4. Prior art
 
@@ -262,6 +267,11 @@ trigger a spurious `rerun-failed-jobs`.
 
 ## Open
 
+Nothing. The one follow-up is closed:
+
 - **Q468** — measure real `JobCompleted` retention across a multi-hour gap with
-  no session (§3). Live-only. Its answer changes how much the replay path can be
-  relied on, but not this decision: the deadline is required either way.
+  no session (§3). Live-only. Answered 2026-07-29
+  ([q468-jobcompleted-retention.md](q468-jobcompleted-retention.md)): RETAINED at
+  13 h 3 m, so the replay path can be relied on across any gap in which a worker
+  is still alive to reclaim. As predicted, it did not change this decision — the
+  deadline was required either way.

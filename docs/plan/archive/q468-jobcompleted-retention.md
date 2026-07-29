@@ -1,16 +1,17 @@
 # Q468: how long does GitHub hold a `JobCompleted` when no session exists?
 
-**Status:** armed live 2026-07-28, and **the headline question is still open.**
-Both phases of `cmd/probe`'s Investigation F ran against real GitHub and did
-what they claim: an experiment is armed, and one rung is measured — the
-`JobCompleted` was redelivered to a session created **29 seconds** after the
-arming session was deleted. That establishes the replay path exists on the live
-wire; it says nothing yet about the multi-hour gap the Q435 residual is about.
-The experiment is left armed for a long-gap check.
+**Status:** answered 2026-07-29 and concluded. GitHub redelivered the
+unacknowledged `JobCompleted` to a session created **13 h 3 m 40 s** after the
+arming session was deleted, with no session in existence for the whole gap. That
+is past Q438's 12 h default `maxWorkerLifetime`, which is the comparison that
+decides the question: beyond that point the kubelet has already killed the
+worker, so retention outlasts the entire window in which the replay path could
+still have something to reclaim. The Q435 replay path is a **recovery path**, and
+the architecture and runbook may say so. Scale set torn down; experiment closed.
 
-## Why the question is open
+## Why the question was open
 
-[Q435](archive/q435-restart-orphan-reclaim.md) measured which worker-pod orphan classes
+[Q435](q435-restart-orphan-reclaim.md) measured which worker-pod orphan classes
 a restarted AGC reclaims. Three of the four are reclaimed unconditionally. The
 fourth — a `Running` worker whose job ended *while the AGC was down* — has no
 durable deadline of its own, and is reclaimed only if GitHub redelivers that
@@ -18,7 +19,7 @@ job's terminal `JobCompleted` to the restarted AGC's **new** session, which
 stamps the pod and lets the reaper act.
 
 Whether GitHub does that is not something the AGC decides, and
-[Q438](archive/q438-worker-lifetime-deadline.md) §3 established that it is not
+[Q438](q438-worker-lifetime-deadline.md) §3 established that it is not
 something reading settles either. The published contract covers only the
 *within-session* acknowledgement loop: a client acknowledges with
 `DeleteMessage`, and messages it never acknowledged are redelivered on its next
@@ -38,8 +39,8 @@ rather than more reading:
 - **The answer changes confidence, not design.** Q438's `maxWorkerLifetime` cap
   is on by default either way. What the answer changes is whether replay is a
   *recovery path* that usually works or a coincidence that occasionally does —
-  and therefore whether [the architecture doc](../design/02-architecture.md) and
-  the [troubleshooting runbook](../operations/troubleshooting.md) may keep
+  and therefore whether [the architecture doc](../../design/02-architecture.md) and
+  the [troubleshooting runbook](../../operations/troubleshooting.md) may keep
   presenting it as recovery.
 
 ## What is actually being measured
@@ -101,7 +102,7 @@ which is when the gap starts.
 ### Operating recipe
 
 Two things carried over from the Q264/Q417 live runs
-([scaleset-eviction-recovery.md](scaleset-eviction-recovery.md#reproducing-the-run)) and
+([scaleset-eviction-recovery.md](../scaleset-eviction-recovery.md#reproducing-the-run)) and
 they are not optional here either:
 
 - **Register repo-scoped, not org-scoped.** This repo is public and the org's
@@ -114,7 +115,7 @@ they are not optional here either:
   appears, which removes the race the probe's own `dispatch … NOW` prompt
   implies.
 
-The fixture is [`q468-retention-probe.yml`](../../.github/workflows/q468-retention-probe.yml)
+The fixture is [`q468-retention-probe.yml`](../../../.github/workflows/q468-retention-probe.yml)
 (`runs-on: gag-q468-retention`, one job, dispatch-only):
 
 ```bash
@@ -171,7 +172,7 @@ below.
 ## Tests
 
 Investigation F is exercised against the `scalesettest` stub in
-[`cmd/probe/retention_test.go`](../../cmd/probe/retention_test.go): config
+[`cmd/probe/retention_test.go`](../../../cmd/probe/retention_test.go): config
 parsing and phase selection, the arm→check state round-trip, the `RETAINED`
 verdict, the `LOST` verdict, the check history under
 `PROBE_RETENTION_KEEP_ARMED`, and cleanup deleting the scale set.
@@ -195,7 +196,7 @@ Armed against `actions-gateway/github-actions-gateway`, scale set
 
 | Step | Observed |
 |---|---|
-| Assignment | `JobAssigned` delivered ~0.6 s after the session opened (the fixture job was already queued against the label). Carried a complete run identity — `ownerName`, `repositoryName`, `workflowRunId` — corroborating [Q417](scaleset-eviction-recovery.md#the-rerun-target-was-unidentified-on-scale-set--resolved-2026-07-26). |
+| Assignment | `JobAssigned` delivered ~0.6 s after the session opened (the fixture job was already queued against the label). Carried a complete run identity — `ownerName`, `repositoryName`, `workflowRunId` — corroborating [Q417](../scaleset-eviction-recovery.md#the-rerun-target-was-unidentified-on-scale-set--resolved-2026-07-26). |
 | Cancel | `POST …/runs/30409332447/cancel` accepted; the job went terminal with **no runner ever involved**, confirming the arming phase does not need one. |
 | Completion | `JobCompleted` (message `100000002`) appeared ~0.2 s later, `result: canceled`. Left unacknowledged; cursor recorded at `100000001`. |
 | Gap start | Arming session deleted at `23:52:38Z`. |
@@ -217,22 +218,55 @@ and the wire disagreed on a field a client can branch on. Corrected in the same
 change — which is the whole argument for driving these probes against the
 shipping client rather than a bespoke one.
 
-## Open
+### The answer: RETAINED at 13 h 3 m 40 s (2026-07-29)
 
-- **The long-gap check.** The experiment is armed and the state file is at
-  `tmp/q468-retention-state.json`; the scale set stays registered until cleanup.
-  Run `PROBE_RETENTION_TEST=check` after the gap you want to measure — 4 h and
-  12 h are the interesting rungs, 12 h because it brackets Q438's default
-  `maxWorkerLifetime`. Then `PROBE_RETENTION_TEST=cleanup`.
-- **Read a long-gap `RETAINED` with the intervening-session caveat.** The 29 s
-  check created a session. If the backend measures retention from the last
-  session rather than from the message's arrival, that session extended the
-  window, and any later `RETAINED` is optimistic by up to the elapsed time. A
-  later `LOST` is unaffected — it is only ever conservative — so a negative
-  result at 4 h or 12 h is trustworthy as it stands, and a positive one wants a
-  freshly armed confirmation before it is written down as the number.
-- If the result is `LOST` at any gap short of a working day, the replay path
-  stops being a recovery path: [architecture §Worker-Pod Reaper](../design/02-architecture.md)
-  and the [troubleshooting runbook](../operations/troubleshooting.md) both need
-  their redelivery sentences demoted, and Q438's cap becomes the sole recovery
-  mechanism rather than a backstop.
+The same armed experiment, checked once more at 05:56 PDT / 12:56 UTC — a gap of
+**13 h 3 m 40 s** during which the scale set had no session at all.
+
+| Step | Observed |
+|---|---|
+| Scale set | `gag-q468-retention` (id 11) still registered, its queue log intact across the gap. |
+| Check session | Created under `gag-q468-check`, a different owner name than the arming session — what the backend sees is a new listener arriving after the gap, which is what a restarted AGC is. |
+| Redelivery | Message `100000002` — byte-for-byte the armed one, `result: canceled`, `finishTime` still `2026-07-28T23:52:38Z` — arrived on the **first** poll, 351 ms after the session opened. **RETAINED.** |
+| Teardown | Session deleted, then the scale set, taking its queue log with it. |
+
+**The intervening-session caveat does not bite here, and the arithmetic is why.**
+The worry was that a check is itself a session, so if the backend measures
+retention from the last session rather than from the message's arrival, every
+later rung is measuring a shorter gap than it claims. The only intervening
+session was the 29 s check, which ended ~31 s after arming. So the pessimistic
+model gives 13 h 0 m 50 s and the optimistic one 13 h 3 m 40 s — a 0.2 %
+difference, both on the same side of every threshold that matters. The ladder is
+exploratory *in general*; this particular ladder has its second rung more than
+three orders of magnitude past its first, which collapses the two models onto the
+same answer. No freshly armed confirmation is needed to write the number down.
+
+**Why 13 h settles a question the 16 h incident might look like it reopens.** The
+Q434 outage ran 16 hours, and this measurement does not reach that far. It does
+not need to: `maxWorkerLifetime` defaults to 12 h and is enforced by the kubelet
+with no live AGC, so at the 12 h mark the stranded worker is already `Failed`/
+`DeadlineExceeded` and is reclaimed by the ordinary terminal-orphan path that
+Q435 proved unconditional. Retention only has to outlast the window in which a
+`Running` worker can still exist for redelivery to be worth anything, and 13 h
+outlasts 12 h. The two mechanisms overlap rather than leaving a gap between them.
+
+What this does **not** establish:
+
+- **A retention window — only a lower bound.** `LOST` was never observed at any
+  gap, so the measurement says retention ≥ 13 h and says nothing about where it
+  ends. Anyone tempted to derive a timeout from this number should not.
+- **A contract.** One tenant, one region, one point in time, on an undocumented
+  backend policy. The claim written into the docs is "observed, 2026-07-29",
+  not "GitHub guarantees".
+- **That redelivery is sufficient on its own.** It is a recovery path, not the
+  recovery mechanism. Q438's cap remains the unconditional backstop precisely
+  because it depends on nothing GitHub does.
+
+## Outcome
+
+The redelivery sentences in [architecture §Worker-Pod Reaper](../../design/02-architecture.md)
+and the [troubleshooting runbook](../../operations/troubleshooting.md) stood as
+written and were upgraded from hedged to measured; the `LOST` contingency that
+would have demoted them did not occur. The harness stays in `cmd/probe` — the
+experiment is re-armable against a future GitHub, which is the point of building
+it as three phases around a state file rather than as a one-off script.

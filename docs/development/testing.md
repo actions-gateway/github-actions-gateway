@@ -595,7 +595,7 @@ Some questions are about GitHub's behaviour rather than ours, and no tier that r
 | Scenario | Selector | Question | Plan doc |
 |---|---|---|---|
 | Investigation E | `PROBE_SCALESET_TEST=true` | The scale-set wire protocol end to end — auth chain, queue/message semantics, the acquire route matrix, rate-limit headers. `PROBE_SCALESET_JOB_TEST=true` adds the live-job arm that also verifies run identity on a real `JobAssigned` (Q417). | [q264-scale-set-protocol.md](../plan/q264-scale-set-protocol.md) |
-| Investigation F | `PROBE_RETENTION_TEST=arm\|check\|cleanup` | Does GitHub redeliver an unacknowledged `JobCompleted` to a session created after a multi-hour gap with no session at all? The Q435 replay path depends on it and the contract does not cover it. | [q468-jobcompleted-retention.md](../plan/q468-jobcompleted-retention.md) |
+| Investigation F | `PROBE_RETENTION_TEST=arm\|check\|cleanup` | Does GitHub redeliver an unacknowledged `JobCompleted` to a session created after a multi-hour gap with no session at all? The Q435 replay path depends on it and the contract does not cover it. **Answered 2026-07-29: yes at a 13 h gap** — re-arm it against a future GitHub rather than trusting the number indefinitely. | [q468-jobcompleted-retention.md](../plan/archive/q468-jobcompleted-retention.md) |
 
 Investigation F is three phases around a state file rather than one run, because the gap it measures has to pass with **no session in existence** — so it must outlive the process, and the experiment lives on disk. Its `arm` phase leaves the message under test deliberately unacknowledged; do not "tidy up" by acknowledging it, and do not leave a session behind between phases, or the next gap measures something shorter than it claims.
 
