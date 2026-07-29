@@ -439,6 +439,12 @@ addresses fakegithub, and pins an `AcquireJob` payload carrying owner/repo/run_i
 without which `handleEviction` returns early and no rerun could fire for reasons having
 nothing to do with preemption.
 
+> The last row is the measurement as taken, before Q497. The spec kept its whole
+> apparatus and flipped that assertion: it is now `E2E_AGC_PreemptedWorkerIsRecovered`
+> and requires **exactly one** rerun. The rows above it are unchanged and still asserted
+> — recovery must be reached by the scheduler's marker, never by the victim turning up
+> `Failed`/`Evicted`.
+
 **A second spec, for the phase a *running* victim publishes** —
 `E2E_AGC_PreemptedRunningPodPhaseFollowsItsExitCode`, in the same file. The first
 spec's victim is deliberately held `Pending` (its image cannot be pulled), the same
@@ -481,17 +487,41 @@ phase — which is finding 1 below.
    preemption. It cannot be produced by a human cancelling a run, nor by a job failing on
    its own. That makes the preemption slice of the graceful-removal gap closable on its
    own, without the human-cancel ambiguity that is holding Q459's decision open.
-   [Q497](../STATUS.md#Q497) carries it.
 
-**What this costs the published claim.** The oversubscription argument in
-[01-executive-summary.md](../design/01-executive-summary.md) §"safe oversubscription"
-and in the README's problem statement rests on displaced work coming back by itself. The
-*packing* half is real and unaffected — guaranteed tiers do preempt their way in, which
-is what removes the need for reserved idle headroom. The *safety* half, as published, is
-not: a preempted job is left needing a manual re-run, exactly like a drained one. Both
-documents are corrected accordingly, and
-[troubleshooting.md](../operations/troubleshooting.md#draining-or-preempting-a-worker-does-not-auto-re-run-the-jobs-it-interrupts)
-now names preemption alongside the drain.
+   **Closed 2026-07-29 by Q497** ([plan](archive/q497-preemption-recovery.md)). Both tiers now
+   recover a preemption off this condition, sharing the existing per-`run_id` retry
+   budget, and the `cause` label on the eviction counters keeps a preemption recovery
+   distinguishable from a node-pressure one. The spec below flipped with it: it is now
+   `E2E_AGC_PreemptedWorkerIsRecovered`, and asserts exactly one re-run rather than none.
+   Two things about the fix are worth recording here, because both are consequences of
+   *this* measurement rather than choices:
+
+   - Detection keys on the condition and never on the phase, because finding 1 above
+     ruled the phase out entirely.
+   - Matching the `DisruptionTarget` **type** alone would have been wrong: the eviction
+     API stamps the same condition with reason `EvictionByEvictionAPI`, so a
+     type-only match would have silently recovered the drain path and pre-empted Q459's
+     open decision. The `reason` is the whole discriminator.
+
+**What this cost the published claim, and how it was repaid.** The oversubscription
+argument in [01-executive-summary.md](../design/01-executive-summary.md) §"safe
+oversubscription" and in the README's problem statement rests on displaced work coming
+back by itself. The *packing* half was real and unaffected — guaranteed tiers do preempt
+their way in, which is what removes the need for reserved idle headroom. The *safety*
+half, as published, was not: a preempted job was left needing a manual re-run, exactly
+like a drained one. Both documents were corrected to say so on the day of the
+measurement.
+
+Q497 then made the original claim true rather than leaving the correction standing, and
+both documents are corrected back — this time with a measurement behind them. The
+residual cost is no longer a manual re-run but the displaced job's own elapsed time: the
+re-run starts from the beginning rather than resuming, which is why the guidance to put
+cheap-to-repeat work in displaceable tiers survives. The drain path keeps the original
+correction, since [Q459](../STATUS.md#Q459) is still open;
+[troubleshooting.md](../operations/troubleshooting.md#draining-a-worker-does-not-auto-re-run-the-jobs-it-interrupts)
+now covers the drain alone, with
+[a separate runbook](../operations/troubleshooting.md#a-preempted-workers-job-is-not-re-run)
+for a preemption recovery that fails to fire.
 
 **A third finding, from building the spec rather than running it ([Q499](../STATUS.md#Q499)).**
 Narrowing the platform PriorityClass allowlist **wedges deletion of any tenant still
@@ -591,11 +621,11 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
    want a real GitHub run interrupted mid-job, and Q396 is already standing that
    up.
 4. ~~Q423 (experiment 3)~~ — **done 2026-07-29**; see
-   [Result](#result-measured-2026-07-29-preemption-is-not-eviction). Its residual is
-   [Q497](../STATUS.md#Q497), which can be taken independently of Q459: the
-   `PreemptionByScheduler` marker resolves the discriminator question for the
-   preemption slice without waiting on the human-cancel one. Then revive
-   [Q424](../STATUS.md#Q424) (experiment 5).
+   [Result](#result-measured-2026-07-29-preemption-is-not-eviction). ~~Its residual is
+   Q497~~ — **also done 2026-07-29** ([plan](archive/q497-preemption-recovery.md)): the
+   `PreemptionByScheduler` marker resolved the discriminator question for the preemption
+   slice without waiting on Q459's human-cancel one, exactly as predicted here. Then
+   revive [Q424](../STATUS.md#Q424) (experiment 5).
 
 ## Acceptance criteria
 
@@ -611,8 +641,11 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
 - The quota gate demonstrated under contention, with the rejection counter as
   the observable.
 - ~~Preemption recovery demonstrated end to end before the oversubscription claim
-  is published.~~ **Met 2026-07-29, by finding there is nothing to demonstrate.** A
-  `PriorityClass` preemption is a graceful deletion, not a kubelet eviction, so no
-  automatic recovery fires; the published claim was corrected rather than illustrated,
-  and [Q497](../STATUS.md#Q497) carries the fix that would make the original wording
-  true. See [the result](#result-measured-2026-07-29-preemption-is-not-eviction).
+  is published.~~ **Met 2026-07-29, in two steps.** The experiment first found there was
+  nothing to demonstrate — a `PriorityClass` preemption is a graceful deletion, not a
+  kubelet eviction, so no automatic recovery fired — and the published claim was
+  corrected rather than illustrated. Q497 then built the recovery
+  ([plan](archive/q497-preemption-recovery.md)) and the claim was restored, this time with a
+  measurement behind it. The Tier B spec that made the original measurement was flipped
+  from "no rerun" to "exactly one rerun" and is what demonstrates it end to end. See
+  [the result](#result-measured-2026-07-29-preemption-is-not-eviction).

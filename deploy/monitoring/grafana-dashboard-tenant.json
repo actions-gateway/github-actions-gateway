@@ -339,7 +339,7 @@
     },
     {
       "type": "barchart",
-      "title": "Eviction retries (1h)",
+      "title": "Disruption retries (1h)",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 6, "x": 12, "y": 16 },
       "id": 23,
@@ -347,15 +347,15 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (runner_group, tier) (increase(actions_gateway_eviction_retries_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
-          "legendFormat": "{{runner_group}} ({{tier}})",
+          "expr": "sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
+          "legendFormat": "{{runner_group}} ({{tier}}/{{cause}})",
           "refId": "A"
         }
       ]
     },
     {
       "type": "stat",
-      "title": "Eviction budget exhausted (1h)",
+      "title": "Disruption budget exhausted (1h)",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 6, "x": 18, "y": 16 },
       "id": 24,

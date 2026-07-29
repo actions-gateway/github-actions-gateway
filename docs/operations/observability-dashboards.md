@@ -44,8 +44,8 @@ Filtered by the `$namespace` and `$runner_group` template variables. Uses the [S
 |-------|-------|---------------|
 | Jobs acquired total | `increase(actions_gateway_jobs_acquired_total[1h])` | Bar chart by runner_group |
 | Job duration p50/p95 | `actions_gateway:job_duration_seconds:p50/p95` | Time series |
-| Eviction retries | `sum by (runner_group, tier) (increase(actions_gateway_eviction_retries_total[1h]))` | Bar chart, split by acquisition tier (`classic`, `scaleset`) |
-| Eviction budget exhausted | `increase(actions_gateway_eviction_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
+| Disruption retries | `sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))` | Bar chart, split by acquisition tier (`classic`, `scaleset`) and cause (`eviction`, `preemption`). Keep the causes visually distinct: `eviction` rising means node pressure, `preemption` rising means a `priorityTiers` floor is displacing opportunistic work — different investigations entirely |
+| Disruption budget exhausted | `increase(actions_gateway_eviction_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
 | Quota retries | `increase(actions_gateway_quota_retries_total[1h])` | Bar chart |
 | Quota retry budget exhausted | `increase(actions_gateway_quota_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
 

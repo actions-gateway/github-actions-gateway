@@ -66,14 +66,13 @@ func TestInformerPodWaiter_RealInformer(t *testing.T) {
 
 	// Block on completion in the background, then drive the pod terminal.
 	type result struct {
-		phase  corev1.PodPhase
-		reason string
-		err    error
+		outcome provisioner.PodOutcome
+		err     error
 	}
 	resCh := make(chan result, 1)
 	go func() {
-		ph, rs, err := waiter.WaitForCompletion(mgrCtx, ns, name)
-		resCh <- result{ph, rs, err}
+		out, err := waiter.WaitForCompletion(mgrCtx, ns, name)
+		resCh <- result{out, err}
 	}()
 
 	// Give the waiter a beat to register, then transition the pod to Succeeded.
@@ -87,7 +86,8 @@ func TestInformerPodWaiter_RealInformer(t *testing.T) {
 	select {
 	case r := <-resCh:
 		require.NoError(t, r.err)
-		require.Equal(t, corev1.PodSucceeded, r.phase)
+		require.Equal(t, corev1.PodSucceeded, r.outcome.Phase)
+		require.False(t, r.outcome.Preempted, "an undisturbed completion must not be reported as preempted")
 	case <-time.After(10 * time.Second):
 		t.Fatal("WaitForCompletion did not resolve after pod reached Succeeded")
 	}

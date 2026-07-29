@@ -74,15 +74,28 @@ func pod(ns, name string, phase corev1.PodPhase, reason string) *corev1.Pod {
 	}
 }
 
+// preemptedPod is a pod carrying the DisruptionTarget condition kube-scheduler stamps on
+// a preemption victim before deleting it. The phase is a parameter because the phase is
+// precisely what this marker exists to be independent of.
+func preemptedPod(ns, name string, phase corev1.PodPhase) *corev1.Pod {
+	p := pod(ns, name, phase, "")
+	p.Status.Conditions = []corev1.PodCondition{{
+		Type:   corev1.DisruptionTarget,
+		Status: corev1.ConditionTrue,
+		Reason: corev1.PodReasonPreemptionByScheduler,
+	}}
+	return p
+}
+
 func TestInformerPodWaiter_TerminalBeforeWait(t *testing.T) {
 	w := newTestWaiter(pod("ns", "p", corev1.PodSucceeded, ""))
 
-	phase, reason, err := w.WaitForCompletion(context.Background(), "ns", "p")
+	out, err := w.WaitForCompletion(context.Background(), "ns", "p")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if phase != corev1.PodSucceeded || reason != "" {
-		t.Fatalf("got phase=%q reason=%q, want Succeeded/\"\"", phase, reason)
+	if out.Phase != corev1.PodSucceeded || out.Reason != "" {
+		t.Fatalf("got phase=%q reason=%q, want Succeeded/\"\"", out.Phase, out.Reason)
 	}
 }
 
@@ -91,8 +104,8 @@ func TestInformerPodWaiter_EventDrivenSucceeded(t *testing.T) {
 
 	done := make(chan podResult, 1)
 	go func() {
-		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{phase: ph, reason: rs}
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
 	}()
 
 	// Let the goroutine register before the event fires.
@@ -100,8 +113,8 @@ func TestInformerPodWaiter_EventDrivenSucceeded(t *testing.T) {
 	w.onPodEvent(pod("ns", "p", corev1.PodSucceeded, ""))
 
 	res := mustResolve(t, done)
-	if res.phase != corev1.PodSucceeded {
-		t.Fatalf("got phase=%q, want Succeeded", res.phase)
+	if res.outcome.Phase != corev1.PodSucceeded {
+		t.Fatalf("got phase=%q, want Succeeded", res.outcome.Phase)
 	}
 }
 
@@ -110,16 +123,16 @@ func TestInformerPodWaiter_EventDrivenEviction(t *testing.T) {
 
 	done := make(chan podResult, 1)
 	go func() {
-		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{phase: ph, reason: rs}
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
 	}()
 
 	waitForRegistration(t, w, "ns/p")
 	w.onPodEvent(pod("ns", "p", corev1.PodFailed, "Evicted"))
 
 	res := mustResolve(t, done)
-	if res.phase != corev1.PodFailed || res.reason != "Evicted" {
-		t.Fatalf("got phase=%q reason=%q, want Failed/Evicted", res.phase, res.reason)
+	if res.outcome.Phase != corev1.PodFailed || res.outcome.Reason != "Evicted" {
+		t.Fatalf("got phase=%q reason=%q, want Failed/Evicted", res.outcome.Phase, res.outcome.Reason)
 	}
 }
 
@@ -128,16 +141,16 @@ func TestInformerPodWaiter_DeleteResolvesSucceeded(t *testing.T) {
 
 	done := make(chan podResult, 1)
 	go func() {
-		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{phase: ph, reason: rs}
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
 	}()
 
 	waitForRegistration(t, w, "ns/p")
 	w.onPodDelete(pod("ns", "p", corev1.PodRunning, ""))
 
 	res := mustResolve(t, done)
-	if res.phase != corev1.PodSucceeded || res.reason != "" {
-		t.Fatalf("got phase=%q reason=%q, want Succeeded/\"\"", res.phase, res.reason)
+	if res.outcome.Phase != corev1.PodSucceeded || res.outcome.Reason != "" {
+		t.Fatalf("got phase=%q reason=%q, want Succeeded/\"\"", res.outcome.Phase, res.outcome.Reason)
 	}
 }
 
@@ -146,8 +159,8 @@ func TestInformerPodWaiter_DeleteTombstone(t *testing.T) {
 
 	done := make(chan podResult, 1)
 	go func() {
-		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{phase: ph, reason: rs}
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
 	}()
 
 	waitForRegistration(t, w, "ns/p")
@@ -157,8 +170,91 @@ func TestInformerPodWaiter_DeleteTombstone(t *testing.T) {
 	})
 
 	res := mustResolve(t, done)
-	if res.phase != corev1.PodSucceeded {
-		t.Fatalf("got phase=%q, want Succeeded", res.phase)
+	if res.outcome.Phase != corev1.PodSucceeded {
+		t.Fatalf("got phase=%q, want Succeeded", res.outcome.Phase)
+	}
+}
+
+// The waiter must carry the preemption marker out on the DELETE path, because that is
+// the path a scheduler preemption almost always takes: the scheduler removes its victim
+// by deleting it, and a victim that never got a container running (image still pulling —
+// the shape Q423 reproduced) publishes no terminal phase at all. The informer's delete
+// event carries the pod's last-known state, which is the only place the condition
+// survives; a re-Get would race the object out of existence.
+func TestInformerPodWaiter_DeleteCarriesPreemptionMarker(t *testing.T) {
+	w := newTestWaiter(pod("ns", "p", corev1.PodPending, ""))
+
+	done := make(chan podResult, 1)
+	go func() {
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	w.onPodDelete(preemptedPod("ns", "p", corev1.PodPending))
+
+	res := mustResolve(t, done)
+	if !res.outcome.Preempted {
+		t.Fatal("a deleted preemption victim resolved without its Preempted marker; the classic tier would not recover it")
+	}
+}
+
+// The same, via the tombstone the informer delivers when it missed the delete watch
+// event. An AGC whose watch dropped must still recover the displaced run.
+func TestInformerPodWaiter_DeleteTombstoneCarriesPreemptionMarker(t *testing.T) {
+	w := newTestWaiter(pod("ns", "p", corev1.PodRunning, ""))
+
+	done := make(chan podResult, 1)
+	go func() {
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	w.onPodDelete(toolscache.DeletedFinalStateUnknown{
+		Key: "ns/p",
+		Obj: preemptedPod("ns", "p", corev1.PodRunning),
+	})
+
+	if res := mustResolve(t, done); !res.outcome.Preempted {
+		t.Fatal("a tombstoned preemption victim resolved without its Preempted marker")
+	}
+}
+
+// A preemption whose container did exit resolves through the terminal-phase path
+// instead, and must carry the marker there too. The phase itself is uninformative —
+// Q423 measured Succeeded from a preemption — so the marker is the entire signal.
+func TestInformerPodWaiter_TerminalPhaseCarriesPreemptionMarker(t *testing.T) {
+	w := newTestWaiter(pod("ns", "p", corev1.PodRunning, ""))
+
+	done := make(chan podResult, 1)
+	go func() {
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	w.onPodEvent(preemptedPod("ns", "p", corev1.PodSucceeded))
+
+	res := mustResolve(t, done)
+	if res.outcome.Phase != corev1.PodSucceeded {
+		t.Fatalf("got phase=%q, want Succeeded", res.outcome.Phase)
+	}
+	if !res.outcome.Preempted {
+		t.Fatal("a preempted worker that exited 0 resolved without its Preempted marker; the phase alone cannot discriminate")
+	}
+}
+
+// An undisturbed completion must not be flagged, or every finished job would be re-run.
+func TestInformerPodWaiter_OrdinaryCompletionIsNotPreempted(t *testing.T) {
+	w := newTestWaiter(pod("ns", "p", corev1.PodSucceeded, ""))
+
+	out, err := w.WaitForCompletion(context.Background(), "ns", "p")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Preempted {
+		t.Fatal("an ordinary completion was reported as preempted")
 	}
 }
 
@@ -169,8 +265,8 @@ func TestInformerPodWaiter_NotFoundThenTerminal(t *testing.T) {
 
 	done := make(chan podResult, 1)
 	go func() {
-		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{phase: ph, reason: rs}
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
 	}()
 
 	waitForRegistration(t, w, "ns/p")
@@ -178,14 +274,14 @@ func TestInformerPodWaiter_NotFoundThenTerminal(t *testing.T) {
 	// It must still be blocked — no premature success.
 	select {
 	case res := <-done:
-		t.Fatalf("waiter resolved prematurely with phase=%q", res.phase)
+		t.Fatalf("waiter resolved prematurely with phase=%q", res.outcome.Phase)
 	case <-time.After(50 * time.Millisecond):
 	}
 
 	w.onPodEvent(pod("ns", "p", corev1.PodSucceeded, ""))
 	res := mustResolve(t, done)
-	if res.phase != corev1.PodSucceeded {
-		t.Fatalf("got phase=%q, want Succeeded", res.phase)
+	if res.outcome.Phase != corev1.PodSucceeded {
+		t.Fatalf("got phase=%q, want Succeeded", res.outcome.Phase)
 	}
 }
 
@@ -195,7 +291,7 @@ func TestInformerPodWaiter_ContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		_, _, err := w.WaitForCompletion(ctx, "ns", "p")
+		_, err := w.WaitForCompletion(ctx, "ns", "p")
 		errCh <- err
 	}()
 
@@ -226,8 +322,8 @@ func TestInformerPodWaiter_NonTerminalEventIgnored(t *testing.T) {
 
 	done := make(chan podResult, 1)
 	go func() {
-		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{phase: ph, reason: rs}
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
 	}()
 
 	waitForRegistration(t, w, "ns/p")
@@ -235,13 +331,13 @@ func TestInformerPodWaiter_NonTerminalEventIgnored(t *testing.T) {
 
 	select {
 	case res := <-done:
-		t.Fatalf("waiter resolved on non-terminal event with phase=%q", res.phase)
+		t.Fatalf("waiter resolved on non-terminal event with phase=%q", res.outcome.Phase)
 	case <-time.After(50 * time.Millisecond):
 	}
 
 	w.onPodEvent(pod("ns", "p", corev1.PodFailed, ""))
-	if res := mustResolve(t, done); res.phase != corev1.PodFailed {
-		t.Fatalf("got phase=%q, want Failed", res.phase)
+	if res := mustResolve(t, done); res.outcome.Phase != corev1.PodFailed {
+		t.Fatalf("got phase=%q, want Failed", res.outcome.Phase)
 	}
 }
 
@@ -257,8 +353,8 @@ func TestInformerPodWaiter_MultipleWaiters(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ph, _, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-			results <- ph
+			out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+			results <- out.Phase
 		}()
 	}
 
@@ -309,7 +405,7 @@ func TestInformerPodWaiter_DebugLogsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		_, _, err := w.WaitForCompletion(ctx, "ns", "p")
+		_, err := w.WaitForCompletion(ctx, "ns", "p")
 		errCh <- err
 	}()
 
@@ -369,8 +465,8 @@ func TestInformerPodWaiter_PodCreationLatencyObservedOnce(t *testing.T) {
 
 	done := make(chan podResult, 1)
 	go func() {
-		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{phase: ph, reason: rs}
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
 	}()
 
 	waitForRegistration(t, w, "ns/p")
@@ -394,8 +490,8 @@ func TestInformerPodWaiter_PodCreationLatencySkippedWhenNeverStarted(t *testing.
 
 	done := make(chan podResult, 1)
 	go func() {
-		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{phase: ph, reason: rs}
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
 	}()
 
 	waitForRegistration(t, w, "ns/p")

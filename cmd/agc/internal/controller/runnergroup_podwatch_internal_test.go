@@ -23,6 +23,18 @@ func workerPod(name, ns, group string, phase corev1.PodPhase) *corev1.Pod {
 	}
 }
 
+// preemptedWorkerPod is a worker pod carrying the DisruptionTarget condition
+// kube-scheduler stamps on a preemption victim before deleting it.
+func preemptedWorkerPod(name, ns, group string, phase corev1.PodPhase) *corev1.Pod {
+	p := workerPod(name, ns, group, phase)
+	p.Status.Conditions = []corev1.PodCondition{{
+		Type:   corev1.DisruptionTarget,
+		Status: corev1.ConditionTrue,
+		Reason: corev1.PodReasonPreemptionByScheduler,
+	}}
+	return p
+}
+
 func TestPodToRunnerGroup_MapsLabelledPod(t *testing.T) {
 	r := &RunnerGroupReconciler{}
 	reqs := r.podToRunnerGroup(context.Background(),
@@ -75,6 +87,43 @@ func TestWorkerPodPredicate_UpdateOnlyOnPhaseChange(t *testing.T) {
 		ObjectNew: workerPod("p", "ns", "", corev1.PodFailed),
 	})
 	assert.False(t, unlabelled, "non-worker pod should be filtered out")
+}
+
+// TestWorkerPodPredicate_UpdateOnPreemptionMarker covers the one non-phase update the
+// predicate must admit (Q497). A scheduler preemption stamps a DisruptionTarget
+// condition and deletes the victim; a Pending worker stays Pending throughout, so on the
+// phase-change edge alone the first event reaching the reconciler would be the Delete —
+// by which point the pod is out of the cache and the recovery scan has nothing left to
+// read the workflow-run identity off, and the displaced run needs a manual re-run.
+func TestWorkerPodPredicate_UpdateOnPreemptionMarker(t *testing.T) {
+	p := workerPodPredicate()
+
+	// The edge itself: the marker appears, with no phase change at all.
+	assert.True(t, p.Update(event.UpdateEvent{
+		ObjectOld: workerPod("p", "ns", "my-rg", corev1.PodPending),
+		ObjectNew: preemptedWorkerPod("p", "ns", "my-rg", corev1.PodPending),
+	}), "a worker newly marked as a preemption victim must wake the reconciler")
+
+	// Already marked, and still marked: a later heartbeat on a terminating victim adds
+	// nothing, and admitting it would put the pod's whole grace period of updates on the
+	// work queue.
+	assert.False(t, p.Update(event.UpdateEvent{
+		ObjectOld: preemptedWorkerPod("p", "ns", "my-rg", corev1.PodPending),
+		ObjectNew: preemptedWorkerPod("p", "ns", "my-rg", corev1.PodPending),
+	}), "a repeat of an already-observed preemption marker must be filtered out")
+
+	// A preemption that also changes phase is already covered by the phase edge; it must
+	// not be dropped by the new one.
+	assert.True(t, p.Update(event.UpdateEvent{
+		ObjectOld: preemptedWorkerPod("p", "ns", "my-rg", corev1.PodRunning),
+		ObjectNew: preemptedWorkerPod("p", "ns", "my-rg", corev1.PodSucceeded),
+	}), "a marked victim reaching a terminal phase must still wake the reconciler")
+
+	// The label gate applies to the new edge exactly as to the old one.
+	assert.False(t, p.Update(event.UpdateEvent{
+		ObjectOld: workerPod("p", "ns", "", corev1.PodPending),
+		ObjectNew: preemptedWorkerPod("p", "ns", "", corev1.PodPending),
+	}), "a preempted pod that is not one of our workers must be filtered out")
 }
 
 func TestWorkerPodPredicate_IgnoresGeneric(t *testing.T) {

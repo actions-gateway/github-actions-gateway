@@ -47,14 +47,19 @@ const (
 // handleEviction reserves a slot from the run's retry budget and, if one remains,
 // waits out retryDelay and asks GitHub to re-run the run's failed jobs. It is shared
 // by both acquisition tiers: the classic path calls it inline from provision() once the
-// worker pod it is watching turns up evicted, and the scale-set path from the owning
-// reconciler's RecoverEvictedScaleSetWorkers pass. tier only labels the metrics — the
-// budget is deliberately one budget, keyed by run_id alone, so the Q106 cap of
-// maxRetries re-runs per run holds across both tiers together rather than once each.
-func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration, tier string) {
+// worker pod it is watching is disrupted, and the scale-set path from the owning
+// reconciler's RecoverEvictedScaleSetWorkers pass.
+//
+// tier and cause only label the metrics and the operator-facing wording — the budget is
+// deliberately one budget, keyed by run_id alone, so the Q106 cap of maxRetries re-runs
+// per run holds across both tiers AND both disruption causes together rather than once
+// per combination. A run that is alternately evicted and preempted therefore cannot
+// spend two budgets. cause is recoveryCauseEviction (the kubelet's node-pressure
+// eviction) or recoveryCausePreemption (kube-scheduler preemption, Q497).
+func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration, tier, cause string) {
 	key := target.Key()
 	if runID == "0" || runID == "" {
-		log.Warn("pod evicted but run_id unknown; skipping auto-retry")
+		log.Warn("worker pod disrupted but run_id unknown; skipping auto-retry", "cause", cause)
 		return
 	}
 
@@ -65,19 +70,20 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 	// rerun API is called at most maxRetries times per run.
 	attempt, ok := p.reserveEvictionRetry(runID, maxRetries)
 	if !ok {
-		log.Warn("eviction retry budget exhausted; manual rerun required",
-			"runID", runID, "maxRetries", maxRetries)
+		log.Warn("disruption retry budget exhausted; manual rerun required",
+			"runID", runID, "maxRetries", maxRetries, "cause", cause)
 		if p.Metrics != nil {
-			p.Metrics.EvictionRetriesExhausted.WithLabelValues(key.Namespace, key.Name, tier).Inc()
+			p.Metrics.EvictionRetriesExhausted.WithLabelValues(key.Namespace, key.Name, tier, cause).Inc()
 		}
 		target.RecordEvent(corev1.EventTypeWarning, "EvictionRetriesExhausted", "RetryEvictedJob",
-			fmt.Sprintf("worker pod for run %s was evicted and the auto-retry budget (%d) is exhausted; a manual re-run is required", runID, maxRetries))
+			fmt.Sprintf("worker pod for run %s was lost to %s and the auto-retry budget (%d) is exhausted; a manual re-run is required", runID, cause, maxRetries))
 		return
 	}
 
-	log.Info("pod evicted; scheduling auto-retry", "runID", runID, "attempt", attempt, "tier", tier)
+	log.Info("worker pod disrupted; scheduling auto-retry",
+		"runID", runID, "attempt", attempt, "tier", tier, "cause", cause)
 	if p.Metrics != nil {
-		p.Metrics.EvictionRetries.WithLabelValues(key.Namespace, key.Name, tier).Inc()
+		p.Metrics.EvictionRetries.WithLabelValues(key.Namespace, key.Name, tier, cause).Inc()
 	}
 
 	// Brief delay before calling GitHub so any in-flight state settles.
@@ -88,10 +94,10 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 	}
 
 	if err := p.rerunFailedJobs(ctx, owner, repo, runID, log); err != nil {
-		log.Error("eviction auto-retry failed; manual rerun may be required",
-			"runID", runID, "error", err)
+		log.Error("disruption auto-retry failed; manual rerun may be required",
+			"runID", runID, "cause", cause, "error", err)
 	} else {
-		log.Info("eviction auto-retry triggered", "runID", runID, "attempt", attempt)
+		log.Info("disruption auto-retry triggered", "runID", runID, "attempt", attempt, "cause", cause)
 	}
 }
 

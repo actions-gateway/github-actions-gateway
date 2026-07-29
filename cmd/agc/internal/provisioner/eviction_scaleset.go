@@ -59,21 +59,24 @@ const (
 	evictionTierScaleSet = "scaleset"
 )
 
-// RecoverEvictedScaleSetWorkers finds this owner's scale-set worker pods that the
-// kubelet evicted, claims each one, and triggers the same automatic re-run the classic
-// tier performs. It returns a done channel that closes once every recovery this call
-// started has finished, so a caller may block on it (tests) or ignore it (the
+// RecoverEvictedScaleSetWorkers finds this owner's scale-set worker pods that lost their
+// job to a disruption — the kubelet's node-pressure eviction, or kube-scheduler
+// preemption (Q497) — claims each one, and triggers the same automatic re-run the
+// classic tier performs. It returns a done channel that closes once every recovery this
+// call started has finished, so a caller may block on it (tests) or ignore it (the
 // reconciler, which must not stall a reconcile on GitHub).
 //
 // It is safe and cheap to call every reconcile: the List is served from the shared
 // informer cache, and a pod is acted on at most once ever (see
-// AnnotationEvictionHandledAt). It is a no-op for an owner with no evicted workers,
+// AnnotationEvictionHandledAt). It is a no-op for an owner with no disrupted workers,
 // and for the classic tier, whose pods carry no LabelAcquisitionProtocol.
 //
-// Call it BEFORE the reaper. Recovery reads the evicted pod, and the reaper deletes
+// Call it BEFORE the reaper. Recovery reads the disrupted pod, and the reaper deletes
 // terminal pods once spec.completedPodTTL elapses; reaping first would drop the
 // evidence on any pod whose eviction the AGC did not observe promptly (a restart, a
-// backlogged work queue), turning a recoverable job into a manual re-run.
+// backlogged work queue), turning a recoverable job into a manual re-run. A preemption
+// is on a tighter clock still — see disruptionAwaitingRecovery on why that one cause
+// cannot be made restart-safe.
 //
 // A returned error means the scan itself failed, not that a recovery failed: an
 // individual pod that cannot be claimed or has no run identity is logged, counted, and
@@ -94,13 +97,19 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 		return closedChan(), fmt.Errorf("provisioner: list scale-set worker pods: %w", err)
 	}
 
-	var evicted []*corev1.Pod
+	// Pair each recoverable pod with the cause that made it recoverable, so the metrics
+	// and the operator-facing wording downstream say which disruption actually happened.
+	type disrupted struct {
+		pod   *corev1.Pod
+		cause string
+	}
+	var recoverable []disrupted
 	for i := range pods.Items {
-		if evictedAwaitingRecovery(&pods.Items[i]) {
-			evicted = append(evicted, &pods.Items[i])
+		if cause, ok := disruptionAwaitingRecovery(&pods.Items[i]); ok {
+			recoverable = append(recoverable, disrupted{pod: &pods.Items[i], cause: cause})
 		}
 	}
-	if len(evicted) == 0 {
+	if len(recoverable) == 0 {
 		return closedChan(), nil
 	}
 
@@ -115,7 +124,10 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), spec.EvictionRetryDelay+evictionRecoveryAPIBudget)
 	var wg sync.WaitGroup
-	for _, pod := range evicted {
+	for _, d := range recoverable {
+		// cause is deliberately NOT on podLog: handleEviction puts it on every line it
+		// emits, and a logger-level attribute would duplicate the key on those.
+		pod, cause := d.pod, d.cause
 		podLog := log.With("podName", pod.Name)
 
 		// Claim before calling GitHub, under an optimistic lock: whoever wins the patch
@@ -124,10 +136,10 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 		// error.
 		if err := p.claimEvictionRecovery(rctx, pod); err != nil {
 			if apierrors.IsConflict(err) || apierrors.IsNotFound(err) {
-				podLog.Debug("scale-set worker eviction already claimed elsewhere; skipping", "error", err)
+				podLog.Debug("scale-set worker disruption already claimed elsewhere; skipping", "cause", cause, "error", err)
 				continue
 			}
-			podLog.Warn("could not claim scale-set worker eviction for recovery; skipping", "error", err)
+			podLog.Warn("could not claim scale-set worker disruption for recovery; skipping", "cause", cause, "error", err)
 			continue
 		}
 
@@ -135,21 +147,21 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 		if !ok {
 			// The assignment message carried no complete run identity, so there is
 			// nothing to re-run. Surface it: this is the one failure mode that makes the
-			// whole mechanism silently inert, and an operator seeing evicted jobs stay
+			// whole mechanism silently inert, and an operator seeing disrupted jobs stay
 			// failed needs to be told why rather than left to infer it.
-			podLog.Warn("scale-set worker was evicted but its run identity is unknown; automatic re-run skipped")
+			podLog.Warn("scale-set worker was disrupted but its run identity is unknown; automatic re-run skipped", "cause", cause)
 			if p.Metrics != nil {
-				p.Metrics.EvictionRecoveryIdentityUnknown.WithLabelValues(key.Namespace, key.Name).Inc()
+				p.Metrics.EvictionRecoveryIdentityUnknown.WithLabelValues(key.Namespace, key.Name, cause).Inc()
 			}
 			target.RecordEvent(corev1.EventTypeWarning, "EvictionRecoveryIdentityUnknown", "RecoverEvictedWorker",
-				fmt.Sprintf("worker pod %s was evicted but carries no workflow-run identity, so its job cannot be re-run automatically; a manual re-run is required", pod.Name))
+				fmt.Sprintf("worker pod %s was lost to %s but carries no workflow-run identity, so its job cannot be re-run automatically; a manual re-run is required", pod.Name, cause))
 			continue
 		}
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p.handleEviction(rctx, target, owner, repo, runID, podLog, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet)
+			p.handleEviction(rctx, target, owner, repo, runID, podLog, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, cause)
 		}()
 	}
 
@@ -162,32 +174,64 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 	return done, nil
 }
 
-// evictedAwaitingRecovery reports whether pod is a scale-set worker the kubelet
-// evicted and whose eviction has not been adjudicated yet.
+// disruptionAwaitingRecovery reports whether pod is a scale-set worker that lost its job
+// to a disruption the gateway recovers from, and whose disruption has not been
+// adjudicated yet. The returned cause labels which one, for the metrics and the
+// operator-facing wording.
 //
-// The phase/reason test is the classic path's, verbatim: PodFailed with
-// Status.Reason == "Evicted" is the kubelet's node-pressure eviction, and it is
-// precisely the case where nothing inside the pod got to run. That is what makes
-// firing a re-run here safe from double-reporting, and it is the intent rather than a
-// reliance on the rerun call's benign 404/410 handling:
+// Two causes qualify, and the boundary between what is covered and what is not is the
+// whole of the safety argument:
 //
-//   - A node-pressure eviction SIGKILLs the pod. The runner reports nothing, GitHub
-//     concludes the job only when the job lock lapses, and without this mechanism the
-//     job stays failed until a human re-runs it. This is the case handled here.
-//   - A graceful deletion (an API-initiated eviction such as `kubectl drain`, or the
-//     reaper) sends SIGTERM, which Q385's relay hands to the runner so it reports its
-//     own outcome. The pod is deleted rather than left PodFailed/Evicted, so it fails
-//     this test and no second report is produced. Deletion is deliberately NOT covered
-//     here: covering it would double-report exactly the case the relay already owns.
+//   - **Node-pressure eviction** (PodFailed + Status.Reason "Evicted") is the kubelet's,
+//     and it is the classic path's test verbatim. It SIGKILLs the pod, so the runner
+//     reports nothing, GitHub concludes the job only when the job lock lapses, and
+//     without this mechanism the job stays failed until a human re-runs it.
+//   - **Scheduler preemption** (a DisruptionTarget=True/PreemptionByScheduler condition)
+//     is kube-scheduler's, and is what a RunnerGroup's priorityTiers actually drives.
+//     The scheduler DELETES its victim, so this pod is terminating rather than terminal
+//     and is readable only for its termination grace period — see the note on staleness
+//     below. Q423 measured that it reached no recovery at all before Q497.
+//
+// What is still deliberately NOT covered is every other graceful removal: an operator's
+// `kubectl drain` or `kubectl delete pod`, and the reaper. Those send SIGTERM, which
+// Q385's relay hands to the runner so it reports its own outcome, and their only
+// candidate discriminator is deletionTimestamp — which a human deliberately cancelling a
+// run also sets. Recovering on that would re-run work an operator just stopped, which is
+// why Q459 is still weighing it. PreemptionByScheduler carries no such ambiguity: the
+// scheduler is its only writer.
+//
+// Preemption is not double-reporting despite taking the graceful path. The SIGTERM relay
+// makes the job CONCLUDE at GitHub, not succeed: Q459 measured the conclusion at Tier C
+// as `failure` within 15–26s, with rerun-failed-jobs accepted. The run really is left
+// failed, so the re-run is the repair rather than a duplicate report.
 //
 // A pod already carrying AnnotationEvictionHandledAt is skipped, which is what makes
-// recovery at-most-once per evicted pod across reconciles, restarts, and replicas.
-func evictedAwaitingRecovery(pod *corev1.Pod) bool {
-	if pod.Status.Phase != corev1.PodFailed || pod.Status.Reason != podReasonEvicted {
-		return false
+// recovery at-most-once per disrupted pod across reconciles, restarts, and replicas.
+//
+// # Staleness, and why only one of the two causes is restart-safe
+//
+// An evicted pod sits in PodFailed until the reaper takes it, so a scan that arrives
+// late still finds it — the property Q420 chose a durable pod annotation to get. A
+// preempted pod is being deleted, so it is visible only until its grace period expires
+// (30s by default). Recovery of a preemption is therefore NOT restart-safe, and cannot
+// be: the evidence is the pod, and the scheduler removes it. An AGC down for the whole
+// grace period loses the marker and the displaced run needs a manual re-run. What keeps
+// that window reachable in normal operation is the worker-pod watch predicate, which
+// admits the update where a pod newly becomes a preemption victim (a preemption changes
+// no phase, so the phase-change edge alone would enqueue nothing until the delete event
+// — by which point the pod is already out of the cache).
+func disruptionAwaitingRecovery(pod *corev1.Pod) (cause string, ok bool) {
+	if _, handled := pod.Annotations[AnnotationEvictionHandledAt]; handled {
+		return "", false
 	}
-	_, handled := pod.Annotations[AnnotationEvictionHandledAt]
-	return !handled
+	switch {
+	case pod.Status.Phase == corev1.PodFailed && pod.Status.Reason == podReasonEvicted:
+		return recoveryCauseEviction, true
+	case PreemptedByScheduler(pod):
+		return recoveryCausePreemption, true
+	default:
+		return "", false
+	}
 }
 
 // podReasonEvicted is the Pod.Status.Reason the kubelet sets when it evicts a pod
