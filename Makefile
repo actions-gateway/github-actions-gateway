@@ -195,6 +195,9 @@ path-filters-check: ## Fail if a CI path filter misses a go.work module or names
 # would skip reports green either way, Q429), the image-pull retry schedule
 # (exponential, jittered and capped, so concurrent CI callers cannot retry in
 # lockstep and an unreachable registry still fails on a bounded budget, Q460),
+# the cluster-autoscaler patch resolver updatecli runs unattended (it must stay
+# inside the pinned Kubernetes minor and never downgrade, or the weekly bump
+# manufactures the very version skew the drift gate exists to catch, Q483),
 # and the throttle instruments'
 # parsers (iostat/powermetrics/vm_stat text -> the numbers a throttle decision
 # rests on, Q447 — the measurement paths are macOS-only and one needs root, but
@@ -212,10 +215,11 @@ SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-tes
                  dependabot-rebase-stale-test go-vet-tags-test local-throttle-test \
                  shellcheck-scripts-test release-version-hook-test check-path-filters-test \
                  validate-throttle-test qos-cluster-probe-test git-merge-status-test \
-                 check-codegen-drift-test pull-image-with-retry-test
+                 check-codegen-drift-test pull-image-with-retry-test \
+                 updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, cluster-autoscaler patch resolution)
 	scripts/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of

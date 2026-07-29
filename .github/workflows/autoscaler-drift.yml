@@ -29,6 +29,12 @@
 #     vocabulary reword lands. updatecli bumps KIND_VERSION here weekly
 #     (updatecli.d/kind.yaml rewrites this file and e2e-reusable.yml together),
 #     so that bump PR trips the `changes` filter below and runs the gate.
+#   * CA_VERSION itself, for PATCH releases (Q483). The kind coupling above only
+#     fires on a minor, which left every CA patch untested until the next minor
+#     came round. updatecli.d/cluster-autoscaler.yaml now moves the patch inside
+#     the pinned minor weekly; that PR edits scripts/autoscaler-cluster.sh, the
+#     first path in the `changes` filter below. It cannot cross a minor — doing so
+#     would manufacture the node-image skew this gate exists to report.
 #
 # CAVEAT that the trigger depends on: GitHub does not run workflows on a PR
 # authored by GITHUB_TOKEN, so the weekly updatecli bump PR arrives with no
@@ -79,7 +85,9 @@ jobs:
         with:
           filters: |
             autoscaler:
-              # The version pins and the cluster recipe.
+              # The version pins and the cluster recipe. Also the reason the
+              # weekly cluster-autoscaler patch bump reaches this job: updatecli
+              # rewrites CA_VERSION in this file (updatecli.d/cluster-autoscaler.yaml).
               - 'scripts/autoscaler-cluster.sh'
               - 'test/autoscaler/**'
               # The matcher under test and both of its test files. A matcher edit

@@ -26,7 +26,10 @@
 #                         this is the point: a bump that reworded the vocabulary
 #                         fails `make test-autoscaler`. CI runs the gate on any
 #                         PR that edits this file (.github/workflows/autoscaler-drift.yml),
-#                         so a bump cannot land untested (Q480).
+#                         so a bump cannot land untested (Q480). Patch bumps
+#                         inside the pinned minor arrive weekly by themselves
+#                         (updatecli.d/cluster-autoscaler.yaml, Q483); the minor
+#                         still moves by hand, with the kind bump.
 #   KWOK_VERSION        — kwok release providing the fake kubelet (default below)
 #
 # After this script runs, `make test-autoscaler` drives pods through it.
@@ -42,7 +45,12 @@ AUTOSCALER_CLUSTER=${AUTOSCALER_CLUSTER:-gag-autoscaler}
 # released per Kubernetes minor and its scheduler-framework predicates are the
 # ones from that release. With KIND_NODE_IMAGE unset that minor is kind's
 # default node image (kind v0.32.0 -> kindest/node:v1.36.1), so a kind bump that
-# moves the default is what moves this pin.
+# moves the default is what moves this MINOR — by hand, in that PR.
+#
+# The PATCH moves on its own: updatecli.d/cluster-autoscaler.yaml rewrites the
+# line below weekly to the newest patch published inside this minor, and the
+# resulting PR trips the drift gate's path filter (Q483). Keep the assignment on
+# one line in this exact shape — the manifest matches it by regex.
 CA_VERSION=${CA_VERSION:-v1.36.1}
 KWOK_VERSION=${KWOK_VERSION:-v0.8.0}
 
