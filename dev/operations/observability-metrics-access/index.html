@@ -2434,7 +2434,7 @@ mutual TLS — see <a href="#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scr
 <p>Runtime enforcement of these policies depends on the CNI; kindnet's
 <code>kube-network-policies</code> does not drop all egress negatives (see the worker
 egress limitation in <a href="../troubleshooting/">troubleshooting.md</a>). The manager NP
-is verified by manifest review and is pending a Tier-A runtime check.</p>
+is verified by manifest review and is pending a cluster-only runtime check.</p>
 </blockquote>
 <p>The <code>ServiceMonitor</code> integration stays <strong>opt-in</strong>, behind the
 <code>metrics.serviceMonitor.enabled</code> chart value (default <code>false</code>): out-of-box
