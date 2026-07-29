@@ -442,12 +442,20 @@ mappings for the whole manifest before applying any of it — a CR whose CRD is 
 template in the same release fails the install outright. A **fresh `helm install`
 handles this for you**; `crds/` is applied first.
 
-An **upgrade does not**. Helm skips `crds/` entirely on upgrade, so any release
-created before this CRD existed needs one `kubectl apply` before it can take this
-version. The chart detects that and fails with the exact command rather than
-letting Helm emit a bare `no matches for kind`. Steps:
-[upgrade.md](upgrade.md#priorityclass-allowlist-configmap-to-cr). The same is true
-of any future release that changes this CRD's schema — its notes will say so.
+An **upgrade does not**. Helm skips `crds/` entirely on upgrade, so applying the
+chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally
+rather than conditionally, so the procedure does not depend on which version you
+are coming from:
+
+```sh
+helm show crds <chart> --version <version> | kubectl apply -f -
+```
+
+It is idempotent and version-correct, so it also covers any future schema change
+to this CRD with no release-note callout to remember. The chart preflights the
+CRD's presence and fails with that command rather than letting Helm emit a bare
+`no matches for kind`. Steps:
+[upgrade.md](upgrade.md#gmc-install-and-upgrade-via-helm-recommended).
 
 `helm uninstall` leaves the CRD behind, which is the same end state as the
 `helm.sh/resource-policy: keep` the other CRDs carry.
