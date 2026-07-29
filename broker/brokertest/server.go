@@ -218,9 +218,17 @@ func (s *Server) RenewJobCalls() int {
 	return int(s.renewJobCount.Load())
 }
 
-// CompleteJobCalls returns the number of times /completejob was called. The AGC
-// issues this only for a deduplicated duplicate delivery it abandons (Q260
-// follow-up), so a test can assert the loser released its dangling assignment.
+// CompleteJobCalls returns the number of /completejob calls the stub has FULLY
+// SERVED — the counter is published only after the call's effects are committed,
+// so waiting on it and then reading LastCompleteJob or the fan-out accounting is
+// race-free. The AGC issues completejob for a deduplicated duplicate delivery it
+// abandons (Q260 follow-up), so a test can assert the loser released its dangling
+// assignment.
+//
+// It counts calls, not resolved deliveries: a call whose body never arrives (the
+// client's context was cancelled mid-request) is served and counted, yet resolves
+// nothing. Assert on DeliveryResults when what you mean is "these deliveries are
+// resolved" (Q490).
 func (s *Server) CompleteJobCalls() int {
 	return int(s.completeJobCount.Load())
 }
@@ -618,7 +626,6 @@ func (s *Server) handleCompleteJob(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	s.completeJobCount.Add(1)
 	var req broker.CompleteJobRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
 	s.lastCompleteJob.Store(req)
@@ -641,6 +648,15 @@ func (s *Server) handleCompleteJob(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.acctMu.Unlock()
+
+	// Publish the call LAST, after every piece of state this handler records is
+	// committed, so the counter is a valid happens-before gate: a test that waits on
+	// CompleteJobCalls() and then reads LastCompleteJob or the fan-out accounting is
+	// guaranteed to see this call's effects. Incrementing first let a waiter observe
+	// the count and then read state the handler had not written yet — the Q490 flake,
+	// where the winner's Nth sibling completion was counted but not yet resolved when
+	// ExpireUnstartedDeliveries ran, cancelling a job every delivery had completed.
+	s.completeJobCount.Add(1)
 
 	w.WriteHeader(http.StatusOK)
 }

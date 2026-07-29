@@ -419,6 +419,13 @@ A stub is the usual trap, because it is the most convenient thing to wait on and
 
 Reach for the ordering deliberately: identify which effect the code emits **last**, synchronize on that, and let the earlier ones be implied.
 
+The gap can also sit **inside a single stub handler**, which is harder to see because one HTTP call looks atomic from the test. `brokertest`'s `handleCompleteJob` incremented `CompleteJobCalls` on entry and committed the fan-out accounting several statements later; `TestAGC_Q260_FanoutCompletionReconciles` waited for the count to reach N and then fired `ExpireUnstartedDeliveries`, which could beat the Nth handler to the accounting lock and cancel a job whose deliveries had all in fact completed (Q490). Two rules come out of it:
+
+- **Writing a stub: publish the observable counter last**, after every piece of state the handler records, so waiting on the counter is a valid happens-before gate for everything it wrote. A counter incremented on entry gates nothing.
+- **Writing the test: wait on the state, not the call count.** A count says a call was *served*, not that it *resolved* anything — a request whose body never arrives (cancelled client context) is still served and still counted. Q490's test now waits on `DeliveryResults`, the accounting it actually asserts about.
+
+To prove a window like this rather than guess at it, widen it: drop a `time.Sleep` between the two effects and confirm the test fails every time. Q490's probe took the flake from unreproducible in 200 local runs to 5 failures out of 5, and re-running it against the fix — still 8/8 green with the sleep in place — is the [negative control](#proving-a-flake-fix-invert-it) that shows the ordering, not luck, is what closed it.
+
 ## Where each tier can physically run (and what it costs)
 
 The tier above says *what* observes a bug; this says *where that tier can run*. Most validation is local on a dev machine; a short list needs real GitHub, real cloud, or real scale. The **environment definitions** below are durable; the **Q-item mapping** is a snapshot of the [backlog](../STATUS.md) as of 2026-06 and may lag.

@@ -105,10 +105,13 @@ func driveFanout(t *testing.T, srv *brokertest.Server, mgr *listener.Multiplexer
 		return testutil.ToFloat64(m.JobsDuplicateDeliveryTotal.WithLabelValues("default", "test-rg")) >= float64(n-1)
 	}, 5*time.Second, 10*time.Millisecond, "the N-1 losing siblings must be deduped on planID")
 
-	// Release the winner to complete its own delivery (the worker finishing).
+	// Release the winner to complete its own delivery (the worker finishing). Wait on
+	// the RESOLVED delivery, not the completejob call count: a counted call has been
+	// served but need not have resolved anything (see CompleteJobCalls), and only a
+	// resolved delivery is what the callers below assert about (Q490).
 	close(release)
 	require.Eventually(t, func() bool {
-		return srv.CompleteJobCalls() >= 1
+		return len(srv.DeliveryResults(planID)) >= 1
 	}, 5*time.Second, 10*time.Millisecond, "the winner must complete its own delivery via completejob")
 	last, ok := srv.LastCompleteJob()
 	require.True(t, ok)
@@ -188,9 +191,13 @@ func TestAGC_Q260_FanoutCompletionReconciles(t *testing.T) {
 	driveFanout(t, srv, mgr, m, planID, n, release)
 
 	// The winner fans completion out to the N-1 deduped siblings, so all N deliveries
-	// (winner's own + siblings) are resolved — one completejob each.
+	// (winner's own + siblings) are resolved — one completejob each. Gate on the
+	// resolved deliveries, which is exactly what the state assertion below depends on:
+	// counting completejob calls let the Nth call be observed before its result was
+	// recorded, so ExpireUnstartedDeliveries saw that delivery still dangling and
+	// cancelled a job every delivery had in fact completed (the Q490 flake).
 	require.Eventually(t, func() bool {
-		return srv.CompleteJobCalls() >= n
+		return len(srv.DeliveryResults(planID)) >= n
 	}, 5*time.Second, 10*time.Millisecond, "the winner must complete each deduped sibling delivery")
 
 	// With no delivery dangling, the completed job concludes green even after the
