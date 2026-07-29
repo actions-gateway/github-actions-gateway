@@ -586,6 +586,8 @@ For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node
 
 **Tier C.** Set `GITHUB_E2E_APP_ID`, `GITHUB_E2E_INSTALLATION_ID`, `GITHUB_E2E_PRIVATE_KEY` (a PEM path or the PEM body), `GITHUB_E2E_ORG`, and `GITHUB_E2E_REPO` in the environment, then run `make e2e` (Tier C specs skip themselves at runtime when any variable is missing). The GitHub App key is in the macOS keychain; see the GitHub App reference memory for the retrieval command.
 
+Tier C is the only tier that hands the harness a **live** App key — every other tier stamps the same Secret with a throwaway RSA key. `utils.CreateGitHubAppSecret` therefore routes the PEM through a `0600` temp file and `--from-file`, per [the credential rule](github-app-credentials.md#creating-the-kubernetes-secret). Never switch it back to `--from-literal`: `utils.Run` echoes each command's argv to the `GinkgoWriter` and folds it into the failure message, so a literal PEM would land in the run log, the JUnit report, and any `ps` snapshot taken mid-run (Q493).
+
 ### The credential-gated probe scenarios
 
 Some questions are about GitHub's behaviour rather than ours, and no tier that runs against a double can answer them — a stub answers with whatever we assumed. Those live in the `cmd/probe` binary as numbered investigations, each selected by an environment variable and each documented by the plan doc it exists to settle. They are operator-run, never CI-run: they need live App credentials and, in one case, hours of wall clock.
