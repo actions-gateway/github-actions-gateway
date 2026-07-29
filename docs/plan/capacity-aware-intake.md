@@ -25,21 +25,27 @@ durable rationale in
 | # | Item | Sz | Status |
 |---|---|---|---|
 | 0 | Design rationale recorded (D.8 asymmetry principle, G.16 deferral + triggers) | S | ✅ Done — this change |
-| 0a | Port the shipped quota rung to the scale-set tier, as the integer form of the ladder | M | ✅ Done ([§9a](#9a-the-shipped-quota-rung-was-classic-only-q443)/[§9b](#9b-what-the-port-shipped), Q443, 2026-07-26) |
-| 1 | Gate on the scheduler's verdict, for clusters that cannot grow | M | ✅ Done ([§6](#6-phase-1--the-scheduler-verdict-signal-q405), Q405, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
-| 2 | Gate on the autoscaler's own declination, for elastic clusters | M | ✅ Done ([§7](#7-phase-2--the-autoscaler-declination-signal-q406), Q406, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
+| 0a | Port the shipped quota rung to the scale-set tier, as the integer form of the ladder | M | ✅ Done ([§9a](#9a-the-shipped-quota-rung-was-classic-only-q443)/[§9b](#9b-what-the-port-shipped), Q443, 2026-07-26) — effect unmeasured (V1) |
+| 1 | Gate on the scheduler's verdict, for clusters that cannot grow | M | ✅ Done ([§6](#6-phase-1--the-scheduler-verdict-signal-q405), Q405, 2026-07-27) — effect unmeasured (V2) |
+| 2 | Gate on the autoscaler's own declination, for elastic clusters | M | ✅ Done ([§7](#7-phase-2--the-autoscaler-declination-signal-q406), Q406, 2026-07-27) — effect unmeasured (V2) |
 | 2a | Split the mode enum's two axes: tenant policy on the set, cluster fact on the gateway | S | ✅ Done ([§5a](#5a-the-single-enum-was-two-axes-q470), Q470, 2026-07-27) |
-| 2b | Assert phase 2's matcher against a real autoscaler's events, in kind | M | ✅ Done ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), Q474, 2026-07-28) — cluster-autoscaler only |
+| 2b | Assert phase 2's matcher against a real autoscaler's events, in kind | M | ✅ Done ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), Q474, 2026-07-28) — cluster-autoscaler only (V3) |
 | 2c | Stop one loop's two verdicts from gating: the concurrency window | S | ✅ Done ([§9d](#9d-the-concurrency-window-q478), Q478, 2026-07-28) |
+| V1 | Measure item 0a's effect — the scale-set quota rung — on dogfood | M | ⏳ Unrun ([§9b](#9b-what-the-port-shipped), [Q462](../STATUS.md#Q462)) |
+| V2 | Measure items 1 and 2's effect — both capacity-gate signals — on dogfood | M | ⏳ Unrun ([§9](#9-validation-to-be-measured-not-asserted), [Q469](../STATUS.md#Q469)) — gates item 3 |
+| V3 | Extend item 2b's live-autoscaler drift gate to Karpenter | M | ⏳ Unrun ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), [Q479](../STATUS.md#Q479)) |
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
-**No rung's *effect* has been measured on a live cluster** — items 0a, 1 and 2
-included: each carries an envtest proof of the mechanism, not a measurement of what
-it removes. §9 is that measurement step, still unrun, and its numbers are the input
-to the Phase 3 decision; no effectiveness claim belongs in this doc, or in public
-copy, before it exists. What item 2b added is narrower and does not substitute for
-it: phase 2's *input* — the strings a real cluster-autoscaler emits — is now
-asserted against a live autoscaler on every run of the drift gate ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474)).
+A numbered row means code shipped; a `V` row means that code's effect was
+measured where it runs. **The V rows are the open work — item 3's deferral does
+not close this plan.** A ✅ on 0a, 1 or 2 records an envtest proof of the
+*mechanism*, never a measurement of what it removes, so **no rung's *effect* has
+been measured on a live cluster**, and no effectiveness claim belongs in this
+doc, or in public copy, until V1–V3 produce one. V2's numbers are also the input
+to the Phase 3 decision — deferring item 3 is what makes V2 load-bearing, not
+what retires it. What item 2b added is narrower and does not substitute for V2:
+phase 2's *input* — the strings a real cluster-autoscaler emits — is now asserted
+against a live autoscaler on every run of the drift gate ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474)).
 
 ---
 
