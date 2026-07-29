@@ -898,7 +898,7 @@ and closed Q71.
 - **Deviation from pure production posture (at the time of this run):** the
   AGC's org URL had no CR field, so the GMC was patched with the testing-gated
   `--allow-agc-extra-env=true` + `AGC_EXTRA_GITHUB_ORG_URL=https://github.com/actions-gateway/gateway-test`
-  (same mechanism the Tier-C suite uses). **Resolved by Q116:** the org URL is
+  (same mechanism the live-GitHub suite uses). **Resolved by Q116:** the org URL is
   now a first-class required `spec.gitHubURL` field threaded to the AGC as
   `GITHUB_ORG_URL`, so this workaround is no longer needed — set
   `spec.gitHubURL` (or chart value `sampleGateway.gitHubURL`) on the CR instead.
@@ -969,7 +969,7 @@ empty.
 ### Product bugs surfaced (all filed in [STATUS.md](../STATUS.md))
 
 The live run worked **only after** working around these; none are
-caught by unit/Tier-A/Tier-B tiers:
+caught by unit/cluster-only/fake-GitHub tiers:
 
 1. **Q115 — default worker SecurityContext breaks the runner image.**
    Q31's `applySecurityDefaults` stamps pod-level `runAsNonRoot: true`;
@@ -977,14 +977,14 @@ caught by unit/Tier-A/Tier-B tiers:
    fails every default-path worker pod with
    `CreateContainerConfigError: container has runAsNonRoot and image has
    non-numeric user`. Worked around per-tenant with
-   `podTemplate.spec.securityContext.runAsUser: 1001`. Tier-B masked
+   `podTemplate.spec.securityContext.runAsUser: 1001`. fake-GitHub masked
    this by using the **agc image** as its worker placeholder.
    **Fixed (Q115):** `applySecurityDefaults` now gap-fills
    `runAsUser: 1001` (the runner image's UID) alongside
    `runAsNonRoot: true` whenever non-root is enforced, so the default
    path is kubelet-admissible; the gap-fill is skipped when a tenant sets
    `runAsNonRoot: false` and an explicit `runAsUser` still wins. A new
-   Tier-B spec (`E2E_AGC_WorkerSecurityContext`) provisions a worker pod
+   fake-GitHub spec (`E2E_AGC_WorkerSecurityContext`) provisions a worker pod
    from the **real** worker image and asserts kubelet admits it, so a
    regression of the default is caught in CI rather than only live.
 2. **Q114 — JIT agents are single-use and the AGC cannot self-heal.**
@@ -1000,7 +1000,7 @@ caught by unit/Tier-A/Tier-B tiers:
    **Fixed (Q114):** the listener now re-registers its agent after every
    job (and heals 401/EOF-stale sessions found after a restart,
    resolving the surviving-name 409 by ID lookup); fakegithub can
-   simulate the single-use behaviour for Tier B regression coverage —
+   simulate the single-use behaviour for fake-GitHub regression coverage —
    see [q114-jit-agent-selfheal.md](archive/q114-jit-agent-selfheal.md).
 3. **Q117 — RunnerGroup `podTemplate` changes don't reach running
    listeners.** After patching the CR (observedGeneration advanced),

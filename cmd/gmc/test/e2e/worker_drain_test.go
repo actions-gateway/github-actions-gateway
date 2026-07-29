@@ -53,7 +53,7 @@ import (
 // What that costs, stated plainly: this spec does not exercise the wrapper's
 // SIGTERM relay, because there is no live container to signal. That half is
 // Q385's, covered by the wrapper unit tests, and its end-to-end form needs a real
-// GitHub job to report — a Tier-C question, not a Tier-B one. What is measured
+// GitHub job to report — a live-GitHub question, not a fake-GitHub one. What is measured
 // here is the half that decides recovery: what a real drain does to the worker
 // *pod object*, which is the only thing either tier's eviction detection reads.
 //

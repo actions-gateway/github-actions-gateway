@@ -127,7 +127,7 @@ retention could be far shorter. If it is, the replay path is not a recovery path
 after a long outage and this item's deadline is the *only* one — which is an
 argument for the default being **on**, not opt-in.
 
-Filed as **Q468** for a live measurement; it needs Tier A / live credentials and
+Filed as **Q468** for a live measurement; it needs cluster-only / live credentials and
 does not belong in this PR. **Measured 2026-07-29**
 ([q468-jobcompleted-retention.md](q468-jobcompleted-retention.md)): retention is
 *not* far shorter — a `JobCompleted` was still redelivered to a new session after

@@ -109,10 +109,10 @@ operator may want to alert on (especially `pending_deadline`).
 |---|---|
 | Unit (fake client) | ownerRef stamped on pod + Secret; `0s` TTL deletes pod in goroutine cleanup; >0 TTL retains; reaper deletes terminal-past-TTL and Pending-past-deadline pods, keeps fresh ones, computes RequeueAfter |
 | envtest (`cmd/agc/internal/controller/integration/`) | against a real apiserver with the manager + reconciler running: a pod set to Succeeded is deleted after `completedPodTTL`; a never-scheduled Pending pod (envtest has no scheduler) is deleted after `pendingPodDeadline` |
-| Tier-A kind e2e (`cmd/gmc/test/e2e/`) | end-to-end through GMC→AGC→fakegithub: worker pod carries the RunnerGroup ownerRef; a completed worker pod is deleted after the TTL; a stuck-Pending pod (unpullable image) is reaped after the deadline and the Secret is gone |
+| cluster-only kind e2e (`cmd/gmc/test/e2e/`) | end-to-end through GMC→AGC→fakegithub: worker pod carries the RunnerGroup ownerRef; a completed worker pod is deleted after the TTL; a stuck-Pending pod (unpullable image) is reaped after the deadline and the Secret is gone |
 
 envtest cannot prove the ownerRef cascade (no kube-controller-manager / GC
-controller in envtest), hence the ownerRef assertion at Tier A.
+controller in envtest), hence the ownerRef assertion at cluster-only.
 
 ## Doc updates
 
@@ -137,6 +137,6 @@ controller in envtest), hence the ownerRef assertion at Tier A.
 - [x] Reaper in RunnerGroup reconciler + metric + events
 - [x] Unit tests (provisioner + reaper)
 - [x] envtest integration tests (`make -C cmd/agc test-integration` green incl. new tests)
-- [x] Tier-A e2e test (`E2E_AGC_WorkerPodLifecycle`, Serial)
+- [x] cluster-only e2e test (`E2E_AGC_WorkerPodLifecycle`, Serial)
 - [x] Doc updates
 - [ ] `make check` green; STATUS row removed

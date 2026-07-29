@@ -65,7 +65,7 @@ SecurityContext breaks the runner image) are new `1.0-gate` rows.
   afterwards).
 - [x] **End-to-end job through the proxy**: a job dispatched from
   GitHub routes via `HTTPS_PROXY`, runs in a worker pod, and completes
-  green. The Tier-A `E2E_GMC_TenantProvisioning_ProxyConnectWorks` spec
+  green. The cluster-only `E2E_GMC_TenantProvisioning_ProxyConnectWorks` spec
   already exists and runs in CI; the real-GitHub path was proven live
   2026-06-12 (runs 27386891757 / 27395702908, both `success`).
   **Caveat:** the green path needed a per-tenant `runAsUser: 1001`

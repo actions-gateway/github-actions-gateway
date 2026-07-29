@@ -364,7 +364,7 @@ Prefer the narrowest tier that can actually *observe* the bug class — but no n
 
 - **Unit (fake client)** — pure logic and field-level behavior. The fake client (`sigs.k8s.io/controller-runtime/pkg/client/fake`) reproduces none of the real-apiserver semantics below, so a fake-client test cannot prove claims that depend on them.
 - **envtest (integration)** — any claim that depends on real-apiserver semantics: schema/admission defaulting, server-side no-op-write dedup (the apiserver skips the `resourceVersion` bump when a patch's defaulted result is unchanged), admission/validation webhooks and CEL, and `IsConflict` handling. Both `cmd/agc` and `cmd/gmc` already have envtest suites at `internal/controller/integration/` (build tag `integration`, see [Integration tests](#integration-tests)) — add to them rather than concluding none exists; confirm with a directory listing before deciding a tier is missing. Example: PR #143 (Q65) migrated the GMC `apply*` helpers to `CreateOrPatch`; a fake-client test could verify field-level behavior, but only `apply_nochurn_test.go` (envtest, asserting `resourceVersion` stability across periodic reconciles) could prove the whole-`Spec` helpers don't churn.
-- **Tier-A kind e2e** — behaviors that emerge from real Container Network Interface (CNI), kube-proxy Destination NAT (DNAT), kubelet image-pull policy, or TLS-over-tunnel. When a feature crosses one of those boundaries, the Tier-A test (see [design §7.3](../design/07-test-plan.md#73-end-to-end-tests) and [End-to-end tests](#end-to-end-tests)) is the only thing that proves it works. Example: PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented Tier-A test (`E2E_GMC_TenantProvisioning_ProxyConnectWorks`) would have caught 4 of them locally.
+- **cluster-only kind e2e** — behaviors that emerge from real Container Network Interface (CNI), kube-proxy Destination NAT (DNAT), kubelet image-pull policy, or TLS-over-tunnel. When a feature crosses one of those boundaries, the cluster-only test (see [design §7.3](../design/07-test-plan.md#73-end-to-end-tests) and [End-to-end tests](#end-to-end-tests)) is the only thing that proves it works. Example: PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented cluster-only test (`E2E_GMC_TenantProvisioning_ProxyConnectWorks`) would have caught 4 of them locally.
 - **Live autoscaler (kind + kwok)** — claims about a string, verb, or field an **upstream project** emits, where our side fails open and therefore stays green when upstream changes it. Recorded samples cannot observe that class at all. Today that is the capacity gate's autoscaler vocabulary; see [The live-autoscaler drift gate](#the-live-autoscaler-drift-gate).
 - **Load (in-process)** — scaling claims about the AGC's own goroutine/memory/throughput footprint, not a functional bug class. The load harness (build tag `load`, see [Load tests](#load-tests)) drives the real listener-multiplexing core at thousands of concurrent virtual sessions without a cluster. Use it to pin a capacity claim or guard against a concurrency-core regression (goroutine leak, sustained-session collapse); it cannot speak to anything downstream of the AGC process (real pods, apiserver/GitHub latency).
 
@@ -430,9 +430,9 @@ To prove a window like this rather than guess at it, widen it: drop a `time.Slee
 
 The tier above says *what* observes a bug; this says *where that tier can run*. Most validation is local on a dev machine; a short list needs real GitHub, real cloud, or real scale. The **environment definitions** below are durable; the **Q-item mapping** is a snapshot of the [backlog](../STATUS.md) as of 2026-06 and may lag.
 
-- **Local — `kind` (the default).** Unit, envtest, Tier-A/B e2e, and the load harness need only a Linux-kernel cluster plus a fake or in-cluster GitHub. This covers the large majority of work and runs on an Intel Mac under Docker Desktop.
+- **Local — `kind` (the default).** Unit, envtest, cluster-only/fake-GitHub e2e, and the load harness need only a Linux-kernel cluster plus a fake or in-cluster GitHub. This covers the large majority of work and runs on an Intel Mac under Docker Desktop.
 - **Local — `minikube` + gVisor addon (the one thing kind can't do).** A `RuntimeClass=gvisor` node needs `runsc` on the node, which kind's container-nodes can't supply cleanly. minikube can: locally `minikube start --driver=qemu` (a Linux VM) then `minikube addons enable gvisor`; on a Linux CI runner `--driver=none` (or `docker`) + the same addon. gVisor's **systrap platform needs no nested virtualization**, so it works on a stock machine and a stock `ubuntu-latest` runner alike. Reach for minikube **only** for gVisor — kind stays the default everywhere else (lighter, already wired into the e2e workflows). Full local VMs (Lima/Colima/Multipass) host the same `runsc` setup but unlock nothing beyond gVisor.
-- **Needs real GitHub.** Tier-C e2e and the live broker-compatibility probe (the credential-gated `cmd/probe` binary). Free (GitHub API within rate limits); needs a test App/org credential as a CI secret. Automatable per-PR or nightly. The credential-free counterpart — the `cmd/probe/compat` suite that asserts every documented broker contract against the in-process broker model — runs locally in `make check` with no secrets; its published result is [broker-compatibility.md](broker-compatibility.md).
+- **Needs real GitHub.** live-GitHub e2e and the live broker-compatibility probe (the credential-gated `cmd/probe` binary). Free (GitHub API within rate limits); needs a test App/org credential as a CI secret. Automatable per-PR or nightly. The credential-free counterpart — the `cmd/probe/compat` suite that asserts every documented broker contract against the in-process broker model — runs locally in `make check` with no secrets; its published result is [broker-compatibility.md](broker-compatibility.md).
 - **Needs real cloud.** Cloud KMS signing, managed control-plane behavior (EKS/GKE/AKS), and cloud workload-identity binding (IRSA / GKE WI / Azure WI). Not reproducible in kind/minikube — needs the actual provider. Automatable as a scheduled job that provisions an **ephemeral** cluster (eksctl/Terraform), torn down after.
 - **Needs real scale.** The 1,000-pod real-cluster capacity run. A 4-core Docker Desktop VM can't host it; needs a multi-node cluster. The in-process load harness already covers the AGC-only claim locally for free, so this is release-gated, not routine.
 
@@ -440,7 +440,7 @@ The tier above says *what* observes a bug; this says *where that tier can run*. 
 
 | Validation | Substrate | ~Cost | Cadence |
 |---|---|---|---|
-| Broker-compat, Tier-C (Q191; Q11†) | test GitHub App | $0 (free API) | per-PR / nightly |
+| Broker-compat, live-GitHub (Q191; Q11†) | test GitHub App | $0 (free API) | per-PR / nightly |
 | gVisor `RuntimeClass` (Q15) | minikube + gvisor addon, stock runner | $0 | per-PR / nightly |
 | Cloud KMS + workload-identity legs (Q197 cloud) | KMS key + ephemeral EKS/GKE/AKS | KMS <$5/mo; ~$0.50–1 / run | nightly / weekly |
 | Managed-cluster audit paths (Q182) | ephemeral EKS/GKE/AKS ×3 | ~$1–2 / full-matrix run | weekly / release |
@@ -492,7 +492,7 @@ The AGC's scale-set listener also enforces its own floor (`minPollInterval`) bet
 
 ### The broker doubles share one protocol core
 
-Three broker doubles implement the GitHub Actions broker wire protocol: [`broker/brokertest`](../../broker/brokertest/) (the in-process integration stub), [`test/fakegithub`](../../test/fakegithub/) (the deployed Tier B e2e image), and the [load harness stub](../../cmd/agc/test/load/broker_stub.go). They diverge in what a job delivery and an AcquireJob *mean* — fan-out accounting (Q260), single-use JIT consumption (Q114), saturated auto-delivery — but the session and credential *mechanics* are identical: minting `session-<n>` IDs, resolving a DELETE by its `sessionId` query param or bearer token, owner-scoped session listing, and the connection-reuse-safe JSON framing. Those live once in [`broker/brokerstub`](../../broker/brokerstub/) (Q368); each double layers its own delivery/acquire policy on top. `broker/brokerstub` is deliberately **standard-library-only** so the fakegithub distroless image links no third-party code — do not import the `broker` client (or anything else) into it.
+Three broker doubles implement the GitHub Actions broker wire protocol: [`broker/brokertest`](../../broker/brokertest/) (the in-process integration stub), [`test/fakegithub`](../../test/fakegithub/) (the deployed fake-GitHub e2e image), and the [load harness stub](../../cmd/agc/test/load/broker_stub.go). They diverge in what a job delivery and an AcquireJob *mean* — fan-out accounting (Q260), single-use JIT consumption (Q114), saturated auto-delivery — but the session and credential *mechanics* are identical: minting `session-<n>` IDs, resolving a DELETE by its `sessionId` query param or bearer token, owner-scoped session listing, and the connection-reuse-safe JSON framing. Those live once in [`broker/brokerstub`](../../broker/brokerstub/) (Q368); each double layers its own delivery/acquire policy on top. `broker/brokerstub` is deliberately **standard-library-only** so the fakegithub distroless image links no third-party code — do not import the `broker` client (or anything else) into it.
 
 ### The scale-set protocol has exactly one double
 
@@ -562,16 +562,16 @@ What it measured on first run, and the one finding that outlived it, are in [the
 
 E2E tests run on a local `kind` cluster, are gated by the `//go:build e2e` tag, and live under `cmd/gmc/test/e2e/`. They split into three tiers (see [design §7.3](../design/07-test-plan.md#73-end-to-end-tests)):
 
-- **Tier A** — GMC infrastructure (no GitHub required).
-- **Tier B** — AGC lifecycle against the in-cluster `test/fakegithub/` server.
-- **Tier C** — real GitHub workflow dispatch (requires App credentials).
+- **cluster-only** — GMC infrastructure (no GitHub required).
+- **fake-GitHub** — AGC lifecycle against the in-cluster `test/fakegithub/` server.
+- **live-GitHub** — real GitHub workflow dispatch (requires App credentials).
 
 Typical local run:
 
 ```bash
 make e2e-cluster        # one-time: create the kind cluster
 make e2e-images         # builds gmc/agc/proxy/worker/fakegithub, loads into kind
-make e2e                # runs Tier A + B
+make e2e                # runs cluster-only + fake-GitHub
 make e2e-clean          # tear down when done
 ```
 
@@ -584,32 +584,32 @@ For iterating against a single spec without re-creating the cluster, see [kind-i
 **Test labels and the `multi-node` suite.** Three Ginkgo labels annotate the suite. CI runs the **full** suite — `make e2e` with no `SUITE`, so no `--label-filter` — on the default 2-worker cluster (`test/kind-config-2worker.yaml`), so every labelled spec runs in CI:
 
 - `multi-node` — specs that need the 2-worker cluster shape to be meaningful: `E2E_GMC_ProxyPodScheduledOnWorker` (pod-to-worker placement), `E2E_GMC_PDBPreventsEvictionBelowMinAvailable` (PodDisruptionBudget (PDB) blocks eviction while a replica survives on another node), and `E2E_GMC_GMCRestartPreservesState`.
-- `github-real` — the Tier C specs that dispatch against real GitHub (`E2E_GitHub_RealDispatch`); they self-skip when the `GITHUB_E2E_*` env vars are unset.
-- `real-github-egress` — the specs whose traffic terminates at the live `api.github.com`: the v1/v2 `ProxyConnectWorks` CONNECT specs, the two `E2E_V2_DirectEgress` specs (their NP ipBlock-peer waits also depend on the GMC's live `/meta` fetch), and the Tier C container. Not a filter label: a suite-level `AfterEach` (`cmd/gmc/test/e2e/github_egress_preflight_test.go`) uses it for failure-time attribution — see [Runner→GitHub egress attribution](#runnergithub-egress-attribution-q352).
+- `github-real` — the live-GitHub specs that dispatch against real GitHub (`E2E_GitHub_RealDispatch`); they self-skip when the `GITHUB_E2E_*` env vars are unset.
+- `real-github-egress` — the specs whose traffic terminates at the live `api.github.com`: the v1/v2 `ProxyConnectWorks` CONNECT specs, the two `E2E_V2_DirectEgress` specs (their NP ipBlock-peer waits also depend on the GMC's live `/meta` fetch), and the live-GitHub container. Not a filter label: a suite-level `AfterEach` (`cmd/gmc/test/e2e/github_egress_preflight_test.go`) uses it for failure-time attribution — see [Runner→GitHub egress attribution](#runnergithub-egress-attribution-q352).
 
 For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node` maps to `--label-filter '!multi-node'` and skips the multi-node specs; unset `SUITE` runs everything (matching CI). The HPA scale-up spec (`E2E_GMC_HPADrivesScaleUp`) is unlabelled and CI-safe: it patches `HPA.spec.minReplicas` to drive the HPA→Deployment control path deterministically rather than burning CPU to trigger autoscaling, so it runs everywhere.
 
 **Waiting for the AGC, not just its Deployment.** A spec that waits for a broker session (or anything else that needs the AGC operational) must gate on `utils.WaitForRunnerGroupReconciled`, not only `utils.WaitForDeploymentReady`. Deployment readiness means only that the AGC's health server is up — it binds within seconds of pod start and is deliberately decoupled from the GitHub-App token fetch (`cmd/agc/main.go`), whose budget alone is up to ~2 minutes. `WaitForRunnerGroupReconciled` waits for `RunnerGroup.status.observedGeneration` to be set, which the AGC does only after token + agent registration + listener-multiplexer start all succeed. Gating on Deployment readiness alone folds the AGC's whole startup into the session wait's budget, which under parallel CI load (token/registration/session round-trips to the shared single-replica fakegithub) can exhaust it and surface as a misleading "no session registered" timeout (Q134).
 
-**Tier C.** Set `GITHUB_E2E_APP_ID`, `GITHUB_E2E_INSTALLATION_ID`, `GITHUB_E2E_PRIVATE_KEY` (a PEM path or the PEM body), `GITHUB_E2E_ORG`, and `GITHUB_E2E_REPO` in the environment, then run `make e2e` (Tier C specs skip themselves at runtime when any variable is missing). The GitHub App key is in the macOS keychain; see the GitHub App reference memory for the retrieval command.
+**live-GitHub.** Set `GITHUB_E2E_APP_ID`, `GITHUB_E2E_INSTALLATION_ID`, `GITHUB_E2E_PRIVATE_KEY` (a PEM path or the PEM body), `GITHUB_E2E_ORG`, and `GITHUB_E2E_REPO` in the environment, then run `make e2e` (live-GitHub specs skip themselves at runtime when any variable is missing). The GitHub App key is in the macOS keychain; see the GitHub App reference memory for the retrieval command.
 
-**Run Tier C on a throwaway cluster, not the shared `actions-gateway-e2e` one.** The
-Tier C container swaps the GMC's GitHub env vars cluster-wide and holds them for the
+**Run live-GitHub on a throwaway cluster, not the shared `actions-gateway-e2e` one.** The
+live-GitHub container swaps the GMC's GitHub env vars cluster-wide and holds them for the
 length of the run, and that `kubectl set env` is itself what makes a later
 `helm upgrade` conflict on server-side-apply field ownership. A parallel session
 reinstalling the chart underneath it (observed 2026-07-29) invalidates the run either
 way. Create one per run — `make e2e-cluster KIND_CLUSTER=<name>` shares the existing
 local registry, so no image rebuild is needed — and point the run at it with a private
 `KUBECONFIG` (`kind get kubeconfig --name <name>`) rather than the ambient context,
-which every other session shares. Note also that two concurrent Tier C runs dispatch
+which every other session shares. Note also that two concurrent live-GitHub runs dispatch
 the same fixture workflows in the same repo and register identically-named runners
 (Q500). A private `KUBECONFIG` is not optional either: the suite's own `kubectl` calls
 carry no `--context`, so they follow `current-context` in the file every parallel
 session shares.
 
-**Stop a Tier C run with SIGTERM, never `kill -9`.** Ginkgo runs its `AfterAll` on SIGTERM, which deletes the `ActionsGateway` CR while the tenant's AGC is still up — the only window in which the `agentpool-cleanup` finalizer can deregister that tenant's runners from the org. Kill the process outright and the namespace wedges in `Terminating` on a finalizer whose controller has already gone with it, and force-removing that finalizer strands the runner registrations: they keep accepting job assignments, so the *next* run's job goes `in_progress` against a runner that no longer exists and no worker pod is ever provisioned (observed 2026-07-29).
+**Stop a live-GitHub run with SIGTERM, never `kill -9`.** Ginkgo runs its `AfterAll` on SIGTERM, which deletes the `ActionsGateway` CR while the tenant's AGC is still up — the only window in which the `agentpool-cleanup` finalizer can deregister that tenant's runners from the org. Kill the process outright and the namespace wedges in `Terminating` on a finalizer whose controller has already gone with it, and force-removing that finalizer strands the runner registrations: they keep accepting job assignments, so the *next* run's job goes `in_progress` against a runner that no longer exists and no worker pod is ever provisioned (observed 2026-07-29).
 
-Tier C is the only tier that hands the harness a **live** App key — every other tier stamps the same Secret with a throwaway RSA key. `utils.CreateGitHubAppSecret` therefore routes the PEM through a `0600` temp file and `--from-file`, per [the credential rule](github-app-credentials.md#creating-the-kubernetes-secret). Never switch it back to `--from-literal`: `utils.Run` echoes each command's argv to the `GinkgoWriter` and folds it into the failure message, so a literal PEM would land in the run log, the JUnit report, and any `ps` snapshot taken mid-run (Q493).
+The live-GitHub tier is the only one that hands the harness a **live** App key — every other tier stamps the same Secret with a throwaway RSA key. `utils.CreateGitHubAppSecret` therefore routes the PEM through a `0600` temp file and `--from-file`, per [the credential rule](github-app-credentials.md#creating-the-kubernetes-secret). Never switch it back to `--from-literal`: `utils.Run` echoes each command's argv to the `GinkgoWriter` and folds it into the failure message, so a literal PEM would land in the run log, the JUnit report, and any `ps` snapshot taken mid-run (Q493).
 
 ### The credential-gated probe scenarios
 

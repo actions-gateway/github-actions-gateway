@@ -3,7 +3,7 @@
 // broker test double.
 //
 // Three doubles used to hand-reimplement the same protocol: broker/brokertest
-// (the in-process integration stub), test/fakegithub (the deployed Tier B e2e
+// (the in-process integration stub), test/fakegithub (the deployed fake-GitHub e2e
 // image), and cmd/agc/test/load (the load harness). They diverge in what a job
 // delivery and an AcquireJob mean — fan-out accounting, single-use JIT
 // consumption, saturated auto-delivery — but they agreed, byte for byte, on the

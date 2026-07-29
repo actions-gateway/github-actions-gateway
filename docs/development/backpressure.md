@@ -37,7 +37,7 @@ linked worktree. Bypass the hook for a single commit with `git commit --no-verif
 | Unit tests | per-module `go test` (Go workspace — no root-level `./...`) | `make check` → `make test`; [`unit-test.yml`](../../.github/workflows/unit-test.yml) |
 | Python unit tests | `claude-usage/` usage-snapshot merge semantics (stdlib `unittest`) | `make check` → `make claude-usage-test`; `unit-test.yml` (`claude-usage-test` job) |
 | Integration tests | envtest, `integration` build tag, `cmd/agc` + `cmd/gmc` `internal/controller/integration/` | `make test-integration`; [`integration-test.yml`](../../.github/workflows/integration-test.yml) |
-| End-to-end tests | `kind` cluster, `e2e` build tag, Tier A/B/C (see [07-test-plan.md](../design/07-test-plan.md) §7.3) | `make e2e`; [`e2e-test.yml`](../../.github/workflows/e2e-test.yml) |
+| End-to-end tests | `kind` cluster, `e2e` build tag, cluster-only/fake-GitHub/live-GitHub (see [07-test-plan.md](../design/07-test-plan.md) §7.3) | `make e2e`; [`e2e-test.yml`](../../.github/workflows/e2e-test.yml) |
 | Linting / formatting | `gofmt -s`, `golangci-lint` (govet, staticcheck, ineffassign, unused) | `.githooks/pre-commit` (gofmt); `make check`; `unit-test.yml` |
 | Structural rules | `scripts/lint-backlog.sh` — `docs/STATUS.md` format: no `**Next ID:**` counter (IDs come from `make queue-id`), unique IDs + anchors, 🔲/🚫-only states, Notes/trigger caps with the doc-link rule | `.githooks/pre-commit` (also enforces isolated STATUS.md commits); `make check`; [`status-lint.yml`](../../.github/workflows/status-lint.yml) |
 | Vulnerability scan | `govulncheck` (symbol-reachable CVEs, per module) | `make vulncheck`; [`security-scan.yml`](../../.github/workflows/security-scan.yml) |

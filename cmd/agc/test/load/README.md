@@ -96,7 +96,7 @@ absolute throughput and latency with these caveats; the **sustained-sessions**,
   per-session **trend** is what matters, not the absolute peak. The
   goroutine-leak check closes the stub first, so it measures only AGC goroutines.
 - **No worker pods, CNI, image pulls, or cross-tenant network isolation.** Those
-  need the Tier-A kind e2e and the M5 staging run — see
+  need the cluster-only kind e2e and the M5 staging run — see
   [docs/plan/milestone-5.md §2.6](../../../../docs/plan/milestone-5.md).
 - **Proxy HPA under burst** is a real-cluster behaviour, out of scope here.
 

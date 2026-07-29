@@ -340,7 +340,7 @@ Documented in the README so results are not over-read:
   the real per-job apiserver write load. The recycle *rate* it reports
   is the figure to carry into apiserver capacity planning.
 - **Real worker pods, CNI, image pulls, cross-tenant network isolation.**
-  Out of scope here; those belong to the Tier-A kind e2e (§5.1) and the
+  Out of scope here; those belong to the cluster-only kind e2e (§5.1) and the
   staging run below.
 - **Proxy HPA under burst** (§2.2 rows in the original plan) — an
   HPA/Deployment-status behaviour that needs a real cluster; tracked

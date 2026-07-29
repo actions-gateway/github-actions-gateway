@@ -20,7 +20,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/gmc/test/utils"
 )
 
-// Tier C tests dispatch a real workflow_dispatch event against a GitHub repo
+// live-GitHub tests dispatch a real workflow_dispatch event against a GitHub repo
 // and verify the gateway runs the job to completion. They require a configured
 // GitHub App and a repo with a self-hosted workflow committed in advance.
 //
@@ -88,7 +88,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		}
 
 		if appIDStr == "" || installIDStr == "" || pkValue == "" || creds.org == "" || creds.repo == "" {
-			Skip("Tier C e2e tests skipped: set GITHUB_E2E_APP_ID, GITHUB_E2E_INSTALLATION_ID, " +
+			Skip("live-GitHub e2e tests skipped: set GITHUB_E2E_APP_ID, GITHUB_E2E_INSTALLATION_ID, " +
 				"GITHUB_E2E_PRIVATE_KEY, GITHUB_E2E_ORG, GITHUB_E2E_REPO to enable")
 		}
 
@@ -493,7 +493,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		}
 	})
 
-	// The Q459 measurement. Q421 established at Tier B that a graceful worker-pod
+	// The Q459 measurement. Q421 established at fake-GitHub that a graceful worker-pod
 	// removal reaches no eviction recovery on either tier, and left two questions
 	// it could not ask there, because its drained worker was deliberately held
 	// Pending and so had no live runner to report anything:
@@ -510,7 +510,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 	//
 	// It deletes the pod rather than draining its node on purpose. Whether an
 	// admitted eviction is a graceful delete is already settled — Q421 measured it
-	// at Tier B — and what is open here is everything downstream of the delete.
+	// at fake-GitHub — and what is open here is everything downstream of the delete.
 	// A bare delete reaches that identically while dropping the cordon, the node
 	// scoping and the --force from a measurement none of them are about. The spec
 	// asserts a deletionTimestamp and a non-zero grace period so the deletion it
@@ -804,7 +804,7 @@ func dispatchAndResolveRun(repoSlug, workflow string) string {
 // "wait for the namespace to be quiet first" is not needed and not done.
 // Only a genuine ambiguity — no annotated match and several new Running workers —
 // yields "", along with a description of what it saw. That case is reachable and was
-// hit on 2026-07-29: a second Tier C session dispatched the same fixture workflow
+// hit on 2026-07-29: a second live-GitHub session dispatched the same fixture workflow
 // against the same repo, and this tenant's AGC acquired both jobs, so two workers
 // appeared that were not there before. Nothing in the cluster can separate them
 // without the run-id annotation, so the spec must fail — but it must fail saying so
@@ -842,7 +842,7 @@ func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool
 	default:
 		return "", fmt.Sprintf(
 			"%d workers appeared since dispatch, so none can be attributed to run %s without the "+
-				"run-id annotation (Q495). Most likely another Tier C session dispatched the same "+
+				"run-id annotation (Q495). Most likely another live-GitHub session dispatched the same "+
 				"fixture workflow and this AGC acquired its job too (Q500). New since dispatch: %v",
 			len(fresh), runID, fresh)
 	}
