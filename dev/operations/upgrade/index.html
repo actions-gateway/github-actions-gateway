@@ -1454,6 +1454,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2749,6 +2760,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3221,6 +3243,7 @@
 <ul>
 <li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
+<li><a href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github">Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)</a></li>
 <li><a href="#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact">BREAKING (pre-GA): capacityGate.mode values replaced by Observe + a gateway-level cluster fact</a></li>
 <li><a href="#non-breaking-an-over-long-derived-runnergroup-name-is-bounded-and-renamed">Non-breaking: an over-long derived RunnerGroup name is bounded (and renamed)</a></li>
 <li><a href="#non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix">Non-breaking: a RunnerSet's agent Secrets and runner names gain an rs- prefix</a></li>
@@ -3276,6 +3299,37 @@
 - Behavior changes that require configuration updates before the new binary takes effect.</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
+<h3 id="non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github">Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)<a class="headerlink" href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> any tenant on the classic acquisition tier — a <code>RunnerGroup</code>, or
+a <code>RunnerSet</code> with <code>spec.acquisitionProtocol: Classic</code>. Scale-set tenants are
+unaffected; that tier takes its run identity from the assignment message and has
+always worked. <strong>No action is required, and nothing you configured was wrong.</strong></p>
+<p>Before this version the AGC looked for a classic job's workflow run in the
+<code>system.github.run_id</code> and <code>system.github.repository</code> job variables. A real
+<code>acquirejob</code> response carries neither: the run identity lives in the payload's
+serialised <code>github</code> context. The run therefore resolved to <code>0</code>, and every eviction of
+a classic worker took <code>handleEviction</code>'s early return — logging <code>pod evicted but
+run_id unknown; skipping auto-retry</code> and calling nothing. <code>maxEvictionRetries</code> was
+configurable but unreachable. The same lookup fed the worker-pod annotations, so real
+classic worker pods also carried no <code>actions-gateway.com/run-id</code>,
+<code>/repository</code>, or <code>/workflow</code>.</p>
+<p>After the upgrade, on the classic tier:</p>
+<ul>
+<li>An evicted worker's run is re-run automatically, within the run's
+  <code>maxEvictionRetries</code> budget (default 2) — the behaviour the docs have always
+  described.</li>
+<li><code>actions_gateway_eviction_retries_total{tier="classic"}</code> starts moving. If you
+  alert on it being flat, or on <code>EvictionRetriesExhausted</code> events, expect first
+  signal from clusters that evict workers. A rise here is the fix working, not a new
+  fault.</li>
+<li>New worker pods carry the run-identity annotations. Existing pods are not
+  back-filled; they are replaced as jobs turn over.</li>
+</ul>
+<p>The budget is shared per run across both tiers, so a run whose workers span tiers now
+consumes slots from the classic side too.</p>
+<p><strong>Rolling back</strong> re-arms the gap: a rolled-back AGC returns to reading the variables,
+and classic evictions stop being re-run again, silently. There is no configuration
+that restores the behaviour on an older image.</p>
 <h3 id="breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact">BREAKING (pre-GA): <code>capacityGate.mode</code> values replaced by <code>Observe</code> + a gateway-level cluster fact<a class="headerlink" href="#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> only a <code>RunnerSet</code> that set <code>spec.capacityGate.mode</code> to
 <code>SchedulerVerdict</code>, <code>AutoscalerVerdict</code>, or <code>On</code>. None of those values ever appeared in

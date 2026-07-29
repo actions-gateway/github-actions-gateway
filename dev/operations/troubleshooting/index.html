@@ -5938,6 +5938,16 @@ landing. If the counters are flat at <strong>zero</strong> on a scale-set set ra
 exhausted, the recovery is not firing at all: see
 <a href="#evicted-scale-set-jobs-are-not-re-run-automatically">Evicted Scale-Set Jobs Are Not Re-Run Automatically</a>
 below.</p>
+<p><strong>Flat at zero on the <em>classic</em> tier, with <code>pod evicted but run_id unknown;
+skipping auto-retry</code> in the AGC log?</strong> That is a fixed defect, not a
+misconfiguration: the AGC read the run identity from a payload field GitHub does
+not send, so no classic eviction was ever re-run and worker pods carried no
+<code>actions-gateway.com/run-id</code> annotation (Q495). The only remedy is to upgrade the
+AGC — see
+<a href="../upgrade/#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github">the migration note</a>.
+On a fixed AGC, check the pod's annotation first:
+<code>kubectl get pod -n &lt;namespace&gt; &lt;pod&gt; -o jsonpath='{.metadata.annotations.actions-gateway\.com/run-id}'</code>
+— empty there means the payload genuinely carried no identity.</p>
 </blockquote>
 <p><strong>Symptoms.</strong> <code>actions_gateway_eviction_retries_exhausted_total</code> is incrementing. Jobs are being cancelled after eviction despite automatic retries. <code>kubectl describe</code> on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> shows a <code>Warning</code> event with reason <code>EvictionRetriesExhausted</code> (Q170) naming the affected run — the event-based companion to the metric.</p>
 <p><strong>Likely causes.</strong>
