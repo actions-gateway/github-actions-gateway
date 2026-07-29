@@ -7,28 +7,36 @@
 # `helm uninstall` followed by a reinstall. That gap hid a total outage of the
 # product's CRs.
 #
-# STATUS: Q444 is OPEN and this script is a reproduction tool, not a gate. It is
-# deliberately not wired into CI — the defect is unfixed, so it would pin every
-# run red. Wiring it in is part of closing Q444.
+# STATUS: a CI GATE as of Q492. It ran as a reproduction tool while Q444 was
+# open (it would have pinned every run red); the fix moved the guard's paramKind
+# off a core type, so the cycle is now expected to pass and this is what keeps it
+# passing. It runs in e2e-reusable.yml after the suite and after
+# chart-upgrade-check, because it destroys and recreates the release.
 #
-# The mechanism is established (docs/plan/q444-vap-param-resolution.md has the
+# What it guards against (docs/plan/archive/q444-vap-param-resolution.md has the
 # full log; scripts/vap-param-informer-check.sh reproduces it deterministically
 # without Helm):
 #   - Deleting the BINDING is the trigger. The apiserver tears down the shared
-#     param informer as soon as no binding names the ConfigMap paramKind, and
-#     never restarts it. `helm uninstall` deletes the guard's only binding.
+#     param informer as soon as no binding names a CORE-type paramKind, and never
+#     restarts it. `helm uninstall` deletes the guard's only binding.
 #   - The broken state is per-kube-apiserver-process. A genuine restart clears it
 #     in ~3s with zero object changes.
-#   - Once broken, ConfigMaps created afterwards stay invisible to param
-#     resolution, so even a FRESH install fails with the binding pointing at a
-#     ConfigMap that demonstrably exists.
+#   - Once broken, params created afterwards stay invisible to resolution, so even
+#     a FRESH install fails with the binding pointing at an object that
+#     demonstrably exists.
 #   - Under parameterNotFoundAction: Deny, params resolve before per-object
 #     matching, so EVERY matched write is denied cluster-wide — runnergroups,
 #     runnersets and runnertemplates alike, class-naming or not.
 #
-# This script can also pass while broken: if the torn-down informer's cache still
-# holds the old ConfigMap, resolution succeeds against an object that no longer
-# exists. A clean run is not proof of health.
+# The guard's paramKind is now the cluster-scoped PriorityClassAllowlist CRD, for
+# which the apiserver allocates a fresh dynamic informer per context. A regression
+# to any core-type paramKind — here or in a new policy — brings the outage back,
+# and this script is where that shows up.
+#
+# Note this check could pass while broken in the ConfigMap era: if the torn-down
+# informer's cache still held the old object, resolution succeeded against
+# something that no longer existed. That ambiguity is why the deterministic
+# three-arm reproducer exists alongside it.
 #
 # Run against a cluster that already has the chart installed (CI runs it after the
 # e2e suite, which leaves the release up under E2E_SKIP_TEARDOWN). The release's
@@ -86,12 +94,12 @@ probe_write() {
 }
 
 # dump_param_state prints everything needed to tell a broken MANIFEST (the binding
-# points somewhere the ConfigMap is not) from a broken APISERVER (all three objects
-# agree and it still cannot resolve them). Without this the failure text alone
-# cannot distinguish the two, which is most of the diagnosis.
+# points somewhere the param object is not) from a broken APISERVER (all three
+# objects agree and it still cannot resolve them). Without this the failure text
+# alone cannot distinguish the two, which is most of the diagnosis.
 dump_param_state() {
 	echo
-	echo "--- policy / binding / param ConfigMap as the apiserver sees them ---"
+	echo "--- policy / binding / param object as the apiserver sees them ---"
 	kc get validatingadmissionpolicy -o custom-columns=\
 'POLICY:.metadata.name,PARAMKIND:.spec.paramKind,KEEP:.metadata.annotations.helm\.sh/resource-policy' \
 		2>&1 | grep -Ei 'POLICY|priorityclass' || echo "  (no policies)"
@@ -99,15 +107,15 @@ dump_param_state() {
 'BINDING:.metadata.name,POLICY:.spec.policyName,PARAM:.spec.paramRef.namespace/.spec.paramRef.name,NOTFOUND:.spec.paramRef.parameterNotFoundAction' \
 		2>&1 | grep -Ei 'BINDING|priorityclass' || echo "  (no bindings)"
 
-	local ref_ns ref_name
-	ref_ns="$(kc get validatingadmissionpolicybinding -o jsonpath='{.items[?(@.spec.paramRef)].spec.paramRef.namespace}' 2>/dev/null | awk '{print $1}')"
+	# The param is a cluster-scoped PriorityClassAllowlist (Q492), so paramRef
+	# carries a name and no namespace.
+	local ref_name
 	ref_name="$(kc get validatingadmissionpolicybinding -o jsonpath='{.items[?(@.spec.paramRef)].spec.paramRef.name}' 2>/dev/null | awk '{print $1}')"
-	echo "  binding paramRef -> ${ref_ns:-?}/${ref_name:-?}"
-	if [[ -n "${ref_ns}" && -n "${ref_name}" ]]; then
-		kc get configmap -n "${ref_ns}" "${ref_name}" \
-			-o jsonpath='  that ConfigMap: EXISTS uid={.metadata.uid} data={.data}{"\n"}' 2>&1 ||
-			echo "  that ConfigMap: MISSING -> the manifest is wrong, not the apiserver"
-		echo "  namespace ${ref_ns} phase: $(kc get namespace "${ref_ns}" -o jsonpath='{.status.phase}' 2>&1)"
+	echo "  binding paramRef -> ${ref_name:-?}"
+	if [[ -n "${ref_name}" ]]; then
+		kc get priorityclassallowlist "${ref_name}" \
+			-o jsonpath='  that PriorityClassAllowlist: EXISTS uid={.metadata.uid} allowed={.spec.allowedPriorityClasses}{"\n"}' 2>&1 ||
+			echo "  that PriorityClassAllowlist: MISSING -> the manifest is wrong, not the apiserver"
 	fi
 	echo "---------------------------------------------------------------------"
 }
@@ -118,7 +126,7 @@ dump_param_state() {
 # The gating probe is the class-NAMING one, because it is the only write whose
 # answer distinguishes every state: the allowlist denial proves the param resolved
 # AND the binding is live; `no params found` is unresolved (benign while the
-# recreated ConfigMap propagates, the Q444 defect once it persists for the whole
+# recreated param propagates, the Q444 defect once it persists for the whole
 # budget); an admitted write means enforcement has not propagated yet (a binding
 # recreated by the reinstall takes a moment to take effect). A class-free write is
 # admitted whether or not the guard is bound, so it can only be a follow-up check
@@ -131,13 +139,13 @@ assert_params_resolve() {
 	for ((i = 1; i <= 45; i++)); do
 		answer="$(probe_write "probe-${phase}-class-${i}" "system-cluster-critical")"
 		case "${answer}" in
-		*"not in the platform PriorityClass allowlist"*)
+		*"not in the platform PriorityClassAllowlist"*)
 			break
 			;;
 		*"no params found"*)
-			# NOT fatal on its own. `helm uninstall` deletes the param ConfigMap and
-			# the reinstall recreates it, so until the apiserver observes the new
-			# ConfigMap this is the CORRECT fail-closed answer — a couple of seconds
+			# NOT fatal on its own. `helm uninstall` deletes the param CR and the
+			# reinstall recreates it, so until the apiserver observes the new object
+			# this is the CORRECT fail-closed answer — a couple of seconds
 			# in practice. What distinguishes the Q444 breakage is that it never
 			# recovers: the state is per-apiserver-process and only a restart of
 			# kube-apiserver clears it, so every probe in the budget answers this way.
@@ -151,7 +159,7 @@ assert_params_resolve() {
 		sleep 2
 	done
 	if [[ "${answer}" == *"no params found"* ]]; then
-		echo "FAIL [${phase}]: the policy binding never resolved its param ConfigMap." >&2
+		echo "FAIL [${phase}]: the policy binding never resolved its param object." >&2
 		echo "  ${answer}" >&2
 		echo "  Every runnergroups/runnersets/runnertemplates write is denied cluster-wide in" >&2
 		echo "  this state. It is Q444 if the objects below all look correct — that means the" >&2
@@ -160,7 +168,7 @@ assert_params_resolve() {
 		dump_param_state >&2
 		return 1
 	fi
-	if [[ "${answer}" != *"not in the platform PriorityClass allowlist"* ]]; then
+	if [[ "${answer}" != *"not in the platform PriorityClassAllowlist"* ]]; then
 		echo "FAIL [${phase}]: the guard never denied an off-allowlist PriorityClass; last answer:" >&2
 		echo "  ${answer}" >&2
 		return 1
@@ -271,5 +279,7 @@ echo "==> after reinstall: admission must still work"
 assert_params_resolve reinstall
 
 echo "OK: this apiserver resolved the policy's params through a full uninstall/reinstall"
-echo "    cycle. Note Q444 does not reproduce on every run — a clean pass does NOT mean"
-echo "    the defect is fixed, only that it did not trigger here."
+echo "    cycle — the transition that was a cluster-wide outage while the paramKind was"
+echo "    a core type (Q444). It resolves deterministically now that the paramKind is a"
+echo "    CRD, so this pass is meaningful; a FAILURE most likely means a paramKind"
+echo "    regressed to a core type. See docs/development/kubernetes-conventions.md."

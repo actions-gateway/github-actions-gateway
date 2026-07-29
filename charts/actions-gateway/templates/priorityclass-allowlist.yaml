@@ -1,0 +1,63 @@
+{{- /*
+Q492: priorityClassAllowlist.configMapName is removed. Its ConfigMap was both the
+GMC's watched dynamic allowlist source AND the priorityclass-allowlist-guard
+policy's paramKind, and a core-type paramKind is what the Q444 apiserver defect
+kills. The PriorityClassAllowlist CR below replaces it in both roles. Fail loudly
+at render rather than silently narrowing a security allowlist to
+.Values.allowedPriorityClasses on upgrade — a narrowed allowlist denies writes at
+admission time, which is far harder to diagnose than a refused upgrade.
+*/ -}}
+{{- if .Values.priorityClassAllowlist }}
+{{- if .Values.priorityClassAllowlist.configMapName }}
+{{- fail (printf "priorityClassAllowlist.configMapName (%q) is removed as of Q492. The watched allowlist is now the cluster-scoped PriorityClassAllowlist CR, which this chart renders from .Values.allowedPriorityClasses. Move every name from that ConfigMap into allowedPriorityClasses and unset priorityClassAllowlist.configMapName. See docs/operations/upgrade.md, \"PriorityClass allowlist: ConfigMap to CR\"." .Values.priorityClassAllowlist.configMapName) }}
+{{- end }}
+{{- end }}
+{{- /*
+Preflight for the one-time upgrade step this CRD's placement forces. Helm installs
+the chart-root crds/ dir on `helm install` ONLY — never on upgrade — so a release
+created before this CRD existed has no PriorityClassAllowlist kind, and Helm fails
+building the manifest below with a bare `no matches for kind ... ensure CRDs are
+installed first`. That message does not say which CRD, where to get it, or why the
+chart could not ship it the usual way. Fail first, with the command.
+
+Gated on .Release.IsUpgrade: on a fresh install .Capabilities is computed BEFORE
+crds/ is applied, so the kind is legitimately absent from discovery there and this
+check would fire on a perfectly good install.
+*/ -}}
+{{- if and .Release.IsUpgrade (not (.Capabilities.APIVersions.Has "actions-gateway.com/v2beta1/PriorityClassAllowlist")) }}
+{{- fail "the PriorityClassAllowlist CRD is not installed in this cluster. Helm installs the chart-root crds/ dir on a fresh install ONLY and skips it on every upgrade, so applying it is a standard pre-upgrade step for this chart. Run it, then re-run this upgrade:\n\n    helm show crds <chart> --version <version> | kubectl apply -f -\n\nwhere <chart> is the same chart reference you are upgrading with (e.g. oci://ghcr.io/actions-gateway/charts/actions-gateway, or a local chart directory). It is idempotent and reads the CRDs from the exact version you are upgrading to. See docs/operations/upgrade.md, \"GMC install and upgrade via Helm\"." }}
+{{- end }}
+# The platform PriorityClass allowlist, generated from .Values.allowedPriorityClasses
+# — the same list passed to the GMC as --allowed-priority-classes — so the webhook
+# and the priorityclass-allowlist-guard policy cannot drift.
+#
+# TWO consumers read this one object:
+#   - the GMC, via --priority-class-allowlist-name, folding it into the dynamic
+#     half of its webhook allowlist so an admin can add a class without a GMC
+#     rollout (Q188);
+#   - the priorityclass-allowlist-guard ValidatingAdmissionPolicy, as its
+#     paramKind — the apiserver cannot read a controller flag.
+#
+# It is rendered unconditionally, NOT gated on admissionPolicy.enabled: it is the
+# allowlist source for the webhook whether or not the policy backstop is on.
+#
+# Its CRD ships in the chart-root crds/ dir rather than templates/, because Helm
+# resolves REST mappings for the whole manifest before applying any of it and would
+# otherwise fail this very object with "no matches for kind". See
+# scripts/sync-chart-crds.sh.
+#
+# Editing this object in place is supported and takes effect without a restart;
+# `helm upgrade` reasserts .Values.allowedPriorityClasses over it, so persist
+# additions there.
+apiVersion: actions-gateway.com/v2beta1
+kind: PriorityClassAllowlist
+metadata:
+  name: {{ include "actions-gateway.namePrefix" . }}-priorityclass-allowlist
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  allowedPriorityClasses:
+    {{- if .Values.allowedPriorityClasses }}
+    {{- toYaml .Values.allowedPriorityClasses | nindent 4 }}
+    {{- else }} []
+    {{- end }}

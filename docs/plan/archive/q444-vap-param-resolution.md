@@ -1,8 +1,11 @@
 # Q444 — PriorityClass VAP cannot resolve its params
 
-**Status: mechanism ESTABLISHED.** The trigger, the code path and the two
-observable failure modes are all reproduced deterministically. The defect is a
-kube-apiserver bug; what remains is a fix, tracked separately (see
+**Status: mechanism ESTABLISHED; product exposure CLOSED (Q492).** The trigger,
+the code path and the two observable failure modes are all reproduced
+deterministically. The defect is a kube-apiserver bug and is still unfixed
+upstream, but the product no longer sits on it: the PriorityClass guard's
+`paramKind` moved from a `ConfigMap` to the cluster-scoped `PriorityClassAllowlist`
+CRD, which measurement shows is structurally immune (see
 [Where this goes next](#where-this-goes-next)).
 
 Symptom: every `runnergroups` / `runnersets` / `runnertemplates` write is denied
@@ -20,7 +23,7 @@ per-object matching, this denies **every** matched write, class-naming or not �
 a total outage of the product's CRs, cluster-wide.
 
 Observed on Kubernetes 1.35.5 and 1.36.1. Prior sighting:
-[`archive/q414-dind-tenant-fixture.md`](archive/q414-dind-tenant-fixture.md)
+[`q414-dind-tenant-fixture.md`](q414-dind-tenant-fixture.md)
 § Local-loop notes.
 
 ## The trigger
@@ -95,7 +98,7 @@ stale allowlist with no error anywhere.
 ## Measurements
 
 Run on a single-node kind cluster at v1.35.5 via
-[`scripts/vap-param-informer-check.sh`](../../scripts/vap-param-informer-check.sh),
+[`scripts/vap-param-informer-check.sh`](../../../scripts/vap-param-informer-check.sh),
 all on one apiserver process, in order:
 
 | # | what | result |
@@ -116,6 +119,24 @@ Measurement 4 is the direct proof that the store is frozen rather than emptied.
 Measurement 6 is the direct proof that the fault is per-GVK and specific to the
 shared-factory path — the CRD path allocates a fresh informer per context and is
 immune.
+
+### Arm 3 — the CRD `paramKind` under the same transition (Q492)
+
+Measurement 6 showed a CRD `paramKind` *resolving on an already-broken
+apiserver*. That is necessary but not sufficient for the fix: it never subjected a
+CRD `paramKind` to its own empty-binding-set transition. Arm 3 does, on
+Kubernetes **1.36.1**, ordered **before** arm 2 so no pass can be attributed to
+contamination:
+
+| arm | `paramKind` | after emptying the binding set | param created after the window |
+|---|---|---|---|
+| 1 | ConfigMap, keeper held | `FRESH-PARAM` | — |
+| 3 | `PriorityClassAllowlist` (cluster-scoped CRD) | **`FRESH-PARAM`** | **`FRESH-PARAM`** |
+| 2 | ConfigMap, binding set emptied | `STALE-PARAM` | `NO-PARAMS` |
+
+Arm 3 and arm 2 run the byte-identical transition one GVK apart, on one apiserver
+process. That contrast — not the source read — is what makes "move the `paramKind`
+to a CRD" a fix rather than an inference.
 
 Note `kubectl delete pod -n kube-system kube-apiserver-…` **does not restart the
 apiserver** — it recreates the static pod's *mirror object* while the container
@@ -161,11 +182,11 @@ perform. The alternative offered there is to drop the shared-factory fast path
 entirely and always use a dynamic informer — uniform and genuinely stoppable, at
 the cost of losing informer sharing for the common ConfigMap case.
 
-**This does not close Q492.** As of 2026-07-29 that PR is unreviewed and
+**Q492 did not wait for it.** As of 2026-07-28 that PR is unreviewed and
 untriaged, v1.37 is in code freeze, and it would still need a cherry-pick to
-reach a version anyone runs. Nothing above changes on 1.35.5 or 1.36.1 until a
-backport lands. Revisit Q492's priority when there is a merged master commit
-*and* a cherry-pick decision — not before.
+reach a version anyone runs — so the fix that shipped is ours, not upstream's, and
+does not depend on this landing. See
+[Still open upstream](#still-open-upstream).
 
 Related but **not** the same bug:
 [#122658](https://github.com/kubernetes/kubernetes/issues/122658) /
@@ -176,61 +197,87 @@ always discoverable, and a restart *fixes* it.
 
 ## Reproducing
 
-- [`scripts/vap-param-informer-check.sh`](../../scripts/vap-param-informer-check.sh)
-  — the deterministic two-arm reproducer above. Self-contained (its own CRD,
+- [`scripts/vap-param-informer-check.sh`](../../../scripts/vap-param-informer-check.sh)
+  — the deterministic three-arm reproducer above. Self-contained (its own CRDs,
   namespace and policies), no chart required. **Run it only against a disposable
   cluster**: arm 2 permanently breaks ConfigMap param resolution for that
-  apiserver process.
-- [`scripts/chart-reinstall-check.sh`](../../scripts/chart-reinstall-check.sh)
+  apiserver process. Not wired into CI — it deliberately destroys the cluster it
+  runs on, and it pins an *upstream* defect that our own code no longer depends
+  on. It is the evidence for the fix, re-runnable by hand on a new Kubernetes
+  minor to confirm arm 3 still holds.
+- [`scripts/chart-reinstall-check.sh`](../../../scripts/chart-reinstall-check.sh)
   (`make chart-reinstall-check`) — the product-level check, driving a real
-  uninstall/reinstall against an installed release.
-
-Neither is wired into CI while the defect is unfixed; doing so is part of the
-fix work below.
+  uninstall/reinstall against an installed release. **Wired into CI as of Q492**,
+  now that the cycle it exercises is expected to pass.
 
 ## Operator impact
 
-Recovery is a kube-apiserver restart, which is **not available on a managed
-control plane** (GKE/EKS/AKS). Blast radius, prevention and recovery are
-documented in
-[`../operations/troubleshooting.md`](../operations/troubleshooting.md) and
-[`../operations/install.md`](../operations/install.md).
+**On releases from Q492 onward: none.** The guard's `paramKind` is a CRD, so the
+binding-set transition is survivable and no apiserver restart is ever needed. Our
+GKE dogfood — which could not restart its apiserver — is no longer exposed.
 
-**Our own dogfood is exposed.** [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh)
-runs `helm upgrade --install gag charts/actions-gateway` with no
-`admissionPolicy` override, and the chart defaults `admissionPolicy.enabled:
-true`. Dogfood is GKE, so its apiserver cannot be restarted. The trigger being
-known lowers the risk materially — `helm upgrade` is safe, and dogfood only ever
-upgrades — but an uninstall/reinstall there would still be unrecoverable.
+**On pre-Q492 releases**, recovery is a kube-apiserver restart, which is **not
+available on a managed control plane** (GKE/EKS/AKS). Blast radius, symptoms and
+recovery for that case remain documented in
+[`../operations/troubleshooting.md`](../../operations/troubleshooting.md); the
+migration off it is
+[upgrade.md § PriorityClass allowlist: ConfigMap to CR](../../operations/upgrade.md#priorityclass-allowlist-configmap-to-cr).
 
-**Surface this in the next release's notes** — while this is unfixed it is
-exactly the "upgrade caveat" the curated-notes path in
-[`../operations/release.md`](../operations/release.md) exists for. The
-install-time decision is documented at
-[install.md § Known defect (Q444)](../operations/install.md#known-defect-q444-the-policy-can-stop-resolving-its-parameters);
-the notes need a line and that link.
+**The release notes need an upgrade caveat** — not for the defect any more, but
+for the **breaking values change**: `priorityClassAllowlist.configMapName` is
+removed and a release that sets it fails the Helm render. That is exactly the
+curated-notes path in [`../operations/release.md`](../../operations/release.md), and
+it should link the upgrade.md section above.
 
 ## Where this goes next
 
-Q444 as scoped ("find what triggers it") is answered. The remaining work is a
-fix, and there are two candidates, both entirely in our control:
+Q444 as scoped ("find what triggers it") is answered, and **Q492 shipped the fix**:
+option 1 below, the `paramKind` moved off a core type.
 
-1. **Move the `paramKind` off a core type** to a small CRD. Measurement 6 shows
+Two candidates were on the table, both entirely in our control:
+
+1. **Move the `paramKind` off a core type** to a small CRD. Measurement 6 showed
    the CRD path is structurally immune, because it allocates a fresh informer per
-   context. Costs a CRD, its RBAC, and a migration for the existing ConfigMap.
+   context; [arm 3](#arm-3--the-crd-paramkind-under-the-same-transition-q492)
+   then confirmed it survives the actual failing transition. Cost: a CRD, its
+   RBAC, and a migration for the existing ConfigMap. **This is what shipped.**
 2. **Keep the binding alive across `helm uninstall`** with
    `helm.sh/resource-policy: keep` on the VAPB and its param ConfigMap, so the
    binding set never empties. Much cheaper — but it collides with an existing
-   invariant: [`scripts/manifest-validate.sh`](../../scripts/manifest-validate.sh)
+   invariant: [`scripts/manifest-validate.sh`](../../../scripts/manifest-validate.sh)
    asserts that **no VAPB carries `helm.sh/resource-policy: keep`**, because a
    retained binding leaves the guard enforcing after the release is gone and makes
    `admissionPolicy.enabled=false` a silent no-op. That reason still holds and is
    worse than the defect it would paper over. It also only defends the Helm path;
-   anything else that deletes the binding still breaks the cluster.
+   anything else that deletes the binding still breaks the cluster. **Rejected**;
+   the invariant it would have overturned is still enforced.
 
-**Option 1 is the fix.** Option 2 should not ship without first overturning the
-manifest-validate invariant, which is not worth doing. Note the historical irony:
-retaining the *policy* was tried and reverted, and the binding — the one object
-that would have worked — is precisely the one we forbid retaining.
+Note the historical irony: retaining the *policy* was tried and reverted
+(`07061175` / `70b4b351`), and the binding — the one object that would have
+worked — is precisely the one we forbid retaining.
 
-Neither is in scope here; the fix is tracked as Q492 on the Queue.
+### What shipped in Q492
+
+- `PriorityClassAllowlist`, a cluster-scoped CRD in `api/v2beta1`, is the guard's
+  `paramKind` **and** the object the GMC watches for restart-free allowlist
+  additions (Q188). One object, two consumers, so the webhook and the policy
+  cannot drift — which also retires the superset discipline the admin-owned
+  ConfigMap needed.
+- `priorityClassAllowlist.configMapName` is removed; setting it fails the Helm
+  render with migration instructions rather than silently narrowing a security
+  allowlist.
+- Its CRD ships in the chart-root `crds/` dir — the only one that does. Helm
+  resolves REST mappings for the whole manifest before applying any of it, so a CR
+  whose CRD is a template in the same release fails the install outright. The cost
+  is that `helm upgrade` does not carry schema changes to that CRD.
+- `scripts/chart-reinstall-check.sh` is now a CI gate.
+
+### Still open upstream
+
+The apiserver bug itself is unfixed.
+[kubernetes/kubernetes#141015](https://github.com/kubernetes/kubernetes/pull/141015)
+remains unreviewed and untriaged, v1.37 is in code freeze, and it would still need
+a cherry-pick to reach a version anyone runs. Nothing about our fix depends on it
+landing — a CRD `paramKind` is immune either way — so this is now a "watch, don't
+block" item. Anyone adding a **new** VAP to this repo should still take the rule
+from it: **never use a core type as a `paramKind`.**

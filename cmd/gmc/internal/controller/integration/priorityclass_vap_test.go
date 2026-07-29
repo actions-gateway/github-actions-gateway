@@ -29,17 +29,17 @@ import (
 // matchCondition in the deployed artifact is caught here.
 const priorityClassGuardManifestPath = "../../../config/admission-policy/priorityclass-allowlist-guard.yaml"
 
-// vapParamCMName / vapParamCMNamespace are the fixed names the shipped manifest's
-// binding paramRef points at.
+// vapParamName is the fixed name the shipped manifest's binding paramRef points
+// at. Since Q492 the param is a CLUSTER-scoped PriorityClassAllowlist, so it has
+// no namespace; vapProbeNamespace is only where this test's probe RunnerGroups go.
 const (
-	vapParamCMName      = "gag-priorityclass-allowlist"
-	vapParamCMNamespace = "gmc-system"
+	vapParamName      = "gag-priorityclass-allowlist"
+	vapProbeNamespace = "gmc-system"
 )
 
 // installPriorityClassGuard applies the real VAP + binding + default (empty)
-// param ConfigMap. The param ConfigMap is namespaced, so its namespace must exist
-// first. Objects are installed idempotently; the ConfigMap's contents are owned
-// (and mutated) by the test that calls this.
+// param object. Objects are installed idempotently; the param's contents are
+// owned (and mutated) by the test that calls this.
 //
 // The policy is torn down again when the calling test finishes: since Q323 it
 // matches v2 runnersets/runnertemplates too, so leaving it behind (with whatever
@@ -49,7 +49,7 @@ const (
 // propagates asynchronously.
 func installPriorityClassGuard(t *testing.T) {
 	t.Helper()
-	createNamespace(t, vapParamCMNamespace)
+	createNamespace(t, vapProbeNamespace)
 
 	f, err := os.Open(priorityClassGuardManifestPath)
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func installPriorityClassGuard(t *testing.T) {
 		attempt := 0
 		gomega.NewWithT(t).Eventually(func() error {
 			attempt++
-			probe := guardedRG(vapParamCMNamespace, fmt.Sprintf("guard-teardown-probe-%d", attempt), "guard-teardown-class", "")
+			probe := guardedRG(vapProbeNamespace, fmt.Sprintf("guard-teardown-probe-%d", attempt), "guard-teardown-class", "")
 			if createErr := k8sClient.Create(context.Background(), probe); createErr != nil {
 				return createErr
 			}
@@ -97,23 +97,23 @@ func installPriorityClassGuard(t *testing.T) {
 	})
 }
 
-// setGuardAllowlist writes the param ConfigMap's allowedPriorityClasses value,
-// creating the ConfigMap if a prior step deleted it.
-func setGuardAllowlist(t *testing.T, value string) {
+// setGuardAllowlist writes the param object's spec.allowedPriorityClasses,
+// creating it if a prior step deleted it.
+func setGuardAllowlist(t *testing.T, names ...string) {
 	t.Helper()
-	var cm corev1.ConfigMap
-	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: vapParamCMNamespace, Name: vapParamCMName}, &cm)
+	var pca agcv2beta1.PriorityClassAllowlist
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: vapParamName}, &pca)
 	if apierrors.IsNotFound(err) {
-		cm = corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Namespace: vapParamCMNamespace, Name: vapParamCMName},
-			Data:       map[string]string{"allowedPriorityClasses": value},
+		pca = agcv2beta1.PriorityClassAllowlist{
+			ObjectMeta: metav1.ObjectMeta{Name: vapParamName},
+			Spec:       agcv2beta1.PriorityClassAllowlistSpec{AllowedPriorityClasses: names},
 		}
-		require.NoError(t, k8sClient.Create(ctx, &cm))
+		require.NoError(t, k8sClient.Create(ctx, &pca))
 		return
 	}
 	require.NoError(t, err)
-	cm.Data = map[string]string{"allowedPriorityClasses": value}
-	require.NoError(t, k8sClient.Update(ctx, &cm))
+	pca.Spec.AllowedPriorityClasses = names
+	require.NoError(t, k8sClient.Update(ctx, &pca))
 }
 
 // guardedRG returns a RunnerGroup naming tierClass in priorityTiers (when
@@ -145,10 +145,10 @@ func guardedRG(ns, name, tierClass, podClass string) *agcv1alpha1.RunnerGroup {
 // backstop (Appendix G §G.7): RunnerGroups have no validating webhook, so a
 // principal with direct runnergroups RBAC bypasses the ActionsGateway webhook's
 // PriorityClass allowlist — unless this policy denies the write. The policy reads
-// its allowlist from a paramKind ConfigMap and must (1) deny off-allowlist
-// classes on both the priorityTiers and podTemplate.spec routes, (2) admit
-// allowlisted classes and class-free RunnerGroups, (3) fail closed — for every
-// runnergroups write — when the param ConfigMap is missing, and (4) re-validate
+// its allowlist from a paramKind PriorityClassAllowlist and must (1) deny
+// off-allowlist classes on both the priorityTiers and podTemplate.spec routes,
+// (2) admit allowlisted classes and class-free RunnerGroups, (3) fail closed — for
+// every runnergroups write — when the param object is missing, and (4) re-validate
 // stored objects on update, which a webhook alone cannot do for the bypass path.
 func TestGMC_PriorityClassGuard_GatesDirectRunnerGroupWrites(t *testing.T) {
 	installPriorityClassGuard(t)
@@ -161,7 +161,7 @@ func TestGMC_PriorityClassGuard_GatesDirectRunnerGroupWrites(t *testing.T) {
 	g := gomega.NewWithT(t)
 
 	// Gate: wait until the policy is enforced (VAP enforcement is not instantaneous
-	// after the binding is created). The shipped param ConfigMap is empty, so a
+	// after the binding is created). The shipped param object is empty, so a
 	// tier naming any class must become Forbidden.
 	g.Eventually(func() bool {
 		err := k8sClient.Create(ctx, guardedRG(ns, "probe", escalation, ""))
@@ -187,13 +187,12 @@ func TestGMC_PriorityClassGuard_GatesDirectRunnerGroupWrites(t *testing.T) {
 		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rg) })
 	})
 
-	// Allowlist the class (newline-separated to exercise the same separators the
-	// GMC ConfigMap watcher accepts) — both routes must admit it, live.
-	setGuardAllowlist(t, allowed+"\nrunner-bursty")
+	// Allowlist the class — both routes must admit it, live.
+	setGuardAllowlist(t, allowed, "runner-bursty")
 	g.Eventually(func() error {
 		return k8sClient.Create(ctx, guardedRG(ns, "tier-allowed", allowed, ""))
 	}, 30*time.Second, 100*time.Millisecond).Should(gomega.Succeed(),
-		"an allowlisted tier class must be admitted once the param ConfigMap lists it")
+		"an allowlisted tier class must be admitted once the param object lists it")
 
 	t.Run("allowlisted class admitted on both routes", func(t *testing.T) {
 		rg := guardedRG(ns, "pod-allowed", "", "runner-bursty")
@@ -222,15 +221,20 @@ func TestGMC_PriorityClassGuard_GatesDirectRunnerGroupWrites(t *testing.T) {
 			"an update to a stored RunnerGroup naming a now-off-allowlist class must be denied")
 	})
 
-	t.Run("missing param ConfigMap fails closed for every write", func(t *testing.T) {
+	t.Run("missing param object fails closed for every write", func(t *testing.T) {
 		// parameterNotFoundAction: Deny is the never-silently-off contract: the
 		// apiserver resolves binding params before any per-object filtering, so a
-		// deleted param ConfigMap denies EVERY runnergroups write — including
+		// deleted param object denies EVERY runnergroups write — including
 		// class-free ones — until it is recreated. Loud and fail-closed by design;
-		// the ConfigMap ships with the policy, so this state is an explicit deletion.
-		var cm corev1.ConfigMap
-		require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: vapParamCMNamespace, Name: vapParamCMName}, &cm))
-		require.NoError(t, k8sClient.Delete(ctx, &cm))
+		// the object ships with the policy, so this state is an explicit deletion.
+		//
+		// It is ALSO the Q492 regression test for the Q444 apiserver defect: with a
+		// core-type paramKind, deleting and recreating the param is exactly the
+		// transition that used to leave resolution permanently broken. The recovery
+		// assertion below is what a ConfigMap paramKind could not satisfy.
+		var pca agcv2beta1.PriorityClassAllowlist
+		require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: vapParamName}, &pca))
+		require.NoError(t, k8sClient.Delete(ctx, &pca))
 
 		// A create that slips through before the apiserver observes the deletion is
 		// removed and retried under a fresh name — a fixed name would turn every
@@ -250,18 +254,19 @@ func TestGMC_PriorityClassGuard_GatesDirectRunnerGroupWrites(t *testing.T) {
 			return strings.Contains(lastErr.Error(), "gag-priorityclass-allowlist-guard") &&
 				strings.Contains(lastErr.Error(), "denied request")
 		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), func() string {
-			return fmt.Sprintf("parameterNotFoundAction: Deny must deny even a class-free write when the ConfigMap is gone; last create error: %v", lastErr)
+			return fmt.Sprintf("parameterNotFoundAction: Deny must deny even a class-free write when the param object is gone; last create error: %v", lastErr)
 		})
 
-		// Recreating the ConfigMap restores normal admission — class-free writes
-		// are admitted again without touching the policy or binding.
-		setGuardAllowlist(t, "")
+		// Recreating the param restores normal admission — class-free writes are
+		// admitted again without touching the policy or binding. This is the
+		// property Q444 destroyed for a ConfigMap paramKind.
+		setGuardAllowlist(t)
 		recovered := 0
 		gomega.NewWithT(t).Eventually(func() error {
 			recovered++
 			return k8sClient.Create(ctx, guardedRG(ns, fmt.Sprintf("recovered-%d", recovered), "", ""))
 		}, 30*time.Second, 100*time.Millisecond).Should(gomega.Succeed(),
-			"recreating the param ConfigMap must restore admission of class-free RunnerGroups")
+			"recreating the param object must restore admission of class-free RunnerGroups")
 	})
 
 	// Q323: the same policy now also matches the v2 kinds; exercised here (not as
@@ -290,11 +295,11 @@ func guardedV2RS(ns, name, tierClass string) *agcv2alpha1.RunnerSet {
 // test tell the two layers apart by which one denies.
 //
 // Runs as a subtest section of the parent VAP test rather than its own Test
-// function: the policy install (and its gmc-system param namespace) must happen
-// exactly once — envtest namespaces never finish terminating, so a second
-// install could not recreate the param ConfigMap.
+// function: the policy install must happen exactly once, and its teardown waits
+// for enforcement to actually stop, so a second install racing that teardown
+// would see nondeterministic admission.
 func runV2GuardSubtests(t *testing.T, ns string) {
-	setGuardAllowlist(t, "")
+	setGuardAllowlist(t)
 
 	g := gomega.NewWithT(t)
 
@@ -345,7 +350,7 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 		gomega.NewWithT(t).Eventually(func() error {
 			return k8sClient.Create(ctx, guardedV2RS(ns, "tier-allowed", "high"))
 		}, 30*time.Second, 100*time.Millisecond).Should(gomega.Succeed(),
-			"an allowlisted tier class must be admitted once the param ConfigMap lists it")
+			"an allowlisted tier class must be admitted once the param object lists it")
 
 		// The layering proof for runnertemplates: with the class on the VAP
 		// allowlist, the denial falls through to the webhook (whose allowlist in
@@ -360,7 +365,7 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 	})
 
 	t.Run("v2: v2beta1 writes are matched too", func(t *testing.T) {
-		setGuardAllowlist(t, "")
+		setGuardAllowlist(t)
 		attempt := 0
 		var lastErr error
 		gomega.NewWithT(t).Eventually(func() bool {

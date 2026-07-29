@@ -36,9 +36,9 @@ type gmcFlags struct {
 	allowFloatingImageTags      bool
 	enableTenantServiceMonitors bool
 
-	allowedPriorityClasses          string
-	allowedInfraPriorityClasses     string
-	priorityClassAllowlistConfigMap string
+	allowedPriorityClasses      string
+	allowedInfraPriorityClasses string
+	priorityClassAllowlistName  string
 
 	allowedEgressFQDNs                  string
 	allowedEgressCIDRs                  string
@@ -118,14 +118,16 @@ func addFlags(fs *flag.FlagSet) *gmcFlags {
 			"from both surfaces would let a tenant lift its WORKERS to infra priority and preempt "+
 			"other tenants' proxy pods. Empty (default) forbids all "+
 			"spec.scheduling.priorityClassName references.")
-	fs.StringVar(&f.priorityClassAllowlistConfigMap, "priority-class-allowlist-configmap", "",
-		"Name of a ConfigMap in the GMC's own namespace whose entries AUGMENT the "+
-			"--allowed-priority-classes flag allowlist, watched so additions take effect "+
-			"without a GMC restart (Q188). The ConfigMap's data."+
-			controller.PriorityClassAllowlistConfigMapKey+" value lists PriorityClass names "+
-			"(comma/newline-separated). Additive and fail-safe: a missing or malformed "+
-			"ConfigMap leaves the static flag allowlist in force. Empty (default) disables "+
-			"the watch — flag-only behavior, unchanged.")
+	fs.StringVar(&f.priorityClassAllowlistName, "priority-class-allowlist-name", "",
+		"Name of the cluster-scoped PriorityClassAllowlist CR whose "+
+			"spec.allowedPriorityClasses AUGMENT the --allowed-priority-classes flag "+
+			"allowlist, watched so additions take effect without a GMC restart (Q188). "+
+			"The same object is the priorityclass-allowlist-guard policy's paramKind, so "+
+			"the webhook and the policy read one source and cannot drift. Additive and "+
+			"fail-safe: a missing or malformed object leaves the static flag allowlist in "+
+			"force. Empty (default) disables the watch — flag-only behavior, unchanged. "+
+			"Replaced --priority-class-allowlist-configmap in Q492: a ConfigMap paramKind "+
+			"is destroyed by the Q444 apiserver defect.")
 	fs.StringVar(&f.allowedEgressFQDNs, "allowed-egress-fqdns", "",
 		"Comma-separated allowlist of FQDN host suffixes a tenant EgressProxy may "+
 			"request in spec.destinationFQDNs (Q242 G.1). A request matches if it equals "+

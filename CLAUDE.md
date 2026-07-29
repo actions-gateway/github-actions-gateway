@@ -129,7 +129,7 @@ When working on specific tasks, read the relevant doc before starting:
 | Updating docs after a change — CRD fields, new behaviour, admission/validation rules, operator-visible changes, security, module dependencies | `docs/development/doc-update-matrix.md` |
 | Writing, editing, or restructuring any doc — style for scannability, copy-paste-safe code blocks, conventions, maintenance | `docs/development/documentation-standards.md` |
 | Modifying CRD types (`api/`, `cmd/agc/api/`, `cmd/gmc/api/`) — adding/reshaping a field, enum, condition, or default | `docs/development/api-review.md` (design rules + is-it-breaking; read **before** writing the field), then `docs/development/code-generation.md` |
-| Adding a label/annotation an operator sets, a hand-set CRD field, or **writing/changing any binary's SIGTERM/shutdown path** | `docs/development/kubernetes-conventions.md` |
+| Adding a label/annotation an operator sets, a hand-set CRD field, **writing or changing a ValidatingAdmissionPolicy** (a `paramKind` must be a CRD, never a core type — Q444/Q492), or **writing/changing any binary's SIGTERM/shutdown path** | `docs/development/kubernetes-conventions.md` |
 | Building binaries | `docs/development/building.md` |
 | Deciding whether to fix, flag, defer, or decline tech debt | `docs/development/technical-debt.md` |
 | Picking the next task, tracking progress, adding new items | `docs/STATUS.md` — run `gh pr list` first and skip any Queue item already covered by an open PR |

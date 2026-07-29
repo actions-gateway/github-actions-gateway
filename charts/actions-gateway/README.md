@@ -17,11 +17,33 @@ not chart resources.
 
 ## What it installs
 
-- The two CRDs — `ActionsGateway` and `RunnerGroup` — under `templates/crds/`
-  with `helm.sh/resource-policy: keep` so `helm upgrade` carries CRD field
-  changes (Helm never upgrades the chart-root `crds/` dir) and `helm uninstall`
-  preserves tenant objects. **These files are generated** from the authoritative
-  controller-gen sources (`cmd/*/config/crd`) by `make chart-crds` — do not
+- The two tenant CRDs — `ActionsGateway` and `RunnerGroup` — under
+  `templates/crds/` with `helm.sh/resource-policy: keep` so `helm upgrade`
+  carries CRD field changes (Helm never upgrades the chart-root `crds/` dir) and
+  `helm uninstall` preserves tenant objects.
+- The `PriorityClassAllowlist` CRD, uniquely, under the chart-root **`crds/`**
+  dir: the chart also renders a `PriorityClassAllowlist` CR (the
+  `priorityclass-allowlist-guard` policy's param). Helm resolves REST mappings
+  for the entire manifest before applying any of it, so a CR whose CRD is a
+  template in the same release fails the install with `no matches for kind`.
+  Only `crds/` is installed ahead of that resolution.
+
+  The cost lands on **upgrades**: Helm skips `crds/` there entirely. So applying
+  the chart's CRDs is a standard pre-upgrade step for this chart, run every time
+  rather than conditionally:
+
+  ```sh
+  helm show crds <chart> --version <version> | kubectl apply -f -
+  ```
+
+  It is idempotent, and reads the CRDs from the exact chart version you are
+  upgrading to — so it covers any future schema change without anyone having to
+  remember a release note. The chart preflights the CRD's presence and fails with
+  that command if it is skipped. Fresh installs are unaffected; Helm applies
+  `crds/` for you.
+
+  **All CRD files here are generated** from the authoritative controller-gen
+  sources (`cmd/*/config/crd`, `api/config/crd`) by `make chart-crds` — do not
   hand-edit them; a CI drift gate (`make chart-crds-check`) fails if they fall
   out of sync. See [code-generation.md](../../docs/development/code-generation.md).
 - The GMC `Deployment` (HA: 2 replicas + leader election + PDB), `ServiceAccount`,
@@ -37,9 +59,11 @@ not chart resources.
   Deployments, Secrets, RoleBindings, NetworkPolicies, etc.) confine the GMC's
   cluster-wide write grants to marked tenant namespaces;
   `priorityclass-allowlist-guard` backstops the PriorityClass allowlist on
-  direct `runnergroups` writes that bypass the GMC webhooks (its parameter
-  ConfigMap is rendered from `allowedPriorityClasses`, or is the
-  `priorityClassAllowlist.configMapName` ConfigMap when set).
+  direct `runnergroups` writes that bypass the GMC webhooks. Its parameter is the
+  cluster-scoped `PriorityClassAllowlist` CR rendered from
+  `allowedPriorityClasses`, which the GMC also watches — a CRD rather than a
+  ConfigMap because a core-type `paramKind` is destroyed by a kube-apiserver
+  defect on `helm uninstall` (Q444/Q492).
 - NetworkPolicies (default-deny ingress + metrics/webhook allows) and the
   metrics Service / optional ServiceMonitor.
 
@@ -100,7 +124,11 @@ cannot reuse the existing Secret — see [upgrade](../../docs/operations/upgrade
 helm upgrade gag charts/actions-gateway --namespace gmc-system --reset-then-reuse-values
 ```
 
-CRDs ship as templates, so field changes are applied on upgrade. The
+CRDs ship as templates, so field changes are applied on upgrade — except the
+`PriorityClassAllowlist` CRD, which ships in `crds/` and needs
+`helm show crds <chart> | kubectl apply -f -` first (see *What it installs*).
+Setting the removed `priorityClassAllowlist.configMapName` now fails the render
+with migration instructions. The
 `namespace-psa-guard` and `tenant-resource-guard` bindings deny by default; if
 you are upgrading a cluster whose tenant namespaces are not yet labeled
 `actions-gateway.github.com/tenant=true`, label them first (or temporarily set

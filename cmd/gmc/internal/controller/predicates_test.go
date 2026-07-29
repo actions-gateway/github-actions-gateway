@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,21 +29,20 @@ func TestEgressDestinationConfigMapPredicate_MatchesOnlyDesignatedConfigMap(t *t
 	assert.False(t, p.Create(event.CreateEvent{Object: wrongName}), "a different-name ConfigMap in the same namespace must not match")
 }
 
-// TestPriorityClassConfigMapPredicate_MatchesOnlyDesignatedConfigMap mirrors the
+// TestPriorityClassAllowlistPredicate_MatchesOnlyDesignatedObject mirrors the
 // EgressDestination predicate test for the PriorityClass allowlist reconciler,
-// whose configMapPredicate is a distinct method with the same contract.
-func TestPriorityClassConfigMapPredicate_MatchesOnlyDesignatedConfigMap(t *testing.T) {
-	r := &PriorityClassAllowlistReconciler{ConfigMapName: "gag-priorityclass-allowlist", Namespace: "gag-system"}
-	p := r.configMapPredicate()
+// whose namePredicate is a distinct method with the same contract. The kind is
+// cluster-scoped since Q492, so the name alone identifies the object and there is
+// no namespace to disambiguate.
+func TestPriorityClassAllowlistPredicate_MatchesOnlyDesignatedObject(t *testing.T) {
+	r := &PriorityClassAllowlistReconciler{Name: "gag-priorityclass-allowlist"}
+	p := r.namePredicate()
 
-	designated := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "gag-priorityclass-allowlist", Namespace: "gag-system"}}
-	assert.True(t, p.Update(event.UpdateEvent{ObjectOld: designated, ObjectNew: designated}), "the designated ConfigMap must match")
+	designated := &v2beta1.PriorityClassAllowlist{ObjectMeta: metav1.ObjectMeta{Name: "gag-priorityclass-allowlist"}}
+	assert.True(t, p.Update(event.UpdateEvent{ObjectOld: designated, ObjectNew: designated}), "the designated object must match")
 
-	wrongNS := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "gag-priorityclass-allowlist", Namespace: "tenant-ns"}}
-	assert.False(t, p.Update(event.UpdateEvent{ObjectOld: wrongNS, ObjectNew: wrongNS}), "a same-name ConfigMap in another namespace must not match")
-
-	wrongName := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "unrelated-cm", Namespace: "gag-system"}}
-	assert.False(t, p.Update(event.UpdateEvent{ObjectOld: wrongName, ObjectNew: wrongName}), "a different-name ConfigMap in the same namespace must not match")
+	wrongName := &v2beta1.PriorityClassAllowlist{ObjectMeta: metav1.ObjectMeta{Name: "unrelated"}}
+	assert.False(t, p.Update(event.UpdateEvent{ObjectOld: wrongName, ObjectNew: wrongName}), "a different-name object must not match")
 }
 
 // TestV2TenantNamespacePredicate_MatchesOnlyMarkedNamespaces verifies the

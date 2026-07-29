@@ -404,7 +404,7 @@ digests. The knobs an operator is most likely to override:
 | `networkPolicy.enabled` | `true` | Leave on; needs an enforcing CNI (see prerequisites). |
 | `vpa.enabled` | `false` | Set `true` to let a Vertical Pod Autoscaler right-size the GMC instead of tuning `resources` by hand. Requires the Kubernetes vertical-pod-autoscaler installed (the `autoscaling.k8s.io` CRDs) — enabling it without them fails `helm install`, same as `metrics.serviceMonitor.enabled`. `vpa.updateMode` defaults to `Off` (recommendation only); it moves requests only, so `resources.limits` stays your hard ceiling. The per-tenant equivalent is `ActionsGateway.spec.agcAutoscaling` ([tenant-onboarding](tenant-onboarding.md#letting-an-autoscaler-size-the-agc-agcautoscaling)). |
 | `systemCriticalPriorityQuota.enabled` | `true` | Leave on; ships the scoped `ResourceQuota` that lets the GMC's `system-cluster-critical` pods schedule under GKE's restricted PriorityClass admission (see [GKE and other restricted-PriorityClass clusters](#gke-and-other-restricted-priorityclass-clusters)). Set `false` only if you provision that quota out-of-band. |
-| `admissionPolicy.enabled` | `true` | Leave on where you can. It ships the `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy`, the backstop that gates direct `runnergroups` writes (which have no webhook) against the PriorityClass allowlist. **Weigh [Q444](#known-defect-q444-the-policy-can-stop-resolving-its-parameters) first on a managed control plane**: the apiserver can stop resolving the policy's parameter ConfigMap and deny every `runnergroups`/`runnersets`/`runnertemplates` write cluster-wide, and the only known recovery is a kube-apiserver restart, which EKS/GKE/AKS do not offer. Set `false` to rely on the GMC webhook allowlist alone. |
+| `admissionPolicy.enabled` | `true` | Leave it on. It ships the `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy`, the backstop that gates direct `runnergroups` writes (which have no webhook) against the PriorityClass allowlist. The managed-control-plane caveat that used to sit here is [resolved](#the-policy-parameter-is-a-crd-not-a-configmap-q492). Set `false` to rely on the GMC webhook allowlist alone. |
 
 A `values.schema.json` validates these at install/lint time (digest format,
 enum values, etc.). The **full reference** — every value with its default and
@@ -412,43 +412,59 @@ description — lives in the
 [chart README](../../charts/actions-gateway/README.md#values); this table is
 only the common subset, not a duplicate.
 
-### Known defect (Q444): the policy can stop resolving its parameters
+### The policy parameter is a CRD, not a ConfigMap (Q492)
 
-`admissionPolicy.enabled` is on by default because a cluster-wide PriorityClass
-escalation is the more serious risk of the two. Make the call deliberately
-though, because the failure mode is severe and currently has no chart-side
-mitigation.
+The guard reads its allowlist from a cluster-scoped `PriorityClassAllowlist` CR
+(`<release>-priorityclass-allowlist`), which the chart renders from
+`allowedPriorityClasses` and the GMC also watches. One object, two consumers, so
+the webhook and the policy cannot disagree.
 
-An apiserver can enter a state where it stops resolving the guard's parameter
-ConfigMap and answers every matched write with `no params found for policy
-binding`, even though the ConfigMap is present at exactly the referenced name
-and namespace. Parameters resolve before any per-object matching, so this denies
-**every** `runnergroups`, `runnersets` and `runnertemplates` write cluster-wide,
-not only the ones the policy would have rejected.
+That it is a **CRD** and not a `ConfigMap` is load-bearing, not incidental.
+Releases that used a ConfigMap were exposed to a kube-apiserver defect (Q444):
+the apiserver keys one *shared* parameter informer per core-type `paramKind`,
+tears it down as soon as no binding names that kind, and never restarts it. A
+`helm uninstall` deletes the guard's only binding and so tripped exactly that,
+leaving every `runnergroups`/`runnersets`/`runnertemplates` write denied
+cluster-wide with `no params found for policy binding` — recoverable only by
+restarting kube-apiserver, which EKS/GKE/AKS do not offer. It could also fail
+*open*, silently enforcing a stale allowlist from a frozen cache.
 
-The trigger is **deleting the policy's binding**, which is exactly what `helm
-uninstall` does. The apiserver tears down the shared parameter informer as soon
-as no binding names the ConfigMap `paramKind`, and never restarts it; ConfigMaps
-created afterwards are invisible, so the reinstall cannot repair it. `helm
-upgrade` never removes the binding and is safe — **upgrade in place rather than
-uninstalling and reinstalling.**
+For a CRD `paramKind` the apiserver allocates a fresh dynamic informer per
+context, so the same uninstall/reinstall cycle is survivable. This is measured
+rather than inferred: `scripts/vap-param-informer-check.sh` runs the identical
+empty-binding-set transition against both kinds on one apiserver, and
+`scripts/chart-reinstall-check.sh` drives a real uninstall/reinstall in CI.
 
-The state belongs to the kube-apiserver process, so restarting kube-apiserver
-clears it in seconds. **On EKS/GKE/AKS you cannot do that**, and a control-plane
-version upgrade is usually the only lever that recycles the process.
+**One consequence, and it is not install-time.** This CRD ships in the chart-root
+`crds/` directory rather than `templates/crds/` like the others, because the same
+release also creates a `PriorityClassAllowlist` object and Helm resolves REST
+mappings for the whole manifest before applying any of it — a CR whose CRD is a
+template in the same release fails the install outright. A **fresh `helm install`
+handles this for you**; `crds/` is applied first.
 
-There is a second, quieter mode: if the torn-down informer's cache still holds
-the old ConfigMap, the guard silently keeps enforcing a **stale allowlist** with
-no error anywhere. Allowlist edits appear to apply and do nothing.
+An **upgrade does not**. Helm skips `crds/` entirely on upgrade, so applying the
+chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally
+rather than conditionally, so the procedure does not depend on which version you
+are coming from:
 
-If you run on a managed control plane and cannot carry that risk, install with
-`admissionPolicy.enabled=false`. You keep the GMC validating webhooks, which
-gate the tenant-facing CRs (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`);
-what you give up is the backstop for principals granted direct `runnergroups`
-RBAC, and stored-object re-validation on update.
+```sh
+helm show crds <chart> --version <version> | kubectl apply -f -
+```
 
-Upstream: [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887).
-Symptoms and recovery: [troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
+It is idempotent and version-correct, so it also covers any future schema change
+to this CRD with no release-note callout to remember. The chart preflights the
+CRD's presence and fails with that command rather than letting Helm emit a bare
+`no matches for kind`. Steps:
+[upgrade.md](upgrade.md#gmc-install-and-upgrade-via-helm-recommended).
+
+`helm uninstall` leaves the CRD behind, which is the same end state as the
+`helm.sh/resource-policy: keep` the other CRDs carry.
+
+Upstream, for the underlying apiserver bug:
+[kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887).
+Migrating an existing release off the ConfigMap:
+[upgrade.md](upgrade.md#priorityclass-allowlist-configmap-to-cr).
+
 
 ---
 
@@ -517,15 +533,14 @@ kubectl delete crd actionsgateways.actions-gateway.github.com \
 ```
 
 The `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy` is removed by
-`helm uninstall` along with its binding and parameter ConfigMap. **Removing that
-binding is the trigger for Q444**: the apiserver can be left permanently unable
-to resolve the policy's parameters, denying **every** `runnergroups` /
-`runnersets` / `runnertemplates` write cluster-wide even though the ConfigMap is
-present — and a reinstall does not repair it, because the new ConfigMap is
-invisible to the torn-down informer. The only recovery is a kube-apiserver
-restart, which managed control planes do not offer. If you are reinstalling
-rather than removing for good, use `helm upgrade` instead. Symptoms and
-mitigation:
+`helm uninstall` along with its binding and its parameter object; the
+`PriorityClassAllowlist` **CRD** is left behind, as `crds/` contents always are.
+Removing the binding used to be the trigger for a cluster-wide outage (Q444) when
+the parameter was a ConfigMap — a reinstall could not repair it. It is safe now
+that the parameter is a CRD, which is
+[why it is one](#the-policy-parameter-is-a-crd-not-a-configmap-q492); the
+uninstall/reinstall cycle is covered by `scripts/chart-reinstall-check.sh` in CI.
+Symptoms of the old failure, if you meet it on a pre-Q492 release:
 [troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
 
 The install namespace (`gmc-system`) is left in place if you created it with

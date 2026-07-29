@@ -13,6 +13,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 )
@@ -97,41 +98,49 @@ func resolveConfig(cfg *gmcFlags, getenv func(string) string) (*resolvedConfig, 
 	}, nil
 }
 
-// buildCacheOptions scopes the ConfigMap informer to the GMC's own namespace when
-// either allowlist ConfigMap watch is enabled, so the GMC needs only namespaced
-// get/list/watch — not cluster-wide ConfigMap read. With a single watched
-// ConfigMap it further pins the informer to that one object by name; with two
-// distinct ConfigMaps it scopes to the namespace and lets each reconciler's
-// predicate narrow to its own object. Without either feature, no ConfigMap
-// informer is ever started, so this returns empty options (a no-op). A watch with
-// no POD_NAMESPACE to locate the ConfigMap is a hard startup failure.
+// buildCacheOptions narrows the informers the two watched-allowlist features need
+// (Q188, Q242 G.1) to the single object each reads, so the GMC needs no broad read
+// grant for either.
+//
+//   - The egress destination allowlist is a ConfigMap in the GMC's own namespace:
+//     the ConfigMap informer is scoped to that namespace and pinned to that one
+//     name, so the GMC needs only namespaced get/list/watch, not cluster-wide
+//     ConfigMap read. A watch with no POD_NAMESPACE to locate it is a hard startup
+//     failure.
+//   - The PriorityClass allowlist is a cluster-scoped PriorityClassAllowlist CR
+//     (Q492, replacing the ConfigMap that Q444's apiserver defect made unusable as
+//     a VAP paramKind). Being cluster-scoped it needs no namespace, only a
+//     name-pinned field selector.
+//
+// With neither feature enabled no extra informer is ever started, so this returns
+// empty options (a no-op).
 func buildCacheOptions(cfg *gmcFlags, podNamespace string) (cache.Options, error) {
-	watchedConfigMaps := map[string]bool{}
-	if cfg.priorityClassAllowlistConfigMap != "" {
-		watchedConfigMaps[cfg.priorityClassAllowlistConfigMap] = true
-	}
-	if cfg.egressDestinationAllowlistConfigMap != "" {
-		watchedConfigMaps[cfg.egressDestinationAllowlistConfigMap] = true
-	}
 	cacheOptions := cache.Options{}
-	if len(watchedConfigMaps) == 0 {
-		return cacheOptions, nil
-	}
-	if podNamespace == "" {
-		return cacheOptions, fmt.Errorf("--priority-class-allowlist-configmap / " +
-			"--egress-destination-allowlist-configmap require POD_NAMESPACE (the GMC install namespace) " +
-			"to locate the ConfigMap")
-	}
-	cmConfig := cache.Config{}
-	if len(watchedConfigMaps) == 1 {
-		for name := range watchedConfigMaps {
-			cmConfig.FieldSelector = fields.OneTermEqualSelector("metadata.name", name)
+	byObject := map[client.Object]cache.ByObject{}
+
+	if cfg.egressDestinationAllowlistConfigMap != "" {
+		if podNamespace == "" {
+			return cacheOptions, fmt.Errorf("--egress-destination-allowlist-configmap requires " +
+				"POD_NAMESPACE (the GMC install namespace) to locate the ConfigMap")
+		}
+		byObject[&corev1.ConfigMap{}] = cache.ByObject{
+			Namespaces: map[string]cache.Config{
+				podNamespace: {
+					FieldSelector: fields.OneTermEqualSelector("metadata.name",
+						cfg.egressDestinationAllowlistConfigMap),
+				},
+			},
 		}
 	}
-	cacheOptions.ByObject = map[client.Object]cache.ByObject{
-		&corev1.ConfigMap{}: {
-			Namespaces: map[string]cache.Config{podNamespace: cmConfig},
-		},
+
+	if cfg.priorityClassAllowlistName != "" {
+		byObject[&v2beta1.PriorityClassAllowlist{}] = cache.ByObject{
+			Field: fields.OneTermEqualSelector("metadata.name", cfg.priorityClassAllowlistName),
+		}
+	}
+
+	if len(byObject) > 0 {
+		cacheOptions.ByObject = byObject
 	}
 	return cacheOptions, nil
 }

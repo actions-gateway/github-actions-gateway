@@ -530,6 +530,13 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --set proxy.image.digest=sha256:<proxy> \
   --set wrapper.image.digest=sha256:<wrapper>
 
+# Apply the chart-root CRDs first — EVERY upgrade, not just some. Helm installs
+# that directory on `helm install` only and skips it on upgrade, so this is the
+# only way changes to those CRDs reach an existing release. Idempotent, and
+# version-correct: it reads the CRDs out of the exact chart you are upgrading to.
+helm show crds oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version <new-chart-version> | kubectl apply -f -
+
 # Upgrade in place to a newer published chart version (carries CRD field changes — see below)
 # --reset-then-reuse-values, NOT --reuse-values: see the values-reuse note below
 helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
@@ -554,9 +561,18 @@ The following upgrade-time behaviors are specific to this chart:
 
   The chart deliberately does **not** paper over this by making templates tolerate a missing block. A missing block would then render as "unset", and for a security-relevant key — `admissionPolicy`, `networkPolicy` — that silently disables a guard on upgrade. Failing the render loudly is the safe direction; reaching for the right flag is the fix. See the [troubleshooting runbook](troubleshooting.md#helm-upgrade-fails-with-nil-pointer-evaluating-interface-field).
 - **All four image digests are required at render time.** Both `helm install` and `helm upgrade` fail with `<image>.image must be pinned by digest …` (naming `gmc`/`agc`/`proxy`/`wrapper`) when the release values carry no digest for one of the four — e.g. a values file that omits it, or `--reset-values`. `--reset-then-reuse-values` and `--reuse-values` both carry the previously pinned digests forward; pass `--set <image>.image.digest=sha256:<new>` for each image you are moving to the new release's build. See the [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest). Dev/test only: `allowFloatingImageTags=true` opts out.
-- **CRDs upgrade with the release.** The `ActionsGateway` and `RunnerGroup` CRDs ship as templates under `templates/crds/` with `helm.sh/resource-policy: keep`, **not** the chart-root `crds/` directory — Helm never upgrades resources in `crds/`. So a `helm upgrade` applies additive CRD field changes automatically, and `helm uninstall` preserves the CRDs (and every tenant's `ActionsGateway`/`RunnerGroup` object) rather than cascade-deleting them. You do not run a separate CRD apply step. The `RunnerGroup` CRD is sourced from the AGC authoritative copy.
+- **Most CRDs upgrade with the release; one does not, so apply the chart's CRDs every time.** The `ActionsGateway` and `RunnerGroup` CRDs ship as templates under `templates/crds/` with `helm.sh/resource-policy: keep`, so `helm upgrade` applies their additive field changes automatically and `helm uninstall` preserves them (and every tenant's objects) rather than cascade-deleting. The `PriorityClassAllowlist` CRD cannot: the same release *creates* a `PriorityClassAllowlist` object, and Helm resolves REST mappings for the whole manifest before applying any of it, so a CR whose CRD is a template in the same release fails outright. It therefore ships in the chart-root `crds/` directory — which Helm installs on `helm install` **only, never on upgrade**.
+
+  Rather than make that a conditional "did your release predate X?" step, the upgrade command above applies the chart's CRDs unconditionally:
+
+  ```bash
+  helm show crds oci://ghcr.io/actions-gateway/charts/actions-gateway \
+    --version <new-chart-version> | kubectl apply -f -
+  ```
+
+  It is idempotent (a no-op when nothing changed), needs no local checkout, and reads the CRDs from the exact chart version you are upgrading to — so it stays correct for any future schema change without a release-note callout to remember. The chart also preflights the CRD's presence and fails with this command if you skip it, so a missed step costs you a re-run, not a broken cluster. The `RunnerGroup` CRD is sourced from the AGC authoritative copy.
 - **The webhook cert path depends on `certManager.enabled`.** With the default `certManager.enabled=true`, cert-manager issues and rotates the serving cert; nothing to do on upgrade. With `certManager.enabled=false`, the chart generates a self-signed serving cert and wires the webhook `caBundle` itself. On an in-place `helm upgrade` the chart **reuses the existing `webhook-server-cert` Secret** (it looks the Secret up), so the cert does not rotate; it only regenerates if that Secret is missing (a fresh install, or after you delete it to force rotation). A `helm template` (no cluster) cannot look the Secret up and therefore renders a fresh cert each time — expected for offline rendering only.
-- **A reinstall can leave the `priorityclass-allowlist-guard` policy unable to resolve its parameters (Q444, open).** Every `runnergroups`/`runnersets`/`runnertemplates` write is then denied cluster-wide with `no params found for policy binding`, even though the parameter ConfigMap is present at the referenced name and namespace. The trigger is deleting the policy's binding, which `helm uninstall` does: the apiserver tears down the shared parameter informer and never restarts it, so the reinstall's ConfigMap is invisible to it. **Upgrade in place — `helm upgrade` never removes the binding and is safe.** The only recovery is a kube-apiserver restart, which is not available on a managed control plane, and there is no chart-side mitigation; if you cannot tolerate the risk on EKS/GKE/AKS, run with `admissionPolicy.enabled=false`. Symptoms, mitigation and recovery: [troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
+- **`priorityClassAllowlist.configMapName` is removed (Q492) — a breaking values change.** The PriorityClass allowlist moved from a watched ConfigMap to the cluster-scoped `PriorityClassAllowlist` CR, which is now both the GMC's dynamic source and the guard policy's `paramKind`. A release that sets the old key fails the render with a migration message; every other release needs no values change, because the chart renders the new object from the `allowedPriorityClasses` it already rendered the ConfigMap from. Full steps: [PriorityClass allowlist: ConfigMap to CR](#priorityclass-allowlist-configmap-to-cr) below. (The CRD itself is covered by the apply step above, like any other chart-root CRD.)
 - **A hand-patched release blocks the next `helm upgrade`.** Helm 4 applies server-side, so a field owned by a different field manager is a hard conflict rather than a silent overwrite. If you have `kubectl patch`ed or `kubectl edit`ed a chart-owned object — the GMC Deployment's container `args` is the usual one — the next upgrade fails outright:
 
   ```text
@@ -567,6 +583,131 @@ The following upgrade-time behaviors are specific to this chart:
 
   Re-run the upgrade with `--force-conflicts` to hand the field back to Helm — your manual edit is reverted, which is the point of the flag. The durable fix is to express the change in chart values so it survives every upgrade instead of being reapplied by hand. Do **not** reach for `--force-replace`: it replaces objects wholesale and is destructive.
 - **The `namespace-psa-guard` and `gmc-tenant-resource-guard` bindings deny by default.** If you are upgrading a cluster whose existing tenant namespaces are not yet labeled `actions-gateway.github.com/tenant=true`, label them **before** the upgrade (see the migration note above), or the GMC's namespace patches *and all tenant-resource writes* will be denied. To stage the rollout you can temporarily set both bindings to `Audit` by editing `validationActions` on each `ValidatingAdmissionPolicyBinding`, then flip them back to `Deny` once the labels are in place.
+
+### PriorityClass allowlist: ConfigMap to CR
+
+**Who this affects:** everyone, for step 1 — which is now simply part of every
+upgrade of this chart, not a one-off. Step 2 additionally applies if you set
+`priorityClassAllowlist.configMapName`.
+
+**What changed.** The watched allowlist is now a cluster-scoped
+`PriorityClassAllowlist` CR named `<release>-priorityclass-allowlist`, rendered by
+the chart from `allowedPriorityClasses`. It is both the GMC's restart-free dynamic
+source (Q188) and the `priorityclass-allowlist-guard` policy's `paramKind`.
+
+**Why it had to move.** A `paramKind` on a *core* type such as `ConfigMap` is
+permanently broken for the rest of a kube-apiserver process once the set of
+bindings naming it goes empty for one refresh tick — which `helm uninstall` does.
+That was the Q444 cluster-wide outage: every `runnergroups`/`runnersets`/
+`runnertemplates` write denied with `no params found for policy binding`, and no
+recovery short of a kube-apiserver restart. A CRD `paramKind` gets a fresh dynamic
+informer per context and survives the same transition, so this removes the
+exposure rather than mitigating it.
+
+**Why the CRD needs a manual step.** This is the one CRD the chart ships in the
+chart-root `crds/` directory rather than `templates/crds/`, because the same
+release also *creates* a `PriorityClassAllowlist` object — and Helm resolves REST
+mappings for the entire manifest before applying any of it, so a CR whose CRD is a
+template in the same release fails the install outright. `crds/` is the only
+directory Helm installs early enough. The cost is that Helm skips `crds/` entirely
+on upgrade, so an existing release never receives it.
+
+#### 1. Apply the chart's CRDs
+
+```bash
+helm show crds oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version <new-chart-version> | kubectl apply -f -
+```
+
+This is the standard pre-upgrade step for every release
+([above](#gmc-install-and-upgrade-via-helm-recommended)), not something special to
+this migration — running it unconditionally is what keeps the procedure the same
+whatever version you are coming from. From a chart directory, `helm show crds
+charts/actions-gateway | kubectl apply -f -` does the same thing.
+
+Skip it and the upgrade stops before changing anything, naming the command:
+
+```text
+Error: UPGRADE FAILED: execution error at (actions-gateway/templates/priorityclass-allowlist.yaml):
+the PriorityClassAllowlist CRD is not installed in this cluster. Helm installs the
+chart-root crds/ dir on a fresh install ONLY and skips it on every upgrade, so
+applying it is a standard pre-upgrade step for this chart. ...
+```
+
+The check is skipped on a fresh `helm install`, where `crds/` is applied for you.
+
+#### 2. Move any watched-ConfigMap names into `allowedPriorityClasses`
+
+Only if your release sets `priorityClassAllowlist.configMapName`. That key is
+removed, and the render fails while it is set:
+
+```text
+priorityClassAllowlist.configMapName ("gmc-priority-class-allowlist") is removed as
+of Q492. ...
+```
+
+Read the names the ConfigMap currently carries — including any added self-service
+since install, which will **not** be in your values file. Use *your* configured
+name, not the example (`helm get values <release> -n gmc-system` shows it under
+`priorityClassAllowlist.configMapName`):
+
+```bash
+kubectl get configmap -n gmc-system <your-configmap-name> -o jsonpath='{.data.allowedPriorityClasses}'
+```
+
+Put the **union** of those and your existing `allowedPriorityClasses` into
+`allowedPriorityClasses`, and unset the removed key:
+
+```yaml
+allowedPriorityClasses:
+  - runner-standard      # was already in values
+  - runner-bursty        # was ConfigMap-only
+  - runner-batch         # was ConfigMap-only
+priorityClassAllowlist:
+  configMapName: ""
+```
+
+Getting this wrong fails **closed**, not open: a name you drop stops being
+admitted, denying writes that name it. Nothing becomes permitted that was not
+permitted before.
+
+#### 3. Upgrade, then verify
+
+```bash
+kubectl get priorityclassallowlist gmc-priorityclass-allowlist -o jsonpath='{.spec.allowedPriorityClasses}'
+```
+
+The GMC's grant becomes a `ClusterRole` with `get`/`list`/`watch` on
+`priorityclassallowlists` (the kind is cluster-scoped); it carries no write verb,
+so the GMC still cannot widen its own allowlist. No manual RBAC step.
+
+**What the upgrade cleans up depends on which case you were in.** Helm only
+removes objects it rendered:
+
+| You had | Helm removes on upgrade | You remove by hand |
+|---|---|---|
+| `configMapName` **unset** (default) | the chart-rendered param ConfigMap `<release>-priorityclass-allowlist` | nothing |
+| `configMapName` **set** | the namespaced `Role`/`RoleBinding` the chart rendered for that watch | your own ConfigMap — the chart never rendered it, so Helm will not touch it |
+
+So if you set `configMapName`, delete your ConfigMap once you are satisfied the CR
+carries everything. Nothing reads it any more:
+
+```bash
+kubectl delete configmap -n gmc-system <your-configmap-name>
+```
+
+**Your self-service workflow moves to the CR.** Adding a class without a GMC
+rollout used to mean editing that ConfigMap; it now means editing the CR, which
+the GMC watches the same way:
+
+```bash
+kubectl edit priorityclassallowlist <release>-priorityclass-allowlist
+```
+
+A chart upgrade reasserts `allowedPriorityClasses` over it, exactly as it would
+have reasserted a chart-rendered ConfigMap — so persist anything durable in
+values. Full detail:
+[security-operations.md](security-operations.md#self-service-additions-via-the-priorityclassallowlist-cr-q188).
 
 `helm upgrade` rolls the GMC Deployment (and carries additive CRD field changes —
 no separate CRD apply step). Watch the rollout:

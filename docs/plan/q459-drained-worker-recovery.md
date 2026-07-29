@@ -208,8 +208,8 @@ Two things stand between it and a result, both understood:
 
 Earlier attempts were blocked before even reaching it, by the
 PriorityClass VAP param-resolution failure that
-[q444-vap-param-resolution.md](q444-vap-param-resolution.md) investigates and
-[Q492](../STATUS.md#Q492) now carries.
+[q444-vap-param-resolution.md](archive/q444-vap-param-resolution.md) investigates and
+Q492 has since fixed, by moving the guard's `paramKind` off a core type.
 
 The e2e cluster's kube-apiserver entered that broken state between the run that
 produced the result above and the next one, and every run since fails in `BeforeAll`
@@ -222,7 +222,7 @@ failed to configure binding: no params found for policy binding with `Deny` para
 
 with `gmc-priorityclass-allowlist` present in `gmc-system` and the binding pointing
 exactly at it — the shape
-[q444-vap-param-resolution.md](q444-vap-param-resolution.md) § Established by
+[q444-vap-param-resolution.md](archive/q444-vap-param-resolution.md) § Established by
 measurement records as findings 1 and 2. Nothing here adds to that investigation: it
 has since established the trigger — deleting the `ValidatingAdmissionPolicyBinding`
 empties the paramKind's binding set and the apiserver never restarts the shared
@@ -258,10 +258,14 @@ Next step, in order:
 4. If it does not, drop to the second row: close behind a default-off opt-in.
 
 Operational note for whoever runs Tier C next, learned the expensive way: the suite
-teardown's `helm uninstall` deletes the `ValidatingAdmissionPolicyBinding`, which is
-exactly the trigger [Q492](../STATUS.md#Q492) documents — so each run poisons the next
-one's apiserver. Restart the kube-apiserver (`crictl stop`, verified by `ATTEMPT`
-incrementing) *before* a run, not after a failure. Running with
+teardown's `helm uninstall` deletes the `ValidatingAdmissionPolicyBinding`, which
+was exactly the trigger — so each run poisoned the next one's apiserver. **Q492 has
+since fixed this**: the guard's `paramKind` is now a CRD, for which the apiserver
+allocates a fresh dynamic informer per context, so emptying the binding set no
+longer breaks param resolution. The workaround below is retained for anyone
+reproducing this investigation on a pre-Q492 build: restart the kube-apiserver
+(`crictl stop`, verified by `ATTEMPT` incrementing) *before* a run, not after a
+failure. Running with
 `E2E_SKIP_TEARDOWN=true` avoids the uninstall, but then a subsequent `helm upgrade`
 conflicts on server-side-apply field ownership (`kubectl-patch`/`kubectl-set` claim
 fields helm owns); deleting just the `gmc-controller-manager` Deployment beforehand

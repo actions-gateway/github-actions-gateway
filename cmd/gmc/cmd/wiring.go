@@ -183,16 +183,17 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		return fmt.Errorf("register IP range reconciler: %w", err)
 	}
 
-	// PriorityClass allowlist ConfigMap watch (Q188): when enabled, reconcile the
-	// designated ConfigMap into the dynamic half of the shared allowlist. Runs in
-	// every replica (the reconciler disables leader election) because every replica
+	// PriorityClass allowlist watch (Q188): when enabled, reconcile the designated
+	// cluster-scoped PriorityClassAllowlist into the dynamic half of the shared
+	// allowlist. The same object is the priorityclass-allowlist-guard policy's
+	// paramKind (Q492), so the webhook and the policy cannot drift. Runs in every
+	// replica (the reconciler disables leader election) because every replica
 	// serves the admission webhook. Disabled by default (empty flag).
-	if cfg.priorityClassAllowlistConfigMap != "" {
+	if cfg.priorityClassAllowlistName != "" {
 		if err := (&controller.PriorityClassAllowlistReconciler{
-			Client:        mgr.GetClient(),
-			ConfigMapName: cfg.priorityClassAllowlistConfigMap,
-			Namespace:     rc.podNamespace,
-			Allowlist:     rc.priorityClassAllowlist,
+			Client:    mgr.GetClient(),
+			Name:      cfg.priorityClassAllowlistName,
+			Allowlist: rc.priorityClassAllowlist,
 		}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("create priorityclass-allowlist controller: %w", err)
 		}
