@@ -106,6 +106,14 @@ k8s_meets_min() {
 	((min >= rmin))
 }
 
+# now_seconds — the current wall clock in whole seconds. A function rather than an
+# inline `date +%s` so validate-cluster-test.sh can substitute a deterministic fake
+# clock for the retry budgets below (Q471): asserting those bounds against the real
+# clock made the suite flake whenever `make check` loaded the machine.
+now_seconds() {
+	date +%s
+}
+
 # retry_until TIMEOUT INTERVAL CMD [ARG...] — run CMD until it exits 0 or TIMEOUT
 # seconds of wall clock have elapsed, sleeping INTERVAL seconds between attempts.
 # Returns 0 as soon as CMD succeeds, 1 when the budget is spent. Two properties
@@ -120,12 +128,12 @@ retry_until() {
 	local timeout="$1" interval="$2"
 	shift 2
 	local start elapsed
-	start="$(date +%s)"
+	start="$(now_seconds)"
 	while true; do
 		if "$@"; then
 			return 0
 		fi
-		elapsed=$(($(date +%s) - start))
+		elapsed=$(($(now_seconds) - start))
 		((elapsed + interval > timeout)) && return 1
 		sleep "$interval"
 	done
@@ -283,9 +291,9 @@ check_metrics_server() {
 	printf '  [WAIT] %-18s %s\n' "metrics-server" \
 		"metrics.k8s.io registered but not Available yet — retrying for up to ${METRICS_AVAILABLE_TIMEOUT}s (a freshly created cluster's addon needs ~2 min)"
 	local start elapsed
-	start="$(date +%s)"
+	start="$(now_seconds)"
 	if retry_until "$METRICS_AVAILABLE_TIMEOUT" "$METRICS_POLL_INTERVAL" metrics_api_available; then
-		elapsed=$(($(date +%s) - start))
+		elapsed=$(($(now_seconds) - start))
 		report pass "metrics-server" "metrics.k8s.io API is Available (after waiting ${elapsed}s)"
 	else
 		report warn "metrics-server" \
