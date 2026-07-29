@@ -4299,19 +4299,38 @@ during any reinstall: <code>helm uninstall</code> removes the parameter ConfigMa
 reinstall recreates it, and the guard correctly fails closed until the apiserver
 observes the new one. That clears on its own. Only a denial that persists past a
 few seconds is the defect below.</p>
-<p><strong>Cause: not yet established (Q444, open).</strong> What is known:</p>
+<p><strong>Cause (Q444, kube-apiserver defect).</strong> The apiserver caches one parameter
+informer per <code>paramKind</code>, shared by every policy naming it. That informer is torn
+down as soon as no <code>ValidatingAdmissionPolicyBinding</code> in the cluster names the
+<code>paramKind</code> any more — and because the guard's ConfigMap is a <em>core</em> type, the
+teardown stops a <strong>shared</strong> informer that the apiserver will never restart. The
+state belongs to the process, so:</p>
 <ul>
-<li>The broken state belongs to the <strong>kube-apiserver process</strong>, not to any object.
-  A restart clears it in seconds with no object changes at all.</li>
-<li>Once an apiserver is in this state, ConfigMaps created afterwards stay
-  invisible to parameter resolution — so even a <em>fresh</em> install fails, with the
-  binding pointing at a ConfigMap that demonstrably exists. Recreating the
-  ConfigMap does not help.</li>
-<li>It shows up most often after a <code>helm uninstall</code> + reinstall, but that cycle is
-  not required.</li>
+<li>Deleting the binding — which is what <code>helm uninstall</code> does — is the trigger.
+  The guard has exactly one binding, so removing it empties the set. One second
+  is enough.</li>
+<li>Afterwards the informer's cache is <strong>frozen</strong>, not emptied. ConfigMaps created
+  later are invisible, which is why even a <em>fresh</em> install fails with the binding
+  pointing at a ConfigMap that demonstrably exists.</li>
+<li><code>helm upgrade</code> never removes the binding and is safe. Uninstall-then-reinstall
+  is the cycle to avoid.</li>
 </ul>
-<p>Observed on Kubernetes 1.35.5 and 1.36.1. Evidence and open questions:
+<p><strong>The quieter failure mode.</strong> If the frozen cache happens to still hold the old
+ConfigMap, there is no error at all — the policy keeps validating against an
+allowlist <strong>that no longer exists in the cluster</strong>. Edits to the allowlist appear
+to apply and silently do nothing. After any event that could have tripped this,
+confirm the guard sees your current allowlist rather than assuming it does: change
+the allowlist and check that a <code>RunnerGroup</code> naming a newly removed class is
+actually rejected.</p>
+<p>Observed on Kubernetes 1.35.5 and 1.36.1. Upstream:
+<a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a>.
+Full mechanism and the reproducer:
 <a href="../../plan/q444-vap-param-resolution/"><code>q444-vap-param-resolution.md</code></a>.</p>
+<p><strong>Prevention.</strong> Upgrade the release in place; never <code>helm uninstall</code> and
+reinstall on a cluster whose apiserver you cannot restart. If you must fully
+reinstall on a managed control plane, accept that the guard may be unrecoverable
+until the next control-plane version upgrade, and plan to run with
+<code>admissionPolicy.enabled=false</code> in the meantime.</p>
 <p><strong>Resolution.</strong></p>
 <ul>
 <li><strong>Restore writes immediately</strong> by removing the binding, which is what evaluates
@@ -4323,16 +4342,22 @@ few seconds is the defect below.</p>
 <p>Denials stop at once. This also disables the PriorityClass backstop, so treat it
   as mitigation, not a fix — the GMC webhook allowlist still gates the
   tenant-facing CRs in the meantime.
-- <strong>Fix it properly</strong> by restarting kube-apiserver — the only known recovery.
-  Straightforward on a self-managed control plane; on EKS/GKE/AKS you cannot
-  restart it directly, and a control-plane version upgrade is usually the only
-  lever that recycles the process. Re-enable <code>admissionPolicy.enabled</code>
-  afterwards.</p>
-<p>There is <strong>no chart-side mitigation today</strong>, and no way to predict which
-apiservers will hit it. If you are running on a managed control plane and cannot
-tolerate the risk, install with <code>admissionPolicy.enabled=false</code> and rely on the
-GMC webhook allowlist, which gates the tenant-facing CRs (the policy is a
-defense-in-depth backstop for direct <code>runnergroups</code> RBAC).</p>
+- <strong>Fix it properly</strong> by restarting kube-apiserver — the only recovery that
+  restores the shipped guard. Straightforward on a self-managed control plane; on
+  EKS/GKE/AKS you cannot restart it directly, and a control-plane version upgrade
+  is usually the only lever that recycles the process. Re-enable
+  <code>admissionPolicy.enabled</code> afterwards.</p>
+<p>Restart the container itself (<code>crictl stop</code> on the apiserver container, then
+  confirm its <code>createdAt</code> changed). <code>kubectl delete pod -n kube-system
+  kube-apiserver-…</code> does <strong>not</strong> work — it recreates the static pod's mirror
+  object while the container keeps running.</p>
+<p>Only the ConfigMap <code>paramKind</code> is affected — the breakage is per-kind, and a
+policy pointing at a different kind resolves normally on the same apiserver.
+There is <strong>no chart-side mitigation today</strong>; the chart ships a ConfigMap
+parameter. If you are on a managed control plane and cannot carry the risk,
+install with <code>admissionPolicy.enabled=false</code> and rely on the GMC webhook
+allowlist, which gates the tenant-facing CRs (the policy is a defense-in-depth
+backstop for direct <code>runnergroups</code> RBAC).</p>
 <hr />
 <h2 id="gmc-not-provisioning-tenant-resources">GMC Not Provisioning Tenant Resources<a class="headerlink" href="#gmc-not-provisioning-tenant-resources" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> An <code>ActionsGateway</code> CR was applied but nothing has been created in the tenant namespace: no AGC Deployment, no proxy Deployment, no RunnerGroup resources.</p>

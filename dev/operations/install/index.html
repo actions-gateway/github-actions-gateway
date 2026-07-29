@@ -3063,11 +3063,18 @@ binding</code>, even though the ConfigMap is present at exactly the referenced n
 and namespace. Parameters resolve before any per-object matching, so this denies
 <strong>every</strong> <code>runnergroups</code>, <code>runnersets</code> and <code>runnertemplates</code> write cluster-wide,
 not only the ones the policy would have rejected.</p>
+<p>The trigger is <strong>deleting the policy's binding</strong>, which is exactly what <code>helm
+uninstall</code> does. The apiserver tears down the shared parameter informer as soon
+as no binding names the ConfigMap <code>paramKind</code>, and never restarts it; ConfigMaps
+created afterwards are invisible, so the reinstall cannot repair it. <code>helm
+upgrade</code> never removes the binding and is safe — <strong>upgrade in place rather than
+uninstalling and reinstalling.</strong></p>
 <p>The state belongs to the kube-apiserver process, so restarting kube-apiserver
 clears it in seconds. <strong>On EKS/GKE/AKS you cannot do that</strong>, and a control-plane
-version upgrade is usually the only lever that recycles the process. It is most
-often seen after a <code>helm uninstall</code> followed by a reinstall, but that cycle is
-not required.</p>
+version upgrade is usually the only lever that recycles the process.</p>
+<p>There is a second, quieter mode: if the torn-down informer's cache still holds
+the old ConfigMap, the guard silently keeps enforcing a <strong>stale allowlist</strong> with
+no error anywhere. Allowlist edits appear to apply and do nothing.</p>
 <p>If you run on a managed control plane and cannot carry that risk, install with
 <code>admissionPolicy.enabled=false</code>. You keep the GMC validating webhooks, which
 gate the tenant-facing CRs (<code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>);
@@ -3129,11 +3136,15 @@ tenant CRs first, then the CRDs explicitly:</p>
 <a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">                   </span>runnergroups.actions-gateway.github.com
 </code></pre></div>
 <p>The <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code> is removed by
-<code>helm uninstall</code> along with its binding and parameter ConfigMap. Be aware of
-<strong>Q444</strong> before reinstalling: an apiserver can end up unable to resolve this
-policy's parameters, denying <strong>every</strong> <code>runnergroups</code> / <code>runnersets</code> /
-<code>runnertemplates</code> write cluster-wide even though the ConfigMap is present. The
-only known recovery is a kube-apiserver restart. Symptoms and mitigation:
+<code>helm uninstall</code> along with its binding and parameter ConfigMap. <strong>Removing that
+binding is the trigger for Q444</strong>: the apiserver can be left permanently unable
+to resolve the policy's parameters, denying <strong>every</strong> <code>runnergroups</code> /
+<code>runnersets</code> / <code>runnertemplates</code> write cluster-wide even though the ConfigMap is
+present — and a reinstall does not repair it, because the new ConfigMap is
+invisible to the torn-down informer. The only recovery is a kube-apiserver
+restart, which managed control planes do not offer. If you are reinstalling
+rather than removing for good, use <code>helm upgrade</code> instead. Symptoms and
+mitigation:
 <a href="../troubleshooting/#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding">troubleshooting.md</a>.</p>
 <p>The install namespace (<code>gmc-system</code>) is left in place if you created it with
 <code>--create-namespace</code>; remove it with <code>kubectl delete namespace gmc-system</code> once
