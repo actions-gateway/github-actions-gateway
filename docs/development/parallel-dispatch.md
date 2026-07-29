@@ -394,7 +394,7 @@ batch most of it is *waiting*. Its three heavy phases (`build-tags-check`,
 ([resource auto-throttle](testing.md#resource-auto-throttle-on-gui-dev-machines)),
 so whenever a 6-worker batch is in those phases, four of the six are queued. A
 cold gate is dominated by `cover-check` — ~19 of ~21 min on the machine the
-baseline was taken on ([measurements](../plan/local-gate-throughput.md)).
+baseline was taken on ([measurements](../plan/archive/local-gate-throughput.md)).
 
 **Every worker should launch the gate as a background task and keep working:**
 
