@@ -111,7 +111,7 @@ is what the two numbers measure:
 
 | Disruption | Grace | Runner reports? | Eviction → conclusion |
 |---|---|---|---|
-| Graceful delete / drain ([Q459](../STATUS.md#Q459)) | 30s | yes | **15–26s** |
+| Graceful delete / drain ([Q459](q459-drained-worker-recovery.md)) | 30s | yes | **15–26s** |
 | Kubelet eviction (this experiment) | ~2s, then SIGKILL | no | **9m36s** |
 
 **What remains.** The scale-set half. This run measured the classic tier; Q417
@@ -140,7 +140,7 @@ cluster to do exactly what is needed:
 
 The zero grace period is the point rather than a side effect: it is what makes this
 the *ungraceful* case, where GitHub must notice by itself. The graceful counterpart,
-where the runner does get its own report out, is [Q459](../STATUS.md#Q459)'s.
+where the runner does get its own report out, is [Q459](q459-drained-worker-recovery.md)'s.
 
 **Sizing the cap needed a measurement of its own.** The kubelet charges a pod only
 its writable layer, emptyDirs and logs — image layers are read-only and are not
@@ -196,12 +196,19 @@ resources are on GitHub's side:
 - **One `runs-on` label, one org.** Every Tier C tenant registers runners labelled
   `e2e` in the `actions-gateway` org, so GitHub may route either session's job to
   either cluster's gateway. The two are entangled even when the clusters are not.
-- **No run-id annotation to disambiguate by** (Q495 again), so
-  `runningWorkerForRun` falls back to "the sole Running worker" and gives up when
-  there are two.
+- **No run-id annotation to disambiguate by** — Q495, since fixed, but absent for
+  these runs — so `runningWorkerForRun` fell back to "the sole Running worker" and
+  gave up when there were two.
 
-Treat Tier C as a **singleton**: one session at a time, across all worktrees. This
-is the same contention that keeps `E2E_GitHub_CancelledRunLeavesNoDeletionMark`
+A throwaway cluster per run, which
+[testing.md](../development/testing.md) now prescribes, is still the right
+move: it removes the *other* half of the collision, where a parallel session's
+`helm upgrade` and `kubectl set env` fight over one GMC. It just does not make two
+Tier C runs independent. Both halves have to hold, so treat Tier C as a
+**singleton**: one session at a time, across all worktrees, each on its own
+cluster. Q500 tracks the GitHub-side half.
+
+This is the same contention that kept `E2E_GitHub_CancelledRunLeavesNoDeletionMark`
 pending in [q459-drained-worker-recovery.md](q459-drained-worker-recovery.md), seen
 from the other side — there between specs, here between sessions.
 
