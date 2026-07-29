@@ -158,10 +158,12 @@ restart-time sweep of much older runs would not.
 [`github_e2e_test.go`](../../cmd/gmc/test/e2e/github_e2e_test.go)) cancels a real run
 from GitHub and asserts the worker publishes a terminal phase carrying no
 `deletionTimestamp` — the other half of the discriminator. It has **not produced a
-result**: three attempts to run it were blocked before reaching it, by
-[Q444](../STATUS.md#Q444).
+result**: three attempts to run it were blocked before reaching it, by the
+PriorityClass VAP param-resolution failure that
+[q444-vap-param-resolution.md](q444-vap-param-resolution.md) investigates and
+[Q492](../STATUS.md#Q492) now carries.
 
-The e2e cluster's kube-apiserver entered the Q444 broken state between the run that
+The e2e cluster's kube-apiserver entered that broken state between the run that
 produced the result above and the next one, and every run since fails in `BeforeAll`
 with the RunnerGroup create denied:
 
@@ -173,11 +175,17 @@ failed to configure binding: no params found for policy binding with `Deny` para
 with `gmc-priorityclass-allowlist` present in `gmc-system` and the binding pointing
 exactly at it — the shape
 [q444-vap-param-resolution.md](q444-vap-param-resolution.md) § Established by
-measurement records as findings 1 and 2. Recovery is a genuine kube-apiserver restart
-(`crictl stop` on the container; a `kubectl delete pod` of the static-pod mirror does
-**not** restart it). Nothing here adds to Q444 — the observation matches what that
-plan already establishes, including that the uninstall/reinstall cycle is its first
-casualty rather than its trigger.
+measurement records as findings 1 and 2. Nothing here adds to that investigation: it
+has since established the trigger — deleting the `ValidatingAdmissionPolicyBinding`
+empties the paramKind's binding set and the apiserver never restarts the shared
+informer — which is consistent with what happened here, since the suite's
+`helm uninstall` teardown deletes exactly that object.
+
+Recovery was confirmed on 2026-07-28: `crictl stop` on the kube-apiserver container
+cleared it, verified by the container ID changing and its `ATTEMPT` going 0 → 1. A
+`kubectl delete pod` of the static-pod *mirror* does **not** restart it and must not
+be mistaken for a restart — that plan records a conclusion drawn from exactly that
+non-restart and later withdrawn.
 
 **What that costs Q459:** the decision cannot be taken yet. The hazard is measured and
 the discriminator's first half is measured; the second half needs one run of a spec
