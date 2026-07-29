@@ -201,7 +201,7 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 // scheduler is its only writer.
 //
 // Preemption is not double-reporting despite taking the graceful path. The SIGTERM relay
-// makes the job CONCLUDE at GitHub, not succeed: Q459 measured the conclusion at Tier C
+// makes the job CONCLUDE at GitHub, not succeed: Q459 measured the conclusion at live-GitHub
 // as `failure` within 15–26s, with rerun-failed-jobs accepted. The run really is left
 // failed, so the re-run is the repair rather than a duplicate report.
 //

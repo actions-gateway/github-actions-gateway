@@ -517,7 +517,7 @@ both documents are corrected back — this time with a measurement behind them. 
 residual cost is no longer a manual re-run but the displaced job's own elapsed time: the
 re-run starts from the beginning rather than resuming, which is why the guidance to put
 cheap-to-repeat work in displaceable tiers survives. The drain path keeps the original
-correction, since [Q459](../STATUS.md#Q459) is still open;
+correction until [Q502](../STATUS.md#Q502) implements Q459's decision;
 [troubleshooting.md](../operations/troubleshooting.md#draining-a-worker-does-not-auto-re-run-the-jobs-it-interrupts)
 now covers the drain alone, with
 [a separate runbook](../operations/troubleshooting.md#a-preempted-workers-job-is-not-re-run)
@@ -646,6 +646,6 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
   kubelet eviction, so no automatic recovery fired — and the published claim was
   corrected rather than illustrated. Q497 then built the recovery
   ([plan](archive/q497-preemption-recovery.md)) and the claim was restored, this time with a
-  measurement behind it. The Tier B spec that made the original measurement was flipped
+  measurement behind it. The fake-GitHub spec that made the original measurement was flipped
   from "no rerun" to "exactly one rerun" and is what demonstrates it end to end. See
   [the result](#result-measured-2026-07-29-preemption-is-not-eviction).

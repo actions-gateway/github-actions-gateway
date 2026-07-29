@@ -21,12 +21,19 @@ Two findings from that experiment decide the design here:
    writes it — not a human `kubectl delete pod`, not a drain, not a job failing on its
    own.
 
-That second point is what makes this slice closable while [Q459](../../STATUS.md#Q459) —
-the *drain / plain delete* slice — stays open. Q459 must key on `deletionTimestamp`,
-which a human cancel also sets, so switching it on risks re-running a run an operator
-deliberately stopped. `PreemptionByScheduler` carries no such ambiguity, so this plan
-deliberately covers **only** the preemption cause and leaves the rest of the
-graceful-removal path exactly as it is.
+That second point is what let this slice close first. The *drain / plain delete* slice
+must key on `deletionTimestamp`, which a human cancel might also set, so it could not be
+switched on without measuring whether a cancel is distinguishable — the risk being a
+re-run of a run an operator deliberately stopped. `PreemptionByScheduler` carries no such
+ambiguity and needed no such measurement, so this plan deliberately covers **only** the
+preemption cause and leaves the rest of the graceful-removal path exactly as it is.
+
+(That measurement landed the same day, while this work was in flight: a cancelled run's
+worker publishes no deletion mark, so the drain slice is decided as well and
+[Q502](../../STATUS.md#Q502) carries its implementation. It did not change anything here
+— the two slices key on different signals and ship independently — but it does mean the
+"stays open" framing this plan was written against is now only true of the code, not of
+the decision.)
 
 ## Is a re-run the right answer here?
 
@@ -35,7 +42,7 @@ must not be recovered, because the Q385 SIGTERM relay lets the runner report its
 outcome and a re-run would double-report. That argument does not carry to preemption:
 
 - The relay makes the job **conclude** at GitHub; it does not make the job **succeed**.
-  Q459 measured the conclusion at Tier C — `failure` in 15–26s, and `rerun-failed-jobs`
+  Q459 measured the conclusion at live-GitHub — `failure` in 15–26s, and `rerun-failed-jobs`
   accepted with `201`. So the run really is left failed, and re-running it is the
   intended repair rather than a duplicate report.
 - `rerun-failed-jobs` re-runs only the *failed* jobs of a run. A run whose jobs all
@@ -111,11 +118,11 @@ around.
 | 5 | `cause` label on the eviction counters | `runnercore/metrics.go`, `eviction.go` |
 | 6 | Worker-pod predicate admits the preemption edge | `controller/runner_shared.go` |
 | 7 | Tests: unit (detector, waiter, both tiers), envtest (scale-set scan + predicate) | `*_internal_test.go`, `controller/integration/` |
-| 8 | Flip the Tier B canary: it asserts **0** reruns today, by design | `cmd/gmc/test/e2e/worker_preemption_test.go` |
+| 8 | Flip the fake-GitHub canary: it asserts **0** reruns today, by design | `cmd/gmc/test/e2e/worker_preemption_test.go` |
 | 9 | Docs | see below |
 
 Out of scope, deliberately: the drain / plain-delete slice (Q459), and re-measuring the
-wrapper's SIGTERM relay against real GitHub (inherited from Q459's Tier C result, as the
+wrapper's SIGTERM relay against real GitHub (inherited from Q459's live-GitHub result, as the
 experiment's "what is not measured here" already records).
 
 ## Docs to update
@@ -143,12 +150,16 @@ experiment's "what is not measured here" already records).
 | Unit — `podwaiter_internal_test.go` | The marker survives both resolve paths, including the informer delete event and its tombstone | pass |
 | Unit — `runnergroup_podwatch_internal_test.go` | The predicate admits the preemption edge exactly once, and still gates on the worker label | pass |
 | envtest — `TestAGC_Preemption_ScaleSetWorker_IsRecovered` | Real apiserver: watch → scan → optimistic-lock claim → rerun, at most once. Its twin `TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover` differs only in the condition's `reason` and must still not recover | pass (`make -C cmd/agc test-integration`, and re-run individually with `-v` to confirm it executed rather than skipped) |
-| Tier B — `E2E_AGC_PreemptedWorkerIsRecovered` | A real kube-scheduler preemption of a real gateway worker | **not run here** — needs the e2e kind cluster; the spec was flipped from "no rerun" to "exactly one rerun" but has not been executed since |
+| fake-GitHub — `E2E_AGC_PreemptedWorkerIsRecovered` | A real kube-scheduler preemption of a real gateway worker, on a real cluster | **pass** — CI run 30473065608, both CNI legs. The spec was flipped from "no rerun" to "exactly one rerun"; its never-`Evicted` and marker-published assertions still hold, so recovery is reached by the scheduler's condition and not by the pod taking the kubelet shape |
 
-The e2e is the one gap. It is the only venue with a real scheduler, so it is what
-converts "the AGC recovers a pod carrying this condition" into "the AGC recovers a real
-preemption" — the unit and envtest tiers all stamp the condition by hand. Run it before
-treating the published claim as re-established end to end.
+The e2e is what closes the argument. Every other tier stamps the `DisruptionTarget`
+condition by hand, so only this one converts "the AGC recovers a pod carrying this
+condition" into "the AGC recovers a real preemption" — it is the sole venue with a real
+kube-scheduler. It also found [Q504](../../STATUS.md) on its first run: the rerun call
+ignored `GITHUB_API_BASE_URL` and was refused a `401` by `api.github.com`, so recovery had
+never been able to work on GHES either. That is the value of asserting a *successful*
+re-run rather than an absence — every prior spec on this path asserted absence, which
+passes whether the call goes nowhere or to the wrong host.
 
 Metric labels changed (`cause` on three counters); the migration note is in
 [observability-metrics.md](../../operations/observability-metrics.md#breaking-observability-changes-q417).
