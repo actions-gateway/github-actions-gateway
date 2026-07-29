@@ -97,6 +97,13 @@ and the worker pod was deleted with the default grace period.
 | `POST .../rerun-failed-jobs` | **`201 Created`** |
 | Second attempt | created, and reached a gateway runner |
 
+Reproduced on four further runs (2026-07-28): conclusion `failure` every time, `201`
+every time, second attempt reaching a runner every time. The *shape* is stable; the
+latency varies more than one observation suggested — 15s, 16s, 17s, 26s across five
+runs. Quote it as "well under a minute", not as a point estimate: the spread is
+GitHub's own conclusion latency, which this experiment does not control for and which
+a published figure should not imply it does.
+
 **Question 1 is answered, and the answer is yes.** The relay gets the runner's own
 report out well inside the grace period, GitHub concludes the job promptly rather than
 waiting out the lock, and the run is fully re-runnable by the exact call
@@ -152,13 +159,54 @@ the disruption, but it does bound any future backstop that retries from a persis
 record after a long AGC outage — the 12h `maxWorkerLifetime` cap sits inside it, a
 restart-time sweep of much older runs would not.
 
+## The measurement found something it was not looking for (Q495)
+
+Worker pods provisioned for **real** GitHub jobs on the classic tier carry **no**
+`actions-gateway.com/run-id` annotation. Observed 2026-07-28 while scoping the spec's
+worker lookup to its own run; the jsonpath was verified against a control pod carrying
+a known annotation, so the empty value is the pod's, not the query's.
+
+That matters well beyond this plan.
+[`repoInfo()`](../../cmd/agc/internal/provisioner/payload.go) — which supplies the
+`runID` that eviction recovery re-runs — and `jobMetaFrom()` — which supplies the
+annotation — read the *same two sources*: `Variables["system.github.run_id"]`, falling
+back to `ap.RunID`. An absent annotation therefore means both were empty, so `runID` is
+`"0"`, and [`handleEviction`](../../cmd/agc/internal/provisioner/eviction.go) opens with
+`if runID == "0" || runID == ""` → log and return.
+
+**Inference, not yet a direct observation:** classic-tier eviction recovery cannot name
+the run to re-run against real GitHub, so it cannot fire. Every test that exercises it
+uses a fakegithub payload carrying the identity explicitly — Q421's own Tier B drain
+spec had to *inject* it, recording that "the default fakegithub response carries no run
+identity, and handleEviction returns early without one". The fake was adjusted to make
+the test pass; the real payload was never checked. Confirming it needs one run that
+evicts a real job and looks for the skip. [Q495](../STATUS.md#Q495) carries that.
+
+It also bears on this plan's decision: closing the drained-worker gap by calling
+`rerun-failed-jobs` buys nothing on classic if the run ID is unavailable in the first
+place. Q495 is therefore a prerequisite for the "close" branch, not a side finding.
+
 ## Question 2 is written but not yet measured
 
 `E2E_GitHub_CancelledRunLeavesNoDeletionMark` (in
 [`github_e2e_test.go`](../../cmd/gmc/test/e2e/github_e2e_test.go)) cancels a real run
 from GitHub and asserts the worker publishes a terminal phase carrying no
-`deletionTimestamp` — the other half of the discriminator. It has **not produced a
-result**: three attempts to run it were blocked before reaching it, by the
+`deletionTimestamp` — the other half of the discriminator. **It is checked in as
+`PIt` — pending — because it has never produced a result**, and shipping it active
+would redden any credentialed Tier C run on a known-incomplete spec.
+
+Two things stand between it and a result, both understood:
+
+- **Worker contention.** The spec before it triggers a re-run whose worker holds the
+  tenant for the fixture's full ten-minute sleep, so "which worker is mine" is
+  ambiguous. Cancelling that run does not promptly free the worker either — measured,
+  a five-minute wait for the pod to clear times out.
+- **No exact disambiguator.** The run-id annotation that would resolve it outright is
+  the one Q495 found missing. Fixing Q495 makes the worker lookup exact and dissolves
+  the contention, which is why it is the natural prerequisite rather than more
+  scaffolding here.
+
+Earlier attempts were blocked before even reaching it, by the
 PriorityClass VAP param-resolution failure that
 [q444-vap-param-resolution.md](q444-vap-param-resolution.md) investigates and
 [Q492](../STATUS.md#Q492) now carries.
@@ -199,10 +247,22 @@ production code has been changed.
 
 Next step, in order:
 
-1. Restart the e2e cluster's kube-apiserver and run
-   `E2E_GitHub_CancelledRunLeavesNoDeletionMark`.
-2. If a cancelled run's worker publishes a terminal phase with no `deletionTimestamp`,
+1. **[Q495](../STATUS.md#Q495) first.** It is both the more serious defect and the
+   unblocker here: restoring the run identity makes the worker lookup exact, which
+   removes the contention that keeps question 2 pending.
+2. Un-pend `E2E_GitHub_CancelledRunLeavesNoDeletionMark` and run it.
+3. If a cancelled run's worker publishes a terminal phase with no `deletionTimestamp`,
    take the decision table's first row — close, gated on the deletion mark — and note
    that the residual ambiguity is an operator's bare `kubectl delete pod`, which is
    indistinguishable from a drain and arguably should re-run anyway.
-3. If it does not, drop to the second row: close behind a default-off opt-in.
+4. If it does not, drop to the second row: close behind a default-off opt-in.
+
+Operational note for whoever runs Tier C next, learned the expensive way: the suite
+teardown's `helm uninstall` deletes the `ValidatingAdmissionPolicyBinding`, which is
+exactly the trigger [Q492](../STATUS.md#Q492) documents — so each run poisons the next
+one's apiserver. Restart the kube-apiserver (`crictl stop`, verified by `ATTEMPT`
+incrementing) *before* a run, not after a failure. Running with
+`E2E_SKIP_TEARDOWN=true` avoids the uninstall, but then a subsequent `helm upgrade`
+conflicts on server-side-apply field ownership (`kubectl-patch`/`kubectl-set` claim
+fields helm owns); deleting just the `gmc-controller-manager` Deployment beforehand
+clears that without touching the binding.

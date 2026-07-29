@@ -185,7 +185,8 @@ decision that follows from it.
 
 **Update, 2026-07-28.** Q459 took the first half of that measurement, and the premise
 holds: a real runner interrupted mid-job gets its report out inside the grace period,
-GitHub concludes the job `failure` 15s later, and `rerun-failed-jobs` returns `201`
+GitHub concludes the job `failure` well under a minute later (15–26s across five
+runs), and `rerun-failed-jobs` returns `201`
 with a second attempt that runs. It also corrected one thing this section infers. The
 claim above that a deliberate cancel "arrives on the same path as a drain" is true of
 `kubectl delete pod` but **not** established for a GitHub-UI cancel, which reaches the
