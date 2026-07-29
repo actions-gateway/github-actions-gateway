@@ -59,8 +59,8 @@ import (
 //
 // The measured result and the design reasoning behind the exclusion live in
 // docs/design/04-operational-flows.md §4.2; the operator-facing consequence is
-// docs/operations/troubleshooting.md, "Draining a Node Does Not Auto-Re-Run the Jobs
-// It Interrupts". Q459 carries the residual.
+// docs/operations/troubleshooting.md, "Draining or Preempting a Worker Does Not Auto-Re-Run
+// the Jobs It Interrupts". Q459 carries the residual.
 //
 // Serial and multi-node. Serial because it cordons a node and sets fakegithub's
 // global AcquireJob response; multi-node because a cordoned node must leave

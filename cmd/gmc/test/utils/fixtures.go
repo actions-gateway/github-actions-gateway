@@ -72,6 +72,15 @@ type RunnerGroupFixture struct {
 	// NodeSelector is copied onto the worker pod template. Set it to
 	// NeverSchedulesNodeSelector to hold every worker pod Pending.
 	NodeSelector map[string]string
+	// PriorityTiers assigns a PriorityClass to the worker pod by cumulative active-pod
+	// count. Every name here must be on the platform PriorityClass allowlist or the GMC
+	// webhook (and the priorityclass-allowlist-guard policy) rejects the whole gateway.
+	PriorityTiers []agcv1alpha1.PriorityTier
+	// WorkerResources, when non-nil, is set on the fixture's `runner` container. The AGC
+	// copies the podTemplate verbatim, so this is how a spec gives the worker pod a
+	// resource footprint the scheduler has to reason about — an extended resource, for
+	// instance, whose exhaustion makes a preemption deterministic.
+	WorkerResources *corev1.ResourceRequirements
 	// DinD adds a privileged Docker-in-Docker daemon as a NATIVE sidecar and points
 	// the runner container at it. See withDinD for why the sidecar shape matters.
 	DinD bool
@@ -186,6 +195,27 @@ func (f TenantFixture) WithWorkerCeiling(maxWorkers int32) TenantFixture {
 	return f
 }
 
+// WithPriorityTier puts every worker pod in one PriorityClass tier, and gives the
+// runner container the resource footprint the spec needs the scheduler to see. The two
+// travel together because either alone cannot produce a preemption: the class decides
+// who loses, and the footprint is what makes the node contended enough for anyone to.
+//
+// threshold is the cumulative active-pod count at which the tier is exhausted, so a
+// threshold of 1 admits exactly one worker at this class. maxWorkers is deliberately
+// left unset — the CRD requires it to equal the last tier's threshold when both are
+// set, and the tier already carries the ceiling.
+func (f TenantFixture) WithPriorityTier(priorityClassName string, threshold int32, resources corev1.ResourceRequirements) TenantFixture {
+	f.RunnerGroups = cloneGroups(f.RunnerGroups)
+	for i := range f.RunnerGroups {
+		f.RunnerGroups[i].PriorityTiers = []agcv1alpha1.PriorityTier{{
+			PriorityClassName: priorityClassName,
+			Threshold:         threshold,
+		}}
+		f.RunnerGroups[i].WorkerResources = resources.DeepCopy()
+	}
+	return f
+}
+
 // cloneGroups copies the runner-group slice so a With* method returns a modified
 // fixture without mutating the receiver's backing array — otherwise two fixtures
 // derived from one preset would alias each other's groups.
@@ -272,6 +302,10 @@ func (g RunnerGroupFixture) spec() agcv1alpha1.RunnerGroupSpec {
 	if g.MaxWorkers > 0 {
 		maxWorkers := g.MaxWorkers
 		spec.MaxWorkers = &maxWorkers
+	}
+	spec.PriorityTiers = g.PriorityTiers
+	if g.WorkerResources != nil {
+		spec.PodTemplate.Spec.Containers[0].Resources = *g.WorkerResources
 	}
 	spec.CompletedPodTTL = mustParseDuration(g.CompletedPodTTL)
 	spec.PendingPodDeadline = mustParseDuration(g.PendingPodDeadline)
