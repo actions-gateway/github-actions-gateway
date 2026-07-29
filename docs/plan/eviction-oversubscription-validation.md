@@ -34,7 +34,7 @@ clean run with no `timeout-minutes` set.
 | Q419 | **Shipped 2026-07-26** with Q417 — the docs half of the same gap. The tier-agnostic claims in the exec summary, README, and why-gag are now true of both tiers rather than needing a qualification. Independent of these experiments. |
 | Q420 | **Shipped 2026-07-26**, ahead of Q417 and independently of it — the reap deadline came from a pod annotation, not a pod watch. Orphaned Running workers would otherwise have contaminated 3 and 5 by holding quota, which is exactly the idle-capacity signature those experiments measure. |
 | [Q418](../STATUS.md#Q418) | Deferred, event-gated on experiment 1 attributing the delay. |
-| [Q459](../STATUS.md#Q459) | **Filed by experiment 2**, 2026-07-27. Its residual: neither tier recovers a drained worker, and whether that matters turns on what GitHub does with the runner's own relayed report — a Tier C question. |
+| [Q459](q459-drained-worker-recovery.md) | **Filed by experiment 2**, 2026-07-27. Its residual: neither tier recovers a drained worker, and whether that matters turns on what GitHub does with the runner's own relayed report — a Tier C question. Both halves measured 2026-07-29; decided **close, gated on `deletionTimestamp`**, and the Queue row is retired in favour of [Q502](../STATUS.md#Q502). |
 
 ## Experiment 1: mid-job eviction latency, both tiers ([Q396](../STATUS.md#Q396))
 
@@ -180,7 +180,7 @@ part still unmeasured. Extending both tiers to treat a graceful deletion as
 recoverable would be the fix, but doing it before knowing what GitHub does with a
 relayed cancellation risks auto-rerunning jobs that a human deliberately cancelled
 (a `kubectl delete pod`, or a run cancelled in the GitHub UI, arrives on the same
-path as a drain). [Q459](../STATUS.md#Q459) carries the Tier C measurement and the
+path as a drain). [Q459](q459-drained-worker-recovery.md) carries the Tier C measurement and the
 decision that follows from it.
 
 **Update, 2026-07-28.** Q459 took the first half of that measurement, and the premise
@@ -222,7 +222,7 @@ no human action.
 ### Result, measured 2026-07-29: preemption is not eviction
 
 **A `PriorityClass` preemption reaches no eviction recovery on either tier.** It is
-the *graceful-removal* path experiment 2 and [Q459](../STATUS.md#Q459) already measured,
+the *graceful-removal* path experiment 2 and [Q459](q459-drained-worker-recovery.md) already measured,
 not the kubelet path recovery acts on. The demo this experiment set out to produce
 does not exist to be produced: there is no automatic recovery on the preemption path to
 demonstrate.
@@ -415,11 +415,11 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
 
 1. ~~Q421 (experiment 2)~~ — **done 2026-07-27**; see
    [Result](#result-measured-2026-07-27). Its residual is
-   [Q459](../STATUS.md#Q459), which needs Tier C and so sequences with the other
+   [Q459](q459-drained-worker-recovery.md), which needs Tier C and so sequences with the other
    Tier C work below rather than ahead of it.
 2. [Q422](../STATUS.md#Q422) (experiment 4).
 3. [Q396](../STATUS.md#Q396) (experiment 1), which then gates
-   [Q418](../STATUS.md#Q418). Fold [Q459](../STATUS.md#Q459) in around here: both
+   [Q418](../STATUS.md#Q418). Fold [Q459](q459-drained-worker-recovery.md) in around here: both
    want a real GitHub run interrupted mid-job, and Q396 is already standing that
    up.
 4. ~~Q423 (experiment 3)~~ — **done 2026-07-29**; see
@@ -437,7 +437,7 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
   Q417 assumed when it scoped detection to `PodFailed`/`Evicted`, or the gap is filed
   and both tiers are extended to cover deletion.~~ **Met 2026-07-27** by the second
   branch: neither tier recovers a drained worker, and the gap is filed as
-  [Q459](../STATUS.md#Q459). Extending the tiers is deliberately left to that row —
+  [Q459](q459-drained-worker-recovery.md). Extending the tiers is deliberately left to that row —
   the same code path carries deliberate cancellations, so it needs the Tier C answer
   before it can tell a drain from a `kubectl delete pod` worth honouring.
 - The quota gate demonstrated under contention, with the rejection counter as

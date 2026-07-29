@@ -218,27 +218,117 @@ the same resolved identity; that it lands on a real worker pod is the one thing 
 still owed a Tier C observation, and un-pending
 `E2E_GitHub_CancelledRunLeavesNoDeletionMark` is where it gets one.
 
-## Question 2 is written but not yet measured
+## Result: the cancellation path, measured 2026-07-29
 
-`E2E_GitHub_CancelledRunLeavesNoDeletionMark` (in
-[`github_e2e_test.go`](../../cmd/gmc/test/e2e/github_e2e_test.go)) cancels a real run
-from GitHub and asserts the worker publishes a terminal phase carrying no
-`deletionTimestamp` — the other half of the discriminator. **It is checked in as
-`PIt` — pending — because it has never produced a result**, and shipping it active
-would redden any credentialed Tier C run on a known-incomplete spec.
+Tier C on a dedicated kind cluster, against `actions-gateway/gateway-test`
+([run 30455540731](https://github.com/actions-gateway/gateway-test/actions/runs/30455540731)),
+by `E2E_GitHub_CancelledRunLeavesNoDeletionMark` — now un-pended, and passing. A real
+runner was executing a real job, and the run was cancelled from GitHub the way a human
+would cancel it.
 
-Two things stand between it and a result, both understood:
+| Observation | Value |
+|---|---|
+| Worker pod phase/reason/deletion sequence | `Running//deleting=` → **`Failed//deleting=`** |
+| Cancel → GitHub concludes the job | **5m02s**, conclusion `cancelled` |
+| Cancel → worker pod reaches a terminal phase | **10m02s** — the fixture's full 600s sleep |
+| `deletionTimestamp` at terminal publish | **absent** |
 
-- **Worker contention.** The spec before it triggers a re-run whose worker holds the
-  tenant for the fixture's full ten-minute sleep, so "which worker is mine" is
-  ambiguous. Cancelling that run does not promptly free the worker either — measured,
-  a five-minute wait for the pod to clear times out.
-- **No exact disambiguator.** The run-id annotation that would resolve it outright is
-  the one Q495 found missing. Fixing Q495 makes the worker lookup exact and dissolves
-  the contention, which is why it is the natural prerequisite rather than more
-  scaffolding here. That fix has since landed (see above); whether the annotation
-  actually appears on a real worker is the first thing the next Tier C run should
-  check, since it is also what this spec's lookup will rest on.
+Reproduced the same day on a second cluster, with the whole Tier C container running
+in order rather than this spec alone
+([run 30459264313](https://github.com/actions-gateway/gateway-test/actions/runs/30459264313)):
+the identical `Running//deleting=` → `Failed//deleting=` sequence, GitHub concluding at
+**5m01s**, the pod at **10m04s**. That run also re-measured the graceful-deletion half
+independently — `deletionGracePeriodSeconds` 30 with the mark set, `Running/` →
+`Failed/`, conclusion `failure` in **16s**, `rerun-failed-jobs` **201**, second attempt
+reaching a runner — so both halves of the discriminator come from two runs each, not
+one.
+
+**Question 2 is answered, and the discriminator holds.** Put beside the
+graceful-deletion result above, the three cases separate exactly where the candidate
+said they would:
+
+| Case | Phase | `status.reason` | `deletionTimestamp` at terminal publish | |
+|---|---|---|---|---|
+| Drained / deleted worker | `Failed` | *empty* | **set** | measured 2026-07-28 |
+| Human-cancelled run | `Failed` | *empty* | absent | measured 2026-07-29 |
+| Genuinely failed job | `Failed` | *empty* | absent | not separately measured — a worker nothing deleted has no deletion mark by construction |
+
+Phase and reason are identical across all three, so neither can carry recovery. The
+deletion mark separates the first from the other two, which is precisely what an
+automatic re-run needs: it fires on the disruption and never on a cancel or a real
+failure.
+
+The third row is the one that did not need its own Tier C run: `deletionTimestamp` is
+set by the apiserver only when something issues a delete, so a worker whose job simply
+exited non-zero cannot carry one. What *did* need measuring is the cancel row — the
+case where a human's intent reaches the system through GitHub rather than through
+Kubernetes, and where it was genuinely open whether some part of the gateway responds
+by deleting the pod. Nothing does.
+
+### The measurement also found that a cancel never reaches the worker (Q501)
+
+The 10m02s figure is not incidental. The job's own step — `sleep 600`, started at
+13:21:00Z — ran to completion at 13:31:04Z, ten minutes after the run was cancelled and
+five minutes after GitHub had already concluded it. The runner was never told.
+
+That is consistent with the architecture rather than a fluke: the AGC owns the broker
+session, a cancellation arrives on that session, and nothing in
+[`listener/`](../../cmd/agc/internal/listener/) relays it to the worker pod. The 5m02s
+to conclusion is GitHub's own cancellation grace lapsing, not the runner acknowledging
+anything — the same figure, 5m01s, was measured on the first attempt at this spec.
+
+Two consequences, both real:
+
+- **A cancelled job keeps burning a worker** for the remainder of its steps, up to
+  `maxWorkerLifetime`. Cancelling a runaway job does not reclaim its capacity.
+- **[04-operational-flows.md](../design/04-operational-flows.md) §4.2 step 7 overstates
+  the Q385 relay.** It lists "cancelled run" among the terminations the wrapper's
+  SIGTERM relay reaches. The relay does reach the engine whenever the *pod* is
+  terminated — but on the cancel path nothing terminates the pod, so the relay never
+  runs. [Q501](../STATUS.md#Q501) carries the gap; the doc is corrected as part of
+  this change.
+
+### What the spec needed in order to run at all
+
+It was pending because it could not tell its own worker from the one the
+graceful-deletion spec leaves behind, and the run-id annotation that would have
+disambiguated them is the one Q495 found missing. Q495 turned out **not** to be the
+only way through: both specs now snapshot the Running worker pods immediately before
+dispatching, and take the worker that was not there before. Identity, not count —
+the same trick `dispatchAndResolveRun` already uses for the run itself. A lingering
+worker from an earlier spec is no longer ambiguous, so no waiting for the namespace
+to fall quiet is needed either.
+
+Q495 was still a prerequisite for the **implementation**, for the separate reason
+recorded above — without a run ID, classic-tier `handleEviction` returns early and has
+nothing to re-run — and it has since been fixed.
+
+### Operational notes for the next Tier C run
+
+- **Do not use the shared `actions-gateway-e2e` cluster.** This spec swaps the GMC's
+  GitHub env vars cluster-wide and holds them for ~12 minutes. Mid-run on 2026-07-29
+  another session reinstalled the chart on that cluster six times (helm revisions 2–7),
+  and the `kubectl set env` this suite performs is itself what makes the next
+  `helm upgrade` conflict on server-side-apply field ownership. Create a throwaway
+  cluster: `make e2e-cluster KIND_CLUSTER=<name>`, and point the run at it with a
+  private `KUBECONFIG` rather than the ambient context.
+- **Read the spec summary, not the wall clock.** The 2026-07-29 full-container run
+  finished its four specs in 19m04s inside a `ginkgo` process that lived 94 minutes,
+  with the tenant namespace still up 75 minutes after the last spec ended — because
+  the host slept mid-run, not because anything hung. A Tier C run is long enough to
+  straddle a laptop sleep, and every in-cluster age and process elapsed time then
+  reads as a stall. `Ran N of M Specs` and the per-spec `• [N seconds]` line are
+  measured from the suite's own clock and stay trustworthy; `ps` elapsed, pod `AGE`,
+  and "no output for a while" do not. Check the summary before concluding a spec is
+  wedged.
+- **Two concurrent Tier C sessions collide on the fixture repo.** Both dispatch the
+  same `drain-probe.yml` in `actions-gateway/gateway-test` and both register a runner
+  named `real-ag-e2e-6d8749c-0`. Two such runs were in flight simultaneously on
+  2026-07-29. `dispatchAndResolveRun`'s snapshot keeps each spec on its own run, and
+  this measurement's binding was confirmed directly (the pod's job began at 13:21:00Z,
+  matching its run's 13:20:55Z job start, and the namespace did not exist when the
+  other run started) — but the runner-name collision is not defended against.
+  [Q500](../STATUS.md#Q500) carries it.
 
 Earlier attempts were blocked before even reaching it, by the
 PriorityClass VAP param-resolution failure that
@@ -269,28 +359,81 @@ cleared it, verified by the container ID changing and its `ATTEMPT` going 0 → 
 be mistaken for a restart — that plan records a conclusion drawn from exactly that
 non-restart and later withdrawn.
 
-**What that costs Q459:** the decision cannot be taken yet. The hazard is measured and
-the discriminator's first half is measured; the second half needs one run of a spec
-that is already written, on a cluster whose apiserver has been restarted.
+That blockage is historical. Q492 fixed the trigger, and the 2026-07-29 run above
+completed on a freshly created cluster without going near it.
+
+## The decision: close, gated on the deletion mark
+
+Both questions are answered, and they select the decision table's **first row**.
+
+> **Close.** Extend both tiers' detection to the graceful-deletion shape, gated on
+> `metadata.deletionTimestamp` being set at the moment the worker's terminal phase
+> publishes.
+
+The premise is measured on both halves: the relayed report leaves the run re-runnable
+(`rerun-failed-jobs` → `201`, second attempt reaches a runner), and a deliberate cancel
+is distinguishable at the pod (no deletion mark). Neither is inferred from reading code.
+
+**The residual ambiguity is an operator's bare `kubectl delete pod`.** It is
+indistinguishable from a drain, and it would re-run. That is the right behaviour rather
+than a defect to design around: someone deleting a worker mid-job has interrupted a job
+they did not intend to fail, which is the same thing a drain does.
+
+### What the implementation has to get right
+
+Recorded here because each was established while measuring, not while coding, and none
+of it is visible from the eviction path alone:
+
+1. **The waiter already sees the mark and throws it away.** `InformerPodWaiter.onPodEvent`
+   holds the whole pod when it resolves, so `deletionTimestamp` is readable at exactly
+   the instant the terminal phase publishes. What blocks it is the contract:
+   `PodWaiter.WaitForCompletion` returns only `(phase, reason, error)`
+   ([`podwaiter.go`](../../cmd/agc/internal/provisioner/podwaiter.go)), so the interface
+   has to widen for the signal to reach `provision()`. No new watch, annotation, or pod
+   bookkeeping is needed.
+2. **Exclude the AGC's own deletions, or the reaper becomes a re-run trigger.**
+   [`reapWorkerPods`](../../cmd/agc/internal/controller/runnergroup_reaper.go) deletes
+   worker pods on three arms; `pending_deadline` applies to both tiers and
+   `orphaned_running` to scale-set. Each sets a `deletionTimestamp` on a pod the AGC
+   itself gave up on, which under a naive deletion-keyed rule would re-run it.
+   `lifetime_exceeded` is already safe by a different route — the kubelet publishes
+   `DeadlineExceeded` *before* the reaper deletes, so that terminal phase carries no
+   deletion mark and the existing reason check still separates it.
+3. **The classic half needs Q495's fix to be real on a live worker.** Without a run ID,
+   `handleEviction` returns early, so closing the gap on classic would buy an interface
+   change and no recovery. Q495 has since been fixed — the identity is read from the
+   payload's `github` context — but that fix has not yet been seen on a real worker pod
+   at Tier C, so confirm the annotation before relying on the recovery it enables. The
+   scale-set tier reads its identity from the pod annotations and is unaffected.
+4. **Do not fold in the cancel path.** [Q501](../STATUS.md#Q501) is a separate defect
+   with a separate fix. A cancelled run's worker is *not* deleted, so it never reaches
+   this recovery path — but if Q501 is later fixed by having the AGC delete the worker
+   on cancellation, that deletion becomes indistinguishable from a drain and must be
+   excluded exactly as the reaper's are.
 
 ## Status
 
-**In progress.** Question 1 is answered and recorded above. Question 2 is specified,
-implemented as a spec, and unrun. No close-or-accept decision has been taken, and no
-production code has been changed *for this plan* — Q495, the defect this plan's
-measurement turned up, has been fixed on its own.
+**Decided, not yet implemented.** Both questions are answered and recorded above, the
+close-or-accept decision is taken (close, gated on the deletion mark), and the two
+Tier C specs that established it are checked in and passing. No production code has
+been changed *for this plan* — Q495, the defect this plan's measurement turned up, has
+been fixed on its own.
 
-Next step, in order:
+The remaining work is carried by three Queue rows rather than by this plan:
 
 1. ~~**Q495 first.**~~ Done — the run identity is read from the payload's `github`
-   context, so the worker lookup can be made exact. The Tier C confirmation that a
-   real worker pod now carries the annotation rides along with the next step.
-2. Un-pend `E2E_GitHub_CancelledRunLeavesNoDeletionMark` and run it.
-3. If a cancelled run's worker publishes a terminal phase with no `deletionTimestamp`,
-   take the decision table's first row — close, gated on the deletion mark — and note
-   that the residual ambiguity is an operator's bare `kubectl delete pod`, which is
-   indistinguishable from a drain and arguably should re-run anyway.
-4. If it does not, drop to the second row: close behind a default-off opt-in.
+   context, so the worker lookup can be made exact. **Still owed a Tier C
+   confirmation**: the 2026-07-29 runs below predate that fix (their images were built
+   from `719e67f1`), so what they observed — every worker matched by the
+   snapshot fallback, none by the annotation — is the *unfixed* build's behaviour, and
+   is evidence for the defect rather than for the fix. The next credentialed Tier C run
+   should check that `actions-gateway.com/run-id` now appears on a real worker pod.
+2. ~~Un-pend `E2E_GitHub_CancelledRunLeavesNoDeletionMark` and run it.~~ Done — it no
+   longer needed the annotation to become runnable (see above), and it passes.
+3. ~~Take the decision.~~ Done — the decision table's first row, recorded above.
+4. **[Q502](../STATUS.md#Q502)** — implement the close, per the four constraints above.
+5. **[Q501](../STATUS.md#Q501)** — relay a run cancellation to the worker pod. Found by
+   this measurement, independent of the gap.
 
 Operational note for whoever runs Tier C next, learned the expensive way: the suite
 teardown's `helm uninstall` deletes the `ValidatingAdmissionPolicyBinding`, which
