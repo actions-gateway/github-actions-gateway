@@ -4567,10 +4567,23 @@ that never claims anything again has a different problem.</p>
 <a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;worker-pod&gt;
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># nodeAutoscaling: Present only — the raw events the gate read, with their reporters.</span>
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>--field-selector<span class="w"> </span>involvedObject.name<span class="o">=</span>&lt;worker-pod&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;TIME:.lastTimestamp,SOURCE:.source.component,REASON:.reason,MESSAGE:.message&#39;</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># Both timestamp columns are printed because the two recorder generations populate</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># different ones: cluster autoscaler sets lastTimestamp, Karpenter sets eventTime.</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">  </span>--field-selector<span class="w"> </span>involvedObject.name<span class="o">=</span>&lt;worker-pod&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;TIME:.lastTimestamp,MICROTIME:.eventTime,SOURCE:.source.component,REASON:.reason,MESSAGE:.message&#39;</span>
 </code></pre></div>
+<blockquote>
+<p><strong>A declination is not always the last word, even when it is the last event.</strong> One
+autoscaler loop can record a scale-up and <em>then</em> a declination for the same pod,
+milliseconds apart — the first round found a plan, a second round still could not
+place the pod even with the node that is now on its way. So the gate reads a
+declination as superseding a scale-up only when it lands more than a second after
+it; anything closer is one loop's own output and leaves the gate open, because a
+node is in fact arriving. If the events above show a <code>NotTriggerScaleUp</code> (or
+Karpenter <code>FailedScheduling</code>) close behind a <code>TriggeredScaleUp</code>/<code>Nominated</code> while
+the condition reads <code>False</code>, that is the rule working, not a stale condition.</p>
+</blockquote>
 <p><strong>Resolution.</strong> The gate is reporting a real cluster condition, so fix the
 placement problem — the resolutions are the same ones listed under
 <a href="#runnergroup-reports-workersunschedulable"><code>WorkersUnschedulable</code></a> (allocatable
