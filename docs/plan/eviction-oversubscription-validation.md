@@ -55,6 +55,102 @@ Phase 1 records the same. The genuinely additive assertion is the retry budget
   [Q418](../STATUS.md#Q418) trigger.
 - **Unblocked** — Q417 shipped 2026-07-26, so the scale-set tier now detects evictions and fires the rerun this experiment measures.
 
+### Established 2026-07-29: the harness, and two findings ahead of the number
+
+The spec is written and checked in — `E2E_GitHub_EvictedWorkerLatencyAndRerun` in
+[`github_e2e_test.go`](../../cmd/gmc/test/e2e/github_e2e_test.go). **The latency
+itself is not yet measured**: every attempt this day was lost to Tier C
+contention, for the reason in the last subsection. What *was* settled is
+recorded here so the next attempt starts from it rather than rediscovering it.
+
+**The eviction lever works, and it is the only aimed one.** Eviction recovery keys
+on `PodFailed` with reason `Evicted` and nothing else, so the disruption has to
+produce exactly that shape. Q421 already ruled out the graceful removals. Node-wide
+memory or disk pressure produces the shape but lets the kubelet choose the victim,
+on a node shared with the rest of the suite. A **pod-level `ephemeral-storage`
+limit** is enforced per pod, and overshooting it was measured on the e2e kind
+cluster to do exactly what is needed:
+
+| Observation | Value |
+|---|---|
+| Pod phase/reason after the overshoot | `Failed/Evicted` |
+| Kubelet message | `Pod ephemeral local storage usage exceeds the total limit of containers 16Mi.` |
+| Container exit code | `137` — SIGKILL, no grace period, so no SIGTERM relay and nothing reported to GitHub |
+| Write → kill | ~55s, the kubelet's local-storage housekeeping cadence |
+
+The zero grace period is the point rather than a side effect: it is what makes this
+the *ungraceful* case, where GitHub must notice by itself. The graceful counterpart,
+where the runner does get its own report out, is [Q459](../STATUS.md#Q459)'s.
+
+**Sizing the cap needed a measurement of its own.** The kubelet charges a pod only
+its writable layer, emptyDirs and logs — image layers are read-only and are not
+charged — and a pod built from the real runner image was measured at **28KiB**
+against the node's `stats/summary` endpoint. The e2e fixture jobs add nothing to
+that: neither checks out a repository. 256Mi is therefore four orders of magnitude
+of headroom, which is what makes the deliberate overshoot the only thing that can
+cross it.
+
+**[Q495](../STATUS.md#Q495) is confirmed, by direct observation rather than
+inference.** A worker pod provisioned for a real GitHub job on the classic tier
+carries `actions-gateway.com/job-name` and **neither** `run-id` **nor**
+`repository`:
+
+```
+annotations: {"actions-gateway.com/job-name":"hold",
+              "cluster-autoscaler.kubernetes.io/safe-to-evict":"false",
+              "descheduler.alpha.kubernetes.io/prefer-no-eviction":"true",
+              "karpenter.sh/do-not-disrupt":"true"}
+```
+
+`jobMetaFrom()` and `repoInfo()` read the same two payload fields, so an absent
+annotation means `runID` is `"0"` and
+[`handleEviction`](../../cmd/agc/internal/provisioner/eviction.go) returns at its
+first line. Note also that `system.github.job` *did* arrive: the acquisition
+payload's `variables` map is populated, and it is specifically the run-identity
+keys that are missing — which narrows Q495 from "the payload is empty" to "these
+keys are not where we read them".
+
+**What that costs this experiment.** The latency half is unaffected — it measures
+GitHub's own detection of a runner that stopped answering, which does not involve
+the AGC at all. The "assert the re-run fires" half, and the Q106 budget assertion
+behind it, cannot pass on the classic tier until Q495 is fixed. The spec is written
+to match: it asserts that the AGC *saw* the eviction and reached a decision (the
+assertion that separates "recovery declined to act" from "detection never
+happened"), and asserts the budget invariant only on the branch where recovery ran.
+
+### Tier C does not parallelize, and the reason is not the cluster
+
+Two sessions ran Tier C on 2026-07-29 from separate worktrees and separate kind
+clusters, and still collided. Cluster isolation does not help, because the shared
+resources are on GitHub's side:
+
+- **One fixture repo and one workflow.** Both sessions dispatch `drain-probe.yml`
+  to `actions-gateway/gateway-test`. `dispatchAndResolveRun` identifies its run as
+  "the one that was not there before" — which is the *other* session's run when two
+  dispatches land seconds apart.
+- **One `runs-on` label, one org.** Every Tier C tenant registers runners labelled
+  `e2e` in the `actions-gateway` org, so GitHub may route either session's job to
+  either cluster's gateway. The two are entangled even when the clusters are not.
+- **No run-id annotation to disambiguate by** (Q495 again), so
+  `runningWorkerForRun` falls back to "the sole Running worker" and gives up when
+  there are two.
+
+Treat Tier C as a **singleton**: one session at a time, across all worktrees. This
+is the same contention that keeps `E2E_GitHub_CancelledRunLeavesNoDeletionMark`
+pending in [q459-drained-worker-recovery.md](q459-drained-worker-recovery.md), seen
+from the other side — there between specs, here between sessions.
+
+**A related hazard, learned expensively.** A Tier C run killed mid-spec leaves its
+tenant namespace `Terminating` on an `agentpool-cleanup` finalizer that only its own
+AGC can clear — and the AGC's Deployment goes away with the namespace, so it never
+clears. Force-removing the finalizer unblocks the namespace but **skips the
+deregistration of that tenant's runners from the org**. Those stale registrations
+keep taking job assignments, so the next run's job goes `in_progress` against a
+runner that no longer exists and no worker pod is ever provisioned. Prefer stopping
+a run with SIGTERM and letting Ginkgo's `AfterAll` run: it deletes the
+`ActionsGateway` CR while the AGC is still up, which is what lets the finalizer do
+its job.
+
 ## Experiment 2: the node-drain path (Q421)
 
 **Done 2026-07-27** — jump to the [Result](#result-measured-2026-07-27). The heading
