@@ -130,7 +130,7 @@ DEV/TEST ONLY: set allowFloatingImageTags=true to allow a floating tag.
 **Cause.** One of the four image digests (`gmc`, `agc`, `proxy`, or `wrapper`) is empty in the release values. The chart enforces digest pinning of **all four** images at render time (secure by default): an empty digest must never silently fall back to a mutable `:latest` tag — for the GMC's own image nothing at runtime validates it, and for the AGC/proxy/wrapper images an unpinned tag would otherwise only surface later as a GMC crash-loop. Common ways to get here:
 
 - A fresh install without `--set <image>.image.digest=sha256:<…>` for one of the four (a forgotten `wrapper.image.digest` is the most common).
-- A `helm upgrade` with a values file (or `--reset-values`) that omits a digest. (`--reuse-values` carries the previously pinned digests forward.)
+- A `helm upgrade` with a values file (or `--reset-values`) that omits a digest. (`--reset-then-reuse-values` carries the previously pinned digests forward.)
 - Offline rendering (`helm template` / `helm lint`) without supplying all four digests.
 
 **Resolution.**
@@ -178,6 +178,45 @@ kubectl describe replicaset -n gmc-system -l app.kubernetes.io/name=gmc
   If it is missing, you likely installed with `--set systemCriticalPriorityQuota.enabled=false`. Re-run the install/upgrade without that override (it defaults to `true`). See [install.md § GKE and other restricted-PriorityClass clusters](install.md#gke-and-other-restricted-priorityclass-clusters).
 - **Do not** work around the rejection by clearing `priorityClassName` — that removes the GMC's eviction protection (a security regression). Keep `system-cluster-critical` and let the quota permit it.
 - **If you manage the quota out-of-band** (e.g. a cluster-wide policy), ensure it exists in the install namespace and its `scopeSelector` matches the system-critical classes before installing.
+
+---
+
+## `helm upgrade` Fails With `nil pointer evaluating interface {}.<field>`
+
+**Symptoms.** An upgrade fails while rendering a template you did not touch, naming
+a values key you may never have set:
+
+```text
+Error: UPGRADE FAILED: actions-gateway/templates/vpa.yaml:1:14
+  executing "actions-gateway/templates/vpa.yaml" at <.Values.vpa.enabled>:
+    nil pointer evaluating interface {}.enabled
+```
+
+Nothing is changed in the cluster — the render fails before anything is applied.
+
+**Cause.** The upgrade used `--reuse-values`. That flag replays the *old* release's
+values over the *old* chart's defaults; it never consults the new chart's
+`values.yaml`. Any key introduced after your release was created is therefore
+absent, and a template reading a field under it dereferences nil. The named file is
+just the first template to touch such a key — it is not the problem.
+
+**Fix.** Re-run with `--reset-then-reuse-values` (Helm ≥ 3.14), which starts from
+the new chart's defaults and layers your release's values on top:
+
+```sh
+helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version <new-chart-version> --namespace gmc-system --reset-then-reuse-values
+```
+
+Everything you set is preserved — verify with `helm get values gag -n gmc-system`.
+Use this flag for every upgrade of this chart; see
+[upgrade.md](upgrade.md#gmc-install-and-upgrade-via-helm-recommended).
+
+**Why the chart does not just tolerate the missing block.** It could render a
+missing key as unset, and the upgrade would succeed — but for a security-relevant
+block (`admissionPolicy`, `networkPolicy`) that silently *disables* a guard on
+upgrade, with no error anywhere. A failed render is the safe direction, so this
+error is deliberate rather than a bug to route around.
 
 ---
 
@@ -247,7 +286,7 @@ until the next control-plane version upgrade, and plan to run with
   the policy:
 
   ```sh
-  helm upgrade gag charts/actions-gateway --namespace gmc-system --reuse-values \
+  helm upgrade gag charts/actions-gateway --namespace gmc-system --reset-then-reuse-values \
     --set admissionPolicy.enabled=false
   ```
 
