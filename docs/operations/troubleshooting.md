@@ -2427,6 +2427,20 @@ kubectl logs -n <namespace> deploy/<agc-deployment> \
 - **Node drains rather than kubelet evictions.** A drained pod is deleted, not left
   `PodFailed`/`Evicted`, and the runner reports its own cancellation through the
   SIGTERM relay — so it is deliberately outside this mechanism, not a gap in it.
+- **Recovery fires but the rerun call fails (GHES).** If the AGC logs
+  `disruption auto-retry failed ... rerun API returned 401: Bad credentials`, the
+  detection worked and the *call* went to the wrong host. Before the Q504 fix the
+  rerun always addressed `api.github.com` regardless of `GITHUB_API_BASE_URL`, so on
+  GHES it presented a token that host had never issued. Confirm the endpoint the AGC
+  is using and upgrade if it is not yours:
+
+  ```sh
+  kubectl get deployment <agc-deployment> -n <namespace> \
+    -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="GITHUB_API_BASE_URL")].value}'
+  ```
+
+  A 401 naming a host you did not configure is the signature; a 401 from your own
+  endpoint is a genuine credential problem instead.
 
 ---
 

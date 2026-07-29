@@ -390,3 +390,59 @@ func TestBaseURL_HTTPAcceptedWithOptIn(t *testing.T) {
 	)
 	require.NoError(t, err)
 }
+
+// ── ResolveAPIBaseURL (Q504) ─────────────────────────────────────────────────
+
+// TestResolveAPIBaseURL covers the exported resolver directly. It exists because
+// the token exchange is not the only GitHub REST caller in the control plane: the
+// AGC's disruption auto-retry builds its rerun-failed-jobs URL from the same
+// answer, and Q504 was that call defaulting past a configured GHES endpoint to
+// api.github.com. The resolver is what makes those two agree by construction, so
+// its contract is pinned on its own rather than only through a constructor.
+func TestResolveAPIBaseURL(t *testing.T) {
+	tests := []struct {
+		name          string
+		env           string
+		allowInsecure bool
+		want          string
+		wantErr       string
+	}{
+		{
+			name: "explicit HTTPS endpoint is returned verbatim",
+			env:  "https://ghe.example.com/api/v3",
+			want: "https://ghe.example.com/api/v3",
+		},
+		{
+			// The bug: an unset var must yield the public API, but a SET one must
+			// never be silently replaced by it.
+			name: "unset defaults to the public API",
+			env:  "",
+			want: "https://api.github.com",
+		},
+		{
+			name:    "plaintext is rejected without the opt-in",
+			env:     "http://fakegithub.infra.svc.cluster.local:8080",
+			wantErr: "non-HTTPS",
+		},
+		{
+			name:          "plaintext is accepted with the dev/test opt-in",
+			env:           "http://fakegithub.infra.svc.cluster.local:8080",
+			allowInsecure: true,
+			want:          "http://fakegithub.infra.svc.cluster.local:8080",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GITHUB_API_BASE_URL", tc.env)
+			got, err := githubapp.ResolveAPIBaseURL(tc.allowInsecure)
+			if tc.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+				assert.Empty(t, got, "a rejected base URL must not be returned for use anyway")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}

@@ -45,6 +45,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/transport"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/usage"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/go-logr/logr"
 	uberzap "go.uber.org/zap"
@@ -601,6 +602,19 @@ func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *runnercore.Metrics,
 		prov.UseImageVolume = useImageVolume(mgr.GetConfig(), cfg.WrapperDelivery)
 	}
 	prov.TokenFunc = tokenMgr.Token
+	// The provisioner's own GitHub REST calls (rerun-failed-jobs, on the
+	// eviction/preemption recovery path) must address the SAME endpoint the token
+	// exchange does. Without this the field stayed empty and rerunFailedJobs fell back
+	// to api.github.com, so on GHES — or anywhere GITHUB_API_BASE_URL is set — recovery
+	// posted a valid installation token to a host that had never issued it and got a
+	// 401 (Q504). Resolved through the shared helper so the two can no longer diverge,
+	// under the same STUB_AUTH_URL opt-in buildTokenProvider uses: a plaintext base URL
+	// stays rejected in production.
+	apiBaseURL, err := githubapp.ResolveAPIBaseURL(os.Getenv("STUB_AUTH_URL") != "")
+	if err != nil {
+		return nil, err
+	}
+	prov.GitHubAPIURL = apiBaseURL
 
 	// Detect worker-pod completion off the shared Pod informer rather than polling
 	// per session: one event handler serves every in-flight session, so detection
