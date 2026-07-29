@@ -41,6 +41,25 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		tenantNS   = "tenant-github-real"
 		agName     = "real-ag"
 		secretName = "real-github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
+
+		// workerEphemeralStorageLimit is the seam the Q396 eviction measurement needs:
+		// a pod-level cap the spec can deliberately overshoot to make the kubelet evict
+		// that one worker. See utils.WithEphemeralStorageLimit for why this is the only
+		// disruption at this tier that reaches eviction recovery at all.
+		//
+		// Sized from a measurement rather than a guess. The kubelet charges a pod only
+		// its *writable* layer, emptyDirs and logs — image layers are read-only and do
+		// not count — and a worker pod built from the real runner image was measured at
+		// 28KiB against the node's stats/summary endpoint. These fixture jobs add
+		// nothing to that: the `hold` job echoes and sleeps, the green-path job echoes,
+		// and neither checks out a repository. 256Mi is therefore four orders of
+		// magnitude of headroom, which is what makes the deliberate overshoot below the
+		// only thing that can cross it.
+		workerEphemeralStorageLimit = "256Mi"
+		// evictionFillMiB overshoots that cap in one write. Sized to cross it
+		// unambiguously without making the kubelet's own node-level disk-pressure
+		// thresholds a second, uncontrolled cause of eviction.
+		evictionFillMiB = 384
 	)
 
 	var creds struct {
@@ -109,7 +128,9 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		utils.CreateGitHubAppSecret(tenantNS, secretName, creds.appID, creds.installationID, creds.privateKeyPEM)
 
 		By("applying ActionsGateway CR with a RunnerGroup pointing at the worker image")
-		utils.RunnerTenant(tenantNS, agName, secretName, workerImage).ApplyWithWebhookRetry()
+		utils.RunnerTenant(tenantNS, agName, secretName, workerImage).
+			WithEphemeralStorageLimit(workerEphemeralStorageLimit).
+			ApplyWithWebhookRetry()
 
 		By("waiting for AGC Deployment to be ready")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 5*time.Minute)
@@ -222,6 +243,251 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			g.Expect(r.Conclusion).To(Equal("success"),
 				"workflow concluded %q (expected success)", r.Conclusion)
 		}, 10*time.Minute, 15*time.Second).Should(Succeed())
+	})
+
+	// The Q396 measurement: what a real eviction costs, and whether recovery fires.
+	//
+	// The one eviction-latency figure the project has is unusable: the U5 probe's ~9.5
+	// minutes coincided with the job's own 10-minute `timeout-minutes` boundary, so the
+	// job lock's TTL, GitHub's liveness detection, and the workflow timeout are
+	// indistinguishable in it. Everything downstream — the "at worst ~10 minutes" in
+	// docs/design/04-operational-flows.md §4.2, the blog post, and Q418's whole premise
+	// that there is latency worth short-circuiting — rests on that one confounded
+	// number.
+	//
+	// This spec removes the confound. The fixture workflow carries no
+	// `timeout-minutes` at all, so the job can only end because something interrupted
+	// it or because the sleep elapsed, and those two are distinguishable.
+	//
+	// # Why the disruption is an ephemeral-storage overshoot
+	//
+	// Eviction recovery keys on exactly one shape: PodFailed with reason "Evicted",
+	// the kubelet's node-pressure kill. Q421 measured that the graceful removals — a
+	// drain, a delete — never produce it and reach no recovery at all, so neither can
+	// be used here. Node-wide memory or disk pressure does produce it, but the kubelet
+	// picks the victim by its own ranking, on a node shared with the rest of the
+	// suite. A pod-level ephemeral-storage limit is the one lever that is both genuine
+	// and aimed: exceed it and the kubelet evicts that pod, and only that pod, with a
+	// zero grace period. Nothing about the eviction is simulated — same kubelet code
+	// path, same object shape, same SIGKILL.
+	//
+	// The zero grace period is the point, not a side effect. It is what makes this the
+	// *ungraceful* case: the runner is killed outright, the wrapper's SIGTERM relay
+	// (Q385) never runs, nothing reports to GitHub, and GitHub has to notice by itself.
+	// That is the case the latency question is about. The graceful counterpart, where
+	// the runner does get its own report out, is Q459's and is measured directly below.
+	//
+	// # What is asserted versus what is recorded
+	//
+	// Both timestamps come from the servers that own them — the container's
+	// `finishedAt` from the kubelet, the job's `completed_at` from GitHub — rather than
+	// from when this spec's polling happened to notice. Poll cadence must not appear in
+	// a published latency figure.
+	//
+	// The re-run half is asserted conditionally, and deliberately so. Q495 measured
+	// that a classic-tier worker for a *real* GitHub job carries no run-id annotation,
+	// which means repoInfo() hands handleEviction a run ID of "0" and it returns
+	// before doing anything. Until that is fixed, "the re-run fires" is not a property
+	// this tier has. Asserting it anyway would produce a red spec that says nothing
+	// about eviction, so the spec instead asserts the thing that is true either way —
+	// that the AGC *saw* the eviction and reached a decision about it — and then
+	// asserts the full budget invariant only on the branch where recovery ran. The
+	// skip branch is a recorded Q495 confirmation, not a silent pass.
+	//
+	// Placed ahead of the Q459 spec below on purpose: a re-run this spec triggers
+	// would hold a worker for the fixture's full ten-minute sleep, and with no run-id
+	// annotation to disambiguate by, the spec below could not tell that worker from
+	// its own. The Q495 fix that makes this branch reachable is the same one that
+	// makes both lookups exact.
+	It("E2E_GitHub_EvictedWorkerLatencyAndRerun: eviction to GitHub's conclusion, unconfounded", func() {
+		repoSlug := creds.org + "/" + creds.repo
+
+		// Snapshot the Running workers before dispatching, so the worker this run
+		// produces is identified by not having been there rather than by being the only
+		// one. A previous spec's worker can outlive its own run, and this spec must not
+		// evict it.
+		before := workerSnapshot(tenantNS)
+
+		By(fmt.Sprintf("dispatching the long-running workflow %q (no timeout-minutes)", creds.longWorkflow))
+		runID := dispatchAndResolveRun(repoSlug, creds.longWorkflow)
+		AddReportEntry("Q396 workflow run", fmt.Sprintf("https://github.com/%s/actions/runs/%s", repoSlug, runID))
+		defer func() {
+			// Unconditional. The fixture sleeps ten minutes and a re-run would sleep ten
+			// more; no exit path from here may leave either burning the shared org's
+			// Actions minutes or this tenant's worker capacity.
+			_, _ = utils.Run(exec.Command("gh", "run", "cancel", runID, "--repo", repoSlug))
+		}()
+
+		By("waiting for GitHub to report the job in_progress")
+		// The job must be genuinely running before it is interrupted. Evicting a worker
+		// that has not reached the runner's job loop would measure startup, and GitHub
+		// would have no in-flight job whose loss it needs to detect — which is the
+		// entire quantity under measurement.
+		Eventually(func(g Gomega) {
+			// An eviction this spec did not cause invalidates everything below it, and
+			// from the GitHub side it is indistinguishable from a slow start. Naming it
+			// here turns a ten-minute "job is still queued" timeout into an immediate,
+			// correctly attributed failure. The case that actually happens is another
+			// workload putting the shared node under pressure: the kubelet resolves that
+			// by evicting somebody, and a worker under an explicit ephemeral-storage
+			// limit is a candidate.
+			g.Expect(evictedWorkerNames(tenantNS)).To(BeEmpty(),
+				"a worker pod was evicted before its job ever started, so nothing below "+
+					"would be measuring the eviction this spec performs. Either this node is "+
+					"under pressure from another workload, or %s is too little headroom",
+				workerEphemeralStorageLimit)
+			status, _ := firstJobState(g, repoSlug, runID)
+			g.Expect(status).To(Equal("in_progress"), "job is %q", status)
+		}, 10*time.Minute, 10*time.Second).Should(Succeed())
+
+		By("locating the worker pod running that job")
+		var podName string
+		Eventually(func(g Gomega) {
+			var diag string
+			podName, diag = runningWorkerForRun(g, tenantNS, runID, before)
+			g.Expect(podName).NotTo(BeEmpty(),
+				"no worker pod attributable to run %s in %s: %s", runID, tenantNS, diag)
+		}, 3*time.Minute, 2*time.Second).Should(Succeed())
+		AddReportEntry("Q396 evicted worker pod", podName)
+
+		By("confirming the worker carries the ephemeral-storage cap this spec overshoots")
+		// Without the cap there is nothing to exceed, the kubelet never evicts, and the
+		// spec would time out on the eviction wait for a reason that has nothing to do
+		// with eviction. Check the premise before acting on it.
+		Expect(podEphemeralStorageLimit(tenantNS, podName)).To(Equal(workerEphemeralStorageLimit),
+			"worker pod carries no ephemeral-storage limit; the eviction lever is absent")
+
+		By("streaming the worker's logs, so anything it manages to say on the way out is captured")
+		// Expected to show nothing: an ephemeral-storage eviction kills with a zero
+		// grace period, so the wrapper's SIGTERM relay never runs. Captured anyway,
+		// because "the runner said nothing" is the claim that makes GitHub's own
+		// detection the only thing that can conclude the job.
+		relayLog := followPodLogs(tenantNS, podName)
+
+		observed := newPhaseRecorder(tenantNS, podName)
+		stopSampling := observed.start(time.Second)
+
+		By(fmt.Sprintf("overshooting the worker's ephemeral-storage limit by writing %dMiB", evictionFillMiB))
+		filledAt := time.Now()
+		fillOutput := overflowEphemeralStorage(tenantNS, podName, evictionFillMiB)
+		AddReportEntry("Q396 fill command output", fillOutput)
+
+		By("waiting for the kubelet to evict the worker")
+		// The kubelet's eviction manager rechecks local storage on its housekeeping
+		// cycle, so this is not instant — measured at roughly a minute on kind. The
+		// wait is bounded well past that; blowing it means the lever did not work and
+		// nothing below would be measuring an eviction.
+		Eventually(func(g Gomega) {
+			g.Expect(podPhaseReason(tenantNS, podName)).To(Equal("Failed/Evicted"),
+				"worker pod has not been evicted")
+		}, 5*time.Minute, 2*time.Second).Should(Succeed())
+		stopSampling()
+
+		evictedAt, exitCode, evictionMessage := evictionFacts(tenantNS, podName)
+		AddReportEntry("Q396 observed pod phase/reason sequence", strings.Join(observed.sequence(), " -> "))
+		AddReportEntry("Q396 kubelet eviction message", evictionMessage)
+		AddReportEntry("Q396 runner container exit code", strconv.Itoa(exitCode))
+		AddReportEntry("Q396 fill to kubelet eviction", evictedAt.Sub(filledAt).Round(time.Second).String())
+		AddReportEntry("Q396 worker log tail across the eviction", relayLog.stopAndRead())
+
+		By("confirming the runner was killed outright rather than asked to stop")
+		// The Queue row's "runner genuinely killed", made an assertion. 137 is SIGKILL:
+		// no grace period, no SIGTERM relay, no report to GitHub. A graceful exit code
+		// here would mean the runner had a chance to say something on the way out, and
+		// the latency below would then be measuring the report rather than GitHub's own
+		// detection — which is Q459's experiment, not this one.
+		Expect(exitCode).To(Equal(137),
+			"the evicted runner exited %d, not SIGKILL; this is not the ungraceful path", exitCode)
+
+		By("waiting for GitHub to conclude the job it can no longer hear from")
+		// The measurement. Bounded at 20 minutes: the design puts the job lock's TTL at
+		// ~10 minutes from the last renewal, so anything beyond this is a finding in
+		// its own right rather than a wait worth extending.
+		var jobConclusion string
+		Eventually(func(g Gomega) {
+			status, conclusion := firstJobState(g, repoSlug, runID)
+			g.Expect(status).To(Equal("completed"), "job is still %q", status)
+			jobConclusion = conclusion
+		}, 20*time.Minute, 15*time.Second).Should(Succeed())
+
+		// GitHub's own record of when it gave up, not this spec's record of noticing.
+		// The latency below is the whole deliverable, so neither end of it may carry a
+		// poll interval: this is GitHub's timestamp and evictedAt is the kubelet's.
+		concludedAtRaw := firstJobCompletedAt(Default, repoSlug, runID)
+		concludedAt, err := time.Parse(time.RFC3339, concludedAtRaw)
+		Expect(err).NotTo(HaveOccurred(), "parse job completed_at %q", concludedAtRaw)
+
+		AddReportEntry("Q396 job conclusion after eviction", jobConclusion)
+		AddReportEntry("Q396 eviction (kubelet finishedAt) -> conclusion (GitHub completed_at)",
+			concludedAt.Sub(evictedAt).Round(time.Second).String())
+		AddReportEntry("Q396 server timestamps",
+			fmt.Sprintf("container finishedAt=%s, GitHub completed_at=%s",
+				evictedAt.Format(time.RFC3339), concludedAt.Format(time.RFC3339)))
+
+		By("reading what the AGC decided when it saw the eviction")
+		agcLog := agcEvictionLog(tenantNS)
+		AddReportEntry("Q396 AGC eviction log lines", agcLog)
+
+		scheduled := strings.Count(agcLog, "pod evicted; scheduling auto-retry")
+		identityUnknown := strings.Contains(agcLog, "pod evicted but run_id unknown")
+
+		By("asserting the AGC observed the eviction at all")
+		// The one assertion that holds on both branches, and the one that separates
+		// "recovery declined to act" from "detection never happened". Silence here
+		// would mean the classic tier's pod watch missed a textbook kubelet eviction,
+		// which is a far bigger defect than the one Q495 already tracks.
+		Expect(scheduled+boolToInt(identityUnknown)).To(BeNumerically(">", 0),
+			"the AGC logged no eviction decision for a worker the kubelet evicted; "+
+				"neither recovery nor the run-id skip was reached. Log:\n%s", agcLog)
+
+		if identityUnknown {
+			// Q495, observed directly rather than inferred. Recorded as the spec's
+			// outcome instead of failing it: the eviction latency above is measured and
+			// valid regardless, and the missing run identity is a tracked defect in the
+			// acquisition payload, not a failure of eviction recovery.
+			AddReportEntry("Q396 outcome",
+				"eviction detected, but the AGC had no run identity to recover with (Q495) — "+
+					"no re-run was attempted, and the latency above is GitHub's own detection with "+
+					"no gateway intervention at all")
+			Expect(scheduled).To(Equal(0),
+				"the AGC both skipped for an unknown run_id and scheduled a retry; those are "+
+					"exclusive branches of handleEviction and cannot both have run. Log:\n%s", agcLog)
+			return
+		}
+
+		By("asserting the retry budget was spent exactly once")
+		// The Q106 sharded-reservation invariant, at the one tier that can exercise it
+		// against real GitHub. One eviction must reserve one slot: a second
+		// "scheduling auto-retry" for this run would mean the budget is being refilled
+		// or the eviction counted twice, which is precisely the over-budget bug that
+		// invariant exists to prevent.
+		Expect(scheduled).To(Equal(1),
+			"one eviction must reserve exactly one retry slot, saw %d. Log:\n%s", scheduled, agcLog)
+		Expect(agcLog).To(ContainSubstring("attempt=1"),
+			"the reserved slot was not the run's first. Log:\n%s", agcLog)
+		Expect(agcLog).NotTo(ContainSubstring("eviction retry budget exhausted"),
+			"a single eviction exhausted the retry budget. Log:\n%s", agcLog)
+
+		By("recording whether the re-run call GitHub received actually succeeded")
+		// The second half of what Q396 was filed to answer. The AGC fires the re-run
+		// evictionRetryDelay (5s) after it sees the eviction — which, per the latency
+		// measured above, is while GitHub still believes the run is in progress.
+		// Whether the API accepts a re-run inside that window has never been observed.
+		switch {
+		case strings.Contains(agcLog, "eviction auto-retry triggered"):
+			AddReportEntry("Q396 outcome", "eviction detected, retry budget spent once, re-run ACCEPTED by GitHub")
+			Eventually(func(g Gomega) {
+				g.Expect(runAttemptCount(g, repoSlug, runID)).To(BeNumerically(">=", 2),
+					"the AGC's re-run was accepted but GitHub created no second attempt")
+			}, 5*time.Minute, 10*time.Second).Should(Succeed())
+		default:
+			// A decline is a legitimate outcome and a load-bearing one: it would mean
+			// recovery fires into a window GitHub rejects, and that the delay needs to
+			// outlast the conclusion rather than anticipate it.
+			AddReportEntry("Q396 outcome",
+				"eviction detected and the retry budget spent, but the re-run call did NOT succeed — "+
+					"the AGC fires it ~5s after the eviction, well before GitHub concludes the run")
+		}
 	})
 
 	// The Q459 measurement. Q421 established at Tier B that a graceful worker-pod
@@ -651,6 +917,125 @@ func firstJobCompletedAt(g Gomega, repoSlug, runID string) string {
 		"--jq", ".jobs[0].completed_at"))
 	g.Expect(err).NotTo(HaveOccurred())
 	return strings.TrimSpace(out)
+}
+
+// podPhaseReason returns a pod's "phase/reason", the projection eviction detection
+// itself keys on.
+func podPhaseReason(ns, name string) string {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("kubectl", "get", "pod", name, "-n", ns,
+		"--ignore-not-found", "-o", "jsonpath={.status.phase}/{.status.reason}"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// evictedWorkerNames returns the tenant's worker pods that the kubelet has evicted.
+// Used as a guard rather than an assertion target: an eviction nobody asked for means
+// whatever the spec measures next is not the eviction it performed.
+func evictedWorkerNames(ns string) []string {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("kubectl", "get", "pods", "-n", ns,
+		"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
+		"-o", `jsonpath={range .items[?(@.status.reason=="Evicted")]}{.metadata.name} {end}`))
+	if err != nil {
+		return nil
+	}
+	return strings.Fields(out)
+}
+
+// podEphemeralStorageLimit returns the runner container's ephemeral-storage limit, or
+// "" when it declares none.
+func podEphemeralStorageLimit(ns, name string) string {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("kubectl", "get", "pod", name, "-n", ns,
+		"-o", `jsonpath={.spec.containers[?(@.name=="runner")].resources.limits.ephemeral-storage}`))
+	Expect(err).NotTo(HaveOccurred())
+	return strings.TrimSpace(out)
+}
+
+// overflowEphemeralStorage writes a file large enough to carry the worker past its
+// ephemeral-storage limit, and returns what the write reported.
+//
+// It writes into /tmp rather than a mounted volume because a worker pod has none that
+// the runner owns: its only volumes are read-only secret and image mounts, so the
+// container's writable layer is where a real job's output lands too. Both count
+// toward the same pod-level limit, which is what the kubelet enforces.
+func overflowEphemeralStorage(ns, podName string, sizeMiB int) string {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("kubectl", "exec", "-n", ns, podName, "-c", "runner", "--",
+		"sh", "-c", fmt.Sprintf("dd if=/dev/zero of=/tmp/q396-fill bs=1M count=%d 2>&1 | tail -1", sizeMiB)))
+	Expect(err).NotTo(HaveOccurred(), "fill worker %s past its ephemeral-storage limit", podName)
+	return strings.TrimSpace(out)
+}
+
+// evictionFacts returns when the kubelet actually killed the worker's container, the
+// exit code it died with, and the message the kubelet recorded for the eviction.
+//
+// The timestamp is the container's own terminated.finishedAt — the kubelet's record of
+// the kill, not this spec's record of noticing it. When a pod is evicted before its
+// container statuses are written the field can be absent; the Evicted Event's timestamp
+// is the fallback, at second granularity, and the caller sees which one it got from the
+// message that comes back with it.
+//
+// The exit code is what distinguishes this disruption from every graceful one: an
+// ephemeral-storage eviction kills with no grace period, so the runner dies on SIGKILL
+// (137) with nothing relayed and nothing reported to GitHub.
+func evictionFacts(ns, name string) (killedAt time.Time, exitCode int, message string) {
+	GinkgoHelper()
+	exitCode = -1
+	out, err := utils.Run(exec.Command("kubectl", "get", "pod", name, "-n", ns,
+		"-o", "jsonpath={.status.containerStatuses[?(@.name=='runner')].state.terminated.finishedAt}"+
+			"|{.status.containerStatuses[?(@.name=='runner')].state.terminated.exitCode}|{.status.message}"))
+	Expect(err).NotTo(HaveOccurred())
+	parts := strings.SplitN(strings.TrimSpace(out), "|", 3)
+	if len(parts) == 3 {
+		if code, convErr := strconv.Atoi(strings.TrimSpace(parts[1])); convErr == nil {
+			exitCode = code
+		}
+		message = strings.TrimSpace(parts[2])
+	}
+	if len(parts) > 0 && parts[0] != "" {
+		t, parseErr := time.Parse(time.RFC3339, parts[0])
+		if parseErr == nil {
+			return t, exitCode, message
+		}
+	}
+
+	evt, evtErr := utils.Run(exec.Command("kubectl", "get", "events", "-n", ns,
+		"--field-selector", "involvedObject.name="+name+",reason=Evicted",
+		"-o", "jsonpath={.items[0].lastTimestamp}"))
+	Expect(evtErr).NotTo(HaveOccurred())
+	t, parseErr := time.Parse(time.RFC3339, strings.TrimSpace(evt))
+	Expect(parseErr).NotTo(HaveOccurred(),
+		"neither the container's finishedAt nor an Evicted Event carries a usable kill time; "+
+			"there is no server-side timestamp to measure latency from")
+	return t, exitCode, message + " [timestamp from the Evicted Event, not the container status]"
+}
+
+// agcEvictionLog returns the AGC's log lines about eviction handling. Scoped to the
+// handful of messages handleEviction emits so the report entry is readable, rather
+// than the whole controller log.
+func agcEvictionLog(ns string) string {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("kubectl", "logs", "-n", ns,
+		"deployment/"+agcName, "--tail=-1"))
+	Expect(err).NotTo(HaveOccurred(), "read AGC logs in %s", ns)
+	var kept []string
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "evicted") || strings.Contains(line, "eviction") {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // runAttemptCount returns the run's current attempt number. A re-run that GitHub
