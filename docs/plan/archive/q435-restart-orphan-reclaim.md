@@ -158,8 +158,11 @@ claim is qualified rather than absolute.
   unknown and could be shorter. Q438's research confirmed this is genuinely
   **undocumented** — the published contract covers only within-session
   redelivery of unacknowledged messages, not retention across a session gap — so
-  it needs a live measurement rather than more reading. Tracked as
-  [Q468](../../STATUS.md#Q468). If it turns out GitHub does not redeliver, the
-  replay path stops being a recovery path at all and Q438's lifetime cap becomes
-  the only one; the cap is on by default either way, which is why the answer
-  changes confidence rather than design.
+  it needs a live measurement rather than more reading. **Answered by
+  [Q468](q468-jobcompleted-retention.md) on 2026-07-29: GitHub does redeliver**,
+  observed at a 13 h 3 m gap with no session in existence — past the 12 h
+  `maxWorkerLifetime` beyond which no unstamped `Running` worker survives for
+  redelivery to help, so the permissive assumption holds over the range that
+  matters and the replay path is a genuine recovery path. Q438's cap is on by
+  default either way, which is why the answer changed confidence rather than
+  design.
