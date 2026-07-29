@@ -183,6 +183,17 @@ relayed cancellation risks auto-rerunning jobs that a human deliberately cancell
 path as a drain). [Q459](../STATUS.md#Q459) carries the Tier C measurement and the
 decision that follows from it.
 
+**Update, 2026-07-28.** Q459 took the first half of that measurement, and the premise
+holds: a real runner interrupted mid-job gets its report out inside the grace period,
+GitHub concludes the job `failure` 15s later, and `rerun-failed-jobs` returns `201`
+with a second attempt that runs. It also corrected one thing this section infers. The
+claim above that a deliberate cancel "arrives on the same path as a drain" is true of
+`kubectl delete pod` but **not** established for a GitHub-UI cancel, which reaches the
+runner over its own broker connection rather than through the pod — and a *running*
+worker, unlike the `Pending` one drained here, publishes `PodFailed` with an empty
+reason before its object is removed rather than vanishing without a terminal phase.
+Details in [q459-drained-worker-recovery.md](q459-drained-worker-recovery.md).
+
 Worth noting for that decision: the drain path is currently *worse* for the user
 than the ungraceful one. A kubelet node-pressure eviction auto-reruns the job; a
 graceful operator drain does not.
