@@ -407,14 +407,25 @@ func rerunCountForRun(runID string) int {
 type phaseRecorder struct {
 	namespace string
 	podName   string
+	jsonPath  string
 	seen      chan string
 	done      chan struct{}
 }
 
 func newPhaseRecorder(namespace, podName string) *phaseRecorder {
+	return newFieldRecorder(namespace, podName, "{.status.phase}/{.status.reason}")
+}
+
+// newFieldRecorder is newPhaseRecorder over an arbitrary jsonpath, for a spec that
+// needs a different projection of the same "sample it while it is happening"
+// behaviour — Q459 samples the deletionTimestamp alongside the phase, because
+// whether one is set at the moment a terminal phase is published is exactly what
+// distinguishes a disrupted worker from a job that failed on its own.
+func newFieldRecorder(namespace, podName, jsonPath string) *phaseRecorder {
 	return &phaseRecorder{
 		namespace: namespace,
 		podName:   podName,
+		jsonPath:  jsonPath,
 		// Buffered well past the number of samples a drain window produces, so a
 		// sample is never dropped and never blocks the sampler.
 		seen: make(chan string, 4096),
@@ -437,7 +448,7 @@ func (r *phaseRecorder) start(interval time.Duration) func() {
 			case <-ticker.C:
 				out, err := utils.Run(exec.Command("kubectl", "get", "pod", r.podName,
 					"-n", r.namespace, "--ignore-not-found",
-					"-o", "jsonpath={.status.phase}/{.status.reason}",
+					"-o", "jsonpath="+r.jsonPath,
 				))
 				if err != nil {
 					continue
