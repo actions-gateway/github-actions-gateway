@@ -1,7 +1,9 @@
 # Q444 — PriorityClass VAP cannot resolve its params
 
-**Status: OPEN.** The defect is real and reproduced. The mechanism is *not*
-established, and the first attempted fix was reverted.
+**Status: mechanism ESTABLISHED.** The trigger, the code path and the two
+observable failure modes are all reproduced deterministically. The defect is a
+kube-apiserver bug; what remains is a fix, tracked separately (see
+[Where this goes next](#where-this-goes-next)).
 
 Symptom: every `runnergroups` / `runnersets` / `runnertemplates` write is denied
 with
@@ -21,115 +23,198 @@ Observed on Kubernetes 1.35.5 and 1.36.1. Prior sighting:
 [`archive/q414-dind-tenant-fixture.md`](archive/q414-dind-tenant-fixture.md)
 § Local-loop notes.
 
-## Established by measurement
+## The trigger
 
-1. **The broken state is per-kube-apiserver-process.** A genuine restart clears
-   it in ~3s with **zero object changes**.
+**The param informer for a `paramKind` dies permanently, in that
+kube-apiserver process, the moment the set of *bindings* whose policy names that
+`paramKind` becomes empty for at least one policy-refresh tick (default 1s).**
 
-   Restart it with `crictl stop` on the container and confirm via the container's
-   `createdAt` changing. **`kubectl delete pod -n kube-system kube-apiserver-…`
-   does not restart it** — that recreates the static pod's *mirror object* while
-   the container keeps running (`restartCount` stays 0). A conclusion was drawn
-   from that non-restart during this investigation and had to be withdrawn.
+For us that set has exactly one member, so `helm uninstall` — which deletes the
+binding — is the trigger. `helm upgrade` never empties the set and is safe.
 
-2. **Once broken, ConfigMaps created afterwards stay invisible to param
-   resolution.** A *fresh* `helm install` on an already-broken apiserver fails
-   the same way, with the binding pointing at a ConfigMap that demonstrably
-   exists (verified name, namespace, UID, data, namespace phase `Active`).
-   So "uninstall/reinstall" is not the trigger so much as the first casualty.
+Two consequences follow, and they explain everything previously observed:
 
-3. **It is paramKind-specific.** Two identically-shaped policies created at the
-   same instant, differing only in `paramKind`: the ServiceAccount one resolves
-   its param, the ConfigMap one cannot.
+- The informer is keyed by `paramKind` **GVK**, shared by every policy naming it,
+  so one policy losing its binding is enough to kill the informer for all of them.
+- A policy with **no binding contributes nothing**. Retaining the policy across
+  the uninstall — the reverted fix `07061175` — could never have worked; the
+  binding is what holds the GVK alive.
 
-4. **CI reproduces it on both CNI lanes** (kindnet and calico), after the e2e
-   suite, so it is not CNI-specific.
+## The mechanism
+
+From `kube-apiserver` v1.36.1,
+`staging/src/k8s.io/apiserver/pkg/admission/plugin/policy/generic/policy_source.go`:
+
+1. `calculatePolicyData` builds `usedParams` by iterating `policiesToBindings` —
+   bindings, not policies.
+2. Any `paramKind` missing from `usedParams` has `info.cancelFunc()` called on it
+   and is dropped from `paramsCRDControllers` (keyed by GVK).
+3. `ensureParamsForPolicyLocked` takes two different paths:
+
+   ```go
+   if genericInformer, err := s.informerFactory.ForResource(mapping.Resource); err == nil {
+       informer = genericInformer
+       s.informerFactory.Start(instanceContext.Done())   // core types: SHARED informer
+   } else {
+       informer = dynamicinformer.NewFilteredDynamicInformer(...)
+       go informer.Informer().Run(instanceContext.Done()) // CRDs: a FRESH informer
+   }
+   ```
+
+`ConfigMap` is a core type, so it takes the first path — and that path starts a
+**shared** informer with a **per-instance** context. `sharedInformerFactory`
+records `startedInformers[type] = true` and never clears it, so once
+`cancelFunc` fires:
+
+- the informer's `Run` returns and it is never restarted — `Start()` skips it
+  forever;
+- its store is **frozen**, not cleared, at whatever it last held;
+- the source still logs `informer started for /v1, Kind=ConfigMap` on every
+  subsequent re-add, because it believes `ForResource` handed it a live informer.
+
+Only a process restart rebuilds the factory. That is why a restart is the
+recovery and why no object change helps.
+
+### Two failure modes, decided by a race
+
+Whether the frozen store still holds the param decides which symptom you see.
+The race is between the ConfigMap's delete event and the ≤1s refresh tick:
+
+| frozen store contents | symptom |
+|---|---|
+| still holds the old ConfigMap | policy silently validates against an object **that no longer exists in etcd** |
+| lost it, or the param is a name it never saw | `no params found …` → every matched write denied |
+
+A fresh install after the break lands in the second row: a newly created
+ConfigMap is invisible to a stopped informer. This is also why the defect "does
+not fire on every run" — a clean pass may just be the first row.
+
+The first row is the more alarming one: it fails *open* and silently, enforcing a
+stale allowlist with no error anywhere.
+
+## Measurements
+
+Run on a single-node kind cluster at v1.35.5 via
+[`scripts/vap-param-informer-check.sh`](../../scripts/vap-param-informer-check.sh),
+all on one apiserver process, in order:
+
+| # | what | result |
+|---|---|---|
+| 1 | **Arm 1** — a second ConfigMap-`paramKind` binding held throughout; probe binding + param deleted and recreated with an 8s gap | resolves the **fresh** param — the GVK never left `usedParams` |
+| 2 | **Arm 2** — *every* ConfigMap-`paramKind` binding removed for 8s, then all restored | broken |
+| 3 | after arm 2, probe against the **live** ConfigMap (`token=v3`) | denied |
+| 4 | after arm 2, probe against the **deleted** ConfigMap (`token=v2`) | **allowed** — the store is serving an object absent from etcd |
+| 5 | repoint the binding at a ConfigMap created *after* the break | `no params found …` — the exact field error |
+| 6 | repoint the **policy** at a CRD `paramKind`, same broken apiserver | resolves immediately |
+| 7 | restore the ConfigMap `paramKind`, restart kube-apiserver (`crictl stop`) | recovers |
+
+Arm 1 passing and arm 2 failing on the same apiserver isolates the cause to the
+empty-set transition: object churn, gap length and Helm are all held constant
+between them.
+
+Measurement 4 is the direct proof that the store is frozen rather than emptied.
+Measurement 6 is the direct proof that the fault is per-GVK and specific to the
+shared-factory path — the CRD path allocates a fresh informer per context and is
+immune.
+
+Note `kubectl delete pod -n kube-system kube-apiserver-…` **does not restart the
+apiserver** — it recreates the static pod's *mirror object* while the container
+keeps running (`restartCount` stays 0). Use `crictl stop` and confirm via the
+container's `createdAt`. A conclusion was drawn from that non-restart earlier in
+this investigation and had to be withdrawn.
 
 ## Ruled out
 
-**Retaining the paramKind-bearing policy across the uninstall is not the fix.**
-Shipped as `07061175`, reverted in `70b4b351`. CI showed the policy retained (the
-check logs it) and params still never resolving — the probe retried a full 90s.
+- **Retaining the paramKind-bearing policy across the uninstall.** Shipped as
+  `07061175`, reverted in `70b4b351`. Now explained: `usedParams` is built from
+  bindings, so a policy without one is invisible to it.
+- **CNI.** CI reproduced it on both kindnet and calico lanes.
+- **Object churn rate, cluster ConfigMap count, cluster load.** Arm 1 holds all
+  of these constant against arm 2 and does not break.
+- **Helm.** Helm is not involved in param resolution; it only performs the
+  delete that empties the binding set. The same break reproduces with plain
+  `kubectl`.
 
-**No single object deletion reproduces the teardown.** Against a freshly
-restarted apiserver, all four of these recover cleanly:
+The four scenarios tested earlier all reported "recovers" because each either
+kept the binding set non-empty or left the param in the frozen store — the
+second row of the table above, mistaken for health.
 
-| scenario | result |
-|---|---|
-| binding + param ConfigMap deleted, policy retained | recovers |
-| binding deleted, ConfigMap retained, policy retained | recovers |
-| ConfigMap deleted only, policy + binding live | recovers |
-| control, nothing deleted | recovers |
+## Upstream
 
-So neither "the last policy naming the GVR was deleted" nor "the binding was
-deleted" nor "the ConfigMap was deleted" is sufficient on its own.
+Filed at
+[kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887),
+open and `needs-triage` since 2025-03. Our evidence is posted there.
 
-## Open questions — where to pick this up
+The bug is `informerFactory.Start(instanceContext.Done())`: a shared factory must
+not be started with a caller-scoped context, because `startedInformers` makes
+that first context permanent for the process. Either the core-type path needs its
+own informer (as the CRD path already does), or the param informers need
+reference counting rather than a single cancelable context.
 
-- What actually kills the informer? The scenarios above are the obvious
-  candidates and all of them recovered, so the trigger is something they do not
-  capture: object churn *rate*, an interleaving of deletes, or cluster load.
-- Does it need a cluster with many ConfigMaps? The param informer watches
-  ConfigMaps cluster-wide, and both CI reproductions were on clusters where the
-  full e2e suite had just run.
-- **Upstream: this is a kube-apiserver bug, and it is filed.** Our evidence is
-  posted on [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887#issuecomment-5105004944),
-  which reports the same symptom on the same `paramKind` and is open and
-  untriaged. Helm is not involved in param resolution at all; it only did the
-  delete/create churn.
-
-  Related but **not** the same bug:
-  [#122658](https://github.com/kubernetes/kubernetes/issues/122658) /
-  [PR #123003](https://github.com/kubernetes/kubernetes/pull/123003) — there a
-  CRD `paramKind` fails because discovery has not caught up and an apiserver
-  restart *causes* it; the fix (retry a failed paramKind sync) merged for v1.30
-  in Jan 2024, long before the versions we see this on. Ours is a core type that
-  is always discoverable, and a restart *fixes* it.
-
-  So the realistic path to closing Q444 is upstream, not chart-side. Watch
-  #130887; if it moves, re-test and wire the reproducer into CI.
+Related but **not** the same bug:
+[#122658](https://github.com/kubernetes/kubernetes/issues/122658) /
+[PR #123003](https://github.com/kubernetes/kubernetes/pull/123003) — there a CRD
+`paramKind` fails because discovery has not caught up and an apiserver restart
+*causes* it; the fix merged for v1.30 in Jan 2024. Ours is a core type that is
+always discoverable, and a restart *fixes* it.
 
 ## Reproducing
 
-`scripts/chart-reinstall-check.sh` (`make chart-reinstall-check`) drives the
-cycle against a cluster with the release already installed and prints a
-diagnostic dump — policy, binding, `paramRef` target, the ConfigMap's existence
-and UID, namespace phase — that separates a broken manifest from a broken
-apiserver.
+- [`scripts/vap-param-informer-check.sh`](../../scripts/vap-param-informer-check.sh)
+  — the deterministic two-arm reproducer above. Self-contained (its own CRD,
+  namespace and policies), no chart required. **Run it only against a disposable
+  cluster**: arm 2 permanently breaks ConfigMap param resolution for that
+  apiserver process.
+- [`scripts/chart-reinstall-check.sh`](../../scripts/chart-reinstall-check.sh)
+  (`make chart-reinstall-check`) — the product-level check, driving a real
+  uninstall/reinstall against an installed release.
 
-It is **deliberately not wired into CI** while Q444 is open: the defect is
-unfixed, so it would pin every run red. Wiring it into `e2e-reusable.yml` (after
-the e2e suite, which leaves the release up under `E2E_SKIP_TEARDOWN`) is part of
-closing this out.
+Neither is wired into CI while the defect is unfixed; doing so is part of the
+fix work below.
 
-Note it does not fire on every run — a clean pass does not mean fixed.
-
-## Operator impact while this is open
+## Operator impact
 
 Recovery is a kube-apiserver restart, which is **not available on a managed
-control plane** (GKE/EKS/AKS). There is no chart-side workaround today. The
-blast radius and the recovery step are documented in
-[`../operations/troubleshooting.md`](../operations/troubleshooting.md).
+control plane** (GKE/EKS/AKS). Blast radius, prevention and recovery are
+documented in
+[`../operations/troubleshooting.md`](../operations/troubleshooting.md) and
+[`../operations/install.md`](../operations/install.md).
 
 **Our own dogfood is exposed.** [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh)
 runs `helm upgrade --install gag charts/actions-gateway` with no
 `admissionPolicy` override, and the chart defaults `admissionPolicy.enabled:
-true`. Dogfood is GKE, so if that cluster ever enters this state we cannot
-restart its apiserver: every `runnergroups`/`runnersets` write stays denied
-until a control-plane version upgrade happens to recycle the process. The
-mitigation available there is the same one operators get, `admissionPolicy.enabled=false`
-plus the GMC webhook allowlist.
+true`. Dogfood is GKE, so its apiserver cannot be restarted. The trigger being
+known lowers the risk materially — `helm upgrade` is safe, and dogfood only ever
+upgrades — but an uninstall/reinstall there would still be unrecoverable.
 
-This exposure is why the item stays in the Queue rather than moving to
-Deferred. Parking it would mean waiting on an upstream issue that has carried
-`sig/api-machinery` since 2025-03 and is still `needs-triage`, while we hold
-the risk.
-
-**Surface this in the next release's notes.** While Q444 is open it is exactly
-the "upgrade caveat" the curated-notes path in
-[`../operations/release.md`](../operations/release.md) exists for. An operator
-upgrading to a release that ships `admissionPolicy.enabled: true` should learn
-about it from the notes, not from a denied write. The install-time decision is
-documented at
+**Surface this in the next release's notes** — while this is unfixed it is
+exactly the "upgrade caveat" the curated-notes path in
+[`../operations/release.md`](../operations/release.md) exists for. The
+install-time decision is documented at
 [install.md § Known defect (Q444)](../operations/install.md#known-defect-q444-the-policy-can-stop-resolving-its-parameters);
-the release notes only need a line and that link.
+the notes need a line and that link.
+
+## Where this goes next
+
+Q444 as scoped ("find what triggers it") is answered. The remaining work is a
+fix, and there are two candidates, both entirely in our control:
+
+1. **Move the `paramKind` off a core type** to a small CRD. Measurement 6 shows
+   the CRD path is structurally immune, because it allocates a fresh informer per
+   context. Costs a CRD, its RBAC, and a migration for the existing ConfigMap.
+2. **Keep the binding alive across `helm uninstall`** with
+   `helm.sh/resource-policy: keep` on the VAPB and its param ConfigMap, so the
+   binding set never empties. Much cheaper — but it collides with an existing
+   invariant: [`scripts/manifest-validate.sh`](../../scripts/manifest-validate.sh)
+   asserts that **no VAPB carries `helm.sh/resource-policy: keep`**, because a
+   retained binding leaves the guard enforcing after the release is gone and makes
+   `admissionPolicy.enabled=false` a silent no-op. That reason still holds and is
+   worse than the defect it would paper over. It also only defends the Helm path;
+   anything else that deletes the binding still breaks the cluster.
+
+**Option 1 is the fix.** Option 2 should not ship without first overturning the
+manifest-validate invariant, which is not worth doing. Note the historical irony:
+retaining the *policy* was tried and reverted, and the binding — the one object
+that would have worked — is precisely the one we forbid retaining.
+
+Neither is in scope here; the fix is tracked as Q492 on the Queue.

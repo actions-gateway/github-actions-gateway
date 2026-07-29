@@ -11,7 +11,12 @@
 # deliberately not wired into CI — the defect is unfixed, so it would pin every
 # run red. Wiring it in is part of closing Q444.
 #
-# What is established (docs/plan/q444-vap-param-resolution.md has the full log):
+# The mechanism is established (docs/plan/q444-vap-param-resolution.md has the
+# full log; scripts/vap-param-informer-check.sh reproduces it deterministically
+# without Helm):
+#   - Deleting the BINDING is the trigger. The apiserver tears down the shared
+#     param informer as soon as no binding names the ConfigMap paramKind, and
+#     never restarts it. `helm uninstall` deletes the guard's only binding.
 #   - The broken state is per-kube-apiserver-process. A genuine restart clears it
 #     in ~3s with zero object changes.
 #   - Once broken, ConfigMaps created afterwards stay invisible to param
@@ -20,8 +25,10 @@
 #   - Under parameterNotFoundAction: Deny, params resolve before per-object
 #     matching, so EVERY matched write is denied cluster-wide — runnergroups,
 #     runnersets and runnertemplates alike, class-naming or not.
-# What is NOT established: what tears the param informer down. Deleting the
-# policy, the binding, or the ConfigMap individually does not reproduce it.
+#
+# This script can also pass while broken: if the torn-down informer's cache still
+# holds the old ConfigMap, resolution succeeds against an object that no longer
+# exists. A clean run is not proof of health.
 #
 # Run against a cluster that already has the chart installed (CI runs it after the
 # e2e suite, which leaves the release up under E2E_SKIP_TEARDOWN). The release's

@@ -188,7 +188,12 @@ echo "==> helm template: no ValidatingAdmissionPolicyBinding survives uninstall"
 # There is deliberately NO matching assertion on the policies. Retaining the
 # paramKind-bearing policy was the first attempted fix for Q444 and it did not
 # work (reverted in 70b4b351); asserting it here would re-freeze a wrong answer.
-# See docs/plan/q444-vap-param-resolution.md.
+# We now know why it could not work: the apiserver builds its set of live
+# paramKinds from BINDINGS, so a retained policy with no binding is invisible to
+# it. That also means retaining the *binding* is the one thing that would have
+# held the informer open — and this assertion deliberately forbids it, because
+# the silent-no-op cost above is worse. Any Q444 fix has to move the paramKind
+# off a core type instead. See docs/plan/q444-vap-param-resolution.md.
 # Reuses $psa_render — retention annotations do not vary with --namespace.
 # Line-oriented, not a multi-character RS: BSD awk (the macOS default) supports
 # only a single-character record separator, so `RS = "\n---\n"` silently never
