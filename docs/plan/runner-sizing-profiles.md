@@ -255,7 +255,12 @@ Decisions taken at pickup (implementation:
   admission validation is what §H.7's "runtime conditions, not admission"
   philosophy avoids (apply-order coupling, GitOps hostility), and the existing
   `WorkerQuota*` conditions + quota retries already surface the conflict. The
-  `maxRequests` clamp is the preventive knob.
+  `maxRequests` clamp is the preventive knob. **Amended (Q489):** those cover
+  the conflicts admission *rejects*. The one that rejects nothing — an injected
+  CPU limit cancelling `Throughput`, whose mechanism is that limit's absence —
+  got its own condition, `SizingProfileOverridden`, computed by comparing the
+  pods the profile built against what the apiserver admitted rather than by
+  reading any policy object.
 - Open question 3 (ship `NodeShare` first) became moot — it shipped with the
   phase. Question 4 confirmed: profile parameters live on the `RunnerSet`
   (differently-tuned sets can share one template).

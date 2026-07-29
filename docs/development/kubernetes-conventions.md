@@ -260,6 +260,19 @@ serving, so eviction recovery reads them back off the pod (Q417). Adding a fifth
 key is fine; changing or removing either of those two breaks recovery on that
 tier.
 
+One further controller-set annotation is stamped at pod build, on both tiers, only
+when an opt-in sizing profile actually derived the pod's ask:
+
+- `actions-gateway.com/sizing-profile: <Binpack|Throughput|NodeShare>`
+  (`provisioner.AnnotationSizingProfile`) — the profile that produced this pod's
+  cpu/memory values. A pod built from the template's static values (`Static`, or a
+  history-based profile still `AwaitingSamples`) carries no such annotation, so
+  presence answers "was this sized by the profile or by the template?" without
+  reverse-engineering it from the numbers. It is load-bearing for the
+  `SizingProfileOverridden` condition (Q489), which compares what the profile built
+  against what the apiserver admitted and must not mistake a template-built pod for
+  a profile-built one. Informational otherwise; never set it by hand.
+
 Two further controller-set annotations are stamped *after* pod creation, on the
 ScaleSet tier only:
 

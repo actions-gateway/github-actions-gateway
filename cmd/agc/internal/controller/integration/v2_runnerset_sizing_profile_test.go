@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -299,6 +300,99 @@ func TestV2_RunnerSet_NodeShareProfileDividesTheNodeEnvelope(t *testing.T) {
 	assert.Equal(t, "1500m", runner.Resources.Requests.Cpu().String(), "maxRequests clamps the derived cpu share")
 	assert.Equal(t, "1500m", runner.Resources.Limits.Cpu().String(), "the lifted limit follows the clamped request")
 	assert.Equal(t, "8Gi", runner.Resources.Requests.Memory().String(), "memory has no clamp configured")
+}
+
+// TestV2_RunnerSet_ThroughputCPULimitInjectionIsReported covers Q489 end to end
+// against a real apiserver, with a real LimitRange doing the injection: the AGC
+// builds the runner container with no CPU limit, admission puts one back, nothing
+// is rejected, and the set must report SizingProfileOverridden=True naming the pod
+// that came back wrong.
+//
+// The detection reads the admitted pods, not the LimitRange, so this also proves the
+// property that motivated that choice: the AGC needs no limitranges access at all —
+// this suite's AGC client has none granted, and the LimitRange here is created by the
+// test's admin client purely to make the apiserver mutate the pod.
+func TestV2_RunnerSet_ThroughputCPULimitInjectionIsReported(t *testing.T) {
+	const ns = "v2-rs-sizing-injected"
+	createNSForAGC(t, ns)
+
+	gw := newGatewayForSet("gw", ns, "")
+	require.NoError(t, k8sClient.Create(ctx, gw))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), gw)
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	r := startRunnerSetReconciler(t)
+	history := []v2alpha1.ContainerSizingRecommendation{{
+		Container: "runner",
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("500m"),
+			corev1.ResourceMemory: resource.MustParse("1Gi"),
+		},
+		Limits:       corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("2Gi")},
+		ObservedPeak: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("1536Mi")},
+		SampleCount:  25,
+	}}
+	r.Sizing.(*sizingStub).Set(types.NamespacedName{Namespace: ns, Name: "capped"}, history)
+
+	// The namespace policy that cancels the profile. Declared before any job runs, so
+	// the very first worker pod is admitted with the limit injected.
+	lr := &corev1.LimitRange{
+		ObjectMeta: metav1.ObjectMeta{Name: "tenant-defaults", Namespace: ns},
+		Spec: corev1.LimitRangeSpec{Limits: []corev1.LimitRangeItem{{
+			Type:    corev1.LimitTypeContainer,
+			Default: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2")},
+		}}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, lr))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), lr) })
+
+	rs := newRunnerSet("capped", ns, "gw")
+	rs.Spec.Sizing = &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileThroughput}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
+
+	waitForSizingProfileState(t, ns, "capped", v2alpha1.SizingProfileStateActive)
+	// Nothing built yet: the condition must not claim health it has not observed.
+	waitForSizingOverride(t, ns, "capped", metav1.ConditionFalse, v2alpha1.ReasonAwaitingWorkerPods)
+
+	// Run a job. The AGC builds the runner container with no CPU limit; the apiserver
+	// admits it with one.
+	pod := workerPodFor(t, ns, "capped")
+	assert.Equal(t, v2alpha1.SizingProfileThroughput, pod.Annotations[provisioner.AnnotationSizingProfile],
+		"a profile-derived pod must be marked as such")
+	runner := containerNamed(t, pod, "runner")
+	cpuLimit, hasCPULimit := runner.Resources.Limits[corev1.ResourceCPU]
+	require.True(t, hasCPULimit, "the LimitRange should have injected a CPU limit the profile removed")
+	assert.Equal(t, "2", cpuLimit.String())
+	assert.Equal(t, "500m", runner.Resources.Requests.Cpu().String(), "the derived request still applies")
+
+	// The worker-pod watch carries that pod back into a reconcile, and the set says so.
+	waitForSizingOverride(t, ns, "capped", metav1.ConditionTrue, v2alpha1.ReasonCPULimitInjected)
+	var overridden v2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "capped"}, &overridden))
+	msg := meta.FindStatusCondition(overridden.Status.Conditions, v2alpha1.ConditionSizingProfileOverridden).Message
+	assert.Contains(t, msg, pod.Name, "the message must name the pod that came back with the limit")
+
+	// Advisory only: the set is still Ready and still serving.
+	waitForSetReadyReason(t, ns, "capped", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+}
+
+// waitForSizingOverride blocks until the RunnerSet reports the expected
+// SizingProfileOverridden status/reason.
+func waitForSizingOverride(t *testing.T, ns, name string, wantStatus metav1.ConditionStatus, wantReason string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		var rs v2alpha1.RunnerSet
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
+			return false
+		}
+		c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionSizingProfileOverridden)
+		return c != nil && c.Status == wantStatus && c.Reason == wantReason
+	}, 20*time.Second, 100*time.Millisecond,
+		"RunnerSet %s should report SizingProfileOverridden=%s/%s", name, wantStatus, wantReason)
 }
 
 // workerPodFor enqueues one job on the set's owner session and returns the

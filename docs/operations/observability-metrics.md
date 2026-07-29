@@ -143,7 +143,13 @@ template's ask is ≥2× the recommendation (waste) or a memory limit is below t
 observed per-job peak (OOM risk). Advisory only; never gates `Ready`. A set
 that opts into a sizing profile (`spec.sizing.profile`) additionally reports
 `status.sizingProfileState` (`Active`/`AwaitingSamples`), and `SizingDrift`
-reads `False/SizingProfileActive` while the profile actuates. See the
+reads `False/SizingProfileActive` while the profile actuates. A set on the
+`Throughput` profile also carries the advisory `SizingProfileOverridden`
+condition — `True` when a worker pod the profile built *without* a CPU limit was
+admitted *with* one (a `LimitRange` cpu default, a mutating webhook, a policy
+engine), which cancels the profile while rejecting nothing
+([detail](worker-rightsizing.md#when-something-re-injects-the-cpu-limit-throughput-removes)).
+See the
 [right-sizing recipe](worker-rightsizing.md#step-0--read-the-built-in-recommendation-first).
 
 | Metric | Type | Labels | Description |

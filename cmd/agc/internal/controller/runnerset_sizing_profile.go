@@ -60,6 +60,14 @@ func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2alpha1.Worker
 		return template
 	}
 	out := template.DeepCopy()
+	// Mark the pod as profile-derived (Q489). Only pods carrying this were built
+	// from the derived values, which is what lets the SizingProfileOverridden check
+	// tell an admission-injected CPU limit from a template one — and it answers the
+	// same question for a human reading the pod.
+	if out.Annotations == nil {
+		out.Annotations = map[string]string{}
+	}
+	out.Annotations[provisioner.AnnotationSizingProfile] = sizing.Profile
 	switch sizing.Profile {
 	case v2alpha1.SizingProfileNodeShare:
 		applyNodeShare(&out.Spec, sizing)

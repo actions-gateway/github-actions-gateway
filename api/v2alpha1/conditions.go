@@ -35,6 +35,7 @@ const (
 	ConditionRateLimited                 = apiconditions.ConditionRateLimited
 	ConditionRunnerVersionTooOld         = apiconditions.ConditionRunnerVersionTooOld
 	ConditionSizingDrift                 = apiconditions.ConditionSizingDrift
+	ConditionSizingProfileOverridden     = apiconditions.ConditionSizingProfileOverridden
 )
 
 // Egress proxy mode (status.proxyMode) and RunnerSet template-resolution source
@@ -96,6 +97,9 @@ const (
 	ReasonSizingWithinRange       = apiconditions.ReasonSizingWithinRange
 	ReasonInsufficientSamples     = apiconditions.ReasonInsufficientSamples
 	ReasonSizingProfileActive     = apiconditions.ReasonSizingProfileActive
+	ReasonCPULimitInjected        = apiconditions.ReasonCPULimitInjected
+	ReasonNoCPULimitInjected      = apiconditions.ReasonNoCPULimitInjected
+	ReasonAwaitingWorkerPods      = apiconditions.ReasonAwaitingWorkerPods
 )
 
 // ImpairingConditionTypes returns the abnormal-is-True RunnerSet condition types that,
