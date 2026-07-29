@@ -463,7 +463,10 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		// invariant exists to prevent.
 		Expect(scheduled).To(Equal(1),
 			"one eviction must reserve exactly one retry slot, saw %d. Log:\n%s", scheduled, agcLog)
-		Expect(agcLog).To(ContainSubstring("attempt=1"),
+		// Both spellings: the AGC ships a JSON handler, but a text handler renders the
+		// same attribute as attempt=1 and this assertion is about the value, not the
+		// encoding.
+		Expect(agcLog).To(SatisfyAny(ContainSubstring(`"attempt":1`), ContainSubstring("attempt=1")),
 			"the reserved slot was not the run's first. Log:\n%s", agcLog)
 		Expect(agcLog).NotTo(ContainSubstring("eviction retry budget exhausted"),
 			"a single eviction exhausted the retry budget. Log:\n%s", agcLog)
