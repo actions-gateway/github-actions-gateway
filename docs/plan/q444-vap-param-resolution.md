@@ -143,13 +143,29 @@ second row of the table above, mistaken for health.
 
 Filed at
 [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887),
-open and `needs-triage` since 2025-03. Our evidence is posted there.
+open since 2025-03. Our mechanism write-up is
+[posted there](https://github.com/kubernetes/kubernetes/issues/130887#issuecomment-5111110494).
 
 The bug is `informerFactory.Start(instanceContext.Done())`: a shared factory must
 not be started with a caller-scoped context, because `startedInformers` makes
-that first context permanent for the process. Either the core-type path needs its
-own informer (as the CRD path already does), or the param informers need
-reference counting rather than a single cancelable context.
+that first context permanent for the process.
+
+**Fix proposed upstream:**
+[kubernetes/kubernetes#141015](https://github.com/kubernetes/kubernetes/pull/141015)
+— start the shared factory with the policy source's own context, and make that
+branch's `cancelFunc` an explicit no-op, since a `SharedInformerFactory` can
+neither stop an individual informer nor restart one it has already started. Its
+regression test fails on master with two `informer started` log lines while
+resolution stays broken: the source logs a start the factory silently refuses to
+perform. The alternative offered there is to drop the shared-factory fast path
+entirely and always use a dynamic informer — uniform and genuinely stoppable, at
+the cost of losing informer sharing for the common ConfigMap case.
+
+**This does not close Q492.** As of 2026-07-29 that PR is unreviewed and
+untriaged, v1.37 is in code freeze, and it would still need a cherry-pick to
+reach a version anyone runs. Nothing above changes on 1.35.5 or 1.36.1 until a
+backport lands. Revisit Q492's priority when there is a merged master commit
+*and* a cherry-pick decision — not before.
 
 Related but **not** the same bug:
 [#122658](https://github.com/kubernetes/kubernetes/issues/122658) /
