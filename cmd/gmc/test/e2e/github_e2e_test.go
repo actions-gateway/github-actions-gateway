@@ -275,8 +275,9 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		By("locating the worker pod running that job")
 		var podName string
 		Eventually(func(g Gomega) {
-			podName = runningWorkerForRun(g, tenantNS, runID, before)
-			g.Expect(podName).NotTo(BeEmpty(), "no Running worker pod for run %s in %s", runID, tenantNS)
+			var diag string
+			podName, diag = runningWorkerForRun(g, tenantNS, runID, before)
+			g.Expect(podName).NotTo(BeEmpty(), "no worker pod attributable to run %s in %s: %s", runID, tenantNS, diag)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q459 interrupted worker pod", podName)
 
@@ -413,8 +414,9 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		By("locating the worker pod running that job")
 		var podName string
 		Eventually(func(g Gomega) {
-			podName = runningWorkerForRun(g, tenantNS, runID, before)
-			g.Expect(podName).NotTo(BeEmpty(), "no Running worker pod for run %s in %s", runID, tenantNS)
+			var diag string
+			podName, diag = runningWorkerForRun(g, tenantNS, runID, before)
+			g.Expect(podName).NotTo(BeEmpty(), "no worker pod attributable to run %s in %s: %s", runID, tenantNS, diag)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q459 cancelled worker pod", podName)
 
@@ -532,9 +534,13 @@ func dispatchAndResolveRun(repoSlug, workflow string) string {
 // lingering past its own run no longer makes the lookup ambiguous, which is why
 // "wait for the namespace to be quiet first" is not needed and not done.
 // Only a genuine ambiguity — no annotated match and several new Running workers —
-// yields "". The annotations actually present are recorded either way, so a
-// mismatch is diagnosable rather than a silent timeout.
-func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool) string {
+// yields "", along with a description of what it saw. That case is reachable and was
+// hit on 2026-07-29: a second Tier C session dispatched the same fixture workflow
+// against the same repo, and this tenant's AGC acquired both jobs, so two workers
+// appeared that were not there before. Nothing in the cluster can separate them
+// without the run-id annotation, so the spec must fail — but it must fail saying so
+// rather than timing out on an empty string (Q500, Q495).
+func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool) (podName, diag string) {
 	out, err := utils.Run(exec.Command("kubectl", "get", "pods",
 		"-n", ns,
 		"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
@@ -546,22 +552,31 @@ func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool
 	// The selector can match more than one pod only if a run has several jobs; these
 	// fixtures have exactly one, so the first field is the worker for this run.
 	if fields := strings.Fields(out); len(fields) > 0 {
-		return fields[0]
+		return fields[0], ""
 	}
 
+	all := runningWorkers(g, ns)
 	var fresh []string
-	for _, pod := range runningWorkers(g, ns) {
+	for _, pod := range all {
 		name := strings.SplitN(pod, "=", 2)[0]
 		if !preexisting[name] {
 			fresh = append(fresh, pod)
 		}
 	}
-	if len(fresh) != 1 {
-		return ""
+	switch len(fresh) {
+	case 1:
+		AddReportEntry("Q459 worker matched without the run-id annotation",
+			fmt.Sprintf("wanted run %s; sole worker new since dispatch is %s", runID, fresh[0]))
+		return strings.SplitN(fresh[0], "=", 2)[0], ""
+	case 0:
+		return "", fmt.Sprintf("no worker has appeared since dispatch; Running workers now: %v", all)
+	default:
+		return "", fmt.Sprintf(
+			"%d workers appeared since dispatch, so none can be attributed to run %s without the "+
+				"run-id annotation (Q495). Most likely another Tier C session dispatched the same "+
+				"fixture workflow and this AGC acquired its job too (Q500). New since dispatch: %v",
+			len(fresh), runID, fresh)
 	}
-	AddReportEntry("Q459 worker matched without the run-id annotation",
-		fmt.Sprintf("wanted run %s; sole worker new since dispatch is %s", runID, fresh[0]))
-	return strings.SplitN(fresh[0], "=", 2)[0]
 }
 
 // runningWorkers returns every Running worker pod in the namespace as
