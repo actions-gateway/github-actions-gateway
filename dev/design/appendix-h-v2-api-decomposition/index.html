@@ -3241,11 +3241,29 @@ derived value. Because only cpu/memory are ever written, a CEL rule on
 envelope carrying neither — empty, or the GPU key alone, which is the realistic
 mistake since GPUs are what the profile bin-packs <em>against</em> — derives nothing
 while <code>sizingProfileState</code> still reports <code>Active</code>. That rule is a <strong>within-object</strong>
-invariant, which is why it belongs at admission where the quota conflict below
-does not. Quota/LimitRange conflicts are deliberately a <strong>runtime</strong> signal
-(the existing <code>WorkerQuota*</code> conditions and quota retries), not an admission
-gate — cross-object admission validation is exactly what this appendix's §H.7
-philosophy avoids. While a profile is <code>Active</code>, <code>SizingDrift</code> reports
+invariant, which is why it belongs at admission where the cross-object conflicts
+below do not. Quota/LimitRange conflicts are deliberately a <strong>runtime</strong> signal,
+not an admission gate — cross-object admission validation is exactly what this
+appendix's §H.7 philosophy avoids, and both objects are platform-owned and can
+change after the <code>RunnerSet</code> is written. A quota conflict surfaces through the
+existing <code>WorkerQuota*</code> conditions and quota retries.</p>
+<p>One conflict rejects <em>nothing</em> and so needed its own signal (Q489): <code>Throughput</code>'s
+mechanism is the ABSENCE of a CPU limit, and any admission mutation that supplies
+one — a <code>LimitRange</code> <code>Container</code> cpu default, a mutating webhook, a policy engine
+— cancels the profile while the pod is admitted, <code>sizingProfileState</code> still reads
+<code>Active</code>, and bursting is gone. The AGC reports it as the advisory
+<code>SizingProfileOverridden</code> condition, Throughput-only and removed under every other
+profile (they all set a CPU limit, leaving nothing to inject).</p>
+<p><strong>It reports the effect, not the cause</strong>, and that is the load-bearing choice.
+Reading the <code>LimitRange</code> — the first design — infers an effect from one policy and
+is blind to every other injector. Instead the AGC marks each profile-derived pod
+(<code>actions-gateway.com/sizing-profile</code>) and compares what it built against what the
+apiserver admitted. Worker pods are already granted, listed, and watched, so this
+needs <strong>no new RBAC, no LimitRange informer, and no polling</strong> — and the existing
+worker-pod watch makes it event-driven for free: the pod event carrying the
+injected limit is itself what re-reconciles the set. The trade is that the signal
+is post-hoc — it arrives with the first pod the profile builds, since a pod is
+what it reads. While a profile is <code>Active</code>, <code>SizingDrift</code> reports
 <code>False/SizingProfileActive</code> (the template ask is not what pods run with).</p>
 <p><strong>Why <code>profile</code> bundles two mechanisms deliberately (Q481).</strong> The 1.3
 <a href="../../development/api-review/">pre-release API review</a> asked of <code>sizing.profile</code>

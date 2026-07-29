@@ -2051,10 +2051,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#a-limitrange-silently-cancels-throughput" class="md-nav__link">
+  <a href="#when-something-re-injects-the-cpu-limit-throughput-removes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A LimitRange silently cancels Throughput
+        When something re-injects the CPU limit Throughput removes
       
     </span>
   </a>
@@ -2422,10 +2422,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#a-limitrange-silently-cancels-throughput" class="md-nav__link">
+  <a href="#when-something-re-injects-the-cpu-limit-throughput-removes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A LimitRange silently cancels Throughput
+        When something re-injects the CPU limit Throughput removes
       
     </span>
   </a>
@@ -2668,7 +2668,9 @@ restart. The template stays authoritative unless you opt in.</p>
   operator-set envelope. Size the ceiling against the namespace
   <code>ResourceQuota</code> and any <code>LimitRange</code>: derived values are still subject to
   both at admission, and the existing <code>WorkerQuota*</code> conditions and quota
-  retries surface a conflict at runtime.</li>
+  retries surface a conflict at runtime. An admission mutation that cancels
+  <code>Throughput</code> rejects nothing, so it gets its own condition —
+  <a href="#when-something-re-injects-the-cpu-limit-throughput-removes"><code>SizingProfileOverridden</code></a>.</li>
 </ul>
 <blockquote>
 <p><strong>Set <code>maxRequests</code> before enabling <code>Binpack</code> <em>or</em> <code>Throughput</code> on a shape
@@ -2718,17 +2720,53 @@ that names the intent. If you want it, say so on the issue tracker — the clean
 form is an explicit field under <code>sizing.nodeShare</code>, an additive change we held
 back from 1.3 for want of a concrete asker
 (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix-h §H.7</a>).</p>
-<h3 id="a-limitrange-silently-cancels-throughput">A <code>LimitRange</code> silently cancels <code>Throughput</code><a class="headerlink" href="#a-limitrange-silently-cancels-throughput" title="Permanent link">&para;</a></h3>
+<h3 id="when-something-re-injects-the-cpu-limit-throughput-removes">When something re-injects the CPU limit <code>Throughput</code> removes<a class="headerlink" href="#when-something-re-injects-the-cpu-limit-throughput-removes" title="Permanent link">&para;</a></h3>
 <p><code>Throughput</code> bursts by <strong>removing</strong> the runner container's CPU limit — that is
-its mechanism, not a side effect. A <code>LimitRange</code> puts the limit straight back.</p>
-<p>An entry of type <code>Container</code> carrying a <code>default</code> for <code>limits.cpu</code> — or a <code>max</code>
-with no <code>default</code>, which Kubernetes then uses as the default — applies to any
-container that does not declare one, and the container <code>Throughput</code> just built
-declares none. The pod is <strong>not rejected</strong>. It is admitted with a CPU limit the
-profile deliberately removed, <code>sizingProfileState</code> still reports <code>Active</code>, and
-every other signal looks correct. Jobs simply stop bursting, and nothing says so.</p>
-<p>Check before you enable it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>limitrange<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .items[*].spec.limits[*]}{.type}{&quot;\t&quot;}{.default}{&quot;\t&quot;}{.max}{&quot;\n&quot;}{end}&#39;</span>
+its mechanism, not a side effect. Anything that puts the limit back at admission
+cancels the profile, and cancels it <em>silently</em>: the pod is <strong>not rejected</strong>, it
+is admitted with a CPU limit, <code>sizingProfileState</code> still reports <code>Active</code>, and
+every other signal looks correct. Jobs simply stop bursting.</p>
+<p>The usual cause is a <code>LimitRange</code> entry of type <code>Container</code> carrying a <code>default</code>
+for <code>limits.cpu</code> — or a <code>max</code> with no <code>default</code>, which Kubernetes then uses as
+the default. It applies to any container that does not declare one, and the
+container <code>Throughput</code> just built declares none. A mutating admission webhook or
+a policy engine's mutate rule does the same thing just as quietly.</p>
+<p>So the gateway reports the <strong>effect</strong> rather than any one cause. It knows which
+worker pods it built without a CPU limit (they carry
+<code>actions-gateway.com/sizing-profile: Throughput</code>), and it can see what the
+apiserver admitted. When those disagree, the <code>RunnerSet</code> raises the advisory
+<strong><code>SizingProfileOverridden</code></strong> condition:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;SizingProfileOverridden&quot;)]}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th><code>status</code> / <code>reason</code></th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>True</code> / <code>CPULimitInjected</code></td>
+<td>A pod the profile built with no CPU limit is running with one. The message names the pod, the container, and the limit. Jobs are capped; the profile has no effect.</td>
+</tr>
+<tr>
+<td><code>False</code> / <code>NoCPULimitInjected</code></td>
+<td>Every profile-built pod reached the kubelet as built. Jobs burst as intended.</td>
+</tr>
+<tr>
+<td><code>False</code> / <code>AwaitingWorkerPods</code></td>
+<td>The profile has built no pod yet, so there is nothing to observe — <em>not</em> a clean bill of health.</td>
+</tr>
+</tbody>
+</table>
+<p>The condition is advisory: it never gates <code>Ready</code>, and jobs keep running. It
+appears only under <code>Throughput</code> and is removed under any other profile. Because
+it reads the admitted pods rather than a policy object, it catches whatever did
+the injecting — and it needs no extra cluster access to do so.</p>
+<p>To check a namespace <em>before</em> enabling the profile, read the <code>LimitRange</code>
+directly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>limitrange<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .items[*].spec.limits[*]}{.type}{&quot;\t&quot;}{.default}{&quot;\t&quot;}{.max}{&quot;\n&quot;}{end}&#39;</span>
 </code></pre></div>
 <p>If a <code>Container</code> row carries a <code>cpu</code> <code>default</code> or <code>max</code>, <code>Throughput</code> will not
 burst in that namespace. Three ways out, in order of preference:</p>
@@ -2742,9 +2780,16 @@ burst in that namespace. Three ways out, in order of preference:</p>
 <li><strong>Stay on <code>Static</code></strong> and apply <code>status.sizingRecommendation</code> by hand, keeping
    whatever limit the <code>LimitRange</code> requires.</li>
 </ol>
-<p>This is the one profile whose contract a namespace policy can quietly void. The
-memory side is unaffected: <code>Throughput</code> sets a memory limit explicitly, so a
-<code>LimitRange</code> default never reaches it.</p>
+<p>This is the one profile whose contract an admission mutation can quietly void —
+which is why it is the one that gets a condition. It is also why the check is
+<code>Throughput</code>-only: every other profile <em>sets</em> a CPU limit, leaving a defaulting
+policy nothing to inject. The memory side is unaffected for the same reason:
+<code>Throughput</code> sets a memory limit explicitly, so a <code>LimitRange</code> default never
+reaches it.</p>
+<p>The signal arrives with the first worker pod the profile builds, not when the
+policy is written — it reports what was admitted, so it needs something to have
+been admitted. Use the <code>kubectl get limitrange</code> check above if you want an answer
+before the first job runs.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <p><strong><code>actions_gateway_worker_usage_poll_errors_total</code> rising steadily</strong> — the AGC
 cannot list <code>PodMetrics</code>. Either metrics-server is not installed (the
@@ -2758,6 +2803,14 @@ ten minutes.</p>
 faster than the sampling interval. There is no per-job signal to size from at
 15s resolution; size such a RunnerSet by its node-shape share instead (see the
 <code>NodeShare</code> idea in the <a href="../../plan/runner-sizing-profiles/">sizing-profiles plan</a>).</p>
+<p><strong><code>Throughput</code> is <code>Active</code> but jobs still run at the old CPU ceiling</strong> — read
+<code>SizingProfileOverridden</code> on the <code>RunnerSet</code>. <code>True/CPULimitInjected</code> means a pod
+the profile built without a CPU limit was admitted with one; the message names
+the pod and the limit, and
+<a href="#when-something-re-injects-the-cpu-limit-throughput-removes">the three ways out</a>
+start with the namespace <code>LimitRange</code>. If that comes back clean, the injector is
+a mutating webhook or policy engine — <code>kubectl get mutatingwebhookconfiguration</code>
+and your policy engine's rules are the next stop.</p>
 <p><strong>Gauges reset after an AGC rollout</strong> — the <code>…_usage_cpu_peak_cores</code> /
 <code>…_usage_memory_peak_bytes</code> gauges are peaks <em>since AGC start</em> by design.
 Use <code>max_over_time(...[30d])</code> in Prometheus to bridge restarts; the histograms
