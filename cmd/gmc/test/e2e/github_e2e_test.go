@@ -253,6 +253,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		repoSlug := creds.org + "/" + creds.repo
 
 		By(fmt.Sprintf("dispatching the long-running workflow %q", creds.longWorkflow))
+		before := workerSnapshot(tenantNS)
 		runID := dispatchAndResolveRun(repoSlug, creds.longWorkflow)
 		AddReportEntry("Q459 workflow run", fmt.Sprintf("https://github.com/%s/actions/runs/%s", repoSlug, runID))
 		defer func() {
@@ -274,7 +275,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		By("locating the worker pod running that job")
 		var podName string
 		Eventually(func(g Gomega) {
-			podName = runningWorkerForRun(g, tenantNS, runID)
+			podName = runningWorkerForRun(g, tenantNS, runID, before)
 			g.Expect(podName).NotTo(BeEmpty(), "no Running worker pod for run %s in %s", runID, tenantNS)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q459 interrupted worker pod", podName)
@@ -376,23 +377,27 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 	// worker whose job ended by itself does not. This spec measures the second half
 	// of that claim against the most important case — a human cancelling the run in
 	// GitHub, which reaches the runner over its own broker connection rather than
-	// through the pod. Reading the code says such a pod is never externally deleted;
-	// per docs/development/testing.md that is a hypothesis until it is exercised.
-	// PENDING, deliberately. This spec has never produced a result. It is correct as
-	// written about *what* to measure, but it cannot yet run reliably alongside the
-	// spec above: that one triggers a re-run whose worker occupies the tenant for the
-	// fixture's full sleep, so "which worker belongs to my run" is ambiguous, and the
-	// run-id annotation that would disambiguate it is absent on this tier (Q495).
-	// Cancelling the re-run does not promptly free the worker either — measured, the
-	// wait times out at five minutes.
+	// through the pod.
 	//
-	// Left pending rather than deleted: the design of the measurement is the valuable
-	// part and is unaffected. Un-pend it once Q495 restores the run-id annotation, which
-	// makes the worker lookup exact and removes the contention entirely.
-	PIt("E2E_GitHub_CancelledRunLeavesNoDeletionMark: a human cancel is distinguishable from a disruption", func() {
+	// Measured 2026-07-29 and it holds: the cancelled run's worker published
+	// Failed//deleting= — the same phase and empty reason as a disruption, without
+	// the deletion mark. It also took 10m02s to get there, running the fixture's
+	// whole 600s sleep after the cancel, because nothing relays the cancellation to
+	// the pod (Q501). That is why this wait is budgeted past the sleep rather than
+	// past GitHub's ~5-minute cancellation grace.
+	//
+	// It was pending until 2026-07-29 for a reason that has since been removed: it
+	// could not tell its own worker from the one the spec above leaves behind, since
+	// that spec triggers a re-run whose worker occupies the tenant for the fixture's
+	// full sleep and the run-id annotation that would disambiguate it is absent on
+	// this tier (Q495). Both specs now snapshot the Running workers before
+	// dispatching, so each identifies its own worker by its not having been there
+	// before — no annotation, and no waiting for the namespace to fall quiet.
+	It("E2E_GitHub_CancelledRunLeavesNoDeletionMark: a human cancel is distinguishable from a disruption", func() {
 		repoSlug := creds.org + "/" + creds.repo
 
 		By(fmt.Sprintf("dispatching the long-running workflow %q", creds.longWorkflow))
+		before := workerSnapshot(tenantNS)
 		runID := dispatchAndResolveRun(repoSlug, creds.longWorkflow)
 		AddReportEntry("Q459 cancel-path workflow run", fmt.Sprintf("https://github.com/%s/actions/runs/%s", repoSlug, runID))
 		defer func() {
@@ -408,7 +413,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		By("locating the worker pod running that job")
 		var podName string
 		Eventually(func(g Gomega) {
-			podName = runningWorkerForRun(g, tenantNS, runID)
+			podName = runningWorkerForRun(g, tenantNS, runID, before)
 			g.Expect(podName).NotTo(BeEmpty(), "no Running worker pod for run %s in %s", runID, tenantNS)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q459 cancelled worker pod", podName)
@@ -422,21 +427,31 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		stopSampling := observed.start(200 * time.Millisecond)
 
 		By("cancelling the run in GitHub, the way a human would")
+		cancelledAt := time.Now()
 		_, err := utils.Run(exec.Command("gh", "run", "cancel", runID, "--repo", repoSlug))
 		Expect(err).NotTo(HaveOccurred(), "cancel run %s", runID)
 
 		By("waiting for the worker pod to reach a terminal phase")
+		// Budgeted past the fixture's own 600s sleep, deliberately. A cancel does not
+		// reach this worker: the AGC owns the broker session and relays nothing to the
+		// pod, so the runner keeps executing and GitHub force-concludes the job at its
+		// own ~5-minute cancellation grace while the container is still going. Measured
+		// 2026-07-29 with a 5-minute budget, this wait expired one second before the pod
+		// would have been observable at all — so anything shorter than the sleep measures
+		// the timeout rather than the pod.
 		Eventually(func(g Gomega) {
 			out, err := utils.Run(exec.Command("kubectl", "get", "pod", podName,
 				"-n", tenantNS, "--ignore-not-found", "-o", "jsonpath={.status.phase}"))
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(strings.TrimSpace(out)).To(BeElementOf("Succeeded", "Failed", ""),
 				"pod is still %s", strings.TrimSpace(out))
-		}, 5*time.Minute, 500*time.Millisecond).Should(Succeed())
+		}, 13*time.Minute, 500*time.Millisecond).Should(Succeed())
 		stopSampling()
 
 		seq := observed.sequence()
 		AddReportEntry("Q459 cancel-path pod phase/deletion sequence", strings.Join(seq, " -> "))
+		AddReportEntry("Q459 cancel to worker terminal phase",
+			time.Since(cancelledAt).Round(time.Second).String())
 
 		By("asserting the cancelled worker reached a terminal phase without a deletion mark")
 		// The discriminator. A terminal phase observed with deleting= empty is a job
@@ -458,6 +473,12 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 
 		_, conclusion := firstJobState(Default, repoSlug, runID)
 		AddReportEntry("Q459 cancel-path job conclusion", conclusion)
+		// Recorded next to the pod's terminal time above so the two can be ordered.
+		// They are not the same event: GitHub concludes the job when its cancellation
+		// grace lapses, the pod ends when the runner's own step finishes, and how far
+		// apart they sit is the size of the work the cancel failed to stop.
+		AddReportEntry("Q459 cancel-path job cancelled_at / completed_at (UTC)",
+			fmt.Sprintf("%s / %s", cancelledAt.UTC().Format(time.RFC3339), firstJobCompletedAt(Default, repoSlug, runID)))
 	})
 })
 
@@ -503,12 +524,17 @@ func dispatchAndResolveRun(repoSlug, workflow string) string {
 // namespace". These specs interrupt one run while a previous spec's re-run may still
 // have a worker of its own up, and picking the wrong pod would make the spec measure
 // a job nobody touched.
-// It prefers an exact match on the run-id annotation. When no pod carries it, a single
-// Running worker is still unambiguous — there is nothing else it could be — so that is
-// accepted, and the annotations actually present are recorded so a mismatch is
-// diagnosable rather than silently timing out. Only a genuine ambiguity (no annotated
-// match and several Running workers) yields "".
-func runningWorkerForRun(g Gomega, ns, runID string) string {
+// It prefers an exact match on the run-id annotation. That annotation is absent on
+// this tier (Q495), so the fallback is what actually resolves the worker today: the
+// caller snapshots the Running workers that existed *before* it dispatched, and a
+// Running worker outside that snapshot is this run's by identity rather than by
+// count. That is what lets these specs run back to back — a previous spec's worker
+// lingering past its own run no longer makes the lookup ambiguous, which is why
+// "wait for the namespace to be quiet first" is not needed and not done.
+// Only a genuine ambiguity — no annotated match and several new Running workers —
+// yields "". The annotations actually present are recorded either way, so a
+// mismatch is diagnosable rather than a silent timeout.
+func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool) string {
 	out, err := utils.Run(exec.Command("kubectl", "get", "pods",
 		"-n", ns,
 		"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
@@ -523,20 +549,44 @@ func runningWorkerForRun(g Gomega, ns, runID string) string {
 		return fields[0]
 	}
 
-	all, err := utils.Run(exec.Command("kubectl", "get", "pods",
+	var fresh []string
+	for _, pod := range runningWorkers(g, ns) {
+		name := strings.SplitN(pod, "=", 2)[0]
+		if !preexisting[name] {
+			fresh = append(fresh, pod)
+		}
+	}
+	if len(fresh) != 1 {
+		return ""
+	}
+	AddReportEntry("Q459 worker matched without the run-id annotation",
+		fmt.Sprintf("wanted run %s; sole worker new since dispatch is %s", runID, fresh[0]))
+	return strings.SplitN(fresh[0], "=", 2)[0]
+}
+
+// runningWorkers returns every Running worker pod in the namespace as
+// "<name>=<run-id annotation>", the annotation being empty when absent (Q495).
+func runningWorkers(g Gomega, ns string) []string {
+	out, err := utils.Run(exec.Command("kubectl", "get", "pods",
 		"-n", ns,
 		"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
 		"--field-selector", "status.phase=Running",
 		"-o", `jsonpath={range .items[*]}{.metadata.name}={.metadata.annotations.actions-gateway\.com/run-id} {end}`,
 	))
 	g.Expect(err).NotTo(HaveOccurred())
-	pods := strings.Fields(all)
-	if len(pods) != 1 {
-		return ""
+	return strings.Fields(out)
+}
+
+// workerSnapshot is the set of Running worker pod names at a moment in time, taken
+// immediately before a dispatch so the worker that run produces can be told from
+// whatever was already there.
+func workerSnapshot(ns string) map[string]bool {
+	GinkgoHelper()
+	before := map[string]bool{}
+	for _, pod := range runningWorkers(Default, ns) {
+		before[strings.SplitN(pod, "=", 2)[0]] = true
 	}
-	AddReportEntry("Q459 worker matched without the run-id annotation",
-		fmt.Sprintf("wanted run %s; sole Running worker is %s", runID, pods[0]))
-	return strings.SplitN(pods[0], "=", 2)[0]
+	return before
 }
 
 // recentRunIDs returns the database IDs of the most recent runs of a workflow. The
@@ -575,6 +625,17 @@ func firstJobState(g Gomega, repoSlug, runID string) (status, conclusion string)
 	g.Expect(json.Unmarshal([]byte(out), &resp)).To(Succeed(), "parse jobs response: %s", out)
 	g.Expect(resp.Jobs).NotTo(BeEmpty(), "run %s has no jobs yet", runID)
 	return resp.Jobs[0].Status, resp.Jobs[0].Conclusion
+}
+
+// firstJobCompletedAt returns the RFC3339 instant GitHub recorded the run's first
+// job as completed, or "" while it is still running. It is the GitHub-side half of
+// the cancel-path timeline; the pod-side half is sampled in cluster.
+func firstJobCompletedAt(g Gomega, repoSlug, runID string) string {
+	out, err := utils.Run(exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/actions/runs/%s/jobs?filter=latest", repoSlug, runID),
+		"--jq", ".jobs[0].completed_at"))
+	g.Expect(err).NotTo(HaveOccurred())
+	return strings.TrimSpace(out)
 }
 
 // runAttemptCount returns the run's current attempt number. A re-run that GitHub
