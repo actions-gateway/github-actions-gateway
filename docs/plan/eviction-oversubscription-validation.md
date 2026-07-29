@@ -199,7 +199,11 @@ Worth noting for that decision: the drain path is currently *worse* for the user
 than the ungraceful one. A kubelet node-pressure eviction auto-reruns the job; a
 graceful operator drain does not.
 
-## Experiment 3: oversubscription demo ([Q423](../STATUS.md#Q423))
+## Experiment 3: oversubscription demo (Q423)
+
+**Done 2026-07-29** — jump to the [Result](#result-measured-2026-07-29-preemption-is-not-eviction).
+The answer is the opposite of what this section predicted, so the prediction is kept
+below rather than edited away.
 
 Configure `priorityTiers` so low-priority CI runs inside capacity reserved for
 higher-priority work. Force preemption. Assert the preempted job recovers with
@@ -210,8 +214,137 @@ no human action.
 - **Unlocks:** turns the payoff section of the write-up from an argument into a
   result.
 - **Unblocked** — both contaminants cleared: Q420 and Q417 shipped 2026-07-26.
-- Preemption is kubelet-initiated, so unlike experiment 2 it does produce
-  `PodFailed`/`Evicted` and does exercise `handleEviction` on classic.
+- ~~Preemption is kubelet-initiated, so unlike experiment 2 it does produce
+  `PodFailed`/`Evicted` and does exercise `handleEviction` on classic.~~
+  **False — measured 2026-07-29.** This conflated two mechanisms that are both called
+  eviction. See the Result.
+
+### Result, measured 2026-07-29: preemption is not eviction
+
+**A `PriorityClass` preemption reaches no eviction recovery on either tier.** It is
+the *graceful-removal* path experiment 2 and [Q459](../STATUS.md#Q459) already measured,
+not the kubelet path recovery acts on. The demo this experiment set out to produce
+does not exist to be produced: there is no automatic recovery on the preemption path to
+demonstrate.
+
+**Why the prediction was wrong.** Two different mechanisms share the word:
+
+- **Node-pressure eviction** is the *kubelet's*. It leaves the pod in `PodFailed` with
+  `Status.Reason` `"Evicted"` — the one shape both tiers key on
+  ([`provisioner.go`](../../cmd/agc/internal/provisioner/provisioner.go) step 7 on
+  classic, `evictedAwaitingRecovery` in
+  [`eviction_scaleset.go`](../../cmd/agc/internal/provisioner/eviction_scaleset.go) on
+  scale-set).
+- **Preemption** is *kube-scheduler's*, and it is what a `PriorityClass` actually
+  drives. The scheduler removes the victim by **deleting** it. The kubelet then runs an
+  ordinary graceful termination.
+
+`priorityTiers` drives the second. Nothing in that path produces `Evicted`.
+
+**How the preemption was forced, at both venues.** Node CPU and memory are the obvious
+contended resources and the wrong ones: how much of a kind node is free depends on
+everything else the suite is running, so a preemption forced that way races the rest of
+the cluster. Both runs instead advertise a custom integer **extended resource** — one
+unit, on one node — and have the victim and the displacing pod each request it.
+Extended resources are integers the kubelet does not manage, so the arithmetic is exact:
+one slot, two claimants, higher priority wins, and preemption is the scheduler's only
+way to place the second pod.
+
+**Tier B, the full gateway** —
+[`worker_preemption_test.go`](../../cmd/gmc/test/e2e/worker_preemption_test.go)
+(`E2E_AGC_WorkerPreemption`), passing 2026-07-29 on the e2e kind cluster (Kubernetes
+v1.36.1). A real tenant declares `priorityTiers`, the AGC provisions a worker for a job
+carrying a complete run identity, and a higher-priority pod displaces it.
+
+| Observation | Value |
+|---|---|
+| `spec.priorityClassName` on the worker pod | `gag-e2e-opportunistic` — the tier reached the pod, so this is oversubscription and not an ordinary eviction |
+| `safe-to-evict` on the worker | `false` — **and the preemption proceeded anyway** |
+| Victim `phase/reason/deletionTimestamp/DisruptionTarget-reason`, sampled at 200 ms | `Pending//2026-07-29T13:30:50Z/PreemptionByScheduler` |
+| `Failed`/`Evicted` ever observed | **no** |
+| Scheduler event on the victim | `Preempted: Preempted by pod 0d6e0a7d-… on node actions-gateway-e2e-worker` |
+| `rerun-failed-jobs` calls for the run, over 45 s after removal | **0** |
+
+As with the drain spec, the rerun assertion is guarded so its absence cannot be an
+absence of instrumentation: the spec first asserts the AGC's `GITHUB_API_BASE_URL`
+addresses fakegithub, and pins an `AcquireJob` payload carrying owner/repo/run_id —
+without which `handleEviction` returns early and no rerun could fire for reasons having
+nothing to do with preemption.
+
+**A second spec, for the phase a *running* victim publishes** —
+`E2E_AGC_PreemptedRunningPodPhaseFollowsItsExitCode`, in the same file. The first
+spec's victim is deliberately held `Pending` (its image cannot be pulled), the same
+trade `E2E_AGC_WorkerNodeDrain` makes and for the same reason, so it has no live
+container and cannot show what the kubelet publishes on the way out. This one preempts a
+worker-shaped pod — same disruption-safety annotations, no PodDisruptionBudget — running
+a process that traps SIGTERM and **exits 0**.
+
+| Observation | Value |
+|---|---|
+| Victim class / preemptor class | value `100`, `preemptionPolicy: Never` / value `1000000`, `PreemptLowerPriority` |
+| Victim `phase/reason/deletionTimestamp/DisruptionTarget-reason`, sampled at 200 ms | `Running//2026-07-29T13:35:29Z/PreemptionByScheduler` → `Succeeded//…/PreemptionByScheduler` |
+| `Failed`/`Evicted` ever observed | **no** |
+| Scheduler event on the victim | `Preempted: Preempted by pod eefad962-… on node actions-gateway-e2e-worker` |
+| kubelet event on the victim | `Killing: Stopping container sleeper` |
+
+It is deliberately *not* a gateway worker: a worker's command is the injected wrapper, so
+its exit code is the runner's and cannot be made 0 on demand. What is under test is the
+kubelet's behaviour on a preemption, which is worker-independent, so the pod is built to
+isolate it.
+
+The two specs agree on everything that decides recovery, and differ only in the terminal
+phase — which is finding 1 below.
+
+**Two findings beyond the verdict.**
+
+1. **The terminal phase on a graceful removal is the container's own exit status.**
+   Q459 recorded a disrupted *running* worker landing in `PodFailed` with an empty
+   reason, and reasoned from there that recovery cannot key on the phase because a
+   genuinely failing job produces the same shape. The second spec lands in `Succeeded`
+   — its container exits 0 on SIGTERM — from the identical removal path, and the first
+   spec's victim never leaves `Pending` at all. So the phase is not merely
+   *ambiguous* on this path, it is not even *stable*: `Pending`, `Succeeded` and
+   `Failed` all occur, decided by what the interrupted process was doing and what it
+   exited with. No phase/reason combination can carry the discrimination.
+2. **The scheduler leaves an unambiguous marker, and the AGC ignores it.** The victim
+   carries a `DisruptionTarget` condition with reason **`PreemptionByScheduler`**. Unlike
+   `deletionTimestamp` — which Q459 is weighing, and which an operator's `kubectl delete
+   pod` and a drain also set — this reason is written *only* by kube-scheduler
+   preemption. It cannot be produced by a human cancelling a run, nor by a job failing on
+   its own. That makes the preemption slice of the graceful-removal gap closable on its
+   own, without the human-cancel ambiguity that is holding Q459's decision open.
+   [Q497](../STATUS.md#Q497) carries it.
+
+**What this costs the published claim.** The oversubscription argument in
+[01-executive-summary.md](../design/01-executive-summary.md) §"safe oversubscription"
+and in the README's problem statement rests on displaced work coming back by itself. The
+*packing* half is real and unaffected — guaranteed tiers do preempt their way in, which
+is what removes the need for reserved idle headroom. The *safety* half, as published, is
+not: a preempted job is left needing a manual re-run, exactly like a drained one. Both
+documents are corrected accordingly, and
+[troubleshooting.md](../operations/troubleshooting.md#draining-or-preempting-a-worker-does-not-auto-re-run-the-jobs-it-interrupts)
+now names preemption alongside the drain.
+
+**A third finding, from building the spec rather than running it ([Q499](../STATUS.md#Q499)).**
+Narrowing the platform PriorityClass allowlist **wedges deletion of any tenant still
+referencing the removed class**. The `priorityclass-allowlist-guard` policy re-validates
+stored objects on update — deliberately, and documented as a feature — but tearing a
+tenant down *is* a sequence of updates: the GMC clearing `gmc-cleanup` from the
+`ActionsGateway`, the AGC clearing `agentpool-cleanup` from the `RunnerGroup`. With the
+class off the allowlist every one of them is denied, so the finalizers can never be
+removed and the namespace hangs in `Terminating` with no controller able to free it.
+Recovering needs a human to re-widen the allowlist and strip the finalizer by hand.
+Reproduced exactly that way here; the spec's teardown now drains the tenant *before*
+restoring the fail-closed default, and the ordering is commented so it is not
+"simplified" back.
+
+**What is not measured here.** The wrapper's SIGTERM relay, and therefore whether a
+*real* preempted job reports itself to GitHub in a state a re-run would accept. Neither
+spec has a real runner in the victim — the first holds it `Pending`, the second runs a
+stand-in process chosen for its exit code. That question is the drain path's too, and
+Q459 answered it for a graceful delete at Tier C: the report gets out and
+`rerun-failed-jobs` returns `201`. A preemption is the same removal, so the same answer
+is expected — but it is inherited, not re-measured.
 
 ## Experiment 4: quota gate under real pressure ([Q422](../STATUS.md#Q422))
 
@@ -289,7 +422,11 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
    [Q418](../STATUS.md#Q418). Fold [Q459](../STATUS.md#Q459) in around here: both
    want a real GitHub run interrupted mid-job, and Q396 is already standing that
    up.
-4. [Q423](../STATUS.md#Q423) (experiment 3), then revive
+4. ~~Q423 (experiment 3)~~ — **done 2026-07-29**; see
+   [Result](#result-measured-2026-07-29-preemption-is-not-eviction). Its residual is
+   [Q497](../STATUS.md#Q497), which can be taken independently of Q459: the
+   `PreemptionByScheduler` marker resolves the discriminator question for the
+   preemption slice without waiting on the human-cancel one. Then revive
    [Q424](../STATUS.md#Q424) (experiment 5).
 
 ## Acceptance criteria
@@ -305,5 +442,9 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
   before it can tell a drain from a `kubectl delete pod` worth honouring.
 - The quota gate demonstrated under contention, with the rejection counter as
   the observable.
-- Preemption recovery demonstrated end to end before the oversubscription claim
-  is published.
+- ~~Preemption recovery demonstrated end to end before the oversubscription claim
+  is published.~~ **Met 2026-07-29, by finding there is nothing to demonstrate.** A
+  `PriorityClass` preemption is a graceful deletion, not a kubelet eviction, so no
+  automatic recovery fires; the published claim was corrected rather than illustrated,
+  and [Q497](../STATUS.md#Q497) carries the fix that would make the original wording
+  true. See [the result](#result-measured-2026-07-29-preemption-is-not-eviction).
