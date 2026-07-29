@@ -487,7 +487,7 @@ Three broker doubles implement the GitHub Actions broker wire protocol: [`broker
 
 ### The scale-set protocol has exactly one double
 
-[`scaleset/scalesettest`](../../scaleset/scalesettest/) is the only stub for the runner-scale-set protocol, shared by the scale-set listener's unit tests, the `cmd/agc` v2 RunnerSet integration suite, and `cmd/probe`'s Investigation E scenario (Q389). Keep it that way: a second hand-rolled scale-set stub is a second dialect to keep in sync, and the probe exists to catch library-vs-wire divergence — which it cannot do against a stub that agrees with whatever the probe assumes.
+[`scaleset/scalesettest`](../../scaleset/scalesettest/) is the only stub for the runner-scale-set protocol, shared by the scale-set listener's unit tests, the `cmd/agc` v2 RunnerSet integration suite, and `cmd/probe`'s Investigation E and F scenarios (Q389). Keep it that way: a second hand-rolled scale-set stub is a second dialect to keep in sync, and the probe exists to catch library-vs-wire divergence — which it cannot do against a stub that agrees with whatever the probe assumes.
 
 It models the protocol *semantically* rather than replaying a scripted response list, so a test states the backend condition it wants and the stub derives the wire from it: `PrequeueJobs` queues jobs against the scale set's label before it registers (for a caller that creates its own scale set mid-run), `EnableGHESAcquireFlow` switches from auto-assign to the JobAvailable→acquire path, and the `Fail*` levers (`FailRunnerGroups`, `FailSessionCreate`, `FailSessionRefresh`, `FailStaticAcquireRoute`, `SetRateLimitPolls`) each model one observed backend failure. Assert on `Server.Calls()`, the ordered call log. Reach for `SeedMessage`/`SeedRawMessage` only for the shapes the model cannot reach on its own — a lifecycle message with no preceding assignment on that scale set, or a body no client can decode.
 
@@ -583,6 +583,21 @@ For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node
 **Waiting for the AGC, not just its Deployment.** A spec that waits for a broker session (or anything else that needs the AGC operational) must gate on `utils.WaitForRunnerGroupReconciled`, not only `utils.WaitForDeploymentReady`. Deployment readiness means only that the AGC's health server is up — it binds within seconds of pod start and is deliberately decoupled from the GitHub-App token fetch (`cmd/agc/main.go`), whose budget alone is up to ~2 minutes. `WaitForRunnerGroupReconciled` waits for `RunnerGroup.status.observedGeneration` to be set, which the AGC does only after token + agent registration + listener-multiplexer start all succeed. Gating on Deployment readiness alone folds the AGC's whole startup into the session wait's budget, which under parallel CI load (token/registration/session round-trips to the shared single-replica fakegithub) can exhaust it and surface as a misleading "no session registered" timeout (Q134).
 
 **Tier C.** Set `GITHUB_E2E_APP_ID`, `GITHUB_E2E_INSTALLATION_ID`, `GITHUB_E2E_PRIVATE_KEY` (a PEM path or the PEM body), `GITHUB_E2E_ORG`, and `GITHUB_E2E_REPO` in the environment, then run `make e2e` (Tier C specs skip themselves at runtime when any variable is missing). The GitHub App key is in the macOS keychain; see the GitHub App reference memory for the retrieval command.
+
+### The credential-gated probe scenarios
+
+Some questions are about GitHub's behaviour rather than ours, and no tier that runs against a double can answer them — a stub answers with whatever we assumed. Those live in the `cmd/probe` binary as numbered investigations, each selected by an environment variable and each documented by the plan doc it exists to settle. They are operator-run, never CI-run: they need live App credentials and, in one case, hours of wall clock.
+
+| Scenario | Selector | Question | Plan doc |
+|---|---|---|---|
+| Investigation E | `PROBE_SCALESET_TEST=true` | The scale-set wire protocol end to end — auth chain, queue/message semantics, the acquire route matrix, rate-limit headers. `PROBE_SCALESET_JOB_TEST=true` adds the live-job arm that also verifies run identity on a real `JobAssigned` (Q417). | [q264-scale-set-protocol.md](../plan/q264-scale-set-protocol.md) |
+| Investigation F | `PROBE_RETENTION_TEST=arm\|check\|cleanup` | Does GitHub redeliver an unacknowledged `JobCompleted` to a session created after a multi-hour gap with no session at all? The Q435 replay path depends on it and the contract does not cover it. | [q468-jobcompleted-retention.md](../plan/q468-jobcompleted-retention.md) |
+
+Investigation F is three phases around a state file rather than one run, because the gap it measures has to pass with **no session in existence** — so it must outlive the process, and the experiment lives on disk. Its `arm` phase leaves the message under test deliberately unacknowledged; do not "tidy up" by acknowledging it, and do not leave a session behind between phases, or the next gap measures something shorter than it claims.
+
+Both register a scale set against the repo, not the org: this repo is public and the org's `Default` runner group sets `allows_public_repositories: false`, so an org-scoped scale set never receives the job. Each has a dispatch-only fixture workflow ([`scaleset-probe.yml`](../../.github/workflows/scaleset-probe.yml), [`q468-retention-probe.yml`](../../.github/workflows/q468-retention-probe.yml)) that queues jobs on its label and never runs in normal CI. Dispatch the fixture *before* starting the probe — a job queued against a not-yet-registered label waits server-side and is assigned the moment the scale set appears.
+
+The App private key stays in the macOS keychain and reaches the probe as a **file path**, never as an env-var value or a process argument ([github-app-credentials.md](github-app-credentials.md)).
 
 ### The chart uninstall/reinstall reproducer (Q444, open)
 

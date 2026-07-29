@@ -6,7 +6,7 @@ available. Shipped instead: a **12-hour default worker lifetime**, stamped at
 provision time as the pod's `activeDeadlineSeconds` and enforced by the kubelet,
 overridable per RunnerGroup / RunnerSet.
 
-This closes the residual [Q435](../q435-restart-orphan-reclaim.md#residual-and-why-it-is-not-fixed-here)
+This closes the residual [Q435](q435-restart-orphan-reclaim.md#residual-and-why-it-is-not-fixed-here)
 left open: a `Running` worker whose job ended while the AGC was down carries no
 deadline of any kind, and only a redelivered `JobCompleted` reclaims it.
 

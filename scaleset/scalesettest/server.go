@@ -217,6 +217,7 @@ func New() *Server {
 	mux.HandleFunc("GET /repos/{owner}/{repo}/actions/runners", s.handleListRunners)
 	mux.HandleFunc("DELETE /orgs/{org}/actions/runners/{rid}", s.handleDeleteRunner)
 	mux.HandleFunc("DELETE /repos/{owner}/{repo}/actions/runners/{rid}", s.handleDeleteRunner)
+	mux.HandleFunc("POST /repos/{owner}/{repo}/actions/runs/{runid}/cancel", s.handleCancelRun)
 	mux.HandleFunc("POST /actions/runner-registration", s.handleRunnerRegistration)
 	mux.HandleFunc("GET /_apis/runtime/runnergroups/", s.handleRunnerGroups)
 	mux.HandleFunc("POST /_apis/runtime/runnerscalesets", s.handleCreateScaleSet)
@@ -519,18 +520,26 @@ func (s *Server) CompleteAssignedJob(scaleSetID int, jobID, result string) bool 
 	}
 	for _, j := range ss.jobs {
 		if j.jobID == jobID && j.state != jobCompleted {
-			j.state = jobCompleted
-			j.result = result
-			ss.appendMessage(s.newMsgID(), []scaleset.JobMessage{{
-				MessageType: scaleset.MessageTypeJobCompleted,
-				JobID:       j.jobID,
-				Result:      result,
-			}})
+			s.completeJobLocked(ss, j, result)
 			s.notifyLocked()
 			return true
 		}
 	}
 	return false
+}
+
+// completeJobLocked drives one job terminal and appends its JobCompleted to the
+// owning scale set's queue log. Both ways a job can end here — the direct test
+// hook and the REST run-cancel route — go through it, so a client cannot observe
+// a different message depending on which one the test used.
+func (s *Server) completeJobLocked(ss *scaleSet, j *job, result string) {
+	j.state = jobCompleted
+	j.result = result
+	ss.appendMessage(s.newMsgID(), []scaleset.JobMessage{{
+		MessageType: scaleset.MessageTypeJobCompleted,
+		JobID:       j.jobID,
+		Result:      result,
+	}})
 }
 
 // ExpireQueueToken rotates the active session's queue token without revealing the
@@ -734,6 +743,48 @@ func (s *Server) handleRegistrationToken(w http.ResponseWriter, r *http.Request)
 		"token":      "reg-token",
 		"expires_at": time.Now().Add(time.Hour).Format(time.RFC3339),
 	})
+}
+
+// handleCancelRun models the REST run-cancel route
+// (POST /repos/{owner}/{repo}/actions/runs/{id}/cancel): every non-terminal job
+// belonging to that run goes terminal with result "cancelled", queueing its
+// JobCompleted on the owning scale set.
+//
+// It exists because cancelling a run is the only way to drive a job terminal
+// without a live runner, which is what the Q468 retention probe does to produce
+// the JobCompleted whose retention it measures. Modelling the causal chain — REST
+// call in, queue message out — means a test covers that wiring instead of
+// stubbing around it.
+//
+// A run with nothing left to cancel answers 409, matching the real API's response
+// for an already-terminal run.
+//
+// The result string is "canceled", one L — the spelling observed on a live
+// JobCompleted (Q468, 2026-07-28), not Go's or English's preference.
+func (s *Server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	runID, _ := strconv.ParseInt(r.PathValue("runid"), 10, 64)
+	s.record("cancel-run id=%d", runID)
+	if s.installToken != "" && r.Header.Get("Authorization") != "Bearer "+s.installToken {
+		http.Error(w, `{"message":"bad installation token"}`, http.StatusUnauthorized)
+		return
+	}
+	cancelled := 0
+	for _, ss := range s.scaleSets {
+		for _, j := range ss.jobs {
+			if j.runID == runID && j.state != jobCompleted {
+				s.completeJobLocked(ss, j, "canceled")
+				cancelled++
+			}
+		}
+	}
+	if cancelled == 0 {
+		http.Error(w, `{"message":"run is already terminal"}`, http.StatusConflict)
+		return
+	}
+	s.notifyLocked()
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (s *Server) handleRunnerRegistration(w http.ResponseWriter, r *http.Request) {

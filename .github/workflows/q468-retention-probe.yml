@@ -1,0 +1,41 @@
+# Q468 probe fixture — dispatch-only, never runs in normal CI.
+#
+# Queues one job on runs-on: gag-q468-retention so the cmd/probe Investigation F
+# arm phase (PROBE_RETENTION_TEST=arm) has a real job to be assigned. Nothing
+# ever runs it: the arm phase cancels the run to drive the job terminal, which is
+# how it produces the JobCompleted whose retention across a session gap is the
+# measurement. See the Q468 plan doc.
+#
+# One job, not two — unlike the Investigation E fixture, this scenario measures a
+# single job's terminal message and a second would only add a second thing to
+# cancel.
+#
+# Dispatch this BEFORE starting the arm phase: a job queued against a
+# not-yet-registered scale-set label waits server-side and is assigned the moment
+# the scale set appears, which removes the race the probe's own "dispatch NOW"
+# prompt implies.
+name: q468-retention-probe
+on:
+  workflow_dispatch: {}
+  # workflow_dispatch only works once the file reaches the default branch; the
+  # push trigger (scoped to this file on claude/ branches) lets the probe session
+  # queue the job from its own feature branch.
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/q468-retention-probe.yml"]
+
+# The job exists to be queued against the scale-set label and cancelled; it never
+# touches the repo, so it gets no token scopes at all.
+permissions: {}
+
+# Jobs run only on explicit opt-in: a workflow_dispatch, or a push whose head
+# commit message contains "[q468-probe]". A plain push touching this file (e.g.
+# editing the fixture itself) skips the job, so the run concludes green instead
+# of leaving a queued job on the PR.
+jobs:
+  retention-job:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[q468-probe]')
+    runs-on: gag-q468-retention
+    timeout-minutes: 10
+    steps:
+      - run: echo "This job is never expected to run — the Q468 arm phase cancels it (Q468)."
