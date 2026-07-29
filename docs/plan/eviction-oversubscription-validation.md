@@ -55,6 +55,174 @@ Phase 1 records the same. The genuinely additive assertion is the retry budget
   [Q418](../STATUS.md#Q418) trigger.
 - **Unblocked** — Q417 shipped 2026-07-26, so the scale-set tier now detects evictions and fires the rerun this experiment measures.
 
+### Result, measured 2026-07-29
+
+Tier C on kind, against `actions-gateway/gateway-test`
+([run 30467282642](https://github.com/actions-gateway/gateway-test/actions/runs/30467282642)),
+by `E2E_GitHub_EvictedWorkerLatencyAndRerun` in
+[`github_e2e_test.go`](../../cmd/gmc/test/e2e/github_e2e_test.go). A real runner was
+executing a real job — GitHub reported it `in_progress` before anything was touched —
+the fixture carries no `timeout-minutes`, and the worker was evicted by the kubelet.
+
+| Observation | Value |
+|---|---|
+| Worker pod phase/reason | `Running/` → `Failed/Evicted` |
+| Kubelet message | `Pod ephemeral local storage usage exceeds the total limit of containers 256Mi.` |
+| Runner container exit code | **137** — SIGKILL |
+| Job conclusion on GitHub | **`failure`** |
+| **Eviction → conclusion** | **9m36s** (`finishedAt=15:44:17Z` → `completed_at=15:53:53Z`, both server-side) |
+| AGC decision | `pod evicted; scheduling auto-retry` … `"attempt":1,"tier":"classic"` |
+| Re-run outcome | **`403 This workflow is already running`** |
+
+**The confound is gone and the number survives it.** 9m36s is close to the U5
+probe's ~9.5 minutes, so that figure was accidentally right about magnitude — but
+it is only now attributable. With no `timeout-minutes` in play, the only mechanism
+left that can end the job is GitHub's own detection of a lock that stopped being
+renewed, and the design's "at worst ~10 minutes from the last renewal" is what the
+measurement lands on. **Quote it as "about 9–10 minutes, bounded by the job lock's
+TTL", not as the workflow timeout it used to be confused with.**
+
+**The headline finding is not the latency. It is that classic-tier eviction
+recovery never actually recovers the job.** The AGC waits `evictionRetryDelay`
+(default 5s) after seeing the eviction and then calls `rerun-failed-jobs` — which,
+per the line above, lands ~9.5 minutes *before* GitHub concludes the run. GitHub
+refuses it:
+
+```
+rerun API returned 403: {"message":"This workflow is already running", ...}
+```
+
+So on the shipped default the sequence is: budget slot reserved,
+`actions_gateway_eviction_retries_total` incremented, re-run refused, job left
+failed. The metric an operator would watch says recovery happened; nothing was
+recovered. This is exactly the question
+[04-operational-flows.md §4.2](../design/04-operational-flows.md) flagged as
+unmeasured — "whether the rerun call succeeds while the run is still winding down
+inside that window" — and the answer is no. [Q503](../STATUS.md#Q503) carries the
+fix.
+
+**Why the runner could not report, unlike Q459's drained worker.** The wrapper's
+relay *did* fire — `forwarding termination signal to child`, `grace: 25s`, and the
+runner logged `Runner will be shutdown for UserCancelled` — but the kubelet's
+eviction gave it about two seconds before SIGKILL, and the runner was still inside
+`Waiting for process exit or 7.5 seconds after SIGINT` when it died. The report
+never left. That is the whole difference between this experiment and Q459's, and it
+is what the two numbers measure:
+
+| Disruption | Grace | Runner reports? | Eviction → conclusion |
+|---|---|---|---|
+| Graceful delete / drain ([Q459](q459-drained-worker-recovery.md)) | 30s | yes | **15–26s** |
+| Kubelet eviction (this experiment) | ~2s, then SIGKILL | no | **9m36s** |
+
+**What remains.** The scale-set half. This run measured the classic tier; Q417
+plumbed the same recovery onto scale-set from the owning reconciler, and whether
+GitHub's conclusion latency and the 403 both reproduce there is unmeasured. The
+403 is tier-independent by construction — it is a property of the API and of the
+delay, not of how the AGC detected the eviction — but that is reasoning, not a
+measurement.
+
+### What the harness cost to build, and why it is shaped this way
+
+**The eviction lever works, and it is the only aimed one.** Eviction recovery keys
+on `PodFailed` with reason `Evicted` and nothing else, so the disruption has to
+produce exactly that shape. Q421 already ruled out the graceful removals. Node-wide
+memory or disk pressure produces the shape but lets the kubelet choose the victim,
+on a node shared with the rest of the suite. A **pod-level `ephemeral-storage`
+limit** is enforced per pod, and overshooting it was measured on the e2e kind
+cluster to do exactly what is needed:
+
+| Observation | Value |
+|---|---|
+| Pod phase/reason after the overshoot | `Failed/Evicted` |
+| Kubelet message | `Pod ephemeral local storage usage exceeds the total limit of containers 16Mi.` |
+| Container exit code | `137` — SIGKILL, no grace period, so no SIGTERM relay and nothing reported to GitHub |
+| Write → kill | ~55s, the kubelet's local-storage housekeeping cadence |
+
+The zero grace period is the point rather than a side effect: it is what makes this
+the *ungraceful* case, where GitHub must notice by itself. The graceful counterpart,
+where the runner does get its own report out, is [Q459](q459-drained-worker-recovery.md)'s.
+
+**Sizing the cap needed a measurement of its own.** The kubelet charges a pod only
+its writable layer, emptyDirs and logs — image layers are read-only and are not
+charged — and a pod built from the real runner image was measured at **28KiB**
+against the node's `stats/summary` endpoint. The e2e fixture jobs add nothing to
+that: neither checks out a repository. 256Mi is therefore four orders of magnitude
+of headroom, which is what makes the deliberate overshoot the only thing that can
+cross it.
+
+**Q495 was confirmed here, by direct observation rather than inference — and has
+since been fixed** ([#967](https://github.com/actions-gateway/github-actions-gateway/pull/967)).
+A worker pod provisioned for a real GitHub job on the classic tier carried
+`actions-gateway.com/job-name` and **neither** `run-id` **nor** `repository`:
+
+```
+annotations: {"actions-gateway.com/job-name":"hold",
+              "cluster-autoscaler.kubernetes.io/safe-to-evict":"false",
+              "descheduler.alpha.kubernetes.io/prefer-no-eviction":"true",
+              "karpenter.sh/do-not-disrupt":"true"}
+```
+
+`jobMetaFrom()` and `repoInfo()` read the same two payload fields, so an absent
+annotation means `runID` is `"0"` and
+[`handleEviction`](../../cmd/agc/internal/provisioner/eviction.go) returns at its
+first line. Note also that `system.github.job` *did* arrive: the acquisition
+payload's `variables` map is populated, and it is specifically the run-identity
+keys that were missing — which narrowed Q495 from "the payload is empty" to "these
+keys are not where we read them". That narrowing is what the fix acted on: run
+identity travels in the serialised `github` context (`contextData.github.run_id`),
+not in the job variables, and the worker pods this experiment provisions now carry
+their `run-id` annotation.
+
+**What that cost this experiment, and no longer does.** The latency half was never
+affected — it measures GitHub's own detection of a runner that stopped answering,
+which does not involve the AGC at all. The "assert the re-run fires" half, and the
+Q106 budget assertion behind it, could not fire at all on the classic tier until
+Q495 landed. The spec is written to hold either way: it asserts that the AGC *saw*
+the eviction and reached a decision — the assertion that separates "recovery
+declined to act" from "detection never happened" — and asserts the budget
+invariant only on the branch where recovery ran. On a post-Q495 build that is the
+branch it takes.
+
+### Tier C does not parallelize, and the reason is not the cluster
+
+Two sessions ran Tier C on 2026-07-29 from separate worktrees and separate kind
+clusters, and still collided. Cluster isolation does not help, because the shared
+resources are on GitHub's side:
+
+- **One fixture repo and one workflow.** Both sessions dispatch `drain-probe.yml`
+  to `actions-gateway/gateway-test`. `dispatchAndResolveRun` identifies its run as
+  "the one that was not there before" — which is the *other* session's run when two
+  dispatches land seconds apart.
+- **One `runs-on` label, one org.** Every Tier C tenant registers runners labelled
+  `e2e` in the `actions-gateway` org, so GitHub may route either session's job to
+  either cluster's gateway. The two are entangled even when the clusters are not.
+- **No run-id annotation to disambiguate by** — Q495, since fixed, but absent for
+  these runs — so `runningWorkerForRun` fell back to "the sole Running worker" and
+  gave up when there were two.
+
+A throwaway cluster per run, which
+[testing.md](../development/testing.md) now prescribes, is still the right
+move: it removes the *other* half of the collision, where a parallel session's
+`helm upgrade` and `kubectl set env` fight over one GMC. It just does not make two
+Tier C runs independent. Both halves have to hold, so treat Tier C as a
+**singleton**: one session at a time, across all worktrees, each on its own
+cluster. Q500 tracks the GitHub-side half.
+
+This is the same contention that kept `E2E_GitHub_CancelledRunLeavesNoDeletionMark`
+pending in [q459-drained-worker-recovery.md](q459-drained-worker-recovery.md), seen
+from the other side — there between specs, here between sessions.
+
+**A related hazard, learned expensively.** A Tier C run killed mid-spec leaves its
+tenant namespace `Terminating` on an `agentpool-cleanup` finalizer that only its own
+AGC can clear — and the AGC's Deployment goes away with the namespace, so it never
+clears. Force-removing the finalizer unblocks the namespace but **skips the
+deregistration of that tenant's runners from the org**. Those stale registrations
+keep taking job assignments, so the next run's job goes `in_progress` against a
+runner that no longer exists and no worker pod is ever provisioned. Prefer stopping
+a run with SIGTERM and letting Ginkgo's `AfterAll` run: it deletes the
+`ActionsGateway` CR while the AGC is still up, which is what lets the finalizer do
+its job.
+
 ## Experiment 2: the node-drain path (Q421)
 
 **Done 2026-07-27** — jump to the [Result](#result-measured-2026-07-27). The heading
