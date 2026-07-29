@@ -709,6 +709,44 @@ have reasserted a chart-rendered ConfigMap — so persist anything durable in
 values. Full detail:
 [security-operations.md](security-operations.md#self-service-additions-via-the-priorityclassallowlist-cr-q188).
 
+#### Rolling back past this change re-arms the outage it fixes
+
+**`helm rollback` to a revision from before this change is not safe on a running
+cluster.** It reports success, and then every `runnergroups`/`runnersets`/
+`runnertemplates` write is denied cluster-wide with `no params found for policy
+binding` — the exact Q444 outage this change removes.
+
+Measured on kind v1.36.1: install `v1.2.0`, upgrade to this chart, `helm rollback`
+to revision 1. Rollback succeeds, the `paramKind` reverts to `ConfigMap`, and a
+class-free `RunnerGroup` write is denied on every attempt across a 20-second
+window — it does not clear.
+
+The reason is the defect itself. Upgrading to the CRD `paramKind` removes the last
+binding naming `v1/ConfigMap`, which is precisely the transition that kills that
+apiserver's shared ConfigMap param informer for the life of the process. The
+rollback then recreates a ConfigMap-`paramKind` binding, and that informer is never
+coming back — so it can never resolve, exactly as a fresh install could not after
+the break.
+
+**Roll forward, not back.** If you need to undo this release for an unrelated
+reason, do it in a way that does not recreate a ConfigMap-`paramKind` binding —
+upgrade to the older chart version with the guard disabled rather than rolling back
+to it:
+
+```bash
+helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version <older-chart-version> --namespace gmc-system \
+  --reset-then-reuse-values --set admissionPolicy.enabled=false
+```
+
+Verified: writes are admitted again within seconds. You lose the PriorityClass
+backstop until you roll forward again, so treat it as an incident mitigation — the
+GMC webhook still gates the tenant-facing CRs meanwhile. The other recovery is a
+kube-apiserver restart, which is not available on EKS/GKE/AKS.
+
+Rolling back a release that has *always* been on the CR `paramKind` is unaffected —
+this is specifically about crossing the ConfigMap→CR boundary downwards.
+
 `helm upgrade` rolls the GMC Deployment (and carries additive CRD field changes —
 no separate CRD apply step). Watch the rollout:
 
