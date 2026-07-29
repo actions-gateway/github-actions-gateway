@@ -629,8 +629,9 @@ Skip it and the upgrade stops before changing anything, naming the command:
 
 ```text
 Error: UPGRADE FAILED: execution error at (actions-gateway/templates/priorityclass-allowlist.yaml):
-the PriorityClassAllowlist CRD is not installed in this cluster, and Helm never
-installs the chart-root crds/ dir on an upgrade (only on a fresh install). ...
+the PriorityClassAllowlist CRD is not installed in this cluster. Helm installs the
+chart-root crds/ dir on a fresh install ONLY and skips it on every upgrade, so
+applying it is a standard pre-upgrade step for this chart. ...
 ```
 
 The check is skipped on a fresh `helm install`, where `crds/` is applied for you.
@@ -646,10 +647,12 @@ of Q492. ...
 ```
 
 Read the names the ConfigMap currently carries — including any added self-service
-since install, which will **not** be in your values file:
+since install, which will **not** be in your values file. Use *your* configured
+name, not the example (`helm get values <release> -n gmc-system` shows it under
+`priorityClassAllowlist.configMapName`):
 
 ```bash
-kubectl get configmap -n gmc-system gmc-priority-class-allowlist -o jsonpath='{.data.allowedPriorityClasses}'
+kubectl get configmap -n gmc-system <your-configmap-name> -o jsonpath='{.data.allowedPriorityClasses}'
 ```
 
 Put the **union** of those and your existing `allowedPriorityClasses` into
@@ -674,19 +677,37 @@ permitted before.
 kubectl get priorityclassallowlist gmc-priorityclass-allowlist -o jsonpath='{.spec.allowedPriorityClasses}'
 ```
 
-The upgrade also garbage-collects the objects this replaced — the old parameter
-ConfigMap and the namespaced `Role` over it — because Helm removes resources that
-are no longer in the release manifest. The GMC's grant becomes a `ClusterRole` with
-`get`/`list`/`watch` on `priorityclassallowlists` (the kind is cluster-scoped); it
-carries no write verb, so the GMC still cannot widen its own allowlist. No manual
-RBAC step.
+The GMC's grant becomes a `ClusterRole` with `get`/`list`/`watch` on
+`priorityclassallowlists` (the kind is cluster-scoped); it carries no write verb,
+so the GMC still cannot widen its own allowlist. No manual RBAC step.
 
-If you set `configMapName`, delete the old ConfigMap once you are satisfied —
-nothing reads it any more:
+**What the upgrade cleans up depends on which case you were in.** Helm only
+removes objects it rendered:
+
+| You had | Helm removes on upgrade | You remove by hand |
+|---|---|---|
+| `configMapName` **unset** (default) | the chart-rendered param ConfigMap `<release>-priorityclass-allowlist` | nothing |
+| `configMapName` **set** | the namespaced `Role`/`RoleBinding` the chart rendered for that watch | your own ConfigMap — the chart never rendered it, so Helm will not touch it |
+
+So if you set `configMapName`, delete your ConfigMap once you are satisfied the CR
+carries everything. Nothing reads it any more:
 
 ```bash
-kubectl delete configmap -n gmc-system gmc-priority-class-allowlist
+kubectl delete configmap -n gmc-system <your-configmap-name>
 ```
+
+**Your self-service workflow moves to the CR.** Adding a class without a GMC
+rollout used to mean editing that ConfigMap; it now means editing the CR, which
+the GMC watches the same way:
+
+```bash
+kubectl edit priorityclassallowlist <release>-priorityclass-allowlist
+```
+
+A chart upgrade reasserts `allowedPriorityClasses` over it, exactly as it would
+have reasserted a chart-rendered ConfigMap — so persist anything durable in
+values. Full detail:
+[security-operations.md](security-operations.md#self-service-additions-via-the-priorityclassallowlist-cr-q188).
 
 `helm upgrade` rolls the GMC Deployment (and carries additive CRD field changes —
 no separate CRD apply step). Watch the rollout:
