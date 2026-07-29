@@ -90,10 +90,10 @@ that: neither checks out a repository. 256Mi is therefore four orders of magnitu
 of headroom, which is what makes the deliberate overshoot the only thing that can
 cross it.
 
-**[Q495](../STATUS.md#Q495) is confirmed, by direct observation rather than
-inference.** A worker pod provisioned for a real GitHub job on the classic tier
-carries `actions-gateway.com/job-name` and **neither** `run-id` **nor**
-`repository`:
+**Q495 was confirmed here, by direct observation rather than inference — and has
+since been fixed** ([#967](https://github.com/actions-gateway/github-actions-gateway/pull/967)).
+A worker pod provisioned for a real GitHub job on the classic tier carried
+`actions-gateway.com/job-name` and **neither** `run-id` **nor** `repository`:
 
 ```
 annotations: {"actions-gateway.com/job-name":"hold",
@@ -107,16 +107,21 @@ annotation means `runID` is `"0"` and
 [`handleEviction`](../../cmd/agc/internal/provisioner/eviction.go) returns at its
 first line. Note also that `system.github.job` *did* arrive: the acquisition
 payload's `variables` map is populated, and it is specifically the run-identity
-keys that are missing — which narrows Q495 from "the payload is empty" to "these
-keys are not where we read them".
+keys that were missing — which narrowed Q495 from "the payload is empty" to "these
+keys are not where we read them". That narrowing is what the fix acted on: run
+identity travels in the serialised `github` context (`contextData.github.run_id`),
+not in the job variables, and the worker pods this experiment provisions now carry
+their `run-id` annotation.
 
-**What that costs this experiment.** The latency half is unaffected — it measures
-GitHub's own detection of a runner that stopped answering, which does not involve
-the AGC at all. The "assert the re-run fires" half, and the Q106 budget assertion
-behind it, cannot pass on the classic tier until Q495 is fixed. The spec is written
-to match: it asserts that the AGC *saw* the eviction and reached a decision (the
-assertion that separates "recovery declined to act" from "detection never
-happened"), and asserts the budget invariant only on the branch where recovery ran.
+**What that cost this experiment, and no longer does.** The latency half was never
+affected — it measures GitHub's own detection of a runner that stopped answering,
+which does not involve the AGC at all. The "assert the re-run fires" half, and the
+Q106 budget assertion behind it, could not fire at all on the classic tier until
+Q495 landed. The spec is written to hold either way: it asserts that the AGC *saw*
+the eviction and reached a decision — the assertion that separates "recovery
+declined to act" from "detection never happened" — and asserts the budget
+invariant only on the branch where recovery ran. On a post-Q495 build that is the
+branch it takes.
 
 ### Tier C does not parallelize, and the reason is not the cluster
 
