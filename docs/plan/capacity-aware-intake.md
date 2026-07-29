@@ -30,6 +30,7 @@ durable rationale in
 | 2 | Gate on the autoscaler's own declination, for elastic clusters | M | ✅ Done ([§7](#7-phase-2--the-autoscaler-declination-signal-q406), Q406, 2026-07-27) — unvalidated on a live cluster ([§9](#9-validation-to-be-measured-not-asserted)) |
 | 2a | Split the mode enum's two axes: tenant policy on the set, cluster fact on the gateway | S | ✅ Done ([§5a](#5a-the-single-enum-was-two-axes-q470), Q470, 2026-07-27) |
 | 2b | Assert phase 2's matcher against a real autoscaler's events, in kind | M | ✅ Done ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), Q474, 2026-07-28) — cluster-autoscaler only |
+| 2c | Stop one loop's two verdicts from gating: the concurrency window | S | ✅ Done ([§9d](#9d-the-concurrency-window-q478), Q478, 2026-07-28) |
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
 **No rung's *effect* has been measured on a live cluster** — items 0a, 1 and 2
@@ -457,7 +458,9 @@ specified two declination matchers and stopped there, which would have let a sta
 transient-declination risk §7 flagged as "unknown until measured", turned from a
 measurement question into a correctness one. So the matcher also recognizes each
 project's *acting* signal (CA `TriggeredScaleUp`, Karpenter `Nominated`) and returns
-the class of the newest event by timestamp, with same-instant ties resolving open.
+the class of the newest event by timestamp, with same-instant ties resolving open
+(generalized to a one-second concurrency window by [§9d](#9d-the-concurrency-window-q478),
+once a live autoscaler was seen emitting both verdicts inside one loop).
 Ordering reads every timestamp field an Event may carry, because the two recorder
 generations populate different ones and reading only `LastTimestamp` would sort every
 new-style event at the zero time. This costs nothing — the events are already in hand —
@@ -752,9 +755,10 @@ Three cases, chosen so each asserts something the recorded table cannot:
   open. The recency rule alone would have said "declined". That makes the
   tie-break the thing carrying correctness here, and it does not carry it for a
   microsecond-resolution recorder — which is the generation Karpenter uses.
-  Tracked as [Q478](../STATUS.md#Q478); not fixed here, because Q474 is a test
-  and the fix is a behavior change to a shipped gate that wants its own negative
-  control.
+  Not fixed here, because Q474 is a test and the fix is a behavior change to a
+  shipped gate that wants its own negative control; tracked as Q478 and shipped
+  the same day as **[§9d](#9d-the-concurrency-window-q478)**, which replaces the
+  tie-break with a concurrency window.
 
 **What this still does not cover.** Karpenter. Its matcher arm — the one that
 genuinely needs reporter discrimination, since it shares kube-scheduler's reason
@@ -765,6 +769,43 @@ also the thing [G.16](../design/appendix-g-future-enhancements.md#g16-provisioni
 named as the local-half prerequisite for ever validating `Probe`/`Provision`
 (Q407): a cluster with a real CA in it is where `--enable-provisioning-requests`
 could be turned on.
+
+## 9d. The concurrency window (Q478)
+
+Shipped 2026-07-28. [§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474)
+measured a real cluster-autoscaler emitting `TriggeredScaleUp` and then
+`NotTriggerScaleUp` for the same pod 4ms apart, and observed that §7a's
+newest-wins rule reads the later declination — so the pair resolved correctly
+only because CA's legacy recorder quantizes both events into one second and ties
+already resolved open. This replaces that accident with a rule.
+
+**The rule.** Recency is asymmetric. A scale-up supersedes a declination the
+instant it is newer, as before; a declination supersedes a scale-up only from
+more than `autoscalerConcurrencyWindow` (one second) later. A closer pair is one
+loop's own output rather than a sequence, and resolves not-declined.
+
+**Why one second.** It has to exceed the spread of one loop's own events —
+milliseconds, measured — and stay well below the gap *between* loops, so a
+declination on a later loop still gates. Both projects leave a wide margin: CA's
+default `--scan-interval` is 10s and Karpenter's provisioning batch is bounded at
+10s. One second is also the legacy recorder's own quantum, so the generation
+running today decides identically with the window as without it; what changes is
+the microsecond generation, which is the one Karpenter uses.
+
+**The direction of the error, in both readings.** The window can only *open* a
+gate that recency would have closed, which is the fail-open direction the whole
+rung is built around — and it opens it for at most one second past a scale-up
+that a genuinely-later declination will re-close on the next loop.
+
+**What it is tested by, and what it is not.** Six unit rows: the measured 4ms
+pair in the recorder generation that can resolve it, its Karpenter-vocabulary
+twin, both sides of the boundary, a declination a full CA loop later that must
+still gate, and an old scale-up that must not shelter a later declination (the
+window is measured from the newest *acting* event, not the newest event). The
+live harness does **not** cover it and cannot: CA records at second resolution,
+so the harness cannot produce a pair the rule would decide differently, and the
+generation that can is Karpenter's — whose harness is [Q479](../STATUS.md#Q479).
+Until that lands, the microsecond arm is asserted only against synthetic events.
 
 ## 10. Non-goals
 

@@ -50,6 +50,10 @@ import (
 //     exists — a pod declined on one loop and scaled up for on the next is being
 //     rescued, and gating on the stale declination would starve exactly the tenant
 //     this mode exists to protect.
+//   - Recency alone is not enough, because one autoscaler loop can emit BOTH verdicts
+//     for one pod, milliseconds apart and with the declination last. Two events that
+//     close together are concurrent rather than sequential, and a concurrent pair
+//     resolves open — see autoscalerConcurrencyWindow.
 
 // Event reasons the two autoscaler projects emit on a pending pod. Each project has
 // one declination reason and one acting reason; nothing else is recognized.
@@ -74,6 +78,37 @@ const (
 // defaults an unset pod.spec.schedulerName to.
 const defaultSchedulerName = "default-scheduler"
 
+// autoscalerConcurrencyWindow is how far apart an acting event and a later declination
+// must be before the declination is read as superseding it rather than as having been
+// emitted alongside it. Inside the window the pair resolves to not-declined (Q478).
+//
+// # Why a window and not a strict timestamp comparison
+//
+// A real cluster-autoscaler emits both verdicts for one pod inside one loop: measured
+// against v1.36.1, TriggeredScaleUp at 14:05:19.348 and NotTriggerScaleUp for the SAME
+// pod at 14:05:19.352 — the first scale-up round found a plan, a second round with the
+// upcoming node still could not place the pod. A node IS arriving, so the only correct
+// reading is not-declined, and strict recency reads the 4ms-later declination instead.
+//
+// That case resolved correctly before this window existed, but only by accident of
+// recorder generation: CA records through the legacy recorder, whose one-second
+// resolution collapsed the two events into a tie, and ties already resolved open. The
+// same pair from a microsecond-resolution recorder — the generation Karpenter uses —
+// would have gated a set the cluster was growing for. The window makes the verdict a
+// property of the autoscaler's behavior rather than of how its events happen to be
+// timestamped, and errs no less open than legacy quantization does in either generation.
+//
+// # Why one second
+//
+// It has to exceed the spread of one loop's own events (milliseconds, above) and stay
+// well below the gap between loops, so a declination from a LATER loop still gates —
+// that direction is the whole point of the recency rule and is the negative control in
+// the tests. Both projects' cadences leave a wide margin: cluster-autoscaler's default
+// --scan-interval is 10s and Karpenter's provisioning batch is bounded at 10s. One
+// second is also the legacy recorder's quantum, so the generation that ships today
+// behaves the same way whether or not this window is applied.
+const autoscalerConcurrencyWindow = time.Second
+
 // autoscalerEventClass is what one Event says about whether a node is coming.
 type autoscalerEventClass int
 
@@ -91,10 +126,11 @@ const (
 // the condition message names the taint, quota, or node-group ceiling that stopped the
 // scale-up rather than merely asserting that something did.
 //
-// The verdict is the class of the NEWEST relevant event, so a declination followed by
-// a scale-up reopens the gate. Ties resolve to not-declined: Event timestamps have
-// one-second resolution, so a same-second declination and scale-up are genuinely
-// ambiguous, and the fail-open direction is the only safe reading of an ambiguity here.
+// The verdict is decided by the newest event of each class, not by the mere existence
+// of a declination, so a declination the autoscaler has since superseded by a scale-up
+// reopens the gate. It gates only when the newest declination post-dates the newest
+// acting event by more than autoscalerConcurrencyWindow; anything closer than that is
+// one loop's own output rather than a sequence, and resolves to not-declined.
 //
 // No relevant events — an autoscaler this matcher does not recognize, an autoscaler
 // that has not looked at the pod yet, or no autoscaler at all — yields false, which is
@@ -105,8 +141,9 @@ func autoscalerDeclination(pod *corev1.Pod, evts []corev1.Event) (declined bool,
 		schedulerName = defaultSchedulerName
 	}
 
-	var newest time.Time
-	newestClass, newestMsg := classIrrelevant, ""
+	var declinedAt, actingAt time.Time
+	var haveDeclined, haveActing bool
+	declinedMsg := ""
 	for i := range evts {
 		e := &evts[i]
 		class := classifyAutoscalerEvent(e, schedulerName)
@@ -114,19 +151,26 @@ func autoscalerDeclination(pod *corev1.Pod, evts []corev1.Event) (declined bool,
 			continue
 		}
 		at := eventTime(e)
-		switch {
-		case newestClass == classIrrelevant: // the first relevant event wins by default
-		case at.After(newest): // a strictly newer verdict supersedes
-		case at.Equal(newest) && class == classActing: // a tie resolves to not-declined
-		default:
+		if class == classDeclined {
+			if !haveDeclined || at.After(declinedAt) {
+				declinedAt, declinedMsg, haveDeclined = at, truncate(e.Message, 200), true
+			}
 			continue
 		}
-		newest, newestClass, newestMsg = at, class, truncate(e.Message, 200)
+		if !haveActing || at.After(actingAt) {
+			actingAt, haveActing = at, true
+		}
 	}
-	if newestClass != classDeclined {
+
+	if !haveDeclined {
 		return false, ""
 	}
-	return true, newestMsg
+	// An acting event supersedes a declination immediately (the fail-open direction);
+	// a declination supersedes an acting event only from outside the window.
+	if haveActing && !declinedAt.After(actingAt.Add(autoscalerConcurrencyWindow)) {
+		return false, ""
+	}
+	return true, declinedMsg
 }
 
 // classifyAutoscalerEvent maps one Event to what it says about a node arriving for the

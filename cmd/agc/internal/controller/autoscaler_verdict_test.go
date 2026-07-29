@@ -188,6 +188,8 @@ func TestAutoscalerDeclination(t *testing.T) {
 			wantDeclined: false,
 		},
 		{
+			// A minute later, so it is a genuinely subsequent verdict rather than
+			// the same loop's other half — see the window rows below.
 			name: "but a declination after a scale-up still gates",
 			pod:  podWithScheduler(""),
 			events: []corev1.Event{
@@ -206,8 +208,8 @@ func TestAutoscalerDeclination(t *testing.T) {
 			wantDeclined: false,
 		},
 		{
-			// Event timestamps have one-second resolution, so a same-instant
-			// declination and scale-up are genuinely ambiguous. Fail open.
+			// The legacy recorder's one-second resolution collapses one loop's two
+			// verdicts into a tie. Concurrent, not sequential. Fail open.
 			name: "a same-instant declination and scale-up resolve open",
 			pod:  podWithScheduler(""),
 			events: []corev1.Event{
@@ -215,6 +217,82 @@ func TestAutoscalerDeclination(t *testing.T) {
 				legacyEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineMsg, t0),
 			},
 			wantDeclined: false,
+		},
+
+		// --- one loop's two verdicts, at recorder resolutions that can tell
+		// --- them apart (Q478) -----------------------------------------------
+		{
+			// The measured case, in the recorder generation that can resolve it. A
+			// real cluster-autoscaler emitted exactly this pair for one pod 4ms
+			// apart: round one found a scale-up plan, round two still could not
+			// place the pod even with the upcoming node. A node IS arriving, so the
+			// declination must not gate — and strict recency would have said it does.
+			name: "a declination 4ms after a scale-up is the same loop, not a newer verdict",
+			pod:  podWithScheduler(""),
+			events: []corev1.Event{
+				newStyleEvent(reasonTriggeredScaleUp, "cluster-autoscaler", caScaleUpMsg, t0),
+				newStyleEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineMsg, t0.Add(4*time.Millisecond)),
+			},
+			wantDeclined: false,
+		},
+		{
+			// The same shape in Karpenter's vocabulary, which is the arm that
+			// actually runs on a microsecond recorder in the field.
+			name: "karpenter declining just after nominating resolves open",
+			pod:  podWithScheduler(""),
+			events: []corev1.Event{
+				newStyleEvent(reasonNominated, "karpenter", karpenterNominateMsg, t0),
+				newStyleEvent(reasonFailedScheduling, "karpenter", karpenterDecline, t0.Add(120*time.Millisecond)),
+			},
+			wantDeclined: false,
+		},
+		{
+			// The negative control for the window, and the reason it is a window
+			// rather than "an acting event wins forever": a declination from a LATER
+			// loop means the scale-up did not pan out, and it must still gate. Both
+			// autoscalers' loop cadences are ~10s, so this is a wide margin.
+			name: "a declination a full loop after a scale-up still gates",
+			pod:  podWithScheduler(""),
+			events: []corev1.Event{
+				newStyleEvent(reasonTriggeredScaleUp, "cluster-autoscaler", caScaleUpMsg, t0),
+				newStyleEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineMsg, t0.Add(10*time.Second)),
+			},
+			wantDeclined: true, wantDetail: caDeclineMsg,
+		},
+		{
+			// Pins the boundary itself, with the row below, so the window cannot be
+			// widened or narrowed silently.
+			name: "a declination one millisecond past the window gates",
+			pod:  podWithScheduler(""),
+			events: []corev1.Event{
+				newStyleEvent(reasonTriggeredScaleUp, "cluster-autoscaler", caScaleUpMsg, t0),
+				newStyleEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineMsg,
+					t0.Add(autoscalerConcurrencyWindow+time.Millisecond)),
+			},
+			wantDeclined: true, wantDetail: caDeclineMsg,
+		},
+		{
+			name: "the same pair one millisecond inside the window resolves open",
+			pod:  podWithScheduler(""),
+			events: []corev1.Event{
+				newStyleEvent(reasonTriggeredScaleUp, "cluster-autoscaler", caScaleUpMsg, t0),
+				newStyleEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineMsg,
+					t0.Add(autoscalerConcurrencyWindow-time.Millisecond)),
+			},
+			wantDeclined: false,
+		},
+		{
+			// The window is measured from the NEWEST acting event, not the newest
+			// event overall: an old scale-up must not shelter a declination that a
+			// later scale-up did not answer.
+			name: "an old scale-up does not shelter a declination outside the window",
+			pod:  podWithScheduler(""),
+			events: []corev1.Event{
+				newStyleEvent(reasonTriggeredScaleUp, "cluster-autoscaler", caScaleUpMsg, t0),
+				newStyleEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineMsg, t0.Add(time.Minute)),
+				newStyleEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineTaintNamedMsg, t0.Add(2*time.Minute)),
+			},
+			wantDeclined: true, wantDetail: caDeclineTaintNamedMsg,
 		},
 		{
 			// Ordering must not depend on which recorder generation wrote which event:

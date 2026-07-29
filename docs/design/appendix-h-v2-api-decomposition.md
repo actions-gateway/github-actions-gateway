@@ -724,8 +724,16 @@ correct:
   (nor `default-scheduler`). An unattributable event does not clear that bar.
 * **The verdict is the newest relevant event, not merely the existence of a
   declination.** An autoscaler that declined on one loop and scaled up on the next is
-  rescuing the tenant, and a stale declination must not gate against that. Same-second
-  ties resolve open.
+  rescuing the tenant, and a stale declination must not gate against that. Recency is
+  asymmetric, because one loop can emit both verdicts for one pod: a scale-up
+  supersedes a declination immediately, while a declination supersedes a scale-up only
+  from more than a second later — inside that window the pair is one loop's own output,
+  and resolves open. Measured, not assumed: cluster-autoscaler v1.36.1 emitted
+  `TriggeredScaleUp` and then `NotTriggerScaleUp` for the same pod 4ms apart
+  ([plan §9c](../plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474)).
+  The window is what makes that read a property of the autoscaler's behavior rather
+  than of its recorder's resolution, which is the difference between the two generations
+  in the field.
 * **Reads are uncached and doubly scoped** — field-selected to one pod, and only for
   pods the `WorkersUnschedulable` evaluation already found stuck past the scheduling
   grace, bounded per reconcile. There is no Event informer: Events are the
