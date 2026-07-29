@@ -145,12 +145,31 @@ func DeleteNamespace(name string) {
 
 // CreateGitHubAppSecret creates a Kubernetes Secret with GitHub App credentials
 // in the given namespace. The privateKeyPEM must be a valid RSA PEM block.
+//
+// The key goes through a temp file and --from-file, never --from-literal: Run
+// echoes every command's argv to the GinkgoWriter and folds it into the error
+// on failure, so a literal PEM would reach the run log, the JUnit report, and
+// any `ps` snapshot taken while kubectl is running. Tier C passes a live GitHub
+// App key here (other tiers use a throwaway), so that exposure is real. appId
+// and installationId are not secret and stay inline. This matches how
+// scripts/dogfood/{setup,e2e-setup}.sh already stamp the same Secret.
 func CreateGitHubAppSecret(ns, name string, appID, installID int64, privateKeyPEM []byte) {
+	// CreateTemp opens at 0600, so the PEM is never world-readable on disk.
+	keyFile, err := os.CreateTemp("", "e2e-github-app-key-*.pem")
+	Expect(err).NotTo(HaveOccurred(), "create temp file for GitHub App private key")
+	defer func() { _ = os.Remove(keyFile.Name()) }()
+	_, err = keyFile.Write(privateKeyPEM)
+	Expect(err).NotTo(HaveOccurred(), "write GitHub App private key")
+	// Closed before kubectl reads it, and CHECKED for the same reason
+	// ApplyManifest checks: an unflushed write would hand kubectl a truncated
+	// PEM, and the failure would surface far from the real cause.
+	Expect(keyFile.Close()).To(Succeed(), "close GitHub App private key file")
+
 	cmd := exec.Command("kubectl", "create", "secret", "generic", name,
 		"-n", ns,
 		fmt.Sprintf("--from-literal=appId=%d", appID),
 		fmt.Sprintf("--from-literal=installationId=%d", installID),
-		fmt.Sprintf("--from-literal=privateKey=%s", string(privateKeyPEM)),
+		"--from-file=privateKey="+keyFile.Name(),
 		"--dry-run=client", "-o", "yaml",
 	)
 	yaml, err := Run(cmd)
