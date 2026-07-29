@@ -2536,10 +2536,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#self-service-additions-via-a-watched-configmap-q188" class="md-nav__link">
+  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Self-service additions via a watched ConfigMap (Q188)
+        Self-service additions via the PriorityClassAllowlist CR (Q188)
       
     </span>
   </a>
@@ -2559,10 +2559,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#param-resolution-can-break-cluster-wide-q444-open" class="md-nav__link">
+  <a href="#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Param resolution can break cluster-wide (Q444, open)
+        Param resolution used to break cluster-wide (Q444, fixed in Q492)
       
     </span>
   </a>
@@ -3145,10 +3145,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#self-service-additions-via-a-watched-configmap-q188" class="md-nav__link">
+  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Self-service additions via a watched ConfigMap (Q188)
+        Self-service additions via the PriorityClassAllowlist CR (Q188)
       
     </span>
   </a>
@@ -3168,10 +3168,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#param-resolution-can-break-cluster-wide-q444-open" class="md-nav__link">
+  <a href="#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Param resolution can break cluster-wide (Q444, open)
+        Param resolution used to break cluster-wide (Q444, fixed in Q492)
       
     </span>
   </a>
@@ -4679,58 +4679,73 @@ objects, so nothing breaks until the CR is edited).</p>
 <p>Any class these print that is <strong>not</strong> in your <code>--allowed-priority-classes</code> was an
 open cross-tenant preemption lever; treat a <code>system-cluster-critical</code> or
 <code>system-node-critical</code> result as an incident, not a config change.</p>
-<h3 id="self-service-additions-via-a-watched-configmap-q188">Self-service additions via a watched ConfigMap (Q188)<a class="headerlink" href="#self-service-additions-via-a-watched-configmap-q188" title="Permanent link">&para;</a></h3>
+<h3 id="self-service-additions-via-the-priorityclassallowlist-cr-q188">Self-service additions via the <code>PriorityClassAllowlist</code> CR (Q188)<a class="headerlink" href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" title="Permanent link">&para;</a></h3>
 <p>Editing <code>--allowed-priority-classes</code> and rolling out the GMC for every new class
-is slow. The GMC can <strong>also</strong> source the allowlist from a ConfigMap it watches in
-its own install namespace, so a platform admin can add an allowed class without a
-flag edit or restart — the change takes effect on the next watch event.</p>
-<p>The ConfigMap source is <strong>additive</strong> and <strong>off by default</strong>. When unset, behavior
-is exactly the flag-only behavior above.</p>
-<ol>
-<li><strong>Enable the watch.</strong> Set the ConfigMap name on the GMC, either via the flag
-   or the Helm value:</li>
-</ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># GMC Deployment / Helm values</span>
-<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="nt">priorityClassAllowlist</span><span class="p">:</span>
-<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span><span class="nt">configMapName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-priority-class-allowlist</span><span class="w">   </span><span class="c1"># renders --priority-class-allowlist-configmap</span>
+is slow. The GMC <strong>also</strong> sources the allowlist from a cluster-scoped
+<code>PriorityClassAllowlist</code> CR it watches, so a platform admin can add an allowed
+class without a flag edit or restart — the change takes effect on the next watch
+event.</p>
+<p>The chart always renders this object (named <code>&lt;release&gt;-priorityclass-allowlist</code>)
+from <code>allowedPriorityClasses</code>, and always points the GMC at it. The <strong>same object
+is the <a href="#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289"><code>priorityclass-allowlist-guard</code></a>
+policy's parameter</strong>, so the webhook and the policy read one source and cannot
+drift — there is no superset discipline to remember.</p>
+<div class="admonition note">
+<p class="admonition-title">This replaced a watched ConfigMap (Q492)</p>
+<p><code>priorityClassAllowlist.configMapName</code> is removed; setting it now fails the
+Helm render with a migration message. A ConfigMap could not remain the
+policy's <code>paramKind</code> — a kube-apiserver defect permanently breaks param
+resolution for any <em>core-type</em> <code>paramKind</code> (see
+<a href="#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492">below</a>).
+Migration steps: <a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md</a>.</p>
+</div>
+<p><strong>Add a class without a restart.</strong> Edit the object in place:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>priorityclassallowlist<span class="w"> </span>gmc-priorityclass-allowlist
 </code></pre></div>
-<p>Setting it renders the flag <strong>and</strong> a namespaced <code>Role</code>/<code>RoleBinding</code> granting
-   the GMC <code>get</code>/<code>list</code>/<code>watch</code> on that one ConfigMap in its own namespace — the
-   GMC is never granted cluster-wide ConfigMap read.</p>
-<ol>
-<li><strong>Create the ConfigMap in the GMC's namespace.</strong> It must live in the GMC
-   install namespace (e.g. <code>gmc-system</code>) so only a platform admin — not a tenant —
-   can write it. The <code>allowedPriorityClasses</code> key lists class names, separated by
-   commas or newlines:</li>
-</ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
-<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClassAllowlist</span>
 <a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-priority-class-allowlist</span>
-<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-system</span>
-<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="nt">data</span><span class="p">:</span>
-<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="w">  </span><span class="nt">allowedPriorityClasses</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">    </span><span class="no">runner-bursty</span>
-<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="w">    </span><span class="no">runner-batch</span>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-priorityclass-allowlist</span>
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="w">  </span><span class="nt">allowedPriorityClasses</span><span class="p">:</span>
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-bursty</span>
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-batch</span>
 </code></pre></div>
-<p>The <strong>effective allowlist is the union</strong> of the static <code>--allowed-priority-classes</code>
-   flag and the ConfigMap entries: the ConfigMap can only <em>widen</em> the allowlist,
-   never remove a flag-pinned class. You still pre-create each <code>PriorityClass</code>
-   object first (step 1 of the previous section) — the allowlist only governs which
-   <em>names</em> a tenant may reference.</p>
+<p>The <strong>effective allowlist for the webhook is the union</strong> of the static
+<code>--allowed-priority-classes</code> flag and this object's entries: it can only <em>widen</em>
+the webhook allowlist, never remove a flag-pinned class. You still pre-create each
+<code>PriorityClass</code> object first (step 1 of the previous section) — the allowlist only
+governs which <em>names</em> a tenant may reference.</p>
+<div class="admonition warning">
+<p class="admonition-title">A chart upgrade reasserts <code>allowedPriorityClasses</code> over this object</p>
+<p>An in-place edit is the fast path, not the durable one. Persist any class you
+intend to keep in the chart's <code>allowedPriorityClasses</code> value.</p>
+</div>
+<p><strong>One caveat the flag does not share.</strong> The <em>policy</em> sees only this object, never
+the flag. A class listed in <code>--allowed-priority-classes</code> but absent here is
+admitted by the webhook and denied by the policy on the direct-write path. The
+chart renders both from one value, so this only arises if you edit the object down
+by hand.</p>
 <p><strong>Fail-safe behavior.</strong> The allowlist is a cross-tenant-isolation guardrail, so a
-broken ConfigMap must never silently widen it:</p>
+broken object must never silently widen it:</p>
 <ul>
-<li>A <strong>missing or deleted</strong> ConfigMap, a <strong>missing <code>allowedPriorityClasses</code> key</strong>,
-  or <strong>any invalid entry</strong> (a name that is not a valid DNS-1123 subdomain) causes
-  the GMC to fall back to the <strong>static flag allowlist only</strong> and log a warning.</li>
-<li>A malformed ConfigMap is rejected <strong>wholesale</strong> — a valid name sitting next to a
-  typo is <em>not</em> partially applied — so a mistake can never smuggle a class in.</li>
-<li>An <strong>empty</strong> <code>allowedPriorityClasses</code> value is valid and simply adds nothing.</li>
+<li>The CRD schema constrains every entry to a valid DNS-1123 subdomain and the list
+  to a set, so a malformed name is <strong>rejected at write time</strong> — it never reaches
+  the GMC or the policy.</li>
+<li>A <strong>missing or deleted</strong> object, or any invalid entry that predates the schema,
+  causes the GMC to fall back to the <strong>static flag allowlist only</strong> and log a
+  warning.</li>
+<li>An invalid list is rejected <strong>wholesale</strong> — a valid name sitting next to a typo
+  is <em>not</em> partially applied — so a mistake can never smuggle a class in.</li>
+<li>An <strong>absent or empty</strong> <code>allowedPriorityClasses</code> is valid and simply adds nothing.</li>
 </ul>
 <p>Because the dynamic set is additive and resets to the static base on any error,
-the worst case of a bad ConfigMap is that recently-added self-service classes stop
-being accepted until it is fixed — never that an unintended class becomes allowed.</p>
+the worst case is that recently-added self-service classes stop being accepted
+until it is fixed — never that an unintended class becomes allowed.</p>
+<p><strong>RBAC.</strong> The chart grants the GMC a <code>ClusterRole</code> with <code>get</code>/<code>list</code>/<code>watch</code> on
+<code>priorityclassallowlists</code> and nothing else. The kind is cluster-scoped so the role
+must be too, but it carries <strong>no write verb</strong>: the GMC can never widen its own
+allowlist.</p>
 <h3 id="defense-in-depth-the-priorityclass-allowlist-guard-policy-q289">Defense-in-depth: the <code>priorityclass-allowlist-guard</code> policy (Q289)<a class="headerlink" href="#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289" title="Permanent link">&para;</a></h3>
 <p>The webhooks above gate every <em>tenant-facing</em> CR, but <code>RunnerGroup</code> CRs have no
 webhook of their own — they are normally authored only by the GMC from an
@@ -4751,68 +4766,59 @@ is defense-in-depth — coverage while the webhook is unavailable or bypassed,
 plus the stored-object re-validation a webhook cannot provide.
 <code>ClusterRunnerTemplate</code> is exempt (cluster-scoped, platform-authored — its
 writers can create <code>PriorityClass</code> objects anyway).</p>
-<p>The policy reads its allowlist from a <strong>parameter ConfigMap</strong> (the apiserver
-cannot read the GMC flag):</p>
-<ul>
-<li><strong>Default:</strong> the chart renders <code>&lt;release&gt;-priorityclass-allowlist</code> in the GMC
-  namespace from <code>allowedPriorityClasses</code> — the same value that feeds
-  <code>--allowed-priority-classes</code> — so the webhook and the policy cannot drift.</li>
-<li><strong>With <code>priorityClassAllowlist.configMapName</code> set:</strong> that admin-owned watched
-  ConfigMap becomes the policy parameter instead. Keep it a <strong>superset of the
-  flag</strong> (or leave the flag empty and manage everything in the ConfigMap):
-  the policy sees only the ConfigMap, so a class allowed by flag alone would be
-  admitted by the webhook but denied here on the direct-write path — a
-  fail-closed skew, but a confusing one.</li>
-</ul>
+<p>The policy reads its allowlist from the cluster-scoped
+<strong><code>PriorityClassAllowlist</code> CR</strong> <code>&lt;release&gt;-priorityclass-allowlist</code> (the apiserver
+cannot read the GMC flag). The chart renders that object from
+<code>allowedPriorityClasses</code> — the same value that feeds <code>--allowed-priority-classes</code>
+— and the GMC watches the very same object, so the webhook and the policy cannot
+drift. See <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188">Self-service additions</a>.</p>
+<p><strong>Why a CRD and not a ConfigMap (Q492).</strong> A <code>paramKind</code> on a <em>core</em> type is
+destroyed by a kube-apiserver defect the moment the set of bindings naming it goes
+empty — which <code>helm uninstall</code> does. See
+<a href="#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492">below</a>.</p>
 <p><strong>Failure mode.</strong> The binding uses <code>parameterNotFoundAction: Deny</code>: if the
-parameter ConfigMap is <strong>deleted</strong>, every matched write — <code>runnergroups</code>,
+parameter object is <strong>deleted</strong>, every matched write — <code>runnergroups</code>,
 <code>runnersets</code>, and <code>runnertemplates</code> alike — is denied
 (<code>no params found for policy binding</code>) until it is recreated — loud and
 fail-closed rather than silently off. The GMC surfaces this as provisioning
-errors on affected gateways; recreate the ConfigMap (or <code>helm upgrade</code>) to
-recover. Deleting the ConfigMap does not affect running workloads.</p>
-<h4 id="param-resolution-can-break-cluster-wide-q444-open">Param resolution can break cluster-wide (Q444, open)<a class="headerlink" href="#param-resolution-can-break-cluster-wide-q444-open" title="Permanent link">&para;</a></h4>
-<p>There is an open defect in which the apiserver stops resolving this policy's
-parameter ConfigMap. Writes are denied with</p>
+errors on affected gateways; recreate the object (or re-run the chart upgrade) to
+recover. Deleting it does not affect running workloads.</p>
+<h4 id="param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492">Param resolution used to break cluster-wide (Q444, fixed in Q492)<a class="headerlink" href="#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492" title="Permanent link">&para;</a></h4>
+<p>Releases before the <code>PriorityClassAllowlist</code> migration used a <strong>ConfigMap</strong> as the
+policy's <code>paramKind</code>, and were exposed to a kube-apiserver defect that denied
+every matched write cluster-wide:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>denied request: failed to configure binding: no params found for policy binding
 <a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>with `Deny` parameterNotFoundAction
 </code></pre></div>
-<p>while the ConfigMap plainly exists at the referenced name and namespace. Because
+<p>…while the ConfigMap plainly existed at the referenced name and namespace. Because
 <code>parameterNotFoundAction: Deny</code> resolves parameters <strong>before</strong> any per-object
-matching, this denies <em>every</em> matched write — <code>runnergroups</code>, <code>runnersets</code>,
-<code>runnertemplates</code>, class-naming or not — cluster-wide. The GMC surfaces it as
-provisioning failures on every gateway.</p>
-<p>Observed on Kubernetes 1.35.5 and 1.36.1. The trigger is <strong>deleting the policy's
-binding</strong> — the apiserver tears down the shared parameter informer as soon as no
-binding names the ConfigMap <code>paramKind</code>, and never restarts it. <code>helm uninstall</code>
-deletes the guard's only binding; a later reinstall cannot repair it, because the
-new ConfigMap is invisible to the torn-down informer. <code>helm upgrade</code> never
-removes the binding and is safe. Recreating the ConfigMap does not help; only a
-kube-apiserver restart does.</p>
-<p><strong>It can also fail open.</strong> If the torn-down informer's cache still holds the
-previous ConfigMap, there is no error — the guard keeps enforcing a <strong>stale
-allowlist</strong>, and edits to the allowlist silently do nothing. Treat any suspected
-occurrence as a reason to verify the guard rejects a class you have just removed,
-rather than assuming your current allowlist is in force.</p>
-<p>Mechanism, measurements and reproducer:
-<a href="../../plan/q444-vap-param-resolution/"><code>q444-vap-param-resolution.md</code></a>.</p>
-<p><strong>Do not confuse it with the benign window.</strong> A reinstall removes the parameter
-ConfigMap and recreates it, and for a second or two in between the guard is
-correctly failing closed with the same message. That clears on its own; the
-defect does not.</p>
-<p><strong>If you hit it</strong>, two options:</p>
-<ul>
-<li><strong>Restart kube-apiserver.</strong> The only known fix — it clears in seconds with no
-  object changes. Available on self-managed control planes; on EKS/GKE/AKS you
-  cannot do this directly, and a control-plane version upgrade is usually the
-  only lever that recycles the process.</li>
-<li><strong>Turn the guard off to restore writes</strong> (<code>helm upgrade --set
-  admissionPolicy.enabled=false</code>, or delete the binding by hand). Denials stop
-  immediately because nothing evaluates the policy any more. You lose the
-  defense-in-depth backstop until the apiserver restarts and you re-enable it, so
-  treat it as an incident mitigation and make sure the webhook allowlist is still
-  in force in the meantime.</li>
-</ul>
+matching, that denied <em>every</em> matched write — <code>runnergroups</code>, <code>runnersets</code>,
+<code>runnertemplates</code>, class-naming or not. It could also fail <strong>open</strong>, silently
+enforcing a stale allowlist from a frozen informer cache.</p>
+<p>The trigger is deleting the policy's <strong>binding</strong>: the apiserver keys one <em>shared</em>
+parameter informer per core-type <code>paramKind</code>, tears it down once no binding names
+that kind, and never restarts it. <code>helm uninstall</code> deletes the guard's only
+binding, so a later reinstall could not repair it — the only recovery was a
+kube-apiserver restart, unavailable on EKS/GKE/AKS. Observed on Kubernetes 1.35.5
+and 1.36.1.</p>
+<p><strong>What fixes it.</strong> For a <em>CRD</em> <code>paramKind</code> the apiserver allocates a fresh dynamic
+informer per context, so the same transition is survivable. Moving the parameter to
+the cluster-scoped <code>PriorityClassAllowlist</code> CR (Q492) therefore removes the
+exposure at its root rather than mitigating it. The contrast is measured directly —
+the same empty-binding-set transition, one GVK apart — by
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/vap-param-informer-check.sh"><code>scripts/vap-param-informer-check.sh</code></a>,
+and the uninstall/reinstall cycle is now a CI gate
+(<code>scripts/chart-reinstall-check.sh</code>). Mechanism and measurements:
+<a href="../../plan/archive/q444-vap-param-resolution/"><code>q444-vap-param-resolution.md</code></a>.</p>
+<p><strong>If you are still on an affected release</strong>, upgrade in place — <code>helm upgrade</code>
+never removes the binding and is safe — and see
+<a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md</a>. If you are
+already in the broken state, restart kube-apiserver where you can; otherwise set
+<code>admissionPolicy.enabled=false</code> to restore writes (you lose the backstop until the
+apiserver recycles), then upgrade.</p>
+<p><strong>The benign window is not this defect.</strong> A reinstall removes the parameter object
+and recreates it, and for a second or two in between the guard correctly fails
+closed with the same message. That clears on its own.</p>
 <hr />
 <h2 id="license-attribution-in-images">License attribution in images<a class="headerlink" href="#license-attribution-in-images" title="Permanent link">&para;</a></h2>
 <p>The compiled binaries statically link third-party Go modules (MIT/BSD/Apache/ISC/…),

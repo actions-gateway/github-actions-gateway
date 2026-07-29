@@ -1470,10 +1470,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#known-defect-q444-the-policy-can-stop-resolving-its-parameters" class="md-nav__link">
+  <a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Known defect (Q444): the policy can stop resolving its parameters
+        The policy parameter is a CRD, not a ConfigMap (Q492)
       
     </span>
   </a>
@@ -2556,10 +2556,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#known-defect-q444-the-policy-can-stop-resolving-its-parameters" class="md-nav__link">
+  <a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Known defect (Q444): the policy can stop resolving its parameters
+        The policy parameter is a CRD, not a ConfigMap (Q492)
       
     </span>
   </a>
@@ -3043,7 +3043,7 @@ digests. The knobs an operator is most likely to override:</p>
 <tr>
 <td><code>admissionPolicy.enabled</code></td>
 <td><code>true</code></td>
-<td>Leave on where you can. It ships the <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code>, the backstop that gates direct <code>runnergroups</code> writes (which have no webhook) against the PriorityClass allowlist. <strong>Weigh <a href="#known-defect-q444-the-policy-can-stop-resolving-its-parameters">Q444</a> first on a managed control plane</strong>: the apiserver can stop resolving the policy's parameter ConfigMap and deny every <code>runnergroups</code>/<code>runnersets</code>/<code>runnertemplates</code> write cluster-wide, and the only known recovery is a kube-apiserver restart, which EKS/GKE/AKS do not offer. Set <code>false</code> to rely on the GMC webhook allowlist alone.</td>
+<td>Leave it on. It ships the <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code>, the backstop that gates direct <code>runnergroups</code> writes (which have no webhook) against the PriorityClass allowlist. The managed-control-plane caveat that used to sit here is <a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492">resolved</a>. Set <code>false</code> to rely on the GMC webhook allowlist alone.</td>
 </tr>
 </tbody>
 </table>
@@ -3052,66 +3052,78 @@ enum values, etc.). The <strong>full reference</strong> — every value with its
 description — lives in the
 <a href="../../charts/actions-gateway/README.md#values">chart README</a>; this table is
 only the common subset, not a duplicate.</p>
-<h3 id="known-defect-q444-the-policy-can-stop-resolving-its-parameters">Known defect (Q444): the policy can stop resolving its parameters<a class="headerlink" href="#known-defect-q444-the-policy-can-stop-resolving-its-parameters" title="Permanent link">&para;</a></h3>
-<p><code>admissionPolicy.enabled</code> is on by default because a cluster-wide PriorityClass
-escalation is the more serious risk of the two. Make the call deliberately
-though, because the failure mode is severe and currently has no chart-side
-mitigation.</p>
-<p>An apiserver can enter a state where it stops resolving the guard's parameter
-ConfigMap and answers every matched write with <code>no params found for policy
-binding</code>, even though the ConfigMap is present at exactly the referenced name
-and namespace. Parameters resolve before any per-object matching, so this denies
-<strong>every</strong> <code>runnergroups</code>, <code>runnersets</code> and <code>runnertemplates</code> write cluster-wide,
-not only the ones the policy would have rejected.</p>
-<p>The trigger is <strong>deleting the policy's binding</strong>, which is exactly what <code>helm
-uninstall</code> does. The apiserver tears down the shared parameter informer as soon
-as no binding names the ConfigMap <code>paramKind</code>, and never restarts it; ConfigMaps
-created afterwards are invisible, so the reinstall cannot repair it. <code>helm
-upgrade</code> never removes the binding and is safe — <strong>upgrade in place rather than
-uninstalling and reinstalling.</strong></p>
-<p>The state belongs to the kube-apiserver process, so restarting kube-apiserver
-clears it in seconds. <strong>On EKS/GKE/AKS you cannot do that</strong>, and a control-plane
-version upgrade is usually the only lever that recycles the process.</p>
-<p>There is a second, quieter mode: if the torn-down informer's cache still holds
-the old ConfigMap, the guard silently keeps enforcing a <strong>stale allowlist</strong> with
-no error anywhere. Allowlist edits appear to apply and do nothing.</p>
-<p>If you run on a managed control plane and cannot carry that risk, install with
-<code>admissionPolicy.enabled=false</code>. You keep the GMC validating webhooks, which
-gate the tenant-facing CRs (<code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>);
-what you give up is the backstop for principals granted direct <code>runnergroups</code>
-RBAC, and stored-object re-validation on update.</p>
-<p>Upstream: <a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a>.
-Symptoms and recovery: <a href="../troubleshooting/#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding">troubleshooting.md</a>.</p>
+<h3 id="the-policy-parameter-is-a-crd-not-a-configmap-q492">The policy parameter is a CRD, not a ConfigMap (Q492)<a class="headerlink" href="#the-policy-parameter-is-a-crd-not-a-configmap-q492" title="Permanent link">&para;</a></h3>
+<p>The guard reads its allowlist from a cluster-scoped <code>PriorityClassAllowlist</code> CR
+(<code>&lt;release&gt;-priorityclass-allowlist</code>), which the chart renders from
+<code>allowedPriorityClasses</code> and the GMC also watches. One object, two consumers, so
+the webhook and the policy cannot disagree.</p>
+<p>That it is a <strong>CRD</strong> and not a <code>ConfigMap</code> is load-bearing, not incidental.
+Releases that used a ConfigMap were exposed to a kube-apiserver defect (Q444):
+the apiserver keys one <em>shared</em> parameter informer per core-type <code>paramKind</code>,
+tears it down as soon as no binding names that kind, and never restarts it. A
+<code>helm uninstall</code> deletes the guard's only binding and so tripped exactly that,
+leaving every <code>runnergroups</code>/<code>runnersets</code>/<code>runnertemplates</code> write denied
+cluster-wide with <code>no params found for policy binding</code> — recoverable only by
+restarting kube-apiserver, which EKS/GKE/AKS do not offer. It could also fail
+<em>open</em>, silently enforcing a stale allowlist from a frozen cache.</p>
+<p>For a CRD <code>paramKind</code> the apiserver allocates a fresh dynamic informer per
+context, so the same uninstall/reinstall cycle is survivable. This is measured
+rather than inferred: <code>scripts/vap-param-informer-check.sh</code> runs the identical
+empty-binding-set transition against both kinds on one apiserver, and
+<code>scripts/chart-reinstall-check.sh</code> drives a real uninstall/reinstall in CI.</p>
+<p><strong>One consequence, and it is not install-time.</strong> This CRD ships in the chart-root
+<code>crds/</code> directory rather than <code>templates/crds/</code> like the others, because the same
+release also creates a <code>PriorityClassAllowlist</code> object and Helm resolves REST
+mappings for the whole manifest before applying any of it — a CR whose CRD is a
+template in the same release fails the install outright. A <strong>fresh <code>helm install</code>
+handles this for you</strong>; <code>crds/</code> is applied first.</p>
+<p>An <strong>upgrade does not</strong>. Helm skips <code>crds/</code> entirely on upgrade, so applying the
+chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally
+rather than conditionally, so the procedure does not depend on which version you
+are coming from:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>&lt;chart&gt;<span class="w"> </span>--version<span class="w"> </span>&lt;version&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+</code></pre></div>
+<p>It is idempotent and version-correct, so it also covers any future schema change
+to this CRD with no release-note callout to remember. The chart preflights the
+CRD's presence and fails with that command rather than letting Helm emit a bare
+<code>no matches for kind</code>. Steps:
+<a href="../upgrade/#gmc-install-and-upgrade-via-helm-recommended">upgrade.md</a>.</p>
+<p><code>helm uninstall</code> leaves the CRD behind, which is the same end state as the
+<code>helm.sh/resource-policy: keep</code> the other CRDs carry.</p>
+<p>Upstream, for the underlying apiserver bug:
+<a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a>.
+Migrating an existing release off the ConfigMap:
+<a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md</a>.</p>
 <hr />
 <h2 id="verify-a-healthy-install">Verify a healthy install<a class="headerlink" href="#verify-a-healthy-install" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># 1. Both GMC replicas are Running and Ready (HA default replicaCount=2).</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>gmc-controller-manager
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Expected: READY 2/2</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Expected: 2 pods, all Running</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
-<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># 2. A leader has been elected (the lease holder is the active replica).</span>
-<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>lease<span class="w"> </span>-n<span class="w"> </span>gmc-system
-<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Expected: a lease whose HOLDER is one of the GMC pods</span>
-<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
-<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># 3. Both CRDs are installed and Established.</span>
-<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">                </span>runnergroups.actions-gateway.github.com
-<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">condition</span><span class="o">=</span>Established<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">  </span>crd/actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">  </span>crd/runnergroups.actions-gateway.github.com
-<a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>
-<a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="c1"># 4. The validating webhook and the admission policies are present.</span>
-<a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="c1"># (Resource names carry the chart namePrefix, default &quot;gmc-&quot;.)</span>
-<a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingwebhookconfiguration<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>actions-gateway
-<a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingadmissionpolicy<span class="w"> </span>gmc-namespace-psa-guard<span class="w"> </span>gmc-tenant-resource-guard<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="w">  </span>gmc-priorityclass-allowlist-guard
-<a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>
-<a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="c1"># 5. No errors in the GMC manager logs.</span>
-<a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>--tail<span class="o">=</span><span class="m">30</span>
-<a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="c1"># Look for: &quot;Starting workers&quot; / &quot;successfully acquired lease&quot;; no repeated</span>
-<a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="c1"># &quot;AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE must be pinned by digest&quot;.</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># 1. Both GMC replicas are Running and Ready (HA default replicaCount=2).</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>gmc-controller-manager
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Expected: READY 2/2</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Expected: 2 pods, all Running</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># 2. A leader has been elected (the lease holder is the active replica).</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>lease<span class="w"> </span>-n<span class="w"> </span>gmc-system
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c1"># Expected: a lease whose HOLDER is one of the GMC pods</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># 3. Both CRDs are installed and Established.</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">                </span>runnergroups.actions-gateway.github.com
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">condition</span><span class="o">=</span>Established<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">  </span>crd/actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">  </span>crd/runnergroups.actions-gateway.github.com
+<a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>
+<a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="c1"># 4. The validating webhook and the admission policies are present.</span>
+<a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="c1"># (Resource names carry the chart namePrefix, default &quot;gmc-&quot;.)</span>
+<a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingwebhookconfiguration<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>actions-gateway
+<a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingadmissionpolicy<span class="w"> </span>gmc-namespace-psa-guard<span class="w"> </span>gmc-tenant-resource-guard<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">  </span>gmc-priorityclass-allowlist-guard
+<a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>
+<a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="c1"># 5. No errors in the GMC manager logs.</span>
+<a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>--tail<span class="o">=</span><span class="m">30</span>
+<a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="c1"># Look for: &quot;Starting workers&quot; / &quot;successfully acquired lease&quot;; no repeated</span>
+<a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="c1"># &quot;AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE must be pinned by digest&quot;.</span>
 </code></pre></div>
 <p>A forgotten <code>agc</code>/<code>proxy</code>/<code>wrapper</code> digest now fails the <strong>render</strong> with a clear
 per-image message (see <a href="#pin-images-by-digest">Pin images by digest</a>), so a
@@ -3123,28 +3135,27 @@ to create the GitHub App Secret and the first <code>ActionsGateway</code> CR, or
 <a href="../tenant-onboarding/">Tenant Onboarding Checklist</a> to bring up a tenant.</p>
 <hr />
 <h2 id="uninstall">Uninstall<a class="headerlink" href="#uninstall" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
 </code></pre></div>
 <p>The two CRDs ship as templates carrying <code>helm.sh/resource-policy: keep</code>, so
 <code>helm uninstall</code> <strong>preserves the CRDs and every tenant's <code>ActionsGateway</code> /
 <code>RunnerGroup</code> object</strong> rather than cascade-deleting them — uninstalling the GMC
 does not tear down running tenant gateways. To fully remove them, delete the
 tenant CRs first, then the CRDs explicitly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Only after confirming no tenant still needs their gateways:</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>actionsgateway<span class="w"> </span>--all<span class="w"> </span>--all-namespaces
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">                   </span>runnergroups.actions-gateway.github.com
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Only after confirming no tenant still needs their gateways:</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>actionsgateway<span class="w"> </span>--all<span class="w"> </span>--all-namespaces
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">                   </span>runnergroups.actions-gateway.github.com
 </code></pre></div>
 <p>The <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code> is removed by
-<code>helm uninstall</code> along with its binding and parameter ConfigMap. <strong>Removing that
-binding is the trigger for Q444</strong>: the apiserver can be left permanently unable
-to resolve the policy's parameters, denying <strong>every</strong> <code>runnergroups</code> /
-<code>runnersets</code> / <code>runnertemplates</code> write cluster-wide even though the ConfigMap is
-present — and a reinstall does not repair it, because the new ConfigMap is
-invisible to the torn-down informer. The only recovery is a kube-apiserver
-restart, which managed control planes do not offer. If you are reinstalling
-rather than removing for good, use <code>helm upgrade</code> instead. Symptoms and
-mitigation:
+<code>helm uninstall</code> along with its binding and its parameter object; the
+<code>PriorityClassAllowlist</code> <strong>CRD</strong> is left behind, as <code>crds/</code> contents always are.
+Removing the binding used to be the trigger for a cluster-wide outage (Q444) when
+the parameter was a ConfigMap — a reinstall could not repair it. It is safe now
+that the parameter is a CRD, which is
+<a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492">why it is one</a>; the
+uninstall/reinstall cycle is covered by <code>scripts/chart-reinstall-check.sh</code> in CI.
+Symptoms of the old failure, if you meet it on a pre-Q492 release:
 <a href="../troubleshooting/#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding">troubleshooting.md</a>.</p>
 <p>The install namespace (<code>gmc-system</code>) is left in place if you created it with
 <code>--create-namespace</code>; remove it with <code>kubectl delete namespace gmc-system</code> once
