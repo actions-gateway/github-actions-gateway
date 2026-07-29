@@ -5971,6 +5971,19 @@ AGC — see
 On a fixed AGC, check the pod's annotation first:
 <code>kubectl get pod -n &lt;namespace&gt; &lt;pod&gt; -o jsonpath='{.metadata.annotations.actions-gateway\.com/run-id}'</code>
 — empty there means the payload genuinely carried no identity.</p>
+<p><strong><code>eviction_retries_total</code> incrementing but the job still never re-runs?</strong> On a
+post-Q495 AGC the re-run is now <em>attempted</em>, and against real GitHub it is
+currently <em>refused</em>. Measured (Q396): a kubelet eviction SIGKILLs the runner
+before it can report, so GitHub does not conclude the run until the job lock's
+TTL lapses — <strong>about 9–10 minutes</strong> — while the AGC fires <code>rerun-failed-jobs</code>
+only <code>evictionRetryDelay</code> (default 5s) after the eviction. The API answers
+<code>403 This workflow is already running</code>, the budget slot is spent anyway, and the
+counter increments regardless. <strong>Treat <code>eviction_retries_total</code> as "a re-run was
+attempted", not "a job was recovered"</strong>, and look for
+<code>eviction auto-retry failed; manual rerun may be required</code> with a 403 in the AGC
+log to confirm this case. Until <a href="../../STATUS/#Q503">Q503</a> lands, evicted jobs need
+a manual re-run; raising <code>evictionRetryDelay</code> past GitHub's conclusion latency is
+the interim workaround.</p>
 </blockquote>
 <p><strong>Symptoms.</strong> <code>actions_gateway_eviction_retries_exhausted_total</code> is incrementing. Jobs are being cancelled after eviction despite automatic retries. <code>kubectl describe</code> on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> shows a <code>Warning</code> event with reason <code>EvictionRetriesExhausted</code> (Q170) naming the affected run — the event-based companion to the metric.</p>
 <p><strong>Likely causes.</strong>
