@@ -176,7 +176,9 @@ Safety rails, in all profiles:
   operator-set envelope. Size the ceiling against the namespace
   `ResourceQuota` and any `LimitRange`: derived values are still subject to
   both at admission, and the existing `WorkerQuota*` conditions and quota
-  retries surface a conflict at runtime.
+  retries surface a conflict at runtime. An admission mutation that cancels
+  `Throughput` rejects nothing, so it gets its own condition —
+  [`SizingProfileOverridden`](#when-something-re-injects-the-cpu-limit-throughput-removes).
 
   > **Set `maxRequests` before enabling `Binpack` *or* `Throughput` on a shape
   > whose measured peak approaches node allocatable.** Both derive `requests`
@@ -231,19 +233,43 @@ form is an explicit field under `sizing.nodeShare`, an additive change we held
 back from 1.3 for want of a concrete asker
 ([appendix-h §H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission)).
 
-### A `LimitRange` silently cancels `Throughput`
+### When something re-injects the CPU limit `Throughput` removes
 
 `Throughput` bursts by **removing** the runner container's CPU limit — that is
-its mechanism, not a side effect. A `LimitRange` puts the limit straight back.
+its mechanism, not a side effect. Anything that puts the limit back at admission
+cancels the profile, and cancels it *silently*: the pod is **not rejected**, it
+is admitted with a CPU limit, `sizingProfileState` still reports `Active`, and
+every other signal looks correct. Jobs simply stop bursting.
 
-An entry of type `Container` carrying a `default` for `limits.cpu` — or a `max`
-with no `default`, which Kubernetes then uses as the default — applies to any
-container that does not declare one, and the container `Throughput` just built
-declares none. The pod is **not rejected**. It is admitted with a CPU limit the
-profile deliberately removed, `sizingProfileState` still reports `Active`, and
-every other signal looks correct. Jobs simply stop bursting, and nothing says so.
+The usual cause is a `LimitRange` entry of type `Container` carrying a `default`
+for `limits.cpu` — or a `max` with no `default`, which Kubernetes then uses as
+the default. It applies to any container that does not declare one, and the
+container `Throughput` just built declares none. A mutating admission webhook or
+a policy engine's mutate rule does the same thing just as quietly.
 
-Check before you enable it:
+So the gateway reports the **effect** rather than any one cause. It knows which
+worker pods it built without a CPU limit (they carry
+`actions-gateway.com/sizing-profile: Throughput`), and it can see what the
+apiserver admitted. When those disagree, the `RunnerSet` raises the advisory
+**`SizingProfileOverridden`** condition:
+
+```bash
+kubectl get runnerset <name> -n <ns> -o jsonpath='{.status.conditions[?(@.type=="SizingProfileOverridden")]}' | jq
+```
+
+| `status` / `reason` | Meaning |
+|---|---|
+| `True` / `CPULimitInjected` | A pod the profile built with no CPU limit is running with one. The message names the pod, the container, and the limit. Jobs are capped; the profile has no effect. |
+| `False` / `NoCPULimitInjected` | Every profile-built pod reached the kubelet as built. Jobs burst as intended. |
+| `False` / `AwaitingWorkerPods` | The profile has built no pod yet, so there is nothing to observe — *not* a clean bill of health. |
+
+The condition is advisory: it never gates `Ready`, and jobs keep running. It
+appears only under `Throughput` and is removed under any other profile. Because
+it reads the admitted pods rather than a policy object, it catches whatever did
+the injecting — and it needs no extra cluster access to do so.
+
+To check a namespace *before* enabling the profile, read the `LimitRange`
+directly:
 
 ```bash
 kubectl get limitrange -n <ns> -o jsonpath='{range .items[*].spec.limits[*]}{.type}{"\t"}{.default}{"\t"}{.max}{"\n"}{end}'
@@ -261,9 +287,17 @@ burst in that namespace. Three ways out, in order of preference:
 3. **Stay on `Static`** and apply `status.sizingRecommendation` by hand, keeping
    whatever limit the `LimitRange` requires.
 
-This is the one profile whose contract a namespace policy can quietly void. The
-memory side is unaffected: `Throughput` sets a memory limit explicitly, so a
-`LimitRange` default never reaches it.
+This is the one profile whose contract an admission mutation can quietly void —
+which is why it is the one that gets a condition. It is also why the check is
+`Throughput`-only: every other profile *sets* a CPU limit, leaving a defaulting
+policy nothing to inject. The memory side is unaffected for the same reason:
+`Throughput` sets a memory limit explicitly, so a `LimitRange` default never
+reaches it.
+
+The signal arrives with the first worker pod the profile builds, not when the
+policy is written — it reports what was admitted, so it needs something to have
+been admitted. Use the `kubectl get limitrange` check above if you want an answer
+before the first job runs.
 
 ## Troubleshooting
 
@@ -280,6 +314,15 @@ ten minutes.
 faster than the sampling interval. There is no per-job signal to size from at
 15s resolution; size such a RunnerSet by its node-shape share instead (see the
 `NodeShare` idea in the [sizing-profiles plan](../plan/runner-sizing-profiles.md)).
+
+**`Throughput` is `Active` but jobs still run at the old CPU ceiling** — read
+`SizingProfileOverridden` on the `RunnerSet`. `True/CPULimitInjected` means a pod
+the profile built without a CPU limit was admitted with one; the message names
+the pod and the limit, and
+[the three ways out](#when-something-re-injects-the-cpu-limit-throughput-removes)
+start with the namespace `LimitRange`. If that comes back clean, the injector is
+a mutating webhook or policy engine — `kubectl get mutatingwebhookconfiguration`
+and your policy engine's rules are the next stop.
 
 **Gauges reset after an AGC rollout** — the `…_usage_cpu_peak_cores` /
 `…_usage_memory_peak_bytes` gauges are peaks *since AGC start* by design.

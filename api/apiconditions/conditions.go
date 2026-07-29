@@ -441,3 +441,38 @@ const (
 	// pods run with, so judging drift against it would mislead.
 	ReasonSizingProfileActive = "SizingProfileActive"
 )
+
+// Sizing-profile override condition (Q489). The Throughput profile's mechanism is
+// the ABSENCE of a runner-container CPU limit — jobs burst into idle node capacity.
+// Anything that puts that limit back at admission cancels the profile without
+// rejecting anything: the pod is admitted, status.sizingProfileState still reports
+// Active, and every other signal looks correct while bursting is gone. A namespace
+// LimitRange with a Container-type cpu default is the common cause; a mutating
+// admission webhook or policy engine does it just as silently.
+//
+// So the AGC reports the EFFECT rather than any one cause: it compares the worker
+// pods it built without a CPU limit (marked provisioner.AnnotationSizingProfile)
+// against what the apiserver admitted. Advisory (abnormal-is-True): jobs still run,
+// they just do not burst, so it never gates Ready and is not in
+// ImpairingConditionTypes.
+const (
+	// ConditionSizingProfileOverridden is True when a worker pod the Throughput
+	// profile built without a CPU limit is running with one — whatever injected
+	// it. The message names the pod, the container, and the observed limit.
+	// Reported only under Throughput, and removed under any other profile.
+	ConditionSizingProfileOverridden = "SizingProfileOverridden"
+
+	// ReasonCPULimitInjected is the SizingProfileOverridden=True reason: admission
+	// added a CPU limit to a container the profile deliberately built without one.
+	ReasonCPULimitInjected = "CPULimitInjected"
+	// ReasonNoCPULimitInjected is the SizingProfileOverridden=False reason: every
+	// profile-built worker pod observed reached the kubelet as built, CPU limit
+	// still absent, so jobs burst as the profile intends.
+	ReasonNoCPULimitInjected = "NoCPULimitInjected"
+	// ReasonAwaitingWorkerPods is the SizingProfileOverridden=False reason when the
+	// profile has built no worker pod yet, so there is nothing to observe. It is
+	// deliberately distinct from NoCPULimitInjected: "we looked and it was clean"
+	// and "there was nothing to look at" are different claims, and reporting the
+	// second as the first would assert a health it has not established.
+	ReasonAwaitingWorkerPods = "AwaitingWorkerPods"
+)

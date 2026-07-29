@@ -248,6 +248,16 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	// descheduling don't evict the pod mid-job and strand the CI run.
 	annotations := applyDisruptionSafetyDefaults(meta.podAnnotations(), template.ObjectMeta.Annotations)
 
+	// Carry the sizing-profile marker the controller stamps on the resolved template
+	// when a profile derived this pod's ask (Q489) — it is what lets the
+	// SizingProfileOverridden check tell a profile-built pod from a template-built
+	// one. Copied by key, deliberately: worker-pod annotations are a controlled set,
+	// and passing tenant template annotations through wholesale would be a different
+	// (and much larger) change.
+	if v, ok := template.ObjectMeta.Annotations[AnnotationSizingProfile]; ok {
+		annotations[AnnotationSizingProfile] = v
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            podName,

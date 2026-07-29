@@ -29,6 +29,24 @@ const LabelRunnerSet = "actions-gateway.com/runner-set"
 // owns the pod through to a terminal phase), so it is scale-set-only in practice.
 const AnnotationJobCompletedAt = "actions-gateway.com/job-completed-at"
 
+// AnnotationSizingProfile is stamped on a worker pod, with the profile name as its
+// value, when an opt-in sizing profile actually derived that pod's cpu/memory ask
+// (Q489). A pod built from the template's static values — Static, or a history-based
+// profile still AwaitingSamples — carries no such annotation, so presence answers
+// "was this pod sized by the profile, or by the template?" without inferring it from
+// the numbers.
+//
+// It is what makes the SizingProfileOverridden condition exact: the condition asks
+// whether admission re-injected a CPU limit the Throughput profile removed, and
+// only a pod this annotation marks was ever built without one. Without it, a pod
+// created moments before the operator selected Throughput — still legitimately
+// running the template's CPU limit — would read as an override for the length of
+// its job.
+//
+// Controller-set and informational: never set it by hand and never use it for
+// security enforcement.
+const AnnotationSizingProfile = "actions-gateway.com/sizing-profile"
+
 // LabelAcquisitionProtocol records which acquisition tier provisioned a worker pod.
 // Only the scale-set tier stamps it (AcquisitionProtocolScaleSet); a classic worker
 // carries no such label, so presence is the tier test.

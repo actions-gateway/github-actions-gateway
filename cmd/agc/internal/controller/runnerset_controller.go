@@ -382,6 +382,13 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// routing so both acquisition tiers persist it with their status writes.
 	r.applySizingStatus(&rs, refs.template)
 
+	// Report a Throughput profile cancelled by an admission-injected CPU limit (Q489)
+	// — the one sizing conflict that rejects nothing, read off the worker pods the
+	// profile built rather than inferred from any one policy object. Advisory, and a
+	// no-op under every other profile. The existing worker-pod watch is what keeps it
+	// current: the pod carrying the injected limit re-reconciles this set.
+	r.applySizingProfileOverride(ctx, &rs, refs.template)
+
 	// 2. Recover evicted scale-set workers (Q417). Runs BEFORE the reaper: the
 	// evicted pod is the only record of which run to re-run, and the reaper deletes
 	// terminal pods once completedPodTTL elapses. It is a no-op for a classic set
