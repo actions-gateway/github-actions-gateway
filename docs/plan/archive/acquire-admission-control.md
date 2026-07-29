@@ -248,7 +248,7 @@ cluster quota. The point is that Kueue **augments** the pod layer; it cannot
     sections as the source the appendix is distilled from.
 - **Test tier:** unit-test the reservation arithmetic (double-admit under
   burst, release on failure, restart resets). The acquired-then-cancelled
-  outcome and the redelivery-after-skip behavior are **Tier-A kind e2e**
+  outcome and the redelivery-after-skip behavior are **cluster-only kind e2e**
   territory — they cross the real broker contract and cannot be proven by
   envtest. This is the same class of bug PR #59's planned
   `E2E_GMC_TenantProvisioning_*` test exists to catch.
@@ -258,7 +258,7 @@ cluster quota. The point is that Kueue **augments** the pod layer; it cannot
 The load-bearing assumption — *a ceiling-held, already-acquired job is cancelled
 (owned by the runner; the unrenewed lock lapses), not redelivered* — was, until
 Q154, only unit-tested and source-read. Per CLAUDE.md's PR #59 lesson (✅
-source-read findings are unverified until run), it is now confirmed by a Tier-A
+source-read findings are unverified until run), it is now confirmed by a cluster-only
 kind e2e: `E2E_AGC_AcquireAdmissionControl` in
 [`cmd/gmc/test/e2e/acquire_admission_test.go`](../../../cmd/gmc/test/e2e/acquire_admission_test.go).
 

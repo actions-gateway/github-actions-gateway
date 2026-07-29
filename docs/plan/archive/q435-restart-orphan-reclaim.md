@@ -53,7 +53,7 @@ terminal `JobCompleted`. An AGC that was down when the job ended never wrote it.
 
 ## Measurement
 
-Tier B (envtest, real apiserver, real Pod watch and `RequeueAfter` loop) in
+fake-GitHub (envtest, real apiserver, real Pod watch and `RequeueAfter` loop) in
 [`cmd/agc/internal/controller/integration/v2_restart_reclaim_test.go`](../../../cmd/agc/internal/controller/integration/v2_restart_reclaim_test.go).
 A restart is modelled the only way that matters to the reaper: worker pods
 already exist in the apiserver and the process has no in-memory state for any of
@@ -153,7 +153,7 @@ claim is qualified rather than absolute.
 ## Open, not measured here
 
 - **Does GitHub redeliver a `JobCompleted` after a multi-hour gap with no
-  session?** Tier A / live only. The fake's queue log is deliberately
+  session?** cluster-only / live only. The fake's queue log is deliberately
   session-independent, which is the *permissive* assumption; real retention is
   unknown and could be shorter. Q438's research confirmed this is genuinely
   **undocumented** — the published contract covers only within-session

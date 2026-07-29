@@ -16,7 +16,7 @@ import (
 // realGitHubEgressLabel marks the specs whose traffic terminates at the live
 // api.github.com (rather than the in-cluster fakegithub): the v1/v2 proxy
 // CONNECT specs, the direct-egress specs (whose NP ipBlock peers also depend on
-// the GMC's live /meta fetch), and the Tier C real-dispatch container. It is
+// the GMC's live /meta fetch), and the live-GitHub real-dispatch container. It is
 // not a filter label — the attribution AfterEach below uses it to decide which
 // failures warrant a runner-host GitHub preflight (Q352).
 const realGitHubEgressLabel = "real-github-egress"

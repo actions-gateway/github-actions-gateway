@@ -181,7 +181,7 @@ probes today, so its metrics simply move `:8081 → :8443` for symmetry.
 - **AGC**: unit test on the TLS-config builder (no-cert → handshake fail;
   valid client cert → 200) — extracted into a testable helper so it doesn't need
   a full manager.
-- **e2e (deferred / Tier-A)**: in-cluster scrape with the client bundle — folded
+- **e2e (deferred / cluster-only)**: in-cluster scrape with the client bundle — folded
   into the scrape-wiring follow-up (open question 3).
 
 ## Docs to update

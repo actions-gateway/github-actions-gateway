@@ -120,7 +120,7 @@ func TestAGC_Reaper_StuckPendingPodDeletedAfterDeadline(t *testing.T) {
 // provisioner path carries a controller OwnerReference to its RunnerGroup
 // with the UID the apiserver assigned — the hook Kubernetes GC uses to
 // cascade-delete worker pods on RunnerGroup/namespace deletion. (The cascade
-// itself needs the GC controller, which envtest does not run; the Tier-A kind
+// itself needs the GC controller, which envtest does not run; the cluster-only kind
 // e2e asserts the same ownerRef end-to-end where GC is live.)
 func TestAGC_Reaper_WorkerPodHasOwnerRef(t *testing.T) {
 	const nsName = "agc-reap-ownerref"

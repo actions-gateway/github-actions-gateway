@@ -156,7 +156,7 @@ duplicate ports) doesn't strip `6443` thinking it's redundant.
 
 A regression unit test in [`builder_test.go`](../../cmd/gmc/internal/controller/builder_test.go) asserts both ports appear in the apiserver egress rule, and the integration test in [`network_policy_test.go`](../../cmd/gmc/internal/controller/integration/network_policy_test.go) covers the same property end-to-end against envtest.
 
-The Tier-A e2e spec `E2E_GMC_TenantProvisioning_ProxyConnectWorks` in [`cmd/gmc/test/e2e/provisioning_test.go`](../../cmd/gmc/test/e2e/provisioning_test.go) is the live-cluster guard: a single label-matched debug pod doing `nc -zv 10.96.0.1 443` would have caught both PR #59's proxy `ipBlock` bug and the AGC `port: 443` bug from one spec, locally, in seconds.
+The cluster-only e2e spec `E2E_GMC_TenantProvisioning_ProxyConnectWorks` in [`cmd/gmc/test/e2e/provisioning_test.go`](../../cmd/gmc/test/e2e/provisioning_test.go) is the live-cluster guard: a single label-matched debug pod doing `nc -zv 10.96.0.1 443` would have caught both PR #59's proxy `ipBlock` bug and the AGC `port: 443` bug from one spec, locally, in seconds.
 
 ## Why this isn't an upstream bug
 

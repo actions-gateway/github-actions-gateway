@@ -50,7 +50,7 @@ the AGC will import it in Q264 P3 when the scale-set acquisition tier lands.
 
 All runtime modules share a single `vendor/` at the repo root, produced by `go work vendor` and committed to git. Docker builds and CI rely on this — they invoke `go build` with `-mod=vendor` auto-selected (no proxy.golang.org during build).
 
-`test/fakegithub` is an HTTP stub used by Tier B e2e tests, listed in `go.work` so its packages are covered by `go work vendor`. It imports one internal package — `broker/brokerstub`, the shared session/credential mechanics every in-repo broker double now builds on (Q368) — which is deliberately standard-library-only, so the fakegithub binary links no third-party code and its distroless, Trivy-scanned image stays lean. Keep `broker/brokerstub` dependency-free for that reason: an import of the `broker` client (githubapp/JWT/Prometheus) would enlarge the scanned surface.
+`test/fakegithub` is an HTTP stub used by fake-GitHub e2e tests, listed in `go.work` so its packages are covered by `go work vendor`. It imports one internal package — `broker/brokerstub`, the shared session/credential mechanics every in-repo broker double now builds on (Q368) — which is deliberately standard-library-only, so the fakegithub binary links no third-party code and its distroless, Trivy-scanned image stays lean. Keep `broker/brokerstub` dependency-free for that reason: an import of the `broker` client (githubapp/JWT/Prometheus) would enlarge the scanned surface.
 
 `tools/` has its own separate `vendor/` (`tools/vendor/`) for the kubebuilder/controller-gen toolchain. That's independent and managed by `make tools`. Do not merge it into the workspace vendor.
 

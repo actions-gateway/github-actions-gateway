@@ -149,7 +149,7 @@ func DeleteNamespace(name string) {
 // The key goes through a temp file and --from-file, never --from-literal: Run
 // echoes every command's argv to the GinkgoWriter and folds it into the error
 // on failure, so a literal PEM would reach the run log, the JUnit report, and
-// any `ps` snapshot taken while kubectl is running. Tier C passes a live GitHub
+// any `ps` snapshot taken while kubectl is running. live-GitHub passes a live GitHub
 // App key here (other tiers use a throwaway), so that exposure is real. appId
 // and installationId are not secret and stay inline. This matches how
 // scripts/dogfood/{setup,e2e-setup}.sh already stamp the same Secret.

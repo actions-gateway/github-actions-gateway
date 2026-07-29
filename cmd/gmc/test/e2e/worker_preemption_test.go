@@ -417,7 +417,7 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 	// with. No phase/reason pair can discriminate a disruption from an ordinary outcome.
 	//
 	// It is deliberately NOT a gateway worker. A worker's command is the injected
-	// wrapper, so its exit code is the runner's, and a Tier B worker cannot be made to
+	// wrapper, so its exit code is the runner's, and a fake-GitHub worker cannot be made to
 	// exit 0 on demand. What is under test here is the kubelet's behaviour on a
 	// preemption, which is worker-independent — so the pod is built to isolate it.
 	It("E2E_AGC_PreemptedRunningPodPhaseFollowsItsExitCode: a preempted running pod can end Succeeded, never Evicted", func() {

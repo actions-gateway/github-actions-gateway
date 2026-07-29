@@ -45,7 +45,7 @@ goroutine knows definitively its agent is spent. It self-heals inline:
 **Implementation note (revised during validation).** The controller factory
 wires `RecycleAgent`/`MarkAgentConsumed` **unconditionally**, for every
 registrar — not nil-for-stubs as an earlier draft of this plan implied. It has
-to: the Tier B self-heal e2e exercises the recycle path through the
+to: the fake-GitHub self-heal e2e exercises the recycle path through the
 `StubRegistrar` (e2e never has real GitHub credentials), so gating it on
 registrar type would leave the e2e unable to heal. It is also production-correct
 — a JIT session always serves exactly one job, so re-registering after every
@@ -171,7 +171,7 @@ applies.
 
 ## fakegithub: single-use simulation
 
-So the death-spiral and the fix are reproducible at Tier A/B without real
+So the death-spiral and the fix are reproducible at cluster-only/fake-GitHub without real
 GitHub:
 
 - **Runner registry + registration API** at GHES-style paths
@@ -184,7 +184,7 @@ GitHub:
     **409** when the name already has a live record.
   - `DELETE .../actions/runners/{id}`; `GET .../actions/runners?name={name}`.
 - **Sessions bind to agents**: `POST /session` parses `agent.id`. Unknown IDs
-  are implicitly registered, so existing StubRegistrar-based Tier B/C flows
+  are implicitly registered, so existing StubRegistrar-based fake-GitHub/live-GitHub flows
   keep working unchanged.
 - **Single-use enforcement (opt-in)**: `/acquirejob` is linked back to the
   delivering session via the message's `runnerRequestId` (injected into the
@@ -196,10 +196,10 @@ GitHub:
   `POST /control/singleuse`.
 
 Enforcement is **default OFF**: fakegithub's job queues are per-session,
-while real GitHub re-queues an unacquired job pool-wide — existing Tier B
+while real GitHub re-queues an unacquired job pool-wide — existing fake-GitHub
 tests that enqueue two jobs onto one session (`job_lifecycle_test.go`) would
 lose the second message when the first acquisition kills the session. A
-dedicated Tier B test toggles enforcement on, runs a job to completion, and
+dedicated fake-GitHub test toggles enforcement on, runs a job to completion, and
 asserts a fresh session replaces the consumed one and a second job still
 completes — proving the self-heal loop on a real cluster. fakegithub also
 gets its own module-level HTTP test covering register → consume → EOF/401 →
@@ -230,7 +230,7 @@ Unit (agentpool):
    `reload()` preserves the consumed set.
 10. `GithubRegistrar`: 409 → typed error; `ResolveAgentID` request/parse.
 
-Tier B (kind): a dedicated e2e test toggles `/control/singleuse` on, runs a
+fake-GitHub (kind): a dedicated e2e test toggles `/control/singleuse` on, runs a
 job to completion, and asserts the consumed session is replaced by a fresh
 one and a second job completes (the pre-fix AGC would stall forever).
 
@@ -240,7 +240,7 @@ one and a second job completes (the pre-fix AGC would stall forever).
   re-registration, heal ladder) + metrics table rows.
 - `docs/design/04-operational-flows.md` — job flow gains the post-job
   re-register step; new self-heal flow.
-- `docs/design/07-test-plan.md` — single-use simulation in the Tier B
+- `docs/design/07-test-plan.md` — single-use simulation in the fake-GitHub
   criteria.
 - `docs/operations/troubleshooting.md` — runbook: symptom on pre-fix versions
   (sessions stuck in `decode response: EOF` / 401 GetMessage loops, runner
@@ -259,6 +259,6 @@ one and a second job completes (the pre-fix AGC would stall forever).
 - [x] controller factory wiring
 - [x] githubapp: typed token-exchange error
 - [x] fakegithub single-use simulation (+ owner-scoped toggle, session owner filter)
-- [x] unit tests (race-clean) + Tier B spec `E2E_AGC_SingleUseSelfHeal`
+- [x] unit tests (race-clean) + fake-GitHub spec `E2E_AGC_SingleUseSelfHeal`
 - [x] docs
-- [ ] make check green, Tier B run, PR
+- [ ] make check green, fake-GitHub run, PR

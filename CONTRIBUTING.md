@@ -103,7 +103,7 @@ make check   # gofmt + golangci-lint + STATUS.md lint + unit tests
 For the full e2e suite against a local kind cluster:
 
 ```bash
-make e2e-up     # create cluster, build+push images, run Tier A + Tier B suites
+make e2e-up     # create cluster, build+push images, run cluster-only + fake-GitHub suites
 make e2e-clean  # tear down the cluster when done
 ```
 

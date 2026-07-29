@@ -25,20 +25,20 @@ Two things had to be known first:
    as "deliberate cancels share the path"; whether they actually do is a claim about
    the pod's observed shape, and it was never checked.
 
-Both are Tier C questions: they need a real runner executing a real job, reported to
-real GitHub. Neither the envtest pair nor the Tier B drain spec can ask them —
-Tier B's drained worker is deliberately held `Pending`, so there is no live container
+Both are live-GitHub questions: they need a real runner executing a real job, reported to
+real GitHub. Neither the envtest pair nor the fake-GitHub drain spec can ask them —
+the fake-GitHub tier's drained worker is deliberately held `Pending`, so there is no live container
 to signal and no report to follow.
 
 ## The measurement
 
-**Venue.** Tier C on the local kind cluster, the same footing as
+**Venue.** live-GitHub on the local kind cluster, the same footing as
 `E2E_GitHub_RealDispatch`: the GMC's fakegithub overrides are swapped for the real
 org URL, the tenant carries the live `actions-gateway-test` App credential, and the
 workflow is dispatched against `actions-gateway/gateway-test`.
 
 **Why a `kubectl delete pod` rather than a `kubectl drain`.** The drain-versus-delete
-distinction is already settled: Q421 measured at Tier B that an admitted eviction *is*
+distinction is already settled: Q421 measured at fake-GitHub that an admitted eviction *is*
 a graceful delete and publishes no `Failed`/`Evicted` shape. What is open here is
 everything downstream of the delete — the relay, the report, and what GitHub does with
 it — and a bare delete reaches that identically while removing the cordon, the
@@ -81,7 +81,7 @@ and must be brought into line with the outcome.
 
 ## Result: the graceful-deletion path, measured 2026-07-28
 
-Tier C on kind, against `actions-gateway/gateway-test`
+Live-GitHub tier on kind, against `actions-gateway/gateway-test`
 ([run 30410156445](https://github.com/actions-gateway/gateway-test/actions/runs/30410156445)),
 by `E2E_GitHub_GracefullyDeletedWorkerReportsAndIsRerunnable`. A real runner was
 executing a real job — GitHub reported it `in_progress` before anything was touched —
@@ -111,8 +111,8 @@ waiting out the lock, and the run is fully re-runnable by the exact call
 mechanically available.
 
 **But the measurement also found the hazard that decides how.** Q421 predicted, from
-its Tier B run, that a disrupted worker is *deleted without ever publishing a terminal
-phase* — and at Tier B that was true, because the pod was deliberately held `Pending`.
+its fake-GitHub run, that a disrupted worker is *deleted without ever publishing a terminal
+phase* — and at fake-GitHub that was true, because the pod was deliberately held `Pending`.
 A **running** worker behaves differently: the kubelet's terminal-phase update wins the
 race against the object's removal, so the pod lands in `PodFailed` with an **empty
 reason** and the informer's `onPodEvent` resolves the waiter before `onPodDelete` ever
@@ -176,7 +176,7 @@ back to `ap.RunID`. An absent annotation therefore means both were empty, so `ru
 
 **Inference, not yet a direct observation:** classic-tier eviction recovery cannot name
 the run to re-run against real GitHub, so it cannot fire. Every test that exercises it
-uses a fakegithub payload carrying the identity explicitly — Q421's own Tier B drain
+uses a fakegithub payload carrying the identity explicitly — Q421's own fake-GitHub drain
 spec had to *inject* it, recording that "the default fakegithub response carries no run
 identity, and handleEviction returns early without one". The fake was adjusted to make
 the test pass; the real payload was never checked. Confirming it looked like it needed
@@ -189,7 +189,7 @@ place. Q495 is therefore a prerequisite for the "close" branch, not a side findi
 
 ### Confirmed and fixed, 2026-07-29 (Q495)
 
-The inference held, and confirming it needed no Tier C run after all. The repo
+The inference held, and confirming it needed no live-GitHub run after all. The repo
 already contained the answer: `testdata/job_payload.json` is a redacted capture of a
 **live** `acquirejob` response, taken by `cmd/probe` and committed as ground truth for
 Milestone 3's handoff — and nothing had ever read it back. Parsed, it carries no
@@ -208,19 +208,19 @@ cannot diverge again. `payload_groundtruth_test.go` asserts against the capture 
 against the unfixed parser it fails with exactly the observed symptom (owner `""`,
 repo `""`, run `0`), which is what makes it a guard rather than a restatement. The
 synthetic payloads in the provisioner unit tests, the envtest eviction and drain
-specs, and Q421's Tier B drain spec were all moved onto the real shape, since a fake
+specs, and Q421's fake-GitHub drain spec were all moved onto the real shape, since a fake
 carrying a field GitHub does not send is what kept this invisible.
 
 Two consequences for this plan. The "close" branch's prerequisite is met at the level
 it was blocked on — classic can name the run it would re-run. And the exact-worker
 lookup question 2 wanted should now be available, since the annotation is stamped from
 the same resolved identity; that it lands on a real worker pod is the one thing here
-still owed a Tier C observation, and un-pending
+still owed a live-GitHub observation, and un-pending
 `E2E_GitHub_CancelledRunLeavesNoDeletionMark` is where it gets one.
 
 ## Result: the cancellation path, measured 2026-07-29
 
-Tier C on a dedicated kind cluster, against `actions-gateway/gateway-test`
+Live-GitHub tier on a dedicated kind cluster, against `actions-gateway/gateway-test`
 ([run 30455540731](https://github.com/actions-gateway/gateway-test/actions/runs/30455540731)),
 by `E2E_GitHub_CancelledRunLeavesNoDeletionMark` — now un-pended, and passing. A real
 runner was executing a real job, and the run was cancelled from GitHub the way a human
@@ -233,7 +233,7 @@ would cancel it.
 | Cancel → worker pod reaches a terminal phase | **10m02s** — the fixture's full 600s sleep |
 | `deletionTimestamp` at terminal publish | **absent** |
 
-Reproduced the same day on a second cluster, with the whole Tier C container running
+Reproduced the same day on a second cluster, with the whole live-GitHub container running
 in order rather than this spec alone
 ([run 30459264313](https://github.com/actions-gateway/gateway-test/actions/runs/30459264313)):
 the identical `Running//deleting=` → `Failed//deleting=` sequence, GitHub concluding at
@@ -258,7 +258,7 @@ deletion mark separates the first from the other two, which is precisely what an
 automatic re-run needs: it fires on the disruption and never on a cancel or a real
 failure.
 
-The third row is the one that did not need its own Tier C run: `deletionTimestamp` is
+The third row is the one that did not need its own live-GitHub run: `deletionTimestamp` is
 set by the apiserver only when something issues a delete, so a worker whose job simply
 exited non-zero cannot carry one. What *did* need measuring is the cancel row — the
 case where a human's intent reaches the system through GitHub rather than through
@@ -303,7 +303,7 @@ Q495 was still a prerequisite for the **implementation**, for the separate reaso
 recorded above — without a run ID, classic-tier `handleEviction` returns early and has
 nothing to re-run — and it has since been fixed.
 
-### Operational notes for the next Tier C run
+### Operational notes for the next live-GitHub run
 
 - **Do not use the shared `actions-gateway-e2e` cluster.** This spec swaps the GMC's
   GitHub env vars cluster-wide and holds them for ~12 minutes. Mid-run on 2026-07-29
@@ -315,13 +315,13 @@ nothing to re-run — and it has since been fixed.
 - **Read the spec summary, not the wall clock.** The 2026-07-29 full-container run
   finished its four specs in 19m04s inside a `ginkgo` process that lived 94 minutes,
   with the tenant namespace still up 75 minutes after the last spec ended — because
-  the host slept mid-run, not because anything hung. A Tier C run is long enough to
+  the host slept mid-run, not because anything hung. A live-GitHub run is long enough to
   straddle a laptop sleep, and every in-cluster age and process elapsed time then
   reads as a stall. `Ran N of M Specs` and the per-spec `• [N seconds]` line are
   measured from the suite's own clock and stay trustworthy; `ps` elapsed, pod `AGE`,
   and "no output for a while" do not. Check the summary before concluding a spec is
   wedged.
-- **Two concurrent Tier C sessions collide on the fixture repo.** Both dispatch the
+- **Two concurrent live-GitHub sessions collide on the fixture repo.** Both dispatch the
   same `drain-probe.yml` in `actions-gateway/gateway-test` and both register a runner
   named `real-ag-e2e-6d8749c-0`. Two such runs were in flight simultaneously on
   2026-07-29. `dispatchAndResolveRun`'s snapshot keeps each spec on its own run, and
@@ -403,7 +403,7 @@ of it is visible from the eviction path alone:
    `handleEviction` returns early, so closing the gap on classic would buy an interface
    change and no recovery. Q495 has since been fixed — the identity is read from the
    payload's `github` context — but that fix has not yet been seen on a real worker pod
-   at Tier C, so confirm the annotation before relying on the recovery it enables. The
+   at live-GitHub, so confirm the annotation before relying on the recovery it enables. The
    scale-set tier reads its identity from the pod annotations and is unaffected.
 4. **Do not fold in the cancel path.** [Q501](../STATUS.md#Q501) is a separate defect
    with a separate fix. A cancelled run's worker is *not* deleted, so it never reaches
@@ -415,18 +415,18 @@ of it is visible from the eviction path alone:
 
 **Decided, not yet implemented.** Both questions are answered and recorded above, the
 close-or-accept decision is taken (close, gated on the deletion mark), and the two
-Tier C specs that established it are checked in and passing. No production code has
+live-GitHub specs that established it are checked in and passing. No production code has
 been changed *for this plan* — Q495, the defect this plan's measurement turned up, has
 been fixed on its own.
 
 The remaining work is carried by three Queue rows rather than by this plan:
 
 1. ~~**Q495 first.**~~ Done — the run identity is read from the payload's `github`
-   context, so the worker lookup can be made exact. **Still owed a Tier C
+   context, so the worker lookup can be made exact. **Still owed a live-GitHub
    confirmation**: the 2026-07-29 runs below predate that fix (their images were built
    from `719e67f1`), so what they observed — every worker matched by the
    snapshot fallback, none by the annotation — is the *unfixed* build's behaviour, and
-   is evidence for the defect rather than for the fix. The next credentialed Tier C run
+   is evidence for the defect rather than for the fix. The next credentialed live-GitHub run
    should check that `actions-gateway.com/run-id` now appears on a real worker pod.
 2. ~~Un-pend `E2E_GitHub_CancelledRunLeavesNoDeletionMark` and run it.~~ Done — it no
    longer needed the annotation to become runnable (see above), and it passes.
@@ -435,7 +435,7 @@ The remaining work is carried by three Queue rows rather than by this plan:
 5. **[Q501](../STATUS.md#Q501)** — relay a run cancellation to the worker pod. Found by
    this measurement, independent of the gap.
 
-Operational note for whoever runs Tier C next, learned the expensive way: the suite
+Operational note for whoever runs live-GitHub next, learned the expensive way: the suite
 teardown's `helm uninstall` deletes the `ValidatingAdmissionPolicyBinding`, which
 was exactly the trigger — so each run poisoned the next one's apiserver. **Q492 has
 since fixed this**: the guard's `paramKind` is now a CRD, for which the apiserver

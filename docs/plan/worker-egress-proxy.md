@@ -157,7 +157,7 @@ or debug pods in the namespace can no longer reach the proxy or AGC.
 
 The e2e procedure in
 [docs/design/network-architecture.md "How to Validate Network Isolation"](../design/network-architecture.md)
-runs as four Tier-A specs in [`cmd/gmc/test/e2e/provisioning_test.go`](../../cmd/gmc/test/e2e/provisioning_test.go):
+runs as four cluster-only specs in [`cmd/gmc/test/e2e/provisioning_test.go`](../../cmd/gmc/test/e2e/provisioning_test.go):
 
 - `E2E_GMC_TenantProvisioning_ProxyConnectWorks` — positive: a
   workload-labelled curl pod CONNECTs through the per-tenant HTTPS proxy

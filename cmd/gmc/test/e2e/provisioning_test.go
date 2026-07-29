@@ -176,7 +176,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
-	// E2E_GMC_TenantProvisioning_ProxyConnectWorks is the keystone Tier-A test
+	// E2E_GMC_TenantProvisioning_ProxyConnectWorks is the keystone cluster-only test
 	// (see docs/design/07-test-plan.md §7.3). It runs a workload-labeled curl pod
 	// that issues an HTTPS CONNECT through the per-tenant proxy to a real
 	// GitHub endpoint, exercising in one shot: kindnet workload-NP egress to

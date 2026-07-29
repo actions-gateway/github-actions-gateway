@@ -34,7 +34,7 @@ clean run with no `timeout-minutes` set.
 | Q419 | **Shipped 2026-07-26** with Q417 — the docs half of the same gap. The tier-agnostic claims in the exec summary, README, and why-gag are now true of both tiers rather than needing a qualification. Independent of these experiments. |
 | Q420 | **Shipped 2026-07-26**, ahead of Q417 and independently of it — the reap deadline came from a pod annotation, not a pod watch. Orphaned Running workers would otherwise have contaminated 3 and 5 by holding quota, which is exactly the idle-capacity signature those experiments measure. |
 | [Q418](../STATUS.md#Q418) | Deferred, event-gated on experiment 1 attributing the delay. |
-| [Q459](q459-drained-worker-recovery.md) | **Filed by experiment 2**, 2026-07-27. Its residual: neither tier recovers a drained worker, and whether that matters turns on what GitHub does with the runner's own relayed report — a Tier C question. Both halves measured 2026-07-29; decided **close, gated on `deletionTimestamp`**, and the Queue row is retired in favour of [Q502](../STATUS.md#Q502). |
+| [Q459](q459-drained-worker-recovery.md) | **Filed by experiment 2**, 2026-07-27. Its residual: neither tier recovers a drained worker, and whether that matters turns on what GitHub does with the runner's own relayed report — a live-GitHub question. Both halves measured 2026-07-29; decided **close, gated on `deletionTimestamp`**, and the Queue row is retired in favour of [Q502](../STATUS.md#Q502). |
 
 ## Experiment 1: mid-job eviction latency, both tiers ([Q396](../STATUS.md#Q396))
 
@@ -49,7 +49,7 @@ scale-set". That already happened: #815 widened Q396's scope to both tiers on
 Phase 1 records the same. The genuinely additive assertion is the retry budget
 (the Q106 sharded-reservation invariant), which the row did not name.
 
-- **Venue:** Tier-C on kind, per the row.
+- **Venue:** live-GitHub on kind, per the row.
 - **Proves:** the real eviction-to-conclusion latency, attributed to a mechanism.
 - **Unlocks:** a defensible number in place of the confounded one, and the
   [Q418](../STATUS.md#Q418) trigger.
@@ -57,7 +57,7 @@ Phase 1 records the same. The genuinely additive assertion is the retry budget
 
 ### Result, measured 2026-07-29
 
-Tier C on kind, against `actions-gateway/gateway-test`
+Live-GitHub tier on kind, against `actions-gateway/gateway-test`
 ([run 30467282642](https://github.com/actions-gateway/gateway-test/actions/runs/30467282642)),
 by `E2E_GitHub_EvictedWorkerLatencyAndRerun` in
 [`github_e2e_test.go`](../../cmd/gmc/test/e2e/github_e2e_test.go). A real runner was
@@ -183,9 +183,9 @@ declined to act" from "detection never happened" — and asserts the budget
 invariant only on the branch where recovery ran. On a post-Q495 build that is the
 branch it takes.
 
-### Tier C does not parallelize, and the reason is not the cluster
+### live-GitHub does not parallelize, and the reason is not the cluster
 
-Two sessions ran Tier C on 2026-07-29 from separate worktrees and separate kind
+Two sessions ran live-GitHub on 2026-07-29 from separate worktrees and separate kind
 clusters, and still collided. Cluster isolation does not help, because the shared
 resources are on GitHub's side:
 
@@ -193,7 +193,7 @@ resources are on GitHub's side:
   to `actions-gateway/gateway-test`. `dispatchAndResolveRun` identifies its run as
   "the one that was not there before" — which is the *other* session's run when two
   dispatches land seconds apart.
-- **One `runs-on` label, one org.** Every Tier C tenant registers runners labelled
+- **One `runs-on` label, one org.** Every live-GitHub tenant registers runners labelled
   `e2e` in the `actions-gateway` org, so GitHub may route either session's job to
   either cluster's gateway. The two are entangled even when the clusters are not.
 - **No run-id annotation to disambiguate by** — Q495, since fixed, but absent for
@@ -204,7 +204,7 @@ A throwaway cluster per run, which
 [testing.md](../development/testing.md) now prescribes, is still the right
 move: it removes the *other* half of the collision, where a parallel session's
 `helm upgrade` and `kubectl set env` fight over one GMC. It just does not make two
-Tier C runs independent. Both halves have to hold, so treat Tier C as a
+live-GitHub runs independent. Both halves have to hold, so treat live-GitHub as a
 **singleton**: one session at a time, across all worktrees, each on its own
 cluster. Q500 tracks the GitHub-side half.
 
@@ -212,7 +212,7 @@ This is the same contention that kept `E2E_GitHub_CancelledRunLeavesNoDeletionMa
 pending in [q459-drained-worker-recovery.md](q459-drained-worker-recovery.md), seen
 from the other side — there between specs, here between sessions.
 
-**A related hazard, learned expensively.** A Tier C run killed mid-spec leaves its
+**A related hazard, learned expensively.** A live-GitHub run killed mid-spec leaves its
 tenant namespace `Terminating` on an `agentpool-cleanup` finalizer that only its own
 AGC can clear — and the AGC's Deployment goes away with the namespace, so it never
 clears. Force-removing the finalizer unblocks the namespace but **skips the
@@ -293,7 +293,7 @@ reaching one. Both pass. Each is the exact twin of the eviction test that *does*
 fire a rerun on the same wiring, so the eviction/deletion distinction is isolated
 to one substitution rather than argued.
 
-**Tier B on kind** —
+**fake-GitHub on kind** —
 [`worker_drain_test.go`](../../cmd/gmc/test/e2e/worker_drain_test.go)
 (`E2E_AGC_WorkerNodeDrain`). A real `kubectl drain` against the node holding a live,
 AGC-watched worker pod. Recorded:
@@ -327,7 +327,7 @@ by eviction recovery. Every other disruption path is covered by one or the other
 - **3 (does the job requeue, and by what mechanism):** answered, and the answer is
   *not by the AGC, on either tier*. This is the load-bearing result.
 - **1, 2 (does the relay get the runner's own report out inside the grace period):**
-  **not answered here, and not answerable at this tier.** A Tier B worker running the
+  **not answered here, and not answerable at this tier.** A fake-GitHub worker running the
   real runner image exits by itself within seconds — fakegithub's synthetic payload
   is not a job the runner can execute — so the spec deliberately drains a
   scheduled-but-`Pending` worker instead, which makes the drain the unambiguous cause
@@ -348,7 +348,7 @@ part still unmeasured. Extending both tiers to treat a graceful deletion as
 recoverable would be the fix, but doing it before knowing what GitHub does with a
 relayed cancellation risks auto-rerunning jobs that a human deliberately cancelled
 (a `kubectl delete pod`, or a run cancelled in the GitHub UI, arrives on the same
-path as a drain). [Q459](q459-drained-worker-recovery.md) carries the Tier C measurement and the
+path as a drain). [Q459](q459-drained-worker-recovery.md) carries the live-GitHub measurement and the
 decision that follows from it.
 
 **Update, 2026-07-28.** Q459 took the first half of that measurement, and the premise
@@ -418,7 +418,7 @@ Extended resources are integers the kubelet does not manage, so the arithmetic i
 one slot, two claimants, higher priority wins, and preemption is the scheduler's only
 way to place the second pod.
 
-**Tier B, the full gateway** —
+**fake-GitHub, the full gateway** —
 [`worker_preemption_test.go`](../../cmd/gmc/test/e2e/worker_preemption_test.go)
 (`E2E_AGC_WorkerPreemption`), passing 2026-07-29 on the e2e kind cluster (Kubernetes
 v1.36.1). A real tenant declares `priorityTiers`, the AGC provisions a worker for a job
@@ -510,7 +510,7 @@ restoring the fail-closed default, and the ordering is commented so it is not
 *real* preempted job reports itself to GitHub in a state a re-run would accept. Neither
 spec has a real runner in the victim — the first holds it `Pending`, the second runs a
 stand-in process chosen for its exit code. That question is the drain path's too, and
-Q459 answered it for a graceful delete at Tier C: the report gets out and
+Q459 answered it for a graceful delete at live-GitHub: the report gets out and
 `rerun-failed-jobs` returns `201`. A preemption is the same removal, so the same answer
 is expected — but it is inherited, not re-measured.
 
@@ -530,7 +530,7 @@ asserting it needs no new plumbing.
 - **Half A (envtest) — done 2026-07-26.** Covered by
   [`q422_quota_admission_test.go`](../../cmd/agc/internal/controller/integration/q422_quota_admission_test.go),
   one test per tier the rung serves. Findings below.
-- **Half B (Tier-C):** two AGC sessions on the same RunnerGroup, one without
+- **Half B (live-GitHub):** two AGC sessions on the same RunnerGroup, one without
   headroom, and the job is picked up by the sibling. This is the half that
   needs live GitHub redelivery and cannot be faked.
 - **Not blocked.**
@@ -583,8 +583,8 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
 
 1. ~~Q421 (experiment 2)~~ — **done 2026-07-27**; see
    [Result](#result-measured-2026-07-27). Its residual is
-   [Q459](q459-drained-worker-recovery.md), which needs Tier C and so sequences with the other
-   Tier C work below rather than ahead of it.
+   [Q459](q459-drained-worker-recovery.md), which needs live-GitHub and so sequences with the other
+   live-GitHub work below rather than ahead of it.
 2. [Q422](../STATUS.md#Q422) (experiment 4).
 3. [Q396](../STATUS.md#Q396) (experiment 1), which then gates
    [Q418](../STATUS.md#Q418). Fold [Q459](q459-drained-worker-recovery.md) in around here: both
@@ -606,7 +606,7 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
   and both tiers are extended to cover deletion.~~ **Met 2026-07-27** by the second
   branch: neither tier recovers a drained worker, and the gap is filed as
   [Q459](q459-drained-worker-recovery.md). Extending the tiers is deliberately left to that row —
-  the same code path carries deliberate cancellations, so it needs the Tier C answer
+  the same code path carries deliberate cancellations, so it needs the live-GitHub answer
   before it can tell a drain from a `kubectl delete pod` worth honouring.
 - The quota gate demonstrated under contention, with the rejection counter as
   the observable.

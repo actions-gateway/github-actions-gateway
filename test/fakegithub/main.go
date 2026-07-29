@@ -1,6 +1,6 @@
 // Command fakegithub is a deployable HTTP stub that implements the GitHub App
 // token exchange endpoint, the Actions runner registration API, and the
-// Actions broker v2 protocol. It is used in Tier B e2e tests so the AGC can
+// Actions broker v2 protocol. It is used in fake-GitHub e2e tests so the AGC can
 // start and process jobs without real GitHub credentials.
 //
 // Endpoints served:
@@ -29,7 +29,7 @@
 // The AGC's automatic recovery from a worker-pod eviction is a POST to GitHub's
 // rerun-failed-jobs endpoint, and it is the only externally visible signal that
 // recovery fired. fakegithub answers that call like GitHub does (201, empty body)
-// and records it, so a Tier-B spec can assert recovery both ways: that it fires
+// and records it, so a fake-GitHub spec can assert recovery both ways: that it fires
 // for a kubelet eviction, and — the Q421 measurement — that it does NOT fire for a
 // node drain, whose Eviction API call deletes the pod rather than failing it.
 // Without this the absence of a rerun is indistinguishable from a 404 nobody read.

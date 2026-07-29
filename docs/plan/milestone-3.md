@@ -25,7 +25,7 @@
 Last refreshed 2026-05-30. The provisioner, decryption, ceiling
 enforcement, eviction retry, GC, and RBAC are all in code. Investigation A
 (Named Pipe protocol) is complete. Q5h (worker proxy-CA trust)
-shipped 2026-05-30. **Q6 (Tier-C `E2E_GitHub_RealDispatch`)
+shipped 2026-05-30. **Q6 (live-GitHub `E2E_GitHub_RealDispatch`)
 re-ran successfully on 2026-05-30** against real GitHub
 (`actions-gateway/gateway-test`, workflow `test-job.yml`, run
 [26685844172](https://github.com/actions-gateway/gateway-test/actions/runs/26685844172)):
@@ -39,9 +39,9 @@ separately in `cmd/gmc/cmd/main.go` by gating readyz on
 
 | Success criterion | Status | Notes |
 |---|---|---|
-| Real workflow job completes with green checkmark | ✅ Done | 2026-05-30 — Tier-C `E2E_GitHub_RealDispatch` passes; run [26685844172](https://github.com/actions-gateway/gateway-test/actions/runs/26685844172) on `actions-gateway/gateway-test` concludes `success`. Required both 5h (worker proxy-CA trust) and the GMC `/readyz` webhook-gating fix. |
+| Real workflow job completes with green checkmark | ✅ Done | 2026-05-30 — live-GitHub `E2E_GitHub_RealDispatch` passes; run [26685844172](https://github.com/actions-gateway/gateway-test/actions/runs/26685844172) on `actions-gateway/gateway-test` concludes `success`. Required both 5h (worker proxy-CA trust) and the GMC `/readyz` webhook-gating fix. |
 | `go test -race ./...` passes across all modules | ✅ Done | Per-module test commands pass |
-| Worker container exits 0 on success, non-zero on failure | ✅ Done | Exercised by the 2026-05-30 Tier-C re-run: worker pod exited 0 and the GitHub-side run concluded `success`. |
+| Worker container exits 0 on success, non-zero on failure | ✅ Done | Exercised by the 2026-05-30 live-GitHub re-run: worker pod exited 0 and the GitHub-side run concluded `success`. |
 | Pod and Secret GC'd within 30s of terminal state | ✅ Done in code | `deleteSecret` + pod cleanup in [provisioner.go:166-206](../../cmd/agc/internal/provisioner/provisioner.go) |
 | `maxWorkers` ceiling enforced | ✅ Done | `activePodCount` check at [provisioner.go:335](../../cmd/agc/internal/provisioner/provisioner.go) |
 | `priorityTiers` ceiling + PriorityClass assignment | ✅ Done | Tier walk in provisioner pod builder |
@@ -720,7 +720,7 @@ remains gated on Q5c.
 ### 11.C — Worker pod must trust the per-tenant egress proxy CA
 
 **Surfaced by:** 2026-05-29 live kind dry-run of `E2E_GitHub_RealDispatch`
-(Tier C `Label("github-real")`) against the `actions-gateway-test` GitHub
+(live-GitHub `Label("github-real")`) against the `actions-gateway-test` GitHub
 App and the `actions-gateway/gateway-test` workflow.
 
 **Symptom:**
