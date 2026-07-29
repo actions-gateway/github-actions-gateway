@@ -53,6 +53,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
 - [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
 - [Draining or Preempting a Worker Does Not Auto-Re-Run the Jobs It Interrupts](#draining-or-preempting-a-worker-does-not-auto-re-run-the-jobs-it-interrupts)
+- [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod)
 - [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically)
 - [Terminated Worker Pod Never Reports Its Job (Job Hangs on GitHub Until the Lock Lapses)](#terminated-worker-pod-never-reports-its-job-job-hangs-on-github-until-the-lock-lapses)
 - [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion)
@@ -2199,10 +2200,11 @@ the gateway as different things, and only one of them is an eviction:
   `status.reason: Evicted`. That is the shape both tiers' eviction recovery keys on,
   and it triggers the automatic re-run.
 - **`kubectl drain`** does not fail the pod. It POSTs to the pod's `pods/<name>/eviction`
-  subresource, and an admitted eviction is a graceful **delete**. Measured on a real
-  cluster (Q421), a drained worker pod publishes no terminal phase at all — it goes
-  from its running/pending state straight to absent — so there is nothing for either
-  tier's detection to see, and no re-run fires.
+  subresource, and an admitted eviction is a graceful **delete**. What the pod then
+  publishes depends on whether it had started: a worker still `Pending` goes straight
+  to absent with no terminal phase (Q421), while a **running** worker lands in `Failed`
+  with an **empty** `status.reason` (Q459, measured against real GitHub). Neither shape
+  is `Failed`/`Evicted`, so neither tier's detection fires and no re-run happens.
 - **`PriorityClass` preemption** is kube-scheduler's, not the kubelet's, despite often
   being described as eviction. The scheduler **deletes** the victim. Measured on a real
   cluster (Q423), a preempted worker keeps its phase, gains a `deletionTimestamp` and a
@@ -2210,6 +2212,11 @@ the gateway as different things, and only one of them is an eviction:
   terminal phase decided by its own container's exit code — never `Evicted`. So a
   guaranteed tier really does preempt its way in, but the job it displaces is not
   re-run.
+
+Across both, the terminal *phase* is why this is not a one-line fix: `Failed` with an
+empty reason is exactly what a worker whose job genuinely failed leaves behind, and a
+preempted worker can land on `Succeeded` just as readily. Re-running on phase alone
+would re-run every failing job in the cluster.
 
 Two related things operators reasonably expect to help, and which do not:
 
@@ -2261,7 +2268,12 @@ automatic re-run will follow.
   app.kubernetes.io/managed-by=actions-gateway-controller` on the target node shows
   what a drain would interrupt; an empty result is the safe moment.
 - **Re-run the affected workflow runs manually** after the drain or preemption. There
-  is no automatic recovery on these paths today.
+  is no automatic recovery on these paths today. Both are decided gaps rather than
+  open questions: the interrupted run is re-runnable, and the disruption stays
+  distinguishable from a deliberate cancellation (a cancelled run's worker publishes
+  the same phase and empty reason but carries no `deletionTimestamp`), so recovery
+  will key on the deletion mark for the drain path and on `PreemptionByScheduler` for
+  the preemption path. Until those ship, the manual re-run is the answer.
 - **Give the runner room to report** before you drain, so the jobs at least conclude
   cleanly instead of hanging: raise `terminationGracePeriodSeconds` in the runner
   group's `podTemplate` and `WORKER_SHUTDOWN_GRACE` with it, per
@@ -2279,6 +2291,56 @@ automatic re-run will follow.
   undrainable for as long as any job runs. It would not stop a preemption at all —
   the scheduler's victim selection does not consult PodDisruptionBudgets as a hard
   constraint.
+
+---
+
+## Cancelling a Run Does Not Stop Its Worker Pod
+
+> **Applies to both acquisition tiers.** Cancelling a job reclaims nothing.
+
+**Symptoms.** You cancel a workflow run in the GitHub UI (or with `gh run cancel`).
+GitHub shows the job `cancelled` a few minutes later, but the worker pod stays
+`Running` and keeps consuming its CPU/memory request — and its concurrency-ceiling
+slot — until the job's own steps finish or `maxWorkerLifetime` kills it. Cancelling a
+runaway job does not free capacity.
+
+**Cause — this is current behaviour, not a misconfiguration.** The gateway multiplexes
+runner sessions inside the AGC, so a cancellation is delivered to the *AGC's* broker
+session, not to the runner in the worker pod. Nothing forwards it, and nothing deletes
+the pod, so the runner never learns the job was cancelled and executes its remaining
+steps to the end. GitHub concludes the job on its own ~5-minute cancellation grace
+rather than on anything the runner reports.
+
+Measured against real GitHub on 2026-07-29: a job whose step was `sleep 600` was
+cancelled 2 seconds after it started, GitHub concluded it `cancelled` 5m02s later, and
+the worker pod ran the full 600s before reaching a terminal phase.
+
+This is also why the SIGTERM relay does not help here. The relay fires when the *pod*
+is terminated — an eviction, a drain, a delete — and on this path nothing terminates
+the pod.
+
+**Diagnostics.**
+
+```sh
+# Worker pods still Running for a run you already cancelled. Compare against the
+# run's state in GitHub: gh run view <run-id> --json status,conclusion
+kubectl get pods -n <namespace> \
+  -l app.kubernetes.io/managed-by=actions-gateway-controller \
+  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,AGE:.metadata.creationTimestamp'
+
+# What the runner thinks it is doing. A worker still executing steps after its run
+# was cancelled prints ordinary job output, with no cancellation notice.
+kubectl logs -n <namespace> <worker-pod> --tail=50
+```
+
+**Resolution.**
+- **To reclaim the capacity now, delete the worker pod.** `kubectl delete pod -n
+  <namespace> <worker-pod>` terminates it gracefully: the wrapper relays SIGTERM and
+  the runner stops. The run is already cancelled, so nothing is lost.
+- **Bound the worst case with `maxWorkerLifetime`** on the runner group, which caps how
+  long any worker — cancelled or not — can hold its slot.
+- Do **not** expect a lower `completedPodTTL` or `pendingPodDeadline` to help: both act
+  on pods that have already stopped or never started, and this pod is running.
 
 ---
 

@@ -593,6 +593,18 @@ For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node
 
 **Tier C.** Set `GITHUB_E2E_APP_ID`, `GITHUB_E2E_INSTALLATION_ID`, `GITHUB_E2E_PRIVATE_KEY` (a PEM path or the PEM body), `GITHUB_E2E_ORG`, and `GITHUB_E2E_REPO` in the environment, then run `make e2e` (Tier C specs skip themselves at runtime when any variable is missing). The GitHub App key is in the macOS keychain; see the GitHub App reference memory for the retrieval command.
 
+**Run Tier C on a throwaway cluster, not the shared `actions-gateway-e2e` one.** The
+Tier C container swaps the GMC's GitHub env vars cluster-wide and holds them for the
+length of the run, and that `kubectl set env` is itself what makes a later
+`helm upgrade` conflict on server-side-apply field ownership. A parallel session
+reinstalling the chart underneath it (observed 2026-07-29) invalidates the run either
+way. Create one per run — `make e2e-cluster KIND_CLUSTER=<name>` shares the existing
+local registry, so no image rebuild is needed — and point the run at it with a private
+`KUBECONFIG` (`kind get kubeconfig --name <name>`) rather than the ambient context,
+which every other session shares. Note also that two concurrent Tier C runs dispatch
+the same fixture workflows in the same repo and register identically-named runners
+(Q500).
+
 Tier C is the only tier that hands the harness a **live** App key — every other tier stamps the same Secret with a throwaway RSA key. `utils.CreateGitHubAppSecret` therefore routes the PEM through a `0600` temp file and `--from-file`, per [the credential rule](github-app-credentials.md#creating-the-kubernetes-secret). Never switch it back to `--from-literal`: `utils.Run` echoes each command's argv to the `GinkgoWriter` and folds it into the failure message, so a literal PEM would land in the run log, the JUnit report, and any `ps` snapshot taken mid-run (Q493).
 
 ### The credential-gated probe scenarios
