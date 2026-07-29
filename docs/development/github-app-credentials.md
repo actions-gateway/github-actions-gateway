@@ -25,14 +25,15 @@ it some other way — and the two obvious routes are both wrong. Feed the comman
 below its input on **stdin**, which is neither:
 
 ```bash
-umask 077
-KEY_FILE=$(mktemp -t gag-app-key.XXXXXX)
-trap 'rm -f "$KEY_FILE"' EXIT INT TERM
-cp ~/Downloads/actions-gateway-test.*.private-key.pem "$KEY_FILE"
+# The file you just downloaded. Name it exactly — see the warning below.
+KEY_FILE=~/Downloads/actions-gateway-test.2026-01-01.private-key.pem
 
 { printf 'add-generic-password -U -a "actions-gateway-test" -s "github-app-private-key" -X ';
   xxd -p -c 1000000 "$KEY_FILE"; } | security -i
 ```
+
+`xxd` reads the downloaded file in place; there is no temp copy to make or
+clean up, which is one fewer copy of the key on disk than any staging approach.
 
 `security -i` reads *commands* from stdin, so the key never becomes a process
 argument: `xxd` is invoked with only a filename and writes the hex to its
@@ -44,6 +45,12 @@ into `printf '… -X %s' "$(xxd …)"` happens to avoid a leak only because
 `printf` is a shell builtin and no process is spawned; with `/usr/bin/printf`
 the key is back in `ps`.
 
+> **Give `xxd` one explicit path, never a glob.** `xxd`'s second positional
+> argument is an *output* file, so `xxd -p -c 1000000 ~/Downloads/*.private-key.pem`
+> with two keys in `~/Downloads` writes the hex of the first **over the second**
+> — exit 0, no warning, the other key destroyed. Quote `"$KEY_FILE"` so the
+> shell cannot expand it either.
+
 > **Do not use the `-w` prompt for this key.** It is line-oriented — a
 > multi-line PEM's second line is consumed as the "retype" and the command
 > fails — and it silently truncates input at **128 characters**, which a
@@ -51,14 +58,7 @@ the key is back in `ps`.
 > only symptom is authentication failing later. `-w "$(cat <file>)"` avoids the
 > truncation but puts the key in `ps`.
 
-Delete the downloaded file once the import succeeds (the `trap` already removes
-the temp copy):
-
-```bash
-rm ~/Downloads/actions-gateway-test.*.private-key.pem
-```
-
-To verify the key is present:
+Verify the entry round-trips:
 
 ```bash
 security find-generic-password -a "actions-gateway-test" -s "github-app-private-key" -w \
@@ -66,9 +66,16 @@ security find-generic-password -a "actions-gateway-test" -s "github-app-private-
 # should print: RSA key ok
 ```
 
-Check the whole key parses, not just that the first line looks right: a
+Check that the whole key parses, not just that the first line looks right: a
 truncated entry still starts with `-----BEGIN RSA PRIVATE KEY-----`, so
 `head -1` cannot tell a good key from a broken one.
+
+Only once that passes, delete the download — until then it is the only intact
+copy:
+
+```bash
+rm "$KEY_FILE"
+```
 
 > **Note:** `security find-generic-password -w` outputs the password as ASCII
 > hex. Pipe through `xxd -r -p` to convert it back to the raw PEM bytes before
