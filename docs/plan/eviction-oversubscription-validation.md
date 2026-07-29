@@ -222,7 +222,7 @@ no human action.
 ### Result, measured 2026-07-29: preemption is not eviction
 
 **A `PriorityClass` preemption reaches no eviction recovery on either tier.** It is
-the *graceful-removal* path experiment 2 and [Q459](../STATUS.md#Q459) already measured,
+the *graceful-removal* path experiment 2 and [Q459](q459-drained-worker-recovery.md) already measured,
 not the kubelet path recovery acts on. The demo this experiment set out to produce
 does not exist to be produced: there is no automatic recovery on the preemption path to
 demonstrate.
