@@ -2132,6 +2132,17 @@ kubectl get secret -n <namespace> actions-gateway-proxy-tls \
 > exhausted, the recovery is not firing at all: see
 > [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically)
 > below.
+>
+> **Flat at zero on the *classic* tier, with `pod evicted but run_id unknown;
+> skipping auto-retry` in the AGC log?** That is a fixed defect, not a
+> misconfiguration: the AGC read the run identity from a payload field GitHub does
+> not send, so no classic eviction was ever re-run and worker pods carried no
+> `actions-gateway.com/run-id` annotation (Q495). The only remedy is to upgrade the
+> AGC — see
+> [the migration note](upgrade.md#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github).
+> On a fixed AGC, check the pod's annotation first:
+> `kubectl get pod -n <namespace> <pod> -o jsonpath='{.metadata.annotations.actions-gateway\.com/run-id}'`
+> — empty there means the payload genuinely carried no identity.
 
 **Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing. Jobs are being cancelled after eviction despite automatic retries. `kubectl describe` on the owning `RunnerGroup`/`RunnerSet` shows a `Warning` event with reason `EvictionRetriesExhausted` (Q170) naming the affected run — the event-based companion to the metric.
 

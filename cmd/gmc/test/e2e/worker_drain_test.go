@@ -196,13 +196,22 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 			fakegithubServiceName, infraNamespace, fakegithubServicePort)
 		setAcquireJobResponse(map[string]interface{}{
 			"plan": map[string]string{"planId": "drain-plan-" + runID},
-			// The identity rides in `variables` only. The top-level `run_id` the
-			// payload also accepts is an int64 there, and a string in it makes the
-			// whole payload fail to unmarshal — costing the identity this spec
-			// depends on rather than adding to it.
-			"variables": map[string]interface{}{
-				"system.github.repository": map[string]string{"value": repoOwner + "/" + repoName},
-				"system.github.run_id":     map[string]string{"value": runID},
+			// The identity rides in the serialised `github` context — the shape a real
+			// acquirejob body uses, and so the shape this spec must exercise. Building
+			// it as system.github.* variables instead would assert against a shape
+			// GitHub never sends, which is how the classic tier came to ship unable to
+			// name a real job's run at all (Q495). The top-level `run_id` the payload
+			// also accepts is an int64 there, and a string in it makes the whole
+			// payload fail to unmarshal — costing the identity this spec depends on
+			// rather than adding to it.
+			"contextData": map[string]interface{}{
+				"github": map[string]interface{}{
+					"t": 2,
+					"d": []map[string]interface{}{
+						{"k": "repository", "v": repoOwner + "/" + repoName},
+						{"k": "run_id", "v": runID},
+					},
+				},
 			},
 			"resources": map[string]interface{}{
 				"endpoints": []map[string]interface{}{{

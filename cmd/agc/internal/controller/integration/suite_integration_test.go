@@ -106,6 +106,27 @@ func (stubProvider) TokenWithExpiry(_ context.Context) (*githubapp.InstallationT
 	}, nil
 }
 
+// runIdentityContext returns the `contextData` block of an AcquireJob response
+// carrying a complete run identity, in the shape a real response uses: the
+// serialised `github` context, as a type-tagged key/value list.
+//
+// Specs that need eviction recovery to fire must build the identity this way and
+// not as system.github.* variables. Those variables do not exist in a real
+// acquirejob body — building them here is what let the classic tier ship unable to
+// name the run it had to re-run, with every test passing (Q495).
+// testdata/job_payload.json is the capture this mirrors.
+func runIdentityContext(repository, runID string) map[string]interface{} {
+	return map[string]interface{}{
+		"github": map[string]interface{}{
+			"t": 2,
+			"d": []map[string]interface{}{
+				{"k": "repository", "v": repository},
+				{"k": "run_id", "v": runID},
+			},
+		},
+	}
+}
+
 // sharedListenerMetrics returns the process-wide runnercore.Metrics, constructed
 // once. runnercore.NewMetrics registers with the controller-runtime metrics
 // registry, so it must be created a single time per test binary; counters
