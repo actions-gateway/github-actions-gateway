@@ -55,13 +55,73 @@ Phase 1 records the same. The genuinely additive assertion is the retry budget
   [Q418](../STATUS.md#Q418) trigger.
 - **Unblocked** — Q417 shipped 2026-07-26, so the scale-set tier now detects evictions and fires the rerun this experiment measures.
 
-### Established 2026-07-29: the harness, and two findings ahead of the number
+### Result, measured 2026-07-29
 
-The spec is written and checked in — `E2E_GitHub_EvictedWorkerLatencyAndRerun` in
-[`github_e2e_test.go`](../../cmd/gmc/test/e2e/github_e2e_test.go). **The latency
-itself is not yet measured**: every attempt this day was lost to Tier C
-contention, for the reason in the last subsection. What *was* settled is
-recorded here so the next attempt starts from it rather than rediscovering it.
+Tier C on kind, against `actions-gateway/gateway-test`
+([run 30467282642](https://github.com/actions-gateway/gateway-test/actions/runs/30467282642)),
+by `E2E_GitHub_EvictedWorkerLatencyAndRerun` in
+[`github_e2e_test.go`](../../cmd/gmc/test/e2e/github_e2e_test.go). A real runner was
+executing a real job — GitHub reported it `in_progress` before anything was touched —
+the fixture carries no `timeout-minutes`, and the worker was evicted by the kubelet.
+
+| Observation | Value |
+|---|---|
+| Worker pod phase/reason | `Running/` → `Failed/Evicted` |
+| Kubelet message | `Pod ephemeral local storage usage exceeds the total limit of containers 256Mi.` |
+| Runner container exit code | **137** — SIGKILL |
+| Job conclusion on GitHub | **`failure`** |
+| **Eviction → conclusion** | **9m36s** (`finishedAt=15:44:17Z` → `completed_at=15:53:53Z`, both server-side) |
+| AGC decision | `pod evicted; scheduling auto-retry` … `"attempt":1,"tier":"classic"` |
+| Re-run outcome | **`403 This workflow is already running`** |
+
+**The confound is gone and the number survives it.** 9m36s is close to the U5
+probe's ~9.5 minutes, so that figure was accidentally right about magnitude — but
+it is only now attributable. With no `timeout-minutes` in play, the only mechanism
+left that can end the job is GitHub's own detection of a lock that stopped being
+renewed, and the design's "at worst ~10 minutes from the last renewal" is what the
+measurement lands on. **Quote it as "about 9–10 minutes, bounded by the job lock's
+TTL", not as the workflow timeout it used to be confused with.**
+
+**The headline finding is not the latency. It is that classic-tier eviction
+recovery never actually recovers the job.** The AGC waits `evictionRetryDelay`
+(default 5s) after seeing the eviction and then calls `rerun-failed-jobs` — which,
+per the line above, lands ~9.5 minutes *before* GitHub concludes the run. GitHub
+refuses it:
+
+```
+rerun API returned 403: {"message":"This workflow is already running", ...}
+```
+
+So on the shipped default the sequence is: budget slot reserved,
+`actions_gateway_eviction_retries_total` incremented, re-run refused, job left
+failed. The metric an operator would watch says recovery happened; nothing was
+recovered. This is exactly the question
+[04-operational-flows.md §4.2](../design/04-operational-flows.md) flagged as
+unmeasured — "whether the rerun call succeeds while the run is still winding down
+inside that window" — and the answer is no. [Q503](../STATUS.md#Q503) carries the
+fix.
+
+**Why the runner could not report, unlike Q459's drained worker.** The wrapper's
+relay *did* fire — `forwarding termination signal to child`, `grace: 25s`, and the
+runner logged `Runner will be shutdown for UserCancelled` — but the kubelet's
+eviction gave it about two seconds before SIGKILL, and the runner was still inside
+`Waiting for process exit or 7.5 seconds after SIGINT` when it died. The report
+never left. That is the whole difference between this experiment and Q459's, and it
+is what the two numbers measure:
+
+| Disruption | Grace | Runner reports? | Eviction → conclusion |
+|---|---|---|---|
+| Graceful delete / drain ([Q459](../STATUS.md#Q459)) | 30s | yes | **15–26s** |
+| Kubelet eviction (this experiment) | ~2s, then SIGKILL | no | **9m36s** |
+
+**What remains.** The scale-set half. This run measured the classic tier; Q417
+plumbed the same recovery onto scale-set from the owning reconciler, and whether
+GitHub's conclusion latency and the 403 both reproduce there is unmeasured. The
+403 is tier-independent by construction — it is a property of the API and of the
+delay, not of how the AGC detected the eviction — but that is reasoning, not a
+measurement.
+
+### What the harness cost to build, and why it is shaped this way
 
 **The eviction lever works, and it is the only aimed one.** Eviction recovery keys
 on `PodFailed` with reason `Evicted` and nothing else, so the disruption has to
