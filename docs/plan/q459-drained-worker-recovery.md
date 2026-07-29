@@ -76,7 +76,7 @@ if the gap were closed, so its answer is the answer.
 | `rerun-failed-jobs` declines the run | **Accept.** No re-run is available on this path; the operator-facing docs already say so and the design records why. |
 
 Whichever branch is taken, the operator-facing consequence is already documented in
-[troubleshooting.md](../operations/troubleshooting.md#draining-a-node-does-not-auto-re-run-the-jobs-it-interrupts)
+[troubleshooting.md](../operations/troubleshooting.md#draining-or-preempting-a-worker-does-not-auto-re-run-the-jobs-it-interrupts)
 and must be brought into line with the outcome.
 
 ## Result: the graceful-deletion path, measured 2026-07-28
