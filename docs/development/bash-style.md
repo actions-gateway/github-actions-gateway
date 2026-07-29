@@ -19,3 +19,20 @@ Before writing a new helper function, check [`scripts/lib/common.sh`](../../scri
 ## Accepted shellcheck findings
 
 A finding that is accepted rather than fixed carries a targeted `# shellcheck disable=SCxxxx` directive with a justifying comment immediately above the line (example: the dynamic-name `read`/`export` in [`scripts/probe-investigations-cd.sh`](../../scripts/probe-investigations-cd.sh)). Everything else is fixed to match the rules above.
+
+### SC2329 on a `trap`-invoked cleanup function
+
+shellcheck 0.11 reports `SC2329 (info): This function is never invoked` for a function reached only through `trap`, but **only when the script's final statement is an unconditional `exit`**. The same script ending in an ordinary command is clean, and a conditional `exit` inside an `if` does not trigger it either — so most scripts here never see it, and the ones that do look identical to the ones that do not.
+
+It is a false positive: the function *is* invoked, by the `EXIT` trap. Keep the `exit` if the script needs a meaningful status, and disable the check where the function is defined:
+
+```bash
+# shellcheck disable=SC2329 # invoked by `trap cleanup EXIT`; shellcheck 0.11 misses
+# that whenever the script ends in an explicit `exit`.
+cleanup() {
+	rm -rf "${work_dir}"
+}
+trap cleanup EXIT
+```
+
+Do not delete the trailing `exit` or restructure the cleanup to silence it — the exit status is the useful thing and the warning is the wrong one. Live example: [`scripts/vap-param-informer-check.sh`](../../scripts/vap-param-informer-check.sh).
