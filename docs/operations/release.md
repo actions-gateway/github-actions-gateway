@@ -132,6 +132,37 @@ The maintainer's job is to cut the tag and verify the result.
   `capacityGate.mode: On` days before 1.3.0 would have published it, and only
   because the question came up in an unrelated conversation.
 
+- **Review the operator-facing caveats this tag publishes, and curate the notes
+  if there are any.** `publish.yml` writes a generated body from the commit log,
+  which never says "this upgrade needs a manual step first". Richer notes are
+  opt-in and must be created *before* you push the tag ([§ 5](#5-cut-the-github-release)),
+  so the decision belongs here, not after.
+
+  ```bash
+  scripts/operator-caveats-since.sh
+  ```
+
+  It needs no bookkeeping to stay current: the
+  [doc-update matrix](../development/doc-update-matrix.md) already requires an
+  operator-visible change to land in `docs/operations/`, so the diff of those
+  pages since the last tag already *is* the list — this only makes it scannable
+  (added sections, bold-lead bullets, anything marked `BREAKING`) instead of a
+  release-sized raw diff.
+
+  Reading it is judgement: a clarification is not a caveat, and the script cannot
+  tell them apart. What it guarantees is that you have **seen** them. Carry the
+  real ones into a curated body:
+
+  ```bash
+  gh release create vX.Y.Z --draft --notes-file <file>
+  ```
+
+  This step exists because the alternative is remembering. The `v1.2.0`→next
+  window accumulated a required pre-upgrade `kubectl apply`, a removed values key
+  that fails the render, and a rollback that re-arms a cluster-wide outage — each
+  recorded correctly in `docs/operations/upgrade.md` by the change that
+  introduced it, and each invisible to anyone reading a generated changelog.
+
 - **Reconcile [`docs/roadmap.md`](../roadmap.md) against
   [`docs/STATUS.md`](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md)
   before you tag.** The same freeze that applies to the announce bar applies
