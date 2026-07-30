@@ -411,6 +411,43 @@ Q378 is the worked example. Pinning `BaselineRecheckInterval` in the reaper test
 
 The [structural-ceiling triage](technical-debt.md#distinguish-a-fixable-defect-from-an-external-structural-ceiling) is the same principle at a larger scale: when fixes stop converging, isolate and *measure* the external actor instead of asserting the next on-our-side cause.
 
+### A negative assertion must be able to fail for only one reason
+
+A test that asserts something *did not happen* passes when the mechanism is absent — and
+also when the mechanism is present but misdirected, misconfigured, or erroring out before
+it gets anywhere. Those are indistinguishable from the assertion's point of view, so a
+green negative test is much weaker evidence than a green positive one, and it stays green
+while the thing it guards rots.
+
+**Q504 is the worked example, and it cost a release-blocking bug most of a year.** Every
+spec on the `rerun-failed-jobs` path asserted an *absence*: the drain specs and the
+pre-Q497 preemption spec all checked that no re-run fired. Meanwhile the AGC never
+assigned `Provisioner.GitHubAPIURL`, so the call silently defaulted to `api.github.com`
+regardless of `GITHUB_API_BASE_URL` — eviction recovery could not work on GHES at all.
+Every one of those specs kept passing, because a re-run posted to the wrong host is
+exactly as absent, from `fakegithub`'s counter, as a re-run never attempted. The first
+spec to assert a **successful** re-run (`E2E_AGC_PreemptedWorkerIsRecovered`, Q497) found
+it on its first CI run.
+
+So when you write a negative assertion:
+
+- **Pair it with a positive one somewhere in the suite.** If nothing in the repo asserts
+  the mechanism *works*, "it didn't fire" is unfalsifiable. This is the cheap fix and
+  usually the right one.
+- **Guard the observability first, in the same spec.** Assert that a firing would have
+  been visible before asserting it did not fire — the preemption and drain specs check
+  `GITHUB_API_BASE_URL` addresses fakegithub and pin a payload carrying a complete run
+  identity, precisely so an absent re-run cannot be an absent *instrument*. That guard is
+  what keeps the test honest; note it still could not catch Q504, because it validated
+  the AGC's env var rather than where the call actually went.
+- **Prefer asserting the specific wrong thing did not happen** over asserting nothing
+  happened. `seq` must not contain `Failed/Evicted` is a claim about a mechanism; "the
+  counter stayed 0" is a claim about the whole world, and the world has many ways to be
+  quiet.
+
+This is the negative-control idea above, aimed at the test's *premise* rather than its
+fix: ask what else would produce this same green, and close off the answers.
+
 ### Synchronize on the signal you assert on
 
 "[Wait on the condition, not the clock](#avoiding-shared-stub-flakes-in-the-agc-suite)" has a sharper form: wait on **the same signal you are about to assert on**. Two observable effects of one operation almost never land together, and a test that blocks on the earlier one and then reads the later one races the gap between them — a real race, not a slow machine, so no amount of extra timeout closes it.

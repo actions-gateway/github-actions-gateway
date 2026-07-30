@@ -150,6 +150,50 @@ docs: add vendoring discipline to CONTRIBUTING
 
 Keep commits small and focused. Never commit broken code or failing tests. Amending unpushed commits is fine; once pushed, prefer a follow-up commit unless a rebase is explicitly needed.
 
+### Pushing to a PR that is already open
+
+Prefer putting everything in the first push — but "never push again" is too strong, and
+the reason matters. PRs here squash-merge, so a commit that lands while the PR is
+**green and mergeable** can be overtaken by the merge and stranded: it never reaches
+`main`, and the SHA it was pushed as no longer exists to tell you so.
+
+That risk is a property of the *mergeable* state, not of the PR being open. A PR whose
+checks are pending or failing cannot merge, so pushing to it is safe — and on anything
+that runs e2e, that is a window of roughly ten minutes on every push. Weigh the cost of
+the CI a push restarts, too: on a docs-only PR the gates are seconds, so an amend is
+cheap; on one that runs the full e2e matrix it is a quarter-hour you are spending twice.
+
+**The practical guard is a check immediately before the push, not a rule of thumb:**
+
+```sh
+gh pr view <n> --json state,mergeStateStatus --jq '{state,mergeStateStatus}'
+```
+
+`OPEN` with checks still running is safe to push. `CLEAN` means it can merge right now —
+either push promptly and confirm it landed, or branch off `main` instead. A state you
+read ten minutes ago is not the state you are pushing into.
+
+Whatever happens, verify what actually landed **by content, not SHA** — see below.
+
+### When new work blocks an open PR
+
+Work requested *after* a PR is open normally branches off `main` and gets its own PR. The
+exception is a fix the open PR **cannot go green without** — a blocking bug it surfaced,
+say. Branching that off `main` leaves the first PR red with no path forward, so branch it
+off `main`, then rebase the blocked PR **onto the fix branch** and say so in the PR body.
+Reviewers merge the fix first.
+
+Two mechanics make the follow-through safe once the base lands:
+
+- **Rebase with `--onto` to drop the merged commits.** PRs here squash-merge, so the
+  base's commits reach `main` under a new SHA and a plain `git rebase origin/main` tries
+  to replay your local copies on top of themselves. Use
+  `git rebase --onto origin/main <old-base-tip>` to replay only the commits that are
+  genuinely yours.
+- **Verify the base landed by content, never by SHA.** A squash orphans the original
+  SHAs, so `git log` cannot tell you the work is in. Check the code:
+  `git show origin/main:<path> | grep <the symbol you added>`.
+
 Queue items in `docs/STATUS.md` are identified by `Q`-prefixed IDs (e.g. `Q44`). Use the bare ID in commit messages and PR bodies — its `Q` prefix is what keeps GitHub from auto-linking to PR/issue 44 (`#44` would be linked, `Q44` is not).
 
 ## Security
