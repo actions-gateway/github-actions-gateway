@@ -21,9 +21,9 @@ Part of the [Observability](observability.md) guide. To scrape these metrics, se
 | `actions_gateway_token_refresh_errors_total` | Counter | `namespace` | Failed token refresh attempts. See SLO threshold below. |
 | `actions_gateway_renew_job_errors_total` | Counter | `namespace` | Failed `renewjob` calls. Leading indicator for cancelled jobs. (Renamed from `…_renewjob_errors_total` in Q205 — see [Breaking observability changes](#breaking-observability-changes-q205).) |
 | `actions_gateway_renew_job_teardowns_total` | Counter | `namespace`, `reason` | Workers self-cancelled because the job's lock was definitively lost (Q254), avoiding an orphan pod. `reason="job_not_found"` is a definitive 404/410 from the run service (job recycled/reassigned); `reason="consecutive_failures"` is 5 consecutive renewal failures (~5 min). See the [runbook](troubleshooting.md#renewjob-failures-rising). |
-| `actions_gateway_eviction_retries_total` | Counter | `namespace`, `runner_group`, `tier` | Re-runs **attempted** after worker pod eviction — not re-runs that succeeded. It counts the retry-budget reservation, which happens before the API call, so it increments even when GitHub refuses the call; against real GitHub today it always does, because the re-run fires ~9.5 minutes before the run concludes ([Q503](../STATUS.md#Q503), and the [runbook](troubleshooting.md#evicted-worker-pods-exhausting-retry-budget)). Do not read it as a recovery count. `tier="classic"` is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; `tier="scaleset"` is the scale-set path, where the owning reconciler detects the eviction from the worker pod itself (Q417). The retry budget is **shared** — it is keyed by run ID alone, so `maxEvictionRetries` bounds re-runs per run across both tiers together, not once per tier. The `tier` label was added in Q417; see [Breaking observability changes](#breaking-observability-changes-q417). |
-| `actions_gateway_eviction_retries_exhausted_total` | Counter | `namespace`, `runner_group`, `tier` | Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an `EvictionRetriesExhausted` Warning Event on the owning `RunnerGroup`/`RunnerSet` (Q170). `tier` as above. |
-| `actions_gateway_eviction_recovery_identity_unknown_total` | Counter | `namespace`, `runner_group` | Evicted **scale-set** worker pods that carried no workflow-run identity, so no automatic re-run could be attempted and the job stays failed until a human re-runs it (Q417). Each occurrence also emits an `EvictionRecoveryIdentityUnknown` Warning Event on the owning `RunnerSet`. This is the one failure mode that makes scale-set eviction recovery silently inert, which is why it is counted separately from an exhausted budget: an exhausted budget means a tenant is evicting more than `maxEvictionRetries` allows, while this means GitHub did not send the assignment fields (`ownerName`, `repositoryName`, `workflowRunId`) the mechanism reads. **Expected to be zero** — the assignment fields were confirmed present on live GitHub on 2026-07-26, so a sustained rate is a protocol-level regression, not a capacity problem — see the [runbook](troubleshooting.md#evicted-scale-set-jobs-are-not-re-run-automatically). |
+| `actions_gateway_eviction_retries_total` | Counter | `namespace`, `runner_group`, `tier`, `cause` | Re-runs **attempted** after worker pod eviction — not re-runs that succeeded. It counts the retry-budget reservation, which happens before the API call, so it increments even when GitHub refuses the call; against real GitHub today `cause="eviction"` always does, because that re-run fires ~9.5 minutes before the run concludes ([Q503](../STATUS.md#Q503), and the [runbook](troubleshooting.md#evicted-worker-pods-exhausting-retry-budget)). Do not read it as a recovery count — except under `cause="preemption"`, which is a graceful removal: the runner reports, GitHub concludes in seconds, and the re-run is accepted, so Q503 does not apply there. `tier="classic"` is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; `tier="scaleset"` is the scale-set path, where the owning reconciler detects the disruption from the worker pod itself (Q417). `cause="eviction"` is the kubelet's node-pressure eviction; `cause="preemption"` is kube-scheduler displacing the worker for a higher `priorityTiers` tier (Q497). The retry budget is **shared** — it is keyed by run ID alone, so `maxEvictionRetries` bounds re-runs per run across both tiers **and both causes** together, not once per combination. Labels added in Q417 (`tier`) and Q497 (`cause`); see [Breaking observability changes](#breaking-observability-changes-q417). |
+| `actions_gateway_eviction_retries_exhausted_total` | Counter | `namespace`, `runner_group`, `tier`, `cause` | Disruption retries exhausted; job requires manual re-run. Each occurrence also emits an `EvictionRetriesExhausted` Warning Event on the owning `RunnerGroup`/`RunnerSet` (Q170). `tier` and `cause` as above. |
+| `actions_gateway_eviction_recovery_identity_unknown_total` | Counter | `namespace`, `runner_group`, `cause` | Disrupted **scale-set** worker pods that carried no workflow-run identity, so no automatic re-run could be attempted and the job stays failed until a human re-runs it (Q417). Each occurrence also emits an `EvictionRecoveryIdentityUnknown` Warning Event on the owning `RunnerSet`. This is the one failure mode that makes scale-set eviction recovery silently inert, which is why it is counted separately from an exhausted budget: an exhausted budget means a tenant is evicting more than `maxEvictionRetries` allows, while this means GitHub did not send the assignment fields (`ownerName`, `repositoryName`, `workflowRunId`) the mechanism reads. **Expected to be zero** — the assignment fields were confirmed present on live GitHub on 2026-07-26, so a sustained rate is a protocol-level regression, not a capacity problem — see the [runbook](troubleshooting.md#evicted-scale-set-jobs-are-not-re-run-automatically). |
 | `actions_gateway_quota_retries_total` | Counter | `namespace`, `runner_group` | Pod creation attempts retried after the namespace `ResourceQuota` rejected the worker pod. A brief non-zero rate under burst is normal (the listener backs off and retries); a sustained rate means quota headroom is tight — raise the quota or lower `maxWorkers`. |
 | `actions_gateway_quota_retries_exhausted_total` | Counter | `namespace`, `runner_group` | Quota retries exhausted; the job was abandoned after the quota retry budget ran out and requires a manual re-run. |
 | `actions_gateway_worker_pods_reaped_total` | Counter | `namespace`, `runner_group`, `reason` | Worker pods deleted by the lifecycle reaper. `reason="completed_ttl"` is routine cleanup after `completedPodTTL`; `reason="pending_deadline"` means a pod was stuck Pending past `pendingPodDeadline` and its job was cancelled — each such reap also emits a `WorkerPodStuckPending` Warning Event on the RunnerGroup. `reason="orphaned_running"` means a pod was still Running five minutes after GitHub reported its job terminal — a ScaleSet worker that registered but never received its job, or a pod held open by a container that outlived the runner — and emits a `WorkerPodOrphanedRunning` Warning Event; see the [runbook](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning). `reason="lifetime_exceeded"` means the kubelet killed the pod for outliving `maxWorkerLifetime` (default 12h, the pod's `activeDeadlineSeconds`) and emits a `WorkerPodLifetimeExceeded` Warning Event — the unconditional backstop for a worker orphaned while the AGC was down, and the one reap reason that fires with no AGC running; see the [runbook](troubleshooting.md#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded). |
@@ -50,18 +50,30 @@ Part of the [Observability](observability.md) guide. To scrape these metrics, se
 | `actions_gateway_agc_autoscaling_unavailable` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `AGCAutoscalingUnavailable=True` (Q360, §E.11): the gateway opted into managed AGC right-sizing (`agcAutoscaling`) but it cannot be satisfied — the `VerticalPodAutoscaler` CRDs are not installed (`VPACRDNotInstalled`) or a precedence conflict blocks the managed VPA. Advisory — the AGC still runs on its stamped `agcResources` sizing and `Ready` is unaffected; the opt-in is simply inert until the blocker clears. `0` when satisfied or not opted in. Without this gauge the unsatisfiable opt-in is visible only via `kubectl describe` (Q390). v2 only, emitted only on a v2 install (Q321). |
 | `actions_gateway_build_info` | Gauge | `component`, `version` | Constant `1` per running control-plane binary, following the Prometheus `*_build_info` convention (Q318). Emitted by the GMC, AGC, and proxy — `component` is `gmc`/`agc`/`proxy` and `version` is the build tag stamped into the binary (`dev` for un-stamped local builds). Not load-bearing for alerting; join it into other series to correlate the running version during an incident (worker pods carry `app.kubernetes.io/version`, but the control plane otherwise does not expose its version in metrics). |
 
-> **Reading the eviction metrics across tiers.** Both `eviction_retries_total` and
-> `eviction_retries_exhausted_total` are emitted on **both** acquisition tiers, split
-> by the `tier` label (Q417). The two are detected by different machinery — an inline
-> pod wait on classic, the owning reconciler's recovery pass on scale-set — but they
-> share one budget, keyed by workflow run alone, so `maxEvictionRetries` caps re-runs
-> per run across the pair rather than once each.
+> **Reading the eviction metrics across tiers and causes.** Both `eviction_retries_total`
+> and `eviction_retries_exhausted_total` are emitted on **both** acquisition tiers, split
+> by the `tier` label (Q417), and for **both** recovered disruptions, split by the
+> `cause` label (Q497). Detection differs across all four combinations — an inline pod
+> wait on classic, the owning reconciler's recovery pass on scale-set; a `PodFailed`/
+> `Evicted` phase for an eviction, a `DisruptionTarget` condition for a preemption — but
+> they share one budget, keyed by workflow run alone, so `maxEvictionRetries` caps
+> re-runs per run across the whole set rather than once per combination.
 >
-> A flat zero on `tier="scaleset"` while workers are visibly being evicted means the
-> recovery is not firing, not that nothing was evicted. Check
+> **The `cause` split is a diagnosis, not decoration.** A climbing `cause="eviction"`
+> rate means node pressure: memory or disk exhaustion on the nodes, and the fix is
+> capacity or worker sizing. A climbing `cause="preemption"` rate means a `priorityTiers`
+> floor is displacing more opportunistic work than the tenant sized for, and the fix is
+> tier thresholds or where the work is placed. Reading one as the other sends an operator
+> hunting in entirely the wrong place.
+>
+> A flat zero on `tier="scaleset"` while workers are visibly being disrupted means the
+> recovery is not firing, not that nothing happened. Check
 > `kubectl get pods --field-selector=status.phase=Failed` for `Evicted` pods, then
 > `actions_gateway_eviction_recovery_identity_unknown_total` and the
 > [runbook](troubleshooting.md#evicted-scale-set-jobs-are-not-re-run-automatically).
+> For preemption specifically, see
+> [A Preempted Worker's Job Is Not Re-Run](troubleshooting.md#a-preempted-workers-job-is-not-re-run)
+> — its scale-set path has a time limit the eviction path does not.
 
 > **Proxy conditions on a v2 deploy.** On a v2 install (the opt-in
 > `actions-gateway-crds-v2` CRDs), the GMC also counts v2 `ActionsGateway`s in
@@ -335,18 +347,29 @@ Metric labels are scoped to `namespace` and `runner_group`. To avoid label cardi
 ## Breaking observability changes (Q417)
 
 Q417 ported eviction recovery to the scale-set acquisition tier and added a `tier`
-label to the two eviction counters so the two tiers' recoveries are distinguishable:
+label to the two eviction counters so the two tiers' recoveries are distinguishable.
+Q497 extended recovery to scheduler preemption and added a `cause` label, on those two
+counters and on the identity counter, for the same reason — the two disruptions demand
+different operator responses:
 
-| Metric | Labels before | Labels after |
-| --- | --- | --- |
-| `actions_gateway_eviction_retries_total` | `namespace`, `runner_group` | `namespace`, `runner_group`, `tier` |
-| `actions_gateway_eviction_retries_exhausted_total` | `namespace`, `runner_group` | `namespace`, `runner_group`, `tier` |
+| Metric | Labels before | After Q417 | After Q497 |
+| --- | --- | --- | --- |
+| `actions_gateway_eviction_retries_total` | `namespace`, `runner_group` | + `tier` | + `cause` |
+| `actions_gateway_eviction_retries_exhausted_total` | `namespace`, `runner_group` | + `tier` | + `cause` |
+| `actions_gateway_eviction_recovery_identity_unknown_total` | `namespace`, `runner_group` | — | + `cause` |
 
 **What breaks.** Only queries that match the full label set exactly, or that render
-one series per metric and now render two. Aggregations are unaffected: `sum(...)`,
+one series per metric and now render more. Aggregations are unaffected: `sum(...)`,
 `increase(...) > 0`, and `sum by (namespace, runner_group) (...)` keep working
-unchanged, which covers the shipped dashboards and alert rules. Add `tier` to a
-`by (...)` clause where you want the split.
+unchanged, which covers the shipped dashboards and alert rules. Add `tier` or `cause`
+to a `by (...)` clause where you want the split.
+
+**One reading does change meaning even though no query breaks.** Before Q497,
+`actions_gateway_eviction_retries_total` counted node-pressure evictions only, so a
+dashboard titled "evictions" was accurate. It now also counts preemptions, which are a
+routine consequence of running a `priorityTiers` floor rather than a sign of node
+trouble. An alert that pages on this counter rising should filter to
+`{cause="eviction"}` unless it genuinely wants both.
 
 **Continuity.** Both counters keep their names, so history is preserved; series
 recorded before the upgrade simply carry no `tier` label.

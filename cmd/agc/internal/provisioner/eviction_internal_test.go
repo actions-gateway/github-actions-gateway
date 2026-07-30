@@ -52,10 +52,10 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	m := &runnercore.Metrics{
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "test_q106_eviction_retries_total",
-		}, []string{"namespace", "runner_group", "tier"}),
+		}, []string{"namespace", "runner_group", "tier", "cause"}),
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "test_q106_eviction_retries_exhausted_total",
-		}, []string{"namespace", "runner_group", "tier"}),
+		}, []string{"namespace", "runner_group", "tier", "cause"}),
 	}
 
 	p := &Provisioner{
@@ -72,16 +72,23 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	// All goroutines target the same run_id (and therefore the same lock shard),
 	// so the read-modify-write is maximally contended — exactly the interleaving
 	// the fix must defend against. retryDelay=0 keeps the test fast.
+	// Both tiers AND both disruption causes are interleaved, because the budget is one
+	// budget across every combination: a run that is alternately evicted and preempted
+	// on either tier must still be capped at maxRetries re-runs in total (Q497).
 	var wg sync.WaitGroup
 	for i := 0; i < concurrency; i++ {
 		tier := evictionTierClassic
 		if i%2 == 1 {
 			tier = evictionTierScaleSet
 		}
+		cause := recoveryCauseEviction
+		if i%3 == 1 {
+			cause = recoveryCausePreemption
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "12345", log, maxRetries, 0, tier)
+			p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "12345", log, maxRetries, 0, tier, cause)
 		}()
 	}
 	wg.Wait()
@@ -93,12 +100,16 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	require.Equal(t, int64(maxRetries), got,
 		"budget should be fully used when evictions far exceed it")
 
-	// The EvictionRetries metric is incremented exactly once per reserved slot, so the
-	// two tiers' series must SUM to the number of rerun calls — the tier label splits
-	// the reporting without splitting the budget.
-	classic := testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", evictionTierClassic))
-	scaleset := testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", evictionTierScaleSet))
-	assert.Equal(t, float64(got), classic+scaleset)
+	// The EvictionRetries metric is incremented exactly once per reserved slot, so every
+	// tier×cause series must SUM to the number of rerun calls — the labels split the
+	// reporting without splitting the budget.
+	var total float64
+	for _, tier := range []string{evictionTierClassic, evictionTierScaleSet} {
+		for _, cause := range []string{recoveryCauseEviction, recoveryCausePreemption} {
+			total += testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", tier, cause))
+		}
+	}
+	assert.Equal(t, float64(got), total)
 }
 
 // TestHandleEviction_BudgetIsHardCap verifies that the eviction-retry budget is
@@ -127,7 +138,7 @@ func TestHandleEviction_BudgetIsHardCap(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	for i := 0; i < evictions; i++ {
-		p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "999", log, maxRetries, 0, evictionTierClassic)
+		p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "999", log, maxRetries, 0, evictionTierClassic, recoveryCauseEviction)
 	}
 
 	assert.Equal(t, int64(maxRetries), rerunCount.Load(),

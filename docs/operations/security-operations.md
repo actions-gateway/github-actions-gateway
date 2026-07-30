@@ -61,7 +61,7 @@ Two detection substrates are used:
 
 | Threat (from [05-security.md](../design/05-security.md)) | Abuse signal | Detection substrate | Severity |
 |---|---|---|---|
-| **Eviction-Retry API Misuse** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)) — compromised AGC looping `rerun-failed-jobs` | `eviction_retries_total` rate climbs without matching node pressure; `eviction_retries_exhausted_total` increments. Split by the `tier` label to see which acquisition path is issuing the re-runs (Q417); the alert below aggregates over it, so it fires either way | Metric | Ticket → Page on sustained climb |
+| **Eviction-Retry API Misuse** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)) — compromised AGC looping `rerun-failed-jobs` | `eviction_retries_total{cause="eviction"}` rate climbs without matching node pressure; `eviction_retries_exhausted_total` increments. Split by the `tier` label to see which acquisition path is issuing the re-runs (Q417); the alert below aggregates over it, so it fires either way. **Scope the query to `cause="eviction"`** — the same counter records legitimate `preemption` recoveries, which are the expected steady state under a preempting `priorityTiers` floor and would otherwise read as abuse (Q497) | Metric | Ticket → Page on sustained climb |
 | **Proxy Pool Exhaustion / slowloris** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-17/M-18) | `proxy_connections_active` pinned near capacity; `proxy_tunnel_duration_seconds` mass in the 6h bucket | Metric | Page |
 | **Server-Side Request Forgery (SSRF) / destination probing via proxy** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-2/M-12) | `proxy_connect_denied_total` rate rising — every increment is an explicit allowlist denial (a workload reaching for an off-allowlist destination), so this is the precise signal; corroborate with a `proxy_dial_errors_total` spike | Metric | Ticket |
 | **DoS via Resource Exhaustion** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)) — rogue workflow exhausting tenant quota | `kube_resourcequota` used/hard ratio sustained at 1.0 | Metric (kube-state-metrics) | Ticket |
@@ -88,10 +88,16 @@ groups:
       # Page: eviction-retry loop — sustained re-queue rate without a
       # matching node-pressure event suggests rerun-failed-jobs abuse
       # (compromised AGC) rather than genuine eviction churn.
+      #
+      # Scoped to cause="eviction" deliberately (Q497). The same counter also
+      # records preemption recoveries, which are the EXPECTED steady state for a
+      # tenant running a preempting priorityTiers floor — including them would
+      # page on a supported configuration working correctly, and an alert that
+      # cries wolf on normal operation stops being read.
       - alert: ActionsGatewayEvictionRetryAbuse
         expr: |
           sum by (namespace, runner_group) (
-            rate(actions_gateway_eviction_retries_total[15m])
+            rate(actions_gateway_eviction_retries_total{cause="eviction"}[15m])
           ) > 0.05
         for: 30m
         labels:

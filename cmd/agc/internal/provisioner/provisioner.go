@@ -521,11 +521,10 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	log.Debug("worker pod created", "priorityClass", priorityClass)
 
 	// 6. Watch for pod completion (event-driven when a Waiter is wired; poll fallback otherwise).
-	var phase corev1.PodPhase
-	var reason string
+	var outcome PodOutcome
 	if err = traceStep(ctx, "waitForCompletion", func(ctx context.Context) error {
 		var wErr error
-		phase, reason, wErr = p.waitForCompletion(ctx, key.Namespace, podName)
+		outcome, wErr = p.waitForCompletion(ctx, key.Namespace, podName)
 		return wErr
 	}); err != nil {
 		// Context cancelled or unrecoverable watch error.
@@ -537,7 +536,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// learn the workflow's real result (only the worker's runner binary reports it,
 	// for the winner's own delivery), so PodFailed→failed and anything else
 	// (Succeeded, or a terminal phase we cannot map) →succeeded is the honest proxy.
-	if phase == corev1.PodFailed {
+	if outcome.Phase == corev1.PodFailed {
 		result = broker.TaskResultFailed
 	} else {
 		result = broker.TaskResultSucceeded
@@ -545,21 +544,33 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 
 	duration := time.Since(start)
 	span.SetAttributes(
-		attribute.String("gateway.pod.phase", string(phase)),
-		attribute.String("gateway.pod.reason", reason),
+		attribute.String("gateway.pod.phase", string(outcome.Phase)),
+		attribute.String("gateway.pod.reason", outcome.Reason),
+		attribute.Bool("gateway.pod.preempted", outcome.Preempted),
 		attribute.Float64("gateway.provision.duration_seconds", duration.Seconds()),
 	)
 	// Per-pod completion line; podName is on the logger context. Debug (Q87, Theme D).
-	log.Debug("worker pod completed", "phase", phase, "reason", reason, "duration", duration)
+	log.Debug("worker pod completed",
+		"phase", outcome.Phase, "reason", outcome.Reason, "preempted", outcome.Preempted, "duration", duration)
 	if p.Metrics != nil {
 		p.Metrics.JobDuration.WithLabelValues(key.Namespace, key.Name).Observe(duration.Seconds())
 	}
 
-	// 7. Eviction handling. Inline here because this goroutine owns the pod and still
+	// 7. Disruption recovery. Inline here because this goroutine owns the pod and still
 	// holds the payload's identity; the scale-set tier, which has neither, recovers
 	// from the owning reconciler instead (RecoverEvictedScaleSetWorkers).
-	if phase == corev1.PodFailed && reason == podReasonEvicted {
-		p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic)
+	//
+	// Two causes reach the same recovery. The kubelet's node-pressure eviction is the
+	// PodFailed/Evicted shape; kube-scheduler preemption deletes its victim instead, so
+	// it is recognised by the DisruptionTarget condition the outcome carried out of the
+	// wait (Q497). Eviction is tested first only because its shape is the more specific
+	// one — the two are mutually exclusive in practice, and either way a single call
+	// spends a single slot of the run's one shared retry budget.
+	switch {
+	case outcome.Phase == corev1.PodFailed && outcome.Reason == podReasonEvicted:
+		p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCauseEviction)
+	case outcome.Preempted:
+		p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCausePreemption)
 	}
 
 	// 8. Cleanup. The job Secret is always deleted here. The pod is deleted

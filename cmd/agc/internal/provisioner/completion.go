@@ -12,9 +12,8 @@ import (
 
 // waitForCompletion blocks until the pod reaches a terminal phase, delegating to
 // the event-driven Waiter when one is wired (production) and otherwise falling
-// back to the poll loop (fake-client unit tests). Returns the final phase, reason
-// (for eviction detection), and any error.
-func (p *Provisioner) waitForCompletion(ctx context.Context, namespace, podName string) (corev1.PodPhase, string, error) {
+// back to the poll loop (fake-client unit tests).
+func (p *Provisioner) waitForCompletion(ctx context.Context, namespace, podName string) (PodOutcome, error) {
 	if p.Waiter != nil {
 		return p.Waiter.WaitForCompletion(ctx, namespace, podName)
 	}
@@ -24,8 +23,13 @@ func (p *Provisioner) waitForCompletion(ctx context.Context, namespace, podName 
 // waitForPodCompletion polls until the pod reaches a terminal phase. It is the
 // fallback used when no Waiter is wired; production replaces it with the
 // event-driven InformerPodWaiter (see Provisioner.Waiter).
-// Returns the final phase, reason (for eviction detection), and any error.
-func (p *Provisioner) waitForPodCompletion(ctx context.Context, namespace, podName string) (corev1.PodPhase, string, error) {
+//
+// The last observed pod is retained so that a pod which disappears between two ticks —
+// the shape a preemption takes, since the scheduler deletes its victim — can still be
+// reported as preempted from the state this loop did see. Polling is inherently lossier
+// than the informer here (a preemption that starts and completes inside one interval
+// leaves nothing to observe), which is another reason production wires the Waiter.
+func (p *Provisioner) waitForPodCompletion(ctx context.Context, namespace, podName string) (PodOutcome, error) {
 	interval := p.PollInterval
 	if interval == 0 {
 		interval = 5 * time.Second
@@ -33,22 +37,24 @@ func (p *Provisioner) waitForPodCompletion(ctx context.Context, namespace, podNa
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	var preempted bool
 	for {
 		select {
 		case <-ctx.Done():
-			return "", "", ctx.Err()
+			return PodOutcome{}, ctx.Err()
 		case <-ticker.C:
 			var pod corev1.Pod
 			if err := p.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: podName}, &pod); err != nil {
 				if client.IgnoreNotFound(err) == nil {
 					// Pod was deleted externally; treat as completion.
-					return corev1.PodSucceeded, "", nil
+					return PodOutcome{Phase: corev1.PodSucceeded, Preempted: preempted}, nil
 				}
-				return "", "", fmt.Errorf("provisioner: watch pod: %w", err)
+				return PodOutcome{}, fmt.Errorf("provisioner: watch pod: %w", err)
 			}
+			preempted = preempted || PreemptedByScheduler(&pod)
 			switch pod.Status.Phase {
 			case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
-				return pod.Status.Phase, pod.Status.Reason, nil
+				return PodOutcome{Phase: pod.Status.Phase, Reason: pod.Status.Reason, Preempted: preempted}, nil
 			}
 		}
 	}

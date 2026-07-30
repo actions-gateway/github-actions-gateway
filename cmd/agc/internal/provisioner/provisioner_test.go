@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -51,13 +52,13 @@ func newTestMetrics() *runnercore.Metrics {
 		}, []string{"namespace", "runner_group"}),
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_retries_total",
-		}, []string{"namespace", "runner_group", "tier"}),
+		}, []string{"namespace", "runner_group", "tier", "cause"}),
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_retries_exhausted_total",
-		}, []string{"namespace", "runner_group", "tier"}),
+		}, []string{"namespace", "runner_group", "tier", "cause"}),
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_recovery_identity_unknown_total",
-		}, []string{"namespace", "runner_group"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		QuotaRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_quota_retries_total",
 		}, []string{"namespace", "runner_group"}),
@@ -186,6 +187,26 @@ func evictPod(ctx context.Context, t *testing.T, c client.Client, ns, name strin
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &pod))
 	pod.Status.Phase = corev1.PodFailed
 	pod.Status.Reason = "Evicted"
+	require.NoError(t, c.Status().Update(ctx, &pod))
+}
+
+// preemptPod marks the named pod as kube-scheduler marks a preemption victim — the
+// DisruptionTarget/PreemptionByScheduler condition — and moves it to phase in the same
+// status write, which is what the classic path's single poll Get observes.
+//
+// The pod is left in the API rather than deleted because the scheduler's delete is
+// graceful: the victim stays readable for its termination grace period, and it is that
+// window the AGC observes it in.
+func preemptPod(ctx context.Context, t *testing.T, c client.Client, ns, name string, phase corev1.PodPhase) {
+	t.Helper()
+	var pod corev1.Pod
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &pod))
+	pod.Status.Phase = phase
+	pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
+		Type:   corev1.DisruptionTarget,
+		Status: corev1.ConditionTrue,
+		Reason: corev1.PodReasonPreemptionByScheduler,
+	})
 	require.NoError(t, c.Status().Update(ctx, &pod))
 }
 
@@ -941,7 +962,100 @@ func TestProvisioner_EvictionAutoRetry(t *testing.T) {
 	}
 
 	// H1: EvictionRetries counter must be incremented once.
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
+}
+
+// TestProvisioner_PreemptionAutoRetry is the classic half of Q497. A worker displaced by
+// a higher-priority priorityTiers tier is deleted by kube-scheduler, not failed by the
+// kubelet, so it never carries Evicted and reached no recovery at all before this — the
+// displaced run needed a manual re-run, which is exactly what the oversubscription claim
+// says it should not.
+//
+// The victim here lands in Succeeded deliberately. Q423 measured that the terminal phase
+// on this path is the interrupted container's own exit status, so a preempted worker can
+// look, by phase alone, like a job that finished cleanly. Asserting the re-run fires
+// anyway is asserting that the DisruptionTarget condition — not the phase — is what
+// drives the decision.
+func TestProvisioner_PreemptionAutoRetry(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+
+	rerunCalled := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rerunCalled <- r.URL.Path
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	p := newProvisioner(fc)
+	m := newTestMetrics()
+	p.Metrics = m
+	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
+	p.GitHubAPIURL = srv.URL
+	p.HTTPClient = srv.Client()
+
+	rg := newRG("mygroup", "team-a")
+	payload := stubPayloadFull("myorg", "myrepo", 77)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-preempt", payload, "")
+	}()
+
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
+	preemptPod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
+
+	require.NoError(t, <-done)
+
+	select {
+	case path := <-rerunCalled:
+		assert.Equal(t, "/repos/myorg/myrepo/actions/runs/77/rerun-failed-jobs", path)
+	case <-time.After(2 * time.Second):
+		t.Fatal("a preempted worker's run was not re-run within timeout")
+	}
+
+	// Attributed to preemption, not to node pressure: an operator diagnosing a climbing
+	// eviction rate goes looking at node memory and disk, which would be the wrong hunt.
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "preemption")))
+	assert.Equal(t, float64(0), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
+}
+
+// TestProvisioner_OrdinaryCompletionIsNotRetried is the negative that bounds the change
+// above: a worker that simply finished — no disruption marker of any kind — must not be
+// re-run, whatever its phase. Without this, "recover on preemption" could silently
+// become "re-run everything that ends".
+func TestProvisioner_OrdinaryCompletionIsNotRetried(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+
+	var rerunCount atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		rerunCount.Add(1)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	p := newProvisioner(fc)
+	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
+	p.GitHubAPIURL = srv.URL
+	p.HTTPClient = srv.Client()
+
+	rg := newRG("mygroup", "team-a")
+
+	// A plain failure is the sharper case than a plain success: it is what a genuinely
+	// broken job produces, and it shares a phase with a kubelet eviction.
+	done := make(chan error, 1)
+	go func() {
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-plain", stubPayloadFull("myorg", "myrepo", 78), "")
+	}()
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
+	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodFailed)
+	require.NoError(t, <-done)
+
+	assert.Equal(t, int64(0), rerunCount.Load(),
+		"a job that failed on its own must not be re-run; only a disruption qualifies")
 }
 
 // TestProvisioner_EvictionRetryBudgetExhausted verifies that a second eviction
@@ -1014,8 +1128,8 @@ func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 	// H5: provision returns only after handleEviction finishes, so these assertions
 	// are race-free — no sleep needed.
 	runCycle("plan-evict-2")
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup", "classic")))
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", "classic")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup", "classic", "eviction")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", "classic", "eviction")))
 	assert.Equal(t, 1, rerunCount, "rerun API should be called exactly once")
 
 	// Budget exhaustion records a Warning Event on the owner so the operator sees a
@@ -1075,7 +1189,7 @@ func TestProvisioner_EvictionRerunAPI5xx(t *testing.T) {
 	}
 
 	// EvictionRetries counter incremented even when the API returns 5xx.
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
 }
 
 // TestProvisioner_PriorityTiersSecondTier verifies that the second priority tier
@@ -1633,8 +1747,8 @@ func TestProvisioner_RGMaxEvictionRetriesZero(t *testing.T) {
 	}
 
 	// Exhausted counter must increment immediately.
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "mygroup", "classic")))
-	assert.Equal(t, float64(0), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
+	assert.Equal(t, float64(0), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
 }
 
 // TestProvisioner_RGMaxEvictionRetriesOne verifies that maxEvictionRetries:1 on the
@@ -1699,7 +1813,7 @@ func TestProvisioner_RGMaxEvictionRetriesOne(t *testing.T) {
 
 	// Second eviction: budget exhausted (count 1 >= 1), no retry.
 	runCycle("plan-rg-retry-2")
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup", "classic")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup", "classic", "eviction")))
 	assert.Equal(t, 1, rerunCount, "rerun API should be called exactly once")
 }
 

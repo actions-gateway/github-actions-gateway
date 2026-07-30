@@ -15,27 +15,50 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// PodOutcome is how a worker pod stopped being this session's concern: the terminal
+// phase and Status.Reason (which together detect a kubelet eviction), plus whether the
+// pod was a kube-scheduler preemption victim.
+//
+// Preempted travels alongside the phase rather than being read back off the pod later,
+// because by the time provision() could re-Get the pod the scheduler's delete may have
+// completed and the evidence is gone. The resolving event still holds the object — the
+// informer's delete event carries the last-known pod — so the marker is captured at the
+// only moment it is reliably available.
+type PodOutcome struct {
+	// Phase is the terminal phase, or PodSucceeded for a pod deleted before it
+	// reached one.
+	Phase corev1.PodPhase
+	// Reason is Pod.Status.Reason; "Evicted" is the kubelet's node-pressure eviction.
+	Reason string
+	// Preempted reports a DisruptionTarget=True/PreemptionByScheduler condition, which
+	// only kube-scheduler writes (Q497).
+	Preempted bool
+}
+
 // PodWaiter blocks until a worker pod reaches a terminal phase. It abstracts the
 // completion-detection mechanism so the Provisioner can be wired with either the
 // event-driven [InformerPodWaiter] (production) or the poll fallback (unit tests
 // with a fake client; see Provisioner.waitForPodCompletion).
 type PodWaiter interface {
 	// WaitForCompletion blocks until the named pod reaches a terminal phase or
-	// ctx is cancelled. It returns the terminal phase and Status.Reason (used to
-	// detect evictions). A pod that is deleted before reaching a terminal phase
-	// is reported as PodSucceeded with an empty reason.
-	WaitForCompletion(ctx context.Context, namespace, name string) (corev1.PodPhase, string, error)
+	// ctx is cancelled. A pod that is deleted before reaching a terminal phase is
+	// reported as PodSucceeded with an empty reason.
+	WaitForCompletion(ctx context.Context, namespace, name string) (PodOutcome, error)
 }
 
 // terminalPhase reports whether pod has reached a terminal phase, returning the
-// phase and its Status.Reason. The set matches the legacy poll loop exactly:
+// outcome it resolves a waiter with. The set matches the legacy poll loop exactly:
 // Succeeded, Failed, and Unknown are terminal; Pending and Running are not.
-func terminalPhase(pod *corev1.Pod) (corev1.PodPhase, string, bool) {
+func terminalPhase(pod *corev1.Pod) (PodOutcome, bool) {
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
-		return pod.Status.Phase, pod.Status.Reason, true
+		return PodOutcome{
+			Phase:     pod.Status.Phase,
+			Reason:    pod.Status.Reason,
+			Preempted: PreemptedByScheduler(pod),
+		}, true
 	default:
-		return "", "", false
+		return PodOutcome{}, false
 	}
 }
 
@@ -43,8 +66,7 @@ func terminalPhase(pod *corev1.Pod) (corev1.PodPhase, string, bool) {
 // carries the optional pod-creation latency observation so resolve can emit it
 // exactly once per pod (on the first resolving event that still has waiters).
 type podResult struct {
-	phase  corev1.PodPhase
-	reason string
+	outcome PodOutcome
 	// namespace and latency carry the pod-creation-latency observation.
 	// latencyValid is false when the pod never started (no container StartedAt),
 	// in which case no observation is emitted.
@@ -157,7 +179,7 @@ func (w *InformerPodWaiter) Start(ctx context.Context) error {
 func (w *InformerPodWaiter) NeedLeaderElection() bool { return false }
 
 // WaitForCompletion implements PodWaiter.
-func (w *InformerPodWaiter) WaitForCompletion(ctx context.Context, namespace, name string) (corev1.PodPhase, string, error) {
+func (w *InformerPodWaiter) WaitForCompletion(ctx context.Context, namespace, name string) (PodOutcome, error) {
 	key := namespace + "/" + name
 	// Debug-level traces of the wait lifecycle: this loop is otherwise silent, so
 	// a session stuck waiting on a pod that never reaches a terminal phase (missed
@@ -176,25 +198,27 @@ func (w *InformerPodWaiter) WaitForCompletion(ctx context.Context, namespace, na
 	var pod corev1.Pod
 	switch err := w.reader.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &pod); {
 	case err == nil:
-		if phase, reason, ok := terminalPhase(&pod); ok {
-			log.Debug("pod already terminal at registration", "phase", phase, "reason", reason)
-			return phase, reason, nil
+		if out, ok := terminalPhase(&pod); ok {
+			log.Debug("pod already terminal at registration",
+				"phase", out.Phase, "reason", out.Reason, "preempted", out.Preempted)
+			return out, nil
 		}
 		log.Debug("registered for pod completion; pod not yet terminal", "phase", pod.Status.Phase)
 	case apierrors.IsNotFound(err):
 		// Not yet synced or already deleted — wait for an event.
 		log.Debug("registered for pod completion; pod not yet in cache, awaiting event")
 	default:
-		return "", "", fmt.Errorf("provisioner: pod waiter cache get: %w", err)
+		return PodOutcome{}, fmt.Errorf("provisioner: pod waiter cache get: %w", err)
 	}
 
 	select {
 	case <-ctx.Done():
 		log.Debug("pod wait cancelled before completion", "error", ctx.Err())
-		return "", "", ctx.Err()
+		return PodOutcome{}, ctx.Err()
 	case res := <-ch:
-		log.Debug("pod completion observed", "phase", res.phase, "reason", res.reason)
-		return res.phase, res.reason, nil
+		log.Debug("pod completion observed",
+			"phase", res.outcome.Phase, "reason", res.outcome.Reason, "preempted", res.outcome.Preempted)
+		return res.outcome, nil
 	}
 }
 
@@ -255,26 +279,34 @@ func (w *InformerPodWaiter) onPodEvent(obj any) {
 	if !ok {
 		return
 	}
-	if phase, reason, ok := terminalPhase(pod); ok {
-		latency, ok := podCreationLatency(pod)
+	if out, ok := terminalPhase(pod); ok {
+		latency, valid := podCreationLatency(pod)
 		w.resolve(pod.Namespace+"/"+pod.Name, podResult{
-			phase:        phase,
-			reason:       reason,
+			outcome:      out,
 			namespace:    pod.Namespace,
 			latency:      latency,
-			latencyValid: ok,
+			latencyValid: valid,
 		})
 	}
 }
 
 // onPodDelete resolves waiters when a pod is deleted before reaching a terminal
 // phase, matching the legacy poll's "deleted externally → treat as completion".
+//
+// This is the path a preemption most often takes, and the only one that can observe it:
+// the scheduler removes its victim by deleting it, and a victim held Pending (or killed
+// before the informer sees its terminal phase) publishes no terminal phase at all. The
+// delivered object is the pod's last-known state — including the DisruptionTarget
+// condition the scheduler stamped before the delete — so the marker is read off it here
+// rather than from a re-Get that would race the object's removal (Q497).
 func (w *InformerPodWaiter) onPodDelete(obj any) {
 	pod := podFromDeleteObj(obj)
 	if pod == nil {
 		return
 	}
-	w.resolve(pod.Namespace+"/"+pod.Name, podResult{phase: corev1.PodSucceeded})
+	w.resolve(pod.Namespace+"/"+pod.Name, podResult{
+		outcome: PodOutcome{Phase: corev1.PodSucceeded, Preempted: PreemptedByScheduler(pod)},
+	})
 }
 
 // podFromDeleteObj extracts the Pod from a DeleteFunc object, unwrapping the

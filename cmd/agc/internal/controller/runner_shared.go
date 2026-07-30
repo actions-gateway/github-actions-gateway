@@ -161,9 +161,19 @@ func (p *pendingConditions) forget(key types.NamespacedName) {
 
 // workerPodPhaseChangePredicate restricts a worker-Pod watch to this project's
 // worker pods (those carrying labelKey) and to the events that carry new status
-// for the owning CR: Create, Delete, and phase-changing Updates. Generic events
-// and non-phase Updates are dropped (status heartbeats don't change observable
-// state). labelKey is LabelRunnerGroup (v1) or LabelRunnerSet (v2).
+// for the owning CR: Create, Delete, phase-changing Updates, and the Update where a
+// pod newly becomes a scheduler-preemption victim. Generic events and every other
+// Update are dropped (status heartbeats don't change observable state). labelKey is
+// LabelRunnerGroup (v1) or LabelRunnerSet (v2).
+//
+// The preemption edge exists because that disruption changes no phase (Q497). The
+// scheduler stamps a DisruptionTarget condition and deletes the victim, which can leave
+// a Pending worker Pending for its whole termination grace period — so on the
+// phase-change edge alone the first event the reconciler would see is the Delete, by
+// which point the pod is out of the cache and the scale-set recovery scan has nothing
+// left to read the workflow-run identity off. It fires at most once per pod (the
+// condition is only added, never removed) and only for pods already carrying the
+// worker label, so it adds no steady-state reconcile traffic.
 func workerPodPhaseChangePredicate(labelKey string) predicate.Predicate {
 	hasLabel := func(obj client.Object) bool {
 		_, ok := obj.GetLabels()[labelKey]
@@ -182,7 +192,10 @@ func workerPodPhaseChangePredicate(labelKey string) predicate.Predicate {
 			if !ok1 || !ok2 {
 				return false
 			}
-			return oldPod.Status.Phase != newPod.Status.Phase
+			if oldPod.Status.Phase != newPod.Status.Phase {
+				return true
+			}
+			return !provisioner.PreemptedByScheduler(oldPod) && provisioner.PreemptedByScheduler(newPod)
 		},
 	}
 }

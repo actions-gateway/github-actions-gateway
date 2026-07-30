@@ -34,13 +34,13 @@ func evictionRecoveryMetrics() *runnercore.Metrics {
 	return &runnercore.Metrics{
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q417_eviction_retries_total",
-		}, []string{"namespace", "runner_group", "tier"}),
+		}, []string{"namespace", "runner_group", "tier", "cause"}),
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q417_eviction_retries_exhausted_total",
-		}, []string{"namespace", "runner_group", "tier"}),
+		}, []string{"namespace", "runner_group", "tier", "cause"}),
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q417_eviction_recovery_identity_unknown_total",
-		}, []string{"namespace", "runner_group"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 	}
 }
 
@@ -143,9 +143,9 @@ func TestRecoverEvictedScaleSetWorkers_RerunsTheEvictedRun(t *testing.T) {
 	// The recovery is attributed to the scale-set tier, so an operator can assert the
 	// mechanism works on the tier a v2beta1 tenant actually runs on.
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet)))
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction)))
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierClassic)))
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierClassic, recoveryCauseEviction)))
 
 	// The pod is claimed, which is what makes the next reconcile skip it.
 	var pod corev1.Pod
@@ -238,7 +238,7 @@ func TestRecoverEvictedScaleSetWorkers_IdentityUnknownIsSurfaced(t *testing.T) {
 
 	assert.Equal(t, int64(0), rerunCount.Load(), "there is no run to re-run")
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRecoveryIdentityUnknown.WithLabelValues("team-a", "gpu")))
+		testutil.ToFloat64(m.EvictionRecoveryIdentityUnknown.WithLabelValues("team-a", "gpu", recoveryCauseEviction)))
 	assert.Contains(t, target.events, "EvictionRecoveryIdentityUnknown")
 
 	// Claimed anyway: the verdict is final for this pod, so later reconciles must not
@@ -269,7 +269,7 @@ func TestRecoverEvictedScaleSetWorkers_BudgetExhaustionSurfaces(t *testing.T) {
 	// Three evicted workers, one run, a budget of two.
 	assert.Equal(t, int64(2), rerunCount.Load())
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", evictionTierScaleSet)))
+		testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction)))
 	assert.Contains(t, target.events, "EvictionRetriesExhausted")
 }
 

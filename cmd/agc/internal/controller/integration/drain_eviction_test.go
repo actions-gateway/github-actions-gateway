@@ -244,8 +244,132 @@ func TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover(t *testing.T) {
 
 	// The measurement. RecoverEvictedScaleSetWorkers runs every reconcile and lists from
 	// the informer cache; an evicted-by-API pod is not in that list at all, and would not
-	// pass evictedAwaitingRecovery if it were.
+	// pass disruptionAwaitingRecovery if it were.
+	//
+	// This is also the boundary Q497 had to not cross. The eviction API stamps the SAME
+	// DisruptionTarget condition a preemption does, with its own reason — so a detector
+	// that keyed on the condition type alone would have turned this drain into a rerun
+	// and pre-empted Q459's still-open decision. The reason is what keeps them apart.
 	assert.Never(t, func() bool { return rerunCalls.Load() > 0 }, 3*time.Second, 100*time.Millisecond,
-		"a drained (evicted-via-API, i.e. deleted) scale-set worker must not reach eviction recovery: "+
-			"Q417 scoped detection to PodFailed/Evicted and left deletion to the SIGTERM relay")
+		"a drained (evicted-via-API, i.e. deleted) scale-set worker must not reach disruption recovery: "+
+			"detection is scoped to PodFailed/Evicted and to the scheduler's own PreemptionByScheduler "+
+			"reason, and deletion is otherwise left to the SIGTERM relay")
+}
+
+// TestAGC_Preemption_ScaleSetWorker_IsRecovered is the Q497 twin of the drain test
+// above, and the two together are the whole scope statement: same harness, same real
+// provisioning path, same worker pod, same graceful removal — and the ONE difference is
+// the reason on the DisruptionTarget condition. That single substitution is what turns
+// no rerun into a rerun, which is exactly the claim (`PreemptionByScheduler` has one
+// writer, so it is safe to recover on where a bare deletionTimestamp is not).
+//
+// What this venue can and cannot settle. envtest runs an apiserver but no scheduler, so
+// nothing here can preempt anything; the condition is stamped by hand, with the shape
+// E2E_AGC_WorkerPreemption measured a real kube-scheduler writing. What it does settle
+// is everything downstream of the marker on a REAL apiserver: the worker-pod watch
+// waking the reconciler on a non-phase-changing update, the recovery scan finding a
+// terminating pod, the optimistic-lock claim landing on it, and the identity coming off
+// its annotations.
+func TestAGC_Preemption_ScaleSetWorker_IsRecovered(t *testing.T) {
+	const ns = "v2-rs-ss-preempt"
+	const label = "linux-preempt"
+	createNSForAGC(t, ns)
+
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	fakeGitHub, rerunCalls := rerunCounter(t)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newScaleSetRunnerSet("ss-preempt", ns, "gw", label, 3)
+	rs.Spec.EvictionRetryDelay = &metav1.Duration{Duration: time.Second}
+	rs.Spec.MaxEvictionRetries = ptr.To(int32(2))
+	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		bg := context.Background()
+		_ = k8sClient.Delete(bg, rs)
+		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconcilerWithScaleSet(t, srv, func(p *provisioner.Provisioner) {
+		p.GitHubAPIURL = fakeGitHub.URL
+		p.HTTPClient = fakeGitHub.Client()
+	})
+
+	var ssID int
+	require.Eventually(t, func() bool {
+		id, ok := srv.ScaleSetIDByName(label)
+		ssID = id
+		return ok
+	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
+	waitForSetReadyReason(t, ns, "ss-preempt", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	srv.EnqueueJob(ssID)
+
+	var pod corev1.Pod
+	require.Eventually(t, func() bool {
+		var pods corev1.PodList
+		if err := k8sClient.List(ctx, &pods, client.InNamespace(ns),
+			client.MatchingLabels{provisioner.LabelRunnerSet: "ss-preempt"}); err != nil {
+			return false
+		}
+		for i := range pods.Items {
+			if strings.HasPrefix(pods.Items[i].Name, "runner-") {
+				pod = pods.Items[i]
+				return true
+			}
+		}
+		return false
+	}, 20*time.Second, 50*time.Millisecond, "a worker pod must be provisioned for the assigned job")
+
+	require.NotEmpty(t, pod.Annotations[provisioner.AnnotationRunID],
+		"the assignment's workflowRunId must have reached the pod, or no rerun could fire either way")
+
+	// The substitution. The phase is left exactly as it is — Pending, with no container
+	// ever started, which is the shape the real preemption e2e reproduces and the shape
+	// no phase-based detection could ever act on.
+	markPreempted(t, &pod)
+
+	// The measurement.
+	require.Eventually(t, func() bool { return rerunCalls.Load() >= 1 }, 30*time.Second, 100*time.Millisecond,
+		"a preempted scale-set worker's run must be re-run automatically; without it, oversubscription "+
+			"costs a manual re-run for every displaced job")
+
+	// At-most-once across the many reconciles the pod's remaining lifetime produces.
+	assert.Never(t, func() bool { return rerunCalls.Load() > 1 }, 5*time.Second, 100*time.Millisecond,
+		"one preemption must spend exactly one slot of the run's retry budget, however many "+
+			"reconciles observe the victim")
+
+	// The claim annotation is what enforces that, including across a restart or a second
+	// replica, so it must actually be on the pod rather than implied by the count.
+	var claimed corev1.Pod
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: pod.Name}, &claimed))
+	assert.Contains(t, claimed.Annotations, provisioner.AnnotationEvictionHandledAt,
+		"the preempted pod must carry the handled stamp, or a later reconcile would re-run its job again")
+}
+
+// markPreempted stamps the DisruptionTarget condition kube-scheduler writes on a
+// preemption victim. envtest has no scheduler, so this is the hand-written stand-in for
+// the one thing this venue cannot produce; E2E_AGC_WorkerPreemption pins that a real
+// scheduler writes exactly this.
+//
+// The pod is deliberately NOT deleted afterwards. A real victim stays readable for its
+// whole termination grace period, and that window is precisely what the recovery scan
+// runs in — deleting here would test a race the scheduler does not actually impose.
+func markPreempted(t *testing.T, pod *corev1.Pod) {
+	t.Helper()
+	var fresh corev1.Pod
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: pod.Name}, &fresh))
+	fresh.Status.Conditions = append(fresh.Status.Conditions, corev1.PodCondition{
+		Type:               corev1.DisruptionTarget,
+		Status:             corev1.ConditionTrue,
+		Reason:             corev1.PodReasonPreemptionByScheduler,
+		Message:            "Pod was preempted by a higher-priority pod",
+		LastTransitionTime: metav1.Now(),
+	})
+	require.NoError(t, k8sClient.Status().Update(ctx, &fresh),
+		"the preemption marker must be writable, or the test cannot pose its question")
 }

@@ -18,32 +18,35 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/gmc/test/utils"
 )
 
-// E2E_AGC_WorkerPreemption is the Q423 measurement: does a scheduler preemption of a
-// worker pod reach eviction recovery?
+// E2E_AGC_WorkerPreemption backs the oversubscription claim end to end: a worker
+// displaced by a higher-priority `priorityTiers` tier gets its run re-run automatically,
+// with no human in the loop.
 //
-// The oversubscription argument the project publishes turns on this experiment.
 // `priorityTiers` maps a PriorityClass onto a RunnerGroup's worker pods so low-priority
 // CI can be packed into capacity reserved for higher-priority work, and the claim is
-// that this is safe *because* a displaced job recovers automatically. Everything about
-// the packing half is already covered; the recovery half has only ever been argued.
+// that this is safe *because* a displaced job recovers automatically. The packing half
+// was already covered elsewhere; this spec is the recovery half.
 //
-// # Why this needed measuring rather than reasoning
+// # It started as a measurement, and the measurement said no
 //
-// Q423 opened with a prediction, not a measurement — "preemption is kubelet-initiated,
-// so unlike a drain it does produce PodFailed/Evicted and does exercise handleEviction
-// on classic". That conflates two different mechanisms that both get called eviction:
+// Q423 opened with a prediction — "preemption is kubelet-initiated, so unlike a drain it
+// does produce PodFailed/Evicted and does exercise handleEviction on classic". That
+// conflates two different mechanisms that both get called eviction:
 //
 //   - The **kubelet's node-pressure eviction** publishes PodFailed with
-//     Status.Reason "Evicted". That is the one shape both tiers' recovery acts on
-//     (provisioner.provision step 7 on classic, evictedAwaitingRecovery on scale-set).
+//     Status.Reason "Evicted". That was the ONLY shape either tier's recovery acted on.
 //   - **kube-scheduler preemption**, which is what a PriorityClass actually drives,
 //     removes the victim by DELETING it — the same graceful removal Q421 measured for
-//     `kubectl drain` and Q459 measured for `kubectl delete pod`, neither of which
-//     reaches recovery on either tier.
+//     `kubectl drain` and Q459 measured for `kubectl delete pod`.
 //
-// Which of the two `priorityTiers` produces is a claim about a real scheduler, and the
-// repo's own rule (docs/development/testing.md § Diagnosing failures) is that a symptom
-// match is a hypothesis until the system is measured. This spec is the measurement.
+// Run on 2026-07-29, this spec measured the second, and therefore measured NO recovery:
+// the displaced run needed a manual re-run, and the published safety claim was wrong.
+// Q497 closed that by keying recovery on the DisruptionTarget condition with reason
+// PreemptionByScheduler — which only kube-scheduler writes, and so carries none of the
+// human-cancel ambiguity that keeps Q459's drain slice open. The spec kept its whole
+// apparatus and flipped its rerun assertion from "never" to "exactly once"; the
+// never-Evicted assertion stays, because recovery here must be reached by the marker
+// rather than by the pod taking the kubelet shape.
 //
 // # How the preemption is forced
 //
@@ -78,10 +81,10 @@ import (
 // additionally shows is the worse case — a job displaced before its runner ever
 // connected has no report of its own to fall back on.
 //
-// The measured result and the design reasoning behind the exclusion live in
-// docs/design/04-operational-flows.md §4.2; the operator-facing consequence is
-// docs/operations/troubleshooting.md, "Draining or Preempting a Worker Does Not
-// Auto-Re-Run the Jobs It Interrupts". Q497 carries the residual.
+// The measured result and the design reasoning live in
+// docs/design/04-operational-flows.md §4.2; the operator-facing behaviour is
+// docs/operations/troubleshooting.md, "Draining a Worker Does Not Auto-Re-Run the Jobs
+// It Interrupts" — which now covers the drain slice only.
 //
 // Serial and multi-node: it advertises a resource on a named node, creates
 // cluster-scoped PriorityClasses, edits the cluster-scoped PriorityClassAllowlist, and
@@ -91,6 +94,12 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		tenantNS   = "tenant-preempt"
 		agName     = "preemptprobe-ag"
 		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
+
+		// preemptionConditionReason is the DisruptionTarget reason kube-scheduler writes
+		// on a preemption victim, and the discriminator the AGC's recovery keys on
+		// (Q497). Spelled out here rather than imported so the spec asserts the literal
+		// Kubernetes contract rather than whatever constant the AGC happens to compare.
+		preemptionConditionReason = "PreemptionByScheduler"
 
 		// runID scopes the rerun assertion to this spec: /control/reruns is
 		// process-wide, and another spec's rerun must not be readable as ours.
@@ -255,14 +264,14 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		}
 	})
 
-	It("E2E_AGC_PreemptedWorkerGetsNoAutomaticRerun: a preempted worker pod is deleted, never Evicted, and triggers no rerun", func() {
-		By("confirming a rerun would be observable if one fired")
-		// The spec turns on an absence, so the way it could be observed is checked
-		// first: the AGC builds the rerun-failed-jobs URL from GITHUB_API_BASE_URL, and
-		// if that did not address fakegithub a rerun would leave for the real
-		// api.github.com and fakegithub would report zero whatever the preemption did.
+	It("E2E_AGC_PreemptedWorkerIsRecovered: a preempted worker pod is deleted, never Evicted, and its run is re-run automatically", func() {
+		By("confirming a rerun is observable")
+		// The AGC builds the rerun-failed-jobs URL from GITHUB_API_BASE_URL; if that did
+		// not address fakegithub the call would leave for the real api.github.com and
+		// fakegithub would report zero whatever the preemption did. Checked first so a
+		// failure here reads as "the measurement is broken", not "recovery regressed".
 		Expect(agcEnvValue(tenantNS, "GITHUB_API_BASE_URL")).To(ContainSubstring(fakegithubServiceName),
-			"the AGC must address fakegithub for REST calls, or an absent rerun proves nothing")
+			"the AGC must address fakegithub for REST calls, or the rerun assertion proves nothing")
 
 		By("recording the pre-existing rerun count for this run")
 		Expect(rerunCountForRun(runID)).To(Equal(0),
@@ -270,7 +279,8 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 
 		By("pinning the next AcquireJob response to a payload carrying a complete run identity")
 		// Without owner/repo/run_id, handleEviction returns early and no rerun could
-		// fire regardless of the preemption — the measurement would be vacuous.
+		// fire regardless of the preemption — a pass would be vacuous and a failure
+		// would be about the payload rather than about recovery.
 		fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
 			fakegithubServiceName, infraNamespace, fakegithubServicePort)
 		setAcquireJobResponse(map[string]interface{}{
@@ -346,9 +356,10 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		By("sampling the worker pod's phase, reason, deletion mark and disruption condition")
 		// The measurement. Each sample carries four fields at once, because what decides
 		// recovery is not any one of them but their combination at the moment the pod
-		// leaves: the phase/reason pair is what the AGC's detection reads, and the
-		// deletionTimestamp and DisruptionTarget condition are the candidate
-		// discriminators Q459 is weighing for the graceful-removal path.
+		// leaves: the phase/reason pair is the kubelet-eviction shape, which this path
+		// must never take, and the DisruptionTarget condition is the discriminator Q497
+		// keys recovery on. deletionTimestamp is sampled alongside because it is the
+		// candidate Q459 is still weighing for the rest of the graceful-removal path.
 		observed := newFieldRecorder(tenantNS, podName,
 			`{.status.phase}/{.status.reason}/{.metadata.deletionTimestamp}/`+
 				`{.status.conditions[?(@.type=="DisruptionTarget")].reason}`)
@@ -384,22 +395,47 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		AddReportEntry("Q423 observed worker phase/reason/deletionTimestamp/disruptionReason", strings.Join(seq, " -> "))
 		AddReportEntry("Q423 scheduler events on the worker pod", podEvents(tenantNS, podName))
 
-		By("asserting the preempted pod never took the shape recovery acts on")
+		By("asserting the preempted pod never took the kubelet-eviction shape")
+		// Recovery must be reached by the scheduler's marker, not by the pod turning up
+		// Evicted. If this ever fails, the mechanism under test is not the one this spec
+		// believes it is measuring, and the rerun assertion below would pass for the
+		// wrong reason.
 		Expect(seq).NotTo(BeEmpty(), "the sampler saw nothing; the measurement did not run")
 		Expect(seq).NotTo(ContainElement(HavePrefix("Failed/Evicted")),
 			"a preempted worker reached PodFailed/Evicted — the kubelet-eviction shape. That would mean "+
 				"scheduler preemption DOES reach eviction recovery, contradicting Q421's and Q459's "+
 				"measurements of the graceful-removal path: re-read the experiment before trusting either")
 
-		By("asserting no automatic rerun was requested for this run")
-		// handleEviction waits out evictionRetryDelay before calling GitHub, so a rerun
-		// that was going to fire needs room to appear. The claim is that none ever
-		// arrives, which is Consistently's shape rather than Eventually's.
+		By("asserting the preemption marker the recovery keys on was actually published")
+		// The premise of Q497: PreemptionByScheduler is written only by kube-scheduler,
+		// so it is safe to recover on where deletionTimestamp is not. If the marker never
+		// appeared, a passing rerun assertion would mean the AGC re-ran for some other
+		// reason entirely.
+		Expect(seq).To(ContainElement(HaveSuffix("/"+preemptionConditionReason)),
+			"the victim never carried DisruptionTarget/%s; that condition is the whole basis "+
+				"for recovering this path, so recovery cannot be attributed to it", preemptionConditionReason)
+
+		By("asserting the displaced run was re-run automatically")
+		// The behaviour Q497 added, and the half of the oversubscription claim that was
+		// unbacked before it: displaced work comes back without a human. handleEviction
+		// waits out evictionRetryDelay before calling GitHub, so the rerun needs room to
+		// appear — Eventually, not an immediate read.
+		Eventually(func(g Gomega) {
+			g.Expect(rerunCountForRun(runID)).To(BeNumerically(">=", 1),
+				"a preempted worker's run was never re-run; the safety half of the oversubscription "+
+					"claim is unbacked again — check the AGC logs for 'worker pod disrupted; scheduling auto-retry'")
+		}, 90*time.Second, 2*time.Second).Should(Succeed())
+
+		By("asserting the run was re-run exactly once")
+		// At-most-once is what keeps one preemption from spending the run's whole retry
+		// budget. The victim is readable for its entire termination grace period and the
+		// worker-pod watch fires more than once inside it, so the claim annotation is
+		// doing real work here rather than guarding a hypothetical.
 		Consistently(func(g Gomega) {
-			g.Expect(rerunCountForRun(runID)).To(Equal(0),
-				"a preempted worker triggered an automatic rerun; the AGC now recovers the preemption path "+
-					"and this experiment's premise needs revisiting")
-		}, 45*time.Second, 3*time.Second).Should(Succeed())
+			g.Expect(rerunCountForRun(runID)).To(Equal(1),
+				"one preemption produced more than one rerun; the at-most-once claim on the "+
+					"disrupted pod is not holding, and a run's retry budget can be spent by a single event")
+		}, 30*time.Second, 3*time.Second).Should(Succeed())
 	})
 
 	// The spec above cannot answer what phase a preempted worker publishes on its way
