@@ -131,22 +131,30 @@ for how to run each of the above.
 Work that is scoped and actively being built — adoption-enabling polish and the
 last gaps an outside operator hits.
 
-- **Retiring `v1alpha1`, `v2alpha1`, and the classic acquisition protocol.** <!-- q:Q273 --> The
-  graduation that made this possible has shipped, so what remains is the removal
-  itself. Policy is that a removal lands on a named release announced at least one
-  release ahead: `v1.3.0` is that announcement, and **`v2.0.0` is the named release**
-  that removes all three. They are one bundle because `v2beta1` is already
-  ScaleSet-only, so classic acquisition exists solely to serve `v1alpha1` and
-  `v2alpha1` objects. `v2.0.0` is itself gated on the `v2` GA API being available and
-  validated, not on a date. The deprecation window opened at v1.1.0, and
-  `gag-migrate` already moves a tenant across without changing how jobs are acquired.
-  Detail: the [deprecation and removal notice](operations/v1alpha1-deprecation.md).
+Nothing sits here today. Every capability on this roadmap has either shipped
+(above) or is waiting on a gate rather than on engineering time (below); the
+active backlog is bug-fix, measurement, and test work behind capability that
+already exists. This section fills again when the next capability is scoped.
 
 ## Exploring / longer-term
 
 Directions we expect to pursue as demand and validated evidence accumulate. These
-are intentionally uncommitted — each waits on a real operator need or a measured
-limit before it becomes scheduled work.
+are intentionally unscheduled — each waits on a real operator need, a measured
+limit, or a gating release before it becomes scheduled work. The first entry is
+the exception that proves the rule: it is a firm commitment, waiting only on the
+release that carries it.
+
+- **Retiring `v1alpha1`, `v2alpha1`, and the classic acquisition protocol.** <!-- q:Q273 --> The
+  graduation that made this possible has shipped, so what remains is the removal
+  itself — committed, but not yet started. Policy is that a removal lands on a named
+  release announced at least one release ahead: `v1.3.0` is that announcement, and
+  **`v2.0.0` is the named release** that removes all three. They are one bundle
+  because `v2beta1` is already ScaleSet-only, so classic acquisition exists solely to
+  serve `v1alpha1` and `v2alpha1` objects. `v2.0.0` is itself gated on the `v2` GA API
+  being available and validated, not on a date, so the work stays parked until that
+  gate clears. The deprecation window opened at v1.1.0, and `gag-migrate` already
+  moves a tenant across without changing how jobs are acquired.
+  Detail: the [deprecation and removal notice](operations/v1alpha1-deprecation.md).
 
 - **CI for untrusted pull requests on Kata workers.** <!-- q:Q408 --> Kata micro-VM workers are
   validated today, but only for *trusted* CI: the isolation bounds the guest
