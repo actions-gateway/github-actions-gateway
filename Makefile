@@ -118,6 +118,26 @@ check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap
 	@# run `make vendor-sync` when a change touches dep files. Never fails the build.
 	@scripts/check-dep-advisory.sh
 
+# The complete set of gates a docs/STATUS.md-only diff can fail, so a backlog
+# edit can be verified in seconds instead of waiting out the full `make check`:
+#   lint-backlog          the format rules
+#   roadmap-check         a row changed table or vanished while a roadmap bullet still names it
+#   plan-index-check      the last Queue row citing a plan went away, so archival is owed
+#   conflict-markers-check a marker survived an Edit-based conflict resolution
+#   doc-links             a #QN anchor or plan link broke while rows moved
+# Every entry is also in CHECK_FAST_GATES, so this is a strict subset of `make
+# check` and never a second opinion. It lives as a variable, and the docs point
+# at the target rather than transcribing the list, because a hand-copied list is
+# what drifted before: docs/development/maintaining-backlog.md named three of
+# these five and called that the complete set, so a `docs/STATUS.md` change that
+# parked a row shipped a PR red on roadmap-check.
+STATUS_GATES := lint-backlog roadmap-check plan-index-check \
+                 conflict-markers-check doc-links
+
+.PHONY: status-gates
+status-gates: ## Every gate a docs/STATUS.md-only change can fail — the seconds-long verify for a backlog edit
+	scripts/run-parallel.sh $(foreach gate,$(STATUS_GATES),"$(gate):$(MAKE) $(gate)")
+
 # Markdown link + anchor integrity gate (Q52). scripts/check-doc-links.sh walks
 # every tracked, non-vendored Markdown file and fails on dead relative file
 # links or `#anchors` that match no GitHub heading slug / explicit <a id>. The
