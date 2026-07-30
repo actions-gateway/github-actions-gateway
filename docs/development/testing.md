@@ -411,6 +411,23 @@ Q378 is the worked example. Pinning `BaselineRecheckInterval` in the reaper test
 
 The [structural-ceiling triage](technical-debt.md#distinguish-a-fixable-defect-from-an-external-structural-ceiling) is the same principle at a larger scale: when fixes stop converging, isolate and *measure* the external actor instead of asserting the next on-our-side cause.
 
+### A long `-count` run exhausts the host's ephemeral ports, and it looks like a flake
+
+Stress-running is the first move when chasing a flake, so this trap is reached early and misreads as a second bug. Every iteration of an `httptest`-backed suite stands up a fresh listener and its clients churn connections; past roughly 200 iterations in **one process** the host runs out of ephemeral ports and dials start failing with:
+
+```text
+dial tcp 127.0.0.1:61609: connect: can't assign requested address
+```
+
+The failure the test *reports* is nowhere near that line. The connection error lands on some background poll, and what you see is an unrelated `Eventually` giving up ("Condition never satisfied") on an assertion that has nothing to do with the race you are hunting.
+
+Two things tell it apart from a real flake:
+
+- **`grep` the run for `can't assign requested address`** before reading the `--- FAIL`. Its presence means the run is measuring the host, not the code.
+- **Run the identical loop against the unmodified tree.** If the baseline fails at the same rate with the same cause, it is environmental. This is worth the minutes: it is the difference between a second bug and a saturated laptop.
+
+Avoid it by pacing — many short runs (`for i in $(seq 1 20); do … -count=5; done`) rather than one long `-count=200`, so sockets drain between processes. Measured on the `brokertest`-backed `cmd/agc/internal/listener` suite (macOS), where `Server.HTTPClient()` hands out `http.DefaultClient`; the mechanism is not specific to that double, so treat any long single-process `-count` over an `httptest` suite as suspect. Q490 hit it twice while deflaking the Q260 fan-out gate and burned a full baseline comparison to rule it out.
+
 ### A negative assertion must be able to fail for only one reason
 
 A test that asserts something *did not happen* passes when the mechanism is absent — and
