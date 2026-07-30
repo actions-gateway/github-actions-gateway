@@ -150,6 +150,31 @@ docs: add vendoring discipline to CONTRIBUTING
 
 Keep commits small and focused. Never commit broken code or failing tests. Amending unpushed commits is fine; once pushed, prefer a follow-up commit unless a rebase is explicitly needed.
 
+### Pushing to a PR that is already open
+
+Prefer putting everything in the first push — but "never push again" is too strong, and
+the reason matters. PRs here squash-merge, so a commit that lands while the PR is
+**green and mergeable** can be overtaken by the merge and stranded: it never reaches
+`main`, and the SHA it was pushed as no longer exists to tell you so.
+
+That risk is a property of the *mergeable* state, not of the PR being open. A PR whose
+checks are pending or failing cannot merge, so pushing to it is safe — and on anything
+that runs e2e, that is a window of roughly ten minutes on every push. Weigh the cost of
+the CI a push restarts, too: on a docs-only PR the gates are seconds, so an amend is
+cheap; on one that runs the full e2e matrix it is a quarter-hour you are spending twice.
+
+**The practical guard is a check immediately before the push, not a rule of thumb:**
+
+```sh
+gh pr view <n> --json state,mergeStateStatus --jq '{state,mergeStateStatus}'
+```
+
+`OPEN` with checks still running is safe to push. `CLEAN` means it can merge right now —
+either push promptly and confirm it landed, or branch off `main` instead. A state you
+read ten minutes ago is not the state you are pushing into.
+
+Whatever happens, verify what actually landed **by content, not SHA** — see below.
+
 ### When new work blocks an open PR
 
 Work requested *after* a PR is open normally branches off `main` and gets its own PR. The
