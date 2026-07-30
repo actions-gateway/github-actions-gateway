@@ -61,15 +61,17 @@ The full gate takes ~6 minutes. Every one of those minutes is a window in which 
 
 1. Resolve the conflict in `docs/STATUS.md`.
 2. Check for leftover markers before staging: `git diff --check`. An `Edit`-based resolution can silently leave one behind, and `git diff --check` catches it in the working tree — before it becomes a commit the gate has to reject.
-3. Run only the three gates that can actually observe a `STATUS.md` change:
+3. Run only the gates that can actually observe a `STATUS.md` change:
 
    ```bash
-   make lint-backlog conflict-markers-check doc-links
+   make status-gates
    ```
 
 4. Commit and push **immediately**. Do not wait on `make check`.
 
-`make check` adds nothing here: its remaining targets (unit tests, coverage, `golangci-lint`, `shellcheck`, chart drift, Go version) read no Markdown, and CI runs the full gate on the pushed branch regardless. The three targets above are the complete set that a `STATUS.md`-only diff can fail — `lint-backlog` for the format rules, `conflict-markers-check` for a marker that survived the resolution, `doc-links` for a link or anchor broken while merging rows.
+`make check` adds nothing here: its remaining targets (unit tests, coverage, `golangci-lint`, `shellcheck`, chart drift, Go version) read no Markdown, and CI runs the full gate on the pushed branch regardless. `status-gates` is the complete set a `STATUS.md`-only diff can fail — `lint-backlog` for the format rules, `roadmap-check` for a row that changed table or vanished while a [roadmap](../roadmap.md) bullet still names it, `plan-index-check` for a plan whose last citing row went away, `conflict-markers-check` for a marker that survived the resolution, and `doc-links` for a link or anchor broken while rows moved. Every one is also in `make check`, so this is a strict subset and never a second opinion.
+
+**Run the target, don't transcribe its contents.** This list used to be spelled out here as three `make` targets, and it was wrong: `roadmap-check` and `plan-index-check` both read Queue membership and both can fail on a `STATUS.md`-only diff. A grooming pass that parked a row followed the three-target list, went green locally, and opened a PR red on `roadmap-check`. The set now lives in the `STATUS_GATES` variable in the [`Makefile`](../../Makefile), so there is one copy to keep true.
 
 **When it does not apply:** if the conflict touches *any* other file — code, a plan doc, another page under `docs/` — this is a normal conflict. Resolve it and run the full `make check` (plus whatever heavier tier the change warrants) before pushing. The fast path is licensed by the narrowness of the diff, not by the presence of `STATUS.md` in it.
 
