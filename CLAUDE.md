@@ -42,6 +42,8 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
 
    **Once CI attaches, confirm the path-gated heavy gates actually RAN — green is not enough.** A PR opened docs-only then given code can show all-green/`CLEAN` while integration/e2e/security never tested it; never treat such a PR as ready or merge it. Put code in the PR's first push to avoid it; if a gate is missing, `gh pr close <n> && gh pr reopen <n>` to force it. Verify/fix: [`docs/development/testing.md`](docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
 
+6. **After a PR merges, or a substantial task finishes — offer a retrospective** (the `session-retro` skill), then act on whatever the user picks. Skip it for trivial work; a clean session's honest retro is two lines. The point is landing lessons somewhere durable while the context is still live: this repo's `no-push-to-open-PR` rule and its negative-assertion testing principle both came out of one.
+
 ## Code standards
 
 ### Go
