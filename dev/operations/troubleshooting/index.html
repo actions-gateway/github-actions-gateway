@@ -6151,6 +6151,17 @@ only while the pod does:</p>
   undrainable for as long as any job runs. It would not stop a preemption at all —
   the scheduler's victim selection does not consult PodDisruptionBudgets as a hard
   constraint.</p>
+<p>That last point is deliberate upstream behaviour, not an oversight, and it is worth
+  knowing before you spend time on it. The Eviction API a drain uses is effectively <em>a
+  delete that checks PDBs first</em>; kube-scheduler preemption skips that check because a
+  PDB that could veto preemption would let any low-priority workload make itself
+  un-preemptible simply by declaring one — which would turn a guaranteed tier's
+  scheduling guarantee into a suggestion, and in a shared cluster would let one tenant
+  starve another's guaranteed capacity. The same reasoning is why the worker's
+  <code>safe-to-evict: false</code> and <code>do-not-disrupt</code> annotations do not deflect a preemption:
+  they are advisory to autoscalers and deschedulers, and the scheduler is neither. See
+  <a href="../../design/04-operational-flows/#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us">§4.2</a>
+  for the full reasoning and what it costs the gateway.</p>
 <hr />
 <h2 id="a-preempted-workers-job-is-not-re-run">A Preempted Worker's Job Is Not Re-Run<a class="headerlink" href="#a-preempted-workers-job-is-not-re-run" title="Permanent link">&para;</a></h2>
 <blockquote>

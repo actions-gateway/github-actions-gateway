@@ -1012,6 +1012,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why preemption deletes rather than evicts, and what that costs us
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-re-running-a-preempted-job-is-not-a-double-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why re-running a preempted job is not a double report
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2548,6 +2570,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why preemption deletes rather than evicts, and what that costs us
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-re-running-a-preempted-job-is-not-a-double-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why re-running a preempted job is not a double report
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2895,6 +2939,60 @@ inputs onto the worker pod; see
 </table>
 <p>The two "not yet" rows are a <strong>sequencing</strong> boundary, not a permanent one, and the reason they are separate from preemption is worth being precise about. Preemption could close first because <code>PreemptionByScheduler</code> has exactly one writer — never a human, never a failing job — so it needs no further measurement to be safe. The drain rows key on <code>deletionTimestamp</code> instead, which a human cancelling a run might also have set; that had to be measured before it could be trusted. It since was (2026-07-29): a cancelled run's worker publishes the same phase and empty reason with <strong>no</strong> deletion mark, so the mark does separate a disruption from a cancel. Q502 carries that implementation.</p>
 <p>Note that the <code>DisruptionTarget</code> <strong>condition type</strong> alone is not the discriminator: the eviction API stamps it too, with reason <code>EvictionByEvictionAPI</code>. The <code>reason</code> is what separates the recovered row from the deferred one, which is why detection matches the full type/status/reason triple — a type-only match would have pulled the drain path in early, ahead of the measurement that justified it.</p>
+<h4 id="why-preemption-deletes-rather-than-evicts-and-what-that-costs-us">Why preemption <em>deletes</em> rather than <em>evicts</em>, and what that costs us<a class="headerlink" href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" title="Permanent link">&para;</a></h4>
+<p>A recurring question, because the answer decides three things we measured and could not
+change: why the worker's disruption-safety annotations did not deflect the preemption,
+why adding a <code>PodDisruptionBudget</code> would not either, and why scale-set preemption
+recovery cannot be made restart-safe.</p>
+<p><strong>"Evict" and "delete" are not a gracefulness distinction.</strong> The Eviction API
+(<code>pods/&lt;name&gt;/eviction</code>) is essentially <em>a DELETE that checks PodDisruptionBudgets first</em>
+and returns <code>429</code> if the budget would be violated. Both paths honour
+<code>terminationGracePeriodSeconds</code>, which is why a preempted worker still receives SIGTERM
+and why the Q385 relay gets the runner its grace period on that path. The real question
+is therefore not "graceful or not" but <strong>"should a PDB be able to block preemption"</strong> —
+and upstream Kubernetes deliberately answers no, for two reasons that apply with extra
+force to a multi-tenant gateway:</p>
+<ul>
+<li><strong>Priority inversion.</strong> If PDBs were a hard constraint on preemption, any low-priority
+  workload could make itself un-preemptible by declaring a tight one. The floor tier's
+  guarantee would degrade from "guaranteed runners always schedule" to "…unless someone
+  downstream declared <code>minAvailable</code>." In our setting that is a cross-tenant denial of
+  service: a tenant could pin a PDB over their opportunistic workers and starve another
+  tenant's guaranteed GPU tier — precisely the failure the platform-owned
+  <code>PriorityClass</code> allowlist exists to prevent.</li>
+<li><strong>Liveness.</strong> The scheduler selects a victim set inside a scheduling cycle and must
+  then bind the preemptor. An API call that can be refused would leave the high-priority
+  pod <code>Pending</code> with no recourse and no retry that would fare better.</li>
+</ul>
+<p>PDBs <em>are</em> consulted, as a soft preference: the scheduler prefers victims whose removal
+violates none, and violates them when it has no alternative. The same reasoning explains
+the annotations — <code>cluster-autoscaler.kubernetes.io/safe-to-evict: false</code>,
+<code>karpenter.sh/do-not-disrupt</code>, and the descheduler opt-out are advisory to <em>those
+controllers</em>, and kube-scheduler is not one of them. Q423 measured all of this rather
+than assuming it: the worker carried every marker and was preempted anyway.</p>
+<p><strong>This is not an upstream defect, and upstream did address the consumer's half of it.</strong>
+The <code>DisruptionTarget</code> condition exists exactly so a controller can tell disruption
+causes apart, so keying recovery on <code>PreemptionByScheduler</code> is the sanctioned mechanism
+rather than a workaround for a missing API.</p>
+<p><strong>What it does cost us</strong> is an asymmetry with no clean fix: a kubelet-evicted pod
+<em>persists</em> in <code>PodFailed</code> until the reaper takes it, while a preempted pod is <em>deleted</em>.
+Recovery evidence therefore survives an AGC restart on one path and not the other, which
+is the root of the scale-set restart-safety residual noted above. Nothing short of
+preemption leaving a tombstone would close it, so it is documented as a property of the
+signal rather than tracked as a bug.</p>
+<h4 id="why-re-running-a-preempted-job-is-not-a-double-report">Why re-running a preempted job is not a double report<a class="headerlink" href="#why-re-running-a-preempted-job-is-not-a-double-report" title="Permanent link">&para;</a></h4>
+<p>The original scale-set detection deliberately excluded every <em>deleted</em> pod on the
+grounds that the Q385 SIGTERM relay already owns that case: the runner receives the
+signal, reports its own outcome, and a second report from the gateway would duplicate
+it. That argument does not carry to preemption, and the distinction is worth keeping
+explicit because it is what makes recovering this path safe:</p>
+<p><strong>The relay makes the job <em>conclude</em> at GitHub; it does not make the job <em>succeed</em>.</strong>
+Q459 measured the conclusion on the graceful path at live-GitHub — <code>failure</code> within
+15–26s, with <code>rerun-failed-jobs</code> accepted. The run really is left failed, so the re-run
+is the repair rather than a duplicate. <code>rerun-failed-jobs</code> also re-runs only a run's
+<em>failed</em> jobs, so a run whose jobs all completed before the preemption landed has
+nothing to re-run and GitHub rejects the call — which the existing error path logs and
+drops.</p>
 <p><strong>Q421 measured that exclusion on both tiers, 2026-07-27, and it holds — with a consequence worth stating plainly.</strong> A real <code>kubectl drain</code> against a live worker pod publishes no terminal phase at all (the pod goes straight from its current phase to absent), so neither tier's detection sees anything and no automatic re-run fires; the envtest pair (<code>TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun</code>, <code>TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover</code>) and the fake-GitHub <code>E2E_AGC_WorkerNodeDrain</code> pin it. The consequence is that a <em>graceful</em> operator drain leaves the interrupted run needing a manual re-run, while an <em>ungraceful</em> kubelet eviction of the same job recovers automatically — and the worker pod's <code>safe-to-evict: false</code> / <code>do-not-disrupt</code> annotations do not deflect a drain either, being advisory to autoscalers and deschedulers only. Whether that asymmetry should be closed depends on what GitHub does with the runner's relayed report. Q459 measured that at live-GitHub on 2026-07-28: the report does get out, the job concludes <code>failure</code> well under a minute after the disruption (15–26s across five runs), and <code>rerun-failed-jobs</code> is accepted, so an automatic re-run is available on this path. What stopped it from simply being switched on is that a disrupted worker lands in <code>PodFailed</code> with an <em>empty</em> reason — the same shape a genuinely failing job produces — so recovery has to key on the pod's <code>deletionTimestamp</code> rather than on its phase. <strong>That discriminator was measured on 2026-07-29 and holds:</strong> a run cancelled by a human publishes the same phase and empty reason with <em>no</em> deletion mark, so the mark separates the disruption from both a cancel and a real failure. Q459's decision is therefore <strong>close, gated on the deletion mark</strong>, and <a href="../../STATUS/#Q502">Q502</a> carries the implementation; the reasoning and its constraints are in <a href="../../plan/q459-drained-worker-recovery/">q459-drained-worker-recovery.md</a>. Operator-facing guidance is in <a href="../../operations/troubleshooting/#draining-a-worker-does-not-auto-re-run-the-jobs-it-interrupts">troubleshooting.md</a>; the full result is in <a href="../../plan/eviction-oversubscription-validation/#result-measured-2026-07-27">the experiment</a>.</p>
 <p><strong>Q423 measured <code>PriorityClass</code> preemption on 2026-07-29 and found the same gap; Q497 closed it.</strong> Preemption is kube-scheduler's, not the kubelet's: the scheduler <strong>deletes</strong> the victim, so a preempted worker never carries <code>Evicted</code>, and before Q497 no re-run fired. The measurement, on a real cluster: the victim went <code>Running</code> → <code>Running</code> + <code>deletionTimestamp</code> → a terminal phase, carrying a <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code> throughout; its <code>safe-to-evict: false</code> / <code>do-not-disrupt</code> annotations deflected nothing.</p>
 <p>Two findings came out of it, and both shape the fix. First, the terminal phase on this path is the interrupted container's own exit status, so it can be <code>Succeeded</code> as readily as <code>Failed</code> — stronger than Q459's "empty reason is ambiguous", and it rules the phase out as a discriminator entirely. Second, <code>PreemptionByScheduler</code> is written only by the scheduler, never by a human cancel or a job failing on its own. So <strong>detection keys on the condition, never the phase</strong>, and the preemption slice closed on its own — ahead of the drain slice, which needed the cancel-path measurement Q459 took the same day and is now carried by <a href="../../STATUS/#Q502">Q502</a>.</p>
