@@ -70,6 +70,23 @@ The bias is toward (2): **flag rather than fix out of scope.** A bundled
 "while I was here" fix inflates a diff, hides the real change from review, and
 couples unrelated risk.
 
+**Measure before you flag, not only before you fix.** A flag is a claim: it goes
+into a Queue row or a PR description, and the next reader treats it as a finding
+someone verified. "Measure before asserting a root cause" applies to the aside as
+much as to the change in front of you — a plausible-by-analogy flag ("X probably
+has the same shape as Y") is a hypothesis, and filing one costs someone else the
+measurement you skipped. If measuring it now is out of scope, flag *the question*
+rather than the answer: "does X have Y's failure mode? unmeasured" is honest and
+still actionable, where a confident wrong flag is neither.
+
+Worked example: Q492 flagged "`helm rollback` past a chart version that added a
+values key fails the way `--reuse-values` does" in a PR description, reasoning
+from shape alone. Measuring it disproved the claim — `helm rollback` replays the
+target revision's stored manifest instead of re-rendering, so the failure cannot
+arise — while turning up a *different*, real hazard the analogy had hidden
+([Q492's rollback caveat](../operations/upgrade.md#rolling-back-past-this-change-re-arms-the-outage-it-fixes)).
+The wrong flag had already merged into the record by then.
+
 ### Capture knowledge durably, not in chat
 
 A debt item that exists only in a conversation is lost. The moment you decide an

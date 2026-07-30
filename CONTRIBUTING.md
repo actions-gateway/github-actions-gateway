@@ -173,6 +173,15 @@ gh pr view <n> --json state,mergeStateStatus --jq '{state,mergeStateStatus}'
 either push promptly and confirm it landed, or branch off `main` instead. A state you
 read ten minutes ago is not the state you are pushing into.
 
+`MERGED` is the state worth naming separately, because the push *appears to work*. The
+merge deletes the branch, so pushing to it **recreates** it — git says
+`* [new branch]`, you get a branch with no PR and a commit that will never reach `main`,
+and nothing errors. Two tells: the `new branch` line on a branch you have pushed to
+before, and `git status` reporting `your upstream is gone`. The recovery is to move the
+commit rather than re-push: confirm the PR's own work landed by content, `git checkout -b
+<new> origin/main`, `git cherry-pick <sha>`, and open a fresh PR. The stray branch then
+needs deleting (`git push origin --delete <branch>`), which is easy to leave behind.
+
 Whatever happens, verify what actually landed **by content, not SHA** — see below.
 
 ### When new work blocks an open PR
