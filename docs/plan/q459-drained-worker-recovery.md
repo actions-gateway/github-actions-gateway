@@ -336,7 +336,8 @@ nothing to re-run — and it has since been fixed.
   this measurement's binding was confirmed directly (the pod's job began at 13:21:00Z,
   matching its run's 13:20:55Z job start, and the namespace did not exist when the
   other run started) — but the runner-name collision is not defended against.
-  [Q500](../STATUS.md#Q500) carries it.
+  [Q511](../STATUS.md#Q511) carries it, via
+  [q511-live-github-run-isolation.md](q511-live-github-run-isolation.md).
 
 Earlier attempts were blocked before even reaching it, by the
 PriorityClass VAP param-resolution failure that
