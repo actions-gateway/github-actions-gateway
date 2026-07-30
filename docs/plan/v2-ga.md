@@ -9,6 +9,16 @@ This plan starts **after `v1.3.0` ships**. It is deliberately unhurried: General
 Availability (GA) signs a permanent backward-compatibility contract on a five-kind
 API surface, and the contract cannot be walked back.
 
+> **Status: parked — no active work, every phase carried by a Deferred trigger.**
+> Phases 1, 2 and 4 wait on [Q413](../STATUS.md#Q413) (**Event:** `v1.3.0`
+> ships, starting the Phase 1 soak); Phase 3's coupled removals wait on
+> [Q273](../STATUS.md#Q273) and [Q264](../STATUS.md#Q264); the Phase 2 alias
+> decision is [Q452](../STATUS.md#Q452). The `✅` on this plan's
+> [Progress](../STATUS.md#progress) row means *no open Queue row remains*, not
+> that the graduation has happened — deferred residuals
+> [don't count](../development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count).
+> The phase table below is the real state.
+
 ## Status at a glance
 
 | Phase | Scope | Sz | Status |
