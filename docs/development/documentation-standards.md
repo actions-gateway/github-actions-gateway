@@ -89,6 +89,14 @@ A reader copies a block and runs it. Make that safe.
   incomplete block that looks runnable is a trap.
 - **Introduce, then show.** A one-line lead-in ending in a colon, then the block. Put
   explanation *before* the block, not as a wall of text after it.
+- **A command that fetches a versioned artifact pins the version.** A URL on a moving
+  ref — `raw.githubusercontent.com/<org>/<repo>/main/...`, a `:latest` image, an
+  unpinned chart — silently hands the reader the *wrong* artifact whenever they are not
+  on tip, which is most readers most of the time. Prefer a tool that derives the version
+  from what they are installing (`helm show crds <chart> --version <v>`, `helm pull`,
+  `gh release download <tag>`) over a hand-written URL; when only a URL will do, pin it
+  to a tag. Worst case is silent: applying a CRD from `main` against an older release
+  can prune a field the apiserver then drops without an error.
 - Shell snippets follow the repo [bash conventions](bash-style.md).
 
 ## Write with substance (don't read as AI slop)
