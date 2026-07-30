@@ -2,6 +2,9 @@
 
 **Status:** ⓘ informational — strategy/review, read-only analysis. No code
 changed. Feeds the Q264 P5 cutover and the v1alpha1 removal-timeline decisions.
+Complete as a review: both follow-ups it filed are parked in Deferred, waiting on
+[v2-ga.md](v2-ga.md) Phase 3 ([Q273](../STATUS.md#Q273), the v1 removal) and on
+upstream scale-set GA ([Q272](../STATUS.md#Q272)).
 **Date:** 2026-07-05. **Author view:** adversarial review of the hypothesis that
 v1 may be fundamentally limited by its protocol constraints — and that if so, we
 should sunset it faster and focus on v2/scale-set. The review deliberately tests
