@@ -64,8 +64,18 @@ the record as the graceful kind.
    - **Re-runnability.** Whether `rerun-failed-jobs` is accepted for that run, and
      whether the attempt it creates actually runs to completion on the gateway.
 
-Step 3's last item is the load-bearing one. It is the exact call the AGC would make
-if the gap were closed, so its answer is the answer.
+Step 3's last item is the load-bearing one: it is the call the AGC would make if the
+gap were closed, so GitHub's answer to it decides whether there is anything to close.
+
+**What it does not establish** — recorded here because the original wording of this
+line ("the exact call the AGC would make, so its answer is the answer") was later shown
+to overreach. The harness issues this call with `gh api`, after waiting for GitHub to
+conclude the job. The AGC issues it from `rerunFailedJobs`, against whatever host
+`Provisioner.GitHubAPIURL` names, `evictionRetryDelay` after the disruption. Both of
+those differences turned out to hide defects the `201` here could not see — Q504 (the
+call ignored `GITHUB_API_BASE_URL`) and Q503 (it fires ~9.5 minutes too early and is
+refused `403`). Read this measurement as *GitHub will re-run a run in this state*, and
+nothing more.
 
 ## The decision this produces
 
@@ -106,9 +116,11 @@ a published figure should not imply it does.
 
 **Question 1 is answered, and the answer is yes.** The relay gets the runner's own
 report out well inside the grace period, GitHub concludes the job promptly rather than
-waiting out the lock, and the run is fully re-runnable by the exact call
-`handleEviction` already makes. The premise Q417 shipped on holds. Closing the gap is
-mechanically available.
+waiting out the lock, and the run is re-runnable by the endpoint `handleEviction`
+calls. The premise Q417 shipped on holds, and closing the gap is mechanically
+available — at the endpoint. Whether the AGC's own call reaches it correctly and at the
+right moment is a separate question this measurement did not ask; Q504 and Q503 are the
+answers, and both were defects.
 
 **But the measurement also found the hazard that decides how.** Q421 predicted, from
 its fake-GitHub run, that a disrupted worker is *deleted without ever publishing a terminal
