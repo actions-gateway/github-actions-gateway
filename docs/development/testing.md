@@ -512,6 +512,19 @@ The gap can also sit **inside a single stub handler**, which is harder to see be
 
 To prove a window like this rather than guess at it, widen it: drop a `time.Sleep` between the two effects and confirm the test fails every time. Q490's probe took the flake from unreproducible in 200 local runs to 5 failures out of 5, and re-running it against the fix — still 8/8 green with the sleep in place — is the [negative control](#proving-a-flake-fix-invert-it) that shows the ordering, not luck, is what closed it.
 
+### Script tests: neutralize the clock, never measure it
+
+The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion. `make scripts-test` runs all 26 suites concurrently through [`scripts/run-parallel.sh`](../../scripts/run-parallel.sh), inside a `make check` that is already saturating the machine with the Go tests. A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.
+
+**So a script test must never assert on wall-clock time it actually spent.** Stub `sleep` — it is a plain command, so a shell function shadows it — and assert on what the stub recorded. Two established shapes, both in-tree:
+
+- **Count the sleeps** when the property is "the loop paced itself rather than spinning". [`scripts/dogfood/workers-test.sh`](../../scripts/dogfood/workers-test.sh) does this: `sleep() { echo x >>"${STUB_DIR}/sleeps"; }`, and the assertions read the count. No notion of elapsed time is needed at all.
+- **Shadow the clock as well** when the assertion is genuinely about a *budget* — "this retry stopped inside its timeout". Have the stubbed `sleep` advance a counter and have the script read that counter instead of the real clock. Elapsed time becomes the script's own accounting of the budget it spent: independent of load, and **exact**, so the bound can be the real budget rather than a slack value padded for jitter. [`scripts/validate-cluster-test.sh`](../../scripts/validate-cluster-test.sh) does this against [`validate-cluster.sh`](../../scripts/validate-cluster.sh)'s `retry_until`.
+
+The second shape needs a seam in the script under test: **read the clock through a named function** (`now_seconds`), never an inline `date +%s`, so a test can substitute it. This is the same constraint as the `BASH_SOURCE` guard and the "keep new parsing in a named function" rule above — an inline call in the middle of a code path is untestable by construction.
+
+Q471 is the worked example, and it shows the cost of getting this wrong is not just a flake: `validate-cluster-test.sh` bounded real seconds (`date +%s`, max 1–5 s) around sleep-based retries, so it passed standalone and failed under a loaded `make check` — a flake that only ever fires where it is hardest to reproduce. Converting it to a fake clock also took the suite from ~4 s of real sleeping to under 0.5 s, because a test that stubs `sleep` does not wait for anything.
+
 ## Where each tier can physically run (and what it costs)
 
 The tier above says *what* observes a bug; this says *where that tier can run*. Most validation is local on a dev machine; a short list needs real GitHub, real cloud, or real scale. The **environment definitions** below are durable; the **Q-item mapping** is a snapshot of the [backlog](../STATUS.md) as of 2026-06 and may lag.
