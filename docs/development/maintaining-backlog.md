@@ -73,6 +73,8 @@ The full gate takes ~6 minutes. Every one of those minutes is a window in which 
 
 **When it does not apply:** if the conflict touches *any* other file — code, a plan doc, another page under `docs/` — this is a normal conflict. Resolve it and run the full `make check` (plus whatever heavier tier the change warrants) before pushing. The fast path is licensed by the narrowness of the diff, not by the presence of `STATUS.md` in it.
 
+**It is also not a general shortcut for authoring.** The minutes it saves buy speed in a race you are already losing — a sibling session merging its own edit while you verify. Authoring a groom, filing a row, or completing an item is not that race, and a Queue edit routinely [cascades](#what-parking-a-row-obliges-elsewhere) into a plan doc, `plan/README.md`, or a roadmap bullet, which puts the diff outside this section's narrowness anyway. Author the change first: if it really did touch only `docs/STATUS.md`, the gate set above still covers it; otherwise run `make check`.
+
 ### A moved row defeats conflict detection
 
 Git raises a delete/modify conflict only when both sides touch the *same* lines. Reordering a row moves it, so a branch that **relocates** a row while `main` **deletes** it produces no conflict at all: git applies the delete at the old position and the re-add at the new one, and a completed row silently comes back. **A clean rebase is not evidence of a correct one.**
@@ -162,6 +164,20 @@ A plan is `⚠️` only while it has at least one open row **in the Queue**. Int
 `scripts/lint-backlog.sh` enforces the transition at the moment it becomes owed: deleting the **last** Queue row that links `plan/NAME.md` fails the gate while that plan's Progress row is still `⚠️`, naming the plan and the flip. It fires only on that deletion, never on a steady-state scan — plenty of open rows merely *cite* a completed plan as evidence, and treating those as active work would make the rule cry wolf. For the rare case where the vanished row was such a citation and real work genuinely remains elsewhere, `BACKLOG_ALLOW_PROGRESS_STALE="plan/NAME.md"` admits it.
 
 When you flip a plan to `✅`, add (or update) a **Status** banner at the top of its plan doc naming the Deferred IDs carrying its residuals (e.g. "Status: Complete — residuals deferred as [Q11](../STATUS.md#Q11)"). The plan doc is **not** archived in this case — its `✅` Progress row still references it.
+
+### What parking a row obliges elsewhere
+
+Deleting a row has a documented cascade — the Progress flip, plan archival, the roadmap graduation. **Moving a row to Deferred has the same one**, because parking changes Queue membership exactly as deleting does, and everything downstream reads Queue membership rather than row existence:
+
+| What to check | Why parking triggers it |
+|---|---|
+| The plan's **Progress** row | A plan whose only remainders are now Deferred is `✅`, not `⚠️` — deferred residuals don't count (above). |
+| The plan doc's **Status** banner | That `✅` flip owes one, naming the Deferred IDs and their triggers. |
+| The plan's row in [`plan/README.md`](../plan/README.md) | Its status text usually describes the residual as open work. |
+| The [roadmap](../roadmap.md) bullet annotated `<!-- q:QN -->` | An "In progress / near-term" bullet must name at least one row still **in the Queue**; an all-Deferred bullet was parked and belongs under "Exploring / longer-term". `make roadmap-check` fails until it moves. |
+| Prose cross-references on the same page | Nothing checks these. Moving a roadmap bullet between sections leaves any "the near-term work below" phrasing pointing at the wrong place, and `make doc-links` reads links, not sentences. |
+
+Only the first two were written down before. A 2026-07-30 groom that deferred [Q273](../STATUS.md#Q273) found the other three the expensive way — two by opening a red PR, the third by re-reading the page.
 
 ## Don't pre-assign release versions to backlog items
 
