@@ -448,6 +448,38 @@ So when you write a negative assertion:
 This is the negative-control idea above, aimed at the test's *premise* rather than its
 fix: ask what else would produce this same green, and close off the answers.
 
+### A measurement that reproduces a call is not a test of the code that makes it
+
+The sibling of the rule above, and the one that survives a green **positive**. A
+measurement that issues an API call from the harness — `gh api`, `curl`, a scratch
+client — establishes what the *remote* does with that request. It establishes nothing
+about the code path that will make the request in production, and the write-up is where
+that distinction usually gets lost.
+
+**Q459 is the worked example.** Its plan recorded the re-runnability step as "the exact
+call the AGC would make … so its answer is the answer," and the measurement returned
+`201 Created` on five separate live-GitHub runs. Semantically it *was* the same call.
+Operationally it differed from the AGC's in two ways, each of which was a shipped bug a
+green `201` could not show:
+
+- **Where it went.** The harness used `gh api`, which addresses whatever host the
+  ambient config names. The AGC read `Provisioner.GitHubAPIURL` — a field `cmd/agc`
+  never assigned — so its call always went to `api.github.com` whatever
+  `GITHUB_API_BASE_URL` said, and recovery could not work on GHES at all (Q504).
+- **When it fired.** The harness POSTed *after* waiting for GitHub to conclude the job.
+  The AGC fires `evictionRetryDelay` (5s) after the disruption, ~9.5 minutes before
+  GitHub concludes, and is answered `403 This workflow is already running` (Q503).
+
+Neither is a flaw in the measurement — "GitHub accepts this call for this run state" was
+a real question and the answer was real. The flaw was in the sentence that carried it
+forward, which let a fact about GitHub read as a fact about us.
+
+So when a harness call stands in for a product code path, **write down what it did not
+exercise**: the client that will really make it, the configuration that will really
+route it, and the moment it will really fire. Then say which of those a follow-up must
+still confirm. A measurement whose write-up names its own blind spots is worth far more
+than one that quietly implies it has none.
+
 ### Synchronize on the signal you assert on
 
 "[Wait on the condition, not the clock](#avoiding-shared-stub-flakes-in-the-agc-suite)" has a sharper form: wait on **the same signal you are about to assert on**. Two observable effects of one operation almost never land together, and a test that blocks on the earlier one and then reads the later one races the gap between them — a real race, not a slow machine, so no amount of extra timeout closes it.
