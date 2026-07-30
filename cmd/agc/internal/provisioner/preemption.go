@@ -4,35 +4,30 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// Preemption recovery (Q497).
+// Preemption recovery (Q497): the discriminator that lets a worker displaced by a
+// higher priorityTiers tier reach the same automatic re-run a kubelet eviction does.
 //
-// # Two disruptions, one recovery
+// Two mechanisms are both colloquially called eviction and only one produces the
+// PodFailed/Evicted shape the original recovery keyed on. kube-scheduler preemption —
+// what priorityTiers actually drives — instead DELETES its victim after stamping a
+// DisruptionTarget condition. Both tiers feed this file's result into the same
+// handleEviction they already use.
 //
-// A worker pod can lose its job to two mechanisms that are both colloquially called
-// eviction, and only one of them produces the shape the original recovery keys on:
+// Two constraints this file must not lose, both measured rather than assumed (Q423):
 //
-//   - The kubelet's node-pressure eviction SIGKILLs the pod and leaves it PodFailed with
-//     Status.Reason "Evicted". Detected by podReasonEvicted.
-//   - kube-scheduler's preemption — what a RunnerGroup's priorityTiers actually drives —
-//     removes the victim by DELETING it, after stamping a DisruptionTarget condition
-//     with reason PreemptionByScheduler. Nothing about that resembles "Evicted".
+//   - Detection must key on the CONDITION, never the phase. A preempted worker lands in
+//     Pending, Succeeded or Failed depending on what its container was doing, so no
+//     phase/reason pair separates a disruption from an ordinary outcome.
+//   - It must match the full type/status/REASON triple, never the condition type alone.
+//     The eviction API stamps the same type with its own reason, so a type-only match
+//     would silently pull in the drain path that Q459/Q502 deliberately gate separately.
 //
-// Q423 measured the consequence on a real cluster: a preempted worker reached no
-// recovery on either tier, so oversubscription bought the packing guarantee but left
-// the displaced run needing a manual re-run. This file supplies the missing
-// discriminator; both tiers then feed it into the same handleEviction they already use.
-//
-// # Why the phase cannot be used instead, and why the condition can
-//
-// The same experiment ruled the terminal phase out entirely. A preempted worker lands in
-// Pending, Succeeded or Failed depending on what its container was doing and what it
-// exited with — so no phase/reason pair separates a disruption from an ordinary outcome.
-//
-// The condition has the property the phase lacks: kube-scheduler is the only writer of
-// the PreemptionByScheduler reason. An operator's `kubectl delete pod`, a node drain, and
-// a job failing on its own all leave a deletionTimestamp, and Q459 is still weighing
-// whether that is safe to recover on for exactly that reason. None of them can produce
-// this reason, so the preemption slice closes on its own.
+// The full reasoning — why the scheduler deletes rather than evicts, why the worker's
+// disruption-safety annotations and a PodDisruptionBudget cannot deflect it, why
+// re-running a preempted job is not a double report, and what the design costs us — is
+// in docs/design/04-operational-flows.md §4.2 ("Which disruptions are recovered",
+// "Why preemption deletes rather than evicts"). Keep it there rather than regrowing it
+// here; the operator-facing half is docs/operations/troubleshooting.md.
 
 // PreemptedByScheduler reports whether pod was removed by kube-scheduler preemption.
 //
