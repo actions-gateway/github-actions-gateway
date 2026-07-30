@@ -676,6 +676,21 @@ the same fixture workflows in the same repo and register identically-named runne
 carry no `--context`, so they follow `current-context` in the file every parallel
 session shares.
 
+**Read a long run's clock from the suite, not from the host.** A live-GitHub run takes
+long enough to straddle a laptop sleep, and afterwards every host-side clock lies in the
+same direction: `ps` elapsed, pod `AGE`, and "no output for a while" all read as a stall.
+On 2026-07-29 a four-spec run finished its specs in 19m04s inside a `ginkgo` process that
+had been alive 94 minutes, with the tenant namespace still up 75 minutes after the last
+spec ended — nothing had hung. The suite's own numbers are measured from its own clock
+and stay correct across a sleep: `Ran N of M Specs`, and the per-spec `• [N seconds]`
+line. Check those before concluding a spec is wedged.
+
+The other half of the same trap is time**zone**, not wall clock: Ginkgo timestamps its
+output in **local** time while the GitHub API returns **UTC**, so comparing a `@ 07/29/26
+06:20:20` progress line against a `created_at` of `13:20:19Z` manufactures a seven-hour
+anomaly out of a one-second one. Convert before you reason about a latency that spans
+both.
+
 **Stop a live-GitHub run with SIGTERM, never `kill -9`.** Ginkgo runs its `AfterAll` on SIGTERM, which deletes the `ActionsGateway` CR while the tenant's AGC is still up — the only window in which the `agentpool-cleanup` finalizer can deregister that tenant's runners from the org. Kill the process outright and the namespace wedges in `Terminating` on a finalizer whose controller has already gone with it, and force-removing that finalizer strands the runner registrations: they keep accepting job assignments, so the *next* run's job goes `in_progress` against a runner that no longer exists and no worker pod is ever provisioned (observed 2026-07-29).
 
 The live-GitHub tier is the only one that hands the harness a **live** App key — every other tier stamps the same Secret with a throwaway RSA key. `utils.CreateGitHubAppSecret` therefore routes the PEM through a `0600` temp file and `--from-file`, per [the credential rule](github-app-credentials.md#creating-the-kubernetes-secret). Never switch it back to `--from-literal`: `utils.Run` echoes each command's argv to the `GinkgoWriter` and folds it into the failure message, so a literal PEM would land in the run log, the JUnit report, and any `ps` snapshot taken mid-run (Q493).

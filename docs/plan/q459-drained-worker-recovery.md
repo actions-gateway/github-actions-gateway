@@ -324,15 +324,11 @@ nothing to re-run — and it has since been fixed.
   `helm upgrade` conflict on server-side-apply field ownership. Create a throwaway
   cluster: `make e2e-cluster KIND_CLUSTER=<name>`, and point the run at it with a
   private `KUBECONFIG` rather than the ambient context.
-- **Read the spec summary, not the wall clock.** The 2026-07-29 full-container run
-  finished its four specs in 19m04s inside a `ginkgo` process that lived 94 minutes,
-  with the tenant namespace still up 75 minutes after the last spec ended — because
-  the host slept mid-run, not because anything hung. A live-GitHub run is long enough to
-  straddle a laptop sleep, and every in-cluster age and process elapsed time then
-  reads as a stall. `Ran N of M Specs` and the per-spec `• [N seconds]` line are
-  measured from the suite's own clock and stay trustworthy; `ps` elapsed, pod `AGE`,
-  and "no output for a while" do not. Check the summary before concluding a spec is
-  wedged.
+- **Read the spec summary, not the wall clock.** This run's four specs finished in
+  19m04s inside a `ginkgo` process that lived 94 minutes, because the host slept
+  mid-run. Both false "it's wedged" diagnoses this session came from host-side clocks,
+  and the rule that came out of it is now in
+  [testing.md](../development/testing.md#end-to-end-tests).
 - **Two concurrent live-GitHub sessions collide on the fixture repo.** Both dispatch the
   same `drain-probe.yml` in `actions-gateway/gateway-test` and both register a runner
   named `real-ag-e2e-6d8749c-0`. Two such runs were in flight simultaneously on
