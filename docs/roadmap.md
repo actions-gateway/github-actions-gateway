@@ -94,7 +94,7 @@ tagged chart. Check the release notes for the exact image digests to pin.
   converts between them through a webhook the GMC hosts. The single-CR `v1alpha1`
   API, `v2alpha1`, and the classic acquisition protocol are all still fully served
   but **[deprecated](operations/v1alpha1-deprecation.md)**, and all three are removed
-  at **`v2.0.0`**; that removal is the near-term work below. See the migration
+  at **`v2.0.0`**; that removal is committed but not yet started — see below. See the migration
   guide's [Why upgrade to v2](operations/migration-v1-to-v2.md#why-upgrade-to-v2)
   for the full list.
 - **Day-2 operations.** Helm upgrade and rollback paths, a backup/restore and
