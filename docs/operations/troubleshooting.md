@@ -2322,6 +2322,18 @@ kubectl get pod <worker-pod> -n <namespace> \
   the scheduler's victim selection does not consult PodDisruptionBudgets as a hard
   constraint.
 
+  That last point is deliberate upstream behaviour, not an oversight, and it is worth
+  knowing before you spend time on it. The Eviction API a drain uses is effectively *a
+  delete that checks PDBs first*; kube-scheduler preemption skips that check because a
+  PDB that could veto preemption would let any low-priority workload make itself
+  un-preemptible simply by declaring one — which would turn a guaranteed tier's
+  scheduling guarantee into a suggestion, and in a shared cluster would let one tenant
+  starve another's guaranteed capacity. The same reasoning is why the worker's
+  `safe-to-evict: false` and `do-not-disrupt` annotations do not deflect a preemption:
+  they are advisory to autoscalers and deschedulers, and the scheduler is neither. See
+  [§4.2](../design/04-operational-flows.md#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us)
+  for the full reasoning and what it costs the gateway.
+
 ---
 
 ## A Preempted Worker's Job Is Not Re-Run

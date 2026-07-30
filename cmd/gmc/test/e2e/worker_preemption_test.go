@@ -29,24 +29,18 @@ import (
 //
 // # It started as a measurement, and the measurement said no
 //
-// Q423 opened with a prediction — "preemption is kubelet-initiated, so unlike a drain it
-// does produce PodFailed/Evicted and does exercise handleEviction on classic". That
-// conflates two different mechanisms that both get called eviction:
+// Q423 predicted preemption would produce PodFailed/Evicted and reach the existing
+// recovery. Run on 2026-07-29 this spec measured the opposite — kube-scheduler DELETES
+// its victim, so no re-run fired and the published safety claim was wrong — and Q497
+// then closed the gap by keying recovery on the DisruptionTarget condition. The spec
+// kept its whole apparatus and flipped its rerun assertion from "never" to "exactly
+// once". The never-Evicted assertion stays: recovery here must be reached by the
+// scheduler's marker rather than by the pod taking the kubelet shape, and a failure of
+// that assertion means this spec is no longer measuring what it believes.
 //
-//   - The **kubelet's node-pressure eviction** publishes PodFailed with
-//     Status.Reason "Evicted". That was the ONLY shape either tier's recovery acted on.
-//   - **kube-scheduler preemption**, which is what a PriorityClass actually drives,
-//     removes the victim by DELETING it — the same graceful removal Q421 measured for
-//     `kubectl drain` and Q459 measured for `kubectl delete pod`.
-//
-// Run on 2026-07-29, this spec measured the second, and therefore measured NO recovery:
-// the displaced run needed a manual re-run, and the published safety claim was wrong.
-// Q497 closed that by keying recovery on the DisruptionTarget condition with reason
-// PreemptionByScheduler — which only kube-scheduler writes, and so carries none of the
-// human-cancel ambiguity that keeps Q459's drain slice open. The spec kept its whole
-// apparatus and flipped its rerun assertion from "never" to "exactly once"; the
-// never-Evicted assertion stays, because recovery here must be reached by the marker
-// rather than by the pod taking the kubelet shape.
+// Why the mechanism works this way, and why the worker's disruption-safety annotations
+// and PodDisruptionBudgets cannot deflect it: docs/design/04-operational-flows.md §4.2,
+// which also carries the Q423 measurement this spec produced and the Q497 verdict.
 //
 // # How the preemption is forced
 //
@@ -81,10 +75,9 @@ import (
 // additionally shows is the worse case — a job displaced before its runner ever
 // connected has no report of its own to fall back on.
 //
-// The measured result and the design reasoning live in
-// docs/design/04-operational-flows.md §4.2; the operator-facing behaviour is
-// docs/operations/troubleshooting.md, "Draining a Worker Does Not Auto-Re-Run the Jobs
-// It Interrupts" — which now covers the drain slice only.
+// The operator-facing behaviour is docs/operations/troubleshooting.md — "A Preempted
+// Worker's Job Is Not Re-Run" for this path, and "Draining a Worker Does Not Auto-Re-Run
+// the Jobs It Interrupts" for the slice that is still deliberately excluded.
 //
 // Serial and multi-node: it advertises a resource on a named node, creates
 // cluster-scoped PriorityClasses, edits the cluster-scoped PriorityClassAllowlist, and

@@ -295,6 +295,68 @@ The two "not yet" rows are a **sequencing** boundary, not a permanent one, and t
 
 Note that the `DisruptionTarget` **condition type** alone is not the discriminator: the eviction API stamps it too, with reason `EvictionByEvictionAPI`. The `reason` is what separates the recovered row from the deferred one, which is why detection matches the full type/status/reason triple — a type-only match would have pulled the drain path in early, ahead of the measurement that justified it.
 
+#### Why preemption *deletes* rather than *evicts*, and what that costs us
+
+A recurring question, because the answer decides three things we measured and could not
+change: why the worker's disruption-safety annotations did not deflect the preemption,
+why adding a `PodDisruptionBudget` would not either, and why scale-set preemption
+recovery cannot be made restart-safe.
+
+**"Evict" and "delete" are not a gracefulness distinction.** The Eviction API
+(`pods/<name>/eviction`) is essentially *a DELETE that checks PodDisruptionBudgets first*
+and returns `429` if the budget would be violated. Both paths honour
+`terminationGracePeriodSeconds`, which is why a preempted worker still receives SIGTERM
+and why the Q385 relay gets the runner its grace period on that path. The real question
+is therefore not "graceful or not" but **"should a PDB be able to block preemption"** —
+and upstream Kubernetes deliberately answers no, for two reasons that apply with extra
+force to a multi-tenant gateway:
+
+- **Priority inversion.** If PDBs were a hard constraint on preemption, any low-priority
+  workload could make itself un-preemptible by declaring a tight one. The floor tier's
+  guarantee would degrade from "guaranteed runners always schedule" to "…unless someone
+  downstream declared `minAvailable`." In our setting that is a cross-tenant denial of
+  service: a tenant could pin a PDB over their opportunistic workers and starve another
+  tenant's guaranteed GPU tier — precisely the failure the platform-owned
+  `PriorityClass` allowlist exists to prevent.
+- **Liveness.** The scheduler selects a victim set inside a scheduling cycle and must
+  then bind the preemptor. An API call that can be refused would leave the high-priority
+  pod `Pending` with no recourse and no retry that would fare better.
+
+PDBs *are* consulted, as a soft preference: the scheduler prefers victims whose removal
+violates none, and violates them when it has no alternative. The same reasoning explains
+the annotations — `cluster-autoscaler.kubernetes.io/safe-to-evict: false`,
+`karpenter.sh/do-not-disrupt`, and the descheduler opt-out are advisory to *those
+controllers*, and kube-scheduler is not one of them. Q423 measured all of this rather
+than assuming it: the worker carried every marker and was preempted anyway.
+
+**This is not an upstream defect, and upstream did address the consumer's half of it.**
+The `DisruptionTarget` condition exists exactly so a controller can tell disruption
+causes apart, so keying recovery on `PreemptionByScheduler` is the sanctioned mechanism
+rather than a workaround for a missing API.
+
+**What it does cost us** is an asymmetry with no clean fix: a kubelet-evicted pod
+*persists* in `PodFailed` until the reaper takes it, while a preempted pod is *deleted*.
+Recovery evidence therefore survives an AGC restart on one path and not the other, which
+is the root of the scale-set restart-safety residual noted above. Nothing short of
+preemption leaving a tombstone would close it, so it is documented as a property of the
+signal rather than tracked as a bug.
+
+#### Why re-running a preempted job is not a double report
+
+The original scale-set detection deliberately excluded every *deleted* pod on the
+grounds that the Q385 SIGTERM relay already owns that case: the runner receives the
+signal, reports its own outcome, and a second report from the gateway would duplicate
+it. That argument does not carry to preemption, and the distinction is worth keeping
+explicit because it is what makes recovering this path safe:
+
+**The relay makes the job *conclude* at GitHub; it does not make the job *succeed*.**
+Q459 measured the conclusion on the graceful path at live-GitHub — `failure` within
+15–26s, with `rerun-failed-jobs` accepted. The run really is left failed, so the re-run
+is the repair rather than a duplicate. `rerun-failed-jobs` also re-runs only a run's
+*failed* jobs, so a run whose jobs all completed before the preemption landed has
+nothing to re-run and GitHub rejects the call — which the existing error path logs and
+drops.
+
 **Q421 measured that exclusion on both tiers, 2026-07-27, and it holds — with a consequence worth stating plainly.** A real `kubectl drain` against a live worker pod publishes no terminal phase at all (the pod goes straight from its current phase to absent), so neither tier's detection sees anything and no automatic re-run fires; the envtest pair (`TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun`, `TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover`) and the fake-GitHub `E2E_AGC_WorkerNodeDrain` pin it. The consequence is that a *graceful* operator drain leaves the interrupted run needing a manual re-run, while an *ungraceful* kubelet eviction of the same job recovers automatically — and the worker pod's `safe-to-evict: false` / `do-not-disrupt` annotations do not deflect a drain either, being advisory to autoscalers and deschedulers only. Whether that asymmetry should be closed depends on what GitHub does with the runner's relayed report. Q459 measured that at live-GitHub on 2026-07-28: the report does get out, the job concludes `failure` well under a minute after the disruption (15–26s across five runs), and `rerun-failed-jobs` is accepted, so an automatic re-run is available on this path. What stopped it from simply being switched on is that a disrupted worker lands in `PodFailed` with an *empty* reason — the same shape a genuinely failing job produces — so recovery has to key on the pod's `deletionTimestamp` rather than on its phase. **That discriminator was measured on 2026-07-29 and holds:** a run cancelled by a human publishes the same phase and empty reason with *no* deletion mark, so the mark separates the disruption from both a cancel and a real failure. Q459's decision is therefore **close, gated on the deletion mark**, and [Q502](../STATUS.md#Q502) carries the implementation; the reasoning and its constraints are in [q459-drained-worker-recovery.md](../plan/q459-drained-worker-recovery.md). Operator-facing guidance is in [troubleshooting.md](../operations/troubleshooting.md#draining-a-worker-does-not-auto-re-run-the-jobs-it-interrupts); the full result is in [the experiment](../plan/eviction-oversubscription-validation.md#result-measured-2026-07-27).
 
 **Q423 measured `PriorityClass` preemption on 2026-07-29 and found the same gap; Q497 closed it.** Preemption is kube-scheduler's, not the kubelet's: the scheduler **deletes** the victim, so a preempted worker never carries `Evicted`, and before Q497 no re-run fired. The measurement, on a real cluster: the victim went `Running` → `Running` + `deletionTimestamp` → a terminal phase, carrying a `DisruptionTarget` condition with reason `PreemptionByScheduler` throughout; its `safe-to-evict: false` / `do-not-disrupt` annotations deflected nothing.
