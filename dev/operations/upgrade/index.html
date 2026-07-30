@@ -1465,6 +1465,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-preempted-workers-are-now-re-run-automatically-eviction-counters-gain-a-cause-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: preempted workers are now re-run automatically; eviction counters gain a cause label
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2782,6 +2793,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-preempted-workers-are-now-re-run-automatically-eviction-counters-gain-a-cause-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: preempted workers are now re-run automatically; eviction counters gain a cause label
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3267,6 +3289,7 @@
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github">Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)</a></li>
 <li><a href="#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes">Non-breaking: eviction auto-retry now honours GITHUB_API_BASE_URL (it never did on GHES)</a></li>
+<li><a href="#non-breaking-preempted-workers-are-now-re-run-automatically-eviction-counters-gain-a-cause-label">Non-breaking: preempted workers are now re-run automatically; eviction counters gain a cause label</a></li>
 <li><a href="#breaking-pre-ga-capacitygatemode-values-replaced-by-observe--a-gateway-level-cluster-fact">BREAKING (pre-GA): capacityGate.mode values replaced by Observe + a gateway-level cluster fact</a></li>
 <li><a href="#non-breaking-an-over-long-derived-runnergroup-name-is-bounded-and-renamed">Non-breaking: an over-long derived RunnerGroup name is bounded (and renamed)</a></li>
 <li><a href="#non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix">Non-breaking: a RunnerSet's agent Secrets and runner names gain an rs- prefix</a></li>
@@ -3355,6 +3378,67 @@ rather than having none of its own.</p>
 <p><strong>Rolling back</strong> re-arms the gap: recovery on GHES silently returns to calling
 <code>api.github.com</code> and failing with a 401. There is no configuration that restores the
 behaviour on an older image.</p>
+<h3 id="non-breaking-preempted-workers-are-now-re-run-automatically-eviction-counters-gain-a-cause-label">Non-breaking: preempted workers are now re-run automatically; eviction counters gain a <code>cause</code> label<a class="headerlink" href="#non-breaking-preempted-workers-are-now-re-run-automatically-eviction-counters-gain-a-cause-label" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> every tenant on either acquisition tier. The behaviour change only
+manifests for tenants using <code>priorityTiers</code> with a preempting class; the metric change
+affects anyone with dashboards or alerts on the eviction counters.</p>
+<p><strong>What changed.</strong> A worker displaced by kube-scheduler preemption — what a <code>priorityTiers</code>
+floor drives — is now recovered like a node-pressure eviction: lock renewal stops, and
+the displaced run is re-run via <code>rerun-failed-jobs</code>. Previously it reached no recovery at
+all, because the scheduler <em>deletes</em> its victim rather than leaving it <code>Failed</code>/<code>Evicted</code>
+(measured, Q423), so the displaced job needed a manual re-run. Detection now keys on the
+<code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code>, which only
+kube-scheduler writes.</p>
+<p>The retry budget is unchanged and still shared: <code>maxEvictionRetries</code> remains a hard
+lifetime cap per workflow run across both acquisition tiers <strong>and</strong> both disruption
+causes. A run that is alternately evicted and preempted spends one budget, not two — so a
+tenant running a preempting floor may see the budget exhaust sooner than before, and may
+want to raise <code>maxEvictionRetries</code> (default 2, max 10).</p>
+<p><strong>What did NOT change.</strong> A <code>kubectl drain</code>, a <code>kubectl delete pod</code>, and the worker-pod
+reaper still get no automatic re-run. Those removals are indistinguishable from an
+operator deliberately cancelling a run, so recovering on them would restart work someone
+had just stopped.</p>
+<p><strong>Metric change.</strong> Three counters gained a <code>cause</code> label (<code>eviction</code> | <code>preemption</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Labels before</th>
+<th>Labels after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_eviction_retries_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code></td>
+<td>+ <code>cause</code></td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code></td>
+<td>+ <code>cause</code></td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>+ <code>cause</code></td>
+</tr>
+</tbody>
+</table>
+<p>No query breaks: aggregations such as <code>sum(...)</code>, <code>increase(...) &gt; 0</code>, and
+<code>sum by (namespace, runner_group) (...)</code> are unaffected, which covers the shipped
+dashboards and alert rules. Only exact-label-set matchers, and panels that rendered one
+series per metric and now render more, need attention.</p>
+<p><strong>Action required — review any alert that pages on the eviction rate.</strong> The meaning of
+<code>actions_gateway_eviction_retries_total</code> widened: before, a rising rate meant node
+trouble; now it also counts preemptions, which are the <em>expected</em> steady state under a
+preempting floor. Scope such alerts to <code>{cause="eviction"}</code> unless they genuinely want
+both. The shipped <code>ActionsGatewayEvictionRetryAbuse</code> rule in
+<a href="../security-operations/">security-operations.md</a> was updated this way — copy the change
+if you forked it.</p>
+<p><strong>Rolling back</strong> returns preempted jobs to needing a manual re-run, and removes the
+<code>cause</code> label. Nothing else is affected; no configuration restores the recovery on an
+older image.</p>
 <h3 id="non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github">Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)<a class="headerlink" href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> any tenant on the classic acquisition tier — a <code>RunnerGroup</code>, or
 a <code>RunnerSet</code> with <code>spec.acquisitionProtocol: Classic</code>. Scale-set tenants are

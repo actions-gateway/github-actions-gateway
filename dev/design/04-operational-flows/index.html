@@ -1001,6 +1001,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#which-disruptions-are-recovered-and-which-are-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which disruptions are recovered, and which are not
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2526,6 +2537,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#which-disruptions-are-recovered-and-which-are-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which disruptions are recovered, and which are not
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2792,7 +2814,7 @@ inputs onto the worker pod; see
     participant W as Worker Pod
     participant GH as GitHub
     Note over A,GH: RenewJob loop running
-    W--&gt;&gt;A: Pod Evicted (node pressure), seen via pod watch
+    W--&gt;&gt;A: Pod Evicted (node pressure), or preempted by the scheduler — seen via pod watch
     Note over A: RenewJob stops immediately — GitHub cancels the run as the lock lapses
     Note over A: wait evictionRetryDelay (5s), then check retry budget
     alt retries &lt; maxEvictionRetries
@@ -2800,10 +2822,12 @@ inputs onto the worker pod; see
     else budget exhausted
         Note over A: log warning, eviction_retries_exhausted_total++ (manual re-run)
     end</code></pre>
-<p>The AGC stops renewal immediately on detecting <code>Evicted</code>, so the outstanding lock starts lapsing at once and GitHub concludes the run when it expires: within the remaining lock window, at worst ~10 minutes from the last renewal (the lock TTL — see <code>RenewJobResponse.LockedUntil</code> in <code>broker/types.go</code>). The AGC then waits <code>evictionRetryDelay</code> (default 5 seconds) before calling the rerun API, which addresses <code>GITHUB_API_BASE_URL</code> — the same endpoint the installation token was minted against — resolved through the one helper the token exchange uses so the two cannot drift. Before Q504 it defaulted past a configured GHES endpoint to <code>api.github.com</code>, so on GHES the call failed with a 401 before it could reach the refusal below.</p>
+<p>Two disruptions reach this flow, and they are detected differently. The kubelet's node-pressure eviction leaves the pod <code>PodFailed</code> with <code>Status.Reason: Evicted</code>. A kube-scheduler preemption — what a <code>priorityTiers</code> <code>PriorityClass</code> drives — instead <em>deletes</em> the victim after stamping a <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code>, so it is recognised by that condition, which travels out of the pod wait alongside the phase (Q497). See <a href="#which-disruptions-are-recovered-and-which-are-not">Which disruptions are recovered</a> for the full boundary.</p>
+<p>The AGC stops renewal immediately on detecting either, so the outstanding lock starts lapsing at once and GitHub concludes the run when it expires: within the remaining lock window, at worst ~10 minutes from the last renewal (the lock TTL — see <code>RenewJobResponse.LockedUntil</code> in <code>broker/types.go</code>). The AGC then waits <code>evictionRetryDelay</code> (default 5 seconds) before calling the rerun API, which addresses <code>GITHUB_API_BASE_URL</code> — the same endpoint the installation token was minted against — resolved through the one helper the token exchange uses so the two cannot drift. Before Q504 it defaulted past a configured GHES endpoint to <code>api.github.com</code>, so on GHES the call failed with a 401 before it could reach the refusal below.</p>
 <p><strong>Both halves of that are now measured against live GitHub (Q396), and the second one does not work.</strong> A worker killed by a real kubelet eviction, on a job carrying no <code>timeout-minutes</code> to confound the timing, saw GitHub conclude the job <code>failure</code> <strong>9m36s</strong> after the kill — consistent with the lock TTL being the mechanism, since the runner is SIGKILLed with roughly two seconds of grace and never gets its own report out. The re-run, fired 5 seconds after the eviction, therefore arrives while GitHub still considers the run in progress and is refused with <code>403 This workflow is already running</code>. The retry budget is spent and <code>actions_gateway_eviction_retries_total</code> increments, but the job is not re-run. See <a href="../../plan/eviction-oversubscription-validation/#result-measured-2026-07-29">eviction-oversubscription-validation.md § Result</a>; the fix is tracked as <a href="../../STATUS/#Q503">Q503</a>.</p>
 <p>Contrast the <em>graceful</em> removal path, where the worker gets the full 30-second grace period and the runner does report: GitHub concludes in 15–26 seconds, and <code>rerun-failed-jobs</code> is accepted (Q459). The two paths differ by whether the report escapes, and that is what sets both the latency and whether recovery is even possible.</p>
-<p><code>maxEvictionRetries</code> is a hard lifetime cap per <code>run_id</code>, not a per-eviction-wave allowance: once exhausted, every subsequent eviction of that run is a no-op (counted by <code>eviction_retries_exhausted_total</code>) until the AGC restarts and the in-memory counters reset. Because a single workflow run can have several worker pods evicted simultaneously under node pressure, the check-and-increment of the per-run counter is serialized per <code>run_id</code>, so concurrent evictions can never collectively exceed the budget.</p>
+<p><strong>A preemption is on the graceful side of that line, so Q503 does not apply to it.</strong> kube-scheduler deletes its victim rather than SIGKILLing it, the SIGTERM relay gets the runner its grace period, and the job concludes in seconds rather than waiting out the lock — which is why the re-run this flow fires for a preemption is accepted where the same call on an eviction is refused. The two causes share one code path and one budget, but not this failure mode.</p>
+<p><code>maxEvictionRetries</code> is a hard lifetime cap per <code>run_id</code>, not a per-disruption-wave allowance: once exhausted, every subsequent disruption of that run is a no-op (counted by <code>eviction_retries_exhausted_total</code>) until the AGC restarts and the in-memory counters reset. Because a single workflow run can have several worker pods evicted simultaneously under node pressure — or preempted together when a floor tier claims capacity — the check-and-increment of the per-run counter is serialized per <code>run_id</code>, so concurrent disruptions can never collectively exceed the budget, whatever mix of causes they are.</p>
 <h4 id="on-the-scale-set-tier-q417">On the scale-set tier (Q417)<a class="headerlink" href="#on-the-scale-set-tier-q417" title="Permanent link">&para;</a></h4>
 <p>The flow above is the <strong>classic</strong> tier, where one goroutine holds the job's identity and watches its own pod. The scale-set tier provisions fire-and-forget and receives no acquired payload, so it has neither the watcher nor the identity. Both are relocated onto the worker pod, which makes the mechanism restart-safe rather than process-scoped:</p>
 <pre class="mermaid"><code>sequenceDiagram
@@ -2815,7 +2839,7 @@ inputs onto the worker pod; see
     Q--&gt;&gt;L: JobAssigned (ownerName, repositoryName, workflowRunId)
     L-&gt;&gt;P: provision, stamping run-id/repository + acquisition-protocol=ScaleSet
     Note over L: fire-and-forget — the runner pulls and completes its own job
-    P--&gt;&gt;R: Failed/Evicted, seen via the reconciler's pod watch
+    P--&gt;&gt;R: Failed/Evicted, or DisruptionTarget=PreemptionByScheduler — seen via the reconciler's pod watch
     R-&gt;&gt;P: claim: stamp eviction-handled-at (optimistic lock)
     alt claim won and identity present
         R-&gt;&gt;GH: POST .../runs/{run_id}/rerun-failed-jobs
@@ -2824,10 +2848,58 @@ inputs onto the worker pod; see
     else claim lost
         Note over R: another reconcile or replica owns it — skip
     end</code></pre>
-<p>Three properties make this equivalent rather than merely similar. The claim is stamped <strong>before</strong> the GitHub call, so recovery is at-most-once per evicted pod across reconciles, restarts, and replicas — a duplicate re-run would silently spend another slot of the run's budget. The recovery scan runs <strong>before</strong> the worker-pod reaper in the same reconcile, so a terminal pod is never deleted before its identity is read. And the budget is the same budget, keyed by <code>run_id</code> alone: <code>maxEvictionRetries</code> bounds re-runs per run across both tiers together, with the <code>tier</code> metric label splitting the reporting but not the cap.</p>
-<p>Deletion is deliberately excluded. An API-initiated eviction (<code>kubectl drain</code>), a <strong>kube-scheduler preemption</strong> (what a <code>priorityTiers</code> <code>PriorityClass</code> drives), or a plain delete all leave a graceful termination, where the Q385 SIGTERM relay hands the signal to the runner and it reports its own outcome; such a pod is deleted rather than left <code>Failed</code>/<code>Evicted</code>, so it never reaches this path — covering it would double-report the case the relay already owns.</p>
-<p><strong>Q421 measured that exclusion on both tiers, 2026-07-27, and it holds — with a consequence worth stating plainly.</strong> A real <code>kubectl drain</code> against a live worker pod publishes no terminal phase at all (the pod goes straight from its current phase to absent), so neither tier's detection sees anything and no automatic re-run fires; the envtest pair (<code>TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun</code>, <code>TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover</code>) and the fake-GitHub <code>E2E_AGC_WorkerNodeDrain</code> pin it. The consequence is that a <em>graceful</em> operator drain leaves the interrupted run needing a manual re-run, while an <em>ungraceful</em> kubelet eviction of the same job recovers automatically — and the worker pod's <code>safe-to-evict: false</code> / <code>do-not-disrupt</code> annotations do not deflect a drain either, being advisory to autoscalers and deschedulers only. Whether that asymmetry should be closed depends on what GitHub does with the runner's relayed report. Q459 measured that at live-GitHub on 2026-07-28: the report does get out, the job concludes <code>failure</code> well under a minute after the disruption (15–26s across five runs), and <code>rerun-failed-jobs</code> is accepted, so an automatic re-run is available on this path. What stopped it from simply being switched on is that a disrupted worker lands in <code>PodFailed</code> with an <em>empty</em> reason — the same shape a genuinely failing job produces — so recovery has to key on the pod's <code>deletionTimestamp</code> rather than on its phase. <strong>That discriminator was measured on 2026-07-29 and holds:</strong> a run cancelled by a human publishes the same phase and empty reason with <em>no</em> deletion mark, so the mark separates the disruption from both a cancel and a real failure. Q459's decision is therefore <strong>close, gated on the deletion mark</strong>, and <a href="../../STATUS/#Q502">Q502</a> carries the implementation; the reasoning and its constraints are in <a href="../../plan/q459-drained-worker-recovery/">q459-drained-worker-recovery.md</a>. Operator-facing guidance is in <a href="../../operations/troubleshooting/#draining-or-preempting-a-worker-does-not-auto-re-run-the-jobs-it-interrupts">troubleshooting.md</a>; the full result is in <a href="../../plan/eviction-oversubscription-validation/#result-measured-2026-07-27">the experiment</a>.</p>
-<p><strong>Q423 measured the same exclusion for <code>PriorityClass</code> preemption, 2026-07-29, and it lands in the same place — which is load-bearing for the oversubscription claim.</strong> Preemption is kube-scheduler's, not the kubelet's: the scheduler <strong>deletes</strong> the victim, so a preempted worker never carries <code>Evicted</code> and no re-run fires. Measured on a real cluster by the fake-GitHub pair <code>E2E_AGC_PreemptedWorkerGetsNoAutomaticRerun</code> and <code>E2E_AGC_PreemptedRunningPodPhaseFollowsItsExitCode</code>: the victim went <code>Running</code> → <code>Running</code> + <code>deletionTimestamp</code> → a terminal phase, carrying a <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code> throughout; its <code>safe-to-evict: false</code> / <code>do-not-disrupt</code> annotations deflected nothing, and no <code>rerun-failed-jobs</code> call was made in the 45s after removal. Two consequences. First, <code>priorityTiers</code> buys the <em>packing</em> guarantee (a guaranteed tier really does preempt its way in, so reserved idle headroom is unnecessary) but <strong>not</strong> an automatic-recovery guarantee for the work it displaces — the displaced run needs a manual re-run today. Second, the terminal phase on this path is the interrupted container's own exit status, so it can be <code>Succeeded</code> as readily as <code>Failed</code>; that is stronger than Q459's "empty reason is ambiguous" and rules the phase out as a discriminator entirely. What preemption <em>does</em> offer that a drain does not is an unambiguous marker: <code>PreemptionByScheduler</code> is written only by the scheduler, never by a human cancel or a job failing on its own, so this slice is closable without Q459's ambiguity — <a href="../../STATUS/#Q497">Q497</a> carries it. Full result: <a href="../../plan/eviction-oversubscription-validation/#result-measured-2026-07-29-preemption-is-not-eviction">the experiment</a>.</p>
+<p>Three properties make this equivalent rather than merely similar. The claim is stamped <strong>before</strong> the GitHub call, so recovery is at-most-once per disrupted pod across reconciles, restarts, and replicas — a duplicate re-run would silently spend another slot of the run's budget. The recovery scan runs <strong>before</strong> the worker-pod reaper in the same reconcile, so a terminal pod is never deleted before its identity is read. And the budget is the same budget, keyed by <code>run_id</code> alone: <code>maxEvictionRetries</code> bounds re-runs per run across both tiers <strong>and both disruption causes</strong> together, with the <code>tier</code> and <code>cause</code> metric labels splitting the reporting but not the cap.</p>
+<h4 id="which-disruptions-are-recovered-and-which-are-not">Which disruptions are recovered, and which are not<a class="headerlink" href="#which-disruptions-are-recovered-and-which-are-not" title="Permanent link">&para;</a></h4>
+<p>Two causes reach the recovery above, and the boundary between them and everything else is the whole safety argument:</p>
+<table>
+<thead>
+<tr>
+<th>Disruption</th>
+<th>Pod shape</th>
+<th>Recovered</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Kubelet node-pressure eviction</td>
+<td><code>PodFailed</code> + <code>Status.Reason: Evicted</code></td>
+<td>✅</td>
+<td>SIGKILL — nothing inside the pod reported, so the job hangs until its lock lapses</td>
+</tr>
+<tr>
+<td>kube-scheduler preemption (<code>priorityTiers</code>)</td>
+<td>Deleted, with <code>DisruptionTarget=True</code> / <code>PreemptionByScheduler</code></td>
+<td>✅ (Q497)</td>
+<td>The scheduler is the condition's only writer, so the signal is unambiguous</td>
+</tr>
+<tr>
+<td><code>kubectl drain</code> / eviction API</td>
+<td>Deleted, with <code>DisruptionTarget=True</code> / <code>EvictionByEvictionAPI</code></td>
+<td>❌ <em>not yet</em></td>
+<td>Decided by Q459, implementation carried by <a href="../../STATUS/#Q502">Q502</a> — gated on the deletion mark, not on this condition</td>
+</tr>
+<tr>
+<td><code>kubectl delete pod</code>, the reaper</td>
+<td>Deleted, <code>deletionTimestamp</code> only</td>
+<td>❌ <em>not yet</em></td>
+<td>Same. The reaper's own deletions must be excluded when it lands, or it would re-run every job it cleans up</td>
+</tr>
+<tr>
+<td>Job failed on its own</td>
+<td><code>PodFailed</code>, empty reason</td>
+<td>❌</td>
+<td>Re-running genuinely failing work is a retry loop, not a recovery</td>
+</tr>
+</tbody>
+</table>
+<p>The two "not yet" rows are a <strong>sequencing</strong> boundary, not a permanent one, and the reason they are separate from preemption is worth being precise about. Preemption could close first because <code>PreemptionByScheduler</code> has exactly one writer — never a human, never a failing job — so it needs no further measurement to be safe. The drain rows key on <code>deletionTimestamp</code> instead, which a human cancelling a run might also have set; that had to be measured before it could be trusted. It since was (2026-07-29): a cancelled run's worker publishes the same phase and empty reason with <strong>no</strong> deletion mark, so the mark does separate a disruption from a cancel. Q502 carries that implementation.</p>
+<p>Note that the <code>DisruptionTarget</code> <strong>condition type</strong> alone is not the discriminator: the eviction API stamps it too, with reason <code>EvictionByEvictionAPI</code>. The <code>reason</code> is what separates the recovered row from the deferred one, which is why detection matches the full type/status/reason triple — a type-only match would have pulled the drain path in early, ahead of the measurement that justified it.</p>
+<p><strong>Q421 measured that exclusion on both tiers, 2026-07-27, and it holds — with a consequence worth stating plainly.</strong> A real <code>kubectl drain</code> against a live worker pod publishes no terminal phase at all (the pod goes straight from its current phase to absent), so neither tier's detection sees anything and no automatic re-run fires; the envtest pair (<code>TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun</code>, <code>TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover</code>) and the fake-GitHub <code>E2E_AGC_WorkerNodeDrain</code> pin it. The consequence is that a <em>graceful</em> operator drain leaves the interrupted run needing a manual re-run, while an <em>ungraceful</em> kubelet eviction of the same job recovers automatically — and the worker pod's <code>safe-to-evict: false</code> / <code>do-not-disrupt</code> annotations do not deflect a drain either, being advisory to autoscalers and deschedulers only. Whether that asymmetry should be closed depends on what GitHub does with the runner's relayed report. Q459 measured that at live-GitHub on 2026-07-28: the report does get out, the job concludes <code>failure</code> well under a minute after the disruption (15–26s across five runs), and <code>rerun-failed-jobs</code> is accepted, so an automatic re-run is available on this path. What stopped it from simply being switched on is that a disrupted worker lands in <code>PodFailed</code> with an <em>empty</em> reason — the same shape a genuinely failing job produces — so recovery has to key on the pod's <code>deletionTimestamp</code> rather than on its phase. <strong>That discriminator was measured on 2026-07-29 and holds:</strong> a run cancelled by a human publishes the same phase and empty reason with <em>no</em> deletion mark, so the mark separates the disruption from both a cancel and a real failure. Q459's decision is therefore <strong>close, gated on the deletion mark</strong>, and <a href="../../STATUS/#Q502">Q502</a> carries the implementation; the reasoning and its constraints are in <a href="../../plan/q459-drained-worker-recovery/">q459-drained-worker-recovery.md</a>. Operator-facing guidance is in <a href="../../operations/troubleshooting/#draining-a-worker-does-not-auto-re-run-the-jobs-it-interrupts">troubleshooting.md</a>; the full result is in <a href="../../plan/eviction-oversubscription-validation/#result-measured-2026-07-27">the experiment</a>.</p>
+<p><strong>Q423 measured <code>PriorityClass</code> preemption on 2026-07-29 and found the same gap; Q497 closed it.</strong> Preemption is kube-scheduler's, not the kubelet's: the scheduler <strong>deletes</strong> the victim, so a preempted worker never carries <code>Evicted</code>, and before Q497 no re-run fired. The measurement, on a real cluster: the victim went <code>Running</code> → <code>Running</code> + <code>deletionTimestamp</code> → a terminal phase, carrying a <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code> throughout; its <code>safe-to-evict: false</code> / <code>do-not-disrupt</code> annotations deflected nothing.</p>
+<p>Two findings came out of it, and both shape the fix. First, the terminal phase on this path is the interrupted container's own exit status, so it can be <code>Succeeded</code> as readily as <code>Failed</code> — stronger than Q459's "empty reason is ambiguous", and it rules the phase out as a discriminator entirely. Second, <code>PreemptionByScheduler</code> is written only by the scheduler, never by a human cancel or a job failing on its own. So <strong>detection keys on the condition, never the phase</strong>, and the preemption slice closed on its own — ahead of the drain slice, which needed the cancel-path measurement Q459 took the same day and is now carried by <a href="../../STATUS/#Q502">Q502</a>.</p>
+<p>The consequence for the published claim is that <code>priorityTiers</code> now buys both halves: the <em>packing</em> guarantee (a guaranteed tier preempts its way in, so reserved idle headroom is unnecessary) and the <em>recovery</em> guarantee for the work it displaces. Pinned at three tiers — unit (<code>TestProvisioner_PreemptionAutoRetry</code> on classic, the <code>preemption_internal_test.go</code> set on scale-set), envtest (<code>TestAGC_Preemption_ScaleSetWorker_IsRecovered</code>, whose deliberate twin <code>TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover</code> differs only in the condition's <code>reason</code>), and fake-GitHub (<code>E2E_AGC_PreemptedWorkerIsRecovered</code>, plus <code>E2E_AGC_PreemptedRunningPodPhaseFollowsItsExitCode</code> for the phase finding). Full result: <a href="../../plan/eviction-oversubscription-validation/#result-measured-2026-07-29-preemption-is-not-eviction">the experiment</a>.</p>
+<p>One residual, inherent to the signal rather than the implementation: on the scale-set tier a preemption recovery is <strong>not</strong> restart-safe. An evicted pod sits in <code>PodFailed</code> until the reaper takes it, so a late scan still finds it; a preempted pod is being deleted and is readable only for its termination grace period (30s by default). An AGC down for that whole window loses the marker and the displaced run needs a manual re-run. What keeps the window reachable in normal operation is the worker-pod watch predicate, which admits the update where a pod <em>newly becomes</em> a preemption victim — a preemption changes no phase, so the phase-change edge alone would deliver nothing until the delete event, by which point the pod is out of the cache. The classic tier has no such window: its provisioning goroutine is already watching the pod and reads the marker off the resolving event, including the informer's delete event.</p>
 <p>To keep the per-<code>run_id</code> counter map from growing unbounded over the AGC's uptime, a background sweeper reclaims a run's counter once it has gone a fixed TTL (24 hours — well beyond any run's realistic lifetime) without a further eviction, bounding the map to runs evicted within that trailing window. An evicted worker pod only ever exists for a live run, so a counter idle for the TTL belongs to a run that can no longer be evicted; reclaiming it therefore never refills a live run's budget, and the hard cap above still holds (Q141).</p>
 <hr />
 <h3 id="stuck-pending-worker-pod">Stuck-Pending Worker Pod<a class="headerlink" href="#stuck-pending-worker-pod" title="Permanent link">&para;</a></h3>

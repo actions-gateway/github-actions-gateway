@@ -2442,12 +2442,12 @@
 <td>Time series</td>
 </tr>
 <tr>
-<td>Eviction retries</td>
-<td><code>sum by (runner_group, tier) (increase(actions_gateway_eviction_retries_total[1h]))</code></td>
-<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>)</td>
+<td>Disruption retries</td>
+<td><code>sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))</code></td>
+<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>). Keep the causes visually distinct: <code>eviction</code> rising means node pressure, <code>preemption</code> rising means a <code>priorityTiers</code> floor is displacing opportunistic work — different investigations entirely</td>
 </tr>
 <tr>
-<td>Eviction budget exhausted</td>
+<td>Disruption budget exhausted</td>
 <td><code>increase(actions_gateway_eviction_retries_exhausted_total[1h])</code></td>
 <td>Stat (threshold: &gt;0 = red)</td>
 </tr>

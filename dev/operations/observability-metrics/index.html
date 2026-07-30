@@ -2623,20 +2623,20 @@
 <tr>
 <td><code>actions_gateway_eviction_retries_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code></td>
-<td>Re-runs <strong>attempted</strong> after worker pod eviction — not re-runs that succeeded. It counts the retry-budget reservation, which happens before the API call, so it increments even when GitHub refuses the call; against real GitHub today it always does, because the re-run fires ~9.5 minutes before the run concludes (<a href="../../STATUS/#Q503">Q503</a>, and the <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">runbook</a>). Do not read it as a recovery count. <code>tier="classic"</code> is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; <code>tier="scaleset"</code> is the scale-set path, where the owning reconciler detects the eviction from the worker pod itself (Q417). The retry budget is <strong>shared</strong> — it is keyed by run ID alone, so <code>maxEvictionRetries</code> bounds re-runs per run across both tiers together, not once per tier. The <code>tier</code> label was added in Q417; see <a href="#breaking-observability-changes-q417">Breaking observability changes</a>.</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
+<td>Re-runs <strong>attempted</strong> after worker pod eviction — not re-runs that succeeded. It counts the retry-budget reservation, which happens before the API call, so it increments even when GitHub refuses the call; against real GitHub today <code>cause="eviction"</code> always does, because that re-run fires ~9.5 minutes before the run concludes (<a href="../../STATUS/#Q503">Q503</a>, and the <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">runbook</a>). Do not read it as a recovery count — except under <code>cause="preemption"</code>, which is a graceful removal: the runner reports, GitHub concludes in seconds, and the re-run is accepted, so Q503 does not apply there. <code>tier="classic"</code> is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; <code>tier="scaleset"</code> is the scale-set path, where the owning reconciler detects the disruption from the worker pod itself (Q417). <code>cause="eviction"</code> is the kubelet's node-pressure eviction; <code>cause="preemption"</code> is kube-scheduler displacing the worker for a higher <code>priorityTiers</code> tier (Q497). The retry budget is <strong>shared</strong> — it is keyed by run ID alone, so <code>maxEvictionRetries</code> bounds re-runs per run across both tiers <strong>and both causes</strong> together, not once per combination. Labels added in Q417 (<code>tier</code>) and Q497 (<code>cause</code>); see <a href="#breaking-observability-changes-q417">Breaking observability changes</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code></td>
-<td>Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an <code>EvictionRetriesExhausted</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170). <code>tier</code> as above.</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
+<td>Disruption retries exhausted; job requires manual re-run. Each occurrence also emits an <code>EvictionRetriesExhausted</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170). <code>tier</code> and <code>cause</code> as above.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td>Evicted <strong>scale-set</strong> worker pods that carried no workflow-run identity, so no automatic re-run could be attempted and the job stays failed until a human re-runs it (Q417). Each occurrence also emits an <code>EvictionRecoveryIdentityUnknown</code> Warning Event on the owning <code>RunnerSet</code>. This is the one failure mode that makes scale-set eviction recovery silently inert, which is why it is counted separately from an exhausted budget: an exhausted budget means a tenant is evicting more than <code>maxEvictionRetries</code> allows, while this means GitHub did not send the assignment fields (<code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>) the mechanism reads. <strong>Expected to be zero</strong> — the assignment fields were confirmed present on live GitHub on 2026-07-26, so a sustained rate is a protocol-level regression, not a capacity problem — see the <a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
+<td>Disrupted <strong>scale-set</strong> worker pods that carried no workflow-run identity, so no automatic re-run could be attempted and the job stays failed until a human re-runs it (Q417). Each occurrence also emits an <code>EvictionRecoveryIdentityUnknown</code> Warning Event on the owning <code>RunnerSet</code>. This is the one failure mode that makes scale-set eviction recovery silently inert, which is why it is counted separately from an exhausted budget: an exhausted budget means a tenant is evicting more than <code>maxEvictionRetries</code> allows, while this means GitHub did not send the assignment fields (<code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>) the mechanism reads. <strong>Expected to be zero</strong> — the assignment fields were confirmed present on live GitHub on 2026-07-26, so a sustained rate is a protocol-level regression, not a capacity problem — see the <a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_quota_retries_total</code></td>
@@ -2791,17 +2791,28 @@
 </tbody>
 </table>
 <blockquote>
-<p><strong>Reading the eviction metrics across tiers.</strong> Both <code>eviction_retries_total</code> and
-<code>eviction_retries_exhausted_total</code> are emitted on <strong>both</strong> acquisition tiers, split
-by the <code>tier</code> label (Q417). The two are detected by different machinery — an inline
-pod wait on classic, the owning reconciler's recovery pass on scale-set — but they
-share one budget, keyed by workflow run alone, so <code>maxEvictionRetries</code> caps re-runs
-per run across the pair rather than once each.</p>
-<p>A flat zero on <code>tier="scaleset"</code> while workers are visibly being evicted means the
-recovery is not firing, not that nothing was evicted. Check
+<p><strong>Reading the eviction metrics across tiers and causes.</strong> Both <code>eviction_retries_total</code>
+and <code>eviction_retries_exhausted_total</code> are emitted on <strong>both</strong> acquisition tiers, split
+by the <code>tier</code> label (Q417), and for <strong>both</strong> recovered disruptions, split by the
+<code>cause</code> label (Q497). Detection differs across all four combinations — an inline pod
+wait on classic, the owning reconciler's recovery pass on scale-set; a <code>PodFailed</code>/
+<code>Evicted</code> phase for an eviction, a <code>DisruptionTarget</code> condition for a preemption — but
+they share one budget, keyed by workflow run alone, so <code>maxEvictionRetries</code> caps
+re-runs per run across the whole set rather than once per combination.</p>
+<p><strong>The <code>cause</code> split is a diagnosis, not decoration.</strong> A climbing <code>cause="eviction"</code>
+rate means node pressure: memory or disk exhaustion on the nodes, and the fix is
+capacity or worker sizing. A climbing <code>cause="preemption"</code> rate means a <code>priorityTiers</code>
+floor is displacing more opportunistic work than the tenant sized for, and the fix is
+tier thresholds or where the work is placed. Reading one as the other sends an operator
+hunting in entirely the wrong place.</p>
+<p>A flat zero on <code>tier="scaleset"</code> while workers are visibly being disrupted means the
+recovery is not firing, not that nothing happened. Check
 <code>kubectl get pods --field-selector=status.phase=Failed</code> for <code>Evicted</code> pods, then
 <code>actions_gateway_eviction_recovery_identity_unknown_total</code> and the
-<a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.</p>
+<a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.
+For preemption specifically, see
+<a href="../troubleshooting/#a-preempted-workers-job-is-not-re-run">A Preempted Worker's Job Is Not Re-Run</a>
+— its scale-set path has a time limit the eviction path does not.</p>
 <p><strong>Proxy conditions on a v2 deploy.</strong> On a v2 install (the opt-in
 <code>actions-gateway-crds-v2</code> CRDs), the GMC also counts v2 <code>ActionsGateway</code>s in
 <code>managed_gateways</code> and reflects each <code>EgressProxy</code>'s proxy conditions in
@@ -3282,33 +3293,51 @@ labels and the per-tenant namespaces to allocation queries — see
 </ul>
 <h2 id="breaking-observability-changes-q417">Breaking observability changes (Q417)<a class="headerlink" href="#breaking-observability-changes-q417" title="Permanent link">&para;</a></h2>
 <p>Q417 ported eviction recovery to the scale-set acquisition tier and added a <code>tier</code>
-label to the two eviction counters so the two tiers' recoveries are distinguishable:</p>
+label to the two eviction counters so the two tiers' recoveries are distinguishable.
+Q497 extended recovery to scheduler preemption and added a <code>cause</code> label, on those two
+counters and on the identity counter, for the same reason — the two disruptions demand
+different operator responses:</p>
 <table>
 <thead>
 <tr>
 <th>Metric</th>
 <th>Labels before</th>
-<th>Labels after</th>
+<th>After Q417</th>
+<th>After Q497</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><code>actions_gateway_eviction_retries_total</code></td>
 <td><code>namespace</code>, <code>runner_group</code></td>
-<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code></td>
+<td>+ <code>tier</code></td>
+<td>+ <code>cause</code></td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
 <td><code>namespace</code>, <code>runner_group</code></td>
-<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code></td>
+<td>+ <code>tier</code></td>
+<td>+ <code>cause</code></td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>—</td>
+<td>+ <code>cause</code></td>
 </tr>
 </tbody>
 </table>
 <p><strong>What breaks.</strong> Only queries that match the full label set exactly, or that render
-one series per metric and now render two. Aggregations are unaffected: <code>sum(...)</code>,
+one series per metric and now render more. Aggregations are unaffected: <code>sum(...)</code>,
 <code>increase(...) &gt; 0</code>, and <code>sum by (namespace, runner_group) (...)</code> keep working
-unchanged, which covers the shipped dashboards and alert rules. Add <code>tier</code> to a
-<code>by (...)</code> clause where you want the split.</p>
+unchanged, which covers the shipped dashboards and alert rules. Add <code>tier</code> or <code>cause</code>
+to a <code>by (...)</code> clause where you want the split.</p>
+<p><strong>One reading does change meaning even though no query breaks.</strong> Before Q497,
+<code>actions_gateway_eviction_retries_total</code> counted node-pressure evictions only, so a
+dashboard titled "evictions" was accurate. It now also counts preemptions, which are a
+routine consequence of running a <code>priorityTiers</code> floor rather than a sign of node
+trouble. An alert that pages on this counter rising should filter to
+<code>{cause="eviction"}</code> unless it genuinely wants both.</p>
 <p><strong>Continuity.</strong> Both counters keep their names, so history is preserved; series
 recorded before the upgrade simply carry no <code>tier</code> label.</p>
 <h2 id="breaking-observability-changes-q205">Breaking observability changes (Q205)<a class="headerlink" href="#breaking-observability-changes-q205" title="Permanent link">&para;</a></h2>
