@@ -377,6 +377,29 @@ A root-cause claim needs evidence measured from *this* failure, not a resemblanc
 - **Symptom-matching a prior issue.** When a failure looks like a known issue — a flake row on the [backlog](../STATUS.md), a previously fixed bug, a memory of "this is always X" — that match is a **hypothesis, not a diagnosis**. The same surface symptom (a scheduling timeout, an egress blip, a wedged run) can have a different cause each time. Before acting on the remembered cause — and above all before spending a billable re-run, a fix PR, or a state-changing command on it — take a direct measurement from the failing system: read the actual events, describe the actual pod, pull the actual log line. If the environment tears down evidence on failure, capturing diagnostics *before* teardown is part of the fix, not optional (filed from the v1.2.0 release retro, where gate failures had to be re-run just to observe them).
 - **Trusting source inspection.** Reading code — or a plan doc's ✅ investigation findings, which usually derive from source-reading — tells you what *should* happen, not what does. Treat such findings as unverified until confirmed end-to-end: actually exec the thing. Source-reading alone has produced wrong conclusions before (PR #59).
 
+### Check for a committed capture before booking a live measurement
+
+"Measure it" does not always mean "run it". Before scheduling a Tier C run, a dogfood
+dispatch, or anything else that costs a credential and a wall-clock hour, check whether
+the repo already holds a **recorded observation** of the same interface. `cmd/probe`
+exists to capture exactly that, and [`testdata/README.md`](../../testdata/README.md)
+documents what each capture contains.
+
+Q495 is the worked example. Its backlog row read "confirm, then fix", and both it and
+the [Q459 plan](../plan/q459-drained-worker-recovery.md) budgeted a Tier C run that would
+evict a real job and watch for the skip. The answer was already committed:
+`testdata/job_payload.json` is a redacted capture of a live `acquirejob` response, and
+parsing it shows in seconds that the run identity lives in `contextData.github` and that
+none of the fields the AGC was reading exist at all. The measurement was free; only
+nobody had looked.
+
+The corollary is the reason it stayed unlooked-at for so long: **a committed capture with
+no test asserting against it is decoration.** It cannot detect the drift it was captured
+to pin down, and it ages into a file everyone assumes someone else is checking. When you
+commit a capture, commit the test that reads it in the same change — and when a capture
+already exists for an interface you are changing, assert against it rather than a payload
+you wrote yourself.
+
 ### A goroutine stack in the output is not always a failure
 
 Read the `--- FAIL` line and the exit code before attributing a stack trace to the test it appears under. One stack in particular is printed by a **passing** run:
@@ -408,6 +431,8 @@ Repeated passes do not validate a flake fix. A green `-count=20` is equally cons
 Run the **negative control** before concluding: invert the fix — restore the old value, remove the pin, revert the ordering — and confirm the suite *fails*. A fix you cannot make fail on demand has not been shown to be load-bearing, and shipping it closes the backlog row while leaving the flake live. When the inverted form refuses to fail either, that is itself the finding: the diagnosis is wrong, or the mechanism isn't the one you think it is.
 
 Q378 is the worked example. Pinning `BaselineRecheckInterval` in the reaper tests passed 10× under `-race`, which on its own proved nothing; setting the pin to 1s instead — and watching the suite fail — is what established that the pin was the thing closing the race.
+
+The same control applies to any **regression test for a bug fix**, where it is cheaper still: run the new test against the unfixed code and confirm it fails *with the symptom you diagnosed*, not merely that it fails. Q495's ground-truth test, run against the old parser, returned owner `""`, repo `""`, run `0` — the exact shape observed on the real worker pod, which is what made it a guard rather than a restatement of the fix.
 
 The [structural-ceiling triage](technical-debt.md#distinguish-a-fixable-defect-from-an-external-structural-ceiling) is the same principle at a larger scale: when fixes stop converging, isolate and *measure* the external actor instead of asserting the next on-our-side cause.
 
@@ -496,6 +521,35 @@ exercise**: the client that will really make it, the configuration that will rea
 route it, and the moment it will really fire. Then say which of those a follow-up must
 still confirm. A measurement whose write-up names its own blind spots is worth far more
 than one that quietly implies it has none.
+
+### Adjusting a fake to make a test pass is a finding about the real interface
+
+When a test fails because the stub does not send some field, there are two repairs, and
+they look identical from the test's point of view: teach the stub to send it, or find out
+what the real service sends. The first is one line and always works. Reach for it without
+asking the second question and the suite stops describing the system and starts describing
+itself — every test agrees with the fake, the fake agrees with the code, and nothing in the
+loop has consulted the wire.
+
+Q495 is that failure, and it is visible in this page's own example above. The drain specs
+pin "a payload carrying a complete run identity" as an observability guard — correctly, in
+principle. But that identity was pinned as `system.github.*` job variables, a shape a real
+`acquirejob` response has never carried, because the AGC read those variables and the fakes
+were taught to supply them. Q421's session recorded the symptom verbatim — "the default
+fakegithub response carries no run identity, and `handleEviction` returns early without one"
+— and injected the identity to get its spec green. That sentence was the whole defect,
+written down and read as a test-setup detail. Classic-tier eviction recovery could not fire
+against real GitHub for as long as the parsing stood, and every tier of the suite was green
+throughout.
+
+So when you find yourself adding a field to a stub so a test will pass:
+
+- **Ask what the real service sends**, and get the answer from a capture or a live call,
+  not from the code under test — the code is what you are trying to check.
+- **Prefer the real shape in the fake.** A stub that emits what GitHub emits makes the
+  whole suite above it load-bearing; one shaped to match the parser makes it a mirror.
+- **If the fake genuinely has to differ, say why in the fake**, so the next person meets a
+  documented divergence rather than an assumption.
 
 ### Synchronize on the signal you assert on
 
