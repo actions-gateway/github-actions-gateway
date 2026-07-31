@@ -921,7 +921,8 @@ at **0 nodes**, so placement *required* a scale-up.
 the newest event was CA's *acting* signal, and §7a's newest-wins rule kept the
 gate open, which is precisely the case §9d's concurrency window exists to
 protect. Jobs ran green (`unit-test`, `coverage`, `vendor-check`, `tidy-check`,
-`path-filters`; `shellcheck` is the unrelated [Q482](../STATUS.md#Q482) red).
+`path-filters`; `shellcheck` was the unrelated Q482 red — the job lacked the
+`setup-go` step its `make scripts-test` step needs, since fixed).
 
 A pass here alongside a null step 2 is not a contradiction: the gate correctly
 declines to suppress a scale-up, it simply does not bound waste when no scale-up
