@@ -425,7 +425,7 @@ write:packages` if your token lacks it). This is a dev/dogfood convenience only 
 > takes the CRDs with it, silently **downgrading** a cluster running anything
 > newer. The default sat at a 2026-07-07 ref while the cluster ran 2026-07-24 and
 > then 2026-07-31 code, so a defaults run in that window would have withdrawn the
-> capacity-gate rung and re-blocked [Q472](../STATUS.md#Q472). Nothing detects it —
+> capacity-gate rung and re-blocked Q472's re-validation. Nothing detects it —
 > the install path has no notion of "older than what is deployed" — so when you pin
 > a newer ref by hand, update the default in
 > [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh) and the pins above
