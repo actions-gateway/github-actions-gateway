@@ -32,10 +32,15 @@ import (
 // The recovery half of the scale-set tier runs for real: the deployed AGC's
 // RunnerSet reconciler (under the chart role), its worker-pod watch, the
 // Failed-with-deletion-mark discriminator (Q502), the optimistic-lock claim patch,
-// and the rerun-failed-jobs call to fakegithub. The ACQUISITION half does not: the
-// e2e fakegithub speaks only the classic protocol, so the scale-set listener's
-// session can never open here and the worker pod is staged by the spec rather than
-// provisioned from an assignment. The pod restates the recovery-relevant shape
+// and the rerun-failed-jobs call to fakegithub. The ACQUISITION half does not: this
+// spec's gateway points at a port that cannot complete a TLS handshake (see below),
+// so the listener's session never opens here and the worker pod is staged by the
+// spec rather than provisioned from an assignment. That is now a property of this
+// spec rather than of the venue — fakegithub serves the scale-set protocol as of
+// Q528, and E2E_AGC_ScaleSetAcquisition drives the acquisition half through it. The
+// deliberately-failing bootstrap is retained here because this spec's subject is the
+// recovery scan running on a set whose listener is NOT up (see below), which is the
+// harder case. The pod restates the recovery-relevant shape
 // ProvisionScaleSetWorker stamps — the runner-set owner label, the
 // acquisition-protocol label the recovery scan filters on, and the run-identity
 // annotations it re-runs from (cmd/agc/internal/provisioner/target.go,
