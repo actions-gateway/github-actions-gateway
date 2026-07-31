@@ -60,6 +60,23 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		// unambiguously without making the kubelet's own node-level disk-pressure
 		// thresholds a second, uncontrolled cause of eviction.
 		evictionFillMiB = 384
+
+		// The Q422 sibling gateway: a second AGC on the same GitHub runner group, in
+		// its own namespace because a ResourceQuota is namespaced and the experiment
+		// needs one tenant with headroom and one without.
+		//
+		// The name is agName plus a suffix, and both halves of that matter. It must
+		// DIFFER from agName because agentpool derives its runner names from the
+		// gateway name, and two gateways registering one name take the 409 conflict
+		// path where each deregisters the other (Q511). It must EXTEND agName because
+		// the runner names this suite is accountable for are identified by that
+		// prefix — a sibling named independently would be invisible to a
+		// stranded-runner sweep and register runners nothing knows to clean up.
+		siblingNS     = "tenant-github-sibling"
+		siblingAGName = agName + "-sib"
+		// quotaFullName is the ResourceQuota this spec fills the primary tenant's
+		// namespace with.
+		quotaFullName = "q422-full"
 	)
 
 	var creds struct {
@@ -744,6 +761,194 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		AddReportEntry("Q459 cancel-path job cancelled_at / completed_at (UTC)",
 			fmt.Sprintf("%s / %s", cancelledAt.UTC().Format(time.RFC3339), firstJobCompletedAt(Default, repoSlug, runID)))
 	})
+
+	// Experiment 4 half B (Q422): the premise the pre-claim quota rung rests on, at
+	// the only tier that can be asked about it.
+	//
+	// The rung (#784) refuses to CLAIM a job the namespace ResourceQuota cannot house,
+	// on the premise that GitHub then redelivers it to a sibling session with room.
+	// Half A (cmd/agc/internal/controller/integration/q422_quota_admission_test.go)
+	// proved the refusal against a real apiserver — acquirejob is never called,
+	// nothing is staged, the ceiling budget is untouched. It cannot prove the premise:
+	// a fake broker redelivers because it was written to, so asserting redelivery
+	// there restates the fake rather than GitHub. Only live GitHub answers whether an
+	// unclaimed delivery comes back, and whether a sibling gateway then runs it.
+	//
+	// # Why the sibling arrives late
+	//
+	// Both gateways register into the org's Default runner group under the same `e2e`
+	// label, so GitHub may offer the job to either. With both up at dispatch the
+	// sibling could take it on the first offer and the blocked gateway would never see
+	// it — the spec would pass without the decline that is its whole subject. Standing
+	// the sibling up only after the decline is observed makes the ordering a property
+	// of this spec rather than of GitHub's routing.
+	//
+	// # What proves the job was never claimed
+	//
+	// Not "no worker pod appeared". A claimed job whose pod the quota then rejects
+	// also leaves no pod, and that claim-and-stall is exactly what the rung exists to
+	// prevent — the trap half A names for the same reason. The discriminator is the
+	// backstop one layer down: createPodWithQuotaRetry logs "pod creation blocked by
+	// namespace quota" at Info on every quota-rejected create, so its ABSENCE, beside
+	// the gate's own decline line, says the job was left at GitHub instead of claimed
+	// and abandoned.
+	//
+	// # Why the quota is on `pods`
+	//
+	// It is the one quota key that constrains a worker without also constraining how
+	// the tenant's control plane is admitted: a `requests.cpu` quota rejects any pod
+	// that declares no CPU request, which is what makes a LimitRange a prerequisite
+	// for quota'd tenants (Q262). Filling `pods` to the namespace's current occupancy
+	// models a busy namespace the way half A's `hard − used` arithmetic does, rather
+	// than declaring a ceiling too small to ever fit a worker.
+	It("E2E_GitHub_QuotaBlockedJobRunsOnSibling: a declined job is redelivered to a sibling gateway", func() {
+		repoSlug := creds.org + "/" + creds.repo
+
+		By("waiting until no worker pod in the tenant still counts against its quota")
+		// The quota below is sized from live occupancy, so it must be taken when
+		// occupancy is at its floor. A worker left over from an earlier spec — the
+		// re-runs above outlive their own specs, since cancelling a run does not stop
+		// its runner (Q501) — would be counted in, and its later exit would hand the
+		// gate exactly the one pod of headroom this spec needs it not to have.
+		Eventually(func(g Gomega) {
+			g.Expect(liveWorkerPods(g, tenantNS)).To(BeEmpty(), "worker pods from an earlier spec are still running")
+		}, 12*time.Minute, 10*time.Second).Should(Succeed())
+
+		By("filling the tenant's namespace quota so it has room for exactly zero more pods")
+		occupied := nonTerminalPodCount(Default, tenantNS)
+		Expect(occupied).To(BeNumerically(">", 0), "the tenant namespace runs no pods, so its AGC is not up")
+		fillPodQuota(tenantNS, quotaFullName, occupied)
+		DeferCleanup(func() {
+			_, _ = utils.Run(exec.Command("kubectl", "delete", "resourcequota", quotaFullName,
+				"-n", tenantNS, "--ignore-not-found"))
+		})
+		AddReportEntry("Q422 quota filled at", fmt.Sprintf("pods=%d, all occupied", occupied))
+
+		By("waiting for the RunnerGroup to report WorkerQuotaExceeded=True")
+		// The gate reads the quota through the manager's informer cache, and this
+		// condition is computed from that same read against the same one-worker
+		// footprint. It flipping True is what says the gate now sees zero headroom —
+		// dispatching before it does would race the cache.
+		Eventually(func(g Gomega) {
+			g.Expect(runnerGroupCondition(g, tenantNS, "WorkerQuotaExceeded")).To(Equal("True"))
+		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+
+		By("confirming the namespace stays full rather than settling back into headroom")
+		// The ceiling was sized from live occupancy, so anything that vacates a pod —
+		// the proxy HPA scaling back to its floor, most plausibly — hands the gate the
+		// one pod of room this spec needs it not to have. Held here, up front, so that
+		// churn fails as itself instead of surfacing later as "the blocked gateway
+		// provisioned a worker".
+		Consistently(func(g Gomega) {
+			g.Expect(runnerGroupCondition(g, tenantNS, "WorkerQuotaExceeded")).To(Equal("True"))
+		}, 30*time.Second, 5*time.Second).Should(Succeed())
+
+		// Baselines, all taken before the dispatch: the AGC serves every spec in this
+		// container, so its log is cumulative and the namespace already holds the
+		// terminal worker pods those specs left behind. Only the deltas are this
+		// spec's.
+		declinesBefore := countAGCLogLines(tenantNS, admissionDeclinedLine)
+		quotaRetriesBefore := countAGCLogLines(tenantNS, quotaRetryLine)
+		blockedWorkersBefore := allWorkerPods(Default, tenantNS)
+
+		By(fmt.Sprintf("dispatching %q with the only gateway on this runner group out of quota", creds.workflow))
+		dispatchedAt := time.Now()
+		runID := dispatchAndResolveRun(repoSlug, creds.workflow)
+		AddReportEntry("Q422 workflow run", fmt.Sprintf("https://github.com/%s/actions/runs/%s", repoSlug, runID))
+		defer func() {
+			// Unconditional. A run this spec abandons stays queued at GitHub for hours
+			// and is the state the next live-GitHub run's preflight has to clear.
+			_, _ = utils.Run(exec.Command("gh", "run", "cancel", runID, "--repo", repoSlug))
+		}()
+
+		By("waiting for the blocked gateway to decline a delivery for quota")
+		Eventually(func(g Gomega) {
+			g.Expect(countAGCLogLines(tenantNS, admissionDeclinedLine)-declinesBefore).
+				To(BeNumerically(">=", 1), "the gateway has not declined a delivery yet")
+		}, 8*time.Minute, 10*time.Second).Should(Succeed())
+
+		admissionLog := agcAdmissionLog(tenantNS)
+		AddReportEntry("Q422 blocked gateway admission log", admissionLog)
+
+		By("asserting the decline named quota, not the configured ceiling")
+		// The group declares no maxWorkers, so a `ceiling` decline here would mean the
+		// gate refused for a reason this experiment did not arrange. Both encodings:
+		// the AGC ships a JSON handler, but a text handler renders the same attribute
+		// as reason=quota and the assertion is about the value.
+		Expect(admissionLog).To(SatisfyAny(ContainSubstring(`"reason":"quota"`), ContainSubstring("reason=quota")),
+			"the gateway declined, but not for quota. Log:\n%s", admissionLog)
+		Expect(admissionLog).To(ContainSubstring("no namespace ResourceQuota headroom for another worker pod"),
+			"the quota rung did not report what it read. Log:\n%s", admissionLog)
+
+		By("asserting the job was left at GitHub rather than claimed and abandoned")
+		// See the spec's header: this, not the absence of a pod, is what separates the
+		// pre-claim rung from the post-claim backstop it exists to make unnecessary.
+		Expect(countAGCLogLines(tenantNS, quotaRetryLine)).To(Equal(quotaRetriesBefore),
+			"the gateway claimed the job and then hit the quota on pod creation — the pre-claim rung "+
+				"did not fire, and the job is claim-and-stalled")
+
+		By("confirming GitHub still holds the job as queued")
+		queuedStatus, _ := firstJobState(Default, repoSlug, runID)
+		Expect(queuedStatus).To(Equal("queued"),
+			"the declined job is %q rather than queued, so nothing is left for a sibling to pick up", queuedStatus)
+
+		By("bringing up a sibling gateway on the same runner group, with quota headroom")
+		utils.CreateNamespace(siblingNS, nil)
+		utils.CreateGitHubAppSecret(siblingNS, secretName, creds.appID, creds.installationID, creds.privateKeyPEM)
+		utils.RunnerTenant(siblingNS, siblingAGName, secretName, workerImage).ApplyWithWebhookRetry()
+		DeferCleanup(func() {
+			// The CR first and the namespace second, while the AGC is still up: the
+			// agentpool-cleanup finalizer is what deregisters this gateway's runners,
+			// and only its own AGC can clear it. Deleting the namespace first strands
+			// registrations that go on taking job assignments (Q511).
+			if CurrentSpecReport().Failed() {
+				out, _ := utils.Run(exec.Command("kubectl", "logs", "-n", siblingNS,
+					"deployment/"+agcName, "--tail=300"))
+				_, _ = fmt.Fprintln(GinkgoWriter, out)
+			}
+			utils.DeleteActionsGatewayCR(siblingNS, siblingAGName)
+			utils.DeleteNamespace(siblingNS)
+		})
+		utils.WaitForDeploymentReady(siblingNS, agcName, 5*time.Minute)
+		// Deployment readiness is only the health server binding. The sibling cannot be
+		// offered anything until its token fetch, agent registration and listener
+		// multiplexer are all up, which is what observedGeneration reports (Q134) — and
+		// without this gate that whole startup would be charged to the worker wait below
+		// and surface as "the sibling never picked the job up".
+		utils.WaitForRunnerGroupReconciled(siblingNS, 5*time.Minute)
+
+		By("waiting for the sibling to provision a worker for the job the blocked gateway declined")
+		// Any phase, not Running: the fixture job is an echo, so its worker can reach
+		// Succeeded between two polls. Its namespace is new, so any worker pod in it is
+		// this run's.
+		var siblingWorker string
+		Eventually(func(g Gomega) {
+			pods := allWorkerPods(g, siblingNS)
+			g.Expect(pods).NotTo(BeEmpty(), "the sibling has not provisioned a worker")
+			siblingWorker = pods[0]
+		}, 10*time.Minute, 10*time.Second).Should(Succeed())
+		AddReportEntry("Q422 sibling worker pod", siblingWorker)
+		AddReportEntry("Q422 dispatch -> sibling worker", time.Since(dispatchedAt).Round(time.Second).String())
+
+		By("waiting for the run to complete with conclusion=success")
+		// The deliverable. Redelivery that reaches a worker but not a green job would
+		// leave the rung's premise half-proven.
+		Eventually(func(g Gomega) {
+			status, conclusion := firstJobState(g, repoSlug, runID)
+			g.Expect(status).To(Equal("completed"), "job is still %q", status)
+			g.Expect(conclusion).To(Equal("success"), "job concluded %q", conclusion)
+		}, 10*time.Minute, 10*time.Second).Should(Succeed())
+
+		By("asserting the blocked gateway provisioned nothing throughout")
+		// A delta, not an absolute: the specs above leave terminal worker pods in this
+		// namespace, and none of them is a claim this spec's dispatch produced.
+		Expect(allWorkerPods(Default, tenantNS)).To(ConsistOf(blockedWorkersBefore),
+			"the out-of-quota gateway provisioned a worker for a job it had declined")
+
+		AddReportEntry("Q422 outcome",
+			"the out-of-quota gateway declined the delivery without claiming it, GitHub held the job queued, "+
+				"and a sibling gateway on the same runner group ran it to success")
+	})
 })
 
 // suiteRunnerPrefixes are the runner-name prefixes this suite's tenant registers with
@@ -755,6 +960,10 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 // scripts/e2e-github-cleanup.sh applies the same rule, and has to: the preflight below
 // blocks on exactly what that script clears, so a narrower filter there wedges the next
 // run behind a runner the cleanup reports as handled.
+//
+// "this suite's tenant" is plural: siblingAGName extends agName precisely so a second
+// gateway's runners fall under the same prefix. A gateway named outside it registers
+// runners neither the preflight nor the cleanup can see.
 func suiteRunnerPrefixes(gateway string) []string {
 	return []string{gateway + "-", "rs-" + gateway + "-"}
 }
@@ -839,6 +1048,97 @@ func preflightFixtureRepoIdle(repoSlug, gateway string) {
 	b.WriteString("stranding this state. Once you have confirmed no peer is running, clear it with:\n")
 	b.WriteString("    make e2e-github-cleanup\n")
 	Fail(b.String())
+}
+
+// admissionDeclinedLine is the listener's per-delivery decline (listener/job.go), and
+// quotaRetryLine is the post-claim backstop's (provisioner/capacity.go). The Q422
+// spec reads them as a pair: the first must appear and the second must not, which
+// together say the rung refused BEFORE acquirejob rather than after.
+const (
+	admissionDeclinedLine = "job admission rejected: no worker capacity"
+	quotaRetryLine        = "pod creation blocked by namespace quota"
+)
+
+// fillPodQuota puts a `pods` ResourceQuota on a namespace whose ceiling is its
+// current occupancy, leaving headroom for exactly zero more pods.
+func fillPodQuota(ns, name string, hard int) {
+	GinkgoHelper()
+	_, err := utils.Run(exec.Command("kubectl", "create", "quota", name,
+		"-n", ns, fmt.Sprintf("--hard=pods=%d", hard)))
+	Expect(err).NotTo(HaveOccurred(), "create ResourceQuota %s/%s", ns, name)
+}
+
+// nonTerminalPodCount counts the pods a `pods` ResourceQuota would charge the
+// namespace for: Succeeded and Failed pods are not counted by the pod evaluator, so
+// a namespace full of reaped workers is not full.
+func nonTerminalPodCount(g Gomega, ns string) int {
+	out, err := utils.Run(exec.Command("kubectl", "get", "pods", "-n", ns,
+		"--field-selector", "status.phase!=Succeeded,status.phase!=Failed", "-o", "name"))
+	g.Expect(err).NotTo(HaveOccurred())
+	return len(utils.GetNonEmptyLines(out))
+}
+
+// liveWorkerPods returns the namespace's worker pods that have not reached a terminal
+// phase — the ones still holding quota.
+func liveWorkerPods(g Gomega, ns string) []string {
+	out, err := utils.Run(exec.Command("kubectl", "get", "pods", "-n", ns,
+		"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
+		"--field-selector", "status.phase!=Succeeded,status.phase!=Failed",
+		"-o", `jsonpath={range .items[*]}{.metadata.name} {end}`))
+	g.Expect(err).NotTo(HaveOccurred())
+	return strings.Fields(out)
+}
+
+// allWorkerPods returns every worker pod in a namespace regardless of phase, which is
+// what a "did this gateway provision anything" check needs: a worker that ran and
+// exited is still evidence that a job was claimed.
+func allWorkerPods(g Gomega, ns string) []string {
+	out, err := utils.Run(exec.Command("kubectl", "get", "pods", "-n", ns,
+		"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
+		"-o", `jsonpath={range .items[*]}{.metadata.name} {end}`))
+	g.Expect(err).NotTo(HaveOccurred())
+	return strings.Fields(out)
+}
+
+// runnerGroupCondition returns the status of one condition on the namespace's sole
+// RunnerGroup, or "" when the condition is absent. Each fixture tenant declares one
+// group, so indexing the list is unambiguous.
+func runnerGroupCondition(g Gomega, ns, condType string) string {
+	out, err := utils.Run(exec.Command("kubectl", "get", "runnergroups.actions-gateway.github.com",
+		"-n", ns, "-o", fmt.Sprintf(
+			`jsonpath={.items[0].status.conditions[?(@.type=="%s")].status}`, condType)))
+	g.Expect(err).NotTo(HaveOccurred())
+	return strings.TrimSpace(out)
+}
+
+// agcAdmissionLog returns the AGC's log lines about admission decisions, scoped so the
+// report entry is readable rather than the whole controller log.
+func agcAdmissionLog(ns string) string {
+	GinkgoHelper()
+	var kept []string
+	for _, line := range strings.Split(agcLog(ns), "\n") {
+		if strings.Contains(line, "admission") || strings.Contains(line, "quota") {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
+// countAGCLogLines counts the AGC log lines containing substr. Counting rather than
+// matching, because these assertions are deltas against a baseline read before the
+// work starts: the AGC serves every spec in this container and its log is cumulative.
+func countAGCLogLines(ns, substr string) int {
+	GinkgoHelper()
+	return strings.Count(agcLog(ns), substr)
+}
+
+// agcLog reads the tenant AGC's full log.
+func agcLog(ns string) string {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("kubectl", "logs", "-n", ns,
+		"deployment/"+agcName, "--tail=-1"))
+	Expect(err).NotTo(HaveOccurred(), "read AGC logs in %s", ns)
+	return out
 }
 
 // dispatchAndResolveRun dispatches a workflow_dispatch workflow on main and returns
@@ -1140,11 +1440,8 @@ func evictionFacts(ns, name string) (killedAt time.Time, exitCode int, message s
 // than the whole controller log.
 func agcEvictionLog(ns string) string {
 	GinkgoHelper()
-	out, err := utils.Run(exec.Command("kubectl", "logs", "-n", ns,
-		"deployment/"+agcName, "--tail=-1"))
-	Expect(err).NotTo(HaveOccurred(), "read AGC logs in %s", ns)
 	var kept []string
-	for _, line := range strings.Split(out, "\n") {
+	for _, line := range strings.Split(agcLog(ns), "\n") {
 		if strings.Contains(line, "evicted") || strings.Contains(line, "eviction") ||
 			strings.Contains(line, "disrupt") || strings.Contains(line, "re-run") {
 			kept = append(kept, line)

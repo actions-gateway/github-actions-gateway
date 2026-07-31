@@ -586,9 +586,13 @@ asserting it needs no new plumbing.
 - **Half A (envtest) — done 2026-07-26.** Covered by
   [`q422_quota_admission_test.go`](../../cmd/agc/internal/controller/integration/q422_quota_admission_test.go),
   one test per tier the rung serves. Findings below.
-- **Half B (live-GitHub):** two AGC sessions on the same RunnerGroup, one without
-  headroom, and the job is picked up by the sibling. This is the half that
-  needs live GitHub redelivery and cannot be faked.
+- **Half B (live-GitHub) — spec written, not yet run.** Two AGC sessions on the same
+  runner group, one without headroom, and the job is picked up by the sibling. This is
+  the half that needs live GitHub redelivery and cannot be faked. The spec is
+  `E2E_GitHub_QuotaBlockedJobRunsOnSibling` in
+  [`github_e2e_test.go`](../../cmd/gmc/test/e2e/github_e2e_test.go); its shape and the
+  reasoning behind it are below. **The measurement is still owed** — live-GitHub is a
+  singleton and this has not had a run yet, so nothing here reports a result.
 - **Not blocked.**
 
 ### Half A findings
@@ -621,6 +625,58 @@ mutation-checked: disabling the rung fails each of them.
   fit a worker, as every prior envtest does. The flip side is that `used` does
   not rise as worker pods are created, so these tests cannot assert an
   assignment count across more than one poll.
+
+### Half B: how the spec is arranged, and why
+
+Half A proved the *refusal*. Half B is about the **premise the refusal rests on** —
+that a job left unclaimed comes back, and that a sibling with headroom then runs it.
+That premise cannot be tested against a fake broker: `fakegithub` redelivers because
+it was written to, so asserting redelivery there restates the fake rather than GitHub.
+
+Four choices carry the spec, each answering a way it could have passed without
+demonstrating anything.
+
+- **The sibling gateway is stood up *after* the decline is observed.** Both gateways
+  register into the org's Default runner group under the same `e2e` label, so GitHub
+  may offer the job to either. With both up at dispatch, the sibling could take it on
+  the first offer and the blocked gateway would never see it — a green run with no
+  decline in it. Bringing the sibling in late makes the ordering a property of the
+  spec instead of GitHub's routing.
+- **The claim is disproven by the backstop's silence, not by an absent pod.** A job
+  that *was* claimed and whose worker pod the quota then rejected also leaves no pod;
+  that claim-and-stall is the exact failure the rung exists to prevent, and half A
+  names the same trap. `createPodWithQuotaRetry` logs `pod creation blocked by
+  namespace quota` at Info on every quota-rejected create, so **zero** such lines,
+  beside the gate's own `reason=quota` decline, is what says the job was left at
+  GitHub rather than claimed and abandoned.
+- **The quota constrains `pods`, not `requests.cpu`.** A CPU quota rejects any pod
+  that declares no CPU request, which is why a quota'd tenant needs a `LimitRange`
+  (Q262) — the tenant's own control plane would become collateral. `pods` filled to
+  the namespace's live occupancy models a busy namespace the way half A's
+  `hard − used` arithmetic does, without that side effect.
+- **The observable is the AGC log, not the rejection counter.** The counter
+  (`..._admission_rejected_total{reason="quota"}`) is half A's observable and is
+  asserted there directly. At this tier the AGC's metrics endpoint is TLS- and
+  authn-gated inside the tenant namespace, and reaching it means a scrape pod in a
+  namespace this spec has deliberately filled to its pod ceiling. The decline log line
+  carries the same `reason` label and states the consequence — the job is left queued
+  — so it is the cheaper read of the same fact.
+
+Two known residuals, neither of which changes a result:
+
+- **Sizing the quota from live occupancy assumes occupancy holds.** If the tenant's
+  proxy HPA scales back to its floor mid-spec, a pod is vacated and the gate gains the
+  one slot the spec needs it not to have. The spec holds `WorkerQuotaExceeded=True`
+  for 30s before dispatching so that churn fails up front as itself; churn *after*
+  dispatch would surface as the final "the blocked gateway provisioned a worker"
+  assertion instead.
+- **The sibling gateway is new shared GitHub-side state.** It is named `real-ag-sib`
+  — `agName` plus a suffix — for two reasons at once: differing from `real-ag` is what
+  keeps the two off one runner name and out of the 409 path where each deregisters the
+  other, and *extending* it keeps every runner this suite registers under the one
+  `real-ag-` prefix that a stranded-runner sweep identifies the suite by
+  ([Q511](q511-live-github-run-isolation.md)). A sibling named independently would
+  have registered runners nothing knew to clean up.
 
 ## Experiment 5: utilization delta ([Q424](../STATUS.md#Q424), deferred)
 
