@@ -135,6 +135,16 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 		if ssrecPFCmd != nil && ssrecPFCmd.Process != nil {
 			_ = ssrecPFCmd.Process.Kill()
 		}
+		// Delete the tenant CRs in dependency order, WAITING on each, before the
+		// namespace: the RunnerSet's agentpool-cleanup finalizer is cleared by the
+		// AGC, which lives in this namespace — a bare namespace delete races the AGC
+		// pod's own termination and a lost race wedges the namespace in Terminating
+		// forever (observed on this spec's first run). The gateway goes second so the
+		// GMC tears the AGC control plane down while it can still reconcile.
+		_, _ = utils.Run(exec.Command("kubectl", "delete", "runnerset", setName,
+			"-n", tenantNS, "--ignore-not-found", "--timeout=2m"))
+		_, _ = utils.Run(exec.Command("kubectl", "delete", "actionsgateways.actions-gateway.com", gwName,
+			"-n", tenantNS, "--ignore-not-found", "--timeout=2m"))
 		// The per-gateway ClusterRoleBinding is cluster-scoped and not namespace-GC'd.
 		_, _ = utils.Run(exec.Command("kubectl", "delete", "clusterrolebinding",
 			"agc-clusterrunnertemplate-reader."+tenantNS+"."+gwName, "--ignore-not-found"))
