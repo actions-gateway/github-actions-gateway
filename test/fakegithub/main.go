@@ -23,6 +23,7 @@
 //	GET  /control/sessions                — active session IDs
 //	POST /control/singleuse?enabled=true  — toggle single-use JIT simulation
 //	GET  /control/reruns                  — eviction auto-retry calls observed
+//	POST /control/runstate?run=<id>&concluded=false — refuse re-runs for the run
 //
 // # Eviction auto-retry observability (Q421)
 //
@@ -33,6 +34,21 @@
 // for a kubelet eviction, and — the Q421 measurement — that it does NOT fire for a
 // node drain, whose Eviction API call deletes the pod rather than failing it.
 // Without this the absence of a rerun is indistinguishable from a 404 nobody read.
+//
+// # Run-conclusion gating on re-runs (Q517)
+//
+// Real GitHub refuses rerun-failed-jobs with `403 This workflow is already
+// running` until it has concluded the original run — after an ungraceful kill
+// that takes until the job lock's TTL lapses, ~10 minutes (measured 9m36s,
+// Q503) — and the AGC's recovery keys its retry loop on exactly that refusal.
+// A run marked not-yet-concluded via /control/runstate gets the same answer
+// here, with the measured message the AGC discriminates on; concluding it
+// (concluded=true) flips the answer back to 201. Refused calls are recorded
+// separately from accepted ones on /control/reruns, so a spec can assert the
+// refusal window and the post-conclusion acceptance without the refusals
+// inflating its accepted count. Runs never marked are concluded — the default
+// instantly-concluding model — so only a spec that opts its own run in sees
+// refusals, and parallel specs are unaffected.
 //
 // # Single-use JIT runner simulation (Q114)
 //
@@ -229,9 +245,19 @@ type server struct {
 	// once at startup; read without mu. See sweepStaleQueuesLocked.
 	sessionQueueGrace time.Duration
 
-	// rerunPaths records the request path of every rerun-failed-jobs call the AGC
-	// has made, in order — the eviction auto-retry signal (Q421). Guarded by mu.
+	// rerunPaths records the request path of every accepted (201) rerun-failed-jobs
+	// call the AGC has made, in order — the eviction auto-retry signal (Q421).
+	// Guarded by mu.
 	rerunPaths []string
+	// refusedRerunPaths records the rerun-failed-jobs calls refused with the 403
+	// still-running answer, separately from rerunPaths so the accepted count keeps
+	// meaning "the run was re-run" while a spec asserts the refusal window (Q517).
+	// Guarded by mu.
+	refusedRerunPaths []string
+	// nonConcludedRuns holds run_ids whose original run has not concluded:
+	// rerun-failed-jobs for one is refused like real GitHub refuses it (Q517).
+	// Marked per run via /control/runstate. Guarded by mu.
+	nonConcludedRuns map[string]bool
 }
 
 // longPollTick is how often a held GET /message rechecks for a freshly enqueued
@@ -297,6 +323,7 @@ func newServer() *server {
 		leased:            make(map[string]*leasedJob),
 		acquiredReqs:      make(map[string]bool),
 		deliveryCount:     make(map[string]int),
+		nonConcludedRuns:  make(map[string]bool),
 		sessionQueueGrace: defaultSessionQueueGrace,
 	}
 }
@@ -332,6 +359,7 @@ func (s *server) controlMux() http.Handler {
 	mux.HandleFunc("/control/redelivery", s.handleSetRedelivery)
 	mux.HandleFunc("/control/jobstats", s.handleJobStats)
 	mux.HandleFunc("/control/reruns", s.handleReruns)
+	mux.HandleFunc("/control/runstate", s.handleSetRunState)
 	return mux
 }
 
@@ -1155,19 +1183,81 @@ func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 //
 //	POST /api/v3/repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs
 //
-// GitHub answers 201 with an empty object, and so does this. The path is recorded
-// so /control/reruns can report which runs were re-run (Q421).
+// A run marked non-concluded via /control/runstate is refused 403 "This workflow
+// is already running" — real GitHub's answer until it concludes the original run,
+// and the refusal the AGC's retry loop discriminates by message (Q503/Q517).
+// Otherwise GitHub answers 201 with an empty object, and so does this. Accepted
+// and refused paths are recorded separately so /control/reruns can report which
+// runs were re-run vs still being refused (Q421/Q517).
 func (s *server) handleRerunFailedJobs(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
-	s.rerunPaths = append(s.rerunPaths, r.URL.Path)
+	refused := s.nonConcludedRuns[rerunRunID(r.URL.Path)]
+	if refused {
+		s.refusedRerunPaths = append(s.refusedRerunPaths, r.URL.Path)
+	} else {
+		s.rerunPaths = append(s.rerunPaths, r.URL.Path)
+	}
 	s.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
+	if refused {
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"message":           "This workflow is already running",
+			"documentation_url": "https://docs.github.com/rest/actions/workflow-runs#re-run-failed-jobs-from-a-workflow-run",
+			"status":            "403",
+		})
+		return
+	}
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]any{})
 }
 
+// rerunRunID extracts the run_id segment from a rerun-failed-jobs path
+// (.../actions/runs/{run_id}/rerun-failed-jobs).
+func rerunRunID(path string) string {
+	p := strings.TrimSuffix(path, "/rerun-failed-jobs")
+	return p[strings.LastIndex(p, "/")+1:]
+}
+
+// handleSetRunState is the control API:
+//
+//	POST /control/runstate?run=<run_id>&concluded=true|false
+//
+// concluded=false marks the run as not yet concluded, so rerun-failed-jobs for it
+// is refused the way real GitHub refuses it until it concludes the original run —
+// after an ungraceful kill that takes ~10 minutes (measured 9m36s, Q503).
+// concluded=true restores acceptance. Runs never marked are concluded, so only a
+// spec that opts its own run in sees refusals (Q517).
+func (s *server) handleSetRunState(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	runID := r.URL.Query().Get("run")
+	if runID == "" {
+		http.Error(w, "run required", http.StatusBadRequest)
+		return
+	}
+	concluded, err := strconv.ParseBool(r.URL.Query().Get("concluded"))
+	if err != nil {
+		http.Error(w, "concluded=true|false required", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	if concluded {
+		delete(s.nonConcludedRuns, runID)
+	} else {
+		s.nonConcludedRuns[runID] = true
+	}
+	s.mu.Unlock()
+	w.WriteHeader(http.StatusOK)
+}
+
 // handleReruns is the control API: GET /control/reruns[?run=<substring>]
-// Returns {"count": <n>, "paths": [...]} for the rerun-failed-jobs calls observed,
+// Returns {"count": <n>, "paths": [...], "refusedCount": <n>, "refusedPaths": [...]}:
+// accepted (201) rerun-failed-jobs calls in count/paths — the Q421 "the run was
+// re-run" signal — and the 403 still-running refusals separately, so a spec can
+// assert the refusal window without inflating its accepted count (Q517). Both are
 // optionally filtered to paths containing `run`. The filter is what makes the
 // endpoint usable from a spec running beside others on the shared instance: an
 // unfiltered count is process-wide, so a spec asserting "no rerun fired for MY run"
@@ -1178,16 +1268,24 @@ func (s *server) handleReruns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filter := r.URL.Query().Get("run")
-	s.mu.Lock()
-	paths := make([]string, 0, len(s.rerunPaths))
-	for _, p := range s.rerunPaths {
-		if filter == "" || strings.Contains(p, filter) {
-			paths = append(paths, p)
+	match := func(in []string) []string {
+		out := make([]string, 0, len(in))
+		for _, p := range in {
+			if filter == "" || strings.Contains(p, filter) {
+				out = append(out, p)
+			}
 		}
+		return out
 	}
+	s.mu.Lock()
+	accepted := match(s.rerunPaths)
+	refused := match(s.refusedRerunPaths)
 	s.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"count": len(paths), "paths": paths})
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"count": len(accepted), "paths": accepted,
+		"refusedCount": len(refused), "refusedPaths": refused,
+	})
 }
 
 // inRedeliveryScopeLocked reports whether ownerName is within the configured

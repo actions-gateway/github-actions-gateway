@@ -844,3 +844,102 @@ func TestRerunFailedJobsIsRecordedAndScoped(t *testing.T) {
 		t.Fatalf("unimplemented /repos endpoint returned %d, want 404", resp.StatusCode)
 	}
 }
+
+// TestRerunFailedJobsRefusedUntilRunConcludes covers the run-conclusion gate
+// (Q517): real GitHub refuses rerun-failed-jobs with 403 "This workflow is
+// already running" until it concludes the original run — the refusal the AGC's
+// Q503 retry loop keys on — so a spec must get both branches from the fake:
+// refused while its run is marked non-concluded, accepted once concluded, with
+// the two recorded separately so an accepted-count assertion is not inflated by
+// the refusals.
+func TestRerunFailedJobsRefusedUntilRunConcludes(t *testing.T) {
+	s := newServer()
+	main := httptest.NewServer(s.mainMux())
+	defer main.Close()
+	control := httptest.NewServer(s.controlMux())
+	defer control.Close()
+
+	const path = "/repos/o/r/actions/runs/5030/rerun-failed-jobs"
+
+	setConcluded := func(concluded bool) {
+		t.Helper()
+		resp, err := http.Post(fmt.Sprintf("%s/control/runstate?run=5030&concluded=%t", control.URL, concluded), "", nil)
+		if err != nil {
+			t.Fatalf("POST /control/runstate: %v", err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("/control/runstate returned %d, want 200", resp.StatusCode)
+		}
+	}
+	rerun := func(p string) (int, []byte) {
+		t.Helper()
+		resp, err := http.Post(main.URL+p, "application/json", strings.NewReader("{}"))
+		if err != nil {
+			t.Fatalf("POST %s: %v", p, err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		body, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, body
+	}
+	reruns := func() (accepted, refused int) {
+		t.Helper()
+		resp, err := http.Get(control.URL + "/control/reruns?run=/runs/5030/")
+		if err != nil {
+			t.Fatalf("GET /control/reruns: %v", err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		var out struct {
+			Count        int `json:"count"`
+			RefusedCount int `json:"refusedCount"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatalf("decode reruns: %v", err)
+		}
+		return out.Count, out.RefusedCount
+	}
+
+	setConcluded(false)
+
+	// The refusal window: repeated attempts, as the AGC's paced retry loop makes
+	// them, are all refused with the measured shape.
+	for i := 0; i < 2; i++ {
+		status, body := rerun(path)
+		if status != http.StatusForbidden {
+			t.Fatalf("rerun on a non-concluded run returned %d, want 403", status)
+		}
+		var errBody struct {
+			Message string `json:"message"`
+			Status  string `json:"status"`
+		}
+		if err := json.Unmarshal(body, &errBody); err != nil {
+			t.Fatalf("refusal body is not JSON: %v (%s)", err, body)
+		}
+		// The exact message matters: the AGC discriminates the retryable refusal
+		// from a terminal 403 (permissions) by "already running" in the body, so a
+		// drifted message would make it give up instead of retry.
+		if errBody.Message != "This workflow is already running" {
+			t.Fatalf("refusal message %q does not match real GitHub's", errBody.Message)
+		}
+		if errBody.Status != "403" {
+			t.Fatalf("refusal status field %q, want %q", errBody.Status, "403")
+		}
+	}
+	if accepted, refused := reruns(); accepted != 0 || refused != 2 {
+		t.Fatalf("after two refused attempts: accepted=%d refused=%d, want 0/2", accepted, refused)
+	}
+
+	// The gate is per run: an unmarked run is still accepted while 5030 refuses.
+	if status, _ := rerun("/repos/o/r/actions/runs/9999/rerun-failed-jobs"); status != http.StatusCreated {
+		t.Fatalf("rerun on an unmarked run returned %d, want 201", status)
+	}
+
+	// Conclusion flips the answer to 201 — the branch where the AGC's retry lands.
+	setConcluded(true)
+	if status, _ := rerun(path); status != http.StatusCreated {
+		t.Fatalf("rerun on a concluded run returned %d, want 201", status)
+	}
+	if accepted, refused := reruns(); accepted != 1 || refused != 2 {
+		t.Fatalf("after conclusion: accepted=%d refused=%d, want 1/2", accepted, refused)
+	}
+}

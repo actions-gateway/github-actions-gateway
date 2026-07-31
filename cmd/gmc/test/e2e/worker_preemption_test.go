@@ -267,6 +267,16 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		Expect(rerunCountForRun(runID)).To(Equal(0),
 			"no rerun may exist for this spec's run before the spec has done anything")
 
+		By("marking the run as not yet concluded, as a just-disrupted real run is")
+		// Real GitHub refuses rerun-failed-jobs with 403 "This workflow is already
+		// running" until it concludes the original run — after an ungraceful kill,
+		// ~10 minutes away (measured 9m36s, Q503). fakegithub gives this spec's run
+		// the same answer, so the assertions below cover the retry loop that live
+		// measurement forced: an AGC that fires once and gives up on the refusal —
+		// the pre-Q503 behaviour, which passed every fake-backed tier — fails here.
+		setRunConcluded(runID, false)
+		DeferCleanup(func() { setRunConcluded(runID, true) })
+
 		By("pinning the next AcquireJob response to a payload carrying a complete run identity")
 		// Without owner/repo/run_id, handleEviction returns early and no rerun could
 		// fire regardless of the preemption — a pass would be vacuous and a failure
@@ -405,25 +415,43 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 			"the victim never carried DisruptionTarget/%s; that condition is the whole basis "+
 				"for recovering this path, so recovery cannot be attributed to it", preemptionConditionReason)
 
-		By("asserting the displaced run was re-run automatically")
+		By("asserting the recovery's first re-run attempt was refused, not accepted")
 		// The behaviour Q497 added, and the half of the oversubscription claim that was
 		// unbacked before it: displaced work comes back without a human. handleEviction
-		// waits out evictionRetryDelay before calling GitHub, so the rerun needs room to
-		// appear — Eventually, not an immediate read.
+		// waits out evictionRetryDelay before calling GitHub, so the attempt needs room
+		// to appear — Eventually, not an immediate read. With the run non-concluded the
+		// attempt lands as a refusal, which the AGC must treat as "not yet" (Q503).
 		Eventually(func(g Gomega) {
-			g.Expect(rerunCountForRun(runID)).To(BeNumerically(">=", 1),
+			g.Expect(refusedRerunCountForRun(runID)).To(BeNumerically(">=", 1),
 				"a preempted worker's run was never re-run; the safety half of the oversubscription "+
 					"claim is unbacked again — check the AGC logs for 'worker pod disrupted; scheduling auto-retry'")
+		}, 90*time.Second, 2*time.Second).Should(Succeed())
+		Expect(rerunCountForRun(runID)).To(Equal(0),
+			"a re-run was accepted while the run was still marked non-concluded; fakegithub's "+
+				"conclusion gate is not holding and the refusal-window assertion proves nothing")
+
+		By("concluding the run and asserting the retried re-run is then accepted")
+		// GitHub concluding the original run is what flips its answer to 201; the AGC's
+		// next paced retry (30s interval) must then land — a pre-Q503 AGC already gave
+		// up on the refusal above and never reaches this branch.
+		setRunConcluded(runID, true)
+		Eventually(func(g Gomega) {
+			g.Expect(rerunCountForRun(runID)).To(BeNumerically(">=", 1),
+				"the re-run was never accepted after the run concluded; the AGC gave up on the "+
+					"still-running refusal instead of retrying it (Q503) — check the AGC logs for "+
+					"'re-run refused; GitHub has not concluded the original run yet'")
 		}, 90*time.Second, 2*time.Second).Should(Succeed())
 
 		By("asserting the run was re-run exactly once")
 		// At-most-once is what keeps one preemption from spending the run's whole retry
 		// budget. The victim is readable for its entire termination grace period and the
 		// worker-pod watch fires more than once inside it, so the claim annotation is
-		// doing real work here rather than guarding a hypothetical.
+		// doing real work here rather than guarding a hypothetical. Refused attempts are
+		// counted separately, so this stays a claim about accepted re-runs — one
+		// recovery, one budget slot, one re-run that lands.
 		Consistently(func(g Gomega) {
 			g.Expect(rerunCountForRun(runID)).To(Equal(1),
-				"one preemption produced more than one rerun; the at-most-once claim on the "+
+				"one preemption produced more than one accepted rerun; the at-most-once claim on the "+
 					"disrupted pod is not holding, and a run's retry budget can be spent by a single event")
 		}, 30*time.Second, 3*time.Second).Should(Succeed())
 	})
