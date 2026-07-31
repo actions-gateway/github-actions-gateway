@@ -759,7 +759,13 @@ fqdnPolicyBackend: cilium   # none (default) | cilium | calico | gke
 The emitted object is named `<proxy>-proxy-fqdn`, owned by the `EgressProxy`
 (garbage-collected with it), and covers the GitHub Actions runner endpoint families:
 `api.github.com`, `github.com`, `codeload.github.com`, `objects.githubusercontent.com`,
-`*.actions.githubusercontent.com`, and `*.blob.core.windows.net`. In an FQDN mode the
+`*.actions.githubusercontent.com`, and `*.blob.core.windows.net` — **plus the
+`gitHubURL` host of every gateway that references this proxy**, directly via
+`defaultProxyRef` or through a `RunnerSet`'s `proxyRef` (Q506). That is what makes an
+FQDN mode work for GitHub Enterprise Server without any extra configuration: the
+appliance's hostname is on the referring `ActionsGateway`, and a gateway applied after
+the proxy re-triggers the policy. A public-GitHub-only pool emits exactly what it did
+before. In an FQDN mode the
 standard `NetworkPolicy` drops its GitHub-CIDR rule (DNS + ingress are unchanged) and
 the 24h IP-range reconcile skips this proxy. The GMC also re-checks the emitted policy
 on a bounded cadence (a fraction of the egress-staleness window, ~6h at the default;
@@ -771,6 +777,16 @@ nothing else touches the `EgressProxy`.
 > by the admission webhook** ("this cluster has no FQDN egress backend configured; ask
 > the platform operator, or use egressPolicyMode: CIDR"), not left with a silently
 > `Degraded` proxy pool. The default never guesses a mechanism or auto-detects.
+
+> **GHES on the CIDR default needs the appliance's ranges.** CIDR mode allows only the
+> ranges `api.github.com/meta` publishes, and a GitHub Enterprise Server appliance on
+> your own address space is in none of them — so the pool's `NetworkPolicy` denies the
+> traffic it exists to carry. The GMC cannot know those ranges, so it names the gap:
+> `GitHubEgressIncomplete=True` / `ApplianceRangesRequired` on the `EgressProxy`, with
+> the unreachable host in the message. Supply the ranges in `spec.destinationCIDRs` —
+> allowlisting them under `--allowed-egress-cidrs` first, since that field is
+> platform-gated — or move the pool to an FQDN mode, which carries the host for you.
+> See [troubleshooting](troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance).
 
 **Deprecated `CiliumFQDN` / `CalicoFQDN`.** The earlier per-CNI enum values still work:
 each pins its namesake backend regardless of `--fqdn-policy-backend`, so existing
@@ -1185,7 +1201,11 @@ the JWT (signed with the tenant's private key) and the returned token are
 credential material, so this exchange must never traverse a plaintext channel.
 
 The endpoint host is taken from the **`GITHUB_API_BASE_URL`** environment
-variable, defaulting to `https://api.github.com` when unset. The token provider
+variable, defaulting to `https://api.github.com` when unset. On a
+GMC-provisioned AGC you do not set it: the GMC derives it from the gateway's
+`spec.gitHubURL` and injects it on the AGC `Deployment` — `https://api.github.com`
+for a `github.com` gateway, `https://<host>/api/v3` for GitHub Enterprise Server.
+The token provider
 **rejects a non-HTTPS `GITHUB_API_BASE_URL` at startup** — the AGC (and the
 `probe`) will refuse to start with a clear error rather than leak credentials on
 the first token mint:
@@ -1201,11 +1221,13 @@ HTTPS value (including a GitHub Enterprise Server base such as
 `https://ghe.example.com/api/v3`) and the unset default both work, and the error
 names the offending URL but never any token or JWT material.
 
-**Operator action:** if you set `GITHUB_API_BASE_URL` (e.g. for GitHub
-Enterprise Server), it must begin with `https://`. A plaintext value will block
-startup. Do not work around this by editing the deployment to inject a stub
-signal — the plaintext path exists only for the project's own in-cluster test
-fixtures.
+**Operator action:** on a GMC-provisioned gateway there is nothing to set —
+`spec.gitHubURL` is validated `https://` at admission, so the derived base is
+always HTTPS. If you run the AGC or `probe` standalone and set
+`GITHUB_API_BASE_URL` yourself (e.g. for GitHub Enterprise Server), it must
+begin with `https://`. A plaintext value will block startup. Do not work around
+this by editing the deployment to inject a stub signal — the plaintext path
+exists only for the project's own in-cluster test fixtures.
 
 **Documented dev/test trade-off.** The e2e suite points the AGC at an in-cluster
 `fakegithub` over plaintext (`http://<svc>.<ns>.svc.cluster.local:<port>`). That

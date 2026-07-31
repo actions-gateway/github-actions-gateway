@@ -12,6 +12,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)](#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did)
   - [Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")](#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion)
   - [Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)](#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before)
   - [Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)](#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github)
@@ -78,6 +79,60 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)
+
+**Who is affected:** every tenant whose `spec.gitHubURL` names a GitHub Enterprise
+Server (GHES) host. Tenants on `github.com` are unaffected in behaviour — but **every
+AGC pod restarts on this upgrade**, on both API versions, because the AGC `Deployment`
+gains an environment variable and the pod template changes.
+
+**What was broken.** The AGC resolves the GitHub REST API base from
+`GITHUB_API_BASE_URL` and falls back to `https://api.github.com` when it is unset.
+Nothing ever set it: both provisioning paths injected `GITHUB_ORG_URL` from
+`spec.gitHubURL` and stopped there, and no CRD field, Helm value, or other supported
+surface reached the variable. A GHES gateway therefore POSTed its App JWT to
+`https://api.github.com/app/installations/<id>/access_tokens` — an App that host has
+never heard of. Every token mint failed, on both acquisition tiers, before any job was
+acquired, and no configuration changed it.
+
+**What changed.** The GMC derives `GITHUB_API_BASE_URL` from `spec.gitHubURL` and sets
+it on the AGC `Deployment`:
+
+| `spec.gitHubURL` | injected `GITHUB_API_BASE_URL` |
+|---|---|
+| `https://github.com/my-org` | `https://api.github.com` (what the AGC already defaulted to) |
+| `https://ghes.example.com/my-org` | `https://ghes.example.com/api/v3` |
+
+The same derivation now answers for runner registration and the scale-set client, which
+each had their own copy. One of those copies tested `github.com` as a substring of the
+whole URL, so a GHES org path literally named `github.com` — `https://ghes.corp/github.com` —
+was misread as public SaaS; that is fixed with the rest.
+
+**Egress is a separate obligation, and only partly automatic.** Token exchange reaching
+the appliance does not by itself let traffic out:
+
+- **FQDN egress modes** now carry every referrer's GHES host into the CNI policy and the
+  proxy CONNECT allowlist automatically. Nothing to do.
+- **CIDR mode (the default)** allows only the ranges `api.github.com/meta` publishes,
+  which never contain a customer appliance. **You must supply the appliance's ranges in
+  the `EgressProxy`'s `spec.destinationCIDRs`** — and, because that field is gated by the
+  platform `--allowed-egress-cidrs` allowlist, a platform admin must allowlist them
+  first. A pool in this state now reports `GitHubEgressIncomplete=True` with reason
+  `ApplianceRangesRequired`, naming the unreachable host, instead of failing as an
+  unexplained connect timeout.
+
+**Post-upgrade check** for a GHES tenant:
+
+```bash
+kubectl get egressproxy -A -o jsonpath='{range .items[?(@.status.conditions[?(@.type=="GitHubEgressIncomplete")].status=="True")]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'
+```
+
+**Rolling back** restores the defect: GHES gateways return to minting against
+`api.github.com` and acquiring no jobs. There is no configuration that works around it
+on an older image other than the testing-only `--allow-agc-extra-env` flag, which
+[security-operations.md](security-operations.md#github-api-base-url-must-be-https) tells
+you not to use in production.
 
 ### Non-breaking: drained and hand-deleted workers are now re-run automatically (`cause="deletion"`)
 
@@ -152,10 +207,16 @@ per recovery. What you will observe after upgrading:
 
 ### Non-breaking: eviction auto-retry now honours `GITHUB_API_BASE_URL` (it never did on GHES)
 
-**Who is affected:** any deployment that sets `GITHUB_API_BASE_URL` — that is, every
-GitHub Enterprise Server install. Deployments against `github.com` (the default) are
-unaffected: the endpoint they were reaching is the one they were meant to reach.
-**No action is required, and nothing you configured was wrong.**
+**Who is affected:** any deployment that sets `GITHUB_API_BASE_URL`. Deployments against
+`github.com` (the default) are unaffected: the endpoint they were reaching is the one
+they were meant to reach. **No action is required, and nothing you configured was wrong.**
+
+> **Correction.** This note originally said that meant "every GitHub Enterprise Server
+> install". It did not: at the time, no GMC-provisioned AGC could set the variable at
+> all, so this fix reached only hand-rolled deployments until
+> [GHES gateways now reach their own appliance](#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did)
+> made the GMC derive it. On a GHES tenant the failure below was never observed,
+> because token exchange failed first and no job was ever acquired.
 
 Before this version the AGC resolved `GITHUB_API_BASE_URL` for the App **token
 exchange** but not for the `rerun-failed-jobs` call that eviction and preemption

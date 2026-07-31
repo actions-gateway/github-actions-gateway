@@ -19,6 +19,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [RunnerSet Reports WorkerCapacityDeclined (the Gateway Stopped Claiming Jobs)](#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)
 - [Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine](#worker--proxy--agc-pods-rejected-by-a-cluster-policy-engine)
 - [ActionsGateway Reports EgressRulesStale](#actionsgateway-reports-egressrulesstale)
+- [A GHES Tenant's Traffic Never Reaches the Appliance](#a-ghes-tenants-traffic-never-reaches-the-appliance)
 - [Tenant Namespace Missing the Managed-Tenant Marker Label](#tenant-namespace-missing-the-managed-tenant-marker-label)
 - [ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)
 - [Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers](#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers)
@@ -780,6 +781,62 @@ incrementing on the next successful refresh, and the condition clears automatica
 within the re-check cadence (a fraction of the staleness window). If GitHub's meta
 API is down, no action is needed beyond waiting — the allowlist is still valid until
 GitHub rotates.
+
+---
+
+## A GHES Tenant's Traffic Never Reaches the Appliance
+
+**Symptoms.** A tenant whose `spec.gitHubURL` names a GitHub Enterprise Server (GHES)
+host acquires no jobs. Depending on which of the two gaps you have hit:
+
+- **Token exchange fails.** The AGC logs a `401` from `api.github.com` — a host you
+  never configured — when minting the installation token. This is the pre-fix
+  behaviour: nothing set `GITHUB_API_BASE_URL`, so the AGC defaulted to public GitHub.
+  Fixed by upgrading; see
+  [Upgrade — GHES gateways now reach their own appliance](upgrade.md#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did).
+- **Egress is denied.** The AGC reaches the right host name and the connection times
+  out. The tenant's `EgressProxy` reports
+  `GitHubEgressIncomplete=True` / reason `ApplianceRangesRequired`, with a message
+  naming the host.
+
+**Cause of the second.** The default `CIDR` egress mode programs the merged
+`api`/`actions`/`web` ranges from `api.github.com/meta` as the proxy pool's egress
+`ipBlock`. A GHES appliance sits on your own address space and appears in none of
+them, so the `NetworkPolicy` denies the proxy's traffic to the one host it exists to
+reach. The GMC cannot close this gap — the appliance's ranges are knowable only to
+you — so it names it on status instead.
+
+**Diagnostics.**
+
+```sh
+# Which pools are missing their appliance's ranges, and which host is unreachable.
+kubectl get egressproxy -n <namespace> <name> \
+  -o jsonpath='{range .status.conditions[?(@.type=="GitHubEgressIncomplete")]}{.status} {.reason}: {.message}{"\n"}{end}'
+
+# Confirm the AGC is addressing the appliance and not api.github.com.
+kubectl get deploy -n <namespace> <agc> \
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="GITHUB_API_BASE_URL")].value}{"\n"}'
+```
+
+**Resolution.** Either:
+
+- **Supply the ranges.** Put the appliance's CIDRs in the `EgressProxy`'s
+  `spec.destinationCIDRs`. The field is gated by the platform `--allowed-egress-cidrs`
+  allowlist, so a platform admin must allowlist them first — a tenant cannot self-serve.
+  Admission rejects an entry outside the allowlist with a message naming the allowed
+  ranges.
+- **Switch to an FQDN egress mode.** `spec.egressPolicyMode: FQDN` (with a
+  `--fqdn-policy-backend` configured) allows by hostname, and every referring gateway's
+  `gitHubURL` host is added to the policy and the proxy CONNECT allowlist automatically.
+
+The condition is advisory and does not gate `Ready`: the pool is serving exactly the
+policy it was asked for. It clears once `destinationCIDRs` is non-empty — the GMC takes
+your declaration at face value and does not verify the ranges actually cover the
+appliance, so if traffic still fails, check the ranges themselves.
+
+**Adjacent gap worth checking on a private-CA appliance.** The AGC's proxy trust pool is
+the system roots plus the egress proxy's CA. A GHES appliance fronted by a private CA is
+not trusted by that pool, and the symptom is a TLS handshake error rather than a timeout.
 
 ---
 
