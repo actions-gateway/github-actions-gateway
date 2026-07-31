@@ -473,7 +473,7 @@ func reapTestMetrics() *runnercore.Metrics {
 	return &runnercore.Metrics{
 		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_runnerset_worker_pods_reaped_total",
-		}, []string{"namespace", "runner_group", "reason"}),
+		}, []string{"namespace", "runner_group", "runner_set", "reason"}),
 	}
 }
 
@@ -538,7 +538,8 @@ func TestRunnerSetReaper_ReapsOrphanedRunningPods(t *testing.T) {
 		"every Running pod counts as active, including the one reaped this pass")
 
 	assert.Equal(t, 1.0, testutil.ToFloat64(
-		r.Metrics.WorkerPodsReaped.WithLabelValues(ns, "set", "orphaned_running")))
+		r.Metrics.WorkerPodsReaped.WithLabelValues(ns, "set", "set", "orphaned_running")),
+		"a scale-set reap must stamp the set name into both runner_group and runner_set")
 
 	var orphanEvent string
 	for len(rec.Events) > 0 {
