@@ -79,6 +79,7 @@ NARROW_FILTERS=(
 	'status-lint.yml:status'          # docs/STATUS.md, docs/roadmap.md, and their linters
 	'plan-hygiene.yml:plan'           # the plan index plus any .go file (for plan-ref scanning)
 	'autoscaler-drift.yml:autoscaler' # the CA/kwok pins, the kwok manifests, and the matcher under test
+	'autoscaler-drift.yml:karpenter'  # the Karpenter pins/recipe and its live test (Q479)
 )
 
 # parse_filters WORKFLOW_PATH — print one "<filter>\t<pattern>" row per pattern in

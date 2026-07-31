@@ -31,6 +31,8 @@ run:
     - integration
     - e2e
     - load
+    - autoscaler
+    - karpenter
 linters:
   default: none
   enable:

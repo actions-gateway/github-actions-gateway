@@ -90,10 +90,13 @@ const defaultSchedulerName = "default-scheduler"
 // That case resolved correctly before this window existed, but only by accident of
 // recorder generation: CA records through the legacy recorder, whose one-second
 // resolution collapsed the two events into a tie, and ties already resolved open. The
-// same pair from a microsecond-resolution recorder — the generation Karpenter uses —
-// would have gated a set the cluster was growing for. The window makes the verdict a
-// property of the autoscaler's behavior rather than of how its events happen to be
-// timestamped, and errs no less open than legacy quantization does in either generation.
+// same pair from a microsecond-resolution recorder would have gated a set the cluster
+// was growing for. Neither project records through that generation today — measured
+// live for both (CA v1.36.1, Karpenter v1.14.0: LastTimestamp set, EventTime null) —
+// but nothing pins them to the legacy one, and the window is what keeps a future
+// migration from reintroducing the accident. It makes the verdict a property of the
+// autoscaler's behavior rather than of how its events happen to be timestamped, and
+// errs no less open than legacy quantization does in either generation.
 //
 // # Why one second
 //
