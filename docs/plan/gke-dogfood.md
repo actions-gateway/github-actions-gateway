@@ -229,13 +229,13 @@ allowFloatingImageTags: true
 replicaCount: 1
 gmc:
   image:
-    tag: 4567097216ff38e4415ddb23a036569a2104801d
+    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be
 agc:
   image:
-    tag: 4567097216ff38e4415ddb23a036569a2104801d
+    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be
 proxy:
   image:
-    tag: 4567097216ff38e4415ddb23a036569a2104801d
+    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be
 # WRAPPER_IMAGE drives Q235 worker-wrapper injection — the GMC forwards it to
 # every AGC, which injects the wrapper into each worker pod so the runner
 # container can be the unmodified upstream actions-runner. Pin it: the chart's
@@ -243,7 +243,7 @@ proxy:
 # and ImagePullBackOffs the injection.
 wrapper:
   image:
-    tag: 4567097216ff38e4415ddb23a036569a2104801d
+    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be
 
 # Self-signed webhook cert — no cert-manager dependency.
 # The cert rotates on helm upgrade; acceptable for a personal dogfood cluster.
