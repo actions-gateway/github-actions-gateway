@@ -765,7 +765,7 @@ What makes that fire without anyone remembering to run it is a coupling worth kn
 
 `KIND_VERSION` is pinned in this workflow as well as [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml), and [`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml) rewrites both weekly. So the kind bump PR trips this workflow's `changes` filter and runs the gate; when that bump moves the default node image's minor, `CA_VERSION` must move to the matching CA minor in the same PR — and a CA minor is where a vocabulary reword lands. **A kind bump PR whose autoscaler-drift job fails on version skew is telling you to bump `CA_VERSION`, not to pin the node image.**
 
-`KARPENTER_VERSION` has no such coupling: Karpenter is not released per Kubernetes minor (one release supports a wide range), so nothing moves that pin automatically — it moves by hand, and the gate runs on the PR that moves it ([Q529](../STATUS.md#Q529) tracks giving it an updatecli trigger like the CA patch one below).
+`KARPENTER_VERSION` has no such coupling: Karpenter is not released per Kubernetes minor (one release supports a wide range), so no kind bump ever prompts that pin. Its trigger is [`updatecli.d/karpenter.yaml`](../../updatecli.d/karpenter.yaml) (Q529), which weekly resolves the **latest** upstream release — minor or patch, since with no minor coupling there is no skew to guard and a minor is where a reword most likely lands — and opens a PR moving the pin. That PR edits `scripts/karpenter-cluster.sh`, which is in the `changes` filter above, so the gate runs on it.
 
 #### The patch releases in between (Q483)
 

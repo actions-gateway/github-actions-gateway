@@ -31,7 +31,11 @@
 #                         the event vocabulary, the reporter attribution, or the
 #                         recorder generation fails `make test-karpenter`. CI
 #                         runs the gate on any PR that edits this file
-#                         (.github/workflows/autoscaler-drift.yml).
+#                         (.github/workflows/autoscaler-drift.yml). Bumps arrive
+#                         weekly by themselves (updatecli.d/karpenter.yaml,
+#                         Q529) — the latest release, whatever the minor;
+#                         Karpenter is not released per Kubernetes minor, so
+#                         there is no kind coupling to wait for.
 #   KWOK_VERSION        — kwok release providing the fake kubelet (default
 #                         below; kept the same as autoscaler-cluster.sh)
 #
@@ -46,6 +50,10 @@ cd "$REPO_ROOT"
 source "$REPO_ROOT/scripts/lib/common.sh"
 
 KARPENTER_CLUSTER=${KARPENTER_CLUSTER:-gag-karpenter}
+# Moves on its own: updatecli.d/karpenter.yaml rewrites the line below weekly to
+# the latest upstream release, and the resulting PR trips the drift gate's path
+# filter (Q529). Keep the assignment on one line in this exact shape — the
+# manifest matches it by regex.
 KARPENTER_VERSION=${KARPENTER_VERSION:-v1.14.0}
 KWOK_VERSION=${KWOK_VERSION:-v0.8.0}
 
