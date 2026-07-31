@@ -22,6 +22,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Tenant Namespace Missing the Managed-Tenant Marker Label](#tenant-namespace-missing-the-managed-tenant-marker-label)
 - [ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)
 - [Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers](#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers)
+- [Tenant Namespace Stuck Terminating After Narrowing the PriorityClass Allowlist](#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
 - [RunnerGroup ActiveSessions Exceeds maxListeners](#runnergroup-activesessions-exceeds-maxlisteners)
 - [RunnerGroup Stops Serving Jobs With Stale Ready=True](#runnergroup-stops-serving-jobs-with-stale-readytrue)
@@ -922,6 +923,70 @@ the namespace. The ordered commands and the manual finalizer-drop recovery (incl
 what that recovery skips — the GitHub-side runner deregistration) are in
 [migration-v1-to-v2.md § Teardown order is load-bearing](migration-v1-to-v2.md#teardown-order-is-load-bearing-never-delete-the-namespace-first).
 The same order applies to any tenant teardown, migration or not.
+
+---
+
+## Tenant Namespace Stuck Terminating After Narrowing the PriorityClass Allowlist
+
+**Symptoms.** Same surface as the entry above — the namespace sits in `Terminating`
+and the remaining `RunnerGroup`/`RunnerSet` objects hold their `agentpool-cleanup`
+finalizer — but the teardown order was correct and the AGC was still running when
+the CRs were deleted. The AGC logs (and its retry errors) show the finalizer
+update itself being denied by the allowlist guard:
+
+```text
+ValidatingAdmissionPolicy 'gmc-priorityclass-allowlist-guard' with binding
+'gmc-priorityclass-allowlist-guard-binding' denied request: priorityTiers
+priorityClassName <class> is not in the platform PriorityClassAllowlist ...
+```
+
+**Confirm it.** The stuck object still names a class the allowlist no longer
+carries:
+
+```sh
+# The deleting objects, their finalizers, and the classes they still name
+kubectl --context "$CTX" get runnersets.actions-gateway.com,runnergroups.actions-gateway.github.com \
+  -n <TENANT_NS> -o json | jq -r '
+  .items[] | select(.metadata.deletionTimestamp != null)
+  | "\(.kind)/\(.metadata.name) finalizers=\(.metadata.finalizers) classes=\([(.spec.priorityTiers // [])[].priorityClassName, (.spec.podTemplate.spec.priorityClassName // empty)])"'
+
+# What the guard currently allows
+kubectl --context "$CTX" get priorityclassallowlist -o jsonpath='{.items[*].spec.allowedPriorityClasses}'
+```
+
+**Cause.** The allowlist was narrowed while stored objects still named the removed
+class. The guard policy (and the GMC webhooks on the tenant-facing kinds)
+re-validate the **whole stored object on every update**, and removing a finalizer
+is an update — so the AGC's teardown write is denied on every retry. This is not a
+slow reconcile: nothing clears it until admission admits the write. See
+[Narrowing the allowlist: drain stored references first](security-operations.md#narrowing-the-allowlist-drain-stored-references-first).
+
+**Recovery.**
+
+1. **Re-add the removed class** to the `PriorityClassAllowlist` CR in place —
+   effective on the next watch event, no GMC restart, and it unblocks both the
+   guard and the webhooks (the webhook allowlist is the union of the flag and
+   this CR):
+
+   ```sh
+   kubectl --context "$CTX" edit priorityclassallowlist gmc-priorityclass-allowlist
+   ```
+
+2. **Let the AGC finish.** Its retry backoff clears the finalizer and the
+   namespace completes terminating on its own. **Do not** strip the finalizer by
+   hand while the controller can still do it — that skips the GitHub-side runner
+   deregistration the finalizer exists for.
+
+3. **If the AGC is already gone** — the namespace deletion killed it before the
+   CRs cleared — re-adding the class unblocks admission but no controller remains
+   to issue the write. That is the structural case of the entry above: follow the
+   manual finalizer-drop recovery in
+   [migration-v1-to-v2.md § Teardown order is load-bearing](migration-v1-to-v2.md#teardown-order-is-load-bearing-never-delete-the-namespace-first),
+   including its caveats about what the manual drop skips.
+
+4. **Narrow again only after draining** — move every remaining stored reference
+   off the class, then remove it from the allowlist, per the
+   [drain-first order](security-operations.md#narrowing-the-allowlist-drain-stored-references-first).
 
 ---
 

@@ -541,7 +541,8 @@ now covers the drain alone, with
 [a separate runbook](../operations/troubleshooting.md#a-preempted-workers-job-is-not-re-run)
 for a preemption recovery that fails to fire.
 
-**A third finding, from building the spec rather than running it ([Q499](../STATUS.md#Q499)).**
+**A third finding, from building the spec rather than running it (Q499, since
+documented in [security-operations.md § Narrowing the allowlist](../operations/security-operations.md#narrowing-the-allowlist-drain-stored-references-first)).**
 Narrowing the platform PriorityClass allowlist **wedges deletion of any tenant still
 referencing the removed class**. The `priorityclass-allowlist-guard` policy re-validates
 stored objects on update — deliberately, and documented as a feature — but tearing a
