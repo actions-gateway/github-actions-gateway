@@ -2,11 +2,11 @@ package provisioner
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,18 +18,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// sharedMetrics returns one process-wide runnercore.Metrics: NewMetrics registers
-// with the global controller-runtime registry, which panics on a duplicate
-// registration, so it may be built only once per test binary. Tests keep their
-// counter series independent by using distinct runner_group label values.
-var (
-	sharedMetricsOnce sync.Once
-	sharedMetricsInst *runnercore.Metrics
-)
-
-func sharedMetrics() *runnercore.Metrics {
-	sharedMetricsOnce.Do(func() { sharedMetricsInst = runnercore.NewMetrics() })
-	return sharedMetricsInst
+// scaleUpTestMetrics builds the counter the Q223 scale-up limiter records into,
+// unregistered so each test observes only its own increments. runnercore.NewMetrics
+// registers with the process-global controller-runtime registry, whose counters
+// accumulate across repeats of the same test (-count>1).
+func scaleUpTestMetrics() *runnercore.Metrics {
+	return &runnercore.Metrics{
+		ScaleUpThrottled: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_scaleup_throttled_total",
+		}, []string{"namespace", "runner_group"}),
+	}
 }
 
 // stubTarget is a minimal Target for driving the provision path from an internal
@@ -79,7 +77,7 @@ func TestProvisioner_ScaleUpRateLimitDelaysPodCreation(t *testing.T) {
 	scheme := clientgoscheme.Scheme
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&corev1.Pod{}).Build()
 
-	metrics := sharedMetrics()
+	metrics := scaleUpTestMetrics()
 	p := NewProvisioner(fc, metrics, nil)
 
 	// Inject a deterministic clock + a sleep stub that records each throttle delay and
@@ -130,7 +128,7 @@ func TestProvisioner_ScaleUpRateLimitDelaysPodCreation(t *testing.T) {
 func TestProvisioner_ScaleUpDisabledCreatesImmediately(t *testing.T) {
 	ctx := context.Background()
 	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).WithStatusSubresource(&corev1.Pod{}).Build()
-	metrics := sharedMetrics()
+	metrics := scaleUpTestMetrics()
 	p := NewProvisioner(fc, metrics, nil)
 
 	var slept bool
