@@ -1,8 +1,18 @@
 # Q507 — No gate upgrades from the last released chart tag
 
-**Status: OPEN, scoped by measurement.** The gap is confirmed and the failure it
-allowed is on record; what remains is deciding how CI resolves "the last released
-chart" and wiring the arm.
+**Status: SHIPPED.** [`scripts/chart-released-upgrade-check.sh`](../../../scripts/chart-released-upgrade-check.sh)
+(`make chart-released-upgrade-check`) runs last among the chart checks in
+`e2e-reusable.yml` (kindnet leg only). The design question below resolved to
+option (2) — `helm pull` of the published OCI artifact — with the tag discovered
+dynamically as the highest stable `vX.Y.Z` tag on origin (`git ls-remote`,
+prereleases excluded; the version `publish.yml` keys the chart on). No stable
+tag → clean skip; a stable tag with no published chart → loud failure, since
+operators cannot install that release either. The values migration path
+(acceptance bullet 4) is covered: an upgrade carrying the removed
+`priorityClassAllowlist.configMapName` must fail at render with the migration
+message, anchored on the guard still existing in HEAD's templates so retiring
+the guard retires the probe. Gate contract for chart authors and the discovery
+rules: [testing.md § The released-chart upgrade gate](../../development/testing.md#the-released-chart-upgrade-gate-q507).
 
 ## The gap
 
@@ -11,8 +21,8 @@ Three paths exercise the chart, and none of them upgrades a **released** release
 | Path | What it installs | What it upgrades from |
 |---|---|---|
 | `make deploy` / e2e | HEAD's chart | nothing — always a first install |
-| [`chart-upgrade-check.sh`](../../scripts/chart-upgrade-check.sh) (Q475) | HEAD's chart | HEAD's chart with two markers injected |
-| [`chart-reinstall-check.sh`](../../scripts/chart-reinstall-check.sh) (Q444/Q492) | HEAD's chart | uninstall → reinstall, same chart |
+| [`chart-upgrade-check.sh`](../../../scripts/chart-upgrade-check.sh) (Q475) | HEAD's chart | HEAD's chart with two markers injected |
+| [`chart-reinstall-check.sh`](../../../scripts/chart-reinstall-check.sh) (Q444/Q492) | HEAD's chart | uninstall → reinstall, same chart |
 
 So every gate answers "does HEAD upgrade to HEAD?" — never "does the chart an
 operator is actually running upgrade to HEAD?". Those are different questions
@@ -73,7 +83,7 @@ change. Both argue for resolving the tag dynamically rather than hardcoding.
   CR the same release renders, with no documented apply step.
 - It runs on one lane only (the property is Helm-version-dependent, not
   CNI-dependent), matching how `chart_upgrade_check` and `chart_reinstall_check`
-  are gated in [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml).
+  are gated in [`e2e-reusable.yml`](../../../.github/workflows/e2e-reusable.yml).
 - The values migration path is covered too, or explicitly noted as out of scope:
   a released release whose values set a key HEAD removed must fail *at render*
   with the migration message, not midway through applying.
@@ -86,6 +96,6 @@ existing release can upgrade to, because none of them has an older release to
 upgrade *from*. A reviewer would have to know Helm's `crds/` rule and think to ask.
 That is exactly the shape that belongs in CI rather than in a human's memory.
 
-Prior art for the harness: [`chart-upgrade-check.sh`](../../scripts/chart-upgrade-check.sh)
+Prior art for the harness: [`chart-upgrade-check.sh`](../../../scripts/chart-upgrade-check.sh)
 already captures a live release's values, mutates the chart, upgrades, and
 restores — most of the scaffolding this needs exists there.

@@ -107,9 +107,10 @@ jobs:
       contents: read
     with:
       kind_cni: calico
-      # Extra headroom over the kindnet leg's 45m: Calico adds the calico-node
+      # Extra headroom over the kindnet leg's 50m: Calico adds the calico-node
       # rollout to cluster bring-up, and the egress-negative specs that self-skip
-      # on kindnet actually run here. Image pre-pull keeps this comfortable.
+      # on kindnet actually run here — while this leg skips the three chart
+      # checks the kindnet leg pays for. Image pre-pull keeps this comfortable.
       timeout_minutes: 60
       # Skip the day-2 `helm upgrade` check here (Q475). What it asserts — that
       # `helm upgrade` delivers CRD and template changes to a live release — has
@@ -124,6 +125,11 @@ jobs:
       # reproduce on both legs, but that reflected the defect being ambient, not
       # the CNI mattering; the mechanism is now established and CNI-free.
       chart_reinstall_check: false
+      # Skip the released-chart upgrade check here too (Q507), on the same
+      # reasoning. What it asserts — that the last released chart's published
+      # artifact upgrades to HEAD along the documented path — is pure Helm
+      # semantics, entirely independent of the CNI.
+      released_upgrade_check: false
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`e2e-calico-gate`) required in the branch ruleset — never the path-gated
