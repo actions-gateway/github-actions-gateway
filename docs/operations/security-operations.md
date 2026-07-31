@@ -1451,6 +1451,55 @@ until it is fixed — never that an unintended class becomes allowed.
 must be too, but it carries **no write verb**: the GMC can never widen its own
 allowlist.
 
+### Narrowing the allowlist: drain stored references first
+
+Adding a class is safe in any order; **removing one is not**. The
+[guard policy](#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289)
+re-validates the whole stored object on every update — and the GMC webhooks do the
+same on the tenant-facing kinds. Once a class leaves the allowlist, **every write
+to a stored object still naming it is denied**, including the finalizer-removal
+update the AGC issues during teardown. A tenant deleted in that state wedges: the
+`actions-gateway.com/agentpool-cleanup` finalizer can never clear and the
+namespace hangs in `Terminating` — no controller can free it
+([recovery](troubleshooting.md#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist)).
+This holds for every narrowing route — the chart's `allowedPriorityClasses`
+value, the `--allowed-priority-classes` flag, or an in-place edit of the
+`PriorityClassAllowlist` CR.
+
+Narrow in this order:
+
+1. **Enumerate stored references** to the class you are removing. The three
+   commands under
+   [Upgrading](#upgrading-previously-ungated-priorityclassname-fields-are-now-gated)
+   cover the tenant-authored kinds; also check the GMC-authored `RunnerGroup`s,
+   which store the class too:
+
+   ```bash
+   kubectl --context "$CTX" get runnergroups.actions-gateway.github.com -A -o json | jq -r '
+     .items[]
+     | .metadata.namespace as $ns | .metadata.name as $name
+     | ((.spec.priorityTiers // [])[].priorityClassName),
+       (.spec.podTemplate.spec.priorityClassName // empty)
+     | "\($ns)/\($name) -> \(.)"'
+   ```
+
+2. **Move every referencing object off the class** — switch it to a still-allowed
+   class or drop the field. Edit the tenant-facing CR (`ActionsGateway`,
+   `RunnerSet`, `RunnerTemplate`) and let the GMC reconcile the `RunnerGroup`s.
+   Admission validates the *incoming* object, so an update that removes the
+   reference always passes — this step also works as the un-wedge path after a
+   premature narrowing. Re-run step 1 until it prints nothing.
+
+3. **Remove the class from the allowlist** — take it out of the chart's
+   `allowedPriorityClasses` value (which renders both the
+   `--allowed-priority-classes` flag and the `PriorityClassAllowlist` CR) and
+   upgrade the release.
+
+4. **Delete the `PriorityClass` object last**, if you are retiring it entirely.
+   Deleting it earlier does not tighten admission (the allowlist gates names, not
+   objects) but does break scheduling for any worker pod still created with the
+   name — the apiserver rejects pods naming a nonexistent class.
+
 ### Defense-in-depth: the `priorityclass-allowlist-guard` policy (Q289)
 
 The webhooks above gate every *tenant-facing* CR, but `RunnerGroup` CRs have no
@@ -1464,6 +1513,9 @@ default under `admissionPolicy.enabled`, Kubernetes ≥ 1.30) that rejects any
 off the allowlist. Unlike a webhook, the policy also **re-validates every write
 to an existing object**, so a pre-gate stored RunnerGroup naming an
 off-allowlist class is caught on its next update, not just its next re-create.
+The flip side: removing a class that stored objects still name freezes every
+later write to them, teardown included — see
+[Narrowing the allowlist](#narrowing-the-allowlist-drain-stored-references-first).
 
 The policy matches the v2 kinds too (Q323): `runnersets`
 (`priorityTiers[].priorityClassName`) and `runnertemplates`
