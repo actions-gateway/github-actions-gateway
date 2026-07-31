@@ -239,10 +239,19 @@ type Provisioner struct {
 	Log                *slog.Logger
 	MaxEvictionRetries int
 	EvictionRetryDelay time.Duration
-	MaxQuotaRetries    int
-	QuotaRetryDelay    time.Duration
-	PollInterval       time.Duration
-	DefaultWorkerImage string
+	// EvictionRerunWindow bounds how long a single disruption recovery keeps
+	// retrying a re-run that GitHub refuses with "This workflow is already
+	// running" — the refusal every re-run gets until GitHub concludes the
+	// original run, ~10 minutes after an ungraceful kill (Q503). Zero means the
+	// default (15 minutes).
+	EvictionRerunWindow time.Duration
+	// EvictionRerunRetryInterval paces the refused re-run attempts inside the
+	// window. Zero means the default (30 seconds).
+	EvictionRerunRetryInterval time.Duration
+	MaxQuotaRetries            int
+	QuotaRetryDelay            time.Duration
+	PollInterval               time.Duration
+	DefaultWorkerImage         string
 
 	// DisableQuotaAdmission turns OFF the admission gate's namespace-ResourceQuota
 	// rung (#784), reverting to the pre-#784 behaviour where quota exhaustion is
@@ -362,15 +371,17 @@ type Provisioner struct {
 // NewProvisioner creates a Provisioner with sensible defaults.
 func NewProvisioner(c client.Client, m *runnercore.Metrics, log *slog.Logger) *Provisioner {
 	return &Provisioner{
-		Client:             c,
-		Metrics:            m,
-		Log:                log,
-		MaxEvictionRetries: 2,
-		EvictionRetryDelay: 5 * time.Second,
-		MaxQuotaRetries:    5,
-		QuotaRetryDelay:    30 * time.Second,
-		PollInterval:       5 * time.Second,
-		DefaultWorkerImage: DefaultWorkerImage,
+		Client:                     c,
+		Metrics:                    m,
+		Log:                        log,
+		MaxEvictionRetries:         2,
+		EvictionRetryDelay:         5 * time.Second,
+		EvictionRerunWindow:        defaultEvictionRerunWindow,
+		EvictionRerunRetryInterval: defaultEvictionRerunRetryInterval,
+		MaxQuotaRetries:            5,
+		QuotaRetryDelay:            30 * time.Second,
+		PollInterval:               5 * time.Second,
+		DefaultWorkerImage:         DefaultWorkerImage,
 	}
 }
 
@@ -556,9 +567,14 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		p.Metrics.JobDuration.WithLabelValues(key.Namespace, key.Name).Observe(duration.Seconds())
 	}
 
-	// 7. Disruption recovery. Inline here because this goroutine owns the pod and still
-	// holds the payload's identity; the scale-set tier, which has neither, recovers
-	// from the owning reconciler instead (RecoverEvictedScaleSetWorkers).
+	// 7. Disruption recovery. Started here because this goroutine owns the pod and
+	// still holds the payload's identity; the scale-set tier, which has neither,
+	// recovers from the owning reconciler instead (RecoverEvictedScaleSetWorkers).
+	// The recovery itself outlives this goroutine on handleEviction's own bounded
+	// context — its re-run cannot land until GitHub concludes the original run,
+	// ~10 minutes after an ungraceful kill (Q503), and holding the TaskResult (and
+	// the fan-out completion behind it) for that long is not an option — so the
+	// done channel is deliberately not waited on.
 	//
 	// Two causes reach the same recovery. The kubelet's node-pressure eviction is the
 	// PodFailed/Evicted shape; kube-scheduler preemption deletes its victim instead, so
@@ -568,9 +584,9 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// spends a single slot of the run's one shared retry budget.
 	switch {
 	case outcome.Phase == corev1.PodFailed && outcome.Reason == podReasonEvicted:
-		p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCauseEviction)
+		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCauseEviction)
 	case outcome.Preempted:
-		p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCausePreemption)
+		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCausePreemption)
 	}
 
 	// 8. Cleanup. The job Secret is always deleted here. The pod is deleted

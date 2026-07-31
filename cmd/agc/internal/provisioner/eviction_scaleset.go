@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -42,14 +41,6 @@ import (
 // per-run-id lock, and the sweeper. The Q106 invariant — at most maxEvictionRetries
 // re-runs per run_id — is a property of that shared budget, so it holds across both
 // tiers at once rather than per tier.
-
-// evictionRecoveryAPIBudget is how long a detached recovery may spend on GitHub after
-// its evictionRetryDelay has elapsed. Recovery outlives the reconcile that started it
-// (the reconcile context is cancelled the moment Reconcile returns, while
-// handleEviction deliberately waits out the retry delay first), so it runs on a
-// context detached from the caller's and bounded by delay + this budget. The bound is
-// what keeps a wedged GitHub call from leaving a goroutine behind indefinitely.
-const evictionRecoveryAPIBudget = 60 * time.Second
 
 // Eviction-recovery tier labels for the eviction metrics, so an operator can tell a
 // classic recovery from a scale-set one — the two are detected by entirely different
@@ -122,8 +113,7 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 		return closedChan(), fmt.Errorf("provisioner: resolve provisioning spec for eviction recovery: %w", err)
 	}
 
-	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), spec.EvictionRetryDelay+evictionRecoveryAPIBudget)
-	var wg sync.WaitGroup
+	var recoveries []<-chan struct{}
 	for _, d := range recoverable {
 		// cause is deliberately NOT on podLog: handleEviction puts it on every line it
 		// emits, and a logger-level attribute would duplicate the key on those.
@@ -134,7 +124,7 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 		// owns this pod's single recovery attempt. A lost race (another replica, or a
 		// concurrent reconcile of the same owner) is the mechanism working, not an
 		// error.
-		if err := p.claimEvictionRecovery(rctx, pod); err != nil {
+		if err := p.claimEvictionRecovery(ctx, pod); err != nil {
 			if apierrors.IsConflict(err) || apierrors.IsNotFound(err) {
 				podLog.Debug("scale-set worker disruption already claimed elsewhere; skipping", "cause", cause, "error", err)
 				continue
@@ -158,17 +148,15 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 			continue
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			p.handleEviction(rctx, target, owner, repo, runID, podLog, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, cause)
-		}()
+		recoveries = append(recoveries,
+			p.handleEviction(ctx, target, owner, repo, runID, podLog, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, cause))
 	}
 
 	done := make(chan struct{})
 	go func() {
-		wg.Wait()
-		cancel()
+		for _, r := range recoveries {
+			<-r
+		}
 		close(done)
 	}()
 	return done, nil

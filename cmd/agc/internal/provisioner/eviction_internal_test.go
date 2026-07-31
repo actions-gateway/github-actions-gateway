@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // TestHandleEviction_ConcurrentSameRunRespectsBudget is the Q106 regression
@@ -88,7 +89,7 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "12345", log, maxRetries, 0, tier, cause)
+			<-p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "12345", log, maxRetries, 0, tier, cause)
 		}()
 	}
 	wg.Wait()
@@ -138,7 +139,7 @@ func TestHandleEviction_BudgetIsHardCap(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	for i := 0; i < evictions; i++ {
-		p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "999", log, maxRetries, 0, evictionTierClassic, recoveryCauseEviction)
+		<-p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "999", log, maxRetries, 0, evictionTierClassic, recoveryCauseEviction)
 	}
 
 	assert.Equal(t, int64(maxRetries), rerunCount.Load(),
@@ -214,6 +215,146 @@ func TestSweepEvictionCounts_RefreshKeepsLiveRunPinned(t *testing.T) {
 	// The budget must still be exhausted — the surviving entry never refilled.
 	_, ok = p.reserveEvictionRetry("live", maxRetries)
 	assert.False(t, ok, "budget must not refill while the run is live")
+}
+
+// rerunLoopMetrics builds the counters the Q503 re-run loop records into.
+func rerunLoopMetrics() *runnercore.Metrics {
+	return &runnercore.Metrics{
+		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_q503_eviction_retries_total",
+		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_q503_eviction_rerun_failures_total",
+		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+	}
+}
+
+// alreadyRunningBody is GitHub's rerun-failed-jobs refusal while the original run has
+// not concluded, verbatim from the live measurement (Q396/Q503).
+const alreadyRunningBody = `{"message":"This workflow is already running","documentation_url":"https://docs.github.com/rest"}`
+
+// TestHandleEviction_RetriesUntilTheRunConcludes is the Q503 regression test. GitHub
+// refuses rerun-failed-jobs with 403 "This workflow is already running" until it has
+// concluded the original run — measured at 9m36s after an ungraceful kill — while the
+// AGC used to fire exactly once, ~5s after the eviction. The refusal spent the retry
+// budget and the job was never re-run.
+//
+// The invariant now: a still-running refusal is "not yet", so recovery keeps calling
+// until GitHub accepts, and the whole wait costs ONE budget slot.
+func TestHandleEviction_RetriesUntilTheRunConcludes(t *testing.T) {
+	var calls atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Two refusals before the run "concludes": the AGC must outlast both.
+		if calls.Add(1) <= 2 {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(alreadyRunningBody))
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	m := rerunLoopMetrics()
+	p := &Provisioner{
+		Metrics:                    m,
+		TokenFunc:                  func(context.Context) (string, error) { return "tok", nil },
+		GitHubAPIURL:               srv.URL,
+		HTTPClient:                 srv.Client(),
+		EvictionRerunRetryInterval: time.Millisecond,
+	}
+	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "12345", log, 2, 0, evictionTierClassic, recoveryCauseEviction)
+
+	assert.Equal(t, int64(3), calls.Load(), "two refusals then the accepted call")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseEviction)),
+		"the whole refusal-spanning recovery must cost one budget slot, not one per call")
+	assert.Empty(t, target.events, "an eventually-accepted re-run is not an operator incident")
+
+	// The budget must reflect one spent slot, so a SECOND eviction of the run still
+	// has its slot — the property the old one-shot behaviour destroyed.
+	_, ok := p.reserveEvictionRetry("12345", 2)
+	assert.True(t, ok, "one recovery must consume exactly one of the two budget slots")
+}
+
+// TestHandleEviction_RunNeverConcludingIsSurfaced bounds the Q503 retry loop: if the
+// re-run window closes with GitHub still refusing, recovery gives up loudly — the
+// failure counter and an owner Event — rather than retrying forever or, worse,
+// pretending the spent budget slot recovered anything.
+func TestHandleEviction_RunNeverConcludingIsSurfaced(t *testing.T) {
+	var calls atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(alreadyRunningBody))
+	}))
+	defer srv.Close()
+
+	m := rerunLoopMetrics()
+	p := &Provisioner{
+		Metrics:                    m,
+		TokenFunc:                  func(context.Context) (string, error) { return "tok", nil },
+		GitHubAPIURL:               srv.URL,
+		HTTPClient:                 srv.Client(),
+		EvictionRerunWindow:        50 * time.Millisecond,
+		EvictionRerunRetryInterval: 5 * time.Millisecond,
+	}
+	target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	<-p.handleEviction(context.Background(), target, "owner", "repo", "777", log, 2, 0, evictionTierScaleSet, recoveryCauseEviction)
+
+	assert.Greater(t, calls.Load(), int64(1), "the window must span several refused attempts")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonNeverConcluded)))
+	assert.Contains(t, target.events, "EvictionRerunFailed",
+		"a re-run that never landed needs an owner-visible Event, not just a log line")
+}
+
+// TestHandleEviction_TerminalFailuresDoNotRetry pins the discrimination: only the
+// still-running refusal means "again later". A 403 with any other message (a
+// permissions problem) and a 5xx are terminal — retrying either would hammer an
+// endpoint that is not going to change its mind within the window.
+func TestHandleEviction_TerminalFailuresDoNotRetry(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{name: "403 without the still-running message", status: http.StatusForbidden, body: `{"message":"Resource not accessible by integration"}`},
+		{name: "500", status: http.StatusInternalServerError, body: `{}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var calls atomic.Int64
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls.Add(1)
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+
+			m := rerunLoopMetrics()
+			p := &Provisioner{
+				Metrics:                    m,
+				TokenFunc:                  func(context.Context) (string, error) { return "tok", nil },
+				GitHubAPIURL:               srv.URL,
+				HTTPClient:                 srv.Client(),
+				EvictionRerunRetryInterval: time.Millisecond,
+			}
+			target := &stubTarget{key: client.ObjectKey{Namespace: "ns", Name: "g"}}
+			log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+			<-p.handleEviction(context.Background(), target, "owner", "repo", "888", log, 2, 0, evictionTierClassic, recoveryCauseEviction)
+
+			assert.Equal(t, int64(1), calls.Load(), "a terminal failure must not be retried")
+			assert.Equal(t, float64(1),
+				testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseEviction, rerunFailureReasonAPIError)))
+			assert.Contains(t, target.events, "EvictionRerunFailed")
+		})
+	}
 }
 
 // TestRerunFailedJobs_RequiresAnExplicitBaseURL is the Q504 regression test.

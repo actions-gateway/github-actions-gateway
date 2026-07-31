@@ -69,6 +69,13 @@ type Metrics struct {
 	// split by cause: it stays one hard cap per run_id across both.
 	EvictionRetries          *prometheus.CounterVec
 	EvictionRetriesExhausted *prometheus.CounterVec
+	// EvictionRerunFailures counts disruption recoveries whose re-run was never
+	// accepted by GitHub — the budget slot was spent and EvictionRetries
+	// incremented, but the job was not re-run, so without this the metrics read
+	// as a recovery that happened (Q503). Split by reason: run_never_concluded
+	// (GitHub still answered "This workflow is already running" when the re-run
+	// window closed) versus api_error (a terminal API failure).
+	EvictionRerunFailures *prometheus.CounterVec
 	// EvictionRecoveryIdentityUnknown counts scale-set workers found disrupted that
 	// carried no workflow-run identity, so no automatic re-run could be attempted.
 	// It is the one failure mode that makes scale-set disruption recovery silently
@@ -196,6 +203,11 @@ func NewMetrics() *Metrics {
 			Help: "Disrupted jobs where retry budget was exhausted, by acquisition tier (classic, scaleset) and cause (eviction, preemption).",
 		}, []string{"namespace", "runner_group", "tier", "cause"}),
 
+		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_eviction_rerun_failures_total",
+			Help: "Disruption recoveries whose re-run was never accepted by GitHub, so the job requires a manual re-run despite the spent retry slot, by acquisition tier (classic, scaleset), cause (eviction, preemption), and reason (run_never_concluded, api_error).",
+		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_recovery_identity_unknown_total",
 			Help: "Disrupted scale-set worker pods carrying no workflow-run identity, so no automatic re-run could be attempted, by cause (eviction, preemption).",
@@ -264,6 +276,7 @@ func NewMetrics() *Metrics {
 		m.JobDuration,
 		m.EvictionRetries,
 		m.EvictionRetriesExhausted,
+		m.EvictionRerunFailures,
 		m.EvictionRecoveryIdentityUnknown,
 		m.QuotaRetries,
 		m.QuotaRetriesExhausted,

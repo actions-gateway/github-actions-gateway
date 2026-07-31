@@ -56,6 +56,9 @@ func newTestMetrics() *runnercore.Metrics {
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_retries_exhausted_total",
 		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_prov_eviction_rerun_failures_total",
+		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_recovery_identity_unknown_total",
 		}, []string{"namespace", "runner_group", "cause"}),
@@ -1125,8 +1128,8 @@ func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 	}
 
 	// Second eviction (count 1 >= MaxEvictionRetries=1): budget exhausted, no API call.
-	// H5: provision returns only after handleEviction finishes, so these assertions
-	// are race-free — no sleep needed.
+	// H5: the budget check runs synchronously inside provision (only the GitHub calls
+	// are detached — Q503), so these assertions are race-free — no sleep needed.
 	runCycle("plan-evict-2")
 	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup", "classic", "eviction")))
 	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", "classic", "eviction")))
@@ -1190,6 +1193,13 @@ func TestProvisioner_EvictionRerunAPI5xx(t *testing.T) {
 
 	// EvictionRetries counter incremented even when the API returns 5xx.
 	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
+
+	// The re-run never landed, so the failure counter must say so (Q503). Eventually:
+	// the GitHub calls run detached from provision, so the failure is recorded a
+	// moment after the stub's response is read.
+	assert.Eventually(t, func() bool {
+		return testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("team-a", "mygroup", "classic", "eviction", "api_error")) == 1
+	}, 2*time.Second, 5*time.Millisecond, "a 5xx re-run must be surfaced as api_error")
 }
 
 // TestProvisioner_PriorityTiersSecondTier verifies that the second priority tier

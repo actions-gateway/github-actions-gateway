@@ -12,6 +12,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)](#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before)
   - [Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)](#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github)
   - [Non-breaking: eviction auto-retry now honours GITHUB_API_BASE_URL (it never did on GHES)](#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes)
   - [Non-breaking: preempted workers are now re-run automatically; eviction counters gain a cause label](#non-breaking-preempted-workers-are-now-re-run-automatically-eviction-counters-gain-a-cause-label)
@@ -76,6 +77,34 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)
+
+No action required, but two observable behaviours change (Q503).
+
+Previously the AGC fired `rerun-failed-jobs` exactly once, `evictionRetryDelay`
+(default 5s) after seeing a worker evicted. Against real GitHub that call always lost
+a race it could not win: an ungracefully killed runner reports nothing, GitHub
+concludes the run only when the job lock's TTL lapses (~10 minutes, measured 9m36s),
+and until then the API refuses re-runs with `403 This workflow is already running`.
+The retry budget was spent, `actions_gateway_eviction_retries_total` incremented, and
+the job was never re-run — every evicted job needed a manual re-run despite the
+metrics saying recovery had happened.
+
+The AGC now treats that refusal as "not yet" and retries the re-run every 30 seconds
+inside a 15-minute window, on both acquisition tiers, still spending one budget slot
+per recovery. What you will observe after upgrading:
+
+- Evicted jobs actually re-run — expect the `disruption auto-retry triggered` log
+  line and the second run attempt **~10 minutes** after the eviction, not seconds.
+  Preempted jobs are unaffected in timing: their runner reports before dying, GitHub
+  concludes in seconds, and the first or second call is accepted.
+- A new counter, `actions_gateway_eviction_rerun_failures_total`
+  (`reason="run_never_concluded"` | `"api_error"`), and a new `EvictionRerunFailed`
+  Warning Event surface the recoveries whose re-run never landed — those still need
+  a manual re-run. Expected to be zero; see
+  [observability-metrics.md](observability-metrics.md) and the
+  [runbook](troubleshooting.md#evicted-worker-pods-exhausting-retry-budget).
 
 ### Non-breaking: eviction auto-retry now honours `GITHUB_API_BASE_URL` (it never did on GHES)
 

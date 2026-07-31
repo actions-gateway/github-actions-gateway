@@ -3,6 +3,7 @@ package provisioner
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -42,13 +43,59 @@ const (
 	// defaultEvictionSweepInterval is how often the background sweeper scans
 	// evictionCounts for entries older than the TTL.
 	defaultEvictionSweepInterval = time.Hour
+
+	// defaultEvictionRerunWindow bounds how long a disruption recovery keeps retrying
+	// a re-run that GitHub refuses because the original run has not concluded.
+	//
+	// GitHub answers rerun-failed-jobs with `403 This workflow is already running`
+	// until it concludes the run itself, and after an ungraceful kill (SIGKILLed
+	// runner, nothing reported) that takes until the job lock's TTL lapses — measured
+	// at 9m36s on live GitHub, designed as "at worst ~10 minutes from the last
+	// renewal" (Q396/Q503). Fifteen minutes covers that bound with headroom; a run
+	// still refusing past it is a finding, not a wait worth extending.
+	defaultEvictionRerunWindow = 15 * time.Minute
+	// defaultEvictionRerunRetryInterval paces the refused re-run attempts inside the
+	// window. The wait is bounded and its length known (~10 minutes), so a fixed
+	// interval is enough — backoff would only delay the recovery past the moment
+	// GitHub starts accepting.
+	defaultEvictionRerunRetryInterval = 30 * time.Second
+)
+
+// evictionRecoveryAPIBudget is the slack a recovery gets for its GitHub calls beyond
+// the retry delay and the re-run window, bounding the detached context every recovery
+// runs on. The bound is what keeps a wedged GitHub call from leaving a goroutine
+// behind indefinitely.
+const evictionRecoveryAPIBudget = 60 * time.Second
+
+// errRunNotConcluded marks the rerun-failed-jobs refusal that means "not yet": GitHub
+// answers 403 with "This workflow is already running" until it has concluded the
+// original run, so the caller should retry rather than treat the attempt as spent
+// (Q503).
+var errRunNotConcluded = errors.New("the original run has not concluded")
+
+// Reason label values for the EvictionRerunFailures counter: the recovery's re-run
+// window closed with GitHub still refusing, or the API answered with a terminal
+// failure (anything other than the still-running refusal).
+const (
+	rerunFailureReasonNeverConcluded = "run_never_concluded"
+	rerunFailureReasonAPIError       = "api_error"
 )
 
 // handleEviction reserves a slot from the run's retry budget and, if one remains,
-// waits out retryDelay and asks GitHub to re-run the run's failed jobs. It is shared
-// by both acquisition tiers: the classic path calls it inline from provision() once the
+// waits out retryDelay and asks GitHub to re-run the run's failed jobs, retrying
+// while GitHub refuses because the original run has not concluded (Q503). It is shared
+// by both acquisition tiers: the classic path calls it from provision() once the
 // worker pod it is watching is disrupted, and the scale-set path from the owning
 // reconciler's RecoverEvictedScaleSetWorkers pass.
+//
+// The budget check, metrics, and Events run synchronously; the delay and the GitHub
+// calls run on a goroutine whose completion the returned done channel signals, on a
+// context detached from ctx and bounded by retryDelay + the re-run window + an API
+// budget. Detached, because the wait outlives every caller: GitHub concludes an
+// ungracefully killed run only when its job lock TTL lapses (~10 minutes, measured
+// 9m36s — Q396), which is far past both a reconcile and the classic job goroutine's
+// obligation to report its result. Callers may block on the channel (tests), select
+// with a timeout, or ignore it.
 //
 // tier and cause only label the metrics and the operator-facing wording — the budget is
 // deliberately one budget, keyed by run_id alone, so the Q106 cap of maxRetries re-runs
@@ -56,18 +103,19 @@ const (
 // per combination. A run that is alternately evicted and preempted therefore cannot
 // spend two budgets. cause is recoveryCauseEviction (the kubelet's node-pressure
 // eviction) or recoveryCausePreemption (kube-scheduler preemption, Q497).
-func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration, tier, cause string) {
+func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration, tier, cause string) <-chan struct{} {
 	key := target.Key()
 	if runID == "0" || runID == "" {
 		log.Warn("worker pod disrupted but run_id unknown; skipping auto-retry", "cause", cause)
-		return
+		return closedChan()
 	}
 
 	// Reserve a retry slot atomically. This guards against the read-modify-write
 	// race where two concurrent evictions of the same run both read the same
 	// count, both pass the budget check, and both fire a rerun — exceeding
 	// maxRetries (Q106). At most maxRetries evictions ever pass the gate, so the
-	// rerun API is called at most maxRetries times per run.
+	// budget bounds re-run recoveries (not HTTP calls: one recovery may retry a
+	// refused re-run several times before it lands) at maxRetries per run.
 	attempt, ok := p.reserveEvictionRetry(runID, maxRetries)
 	if !ok {
 		log.Warn("disruption retry budget exhausted; manual rerun required",
@@ -77,7 +125,7 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 		}
 		target.RecordEvent(corev1.EventTypeWarning, "EvictionRetriesExhausted", "RetryEvictedJob",
 			fmt.Sprintf("worker pod for run %s was lost to %s and the auto-retry budget (%d) is exhausted; a manual re-run is required", runID, cause, maxRetries))
-		return
+		return closedChan()
 	}
 
 	log.Info("worker pod disrupted; scheduling auto-retry",
@@ -86,19 +134,103 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 		p.Metrics.EvictionRetries.WithLabelValues(key.Namespace, key.Name, tier, cause).Inc()
 	}
 
-	// Brief delay before calling GitHub so any in-flight state settles.
-	select {
-	case <-ctx.Done():
-		return
-	case <-time.After(retryDelay):
-	}
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx),
+		retryDelay+p.rerunWindow()+evictionRecoveryAPIBudget)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer cancel()
 
-	if err := p.rerunFailedJobs(ctx, owner, repo, runID, log); err != nil {
-		log.Error("disruption auto-retry failed; manual rerun may be required",
-			"runID", runID, "cause", cause, "error", err)
-	} else {
-		log.Info("disruption auto-retry triggered", "runID", runID, "attempt", attempt, "cause", cause)
+		// Brief delay before calling GitHub so any in-flight state settles.
+		select {
+		case <-rctx.Done():
+			return
+		case <-time.After(retryDelay):
+		}
+		p.rerunUntilAccepted(rctx, target, owner, repo, runID, log, attempt, tier, cause)
+	}()
+	return done
+}
+
+// rerunUntilAccepted calls rerun-failed-jobs for the run until GitHub accepts it,
+// treating the 403 "This workflow is already running" refusal as "not yet" and
+// retrying on a fixed interval within the re-run window (Q503). Any other failure is
+// terminal: the reserved budget slot stays spent either way (the Q106 hard cap counts
+// recoveries, and re-reserving on failure would let one disruption burn the whole
+// budget), so a re-run that never lands is surfaced to the operator via the
+// EvictionRerunFailures counter and an owner Event rather than retried further.
+func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, attempt int, tier, cause string) {
+	window := time.NewTimer(p.rerunWindow())
+	defer window.Stop()
+
+	for call := 1; ; call++ {
+		err := p.rerunFailedJobs(ctx, owner, repo, runID, log)
+		switch {
+		case err == nil:
+			log.Info("disruption auto-retry triggered",
+				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call)
+			return
+		case !errors.Is(err, errRunNotConcluded):
+			log.Error("disruption auto-retry failed; manual rerun may be required",
+				"runID", runID, "cause", cause, "error", err)
+			p.recordRerunFailure(target, runID, tier, cause, rerunFailureReasonAPIError, err)
+			return
+		}
+
+		// Refused because the original run is still winding down. Expected after an
+		// ungraceful kill; loud once so an operator tailing the log sees the wait is
+		// deliberate, quiet on the repeats.
+		refusedLog := log.Debug
+		if call == 1 {
+			refusedLog = log.Info
+		}
+		refusedLog("re-run refused; GitHub has not concluded the original run yet — will keep retrying",
+			"runID", runID, "cause", cause, "retryInterval", p.rerunRetryInterval())
+
+		select {
+		case <-ctx.Done():
+			log.Warn("disruption auto-retry abandoned before the original run concluded",
+				"runID", runID, "cause", cause, "error", ctx.Err())
+			return
+		case <-window.C:
+			err := fmt.Errorf("run still refusing re-runs after %s: %w", p.rerunWindow(), err)
+			log.Error("disruption auto-retry failed; run never concluded within the re-run window; manual rerun may be required",
+				"runID", runID, "cause", cause, "window", p.rerunWindow(), "rerunCalls", call)
+			p.recordRerunFailure(target, runID, tier, cause, rerunFailureReasonNeverConcluded, err)
+			return
+		case <-time.After(p.rerunRetryInterval()):
+		}
 	}
+}
+
+// recordRerunFailure surfaces a recovery whose re-run never landed: the retry budget
+// was spent and eviction_retries_total incremented, but the job was not re-run, so
+// without this the operator-visible story reads as a recovery that happened (Q503).
+func (p *Provisioner) recordRerunFailure(target Target, runID, tier, cause, reason string, err error) {
+	key := target.Key()
+	if p.Metrics != nil && p.Metrics.EvictionRerunFailures != nil {
+		p.Metrics.EvictionRerunFailures.WithLabelValues(key.Namespace, key.Name, tier, cause, reason).Inc()
+	}
+	target.RecordEvent(corev1.EventTypeWarning, "EvictionRerunFailed", "RetryEvictedJob",
+		fmt.Sprintf("the automatic re-run for run %s (lost to %s) was never accepted by GitHub (%v); a manual re-run is required", runID, cause, err))
+}
+
+// rerunWindow returns the re-run retry window, honouring the EvictionRerunWindow
+// override (zero means the default).
+func (p *Provisioner) rerunWindow() time.Duration {
+	if p.EvictionRerunWindow > 0 {
+		return p.EvictionRerunWindow
+	}
+	return defaultEvictionRerunWindow
+}
+
+// rerunRetryInterval returns the pacing between refused re-run attempts, honouring
+// the EvictionRerunRetryInterval override (zero means the default).
+func (p *Provisioner) rerunRetryInterval() time.Duration {
+	if p.EvictionRerunRetryInterval > 0 {
+		return p.EvictionRerunRetryInterval
+	}
+	return defaultEvictionRerunRetryInterval
 }
 
 // reserveEvictionRetry atomically checks the per-run eviction-retry budget and,
@@ -282,6 +414,16 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 
 	// GitHub returns 201 Created on success.
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		// The one refusal that means "again later" rather than "failed": until GitHub
+		// concludes the original run it answers 403 with "This workflow is already
+		// running", and after an ungraceful kill that conclusion is minutes away
+		// (Q503). Discriminated by the message, not the status code alone — a 403 is
+		// also what a permissions problem returns, and retrying that would be noise.
+		if resp.StatusCode == http.StatusForbidden &&
+			bytes.Contains(bytes.ToLower(body), []byte("already running")) {
+			return fmt.Errorf("rerun API returned %d: %s: %w",
+				resp.StatusCode, strings.TrimSpace(string(body)), errRunNotConcluded)
+		}
 		return fmt.Errorf("rerun API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return nil
