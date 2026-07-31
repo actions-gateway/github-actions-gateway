@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	toolscache "k8s.io/client-go/tools/cache"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -261,25 +262,29 @@ func TestInformerPodWaiter_OrdinaryCompletionIsNotPreempted(t *testing.T) {
 	}
 }
 
-// deletingPod is a pod with a deletionTimestamp, in the given phase — the shape a
-// graceful external removal (a drain, a `kubectl delete pod`) leaves while the kubelet
-// tears the pod down, before any container exit is recorded.
+// deletingPod is a pod under graceful external removal (a drain, a `kubectl delete
+// pod`), in the given phase, with the apiserver's real stamp shape: the delete was
+// requested 2s ago with a 30s grace period, so deletionTimestamp — request time PLUS
+// grace — sits 28s in the FUTURE. No container exit is recorded yet.
 func deletingPod(ns, name string, phase corev1.PodPhase) *corev1.Pod {
 	p := pod(ns, name, phase, "")
-	delTime := metav1.NewTime(time.Now().Add(-10 * time.Second))
+	delTime := metav1.NewTime(time.Now().Add(28 * time.Second))
 	p.DeletionTimestamp = &delTime
+	p.DeletionGracePeriodSeconds = ptr.To(int64(30))
 	return p
 }
 
 // drainedPod is deletingPod plus the container exit a drained *running* worker records
-// as the kubelet tears it down: terminated after the delete was issued (Q459's
-// measured shape).
+// as the kubelet tears it down: a SIGTERM-honouring runner exits seconds after the
+// delete was REQUESTED — and therefore well before deletionTimestamp, which carries
+// the grace period (Q459's measured shape; the raw-mark comparison this fixture once
+// modelled recovered only a worker that ignored SIGTERM to its SIGKILL — Q519).
 func drainedPod(ns, name string) *corev1.Pod {
 	p := deletingPod(ns, name, corev1.PodFailed)
 	p.Status.ContainerStatuses = []corev1.ContainerStatus{{
 		Name: "runner",
 		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
-			FinishedAt: metav1.NewTime(p.DeletionTimestamp.Add(5 * time.Second)),
+			FinishedAt: metav1.NewTime(deletionRequestedAt(p).Add(1 * time.Second)),
 		}},
 	}}
 	return p
@@ -352,6 +357,35 @@ func TestInformerPodWaiter_NeverRanDeletionIsNotExternal(t *testing.T) {
 	if res := mustResolve(t, done); res.outcome.ExternallyDeleted {
 		t.Fatal("a deleted worker with no container exit was reported as externally deleted; " +
 			"recovery would re-run a job that never ran")
+	}
+}
+
+// A cleanup delete of a pod whose job already failed on its own must NOT read as
+// external: the container's exit predates the deletion request, so the delete removed
+// evidence of a failure rather than causing one, and re-running it would re-run a
+// genuinely failed job.
+func TestInformerPodWaiter_CleanupDeleteOfFailedPodIsNotExternal(t *testing.T) {
+	w := newTestWaiter(pod("ns", "p", corev1.PodRunning, ""))
+
+	done := make(chan podResult, 1)
+	go func() {
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	cleaned := deletingPod("ns", "p", corev1.PodFailed)
+	cleaned.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: "runner",
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+			FinishedAt: metav1.NewTime(deletionRequestedAt(cleaned).Add(-5 * time.Minute)),
+		}},
+	}}
+	w.onPodEvent(cleaned)
+
+	if res := mustResolve(t, done); res.outcome.ExternallyDeleted {
+		t.Fatal("a cleanup delete of an already-failed pod was reported as externally deleted; " +
+			"recovery would re-run a job that genuinely failed")
 	}
 }
 

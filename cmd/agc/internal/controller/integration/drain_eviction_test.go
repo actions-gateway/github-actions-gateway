@@ -196,8 +196,12 @@ func holdWithFinalizer(t *testing.T, namespace, name string) {
 }
 
 // publishTerminalFailure writes the terminal status a real kubelet publishes as a
-// drained worker's container exits: PodFailed, an empty reason, and the container
-// termination record whose finishedAt postdates the deletion mark.
+// drained worker's container exits: PodFailed, an empty reason, and a container
+// termination record. Note the venue's timestamp shape: envtest pods are unscheduled,
+// so their eviction collapses grace to zero and deletionTimestamp equals the request
+// time. A real kubelet's mark sits a whole grace period later than the exit a
+// SIGTERM-honouring runner records — the offset the detection subtracts back out
+// (deletionRequestedAt) and E2E_AGC_ScaleSetRecovery pins on a real cluster (Q519).
 func publishTerminalFailure(t *testing.T, namespace, name string) {
 	t.Helper()
 	var pod corev1.Pod
