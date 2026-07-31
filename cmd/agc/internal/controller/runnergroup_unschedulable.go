@@ -36,6 +36,13 @@ type workersUnschedulable struct {
 	// Event watch on a busy cluster is a real load problem, so the mode must only ever
 	// look at pods that have already earned a verdict.
 	stuckPods []*corev1.Pod
+	// lastScheduledAt is the newest PodScheduled=True transition among the listed
+	// pods (zero when none has one), whatever their phase — a pod that bound and is
+	// pulling images, running, or already terminal all count. Carried out for the
+	// capacity gate's latch (Q512): a pod that scheduled AFTER the gate declined is
+	// the evidence that capacity returned, and the transition time rather than the
+	// creation time is what lets a long-stuck pod that finally squeezes in count too.
+	lastScheduledAt time.Time
 }
 
 // evalWorkersUnschedulable computes the WorkersUnschedulable condition (Q157) for
@@ -80,6 +87,9 @@ func evalWorkersUnschedulableForPods(pods []corev1.Pod, now time.Time, grace tim
 	var next time.Duration
 	for i := range pods {
 		pod := &pods[i]
+		if at, ok := podScheduledAt(pod); ok && at.After(st.lastScheduledAt) {
+			st.lastScheduledAt = at
+		}
 		if !pod.DeletionTimestamp.IsZero() || pod.Status.Phase != corev1.PodPending {
 			continue
 		}
@@ -113,6 +123,20 @@ func evalWorkersUnschedulableForPods(pods []corev1.Pod, now time.Time, grace tim
 			len(stuck), grace, strings.Join(stuck, "; "))
 	}
 	return st
+}
+
+// podScheduledAt returns when the scheduler bound the pod — the PodScheduled=True
+// condition's transition time — and whether it has been bound at all. Binding is
+// what makes a pod evidence of placeable capacity, so this deliberately ignores
+// the pod's phase: a bound pod still pulling images proves as much as a running one.
+func podScheduledAt(pod *corev1.Pod) (time.Time, bool) {
+	for i := range pod.Status.Conditions {
+		c := &pod.Status.Conditions[i]
+		if c.Type == corev1.PodScheduled && c.Status == corev1.ConditionTrue {
+			return c.LastTransitionTime.Time, true
+		}
+	}
+	return time.Time{}, false
 }
 
 // podUnschedulable reports whether a pod's scheduler verdict is Unschedulable —

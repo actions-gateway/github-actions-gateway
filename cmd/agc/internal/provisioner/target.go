@@ -159,15 +159,21 @@ type Target interface {
 	// owner that did not opt in (spec.capacityGate unset or mode Off), an owner it
 	// cannot read, or an owner whose tier has no capacity gate all yield false. The
 	// gate may under-gate freely — that is today's behavior — but must never
-	// over-gate, because over-gating starves a tenant.
+	// over-gate, because over-gating starves a tenant. A LATCHED gate (the declined
+	// evidence was reaped, Q512) is not fully closed either: it declines only while
+	// a probe pod is outstanding, admitting exactly one probe job per deadline
+	// window so the latch can resolve.
 	CapacityDeclined(ctx context.Context) (declined bool, detail string)
 
 	// DeclinedCapacity returns the same capacity signal as an integer instead of a
 	// boolean, for the scale-set tier's per-poll advertisement — the CapacityDeclined
 	// counterpart of QuotaCapacity (Q443's invariant: a rung expressed in only one
-	// form ships to only one tier). Declined means "no room for another worker pod",
-	// so the bound is the owner's own in-flight worker pods: GitHub keeps the jobs it
-	// has already assigned and is offered no more.
+	// form ships to only one tier). A live decline means "no room for another worker
+	// pod", so the bound is the owner's own in-flight worker pods: GitHub keeps the
+	// jobs it has already assigned and is offered no more. A latched decline (Q512)
+	// adds one probe slot while no probe pod is outstanding, so this tier trickles
+	// at one job per deadline window instead of snapping back to the full ceiling
+	// when the reaper deletes the gate's evidence.
 	//
 	// Fail-open by contract exactly like QuotaCapacity: bounded=false means "no
 	// capacity-derived bound applies" (gate off, nothing declined, or nothing

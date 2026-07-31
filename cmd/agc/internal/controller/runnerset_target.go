@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
@@ -170,7 +171,11 @@ func (t *runnerSetTarget) QuotaCapacity(ctx context.Context, max int32) (int32, 
 // keeps the gate and the operator's view of it from ever disagreeing — the condition
 // IS the decision, and `kubectl describe runnerset` explains a stall completely. It
 // also keeps this a cheap per-delivery cache read, like Ceiling and QuotaExhausted,
-// instead of a pod list on the acquisition hot path.
+// instead of a pod list on the acquisition hot path — except in the latched state
+// (Q512), where one pod list decides whether this delivery is the probe: a latched
+// gate declines only while a probe pod is outstanding, so exactly one job per
+// deadline window gets through to re-test the cluster. Without that admission the
+// latch could never resolve on the classic tier — no probe pod would ever exist.
 //
 // Fail-open at every step: an unreadable set, a set that never opted in, and a set
 // whose condition has not been computed yet all yield false. The mode is re-checked
@@ -178,40 +183,97 @@ func (t *runnerSetTarget) QuotaCapacity(ctx context.Context, max int32) (int32, 
 // so that opting out takes effect on the very next delivered job rather than waiting
 // for a reconcile to retract the condition.
 func (t *runnerSetTarget) CapacityDeclined(ctx context.Context) (bool, string) {
-	rs := &v2alpha1.RunnerSet{}
-	if err := t.client.Get(ctx, t.key, rs); err != nil {
+	c := t.capacityGateCondition(ctx)
+	if c == nil {
 		return false, ""
 	}
-	if runnerSetCapacityGateMode(rs) == v2alpha1.CapacityGateModeOff {
-		return false, ""
-	}
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
-	if c == nil || c.Status != metav1.ConditionTrue {
-		return false, ""
+	if c.Reason == v2alpha1.ReasonAwaitingProbe {
+		if _, probeOutstanding := t.activeWorkerPodsWithProbe(ctx, c.LastTransitionTime.Time); !probeOutstanding {
+			return false, ""
+		}
 	}
 	return true, c.Message
 }
 
 // DeclinedCapacity is the integer form of the same rung, for the scale-set tier's
 // per-poll advertisement (Q443's invariant — a rung expressed in only one form ships
-// to only one tier). A declining gate means "no room for another worker pod", so the
+// to only one tier). A live decline means "no room for another worker pod", so the
 // bound is this set's own non-terminal worker pods: GitHub keeps whatever it has
-// already assigned and is offered nothing more, and the advertisement falls to zero
-// once those drain.
+// already assigned and is offered nothing more. In the latched state (Q512) the
+// bound adds one probe slot whenever no probe pod is outstanding, because this tier
+// has no per-job decision point: without the slot the advertisement would snap back
+// to the full ceiling when the reaper cleared the gate's evidence — measured as a
+// burst of N wasted claims per deadline window — and with it the tier trickles at
+// one, the same rate the classic tier's per-delivery form allows.
 //
 // Bias-low by construction, like QuotaCapacity: the count is of pods the AGC can see,
 // which lags an assignment it has not provisioned yet. Under-advertising only delays
 // jobs; over-advertising would reproduce the claim-and-stall this rung exists to stop.
 func (t *runnerSetTarget) DeclinedCapacity(ctx context.Context, max int32) (int32, bool) {
-	declined, _ := t.CapacityDeclined(ctx)
-	if !declined {
+	c := t.capacityGateCondition(ctx)
+	if c == nil {
 		return 0, false
 	}
-	active := countActiveWorkerPodsByLabel(ctx, t.client, t.key.Namespace, provisioner.LabelRunnerSet, t.key.Name)
-	if active > max {
-		return max, true
+	active, probeOutstanding := t.activeWorkerPodsWithProbe(ctx, c.LastTransitionTime.Time)
+	limit := active
+	if c.Reason == v2alpha1.ReasonAwaitingProbe && !probeOutstanding {
+		limit++
 	}
-	return active, true
+	if limit > max {
+		limit = max
+	}
+	return limit, true
+}
+
+// capacityGateCondition returns the set's WorkerCapacityDeclined condition when the
+// gate is enabled and currently True, else nil. The shared read for both forms of
+// the placeability rung, folding in every fail-open step they have in common: an
+// unreadable set, mode Off (re-checked live so opting out takes effect on the next
+// delivered job), and a condition absent, False, or not yet computed.
+func (t *runnerSetTarget) capacityGateCondition(ctx context.Context) *metav1.Condition {
+	rs := &v2alpha1.RunnerSet{}
+	if err := t.client.Get(ctx, t.key, rs); err != nil {
+		return nil
+	}
+	if runnerSetCapacityGateMode(rs) == v2alpha1.CapacityGateModeOff {
+		return nil
+	}
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	if c == nil || c.Status != metav1.ConditionTrue {
+		return nil
+	}
+	return c
+}
+
+// activeWorkerPodsWithProbe counts this set's ceiling-relevant worker pods exactly
+// as countActiveWorkerPodsByLabel does — non-terminal and not being deleted — and
+// reports whether any of them was created after since, the latched gate's
+// outstanding-probe test (Q512). One list serves both answers so they cannot come
+// from different snapshots. A list failure reads as no pods and no probe, which for
+// the latch means "admit the probe" — the fail-open direction.
+func (t *runnerSetTarget) activeWorkerPodsWithProbe(ctx context.Context, since time.Time) (active int32, probeOutstanding bool) {
+	var pods corev1.PodList
+	if err := t.client.List(ctx, &pods,
+		client.InNamespace(t.key.Namespace),
+		client.MatchingLabels{provisioner.LabelRunnerSet: t.key.Name},
+	); err != nil {
+		return 0, false
+	}
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		if !p.DeletionTimestamp.IsZero() {
+			continue
+		}
+		switch p.Status.Phase {
+		case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
+			continue
+		}
+		active++
+		if p.CreationTimestamp.Time.After(since) {
+			probeOutstanding = true
+		}
+	}
+	return active, probeOutstanding
 }
 
 // runnerSetCapacityGateMode returns the set's effective capacity-gate mode, applying

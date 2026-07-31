@@ -119,11 +119,13 @@ func TestCapacityGate_FixedClusterDeclinesOnAnUnschedulablePod(t *testing.T) {
 	assert.Contains(t, got[1], "WorkerCapacityDeclined")
 }
 
-// TestCapacityGate_ClearsWhenThePodIsReaped is the trickle property at the condition
-// layer: the gate is derived from the existence of a stuck pod, so the reaper deleting
-// that pod at pendingPodDeadline is what reopens intake. Without this the first close
-// would be permanent and the gate would starve a tenant rather than throttle them.
-func TestCapacityGate_ClearsWhenThePodIsReaped(t *testing.T) {
+// TestCapacityGate_LatchesWhenThePodIsReaped is Q512 at the condition layer: the
+// gate's evidence is the stuck pod itself, and the reaper deletes that pod at
+// pendingPodDeadline. Clearing on the reap is what §9e measured as a no-op on the
+// scale-set tier — the advertisement snapped back to the full ceiling every deadline
+// window — so the decline must latch as AwaitingProbe instead, the reason the two
+// rung forms read to admit exactly one probe job.
+func TestCapacityGate_LatchesWhenThePodIsReaped(t *testing.T) {
 	now := time.Now()
 	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
@@ -133,14 +135,133 @@ func TestCapacityGate_ClearsWhenThePodIsReaped(t *testing.T) {
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
 
-	// The reaper deletes the stuck pod; nothing else about the set changes.
+	// The reaper deletes the stuck pod; nothing has shown that capacity returned.
+	require.NoError(t, r.Delete(context.Background(), pod))
+	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionTrue, c.Status,
+		"reaping the gate's own evidence must not restore the full advertisement")
+	assert.Equal(t, v2alpha1.ReasonAwaitingProbe, c.Reason)
+	assert.Contains(t, c.Message, "one probe job",
+		"the message must say intake is limited, not closed")
+	assert.Contains(t, c.Message, v2alpha1.ReasonPodsUnschedulable,
+		"the reaped verdict must survive into the latched message")
+	assert.Contains(t, c.Message, "untolerated taint",
+		"the scheduler's own text must survive the reap — the pod that carried it is gone")
+	assert.Equal(t, autoscalerVerdictRecheck, requeue,
+		"a probe that binds but stays Pending never fires the phase-only Pod watch, so the latch must poll")
+
+	// Re-publishing the latch over itself must keep its message, not re-wrap it.
+	msg := c.Message
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+	c = meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c)
+	assert.Equal(t, msg, c.Message)
+}
+
+// TestCapacityGate_LatchClearsWhenAProbeSchedules: the probe pod binding is the
+// evidence that capacity returned, and it must clear the latch completely — the whole
+// advertisement comes back, not another probe slot.
+func TestCapacityGate_LatchClearsWhenAProbeSchedules(t *testing.T) {
+	now := time.Now()
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
+		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
+
+	r := capReconciler(t, now, pod)
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+	require.NoError(t, r.Delete(context.Background(), pod))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+
+	// The probe binds after the decline began — still Pending (pulling images), which
+	// is why the check reads PodScheduled and not the phase.
+	probe := capWorkerPod("ns", "set", "worker-probe", corev1.PodPending, now, corev1.ConditionTrue, "", "")
+	probe.Status.Conditions[0].LastTransitionTime = metav1.NewTime(time.Now().Add(time.Minute))
+	require.NoError(t, r.Create(context.Background(), probe))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionFalse, c.Status, "a scheduled probe is capacity returning")
+	assert.Equal(t, v2alpha1.ReasonCapacityAvailable, c.Reason)
+}
+
+// TestCapacityGate_LatchIgnoresPreDeclineSchedulingEvidence: a pod that scheduled
+// BEFORE the decline began — a still-running worker from before the cluster filled,
+// or a Succeeded pod lingering inside completedPodTTL — says nothing about capacity
+// now. Only a binding newer than the condition breaks the latch; anything else would
+// defeat it the moment a set had any pre-decline pod at all.
+func TestCapacityGate_LatchIgnoresPreDeclineSchedulingEvidence(t *testing.T) {
+	now := time.Now()
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
+		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
+	old := capWorkerPod("ns", "set", "worker-old", corev1.PodRunning, now.Add(-time.Hour), corev1.ConditionTrue, "", "")
+	old.Status.Conditions[0].LastTransitionTime = metav1.NewTime(now.Add(-time.Hour))
+
+	r := capReconciler(t, now, pod, old)
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+
 	require.NoError(t, r.Delete(context.Background(), pod))
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
 	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
-	assert.Equal(t, metav1.ConditionFalse, c.Status, "reaping the stuck pod must reopen intake")
-	assert.Equal(t, v2alpha1.ReasonCapacityAvailable, c.Reason)
+	assert.Equal(t, metav1.ConditionTrue, c.Status)
+	assert.Equal(t, v2alpha1.ReasonAwaitingProbe, c.Reason)
+}
+
+// TestCapacityGate_LatchReturnsToTheLiveVerdictWhenTheProbeSticks closes the cycle:
+// the probe's own stuck pod re-earns the live reason with fresh evidence, and the
+// next reap latches again — one wasted claim per deadline window, §5's trickle rate.
+func TestCapacityGate_LatchReturnsToTheLiveVerdictWhenTheProbeSticks(t *testing.T) {
+	now := time.Now()
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
+		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
+
+	r := capReconciler(t, now, pod)
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+	require.NoError(t, r.Delete(context.Background(), pod))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+	require.Equal(t, v2alpha1.ReasonAwaitingProbe,
+		meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined).Reason)
+
+	// The probe pod sticks past the scheduling grace in its turn.
+	probe := capWorkerPod("ns", "set", "worker-probe", corev1.PodPending, now.Add(-6*time.Minute),
+		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "still no room")
+	require.NoError(t, r.Create(context.Background(), probe))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionTrue, c.Status)
+	assert.Equal(t, v2alpha1.ReasonPodsUnschedulable, c.Reason, "fresh evidence must displace the latch")
+	assert.Contains(t, c.Message, "still no room")
+}
+
+// TestCapacityGate_LatchDoesNotSurviveAnUnsupportedMode: an unrecognized mode's
+// fail-open is not a capacity verdict, and a latch held across it would gate a set
+// under semantics the operator never selected.
+func TestCapacityGate_LatchDoesNotSurviveAnUnsupportedMode(t *testing.T) {
+	now := time.Now()
+	rs := rsObj("set", "ns", gateOn("Probe"))
+	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+		Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
+		Reason: v2alpha1.ReasonAwaitingProbe, Message: "latched",
+	})
+	r := capReconciler(t, now)
+
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionFalse, c.Status)
+	assert.Equal(t, v2alpha1.ReasonGateModeUnsupported, c.Reason)
 }
 
 // TestCapacityGate_OptingOutRetractsTheCondition: a set that turns the gate off while
@@ -268,6 +389,35 @@ func TestCapacityGate_ElasticClusterGatesOnADeclination(t *testing.T) {
 	assert.Equal(t, autoscalerVerdictRecheck, requeue,
 		"nothing watches Events, so the gate must schedule its own re-check — otherwise a "+
 			"later scale-up would never reopen it")
+}
+
+// TestCapacityGate_ElasticClusterLatchesAfterTheReap: the latch is signal-agnostic —
+// an autoscaler declination survives its pod's reaping exactly as a scheduler verdict
+// does, with the autoscaler's own text carried into the latched message.
+func TestCapacityGate_ElasticClusterLatchesAfterTheReap(t *testing.T) {
+	now := time.Now()
+	pod := stuckPod("worker-stuck", now)
+	reader := &eventReaderStub{byPod: map[string][]corev1.Event{
+		"worker-stuck": {legacyEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineMsg, now.Add(-time.Minute))},
+	}}
+	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	r := capReconciler(t, now, pod)
+	r.EventReader = reader
+
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
+	require.Equal(t, v2alpha1.ReasonScaleUpDeclined,
+		meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined).Reason)
+
+	require.NoError(t, r.Delete(context.Background(), pod))
+	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
+
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	require.NotNil(t, c)
+	assert.Equal(t, metav1.ConditionTrue, c.Status)
+	assert.Equal(t, v2alpha1.ReasonAwaitingProbe, c.Reason)
+	assert.Contains(t, c.Message, v2alpha1.ReasonScaleUpDeclined)
+	assert.Contains(t, c.Message, "max node group size reached",
+		"the autoscaler's per-node-group text must survive the reap")
 }
 
 // TestCapacityGate_ElasticClusterIgnoresATransientSchedulerFailure is THE test for
@@ -639,6 +789,133 @@ func TestRunnerSetTarget_DeclinedCapacity(t *testing.T) {
 		_, bounded := target.DeclinedCapacity(ctx, 10)
 
 		assert.False(t, bounded, "fail-open here means the ceiling and quota rungs stand alone")
+	})
+}
+
+// latchedSet returns a RunnerSet mutator seeding the latched condition (Q512) with a
+// controlled transition time, so a test can place pods before or after the decline.
+func latchedSet(declinedSince time.Time) func(*v2alpha1.RunnerSet) {
+	return func(r *v2alpha1.RunnerSet) {
+		gateOn(v2alpha1.CapacityGateModeObserve)(r)
+		r.Status.Conditions = append(r.Status.Conditions, metav1.Condition{
+			Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
+			Reason: v2alpha1.ReasonAwaitingProbe, Message: "job intake is limited to one probe job",
+			LastTransitionTime: metav1.NewTime(declinedSince),
+		})
+	}
+}
+
+// TestRunnerSetTarget_LatchedDeclinedCapacity pins the probe slot (Q512): a latched
+// gate advertises the set's in-flight pods plus exactly one, and only while no probe
+// pod is outstanding — the integer tier's one-claim-per-window trickle.
+func TestRunnerSetTarget_LatchedDeclinedCapacity(t *testing.T) {
+	ctx := context.Background()
+	declinedSince := time.Now().Add(-time.Hour)
+
+	t.Run("an empty set advertises exactly the probe slot", func(t *testing.T) {
+		rs := rsObj("set", "ns", latchedSet(declinedSince))
+		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs).Build()
+		target := &runnerSetTarget{client: c, key: keyOf(rs)}
+
+		limit, bounded := target.DeclinedCapacity(ctx, 10)
+
+		assert.True(t, bounded)
+		assert.Equal(t, int32(1), limit, "the latch never closes intake — its floor is one probe job")
+	})
+
+	t.Run("an outstanding probe closes the slot", func(t *testing.T) {
+		rs := rsObj("set", "ns", latchedSet(declinedSince))
+		probe := capWorkerPod("ns", "set", "probe", corev1.PodPending, time.Now(), corev1.ConditionFalse, "", "")
+		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs, probe).Build()
+		target := &runnerSetTarget{client: c, key: keyOf(rs)}
+
+		limit, bounded := target.DeclinedCapacity(ctx, 10)
+
+		assert.True(t, bounded)
+		assert.Equal(t, int32(1), limit, "one probe per window: the outstanding probe IS the slot")
+	})
+
+	t.Run("a reaped probe reopens the slot", func(t *testing.T) {
+		// The probe went terminal without the reconciler clearing the latch — the
+		// next window's probe must still be admitted or the trickle stalls.
+		rs := rsObj("set", "ns", latchedSet(declinedSince))
+		done := capWorkerPod("ns", "set", "probe-done", corev1.PodFailed, time.Now(), corev1.ConditionFalse, "", "")
+		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs, done).Build()
+		target := &runnerSetTarget{client: c, key: keyOf(rs)}
+
+		limit, bounded := target.DeclinedCapacity(ctx, 10)
+
+		assert.True(t, bounded)
+		assert.Equal(t, int32(1), limit)
+	})
+
+	t.Run("pre-decline workers keep their slots plus the probe", func(t *testing.T) {
+		rs := rsObj("set", "ns", latchedSet(declinedSince))
+		objs := []client.Object{rs}
+		for _, n := range []string{"w1", "w2"} {
+			objs = append(objs, capWorkerPod("ns", "set", n, corev1.PodRunning, declinedSince.Add(-time.Hour), corev1.ConditionTrue, "", ""))
+		}
+		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(objs...).Build()
+		target := &runnerSetTarget{client: c, key: keyOf(rs)}
+
+		limit, bounded := target.DeclinedCapacity(ctx, 10)
+
+		assert.True(t, bounded)
+		assert.Equal(t, int32(3), limit, "GitHub keeps its running jobs; only one probe rides on top")
+	})
+
+	t.Run("the probe slot never exceeds the caller's cap", func(t *testing.T) {
+		rs := rsObj("set", "ns", latchedSet(declinedSince))
+		w := capWorkerPod("ns", "set", "w1", corev1.PodRunning, declinedSince.Add(-time.Hour), corev1.ConditionTrue, "", "")
+		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs, w).Build()
+		target := &runnerSetTarget{client: c, key: keyOf(rs)}
+
+		limit, bounded := target.DeclinedCapacity(ctx, 1)
+
+		assert.True(t, bounded)
+		assert.Equal(t, int32(1), limit, "a rung may only ever LOWER what the earlier rungs left")
+	})
+}
+
+// TestRunnerSetTarget_LatchedCapacityDeclined pins the classic tier's half of the
+// probe slot (Q512): a latched gate declines every delivery EXCEPT the one that
+// becomes the probe — without it, a latched classic set would starve, since no probe
+// pod could ever exist to resolve the latch.
+func TestRunnerSetTarget_LatchedCapacityDeclined(t *testing.T) {
+	ctx := context.Background()
+	declinedSince := time.Now().Add(-time.Hour)
+
+	t.Run("no probe outstanding admits the probe", func(t *testing.T) {
+		rs := rsObj("set", "ns", latchedSet(declinedSince))
+		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs).Build()
+		target := &runnerSetTarget{client: c, key: keyOf(rs)}
+
+		declined, _ := target.CapacityDeclined(ctx)
+
+		assert.False(t, declined, "this delivery becomes the probe")
+	})
+
+	t.Run("an outstanding probe declines the rest of the window", func(t *testing.T) {
+		rs := rsObj("set", "ns", latchedSet(declinedSince))
+		probe := capWorkerPod("ns", "set", "probe", corev1.PodPending, time.Now(), corev1.ConditionFalse, "", "")
+		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs, probe).Build()
+		target := &runnerSetTarget{client: c, key: keyOf(rs)}
+
+		declined, detail := target.CapacityDeclined(ctx)
+
+		assert.True(t, declined)
+		assert.Contains(t, detail, "one probe job")
+	})
+
+	t.Run("pre-decline workers are not probes", func(t *testing.T) {
+		rs := rsObj("set", "ns", latchedSet(declinedSince))
+		w := capWorkerPod("ns", "set", "w1", corev1.PodRunning, declinedSince.Add(-time.Hour), corev1.ConditionTrue, "", "")
+		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs, w).Build()
+		target := &runnerSetTarget{client: c, key: keyOf(rs)}
+
+		declined, _ := target.CapacityDeclined(ctx)
+
+		assert.False(t, declined, "a running pre-decline worker must not be mistaken for the probe")
 	})
 }
 
