@@ -819,6 +819,14 @@ kubectl get deploy -n <namespace> <agc> \
   -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="GITHUB_API_BASE_URL")].value}{"\n"}'
 ```
 
+Fleet-wide, the GMC exports the same condition as a gauge (Q537), so one query finds
+every pool carrying the gap — and the `ActionsGatewayGitHubEgressIncomplete` alert
+fires on it:
+
+```promql
+actions_gateway_github_egress_incomplete == 1
+```
+
 **Resolution.** Either:
 
 - **Supply the ranges.** Put the appliance's CIDRs in the `EgressProxy`'s

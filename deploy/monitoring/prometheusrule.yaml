@@ -187,6 +187,18 @@ spec:
             summary: "GitHub egress allowlist stale for {{ $labels.name }} in {{ $labels.namespace }}"
             description: "The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; a stalled refresh loop may let the proxy NetworkPolicy drift from GitHub's published ranges, silently dropping new ranges."
 
+        # Ticket: a GHES tenant's egress allowlist can't reach its appliance (Q506, Q537)
+        - alert: ActionsGatewayGitHubEgressIncomplete
+          expr: |
+            actions_gateway_github_egress_incomplete == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaygithubegressincomplete"
+            summary: "GHES egress ranges missing for {{ $labels.name }} in {{ $labels.namespace }}"
+            description: "A referring gateway names a GitHub Enterprise Server host the pool's CIDR-mode allowlist cannot reach, so the tenant's GitHub traffic is denied and it acquires no jobs. Supply the appliance's ranges in spec.destinationCIDRs or switch to an FQDN egress mode — this will not self-heal."
+
         # Ticket: agent re-registration failing — listener capacity decays job by job (Q267)
         - alert: ActionsGatewayAgentRecycleErrors
           expr: |

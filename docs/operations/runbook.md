@@ -155,6 +155,10 @@ procedure rather than just the alert's `summary`/`description`. Severity classes
 
 **Page.** The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; the proxy `NetworkPolicy` may drift from GitHub's published ranges. See [ActionsGateway Reports EgressRulesStale](troubleshooting.md#actionsgateway-reports-egressrulesstale).
 
+### ActionsGatewayGitHubEgressIncomplete
+
+**Ticket.** A referring gateway names a GitHub Enterprise Server host the `EgressProxy` pool's `CIDR`-mode allowlist cannot reach, so that tenant's GitHub traffic is denied and it acquires no jobs. The fix is yours to make — the appliance's ranges are knowable only to you, so this will not self-heal: supply them in `spec.destinationCIDRs` (a platform admin must allowlist them first) or switch the pool to an FQDN egress mode. See [A GHES Tenant's Traffic Never Reaches the Appliance](troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance).
+
 ### ActionsGatewayAgentRecycleErrors
 
 **Ticket.** Single-use JIT agent re-registration is failing; sustained growth shrinks listener capacity and decays tenant throughput job by job. See [Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner).

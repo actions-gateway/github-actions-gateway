@@ -236,7 +236,7 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
       "id": 21,
-      "description": "GMC-exported condition gauges (1=firing) per gateway: RunnerGroupsDegraded, EgressRulesStale, ProxyQuotaPressure, ProxyQuotaExceeded.",
+      "description": "GMC-exported condition gauges (1=firing) per gateway: RunnerGroupsDegraded, EgressRulesStale, ProxyQuotaPressure, ProxyQuotaExceeded, GitHubEgressIncomplete (v2 EgressProxy only).",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -272,6 +272,12 @@
           "expr": "actions_gateway_proxy_quota_exceeded",
           "legendFormat": "proxy quota exceeded {{namespace}}/{{name}}",
           "refId": "D"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "actions_gateway_github_egress_incomplete",
+          "legendFormat": "github egress incomplete {{namespace}}/{{name}}",
+          "refId": "E"
         }
       ]
     },
