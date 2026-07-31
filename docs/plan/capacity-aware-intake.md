@@ -25,25 +25,35 @@ durable rationale in
 | # | Item | Sz | Status |
 |---|---|---|---|
 | 0 | Design rationale recorded (D.8 asymmetry principle, G.16 deferral + triggers) | S | ✅ Done — this change |
-| 0a | Port the shipped quota rung to the scale-set tier, as the integer form of the ladder | M | ✅ Done ([§9a](#9a-the-shipped-quota-rung-was-classic-only-q443)/[§9b](#9b-what-the-port-shipped), Q443, 2026-07-26) — effect unmeasured (V1) |
-| 1 | Gate on the scheduler's verdict, for clusters that cannot grow | M | ✅ Done ([§6](#6-phase-1--the-scheduler-verdict-signal-q405), Q405, 2026-07-27) — effect unmeasured (V2) |
-| 2 | Gate on the autoscaler's own declination, for elastic clusters | M | ✅ Done ([§7](#7-phase-2--the-autoscaler-declination-signal-q406), Q406, 2026-07-27) — effect unmeasured (V2) |
+| 0a | Port the shipped quota rung to the scale-set tier, as the integer form of the ladder | M | ✅ Done ([§9a](#9a-the-shipped-quota-rung-was-classic-only-q443)/[§9b](#9b-what-the-port-shipped), Q443, 2026-07-26) — effect measured (V1) |
+| 1 | Gate on the scheduler's verdict, for clusters that cannot grow | M | ✅ Done ([§6](#6-phase-1--the-scheduler-verdict-signal-q405), Q405, 2026-07-27) — effect measured null on ScaleSet (V2) |
+| 2 | Gate on the autoscaler's own declination, for elastic clusters | M | ✅ Done ([§7](#7-phase-2--the-autoscaler-declination-signal-q406), Q406, 2026-07-27) — effect measured null on ScaleSet (V2) |
 | 2a | Split the mode enum's two axes: tenant policy on the set, cluster fact on the gateway | S | ✅ Done ([§5a](#5a-the-single-enum-was-two-axes-q470), Q470, 2026-07-27) |
 | 2b | Assert phase 2's matcher against a real autoscaler's events, in kind | M | ✅ Done ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), Q474, 2026-07-28) — cluster-autoscaler only (V3) |
 | 2c | Stop one loop's two verdicts from gating: the concurrency window | S | ✅ Done ([§9d](#9d-the-concurrency-window-q478), Q478, 2026-07-28) |
-| V1 | Measure item 0a's effect — the scale-set quota rung — on dogfood | M | ⏳ Unrun ([§9b](#9b-what-the-port-shipped), [Q462](../STATUS.md#Q462)) |
-| V2 | Measure items 1 and 2's effect — both capacity-gate signals — on dogfood | M | ⏳ Unrun ([§9](#9-validation-to-be-measured-not-asserted), [Q469](../STATUS.md#Q469)) — gates item 3 |
+| V1 | Measure item 0a's effect — the scale-set quota rung — on dogfood | M | ✅ Measured ([§9f](#9f-what-the-dogfood-run-measured-for-the-quota-rung-q462), Q462, 2026-07-31) — rung binds; bias-low margin 0–2 jobs, never inverted |
+| V2 | Measure items 1 and 2's effect — both capacity-gate signals — on dogfood | M | ✅ Measured ([§9e](#9e-what-the-dogfood-run-measured-q469), Q469, 2026-07-31) — **no reduction on the ScaleSet tier**; fix is [Q512](../STATUS.md#Q512) |
 | V3 | Extend item 2b's live-autoscaler drift gate to Karpenter | M | ⏳ Unrun ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), [Q479](../STATUS.md#Q479)) |
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
 A numbered row means code shipped; a `V` row means that code's effect was
 measured where it runs. **The V rows are the open work — item 3's deferral does
 not close this plan.** A ✅ on 0a, 1 or 2 records an envtest proof of the
-*mechanism*, never a measurement of what it removes, so **no rung's *effect* has
-been measured on a live cluster**, and no effectiveness claim belongs in this
-doc, or in public copy, until V1–V3 produce one. V2's numbers are also the input
-to the Phase 3 decision — deferring item 3 is what makes V2 load-bearing, not
-what retires it. What item 2b added is narrower and does not substitute for V2:
+*mechanism*, never a measurement of what it removes.
+
+**V2 has now run, and the answer was no ([§9e](#9e-what-the-dogfood-run-measured-q469)).**
+On the ScaleSet tier — the default acquisition tier — `mode: Observe` produced
+exactly the same wasted-claim count as `mode: Off`. The mechanism behaved as
+specified; the integer expression of the rung cannot bound waste while its bound
+is the set's own in-flight pods and the reaper deletes those. **No effectiveness
+claim belongs in this doc, or in public copy, for either tier**: classic is still
+unmeasured, and scale-set is measured at zero. The remedy is
+[Q512](../STATUS.md#Q512), and V2 should be re-run once it lands.
+
+That also changes what V2 hands to the Phase 3 decision. §8's trigger (a) asks
+whether residual burn survives *rate-bounding*; on this tier there was no
+rate-bounding to survive, so the measurement neither arms nor retires item 3 —
+it says fix the rung first, then re-measure. What item 2b added is narrower and does not substitute for V2:
 phase 2's *input* — the strings a real cluster-autoscaler emits — is now asserted
 against a live autoscaler on every run of the drift gate ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474)).
 
@@ -684,17 +694,20 @@ counters, for the same reason, and every evaluated rung publishes an explicit ze
 poll so a series never freezes at its last non-zero reading. Both are dropped when the
 set is deleted.
 
-**Not measured yet.** §9 still owns the live validation, and none of it has run for this
-rung; it is tracked as [Q462](../STATUS.md#Q462). Specifically unmeasured: the divergence between the AGC's pod count and GitHub's
-`totalAssignedJobs` under burst (the bias-low margin), and whether one poll interval of
-recovery latency is noticeable to a tenant whose quota frees up mid-burst. The envtest
-proof asserts the mechanism (a quota-blocked job is never assigned, and assignment
-resumes when headroom returns), not its behaviour at scale.
+**Measured 2026-07-31 ([§9f](#9f-what-the-dogfood-run-measured-for-the-quota-rung-q462)).**
+Both quantities this section left open came back inside their intended bounds: the
+bias-low margin between the AGC's pod count and GitHub's `totalAssignedJobs` was
+0–2 jobs and never inverted, and recovery from freed quota mid-burst was ~30s
+rather than a painful poll interval. The rung binds continuously on the scale-set
+tier — unlike the capacity rung, whose live result was null
+([§9e](#9e-what-the-dogfood-run-measured-q469)). Still unmeasured: a CPU/memory-shaped
+quota, where `QuotaHeadroomPods`' binary search does the real work, and the classic
+tier's boolean rung on a live cluster.
 
 ## 9c. The live-autoscaler harness, and what it measured (Q474)
 
-Shipped 2026-07-28. §9 above is about the gate's *effect* and still needs a real
-burst on dogfood ([Q469](../STATUS.md#Q469)). This is the other half, and it is
+Shipped 2026-07-28. §9 above is about the gate's *effect*, since measured by a
+real burst on dogfood ([§9e](#9e-what-the-dogfood-run-measured-q469)). This is the other half, and it is
 about the gate's *input*: phase 2 recognizes cluster-autoscaler by strings
 upstream owns, pinned in `autoscaler_verdict_test.go` from recorded samples.
 
@@ -812,6 +825,218 @@ live harness does **not** cover it and cannot: CA records at second resolution,
 so the harness cannot produce a pair the rule would decide differently, and the
 generation that can is Karpenter's — whose harness is [Q479](../STATUS.md#Q479).
 Until that lands, the microsecond arm is asserted only against synthetic events.
+
+## 9e. What the dogfood run measured (Q469)
+
+Measured 2026-07-30/31 on `gag-dogfood` (GKE, Dataplane V2, cluster-autoscaler
+present), against a control plane built from `45670972` — the first time any of
+this rung has run outside envtest. **The headline is negative: on the ScaleSet
+tier the gate did not reduce wasted claims at all.** It is not a harness
+artifact; the rung evaluated, published its condition, and withheld capacity,
+and the arithmetic that makes it a no-op is in the shipped code.
+
+**The harness.** Two ScaleSet RunnerSets differing *only* in
+`capacityGate.mode`, both on a `RunnerTemplate` whose `nodeSelector` names a node
+pool that does not exist, `maxWorkers: 8`, and `pendingPodDeadline: 2m` —
+shortened from the 10m default so the trickle is observable inside a session.
+The deadline is part of the result, not a detail: the residual §5 predicts is
+*per deadline window*. One burst = one `unit-test.yml` dispatch = **7**
+GAG-routed jobs. The gateway leaves `clusterCapacity.nodeAutoscaling` unset
+(default `Present`), which is truthful here, so the signal under test is phase
+2's autoscaler declination, not phase 1's scheduler verdict.
+
+Phase B ran on a **new** set rather than a re-mode of Phase A's: after Phase A's
+run was cancelled the set still reported `7 job(s) assigned` for minutes with
+zero worker pods, and reusing the name would have replayed its unacked
+`JobAssigned` messages (gke-dogfood B7). Both sets were otherwise identical.
+
+### Step 2 — no reduction
+
+| | `mode: Off` | `mode: Observe` |
+|---|---|---|
+| `worker_pods_reaped_total{reason="pending_deadline"}`, ~12 min | **21** | **21** |
+| Shape | 3 batches × 7 | 3 batches × 7 |
+| Batch period | ~5 min | ~5 min |
+
+The gate was not inert — it reached `WorkerCapacityDeclined=True` with reason
+`ScaleUpDeclined` (so the phase 2 matcher recognized a live GKE autoscaler's
+declination, unprompted) and it withheld capacity. It withheld **1 slot**.
+
+**Why 1, and why that is structural.**
+[`DeclinedCapacity`](../../cmd/agc/internal/controller/runnerset_target.go)
+returns `(active, true)` when the gate declines and `(0, false)` when it does
+not, where `active` is the set's own non-terminal worker pods. So the bound is
+only ever *the batch already in flight*: with 7 pods against a ceiling of 8 it
+withheld `8 − 7 = 1`. Its godoc says "the advertisement falls to zero once those
+drain" — **that state is unreachable**, because the gate's evidence is the stuck
+pod itself. One measured cycle, sampled every 10s:
+
+```
+00:14:51  adv=7  withheld{capacity}=1  pods=7  WorkerCapacityDeclined=True/ScaleUpDeclined
+00:15:02  adv=7  withheld{capacity}=1  pods=0  WorkerCapacityDeclined=False/CapacityAvailable   <- reaper fires
+00:15:35  adv=8  withheld{capacity}=0  pods=0  WorkerCapacityDeclined=False/CapacityAvailable   <- full ceiling restored
+```
+
+The reap drains `active` to 0 and clears `declined` together — both were already
+true in the first sample after the reaper fired — so the advertisement returns to
+the **full** ceiling before the next assignment,
+and the next batch is claimed whole. §5's trickle property — "the condition
+clears, *one job* is claimed" — is the classic per-delivery behaviour. The
+integer tier has no per-job decision point to trickle through: clearing the
+condition restores the entire advertisement, so a burst of *N* becomes *N*
+again, every window.
+
+Two further timings, both measured, both making the window worse rather than
+better:
+
+* **The gate closes ~60s after the first pod goes Pending**, not immediately —
+  it waits the `WorkersUnschedulable` scheduling grace, which is
+  `pendingPodDeadline/2`. On the shipped 10m default that is **5 minutes**.
+* **Assignment is batch-granular per long-poll**, so all 7 jobs were assigned
+  before the gate could close under any grace. §5's "none of the phases
+  eliminates the first wasted claim" is, on this tier, the first *batch*.
+
+**What this does not say.** It does not retract the mechanism: the condition,
+the reason, the matcher against a real GKE autoscaler, and the withheld gauge
+all behaved as specified. It says the integer expression of the rung cannot
+bound claim waste while its bound is coupled to the pods the reaper deletes.
+The fix is tracked as [Q512](../STATUS.md#Q512) and is a design question, not a
+patch — a bound that survives the reap needs evidence that outlives the pod.
+
+### Step 3 — scale-up is not suppressed (pass)
+
+The check §9 calls the one that actually matters. Same gate mode (`Observe`),
+same gateway, a shape the autoscaler *can* satisfy (the tenant's `default`
+template, tolerating the workers taint, 2 vCPU) against a `workers` pool sitting
+at **0 nodes**, so placement *required* a scale-up.
+
+```
+00:25:40  pod created, FailedScheduling (0/2 nodes: Insufficient cpu)
+00:25:41  TriggeredScaleUp                       <- 1s, gate on
+00:26:49  worker_nodes 0 -> 2
+00:28:10  2 worker pods Running
+```
+
+`WorkerCapacityDeclined` stayed `False/CapacityAvailable` for the entire run —
+the newest event was CA's *acting* signal, and §7a's newest-wins rule kept the
+gate open, which is precisely the case §9d's concurrency window exists to
+protect. Jobs ran green (`unit-test`, `coverage`, `vendor-check`, `tidy-check`,
+`path-filters`; `shellcheck` is the unrelated [Q482](../STATUS.md#Q482) red).
+
+A pass here alongside a null step 2 is not a contradiction: the gate correctly
+declines to suppress a scale-up, it simply does not bound waste when no scale-up
+is coming.
+
+### Step 4 — the autoscaler event's latency is 0–1s
+
+Across all 7 pods of one burst, CA's `NotTriggerScaleUp` landed **0–1s** after
+pod creation (the spread is the legacy recorder's one-second quantum, §9c). The
+`TriggeredScaleUp` of step 3 landed at 1s. So the 30s re-check of §7a is
+conservative by more than an order of magnitude, and the condition's staleness
+is bounded by the re-check rather than by the autoscaler — the operator doc's
+staleness wording needs no change.
+
+Corroborating §9c on this cluster, unprompted: `reportingComponent` *and*
+`source.component` both read `cluster-autoscaler`, `eventTime` was null with
+`firstTimestamp`/`lastTimestamp` set (so `eventTime()`'s all-fields rule stays
+load-bearing), and the taint case again named only a category. One **new**
+message body not in the recorded table appeared, from the nonexistent-pool
+shape: `1 node(s) didn't match Pod's node affinity/selector`. The matcher never
+parses a body, so it classifies identically — recorded because the sample set is
+the thing Q474's drift gate pins.
+
+### What the method itself got wrong
+
+§9 step 2 names `actions_gateway_jobs_admission_rejected_total{reason="capacity"}`
+as the counter that should account for the drop. **That counter cannot fire on
+this tier.** It is emitted from one site,
+[`listener/job.go`](../../cmd/agc/internal/listener/job.go), on the classic path;
+[`scalesetlistener/metrics.go`](../../cmd/agc/internal/scalesetlistener/metrics.go)
+states it is structurally unreachable for a scale set, because a job the ladder
+declines is never assigned rather than claimed and rejected. The scale-set
+counterparts are `actions_gateway_scaleset_advertised_capacity` and
+`actions_gateway_scaleset_capacity_withheld{reason}`, and those are what the
+table above reports. §9 was written before §9b's port and was never reconciled
+with it; read as written it would have produced a flat-zero series and the false
+reading that the gate never engaged.
+
+Two observability snags found on the way, recorded here rather than as their own
+Queue rows — [Q512](../STATUS.md#Q512) links this section, so whoever takes the
+fix has them in hand:
+
+* `worker_pods_reaped_total` is labelled `runner_group`, while every
+  `scaleset_*` gauge is labelled `runner_set`. A dashboard that joins the reaper
+  counter to the advertisement gauges by label silently returns nothing.
+* The `v2alpha1 is deprecated` warning is logged at info level per API read. On
+  a set reconciling under a stuck burst it dominates the AGC log to the point of
+  making it unusable for diagnosis.
+
+## 9f. What the dogfood run measured for the quota rung (Q462)
+
+Same cluster and control plane as [§9e](#9e-what-the-dogfood-run-measured-q469),
+2026-07-31. Unlike the capacity rung, **the quota rung works on the scale-set
+tier**, and both of the quantities [§9b](#9b-what-the-port-shipped) left open came
+back inside their intended bounds.
+
+**The harness.** The tenant `ResourceQuota` was tightened from `pods: 12` to
+`pods: 6` (restored afterwards) so the rung binds; the set used the tenant's
+normal placeable `default` template with `maxWorkers: 8` and
+`capacityGate.mode: Off`, so the *only* rung under test is quota. Two
+`unit-test.yml` dispatches plus one `integration-test.yml`, sampled every 5s for
+~11 min.
+
+**The rung binds, continuously and correctly.** With 2 infrastructure pods
+against a hard limit of 6, the advertisement tracked `own active pods + headroom`
+capped at the ceiling, oscillating 3↔4 against a declared ceiling of 8:
+
+```
+adv=4  withheld{quota}=4     adv=3  withheld{quota}=5
+```
+
+`actions_gateway_scaleset_capacity_withheld{reason="quota"}` and
+`actions_gateway_scaleset_advertised_capacity` summed to the ceiling at every
+sample, which is the invariant §9b's "every evaluated rung publishes an explicit
+zero each poll" is there to keep readable.
+
+**The bias-low margin is 0–2 jobs and never inverted.** Sampling GitHub's
+`totalAssignedJobs` against the set's own non-terminal worker pods across 75
+samples:
+
+| margin (`assigned − active pods`) | samples |
+|---|---|
+| 0 | 58 (77%) |
+| +1 | 15 (20%) |
+| +2 | 2 (3%) |
+
+It was **never negative**. That is the answer §9a asked for: counting the AGC's
+own pods rather than `totalAssignedJobs` under-advertises by at most 2 slots on
+this workload, and the over-advertising direction — the one that reproduces
+claim-and-stall — did not occur. The bias-low choice costs little and holds.
+
+Two readings that look like violations and are not, worth stating so the next
+person does not re-open them:
+
+* **`assigned` briefly exceeded `advertised`** (4 against 3, at 00:51:33). The
+  advertisement caps *new* assignment; GitHub does not un-assign work when the
+  number drops, so a ceiling lowered under existing assignments is transiently
+  below them by construction.
+* **Terminal pods must be excluded from the AGC side.** Counting them made the
+  margin read negative — `active` appeared to exceed `assigned` — purely because
+  `Succeeded` pods linger. Neither `AdvertiseCapacity` nor the `ResourceQuota`
+  counts them, so the margin must not either.
+
+**Recovery from freed quota is ~30s, not a poll interval of pain.** §9b asked
+whether one poll interval of recovery latency is noticeable to a tenant whose
+quota frees mid-burst. Measured: quota fell to 4/6 at 00:51:03 with 2 active pods
+against 4 assigned, and the AGC was back to 3 active by 00:51:15 and 4 by
+00:51:33 — ~30s from headroom appearing to the pods existing. Against dogfood CI
+job durations that is not a tenant-visible delay.
+
+**What this does not cover.** One tenant, one namespace quota on `pods` only —
+not a CPU/memory-shaped quota, where `QuotaHeadroomPods`' binary search over
+`WorkerFootprint` does the real work and this run exercised only its trivial
+case. And the classic tier's boolean rung remains unmeasured on a live cluster;
+this measures the integer form §9a ported.
 
 ## 10. Non-goals
 
