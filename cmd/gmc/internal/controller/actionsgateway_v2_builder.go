@@ -14,6 +14,7 @@ import (
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -381,6 +382,10 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 		// Deployments in one namespace would all reconcile every RunnerSet and fight.
 		{Name: "GATEWAY_NAME", Value: ag.Name},
 		{Name: "GITHUB_ORG_URL", Value: ag.Spec.GitHubURL},
+		// GITHUB_API_BASE_URL is derived from the same githubURL so the AGC's token
+		// exchange addresses the gateway's own GitHub, not api.github.com (Q506).
+		// See the v1 builder for why it precedes extraEnv.
+		{Name: "GITHUB_API_BASE_URL", Value: githubapp.DeriveAPIBaseURL(ag.Spec.GitHubURL)},
 		// SECURITY_PROFILE comes from the namespace security-profile label (v2 moved
 		// PSA to the namespace, Q175). The reconciler reads the label; it does not
 		// stamp the PSA labels — that is the NamespacePSAReconciler's job.

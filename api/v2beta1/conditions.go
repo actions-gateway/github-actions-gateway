@@ -32,6 +32,7 @@ const (
 	ConditionProxyQuotaPressure          = apiconditions.ConditionProxyQuotaPressure
 	ConditionProxyQuotaExceeded          = apiconditions.ConditionProxyQuotaExceeded
 	ConditionEgressRulesStale            = apiconditions.ConditionEgressRulesStale
+	ConditionGitHubEgressIncomplete      = apiconditions.ConditionGitHubEgressIncomplete
 	ConditionRateLimited                 = apiconditions.ConditionRateLimited
 	ConditionRunnerVersionTooOld         = apiconditions.ConditionRunnerVersionTooOld
 	ConditionSizingDrift                 = apiconditions.ConditionSizingDrift
@@ -101,6 +102,8 @@ const (
 	ReasonCPULimitInjected        = apiconditions.ReasonCPULimitInjected
 	ReasonNoCPULimitInjected      = apiconditions.ReasonNoCPULimitInjected
 	ReasonAwaitingWorkerPods      = apiconditions.ReasonAwaitingWorkerPods
+	ReasonApplianceRangesRequired = apiconditions.ReasonApplianceRangesRequired
+	ReasonGitHubEgressAllowed     = apiconditions.ReasonGitHubEgressAllowed
 )
 
 // ImpairingConditionTypes returns the abnormal-is-True RunnerSet condition types that,

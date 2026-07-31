@@ -7,6 +7,7 @@ import (
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	appsv1 "k8s.io/api/apps/v1"
@@ -640,6 +641,12 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 		// passthrough. Placed before extraEnv so a testing override (when
 		// --allow-agc-extra-env is set) still wins on conflict, mirroring tracing.
 		{Name: "GITHUB_ORG_URL", Value: ag.Spec.GitHubURL},
+		// GITHUB_API_BASE_URL is the REST API root the AGC's token exchange and
+		// disruption auto-retry address, derived from the same spec.gitHubURL so a
+		// GHES gateway cannot mint against api.github.com (Q506). Nothing set it
+		// before, so a GHES tenant failed at token exchange before acquiring a job.
+		// Same ordering rule as GITHUB_ORG_URL: the testing-gated override wins.
+		{Name: "GITHUB_API_BASE_URL", Value: githubapp.DeriveAPIBaseURL(ag.Spec.GitHubURL)},
 		{Name: "HTTP_PROXY", Value: proxyServiceAddr},
 		{Name: "HTTPS_PROXY", Value: proxyServiceAddr},
 		{Name: "NO_PROXY", Value: buildNoProxy(ag.Spec.Proxy.NoProxyCIDRs)},

@@ -9,6 +9,7 @@ import (
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
+	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -183,6 +184,104 @@ func TestV2_EgressProxy_CiliumFQDNExtraDestinations(t *testing.T) {
 	var np networkingv1.NetworkPolicy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyChildName(egressProxyName)}, &np))
 	assert.True(t, npHasCIDRPeer(np, destCIDR), "destinationCIDRs must become an ipBlock peer even in FQDN mode")
+}
+
+// TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost covers Q506 #2. The GitHub host
+// a tenant uses lives on the referring ActionsGateway, not on the EgressProxy, so an
+// FQDN-mode GHES tenant used to get a policy naming six public hosts and nothing its
+// traffic touches. The gateway is applied AFTER the pool is Ready and dormant, so the
+// assertion also proves the referrer watch edge fires: with the suite's 2s resync
+// disabled and no not-ready requeue left running, nothing else can re-enqueue the
+// proxy (the Q326 setup, for the same reason).
+func TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost(t *testing.T) {
+	const ns = "v2-ep-cilium-ghes"
+	const ghesHost = "ghes.example.com"
+	createNamespace(t, ns)
+	createGitHubAppSecret(t, ns, "github-app")
+
+	// A freshly-refreshed cache keeps EgressRulesStale quiet and pushes the periodic
+	// egress recheck far past this test.
+	ipCache := &controller.IPRangeCache{}
+	ipCache.MarkRefreshed(time.Now())
+	startEgressProxyReconcilerNoResync(t, ipCache)
+
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
+		Spec: gmcv2alpha1.EgressProxySpec{
+			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN,
+			MinReplicas:      ptr32(1),
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	fqdnName := egressProxyName + "-proxy-fqdn"
+	require.Eventually(t, func() bool {
+		_, gerr := getCNIPolicy(t, ns, fqdnName, ciliumGVK)
+		return gerr == nil
+	}, 10*time.Second, 100*time.Millisecond, "CiliumNetworkPolicy should be emitted")
+
+	// envtest runs no kubelet, so drive the pool Ready by hand — a not-ready pool
+	// short-requeues, and that requeue alone would carry the gateway in.
+	g := gomega.NewWithT(t)
+	depKey := types.NamespacedName{Namespace: ns, Name: proxyChildName(egressProxyName)}
+	var dep appsv1.Deployment
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, depKey, &dep)
+	}, 20*time.Second, 100*time.Millisecond).Should(gomega.Succeed())
+	dep.Status.Replicas = 1
+	dep.Status.ReadyReplicas = 1
+	require.NoError(t, k8sClient.Status().Update(ctx, &dep))
+
+	g.Eventually(func() *metav1.Condition {
+		return egressProxyCondition(t, ns, egressProxyName, gmcv2alpha1.ConditionReady)
+	}, 20*time.Second, 100*time.Millisecond).Should(
+		gomega.HaveField("Status", metav1.ConditionTrue),
+		"the pool must be Ready (dormant) before the gateway lands, so the watch is the only trigger")
+
+	// No referrer yet: the appliance is absent, which is the defect being fixed.
+	cnp, err := getCNIPolicy(t, ns, fqdnName, ciliumGVK)
+	require.NoError(t, err)
+	require.False(t, ciliumPolicyAllowsFQDN(t, cnp, ghesHost),
+		"no referrer binds a GHES host yet")
+
+	gw := newV2GatewayWired("ghesgw", ns, "github-app", egressProxyName)
+	gw.Spec.GitHubURL = "https://" + ghesHost + "/example-org"
+	require.NoError(t, k8sClient.Create(ctx, gw))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, gw) })
+
+	require.Eventually(t, func() bool {
+		u, gerr := getCNIPolicy(t, ns, fqdnName, ciliumGVK)
+		if gerr != nil {
+			return false
+		}
+		return ciliumPolicyAllowsFQDN(t, u, ghesHost)
+	}, 15*time.Second, 100*time.Millisecond,
+		"the referring gateway's GHES host must reach the emitted toFQDNs set")
+
+	// The built-in public set is additive, never replaced.
+	cnp, err = getCNIPolicy(t, ns, fqdnName, ciliumGVK)
+	require.NoError(t, err)
+	assert.True(t, ciliumPolicyAllowsFQDN(t, cnp, "api.github.com"),
+		"the implicit GitHub hostnames must survive")
+}
+
+// ciliumPolicyAllowsFQDN reports whether the policy's GitHub egress rule names the
+// given host as an exact matchName entry.
+func ciliumPolicyAllowsFQDN(t *testing.T, cnp *unstructured.Unstructured, host string) bool {
+	t.Helper()
+	egress, found, err := unstructured.NestedSlice(cnp.Object, "spec", "egress")
+	require.NoError(t, err)
+	require.True(t, found)
+	fqdns, found, err := unstructured.NestedSlice(egress[len(egress)-1].(map[string]interface{}), "toFQDNs")
+	require.NoError(t, err)
+	require.True(t, found)
+	for _, f := range fqdns {
+		if f.(map[string]interface{})["matchName"] == host {
+			return true
+		}
+	}
+	return false
 }
 
 func TestV2_EgressProxy_CalicoFQDNMode(t *testing.T) {

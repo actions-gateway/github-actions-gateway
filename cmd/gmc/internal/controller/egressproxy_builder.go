@@ -138,20 +138,22 @@ func egressProxyResources(ep *gmcv2alpha1.EgressProxy) corev1.ResourceRequiremen
 // transport-only and the NetworkPolicy alone gates egress.
 //
 // When opted in, the proxy must permit the FULL set the egress policy allows, so:
-//   - PROXY_ALLOWED_HOST_SUFFIXES carries the implicit GitHub hostnames PLUS the
+//   - PROXY_ALLOWED_HOST_SUFFIXES carries the implicit GitHub hostnames, the GitHub
+//     Enterprise Server hosts this proxy's referrers bind to it (Q506 #2), PLUS the
 //     operator's destinationFQDNs. Workers always reach GitHub by hostname, so the
 //     GitHub set is expressed as host suffixes here regardless of egressPolicyMode;
 //     the ~7400 GitHub CIDRs are deliberately NOT injected (no worker CONNECTs to
 //     GitHub by literal IP, and an env var of thousands of CIDRs would be unwieldy).
 //   - PROXY_ALLOWED_CIDRS carries the operator's destinationCIDRs only.
-func proxyAllowlistEnv(ep *gmcv2alpha1.EgressProxy) []corev1.EnvVar {
+func proxyAllowlistEnv(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) []corev1.EnvVar {
 	if len(ep.Spec.DestinationFQDNs) == 0 && len(ep.Spec.DestinationCIDRs) == 0 {
 		return nil
 	}
-	suffixes := make([]string, 0, len(githubEgressFQDNs)+len(ep.Spec.DestinationFQDNs))
+	suffixes := make([]string, 0, len(githubEgressFQDNs)+len(gitHubHosts)+len(ep.Spec.DestinationFQDNs))
 	for _, f := range githubEgressFQDNs {
 		suffixes = append(suffixes, proxyHostSuffix(f))
 	}
+	suffixes = append(suffixes, gitHubHosts...)
 	suffixes = append(suffixes, ep.Spec.DestinationFQDNs...)
 
 	env := []corev1.EnvVar{{Name: "PROXY_ALLOWED_HOST_SUFFIXES", Value: strings.Join(suffixes, ",")}}
@@ -275,7 +277,7 @@ func egressProxyPriorityClassName(ep *gmcv2alpha1.EgressProxy) string {
 // binary falls back to serving /metrics plaintext on the health port, so mounting
 // the bundle is what keeps the endpoint from regressing to unauthenticated plaintext.
 // The bundle is a per-EgressProxy PKI (ensureMetricsCerts), never shared cross-tenant.
-func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) *appsv1.Deployment {
+func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string, gitHubHosts []string) *appsv1.Deployment {
 	replicas := egressProxyMinReplicas(ep)
 	name := proxyResourceName(ep)
 	selector := egressProxyPodSelector(ep)
@@ -365,7 +367,7 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 							// change here reaches the pod template, which is what
 							// rolls the pool so the new level takes effect.
 							{Name: "LOG_LEVEL", Value: logLevelOrDefault(ep.Spec.LogLevel)},
-						}, proxyAllowlistEnv(ep)...),
+						}, proxyAllowlistEnv(ep, gitHubHosts)...),
 						VolumeMounts: []corev1.VolumeMount{
 							{
 								Name:      proxyTLSVolumeName,

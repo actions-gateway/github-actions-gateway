@@ -79,7 +79,7 @@ func TestBuildEgressProxyGKEFQDNNetworkPolicy(t *testing.T) {
 	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
 		ep.Spec.DestinationFQDNs = []string{"proxy.golang.org"}
 	})
-	u := buildEgressProxyGKEFQDNNetworkPolicy(ep)
+	u := buildEgressProxyGKEFQDNNetworkPolicy(ep, nil)
 
 	assert.Equal(t, "networking.gke.io/v1alpha1", u.GetAPIVersion())
 	assert.Equal(t, "FQDNNetworkPolicy", u.GetKind())
@@ -161,7 +161,7 @@ func TestBuildEgressProxyNetworkPolicy_FQDNModeDropsCIDR(t *testing.T) {
 
 func TestBuildEgressProxyCiliumNetworkPolicy(t *testing.T) {
 	ep := newEP("shared", "team-a", nil)
-	u := buildEgressProxyCiliumNetworkPolicy(ep)
+	u := buildEgressProxyCiliumNetworkPolicy(ep, nil)
 
 	assert.Equal(t, "cilium.io/v2", u.GetAPIVersion())
 	assert.Equal(t, "CiliumNetworkPolicy", u.GetKind())
@@ -229,7 +229,7 @@ func assertCiliumFQDNPresent(t *testing.T, fqdns []interface{}, host, matchKey s
 
 func TestBuildEgressProxyCalicoNetworkPolicy(t *testing.T) {
 	ep := newEP("shared", "team-a", nil)
-	u := buildEgressProxyCalicoNetworkPolicy(ep)
+	u := buildEgressProxyCalicoNetworkPolicy(ep, nil)
 
 	assert.Equal(t, "projectcalico.org/v3", u.GetAPIVersion())
 	assert.Equal(t, "NetworkPolicy", u.GetKind())

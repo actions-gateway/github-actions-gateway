@@ -44,6 +44,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // EgressProxyReconciler reconciles a v2alpha1 EgressProxy into a standalone proxy
@@ -107,25 +108,33 @@ func (r *EgressProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		githubCIDRs = r.IPCache.Snapshot()
 	}
 
-	if err := r.reconcileResources(ctx, &ep, githubCIDRs); err != nil {
+	// The GitHub host a referrer binds to this proxy lives on the referrer, not here,
+	// so the hostname allowlists must be assembled from the referrer graph (Q506 #2).
+	// A read failure degrades rather than emitting a policy missing a tenant's host.
+	gitHubHosts, err := resolveReferrerGitHubHosts(ctx, r.Client, ep.Namespace, ep.Name)
+	if err != nil {
+		return r.setDegraded(ctx, &ep, &provisioningError{step: "resolve referrer GitHub hosts", err: err})
+	}
+
+	if err := r.reconcileResources(ctx, &ep, githubCIDRs, gitHubHosts); err != nil {
 		return r.setDegraded(ctx, &ep, err)
 	}
 
-	return r.updateStatus(ctx, &ep)
+	return r.updateStatus(ctx, &ep, gitHubHosts)
 }
 
 // reconcileResources creates or patches every child of the EgressProxy. Each
 // failure is wrapped with the failing step so updateStatus/setDegraded can name it
 // in the Degraded condition. The proxy TLS cert is ensured first so the Deployment
 // can mount it on the very first reconcile.
-func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv2alpha1.EgressProxy, githubCIDRs []net.IPNet) error {
+func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv2alpha1.EgressProxy, githubCIDRs []net.IPNet, gitHubHosts []string) error {
 	if err := r.ensureProxyCert(ctx, ep); err != nil {
 		return &provisioningError{step: "ensure proxy TLS cert", err: err}
 	}
 	if err := r.ensureMetricsCerts(ctx, ep); err != nil {
 		return &provisioningError{step: "ensure metrics TLS certs", err: err}
 	}
-	if err := r.applyDeployment(ctx, ep, buildEgressProxyDeployment(ep, r.ProxyImage)); err != nil {
+	if err := r.applyDeployment(ctx, ep, buildEgressProxyDeployment(ep, r.ProxyImage, gitHubHosts)); err != nil {
 		return &provisioningError{step: "apply proxy Deployment", err: err}
 	}
 	if err := r.applyService(ctx, ep, buildEgressProxyService(ep)); err != nil {
@@ -140,7 +149,7 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	if err := r.applyNetworkPolicy(ctx, ep, buildEgressProxyNetworkPolicy(ep, githubCIDRs)); err != nil {
 		return &provisioningError{step: "apply proxy NetworkPolicy", err: err}
 	}
-	if err := r.reconcileFQDNPolicy(ctx, ep); err != nil {
+	if err := r.reconcileFQDNPolicy(ctx, ep, gitHubHosts); err != nil {
 		return &provisioningError{step: "reconcile FQDN egress policy", err: err}
 	}
 	if err := r.applyOrPruneServiceMonitor(ctx, ep); err != nil {
@@ -157,7 +166,7 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 // make a mode/backend switch converge cleanly. Deletes tolerate a missing object and a
 // missing CRD (a CIDR-mode cluster need not have any FQDN CRD installed), so the default
 // path never fails on their absence.
-func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmcv2alpha1.EgressProxy) error {
+func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) error {
 	managed := ep.Spec.ManagedNetworkPolicy == nil || *ep.Spec.ManagedNetworkPolicy
 	emitter := fqdnEmitNone
 	if managed {
@@ -171,7 +180,7 @@ func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmc
 	// GitHub egress; the GKE object only ever widens the union (Q245).
 	policies := []struct {
 		gvk   schema.GroupVersionKind
-		build func(*gmcv2alpha1.EgressProxy) *unstructured.Unstructured
+		build func(*gmcv2alpha1.EgressProxy, []string) *unstructured.Unstructured
 		want  bool
 	}{
 		{ciliumNetworkPolicyGVK, buildEgressProxyCiliumNetworkPolicy, emitter == fqdnEmitCilium},
@@ -180,7 +189,7 @@ func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmc
 	}
 	for _, p := range policies {
 		if p.want {
-			if err := r.applyCNIPolicy(ctx, ep, p.build(ep)); err != nil {
+			if err := r.applyCNIPolicy(ctx, ep, p.build(ep, gitHubHosts)); err != nil {
 				return err
 			}
 			continue
@@ -469,7 +478,7 @@ func (r *EgressProxyReconciler) applyOwnedSecret(ctx context.Context, ep *gmcv2a
 // status/condition contract (§H.7): readyReplicas, observedGeneration, a Ready
 // condition (True once readyReplicas ≥ minReplicas), and a cleared Degraded
 // condition (the reconcile reached here, so provisioning succeeded).
-func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha1.EgressProxy) (ctrl.Result, error) {
+func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) (ctrl.Result, error) {
 	var dep appsv1.Deployment
 	readyReplicas := int32(0)
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: proxyResourceName(ep)}, &dep); err == nil {
@@ -493,6 +502,7 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 	// as Events, before setCondition mutates them, so we emit only on a genuine change.
 	prevReady := conditionStatusValue(ep.Status.Conditions, gmcv2alpha1.ConditionReady)
 	prevDegraded := conditionStatusValue(ep.Status.Conditions, gmcv2alpha1.ConditionDegraded)
+	prevEgressGap := conditionStatusValue(ep.Status.Conditions, gmcv2alpha1.ConditionGitHubEgressIncomplete)
 
 	setCondition := func(condType string, status bool, reason, msg string) {
 		s := metav1.ConditionFalse
@@ -525,6 +535,10 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 	setCondition(gmcv2alpha1.ConditionProxyQuotaExceeded, qc.exceeded, qc.exceededReason, qc.exceededMessage)
 	es := r.evalEgressProxyEgressRulesStale(ep, now.Time)
 	setCondition(gmcv2alpha1.ConditionEgressRulesStale, es.stale, es.reason, es.message)
+	// GitHubEgressIncomplete (Q506 #3): the one GHES gap the GMC cannot close, named
+	// rather than left to surface as a connect timeout with no cause.
+	eg := evalGitHubEgressIncomplete(ep, gitHubHosts)
+	setCondition(gmcv2alpha1.ConditionGitHubEgressIncomplete, eg.incomplete, eg.reason, eg.message)
 
 	ep.Status.ReadyReplicas = readyReplicas
 	ep.Status.ObservedGeneration = gen
@@ -544,6 +558,15 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 			etype = corev1.EventTypeWarning
 		}
 		r.recordEvent(ep, etype, readyReason, "Reconcile", "%d/%d proxy pods ready", readyReplicas, minReplicas)
+	}
+	// The egress gap is an operator obligation, not a reconcile failure, so it is
+	// announced once per transition rather than every reconcile.
+	if newGap := boolConditionStatus(eg.incomplete); prevEgressGap != newGap {
+		etype := corev1.EventTypeNormal
+		if eg.incomplete {
+			etype = corev1.EventTypeWarning
+		}
+		r.recordEvent(ep, etype, eg.reason, "Reconcile", "%s", eg.message)
 	}
 	// Degraded → recovered: a prior reconcile failed to provision and this one succeeded
 	// (updateStatus is only reached when reconcileResources returned no error).
@@ -629,6 +652,23 @@ func (r *EgressProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&corev1.ResourceQuota{},
 			handler.EnqueueRequestsFromMapFunc(r.quotaToEgressProxies),
 			builder.WithPredicates(quotaHardChangedPredicate()),
+		).
+		// A referrer's githubURL feeds this proxy's hostname allowlists (Q506 #2), and
+		// the binding is created by the referrer, not by the proxy — so a gateway or
+		// RunnerSet applied after the proxy must requeue it, or a GHES tenant's host
+		// never reaches the emitted policy. githubURL itself is immutable (§H.15), so
+		// the events that matter are create/delete and a proxyRef change; the
+		// generation predicate drops the status churn that would otherwise requeue
+		// every proxy in the namespace.
+		Watches(
+			&gmcv2alpha1.ActionsGateway{},
+			handler.EnqueueRequestsFromMapFunc(r.referrerToEgressProxies),
+			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
+		).
+		Watches(
+			&gmcv2alpha1.RunnerSet{},
+			handler.EnqueueRequestsFromMapFunc(r.referrerToEgressProxies),
+			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
 		).
 		Named("egressproxy").
 		Complete(r)
