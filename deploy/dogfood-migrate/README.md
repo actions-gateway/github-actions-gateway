@@ -3,7 +3,7 @@
 A single, throwaway `actions-gateway.github.com/v1alpha1` Docker-in-Docker tenant,
 used once to validate `gag-migrate` v1→v2 on the live dogfood cluster. It exists to
 close the last unverified row in the v2 GA Definition of Done — see
-[docs/plan/q415-migrate-dogfood-validation.md](../../docs/plan/q415-migrate-dogfood-validation.md)
+[docs/plan/q415-migrate-dogfood-validation.md](../../docs/plan/archive/q415-migrate-dogfood-validation.md)
 for the goal, the runbook, and the acceptance criteria.
 
 **This is a dogfood/dev config, not a shipped product install, and not a template to
@@ -64,7 +64,7 @@ Deleting the namespace is **not** sufficient. The migration creates a cluster-sc
 `ClusterRunnerTemplate` and a ClusterRoleBinding that namespace deletion does not
 reclaim — which is exactly why `gag-migrate` stamps a provenance label on them. Full
 teardown is step 11 of the
-[runbook](../../docs/plan/q415-migrate-dogfood-validation.md#runbook).
+[runbook](../../docs/plan/archive/q415-migrate-dogfood-validation.md#runbook).
 
 ## Trusted-only caveat
 
