@@ -3050,6 +3050,18 @@ cluster-scoped kind it holds no grant for, and error-looping on <code>clusterrun
 cluster (Q466). The fix was to stop the read, not to widen the grant: declining work
 that belongs to another controller is what keeps this table as short as it is, and it
 also stops the two AGCs from running competing listener pools for one <code>RunnerSet</code>.</p>
+<p><strong>The partition runs both ways.</strong> A gateway-scoped AGC likewise declines <code>RunnerGroup</code>s:
+a <code>RunnerGroup</code> names no gateway — v1 is a namespace singleton — so the AGC that serves
+it is the one the v1 GMC provisioned, which stamps no <code>GATEWAY_NAME</code>. While that
+reconciler was registered on every AGC, the migrated gateway's AGC ran a second listener
+on the v1 group at the <em>same</em> <code>agentIndex</code> as the v1 AGC's, which means the same agent
+Secret and the same GitHub runner name — the hazard the disjoint-naming fix above cannot
+reach, because it separates kinds and not controllers. Measured live: 409 on every
+<code>CreateSession</code> (153 in ~2.5 minutes, no backoff) and both reconcilers writing the same
+<code>RunnerGroup</code> status (Q535). Nothing can scope a <code>RunnerGroup</code> informer the way
+<code>spec.gatewayRef.name</code> scopes the <code>RunnerSet</code> one, so declining the kind is the whole
+fix. Net effect: <strong>each AGC process serves exactly one API</strong>, and the two never contend
+for an object.</p>
 <p>The table above is enforced, not just documented. The shipped rules
 (<code>charts/actions-gateway/files/agc-clusterrunnertemplate-reader-rules.yaml</code>) and the
 <code>+kubebuilder:rbac</code> markers that declare the AGC's needs
