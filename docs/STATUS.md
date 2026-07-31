@@ -39,7 +39,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [Per-module coverage ≥75%](plan/coverage-to-75-per-module.md) | `tests` | ✅ |
 | [GKE dogfood](plan/gke-dogfood.md) | `infra` `docs` | ✅ |
 | <a id="Q248"></a>[Dogfood runner right-sizing](plan/dogfood-runner-rightsizing.md) | `infra` | ✅ |
-| [Release 1.3](plan/release-1.3.md) | `milestone` | ⚠️ |
+| [Release 1.3](plan/release-1.3.md) | `milestone` | ✅ |
 | [v2 GA graduation](plan/v2-ga.md) | `milestone` `infra` | ✅ |
 | [v1 sunset → v2-only](plan/v1-classic-sunset-review.md) | `infra` | ✅ |
 | [Worker right-sizing profiles](plan/runner-sizing-profiles.md) | `infra` | ✅ |
