@@ -34,7 +34,7 @@ durable rationale in
 | 2d | The latch: a bound that survives the reap, with a probe slot on both tiers | M | ✅ Done ([§9g](#9g-the-latch--a-bound-that-survives-the-reap-q512), Q512, 2026-07-30) — effect measured (V2 re-run) |
 | V1 | Measure item 0a's effect — the scale-set quota rung — on dogfood | M | ✅ Measured ([§9f](#9f-what-the-dogfood-run-measured-for-the-quota-rung-q462), Q462, 2026-07-31) — rung binds; bias-low margin 0–2 jobs, never inverted |
 | V2 | Measure items 1 and 2's effect — both capacity-gate signals — on dogfood | M | ✅ Measured ([§9e](#9e-what-the-dogfood-run-measured-q469), Q469, 2026-07-31) — **no reduction on the ScaleSet tier**; fixed by item 2d, re-run measured ([§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513), Q513) |
-| V3 | Extend item 2b's live-autoscaler drift gate to Karpenter | M | ⏳ Unrun ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), [Q479](../STATUS.md#Q479)) |
+| V3 | Extend item 2b's live-autoscaler drift gate to Karpenter | M | ✅ Done ([§9i](#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479), Q479, 2026-07-31) — vocabulary/attribution hold; recorder-generation premise corrected |
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
 A numbered row means code shipped; a `V` row means that code's effect was
@@ -783,18 +783,19 @@ Three cases, chosen so each asserts something the recorded table cannot:
   recorder has one-second resolution, so the two events tie and the tie resolves
   open. The recency rule alone would have said "declined". That makes the
   tie-break the thing carrying correctness here, and it does not carry it for a
-  microsecond-resolution recorder — which is the generation Karpenter uses.
+  microsecond-resolution recorder — believed at the time to be the generation
+  Karpenter uses ([§9i](#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479)
+  later measured that belief wrong: Karpenter records legacy too).
   Not fixed here, because Q474 is a test and the fix is a behavior change to a
   shipped gate that wants its own negative control; tracked as Q478 and shipped
   the same day as **[§9d](#9d-the-concurrency-window-q478)**, which replaces the
   tie-break with a concurrency window.
 
-**What this still does not cover.** Karpenter. Its matcher arm — the one that
-genuinely needs reporter discrimination, since it shares kube-scheduler's reason
-string — has no live counterpart, and
-[karpenter-provider-kwok](https://github.com/kubernetes-sigs/karpenter/tree/main/kwok)
-is the equivalent harness for it ([Q479](../STATUS.md#Q479)). And the harness is
-also the thing [G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)
+**What this initially did not cover.** Karpenter — the arm that genuinely needs
+reporter discrimination, since it shares kube-scheduler's reason string. Its
+harness landed as
+[§9i](#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479) (Q479).
+This CA harness is also the thing [G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)
 named as the local-half prerequisite for ever validating `Probe`/`Provision`
 (Q407): a cluster with a real CA in it is where `--enable-provisioning-requests`
 could be turned on.
@@ -819,7 +820,8 @@ declination on a later loop still gates. Both projects leave a wide margin: CA's
 default `--scan-interval` is 10s and Karpenter's provisioning batch is bounded at
 10s. One second is also the legacy recorder's own quantum, so the generation
 running today decides identically with the window as without it; what changes is
-the microsecond generation, which is the one Karpenter uses.
+the microsecond generation — believed then to be Karpenter's, measured otherwise
+in [§9i](#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479).
 
 **The direction of the error, in both readings.** The window can only *open* a
 gate that recency would have closed, which is the fail-open direction the whole
@@ -830,11 +832,15 @@ that a genuinely-later declination will re-close on the next loop.
 pair in the recorder generation that can resolve it, its Karpenter-vocabulary
 twin, both sides of the boundary, a declination a full CA loop later that must
 still gate, and an old scale-up that must not shelter a later declination (the
-window is measured from the newest *acting* event, not the newest event). The
-live harness does **not** cover it and cannot: CA records at second resolution,
-so the harness cannot produce a pair the rule would decide differently, and the
-generation that can is Karpenter's — whose harness is [Q479](../STATUS.md#Q479).
-Until that lands, the microsecond arm is asserted only against synthetic events.
+window is measured from the newest *acting* event, not the newest event). No
+live harness covers it, and today none can: CA records at second resolution, so
+its harness cannot produce a pair the rule would decide differently — and the
+Karpenter harness ([§9i](#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479),
+Q479) measured that Karpenter records at second resolution too, despite what
+this section assumed when it shipped. The microsecond arm is therefore asserted
+only against synthetic events by the nature of what ships upstream, not by a
+coverage gap; §9i's recorder-generation case is what will notice if either
+project migrates.
 
 ## 9e. What the dogfood run measured (Q469)
 
@@ -1195,6 +1201,67 @@ this repo's CI that is acceptable; a GPU/spot operator for whom even that rate
 is expensive is trigger (a)'s remaining case. The first batch remains unbounded
 by design (assignment is batch-granular; the gate cannot close before the first
 pod sticks), and the classic tier's boolean rung remains unmeasured live.
+
+## 9i. The Karpenter arm of the drift gate, and what it measured (Q479)
+
+Shipped 2026-07-31. [§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474)
+covered cluster-autoscaler only; this is the arm §9c flagged as needing a live
+counterpart most. Karpenter's declination shares kube-scheduler's reason string
+(`FailedScheduling`), so the matcher's whole Karpenter arm *is* the reporter
+discrimination — and its failure mode is double-silent: an upstream attribution
+change makes every Karpenter declination read as scheduler noise, the gate never
+closes on any Karpenter cluster, and recorded samples carry the old attribution
+forever.
+
+**The harness.** `make karpenter-cluster` stands up a throwaway kind cluster
+running a real upstream Karpenter on its
+[kwok provider](https://github.com/kubernetes-sigs/karpenter/tree/main/kwok).
+One structural difference from the CA arm: upstream publishes **no image** for
+this provider (its own workflow is `ko build` from a checkout), so
+`scripts/karpenter-cluster.sh` clones the pinned `KARPENTER_VERSION` tag, builds
+the binary with the repo's Go toolchain, and reproduces ko's output shape
+(static binary, empty base — `test/karpenter/Dockerfile`). `make test-karpenter`
+then drives three cases (`karpenter_verdict_live_test.go`, build tag
+`karpenter`): the declination read through the discrimination with the
+scheduler's identically-named event in the same list, a nomination that must
+leave the gate open and land the pod on a node that did not exist, and the
+recorder generation. CI runs it beside the CA arm in `autoscaler-drift.yml`;
+the version-move trigger is manual for now ([Q529](../STATUS.md#Q529)).
+
+**Measured against Karpenter v1.14.0 / Kubernetes 1.36.1, 2026-07-31.**
+
+* **The reason vocabulary and attribution hold.** `FailedScheduling` and
+  `Nominated`, attributed on *both* fields (`source.component` and
+  `reportingComponent` read `karpenter`) — same double attribution §9c measured
+  for CA, so `reportedByScheduler`'s fallback reads the same answer either way.
+* **Only the message prefix is stable.** `Failed to schedule pod, ` held, but
+  the recorded sample's body (`incompatible with nodepool "default", daemonset
+  overhead=…, no instance type satisfied resources`) no longer appears at
+  v1.14.0. The measured bodies vary by failure shape: `incompatible
+  requirements, key karpenter.sh/nodepool, …` for a pool-selector mismatch,
+  `no instance type has enough resources, requirements=…` for an oversized pod.
+  Both are now unit rows (classified identically — the matcher never parses a
+  body), the live test pins only the prefix, and the runbook's "which one" list
+  was reworded to match.
+* **The microsecond-generation premise was wrong.** Karpenter records through
+  the **legacy** recorder — `firstTimestamp`/`lastTimestamp` set, `eventTime`
+  null — the same generation as CA, at the same one-second resolution. §9c and
+  §9d shipped believing Karpenter used the microsecond generation (source
+  inspection, never measured; the operator runbook repeated it as "Karpenter
+  sets eventTime"). All three claims are now corrected. The §9d window loses
+  nothing: it was already justified as making the verdict independent of
+  recorder generation, and the live recorder-generation case is what will
+  notice when either project migrates.
+* **Timing.** Karpenter's declination lands 1–2 s after pod creation (its batch
+  idle window is 1 s — no CA-style 10 s scan to wait out), and
+  nomination→new-node→pod-scheduled completed in ~4 s under kwok's fast stages.
+
+**Upstream finding, worked around in the recipe.** The kwok chart at v1.14.0
+renders `featureGates.staticCapacity` and `.capacityBuffer` into the
+`FEATURE_GATES` env var, but its own `values.yaml` omits both keys — the empty
+string panics the controller at startup (`invalid value of StaticCapacity`).
+The harness sets both to their defaults explicitly ([Q531](../STATUS.md#Q531)
+tracks reporting it upstream).
 
 ## 10. Non-goals
 

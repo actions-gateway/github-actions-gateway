@@ -1,6 +1,6 @@
 //go:build autoscaler
 
-// Package controller's live autoscaler test (Q474).
+// Package controller's live cluster-autoscaler test (Q474).
 //
 // TestAutoscalerDeclination's table pins the matcher against RECORDED
 // cluster-autoscaler messages. Recorded samples rot: upstream owns those strings,
@@ -18,25 +18,19 @@
 // It is deliberately NOT part of `make check` or per-PR CI: it costs a cluster, and
 // what it detects is upstream drift, which arrives on upstream's schedule rather
 // than on a pull request's. Run it when bumping CA_VERSION, and on the cadence
-// docs/development/testing.md sets.
+// docs/development/testing.md sets. The Karpenter arm of the same gate is
+// karpenter_verdict_live_test.go (Q479), against its own cluster.
 package controller
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 // The node groups scripts/autoscaler-cluster.sh installs, via the templates in
@@ -56,135 +50,19 @@ const (
 // A pod that consumes most of a 4-CPU template node, so one pod fills one node.
 const bigPodCPU = "3500m"
 
-// verdictBudget bounds every wait. cluster-autoscaler's scan interval is 10s (set in
-// test/autoscaler/cluster-autoscaler.yaml), and a verdict needs the scheduler to fail
-// the pod first, so the floor is ~2 loops; the rest is headroom for a loaded machine.
-const verdictBudget = 3 * time.Minute
-
-// liveClient connects to the harness cluster. It FAILS rather than skips when the
-// cluster is absent: this file only compiles under an explicit build tag, so getting
-// here means someone asked for the live check, and a drift detector that quietly
-// skips itself is worse than no drift detector at all.
-func liveClient(t *testing.T) client.Client {
+// caClient connects to the cluster-autoscaler harness cluster.
+func caClient(t *testing.T) client.Client {
 	t.Helper()
-
-	kubeContext := os.Getenv("AUTOSCALER_KUBE_CONTEXT")
-	if kubeContext == "" {
-		cluster := os.Getenv("AUTOSCALER_CLUSTER")
-		if cluster == "" {
-			cluster = "gag-autoscaler"
-		}
-		kubeContext = "kind-" + cluster
-	}
-
-	cfg, err := ctrlconfig.GetConfigWithContext(kubeContext)
-	require.NoErrorf(t, err, "no kubeconfig for context %q — run `make autoscaler-cluster` first", kubeContext)
-
-	c, err := client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	require.NoErrorf(t, err, "could not reach context %q — run `make autoscaler-cluster` first", kubeContext)
-	return c
+	return liveClient(t, "AUTOSCALER_KUBE_CONTEXT", "AUTOSCALER_CLUSTER", "gag-autoscaler", "make autoscaler-cluster")
 }
 
-// liveNamespace creates a namespace for one test and deletes it afterwards, so a
-// re-run never inherits a previous run's pods (or the capacity they held).
-func liveNamespace(t *testing.T, c client.Client) string {
-	t.Helper()
-
-	name := fmt.Sprintf("q474-%d", time.Now().UnixNano())
-	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
-	require.NoError(t, c.Create(context.Background(), ns))
-	t.Cleanup(func() {
-		// Best-effort: a failed cleanup must not mask the assertion that failed.
-		_ = c.Delete(context.Background(), ns)
-	})
-	return name
-}
-
-// createPendingPod creates a pod pinned to one kwok node group. It requests real CPU
-// so cluster-autoscaler's simulation has something to decide about, and runs `pause`
-// because kwok fakes the container anyway — nothing is ever pulled or executed.
-func createPendingPod(t *testing.T, c client.Client, ns, name, pool, cpu string) *corev1.Pod {
-	t.Helper()
-
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: corev1.PodSpec{
-			NodeSelector: map[string]string{poolLabel: pool},
-			Containers: []corev1.Container{{
-				Name:  "pause",
-				Image: "registry.k8s.io/pause:3.10",
-				Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse(cpu)},
-				},
-			}},
-		},
-	}
-	require.NoError(t, c.Create(context.Background(), pod))
-	return pod
-}
-
-// podEventsLive reads one pod's Events exactly the way the gate does in production —
-// uncached, namespaced, field-selected server-side to that pod's name AND UID (see
-// RunnerSetReconciler.podEvents). Reading them any other way here would prove the
-// matcher works on a list shape the AGC never actually receives.
-func podEventsLive(t *testing.T, c client.Client, pod *corev1.Pod) []corev1.Event {
-	t.Helper()
-
-	var list corev1.EventList
-	require.NoError(t, c.List(context.Background(), &list,
-		client.InNamespace(pod.Namespace),
-		client.MatchingFields{
-			"involvedObject.name": pod.Name,
-			"involvedObject.uid":  string(pod.UID),
-		},
-	))
-	return list.Items
-}
-
-// awaitAutoscalerEvent blocks until cluster-autoscaler has recorded an event with
-// reason against pod, and returns every event on the pod at that moment — including
-// the kube-scheduler FailedScheduling that always accompanies a stuck pod, which is
-// the whole point: the matcher has to pick the autoscaler's verdict out of a list it
-// does not control.
+// awaitAutoscalerEvent blocks until cluster-autoscaler has recorded an event
+// with reason against pod, and returns every event on the pod at that moment.
 func awaitAutoscalerEvent(t *testing.T, c client.Client, pod *corev1.Pod, reason string) []corev1.Event {
 	t.Helper()
-
-	deadline := time.Now().Add(verdictBudget)
-	for {
-		evts := podEventsLive(t, c, pod)
-		for i := range evts {
-			if evts[i].Reason == reason {
-				logEvents(t, pod.Name, evts)
-				return evts
-			}
-		}
-		if time.Now().After(deadline) {
-			logEvents(t, pod.Name, evts)
-			t.Fatalf("cluster-autoscaler never recorded a %q event on pod %s within %s.\n"+
-				"If the events above show the autoscaler DID evaluate this pod under a different "+
-				"reason string, that is the drift this test exists to catch: reconcile "+
-				"cmd/agc/internal/controller/autoscaler_verdict.go with upstream and update the "+
-				"recorded samples in autoscaler_verdict_test.go.", reason, pod.Name, verdictBudget)
-		}
-		time.Sleep(2 * time.Second)
-	}
-}
-
-// logEvents records what the cluster actually said. A drift failure is only
-// actionable if the run shows the new vocabulary next to the expected one.
-func logEvents(t *testing.T, podName string, evts []corev1.Event) {
-	t.Helper()
-
-	t.Logf("--- events on pod %s (%d) ---", podName, len(evts))
-	for i := range evts {
-		e := &evts[i]
-		reporter := e.ReportingController
-		if reporter == "" {
-			reporter = e.Source.Component
-		}
-		t.Logf("  [%s] reason=%q reporter=%q at=%s: %s",
-			e.Type, e.Reason, reporter, eventTime(e).Format(time.RFC3339), e.Message)
-	}
+	return awaitPodEvent(t, c, pod, "a "+reason+" event", func(e *corev1.Event) bool {
+		return e.Reason == reason
+	})
 }
 
 // TestLiveClusterAutoscaler_DeclinationIsRecognized is the drift detector proper: a
@@ -194,10 +72,10 @@ func logEvents(t *testing.T, podName string, evts []corev1.Event) {
 // The scheduler's own FailedScheduling is on this pod too, so a pass also shows the
 // matcher is not merely matching "some event exists".
 func TestLiveClusterAutoscaler_DeclinationIsRecognized(t *testing.T) {
-	c := liveClient(t)
-	ns := liveNamespace(t, c)
+	c := caClient(t)
+	ns := liveNamespace(t, c, "q474")
 
-	pod := createPendingPod(t, c, ns, "declined", poolAbsent, "100m")
+	pod := createPendingPod(t, c, ns, "declined", map[string]string{poolLabel: poolAbsent}, "100m")
 	evts := awaitAutoscalerEvent(t, c, pod, reasonNotTriggerScaleUp)
 
 	require.True(t, hasSchedulerFailure(evts),
@@ -226,8 +104,8 @@ func TestLiveClusterAutoscaler_DeclinationIsRecognized(t *testing.T) {
 // It asserts the outcome, not just the event — the pod must really land on a node
 // that did not exist when it was created.
 func TestLiveClusterAutoscaler_ScaleUpKeepsTheGateOpen(t *testing.T) {
-	c := liveClient(t)
-	ns := liveNamespace(t, c)
+	c := caClient(t)
+	ns := liveNamespace(t, c, "q474")
 
 	// Scale-down is disabled in this cluster, so a previous run leaves its fake nodes
 	// behind — and an empty leftover node would place the pod with no scale-up at all,
@@ -236,7 +114,7 @@ func TestLiveClusterAutoscaler_ScaleUpKeepsTheGateOpen(t *testing.T) {
 	resetPool(t, c, poolStandard)
 	before := nodeNames(t, c)
 
-	pod := createPendingPod(t, c, ns, "rescued", poolStandard, "2")
+	pod := createPendingPod(t, c, ns, "rescued", map[string]string{poolLabel: poolStandard}, "2")
 	evts := awaitAutoscalerEvent(t, c, pod, reasonTriggeredScaleUp)
 
 	declined, detail := autoscalerDeclination(pod, evts)
@@ -254,14 +132,14 @@ func TestLiveClusterAutoscaler_ScaleUpKeepsTheGateOpen(t *testing.T) {
 // cluster-autoscaler says so, and that is what makes the condition actionable rather
 // than merely true.
 func TestLiveClusterAutoscaler_CeilingIsNamed(t *testing.T) {
-	c := liveClient(t)
-	ns := liveNamespace(t, c)
+	c := caClient(t)
+	ns := liveNamespace(t, c, "q474")
 
 	// Fill the single node the capped group can create, then ask for another.
-	filler := createPendingPod(t, c, ns, "filler", poolCapped, bigPodCPU)
+	filler := createPendingPod(t, c, ns, "filler", map[string]string{poolLabel: poolCapped}, bigPodCPU)
 	awaitScheduled(t, c, filler)
 
-	pod := createPendingPod(t, c, ns, "overflow", poolCapped, bigPodCPU)
+	pod := createPendingPod(t, c, ns, "overflow", map[string]string{poolLabel: poolCapped}, bigPodCPU)
 	evts := awaitAutoscalerEvent(t, c, pod, reasonNotTriggerScaleUp)
 
 	declined, detail := autoscalerDeclination(pod, evts)
@@ -270,19 +148,6 @@ func TestLiveClusterAutoscaler_CeilingIsNamed(t *testing.T) {
 	assert.Contains(t, detail, "max node group size reached",
 		"the node-group ceiling must still be named in the declination; "+
 			"docs/design/04-operational-flows.md and the troubleshooting runbook quote it")
-}
-
-// hasSchedulerFailure reports whether kube-scheduler recorded its own placement
-// failure on this pod — the ambiguous reason the matcher must not read as a
-// declination.
-func hasSchedulerFailure(evts []corev1.Event) bool {
-	for i := range evts {
-		e := &evts[i]
-		if e.Reason == reasonFailedScheduling && reportedByScheduler(e, defaultSchedulerName) {
-			return true
-		}
-	}
-	return false
 }
 
 // reporterOf returns the reporting controller of the newest event with reason,
@@ -325,42 +190,6 @@ func resetPool(t *testing.T, c client.Client, pool string) {
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("node group %q still has %d nodes after %s", pool, len(nodes.Items), verdictBudget)
-		}
-		time.Sleep(2 * time.Second)
-	}
-}
-
-func nodeNames(t *testing.T, c client.Client) []string {
-	t.Helper()
-
-	var nodes corev1.NodeList
-	require.NoError(t, c.List(context.Background(), &nodes))
-	names := make([]string, 0, len(nodes.Items))
-	for i := range nodes.Items {
-		names = append(names, nodes.Items[i].Name)
-	}
-	return names
-}
-
-// awaitScheduled blocks until the pod has a node assigned, and returns that node's
-// name.
-func awaitScheduled(t *testing.T, c client.Client, pod *corev1.Pod) string {
-	t.Helper()
-
-	deadline := time.Now().Add(verdictBudget)
-	key := client.ObjectKeyFromObject(pod)
-	for {
-		var got corev1.Pod
-		err := c.Get(context.Background(), key, &got)
-		if err != nil && !apierrors.IsNotFound(err) {
-			require.NoError(t, err)
-		}
-		if got.Spec.NodeName != "" {
-			return got.Spec.NodeName
-		}
-		if time.Now().After(deadline) {
-			logEvents(t, pod.Name, podEventsLive(t, c, pod))
-			t.Fatalf("pod %s was never scheduled within %s", pod.Name, verdictBudget)
 		}
 		time.Sleep(2 * time.Second)
 	}

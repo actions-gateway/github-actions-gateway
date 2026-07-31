@@ -1,0 +1,44 @@
+# The node pool the live Karpenter test provisions against (Q479).
+#
+# One pool, not three: unlike the cluster-autoscaler harness, the Karpenter
+# cases need only "a pool that can grow" (the nomination case) and "no pool at
+# all" (the declination case, a nodeSelector naming a pool that does not exist —
+# nothing to install for that). There is no ceiling case here because the
+# operator docs promise no Karpenter message text by name; what they promise is
+# the reporter and the recorder generation, and those are asserted off the
+# declination pod's events.
+#
+# The KWOKNodeClass is deliberately bare — upstream's own e2e uses exactly this
+# shape, and the kwok provider requires only that the object exist.
+apiVersion: karpenter.kwok.sh/v1alpha1
+kind: KWOKNodeClass
+metadata:
+  name: default
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: standard
+spec:
+  # WhenEmpty keeps consolidation away from nodes that still hold a test pod;
+  # the 1m delay is hygiene between runs, not something a test waits on — the
+  # test resets the pool explicitly by deleting its NodeClaims.
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 1m
+  limits:
+    cpu: 100
+  template:
+    spec:
+      expireAfter: Never
+      requirements:
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+      nodeClassRef:
+        group: karpenter.kwok.sh
+        kind: KWOKNodeClass
+        name: default

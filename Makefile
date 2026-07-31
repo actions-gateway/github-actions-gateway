@@ -771,6 +771,32 @@ autoscaler-cluster-delete: ## Delete the live-autoscaler kind cluster (no-op if 
 		echo "==> kind cluster $(AUTOSCALER_CLUSTER) does not exist"; \
 	fi
 
+# The Karpenter arm of the same drift gate (Q479). Karpenter's declination
+# shares kube-scheduler's reason string, so this is the arm whose correctness
+# is the reporter discrimination — and the one a vocabulary or attribution
+# change upstream would disable most silently. Its own cluster for the same
+# reason as above, and separate from the autoscaler one because two autoscalers
+# fighting over the same pending pods would make both harnesses flaky.
+KARPENTER_CLUSTER ?= gag-karpenter
+
+.PHONY: karpenter-cluster
+karpenter-cluster: ## Create the kind cluster running a real Karpenter (kwok provider) on fake nodes (no-op if it exists)
+	KARPENTER_CLUSTER=$(KARPENTER_CLUSTER) KIND_NODE_IMAGE=$(KIND_NODE_IMAGE) \
+		scripts/karpenter-cluster.sh
+
+.PHONY: test-karpenter
+test-karpenter: ## Assert the autoscaler matcher against a live Karpenter's events (needs karpenter-cluster)
+	KARPENTER_CLUSTER=$(KARPENTER_CLUSTER) $(MAKE) -C cmd/agc test-karpenter
+
+.PHONY: karpenter-cluster-delete
+karpenter-cluster-delete: ## Delete the live-Karpenter kind cluster (no-op if it does not exist)
+	@if kind get clusters 2>/dev/null | grep -qx $(KARPENTER_CLUSTER); then \
+		echo "==> deleting kind cluster $(KARPENTER_CLUSTER)"; \
+		kind delete cluster --name $(KARPENTER_CLUSTER); \
+	else \
+		echo "==> kind cluster $(KARPENTER_CLUSTER) does not exist"; \
+	fi
+
 ##@ Tools
 
 .PHONY: tools

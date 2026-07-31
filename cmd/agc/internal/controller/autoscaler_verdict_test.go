@@ -31,10 +31,19 @@ const (
 	// or the other depending on their autoscaler's release.
 	caDeclineTaintNamedMsg = "pod didn't trigger scale-up: 1 max node group size reached, " +
 		"2 node(s) had untolerated taint {dedicated: gpu}"
-	caScaleUpMsg     = "pod triggered scale-up: [{gpu-pool 1->2 (max: 8)}]"
-	karpenterDecline = "Failed to schedule pod, incompatible with nodepool \"default\", " +
-		"daemonset overhead={\"cpu\":\"210m\"}, no instance type satisfied resources"
-	karpenterNominateMsg = "Pod should schedule on: nodeclaim/default-9k4qz"
+	caScaleUpMsg = "pod triggered scale-up: [{gpu-pool 1->2 (max: 8)}]"
+	// As emitted by Karpenter v1.14.0, measured 2026-07-31 against the live
+	// harness (karpenter_verdict_live_test.go). Only the "Failed to schedule
+	// pod, " prefix is stable; the body varies with the failure shape, so both
+	// measured shapes are rows and must classify identically.
+	karpenterDecline = "Failed to schedule pod, incompatible requirements, key karpenter.sh/nodepool, " +
+		"karpenter.sh/nodepool In [no-such-pool] not in karpenter.sh/nodepool In [standard]"
+	karpenterDeclineNoInstanceMsg = "Failed to schedule pod, no instance type has enough resources, " +
+		"requirements=karpenter.kwok.sh/kwoknodeclass In [default], karpenter.sh/capacity-type In [on-demand], " +
+		"karpenter.sh/initialized In [true], karpenter.sh/nodepool In [standard], " +
+		"karpenter.sh/registered In [true], kubernetes.io/os In [linux], " +
+		"resources={\"cpu\":\"1000100m\",\"memory\":\"50Mi\",\"pods\":\"3\"}"
+	karpenterNominateMsg = "Pod should schedule on: nodeclaim/standard-2hfk8"
 	schedulerFailMsg     = "0/3 nodes are available: 3 Insufficient cpu. " +
 		"preemption: 0/3 nodes are available: 3 No preemption victims found for incoming pod."
 )
@@ -122,6 +131,15 @@ func TestAutoscalerDeclination(t *testing.T) {
 			pod:          podWithScheduler(""),
 			events:       []corev1.Event{legacyEvent(reasonFailedScheduling, "karpenter", karpenterDecline, t0)},
 			wantDeclined: true, wantDetail: karpenterDecline,
+		},
+		{
+			// The other measured shape of the same verdict (an oversized pod rather
+			// than a pool-selector mismatch). The matcher must not care which it
+			// got; the detail is capped like any condition message.
+			name:         "the same declination in the no-instance-type spelling",
+			pod:          podWithScheduler(""),
+			events:       []corev1.Event{legacyEvent(reasonFailedScheduling, "karpenter", karpenterDeclineNoInstanceMsg, t0)},
+			wantDeclined: true, wantDetail: karpenterDeclineNoInstanceMsg[:200] + "…",
 		},
 
 		// --- the discrimination that matters ---------------------------------

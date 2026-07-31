@@ -587,7 +587,9 @@ kubectl describe pod -n <namespace> <worker-pod>
 ```sh
 # nodeAutoscaling: Present only — the raw events the gate read, with their reporters.
 # Both timestamp columns are printed because the two recorder generations populate
-# different ones: cluster autoscaler sets lastTimestamp, Karpenter sets eventTime.
+# different ones. Today both autoscalers set lastTimestamp and leave eventTime empty
+# (measured: cluster autoscaler v1.36.1, Karpenter v1.14.0), but the gate reads
+# whichever is set, so the listing shows both.
 kubectl get events -n <namespace> \
   --field-selector involvedObject.name=<worker-pod> \
   -o custom-columns='TIME:.lastTimestamp,MICROTIME:.eventTime,SOURCE:.source.component,REASON:.reason,MESSAGE:.message'
@@ -609,8 +611,8 @@ placement problem — the resolutions are the same ones listed under
 capacity, `nodeSelector`/affinity, tolerations). Under `nodeAutoscaling: Present`
 the autoscaler has already told you which one in the condition message: a node-group
 ceiling (`max node group size reached`, `max total nodes in cluster reached`), an
-untolerated taint, a cloud quota, or — for Karpenter — no instance type satisfying
-the pod. The condition clears on the next reconcile once a worker pod schedules,
+untolerated taint, a cloud quota, or — for Karpenter — no instance type with enough
+resources, or requirements no pool is compatible with. The condition clears on the next reconcile once a worker pod schedules,
 or once the autoscaler records that it *is* scaling up for one.
 
 > **The taint case names a category, not a key.** Cluster-autoscaler aggregates its

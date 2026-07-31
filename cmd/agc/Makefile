@@ -49,6 +49,10 @@ test-integration: manifests $(SETUP_ENVTEST) ## Run envtest-backed integration t
 test-autoscaler: ## Assert the autoscaler matcher against a live cluster-autoscaler (needs `make autoscaler-cluster`)
 	go test -v -count=1 -timeout 15m -tags autoscaler -run 'TestLiveClusterAutoscaler' ./internal/controller/...
 
+.PHONY: test-karpenter
+test-karpenter: ## Assert the autoscaler matcher against a live Karpenter (needs `make karpenter-cluster`)
+	go test -v -count=1 -timeout 15m -tags karpenter -run 'TestLiveKarpenter' ./internal/controller/...
+
 ##@ Load test
 
 # The in-process AGC load harness (Q13, cmd/agc/test/load). It needs no cluster

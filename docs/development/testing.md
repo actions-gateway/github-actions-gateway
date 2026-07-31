@@ -244,7 +244,7 @@ Three assertions, cheapest first:
 
 Wired into `make check` and CI's `lint` job.
 
-**The rest of the linters see the tagged trees too.** `.golangci.yml` sets `run.build-tags: [integration, e2e, load]`, so `gosec`, `errcheck`, `staticcheck`, `unused`, `dupl`, and `funlen` cover the envtest suites, the e2e harness, and the load harness — the same 102 files this gate compiles — rather than skipping them the way `go vet` did before Q404 (Q430). That list must stay in step with `BUILD_TAGS` in `scripts/go-vet-tags.sh`; the coverage assertion above is what catches a new tag, since it fails before either gate can silently skip a file.
+**The rest of the linters see the tagged trees too.** `.golangci.yml` sets `run.build-tags: [integration, e2e, load, autoscaler, karpenter]`, so `gosec`, `errcheck`, `staticcheck`, `unused`, `dupl`, and `funlen` cover the envtest suites, the e2e harness, the load harness, and the live drift tests — the same files this gate compiles — rather than skipping them the way `go vet` did before Q404 (Q430). That list must stay in step with `BUILD_TAGS` in `scripts/go-vet-tags.sh`; the coverage assertion above is what catches a new tag, since it fails before either gate can silently skip a file.
 
 Two things to know when a finding lands in a tagged package:
 
@@ -733,23 +733,29 @@ Both run under the same desktop-safety throttle as the rest of the suite (a no-o
 
 One tier exists to catch a change **upstream**, not a change here: the capacity gate's elastic-cluster signal (Q406) recognizes cluster-autoscaler by two Event reasons and a reporter name, pinned in a unit table from recorded samples. Those strings belong to upstream, and a reword there fails *open* — an unrecognized vocabulary yields "not declined", which is exactly the ungated behaviour — so the mode would silently become a no-op on every elastic cluster with every existing test still green. Nothing that runs against recorded samples can observe that, by construction.
 
-`make test-autoscaler` runs the same matcher against events a **real** upstream cluster-autoscaler emits, using its [kwok cloud provider](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler/cloudprovider/kwok): the autoscaler, its scheduler-framework evaluation, and its events are genuine, only the nodes are fake, so the whole thing fits in a kind cluster on a laptop.
+The gate has two arms, one per autoscaler project the matcher recognizes, each against events a **real** upstream build emits — the autoscaler, its scheduling evaluation, and its events are genuine, only the nodes are fake (kwok), so each fits in a kind cluster on a laptop:
+
+- `make test-autoscaler` — **cluster-autoscaler**, via its own [kwok cloud provider](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler/cloudprovider/kwok) (Q474).
+- `make test-karpenter` — **Karpenter**, via [karpenter-provider-kwok](https://github.com/kubernetes-sigs/karpenter/tree/main/kwok) (Q479). This is the arm that needs a live counterpart most: Karpenter's declination shares kube-scheduler's reason string (`FailedScheduling`), so the whole arm is the reporter discrimination, and an upstream attribution change would disable it with nothing else looking different. Upstream publishes no image for its kwok provider, so the recipe clones the pinned tag and builds it — the one extra minute the arm costs.
 
 ```bash
 make autoscaler-cluster        # one-time: kind cluster + kwok + cluster-autoscaler (~2 min)
 make test-autoscaler           # three cases, ~30 s
 make autoscaler-cluster-delete # tear down when done
+
+make karpenter-cluster         # one-time: kind cluster + kwok + Karpenter built from source (~4 min)
+make test-karpenter            # three cases, ~1 min
+make karpenter-cluster-delete  # tear down when done
 ```
 
-- **Its own cluster, not the e2e one.** A live autoscaler creating and deleting nodes underneath the e2e suite would perturb every spec in it. `AUTOSCALER_CLUSTER` (default `gag-autoscaler`) names it; `CA_VERSION` and `KWOK_VERSION` pin what gets installed, in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh). Manifests live in [`test/autoscaler/`](../../test/autoscaler/).
-- **Build tag `autoscaler`**, in `cmd/agc/internal/controller/autoscaler_verdict_live_test.go`, in-package so it calls the unexported matcher directly rather than widening its API for a test.
-- **It fails rather than skips when the cluster is absent.** A drift detector that skips itself detects nothing; the failure message names the make target.
+- **Each arm gets its own cluster, and neither is the e2e one.** A live autoscaler creating and deleting nodes underneath the e2e suite would perturb every spec in it, and two autoscalers contending for the same pending pods would make both arms flaky. `AUTOSCALER_CLUSTER` (default `gag-autoscaler`) and `KARPENTER_CLUSTER` (default `gag-karpenter`) name them; `CA_VERSION`, `KARPENTER_VERSION` and `KWOK_VERSION` pin what gets installed, in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) and [`scripts/karpenter-cluster.sh`](../../scripts/karpenter-cluster.sh). Manifests live in [`test/autoscaler/`](../../test/autoscaler/) and [`test/karpenter/`](../../test/karpenter/).
+- **Build tags `autoscaler` and `karpenter`**, in `cmd/agc/internal/controller/autoscaler_verdict_live_test.go` and `karpenter_verdict_live_test.go` (shared plumbing in `live_harness_test.go`), in-package so they call the unexported matcher directly rather than widening its API for a test.
+- **They fail rather than skip when the cluster is absent.** A drift detector that skips itself detects nothing; the failure message names the make target.
 - **Not in `make check`, and change-triggered rather than scheduled in CI** — see below.
-- **Karpenter is not covered.** Its matcher arm has no live counterpart yet ([Q479](../STATUS.md#Q479)).
 
 ### Its cadence: the version bump, not a clock
 
-[`autoscaler-drift.yml`](../../.github/workflows/autoscaler-drift.yml) runs the gate on pull requests that touch the pins (`scripts/autoscaler-cluster.sh`), the manifests (`test/autoscaler/`), or the matcher and its tests — classified by a `changes` job like every other gate here, not by a top-level path filter. Plus `workflow_dispatch`, whose `ca_version` input probes a cluster-autoscaler release without committing to it.
+[`autoscaler-drift.yml`](../../.github/workflows/autoscaler-drift.yml) runs each arm on pull requests that touch its pins (`scripts/autoscaler-cluster.sh`, `scripts/karpenter-cluster.sh`), its manifests (`test/autoscaler/`, `test/karpenter/`), or the shared matcher and its tests (which re-run both arms) — classified by a `changes` job like every other gate here, not by a top-level path filter. Plus `workflow_dispatch`, whose `ca_version` / `karpenter_version` inputs probe a release without committing to it.
 
 It is deliberately **not** on a cron. A weekly sweep would re-run one fixed experiment: `CA_VERSION` is a pin, so a scheduled run installs the same image and asserts the same strings every week until something in the repo changes. The drift it exists to catch arrives in a cluster-autoscaler *release*, which a pinned sweep never installs. The version move is the event, so the version move is the trigger.
 
@@ -758,6 +764,8 @@ What makes that fire without anyone remembering to run it is a coupling worth kn
 > The harness pins no `KIND_NODE_IMAGE`, so its cluster runs **kind's default node image** — Kubernetes 1.36.1 for kind v0.32.0. cluster-autoscaler is released per Kubernetes minor, so the kind release chooses the Kubernetes minor, which chooses the CA minor. That is why `CA_VERSION` (v1.36.x) tracks kind's default rather than the deliberately-pinned-down `KIND_NODE_IMAGE` the e2e tier uses (v1.35.5).
 
 `KIND_VERSION` is pinned in this workflow as well as [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml), and [`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml) rewrites both weekly. So the kind bump PR trips this workflow's `changes` filter and runs the gate; when that bump moves the default node image's minor, `CA_VERSION` must move to the matching CA minor in the same PR — and a CA minor is where a vocabulary reword lands. **A kind bump PR whose autoscaler-drift job fails on version skew is telling you to bump `CA_VERSION`, not to pin the node image.**
+
+`KARPENTER_VERSION` has no such coupling: Karpenter is not released per Kubernetes minor (one release supports a wide range), so nothing moves that pin automatically — it moves by hand, and the gate runs on the PR that moves it ([Q529](../STATUS.md#Q529) tracks giving it an updatecli trigger like the CA patch one below).
 
 #### The patch releases in between (Q483)
 
@@ -770,7 +778,7 @@ Two consequences to plan for:
 - **The gate is not a required status check.** A failure wants a human decision — adopt the new vocabulary (update the matcher and the recorded unit table) or hold the bump — the same posture as the shellcheck and polaris bump PRs. The workflow still ends in an `autoscaler-drift-gate` job of the usual shape, so it can be required later without restructuring ([required-status-checks.md](../plan/archive/required-status-checks.md)).
 - **An updatecli PR arrives with no checks at all.** GitHub never triggers workflows on a `GITHUB_TOKEN`-authored PR, so both triggers above only pay off if the checks are re-run — close and reopen the PR during the weekly dependency triage pass ([dependency-updates.md](dependency-updates.md#operating-notes)). On a cluster-autoscaler bump that step is the entire PR: nothing else in it needs testing.
 
-What it measured on first run, and the one finding that outlived it, are in [the plan §9c](../plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474).
+What each arm measured on first run, and the findings that outlived them, are in [the plan §9c](../plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474) (cluster-autoscaler) and [§9i](../plan/capacity-aware-intake.md#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479) (Karpenter — including the recorder-generation premise it corrected).
 
 ## End-to-end tests
 
