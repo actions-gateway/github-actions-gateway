@@ -2350,6 +2350,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewayscalesetjobsdeferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayScaleSetJobsDeferred
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayproxyconnectdenied" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3030,6 +3041,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewayscalesetjobsdeferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayScaleSetJobsDeferred
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayproxyconnectdenied" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3369,6 +3391,8 @@ procedure rather than just the alert's <code>summary</code>/<code>description</c
 <p><strong>Page.</strong> The scale-set acquisition tier (the default protocol) is receiving <code>JobAssigned</code> messages but has provisioned no worker pods — the tier is wedged and acquired jobs will not start. A ScaleSet-protocol RunnerSet emits no <code>actions_gateway_active_sessions</code>, so this demand-vs-supply signal is the scale-set analog of <a href="#active_sessions-flatlining-at-zero"><code>active_sessions</code> Flatlining at Zero</a>. Respond with <a href="#scale-set-provisioning-stalled">Scale-set provisioning stalled</a>.</p>
 <h3 id="actionsgatewayscalesetprovisionerrors">ActionsGatewayScaleSetProvisionErrors<a class="headerlink" href="#actionsgatewayscalesetprovisionerrors" title="Permanent link">&para;</a></h3>
 <p><strong>Ticket.</strong> The scale-set tier is failing to provision worker pods (JIT-config mint or pod create) at a sustained rate. A transient failure retries on a later poll; a sustained rate means provisioning is degraded. Check the run service's <code>generate-jitconfig</code> responses and namespace quota headroom, then triage as for <a href="#scale-set-provisioning-stalled">Scale-set provisioning stalled</a>.</p>
+<h3 id="actionsgatewayscalesetjobsdeferred">ActionsGatewayScaleSetJobsDeferred<a class="headerlink" href="#actionsgatewayscalesetjobsdeferred" title="Permanent link">&para;</a></h3>
+<p><strong>Ticket.</strong> One or more jobs assigned to a scale set cannot register their runner name (<code>generate-jitconfig</code> 409 that neither deleting the stale record nor a fresh suffixed name cleared), so no worker is running them. The listener holds each one and re-offers it on a backoff, so the run starts by itself as soon as the name is free — but until then it sits queued at GitHub. Read the job ids off the <code>RunnerSet</code>'s <code>JobProvisionStalled</code> condition, then free the conflicting runner records per <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>.</p>
 <h3 id="actionsgatewayproxyconnectdenied">ActionsGatewayProxyConnectDenied<a class="headerlink" href="#actionsgatewayproxyconnectdenied" title="Permanent link">&para;</a></h3>
 <p><strong>Ticket.</strong> The egress proxy is refusing CONNECT requests to destinations off the egress allowlist at a sustained rate — a Server-Side Request Forgery (SSRF) / egress-policy signal. Every increment is an explicit allowlist denial (sharper than <code>dial_errors</code>, which also counts transient failures to <em>allowed</em> hosts).</p>
 <ol>

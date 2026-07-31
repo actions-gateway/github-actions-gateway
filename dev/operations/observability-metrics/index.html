@@ -2857,8 +2857,8 @@ to the gateway (<code>spec.gatewayRef</code>) are impaired — not serving jobs:
 abnormal-is-True impairing condition — <code>Degraded</code> (revoked/invalid credentials, pushed
 by the listener independently of <code>Ready</code>, Q330), <code>CredentialUnavailable</code>,
 <code>RunnerVersionTooOld</code>, or <code>WorkersUnschedulable</code>. The advisory conditions (<code>RateLimited</code>,
-the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>PossibleReapBlockingSidecar</code>) are
-excluded so the rollup does not flap on normal load. The condition message names the impaired sets and their
+the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>PossibleReapBlockingSidecar</code>,
+<code>JobProvisionStalled</code>) are excluded so the rollup does not flap on normal load. The condition message names the impaired sets and their
 tripped signals, giving the operator a single pane without inspecting each child.
 Advisory — like the v1 rollup it does <strong>not</strong> gate <code>Ready</code>, since the gateway's own
 AGC control plane can be healthy while a tenant's set is impaired. It is exported as the <code>actions_gateway_runnersets_degraded</code>
@@ -2898,13 +2898,19 @@ emitted only on a v2 install and labelled per gateway (<code>namespace</code>, <
 <td><code>actions_gateway_scaleset_provision_errors_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
-<td>Failed provision attempts (JIT-config mint or worker pod create). A transient failure leaves the job un-provisioned to retry on a later poll. A <code>generate-jitconfig</code> <strong>runner-name conflict</strong> (HTTP 409) instead retries under a fresh runner name; if it still conflicts after a bounded number of tries the job is <strong>skipped</strong> (counted here once) so it cannot wedge the queue cursor behind it — it is re-assigned or timed out server-side (Q270). A sustained rate warrants checking the run service's <code>generate-jitconfig</code> responses and namespace quota headroom.</td>
+<td>Failed provision attempts (JIT-config mint or worker pod create). A transient failure leaves the job un-provisioned to retry on a later poll. A <code>generate-jitconfig</code> <strong>runner-name conflict</strong> (HTTP 409) instead retries under a fresh runner name; if it still conflicts after a bounded number of tries the job is <strong>deferred</strong> (counted here once per round) so it cannot wedge the queue cursor behind it (Q270), and re-offered on a backoff until it runs — see <code>…_jobs_deferred</code> below. A sustained rate warrants checking the run service's <code>generate-jitconfig</code> responses and namespace quota headroom.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_scaleset_jobs_completed_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_set</code>, <code>result</code></td>
 <td>Terminal <code>JobCompleted</code> messages the queue delivered, by GitHub-reported <code>result</code> (e.g. <code>succeeded</code>, <code>failed</code>, <code>canceled</code>). This is the completion signal the classic many-acquirers protocol never delivered, so it is unique to the scale-set tier. Counted at most once per job even if a re-created session replays the message.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_deferred</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Assigned jobs the listener is holding for a later re-offer because their runner name will not register — a <code>generate-jitconfig</code> 409 that neither deleting the stale record nor a fresh suffixed name could clear (Q551). Each one is a workflow run queued at GitHub with no worker running it, so <strong>any non-zero value is worth alerting on</strong>; it is the metric twin of the <code>RunnerSet</code>'s advisory <code>JobProvisionStalled</code> condition, whose message names the stuck job ids. It clears when the job provisions on a re-offer or GitHub reports it complete. Fix per <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>. Dropped when the <code>RunnerSet</code> is deleted.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_scaleset_advertised_capacity</code></td>

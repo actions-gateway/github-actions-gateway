@@ -3195,8 +3195,8 @@ second axis is load-bearing because the shared listener pushes <code>Degraded</c
 onto the <code>RunnerSet</code> independently of <code>Ready</code> (Q330): a classic set whose sessions are all
 rejected as unauthorized converges to <code>Ready=NoActiveSessions</code> while <code>Degraded=True</code> sits on
 its own condition, so an <code>Ready</code>-only rollup would silently miss it. The advisory conditions
-(<code>RateLimited</code>, the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>PossibleReapBlockingSidecar</code>)
-are excluded so the rollup does not flap on normal load. Like the v1 rollup it is
+(<code>RateLimited</code>, the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>PossibleReapBlockingSidecar</code>,
+<code>JobProvisionStalled</code>) are excluded so the rollup does not flap on normal load. Like the v1 rollup it is
 advisory — it does <strong>not</strong> gate <code>Ready</code>, since the gateway's own AGC control plane can be
 healthy while one tenant's set is impaired. The GMC watches bound <code>RunnerSet</code>s (predicated
 on a change to a set's impaired signature, dropping high-frequency <code>activeSessions</code>/
