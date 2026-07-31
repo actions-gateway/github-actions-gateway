@@ -533,6 +533,46 @@ route it, and the moment it will really fire. Then say which of those a follow-u
 still confirm. A measurement whose write-up names its own blind spots is worth far more
 than one that quietly implies it has none.
 
+### Assert the recovery property, not the mechanism believed to deliver it
+
+A test that exists to pin a safety or recovery property — "the gate cannot starve a
+tenant", "the queue drains eventually", "the retry budget is bounded" — should assert
+that property as an observable outcome. Asserting instead the internal transition
+*believed* to produce it does something worse than under-testing: if the belief is
+wrong, the test actively defends the defect, and its docstring argues the defect is
+the safety feature.
+
+**Q512 is the worked example.** `TestCapacityGate_ClearsWhenThePodIsReaped` asserted
+that reaping a stuck worker pod flips `WorkerCapacityDeclined` back to `False`, with a
+docstring stating that without this clearing "the first close would be permanent and
+the gate would starve a tenant." The real property was *intake resumes at a bounded
+rate*; the clearing was one mechanism assumed to deliver it — and on the scale-set
+tier it did not, because clearing restored the *entire* advertisement and the next
+batch was claimed whole. The suite was green and confidently documented while a
+dogfood measurement (capacity plan §9e) found the gate removed zero wasted claims.
+The fix inverted the pinned behavior (the condition now latches), and the test's
+docstring had to be rewritten from "clearing prevents starvation" to its opposite.
+
+When writing a test for a property of this kind:
+
+- **Name the property in the test, then ask whether the assertion measures it or a
+  proxy for it.** "The condition clears" is a proxy; "one job is admitted per
+  deadline window and no more" is the property. If only the proxy is practical at
+  this tier, say so in the docstring — a stated proxy invites re-examination; an
+  argued-from proxy forbids it.
+- **Docstrings that justify an assertion with a consequence ("without this, X would
+  happen") are claims, and claims want evidence.** If X has never been observed —
+  only reasoned about — mark it as design intent rather than measured fact. §9e's
+  measurement contradicted exactly such a sentence.
+- **When a live measurement falsifies a test's premise, the test is a casualty, not
+  a defense.** Expect the fix to rewrite it, and treat "but the existing test
+  asserts the opposite" as the finding it is.
+
+This is the negative-assertion rule's sibling one level up: there, a green test
+couldn't distinguish absence from misdirection; here, a green test pinned the wrong
+thing on purpose, because the mechanism and the property had been conflated at
+design time.
+
 ### Adjusting a fake to make a test pass is a finding about the real interface
 
 When a test fails because the stub does not send some field, there are two repairs, and
