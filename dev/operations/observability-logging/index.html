@@ -2456,6 +2456,7 @@ one session→job→pod through a log pipeline. Filter on <code>namespace</code>
 always names the live session); <code>podName</code> appears on the provisioner lines for an
 acquired job's worker pod.</p>
 <p>Admission <strong>rejections</strong> (reserved-namespace, cross-namespace <code>gitHubAppRef</code>, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at <strong>info</strong> — they need no debug flag — as <code>ActionsGateway admission denied</code> with the <code>operation</code>, <code>namespace</code>, <code>name</code>, and <code>reason</code> fields, giving an audit trail of denied attempts.</p>
+<p><strong>API server warnings</strong> (e.g. the <a href="../upgrade/#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns"><code>v2alpha1</code> deprecation warning</a>) are logged at info, <strong>deduplicated to one line per unique message per process</strong> in both controllers. The apiserver attaches such a warning to every read and write of a deprecated API version, so without dedup a set reconciling under churn would drown the log in repeats; expect the first occurrence only, not one per API call.</p>
 <hr />
 <h2 id="distributed-tracing-agc">Distributed Tracing (AGC)<a class="headerlink" href="#distributed-tracing-agc" title="Permanent link">&para;</a></h2>
 <p>The per-tenant AGC emits <strong>OpenTelemetry traces</strong> for its two hottest operational paths:</p>
