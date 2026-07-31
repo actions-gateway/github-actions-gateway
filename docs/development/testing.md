@@ -320,7 +320,18 @@ The Bash tool's default timeout is short (two minutes) and it **kills** anything
 
 Never fire one of these as a default-timeout foreground run and hope it finishes — it will be killed partway and you learn nothing. Pick the timeout from the tier's real cost (see [Cost & cadence](#cost--cadence-rough-ephemeral-ci-2026-ballparks) below); when in doubt, background it.
 
-**Read a background run's output, not its reported exit status.** The status you get back is the *pipeline's* — so a run piped through `tail`, `head`, or `grep` reports the filter's exit code, not the test's. `go test … | tail -30` is reported as exit 0 even when the suite failed, which silently inverts the one signal the run existed to produce. Either drop the pipe (the output file is readable in full anyway) or add `set -o pipefail` so the pipeline carries the test's status through. Confirm a pass by reading the `ok` / `FAIL` line, never from the exit code alone.
+**Read a background run's output, not its reported exit status.** The status you get back is the *last thing the command did* — which is rarely the thing under test.
+
+- **Piped**: a run through `tail`, `head`, or `grep` reports the filter's code. `go test … | tail -30` reports exit 0 even when the suite failed. Drop the pipe (the output file is readable in full anyway) or add `set -o pipefail`.
+- **Sequenced**: the same trap, one step removed, and easier to miss because nothing looks filtered. `make check > check.log 2>&1; tail -20 check.log` reports **`tail`'s** status, so a failed gate arrives as a green completion notification. Redirecting to a log and then peeking at it is the natural way to run a slow gate in the background, which is exactly why this one bites.
+
+The fix for the sequenced form is to record the real status *into* the artifact and read it back, rather than trusting the notification:
+
+```bash
+make check > check.log 2>&1; echo "CHECK_EXIT=$?" >> check.log
+```
+
+Then confirm with `grep -n CHECK_EXIT check.log` alongside the `ok` / `FAIL` lines. Either way the rule is the same: confirm a pass by reading the output, never from the reported exit code alone.
 
 Both rules in this section are enforced mechanically by the foreground-guard hook: it prompts on foreground watch/`sleep`-poll forms, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts — keep that registry in sync when a tier's runtime or target name changes.
 
