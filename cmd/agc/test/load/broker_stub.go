@@ -238,7 +238,6 @@ func (s *brokerStub) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
-	n := s.acquireCount.Add(1)
 	if reqBody.JobMessageID != "" {
 		s.mu.Lock()
 		sid, ok := s.requestSessions[reqBody.JobMessageID]
@@ -262,6 +261,9 @@ func (s *brokerStub) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Bumped only after the single-use consumption is committed, so AcquireCount
+	// never signals an acquisition whose session teardown is still in flight.
+	n := s.acquireCount.Add(1)
 	brokerstub.WriteJSON(w, http.StatusOK, map[string]any{
 		"plan": map[string]string{"planId": fmt.Sprintf("plan-%d", n)},
 	})

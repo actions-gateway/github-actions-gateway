@@ -727,8 +727,6 @@ func (s *server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
-	n := s.acquireCount.Add(1)
-
 	if s.singleUse.Load() && reqBody.JobMessageID != "" {
 		s.mu.Lock()
 		sid, ok := s.requestSessions[reqBody.JobMessageID]
@@ -754,6 +752,11 @@ func (s *server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 		s.recordAcquireLocked(reqBody.JobMessageID)
 		s.mu.Unlock()
 	}
+
+	// Bumped only after the single-use consumption and the acquire claim are
+	// committed, so the counter never signals an acquisition whose state is still
+	// in flight (the Q490 rule; today it only mints the plan/token IDs below).
+	n := s.acquireCount.Add(1)
 
 	w.Header().Set("Content-Type", "application/json")
 	s.mu.Lock()
