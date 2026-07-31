@@ -161,6 +161,10 @@ type provisionerOptions struct {
 	maxEvictionRetries int
 	githubAPIURL       string
 	pollInterval       time.Duration
+	// evictionRerunRetryInterval overrides the pacing between re-run attempts that
+	// GitHub refuses because the original run has not concluded (Q503). Zero leaves
+	// the production default (30s), far past these suites' Eventually timeouts.
+	evictionRerunRetryInterval time.Duration
 	// registrar overrides the default brokerRegistrar. Nil uses the default.
 	registrar agentpool.Registrar
 	// baselineRecheckInterval overrides the reconciler's baseline re-check cadence
@@ -275,15 +279,16 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (*controller.
 		}
 		maxRetries := opts.maxEvictionRetries
 		p := &provisioner.Provisioner{
-			Client:             mgr.GetClient(),
-			Log:                slog.Default(),
-			PollInterval:       pollInterval,
-			WorkerSA:           agcnames.WorkerSAName,
-			MaxEvictionRetries: maxRetries,
-			DefaultWorkerImage: "runner:test",
-			GitHubAPIURL:       opts.githubAPIURL,
-			HTTPClient:         brokerStub.HTTPClient(),
-			TokenFunc:          stubProvider{}.Token,
+			Client:                     mgr.GetClient(),
+			Log:                        slog.Default(),
+			PollInterval:               pollInterval,
+			WorkerSA:                   agcnames.WorkerSAName,
+			MaxEvictionRetries:         maxRetries,
+			EvictionRerunRetryInterval: opts.evictionRerunRetryInterval,
+			DefaultWorkerImage:         "runner:test",
+			GitHubAPIURL:               opts.githubAPIURL,
+			HTTPClient:                 brokerStub.HTTPClient(),
+			TokenFunc:                  stubProvider{}.Token,
 		}
 		if opts.informerWaiter {
 			w := provisioner.NewInformerPodWaiter(mgr.GetCache(), nil)

@@ -158,6 +158,73 @@ func TestAGC_FailureRecovery_EvictionTriggersRequeue(t *testing.T) {
 	}, 20*time.Second, 50*time.Millisecond, "job Secret should be deleted after eviction")
 }
 
+// TestAGC_FailureRecovery_EvictionRerunOutlastsTheRefusalWindow is the Q503 case
+// through the real wiring: informer-fed pod watch, the provision goroutine detecting
+// the eviction, and the detached recovery it starts. GitHub refuses rerun-failed-jobs
+// with 403 "This workflow is already running" until it concludes the original run —
+// ~10 minutes after an ungraceful kill — so the fake refuses twice before accepting,
+// and the AGC must keep retrying across the refusals on ONE budget slot.
+//
+// maxEvictionRetries is 1 on purpose: under the old one-shot behaviour the first
+// refusal spent the whole budget and no second call could ever fire, so this test
+// fails on the defect rather than merely exercising the fix.
+func TestAGC_FailureRecovery_EvictionRerunOutlastsTheRefusalWindow(t *testing.T) {
+	const nsName = "agc-eviction-refusal"
+	createNSForAGC(t, nsName)
+
+	var rerunCalls, acceptedCalls atomic.Int64
+	fakeGitHub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "rerun-failed-jobs") {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		if rerunCalls.Add(1) <= 2 {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"message":"This workflow is already running","documentation_url":"https://docs.github.com/rest"}`))
+			return
+		}
+		acceptedCalls.Add(1)
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]string{})
+	}))
+	defer fakeGitHub.Close()
+
+	rg := newRunnerGroup(nsName, "refusal-rg", 2)
+	require.NoError(t, k8sClient.Create(ctx, rg))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rg) })
+
+	startAGCReconcilerWithProvisioner(t, provisionerOptions{
+		githubAPIURL:               fakeGitHub.URL,
+		maxEvictionRetries:         1,
+		evictionRerunRetryInterval: 50 * time.Millisecond,
+	})
+
+	require.Eventually(t, func() bool {
+		return len(brokerStub.ActiveSessionsForOwner("refusal-rg")) >= 1
+	}, 15*time.Second, 1*time.Millisecond, "refusal-rg session should register")
+
+	brokerStub.SetAcquireJobResponse(map[string]interface{}{
+		"plan":        map[string]string{"planId": "refusal-plan-1"},
+		"contextData": runIdentityContext("owner/repo", "54321"),
+	})
+	t.Cleanup(func() { brokerStub.SetAcquireJobResponse(nil) })
+	sid := enqueueJobOnOwnerSession(15*time.Second, "refusal-rg", map[string]bool{}, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, sid, "should have found refusal-rg session to enqueue on")
+
+	pod := waitForWorkerPod(t, nsName, "refusal-rg")
+	pod.Status.Phase = corev1.PodFailed
+	pod.Status.Reason = "Evicted"
+	require.NoError(t, k8sClient.Status().Update(ctx, &pod))
+
+	// The re-run must land despite the two refusals, and land exactly once.
+	require.Eventually(t, func() bool {
+		return acceptedCalls.Load() >= 1
+	}, 20*time.Second, 50*time.Millisecond,
+		"the re-run must be retried across the still-running refusals until GitHub accepts it")
+	assert.Equal(t, int64(3), rerunCalls.Load(), "two refused calls then the accepted one")
+	assert.Equal(t, int64(1), acceptedCalls.Load(), "one eviction, one accepted re-run")
+}
+
 // TestAGC_FailureRecovery_EvictionBudgetExhausted verifies that with maxEvictionRetries=0
 // the provisioner suppresses the rerun API call.
 func TestAGC_FailureRecovery_EvictionBudgetExhausted(t *testing.T) {

@@ -92,14 +92,32 @@ refuses it:
 rerun API returned 403: {"message":"This workflow is already running", ...}
 ```
 
-So on the shipped default the sequence is: budget slot reserved,
+So on the then-shipped default the sequence was: budget slot reserved,
 `actions_gateway_eviction_retries_total` incremented, re-run refused, job left
-failed. The metric an operator would watch says recovery happened; nothing was
+failed. The metric an operator would watch said recovery happened; nothing was
 recovered. This is exactly the question
 [04-operational-flows.md §4.2](../design/04-operational-flows.md) flagged as
 unmeasured — "whether the rerun call succeeds while the run is still winding down
-inside that window" — and the answer is no. [Q503](../STATUS.md#Q503) carries the
-fix.
+inside that window" — and the answer is no. Q503 carried the fix; see the update
+below.
+
+**Update, 2026-07-30 — Q503 fixed, Q510 flipped the spec.** The AGC now treats the
+`403 This workflow is already running` refusal as "not yet": the re-run is retried
+every 30 seconds inside a 15-minute window (sized past the ~10-minute lock-TTL bound
+this experiment measured), on a context detached from the job goroutine so neither
+the classic TaskResult nor a reconcile is held for the wait, and the whole
+refusal-spanning recovery still costs one slot of the per-run budget. A re-run that
+never lands is no longer silent: `actions_gateway_eviction_rerun_failures_total`
+(reasons `run_never_concluded`, `api_error`) and an `EvictionRerunFailed` Warning
+Event name the run needing a manual re-run. The spec flipped with the fix (Q510): a
+refused re-run now FAILS `E2E_GitHub_EvictedWorkerLatencyAndRerun` — the outcome
+`switch` that recorded a refusal as a report entry and passed is gone, the
+identity-unknown branch fails too (Q495 is fixed, so it is a regression now), and
+the conclusion wait pins **attempt 1**, which the accepted re-run's second attempt
+would otherwise displace from the `filter=latest` jobs listing mid-measurement.
+Verified at the unit and envtest tiers against the measured refusal body; the
+live-GitHub re-validation rides the next run of this spec (live-GitHub is a
+singleton tier and out of scope for the fixing session).
 
 **Why the runner could not report, unlike Q459's drained worker.** The wrapper's
 relay *did* fire — `forwarding termination signal to child`, `grace: 25s`, and the

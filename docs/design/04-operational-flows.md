@@ -231,9 +231,12 @@ sequenceDiagram
     Note over A,GH: RenewJob loop running
     W-->>A: Pod Evicted (node pressure), or preempted by the scheduler — seen via pod watch
     Note over A: RenewJob stops immediately — GitHub cancels the run as the lock lapses
-    Note over A: wait evictionRetryDelay (5s), then check retry budget
+    Note over A: check retry budget, then wait evictionRetryDelay (5s)
     alt retries < maxEvictionRetries
-        A->>GH: POST .../runs/{run_id}/rerun-failed-jobs
+        loop until accepted, bounded by the re-run window (15m)
+            A->>GH: POST .../runs/{run_id}/rerun-failed-jobs
+            GH-->>A: 403 "This workflow is already running" until the run concludes (~10m), then 201
+        end
     else budget exhausted
         Note over A: log warning, eviction_retries_exhausted_total++ (manual re-run)
     end
@@ -241,13 +244,13 @@ sequenceDiagram
 
 Two disruptions reach this flow, and they are detected differently. The kubelet's node-pressure eviction leaves the pod `PodFailed` with `Status.Reason: Evicted`. A kube-scheduler preemption — what a `priorityTiers` `PriorityClass` drives — instead *deletes* the victim after stamping a `DisruptionTarget` condition with reason `PreemptionByScheduler`, so it is recognised by that condition, which travels out of the pod wait alongside the phase (Q497). See [Which disruptions are recovered](#which-disruptions-are-recovered-and-which-are-not) for the full boundary.
 
-The AGC stops renewal immediately on detecting either, so the outstanding lock starts lapsing at once and GitHub concludes the run when it expires: within the remaining lock window, at worst ~10 minutes from the last renewal (the lock TTL — see `RenewJobResponse.LockedUntil` in `broker/types.go`). The AGC then waits `evictionRetryDelay` (default 5 seconds) before calling the rerun API, which addresses `GITHUB_API_BASE_URL` — the same endpoint the installation token was minted against — resolved through the one helper the token exchange uses so the two cannot drift. Before Q504 it defaulted past a configured GHES endpoint to `api.github.com`, so on GHES the call failed with a 401 before it could reach the refusal below.
+The AGC stops renewal immediately on detecting either, so the outstanding lock starts lapsing at once and GitHub concludes the run when it expires: within the remaining lock window, at worst ~10 minutes from the last renewal (the lock TTL — see `RenewJobResponse.LockedUntil` in `broker/types.go`). The AGC waits `evictionRetryDelay` (default 5 seconds) and then calls the rerun API — **retrying while GitHub refuses with `403 This workflow is already running`**, the answer every re-run gets until GitHub has concluded the original run (Q503). The retries are paced at a fixed 30-second interval inside a 15-minute re-run window, sized past the lock TTL bound above; the whole refusal-spanning recovery holds **one** slot of the retry budget. A re-run still refused when the window closes, or refused with anything other than the still-running message, is terminal: `actions_gateway_eviction_rerun_failures_total` increments and an `EvictionRerunFailed` Warning Event names the run needing a manual re-run. The call addresses `GITHUB_API_BASE_URL` — the same endpoint the installation token was minted against — resolved through the one helper the token exchange uses so the two cannot drift. Before Q504 it defaulted past a configured GHES endpoint to `api.github.com`, so on GHES the call failed with a 401 before it could reach the refusal above.
 
-**Both halves of that are now measured against live GitHub (Q396), and the second one does not work.** A worker killed by a real kubelet eviction, on a job carrying no `timeout-minutes` to confound the timing, saw GitHub conclude the job `failure` **9m36s** after the kill — consistent with the lock TTL being the mechanism, since the runner is SIGKILLed with roughly two seconds of grace and never gets its own report out. The re-run, fired 5 seconds after the eviction, therefore arrives while GitHub still considers the run in progress and is refused with `403 This workflow is already running`. The retry budget is spent and `actions_gateway_eviction_retries_total` increments, but the job is not re-run. See [eviction-oversubscription-validation.md § Result](../plan/eviction-oversubscription-validation.md#result-measured-2026-07-29); the fix is tracked as [Q503](../STATUS.md#Q503).
+**Both halves of that are measured against live GitHub (Q396) — and the refusal window is why the retry loop exists.** A worker killed by a real kubelet eviction, on a job carrying no `timeout-minutes` to confound the timing, saw GitHub conclude the job `failure` **9m36s** after the kill — consistent with the lock TTL being the mechanism, since the runner is SIGKILLed with roughly two seconds of grace and never gets its own report out. The AGC originally fired the re-run exactly once, 5 seconds after the eviction — squarely inside the window GitHub refuses — so the budget was spent, `actions_gateway_eviction_retries_total` incremented, and the job was never re-run (the Q503 defect). Treating the still-running refusal as "not yet" rather than a spent attempt is what closed it. See [eviction-oversubscription-validation.md § Result](../plan/eviction-oversubscription-validation.md#result-measured-2026-07-29).
 
 Contrast the *graceful* removal path, where the worker gets the full 30-second grace period and the runner does report: GitHub concludes in 15–26 seconds, and `rerun-failed-jobs` is accepted (Q459). The two paths differ by whether the report escapes, and that is what sets both the latency and whether recovery is even possible.
 
-**A preemption is on the graceful side of that line, so Q503 does not apply to it.** kube-scheduler deletes its victim rather than SIGKILLing it, the SIGTERM relay gets the runner its grace period, and the job concludes in seconds rather than waiting out the lock — which is why the re-run this flow fires for a preemption is accepted where the same call on an eviction is refused. The two causes share one code path and one budget, but not this failure mode.
+**A preemption is on the graceful side of that line, so the refusal window barely arises there.** kube-scheduler deletes its victim rather than SIGKILLing it, the SIGTERM relay gets the runner its grace period, and the job concludes in seconds rather than waiting out the lock — so the first or second re-run call is already past the refusal that an eviction's recovery must out-wait for ~10 minutes. The two causes share one code path, one budget, and one retry loop; they differ only in how long that loop runs.
 
 
 `maxEvictionRetries` is a hard lifetime cap per `run_id`, not a per-disruption-wave allowance: once exhausted, every subsequent disruption of that run is a no-op (counted by `eviction_retries_exhausted_total`) until the AGC restarts and the in-memory counters reset. Because a single workflow run can have several worker pods evicted simultaneously under node pressure — or preempted together when a floor tier claims capacity — the check-and-increment of the per-run counter is serialized per `run_id`, so concurrent disruptions can never collectively exceed the budget, whatever mix of causes they are.
@@ -269,7 +272,7 @@ sequenceDiagram
     P-->>R: Failed/Evicted, or DisruptionTarget=PreemptionByScheduler — seen via the reconciler's pod watch
     R->>P: claim: stamp eviction-handled-at (optimistic lock)
     alt claim won and identity present
-        R->>GH: POST .../runs/{run_id}/rerun-failed-jobs
+        R->>GH: POST .../runs/{run_id}/rerun-failed-jobs (retried until the run concludes — the classic loop above)
     else identity absent
         Note over R: eviction_recovery_identity_unknown_total++, Warning Event (manual re-run)
     else claim lost

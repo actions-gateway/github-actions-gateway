@@ -1372,6 +1372,7 @@ few seconds; the metric is the real-time signal.
 | `QuotaRetriesExhausted` | Warning | Worker pod creation was abandoned after exhausting the namespace `ResourceQuota` retry budget (`maxQuotaRetries`). | [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion) |
 | `WorkerPodCreateFailed` | Warning | The API server refused to create a worker pod (invalid name, admission webhook, pod-security policy). The note carries the API server's own message. No pod exists, so GitHub reports only that the runner lost communication. | ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created) |
 | `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, which share one per-run budget. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) |
+| `EvictionRerunFailed` | Warning | A disrupted run's automatic re-run was never accepted by GitHub — refused past the 15-minute re-run window, or a terminal API error (Q503). The budget slot is spent; the named run needs a manual re-run. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |
 
 **Diagnostics.**
 
@@ -2150,19 +2151,23 @@ kubectl get secret -n <namespace> actions-gateway-proxy-tls \
 > `kubectl get pod -n <namespace> <pod> -o jsonpath='{.metadata.annotations.actions-gateway\.com/run-id}'`
 > — empty there means the payload genuinely carried no identity.
 >
-> **`eviction_retries_total` incrementing but the job still never re-runs?** On a
-> post-Q495 AGC the re-run is now *attempted*, and against real GitHub it is
-> currently *refused*. Measured (Q396): a kubelet eviction SIGKILLs the runner
-> before it can report, so GitHub does not conclude the run until the job lock's
-> TTL lapses — **about 9–10 minutes** — while the AGC fires `rerun-failed-jobs`
-> only `evictionRetryDelay` (default 5s) after the eviction. The API answers
-> `403 This workflow is already running`, the budget slot is spent anyway, and the
-> counter increments regardless. **Treat `eviction_retries_total` as "a re-run was
-> attempted", not "a job was recovered"**, and look for
-> `eviction auto-retry failed; manual rerun may be required` with a 403 in the AGC
-> log to confirm this case. Until [Q503](../STATUS.md#Q503) lands, evicted jobs need
-> a manual re-run; raising `evictionRetryDelay` past GitHub's conclusion latency is
-> the interim workaround.
+> **`eviction_retries_total` incrementing but the job still never re-runs?** An
+> evicted run's re-run is deliberately slow to land: a kubelet eviction SIGKILLs
+> the runner before it can report, so GitHub does not conclude the run until the
+> job lock's TTL lapses — measured at 9m36s (Q396) — and until then it refuses
+> `rerun-failed-jobs` with `403 This workflow is already running`. The AGC retries
+> that refusal every 30 seconds inside a 15-minute re-run window (Q503), so expect
+> `disruption auto-retry triggered` in the AGC log **~10 minutes** after the
+> eviction, not seconds. A recovery that gave up instead logs
+> `disruption auto-retry failed`, increments
+> `actions_gateway_eviction_rerun_failures_total`, and emits an
+> `EvictionRerunFailed` Warning Event naming the run — that job needs a manual
+> re-run. `reason="run_never_concluded"` means the original run outlived the
+> 15-minute window (check whether GitHub still shows it in progress);
+> `reason="api_error"` means the API failed outright — check the AGC log line's
+> error for a permissions 403 or an endpoint problem. On an AGC older than the
+> Q503 fix, the single un-retried re-run always lost this race and every evicted
+> job needed a manual re-run.
 
 **Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing. Jobs are being cancelled after eviction despite automatic retries. `kubectl describe` on the owning `RunnerGroup`/`RunnerSet` shows a `Warning` event with reason `EvictionRetriesExhausted` (Q170) naming the affected run — the event-based companion to the metric.
 
@@ -2179,6 +2184,7 @@ kubectl get secret -n <namespace> actions-gateway-proxy-tls \
 # preemption); the retry budget itself is shared across every combination.
 # actions_gateway_eviction_retries_total{namespace, runner_group, tier, cause}
 # actions_gateway_eviction_retries_exhausted_total{namespace, runner_group, tier, cause}
+# actions_gateway_eviction_rerun_failures_total{namespace, runner_group, tier, cause, reason}
 # Start here: the cause that is climbing decides which resolution below applies.
 
 # Check recent evicted pods

@@ -520,8 +520,9 @@ green `201` could not show:
   never assigned — so its call always went to `api.github.com` whatever
   `GITHUB_API_BASE_URL` said, and recovery could not work on GHES at all (Q504).
 - **When it fired.** The harness POSTed *after* waiting for GitHub to conclude the job.
-  The AGC fires `evictionRetryDelay` (5s) after the disruption, ~9.5 minutes before
-  GitHub concludes, and is answered `403 This workflow is already running` (Q503).
+  The AGC fired `evictionRetryDelay` (5s) after the disruption, ~9.5 minutes before
+  GitHub concludes, and was answered `403 This workflow is already running` (Q503,
+  since fixed by retrying that refusal until the run concludes).
 
 Neither is a flaw in the measurement — "GitHub accepts this call for this run state" was
 a real question and the answer was real. The flaw was in the sentence that carried it

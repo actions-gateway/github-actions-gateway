@@ -73,9 +73,9 @@ to overreach. The harness issues this call with `gh api`, after waiting for GitH
 conclude the job. The AGC issues it from `rerunFailedJobs`, against whatever host
 `Provisioner.GitHubAPIURL` names, `evictionRetryDelay` after the disruption. Both of
 those differences turned out to hide defects the `201` here could not see — Q504 (the
-call ignored `GITHUB_API_BASE_URL`) and Q503 (it fires ~9.5 minutes too early and is
-refused `403`). Read this measurement as *GitHub will re-run a run in this state*, and
-nothing more.
+call ignored `GITHUB_API_BASE_URL`) and Q503 (it fired ~9.5 minutes too early and was
+refused `403`; both since fixed). Read this measurement as *GitHub will re-run a run in
+this state*, and nothing more.
 
 ## The decision this produces
 
