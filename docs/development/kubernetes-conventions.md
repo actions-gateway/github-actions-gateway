@@ -341,6 +341,26 @@ annotations are not copied onto worker pods. The markers live on the pod, so the
 release automatically when the pod is torn down on job completion. Operator-facing
 detail in [observability.md](../operations/observability-metrics.md#node-disruption-safety-annotations).
 
+## A new controller write verb updates the role pair in the same change
+
+When controller code gains a client write it did not make before — a `Patch` on a
+kind it only deleted, an `Update` on one it only read, any new (resource, verb)
+combination — the change must also land the grant, in both halves of the pair:
+the `+kubebuilder:rbac` markers (`cmd/agc/internal/controller/doc.go`) **and** the
+chart's hand-maintained rules fragment
+(`charts/actions-gateway/files/agc-*-rules.yaml`; see
+[code-generation.md § agc-tenant-role](code-generation.md#agc-tenant-role) for why
+the tenant role is not generated).
+
+Nothing catches the miss for you. The drift gate (Q454) pairs markers with chart
+rules, but nothing pairs *code* with markers — and envtest does not enforce RBAC
+(every test client runs as admin), so unit and integration stay green and the write
+403s only on a real cluster. That is how the scale-set eviction-recovery claim and
+the `job-completed-at` stamp shipped patching pods without the verb and ran broken
+on every real install until Q502's e2e round surfaced it. Grep for the client call
+(`Client.Patch`/`Update`/`Delete` on the kind) when reviewing a controller change,
+and treat a new verb in code with no diff under `charts/` as the smell.
+
 ## ValidatingAdmissionPolicy `paramKind`: never a core type (Q444/Q492)
 
 **Rule: a `paramKind` must be a CRD. Never `ConfigMap`, `Secret`, or any other
