@@ -538,7 +538,11 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		outcome, wErr = p.waitForCompletion(ctx, key.Namespace, podName)
 		return wErr
 	}); err != nil {
-		// Context cancelled or unrecoverable watch error.
+		// Context cancelled or unrecoverable watch error. When the listener abandoned
+		// this one job, the pod is still running a job nothing will ever report, so
+		// reclaim it (Q501); a shutdown cancels every job context at once and must
+		// leave live workers alone. reclaimAbandonedWorker checks the cause.
+		p.reclaimAbandonedWorker(ctx, target, podName, log)
 		_ = p.deleteSecret(ctx, key.Namespace, secretName)
 		return "", err
 	}

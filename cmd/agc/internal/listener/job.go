@@ -242,8 +242,12 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	// an orphan pod while GitHub recycles the job and redelivers it to a sibling
 	// session (a duplicate acquire). On the normal path cancelJob fires via defer
 	// once the job completes (a no-op teardown of an already-finished worker) (Q254).
-	jobCtx, cancelJob := context.WithCancel(ctx)
-	defer cancelJob()
+	//
+	// WithCancelCause, not WithCancel: the JobHandler reclaims the worker pod only
+	// when THIS job was abandoned, and the parent ctx's own cancellation (AGC
+	// shutdown) reaches the same job context. Only the cause tells them apart (Q501).
+	jobCtx, cancelJob := context.WithCancelCause(ctx)
+	defer cancelJob(nil)
 	stop, renewDone := StartRenewLoop(jobCtx, cancelJob, cfg.Broker, runServiceURL, planID, jobID, jobToken,
 		cfg.Metrics, cfg.Namespace, cfg.Clock, log, renewInterval, cfg.controlPlaneTimeout())
 	// Cancel the renew loop and wait for it to exit before returning, so the

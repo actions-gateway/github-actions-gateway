@@ -1176,8 +1176,8 @@ func TestRenewLoop_DefinitiveJobNotFoundTearsDown(t *testing.T) {
 	defer cancel()
 	// jobCtx models the worker's job context; the loop must cancel it on a
 	// definitive job-gone response so the JobHandler unwinds and the pod tears down.
-	jobCtx, cancelJob := context.WithCancel(context.Background())
-	defer cancelJob()
+	jobCtx, cancelJob := context.WithCancelCause(context.Background())
+	defer cancelJob(nil)
 
 	stop, done := listener.StartRenewLoop(ctx, cancelJob, bc, srv.URL, "plan-1", "job-1", "", m, "default", clk, log, 60*time.Second, 0)
 
@@ -1197,6 +1197,12 @@ func TestRenewLoop_DefinitiveJobNotFoundTearsDown(t *testing.T) {
 	assert.Equal(t, float64(1),
 		testutil.ToFloat64(m.RenewJobTeardownsTotal.WithLabelValues("default", "job_not_found")),
 		"definitive-loss teardown counter must fire once with reason=job_not_found")
+	// The cause is what tells the JobHandler this job was abandoned, as opposed to
+	// the AGC shutting down — only the former may delete the worker pod (Q501).
+	require.ErrorIs(t, context.Cause(jobCtx), listener.ErrJobAbandoned,
+		"the teardown must cancel with ErrJobAbandoned so the worker pod is reclaimed")
+	assert.Contains(t, context.Cause(jobCtx).Error(), "job_not_found",
+		"the cause must carry the teardown reason")
 	assert.Contains(t, logBuf.String(), "job lock definitively lost", "expected the distinct teardown log line")
 
 	stop()
@@ -1228,8 +1234,8 @@ func TestRenewLoop_ConsecutiveFailuresTearDown(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	jobCtx, cancelJob := context.WithCancel(context.Background())
-	defer cancelJob()
+	jobCtx, cancelJob := context.WithCancelCause(context.Background())
+	defer cancelJob(nil)
 
 	stop, done := listener.StartRenewLoop(ctx, cancelJob, bc, srv.URL, "plan-1", "job-1", "", m, "default", clk, nil, 60*time.Second, 0)
 
@@ -1251,6 +1257,8 @@ func TestRenewLoop_ConsecutiveFailuresTearDown(t *testing.T) {
 	assert.Equal(t, float64(1),
 		testutil.ToFloat64(m.RenewJobTeardownsTotal.WithLabelValues("default", "consecutive_failures")),
 		"definitive-loss teardown counter must fire once with reason=consecutive_failures")
+	require.ErrorIs(t, context.Cause(jobCtx), listener.ErrJobAbandoned,
+		"the teardown must cancel with ErrJobAbandoned so the worker pod is reclaimed (Q501)")
 
 	stop()
 	clk.Stop()
@@ -1285,8 +1293,8 @@ func TestRenewLoop_TransientFailuresDoNotTearDown(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	jobCtx, cancelJob := context.WithCancel(context.Background())
-	defer cancelJob()
+	jobCtx, cancelJob := context.WithCancelCause(context.Background())
+	defer cancelJob(nil)
 
 	stop, done := listener.StartRenewLoop(ctx, cancelJob, bc, srv.URL, "plan-1", "job-1", "", m, "default", clk, nil, 60*time.Second, 0)
 

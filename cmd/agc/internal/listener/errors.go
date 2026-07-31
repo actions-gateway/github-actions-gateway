@@ -11,6 +11,14 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 )
 
+// ErrJobAbandoned is the cancellation cause attached to a job's context when the
+// listener gives up on that one job — today only the renew loop's definitively lost
+// lock (Q254). A JobHandler reads it with context.Cause to tell this apart from the
+// process-wide shutdown that cancels every job context at once: an abandoned job's
+// worker pod is reclaimed, a shutdown's is left running (Q501). The teardown reason
+// is wrapped around it, so errors.Is still matches.
+var ErrJobAbandoned = errors.New("job abandoned by the gateway")
+
 // NonRetriableError wraps an error from Run that indicates a permanent failure
 // condition for this goroutine (e.g. version too old, unauthorized). The
 // Multiplexer uses this to suppress automatic restart of the permanent baseline.

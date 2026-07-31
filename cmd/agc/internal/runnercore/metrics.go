@@ -90,7 +90,8 @@ type Metrics struct {
 	// token (the burst was spent). Only non-zero when a group sets spec.scaleUp; a
 	// sustained rate shows the ramp is actively smoothing a burst.
 	ScaleUpThrottled *prometheus.CounterVec
-	// Q95: worker pod lifecycle (emitted by the RunnerGroup reconciler's reaper)
+	// Q95: worker pod lifecycle (emitted by the RunnerGroup reconciler's reaper, and
+	// by the provisioner for the job-abandoned reclaim it owns — Q501)
 	WorkerPodsReaped *prometheus.CounterVec
 	// Q114: single-use JIT agent recycling (emitted by listener goroutines and
 	// the agent pool's reconcile repair pass)
@@ -230,7 +231,7 @@ func NewMetrics() *Metrics {
 
 		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_worker_pods_reaped_total",
-			Help: "Worker pods deleted by the reaper, by reason (completed_ttl, pending_deadline, orphaned_running, lifetime_exceeded). runner_group carries the owning CR's name on both acquisition tiers; runner_set additionally carries it on scale-set reaps (empty on classic) so the series join the runner_set-labelled scaleset_* gauges (Q514).",
+			Help: "Worker pods the AGC deleted, by reason (completed_ttl, pending_deadline, orphaned_running, lifetime_exceeded, job_abandoned). All but job_abandoned come from the reconciler's reaper; job_abandoned is the provisioner reclaiming the worker of a job the listener gave up on (Q501). runner_group carries the owning CR's name on both acquisition tiers; runner_set additionally carries it on scale-set reaps (empty on classic) so the series join the runner_set-labelled scaleset_* gauges (Q514).",
 		}, []string{"namespace", "runner_group", "runner_set", "reason"}),
 
 		AgentRecyclesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
