@@ -880,9 +880,11 @@ can, both feed the same rung this would later reuse. Building the
 booking model with no measurement of how much residual claim-burn is actually
 left after rate-bounding.
 
-**Triggers to revisit.** Any one of: measurement from the cheaper rungs shows
-residual burn that rate-bounding cannot make acceptable (the GPU/spot case, where
-one wasted claim per deadline window is still expensive); an operator asks with a
+**Triggers to revisit.** Any one of: an operator finds the measured residual
+burn of the latched gate — ~1 claim per deadline window
+([plan §9h](../plan/capacity-aware-intake.md#9h-what-the-dogfood-re-run-measured-for-the-latch-q513))
+— still unacceptable (the GPU/spot case, where
+one wasted claim per window is expensive); an operator asks with a
 cluster already running cluster-autoscaler with provisioning requests enabled;
 or provider support for `check-capacity` broadens enough that the fail-open path
 stops being the common one.

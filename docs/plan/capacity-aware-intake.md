@@ -31,9 +31,9 @@ durable rationale in
 | 2a | Split the mode enum's two axes: tenant policy on the set, cluster fact on the gateway | S | ✅ Done ([§5a](#5a-the-single-enum-was-two-axes-q470), Q470, 2026-07-27) |
 | 2b | Assert phase 2's matcher against a real autoscaler's events, in kind | M | ✅ Done ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), Q474, 2026-07-28) — cluster-autoscaler only (V3) |
 | 2c | Stop one loop's two verdicts from gating: the concurrency window | S | ✅ Done ([§9d](#9d-the-concurrency-window-q478), Q478, 2026-07-28) |
-| 2d | The latch: a bound that survives the reap, with a probe slot on both tiers | M | ✅ Done ([§9g](#9g-the-latch--a-bound-that-survives-the-reap-q512), Q512, 2026-07-30) — effect unmeasured until the V2 re-run |
+| 2d | The latch: a bound that survives the reap, with a probe slot on both tiers | M | ✅ Done ([§9g](#9g-the-latch--a-bound-that-survives-the-reap-q512), Q512, 2026-07-30) — effect measured (V2 re-run) |
 | V1 | Measure item 0a's effect — the scale-set quota rung — on dogfood | M | ✅ Measured ([§9f](#9f-what-the-dogfood-run-measured-for-the-quota-rung-q462), Q462, 2026-07-31) — rung binds; bias-low margin 0–2 jobs, never inverted |
-| V2 | Measure items 1 and 2's effect — both capacity-gate signals — on dogfood | M | ✅ Measured ([§9e](#9e-what-the-dogfood-run-measured-q469), Q469, 2026-07-31) — **no reduction on the ScaleSet tier**; fixed by item 2d, re-run tracked as [Q513](../STATUS.md#Q513) |
+| V2 | Measure items 1 and 2's effect — both capacity-gate signals — on dogfood | M | ✅ Measured ([§9e](#9e-what-the-dogfood-run-measured-q469), Q469, 2026-07-31) — **no reduction on the ScaleSet tier**; fixed by item 2d, re-run measured ([§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513), Q513) |
 | V3 | Extend item 2b's live-autoscaler drift gate to Karpenter | M | ⏳ Unrun ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), [Q479](../STATUS.md#Q479)) |
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
@@ -42,20 +42,23 @@ measured where it runs. **The V rows are the open work — item 3's deferral doe
 not close this plan.** A ✅ on 0a, 1 or 2 records an envtest proof of the
 *mechanism*, never a measurement of what it removes.
 
-**V2 has now run, and the answer was no ([§9e](#9e-what-the-dogfood-run-measured-q469)).**
-On the ScaleSet tier — the default acquisition tier — `mode: Observe` produced
-exactly the same wasted-claim count as `mode: Off`. The mechanism behaved as
-specified; the integer expression of the rung cannot bound waste while its bound
-is the set's own in-flight pods and the reaper deletes those. **No effectiveness
-claim belongs in this doc, or in public copy, for either tier**: classic is still
-unmeasured, and scale-set is measured at zero. The remedy — the latch, item 2d —
-shipped as [§9g](#9g-the-latch--a-bound-that-survives-the-reap-q512) (Q512); V2
-should be re-run against it.
+**V2 ran twice.** The first run ([§9e](#9e-what-the-dogfood-run-measured-q469))
+measured **no reduction** on the ScaleSet tier — the integer expression of the
+rung could not bound waste while its bound was the set's own in-flight pods and
+the reaper deleted those. The remedy — the latch, item 2d — shipped as
+[§9g](#9g-the-latch--a-bound-that-survives-the-reap-q512) (Q512), and the re-run
+([§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513), Q513) measured
+it working as designed: steady-state waste fell from 7 per window to **exactly
+1 probe claim per ~5-min window**, the condition held `True/AwaitingProbe`
+across reap cycles, and the advertisement stayed pinned at the probe slot
+instead of sawtoothing to the full ceiling. **The effectiveness claim this
+supports is scale-set-tier-specific and rate-shaped** — a burst's first batch is
+still claimed whole, and the classic tier remains unmeasured live.
 
-That also changes what V2 hands to the Phase 3 decision. §8's trigger (a) asks
-whether residual burn survives *rate-bounding*; on this tier there was no
-rate-bounding to survive, so the measurement neither arms nor retires item 3 —
-it says fix the rung first, then re-measure. What item 2b added is narrower and does not substitute for V2:
+§8's trigger (a) now has its number: residual burn under rate-bounding is ~1
+claim per window ([§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513)),
+which arms item 3 only for operators (GPU/spot) for whom even that rate is
+expensive. What item 2b added is narrower and does not substitute for V2:
 phase 2's *input* — the strings a real cluster-autoscaler emits — is now asserted
 against a live autoscaler on every run of the drift gate ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474)).
 
@@ -910,7 +913,8 @@ bound claim waste while its bound is coupled to the pods the reaper deletes.
 The fix was a design question, not a patch — a bound that survives the reap
 needs evidence that outlives the pod — and shipped as
 [§9g](#9g-the-latch--a-bound-that-survives-the-reap-q512)'s latch (Q512); the
-re-measurement is [Q513](../STATUS.md#Q513).
+re-measurement ([§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513),
+Q513) confirmed it bounds the rate to 1 per window.
 
 ### Step 3 — scale-up is not suppressed (pass)
 
@@ -1056,7 +1060,9 @@ evidence is the stuck pod itself, the reaper deletes that pod at
 advertisement — so a burst of *N* becomes *N* again, every window. The classic
 tier survives the same clearing because it re-decides per delivered job; the
 integer tier has no per-job decision point, so the clearing must not mean "back
-to ceiling". This section is the design for the bound that survives the reap.
+to ceiling". This section is the design for the bound that survives the reap;
+[§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513) is its dogfood
+measurement.
 
 **The rule.** When every stuck pod has vanished *without evidence that capacity
 returned*, the condition does not clear — it **latches**:
@@ -1124,6 +1130,67 @@ flapped with every reap cycle. The withheld gauge
 (`actions_gateway_scaleset_capacity_withheld{reason="capacity"}`) now shows
 sustained withholding (`ceiling − active − 1`) across windows instead of the
 §9e sawtooth that always returned to zero.
+
+## 9h. What the dogfood re-run measured for the latch (Q513)
+
+Measured 2026-07-31 on `gag-dogfood`, against a control plane built from
+`2715e7f8` — the first post-latch (Q512) main. Same harness as
+[§9e](#9e-what-the-dogfood-run-measured-q469): two ScaleSet RunnerSets differing
+only in `capacityGate.mode`, a `RunnerTemplate` naming a nonexistent node pool,
+`maxWorkers: 8`, `pendingPodDeadline: 2m`, one `unit-test.yml` dispatch (7
+GAG-routed jobs) per arm, arms run sequentially on fresh set names (per the
+gke-dogfood B7 replay rule). Sampled every 10s from the AGC's mTLS metrics
+endpoint plus the RunnerSet condition.
+
+**The headline: every §9g prediction held.** Steady-state waste dropped from
+*N* per window to exactly 1, the condition latched instead of flapping, and the
+§9e sawtooth is gone.
+
+| | `mode: Off` | `mode: Observe` (latched) |
+|---|---|---|
+| Wasted claims, first 12.5 min | **21** (3 batches × 7) | **8** (first batch of 7 + 1 probe) |
+| Steady-state rate | 7 per window | **1 per window** (probes at 07:25, 07:30, 07:35, 07:40 — reaped 8→9→10→11) |
+| Advertisement after a reap | full ceiling (8) — the §9e sawtooth | **pinned at 1** (the probe slot), `withheld{capacity}=7` sustained |
+| `WorkerCapacityDeclined` | absent throughout | `True` continuously after first close — alternating `ScaleUpDeclined` (probe stuck) ↔ `AwaitingProbe` (probe reaped) |
+
+The Off control reproduced §9e exactly (21 reaps, 3×7, ~5 min batch period),
+so the delta is the latch, not a changed environment.
+
+One measured cycle of the latch arm, from the sampler:
+
+```
+07:20:48  adv=8  pods=7  cond=False/CapacityAvailable      <- burst assigned whole (batch-granular)
+07:21:45  adv=8  pods=7  cond=True/ScaleUpDeclined         <- gate closes: deadline/2 grace (~60s)
+07:22:43  adv=7  pods=0  cond=True/AwaitingProbe           <- reap; condition LATCHES, does not clear
+07:23:17  adv=1  withheld=7                                <- next poll: probe slot only
+07:25:43  adv=1  pods=1  cond=True/AwaitingProbe           <- GitHub assigns 1 (not 7): the probe
+07:26:40  adv=1  pods=1  cond=True/ScaleUpDeclined         <- probe sticks; live verdict re-earned
+07:27:47  adv=1  pods=0  cond=True/AwaitingProbe           <- probe reaped; latch holds; repeat
+```
+
+Two timings worth recording:
+
+* **The practical window is ~5 min, not the 2 m deadline** — reap at 2 m plus
+  ~3 min of GitHub-side re-assignment latency before the probe job lands (the
+  same lag §9e's Off batches showed). The steady-state burn rate is therefore
+  ~1 claim / ~5 min at this deadline, and scales with `pendingPodDeadline`.
+* **The condition never flapped through `False`.** `WorkersUnschedulable`
+  cleared at each reap (its evidence is the pods) while `WorkerCapacityDeclined`
+  held `True` — the decoupling §9g designed. The `AwaitingProbe` message names
+  the reaped evidence and the reopening rule verbatim from the operator doc.
+
+Corroborated in passing: CA's `NotTriggerScaleUp` again landed 0–1 s after pod
+creation, and the nonexistent-pool shape emitted a two-category body
+(`1 node(s) had untolerated taint(s), 1 node(s) didn't match Pod's node
+affinity/selector`) — classified by category, never parsed, per §9c.
+
+**What this hands the Phase 3 decision.** §8's trigger (a) now has its number:
+residual burn under rate-bounding is ~1 claim per ~(deadline + reassignment)
+window, only while jobs are actually queued against an unplaceable shape. For
+this repo's CI that is acceptable; a GPU/spot operator for whom even that rate
+is expensive is trigger (a)'s remaining case. The first batch remains unbounded
+by design (assignment is batch-granular; the gate cannot close before the first
+pod sticks), and the classic tier's boolean rung remains unmeasured live.
 
 ## 10. Non-goals
 
