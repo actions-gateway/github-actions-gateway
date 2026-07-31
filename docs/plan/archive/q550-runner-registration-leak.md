@@ -6,11 +6,12 @@ provision→reap lifecycle removes it. Because the runner name is derived from t
 job ID, a job's own leftovers collide with its retries — the failure mode that
 wedged the `v1.3.0-rc.2` validation window with 22 stale `gag-ci-e2e` records.
 
-Closed 2026-07-31 (Q550, `bug` `1.3-gate`). Sibling row
-[Q551](../../STATUS.md#Q551) covers what the listener does *after* the collisions
-become unrecoverable (permanent skip, no retry/condition/Event); it is a separate
-concern and ships separately. This fix removes most of what *causes* the
-collisions, but does not change the skip behaviour, so Q551 stays open.
+Closed 2026-07-31 (Q550, `bug` `1.3-gate`). Sibling row Q551 covered what the
+listener does *after* the collisions become unrecoverable — it kept the skip that
+stops one stuck assignment wedging the batch, but now holds the job and re-offers
+it on a backoff, surfacing the stall as `JobProvisionStalled`. The two shipped
+separately the same day: this fix removes most of what *causes* the collisions,
+Q551 makes what remains recoverable and visible.
 
 > **Verified at unit and integration; not yet re-verified live.** The defect was
 > found in the `v1.3.0-rc.2` dogfood window, and no tier below a live-GitHub run

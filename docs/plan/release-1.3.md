@@ -1,22 +1,29 @@
 # Release 1.3 Milestone Definition
 
-> **Status: one gating row is OPEN — Q551.** Two were filed 2026-07-31 from the
-> `v1.3.0-rc.2` validation window, where the RC gate's dispatched e2e job was
-> wedged by the AGC itself: provisioning leaked runner registrations at GitHub
-> (reap never deregistered them, and names derive from the job ID, so retries
-> 409 against their own leftovers — Q550), and after four attempts the listener
-> dropped the job permanently with no retry, condition, or Event (Q551). Both
-> are availability bugs in the scale-set listener an ordinary tenant can hit —
-> any burst of provisioning failures (quota, stockout, admission) starts the
-> same cycle — so they gate the tag rather than ride the backlog.
+> **Status: no gating Queue row remains — both 2026-07-31 gates closed the same
+> day they were filed.** Q550 and Q551 came out of the `v1.3.0-rc.2` validation
+> window, where the RC gate's dispatched e2e job was wedged by the AGC itself:
+> provisioning leaked runner registrations at GitHub (reap never deregistered
+> them, and names derive from the job ID, so retries 409 against their own
+> leftovers — Q550), and after four attempts the listener dropped the job
+> permanently with no retry, condition, or Event (Q551). Both were availability
+> bugs in the scale-set listener an ordinary tenant could hit — any burst of
+> provisioning failures (quota, stockout, admission) starts the same cycle — so
+> they gated the tag rather than riding the backlog.
 >
-> **Q550 shipped 2026-07-31**
-> ([plan](archive/q550-runner-registration-leak.md)): the worker pod now carries
-> the name its runner is registered under, the reaper deregisters that record
-> before deleting the pod, and a listener start sweeps records no live pod
-> claims. That removes most of what *causes* the collisions but does not change
-> what the listener does once they persist, so **Q551 still gates the tag**. The
-> paragraph below records the pre-2026-07-31 history.
+> **Q550** ([plan](archive/q550-runner-registration-leak.md)) made the worker pod
+> the record of its own registration: it carries the runner name, the reaper
+> deregisters that record before deleting the pod, and a listener start sweeps
+> records no live pod claims. **Q551** kept the skip that stops one stuck
+> assignment wedging the batch, but now holds the job and re-offers it on a
+> backoff, surfacing the stall as `JobProvisionStalled` plus a deferred-jobs
+> gauge. Q550 removes most of what causes the collisions; Q551 makes what remains
+> recoverable and visible.
+>
+> **The fixes are verified at unit and integration only.** Neither can be
+> re-confirmed against the live API below a dogfood run, so the RC validation
+> below is where that lands. The paragraph below records the pre-2026-07-31
+> history.
 >
 > **Previously: no gating Queue row remained.** The original six closed 2026-07-26
 > (Q359, Q400, Q404, Q411, Q412, Q393), and all four rows the
