@@ -36,7 +36,7 @@ hide:
 ```sh
 helm install gag \
   oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.2.0 \
+  --version 1.3.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
@@ -45,7 +45,7 @@ helm install gag \
 
 # v2 API (recommended): apply the signed, pre-rendered CRDs
 kubectl apply --server-side -f \
-  https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.2.0/actions-gateway-crds-v2.yaml
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.3.0/actions-gateway-crds-v2.yaml
 ```
 
 </div>
@@ -70,7 +70,7 @@ Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-co
     - Platform-owned quota cap
     - Blocked jobs auto-recover
     - Zero manual reruns
-    - Tenants manage their runners
+    - Self-serve `ActionsGateway` CRs — no platform ticket per change
 
 -   :material-layers-triple:{ .lg .middle } __No blocked critical jobs__
 
@@ -124,7 +124,7 @@ Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-co
     - Grafana dashboards + alerts, as code
     - Job counts in `kubectl get`
     - K8s Events on job transitions
-    - Per-job usage peaks for [right-sizing](operations/worker-rightsizing.md)
+    - Cross-tenant fleet rollups for platform admins
 
 -   :material-file-document-multiple:{ .lg .middle } __Shared runner templates__ <span class="gag-v2-badge">v2</span>
 
@@ -149,16 +149,16 @@ Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-co
     - Signed images + Software Bill of Materials (SBOM) + SLSA
     - [Kata micro-VM workers](operations/kata-dind-workloads.md), proven in our own CI
 
--   :material-account-cog:{ .lg .middle } __Tenant runner self-service__ <span class="gag-v2-badge">v2</span>
+-   :material-tape-measure:{ .lg .middle } __Right-size from measured usage__ <span class="gag-v2-badge">v2</span>
 
     ---
 
-    Self-managed runners, one setup:
+    No more guessed `resources`:
 
-    - Self-serve `ActionsGateway` CRs
-    - Tune `maxRunners` per group
-    - Multiple gateways per namespace
-    - No platform ticket per change
+    - Per-job usage peaks sampled
+    - [Recommendations in `RunnerSet` status](operations/worker-rightsizing.md)
+    - Opt-in profiles auto-apply at pod build
+    - `SizingDrift` warns; GPUs never touched
 
 </div>
 </div>
