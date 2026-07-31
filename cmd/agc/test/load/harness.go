@@ -115,10 +115,12 @@ type recorder struct {
 }
 
 func (r *recorder) add(d time.Duration) {
-	r.recycles.Add(1)
 	r.mu.Lock()
 	r.latencies = append(r.latencies, d)
 	r.mu.Unlock()
+	// Counted after the latency is appended, so the count never claims a recycle
+	// whose latency sample is not yet visible.
+	r.recycles.Add(1)
 }
 
 // resetLatencies drops latencies accumulated during warmup so the reported

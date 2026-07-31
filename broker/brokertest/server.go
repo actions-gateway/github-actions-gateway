@@ -200,7 +200,10 @@ func (s *Server) WaitForFirstPoll(sessionID string, timeout time.Duration) bool 
 	}
 }
 
-// AcquireJobCalls returns the number of times /acquirejob was called.
+// AcquireJobCalls returns the number of /acquirejob calls the stub has fully
+// served — like CompleteJobCalls, the counter is published only after the call's
+// fan-out accounting is committed, so waiting on it and then reading the
+// accounting is race-free.
 func (s *Server) AcquireJobCalls() int {
 	return int(s.acquireCount.Load())
 }
@@ -498,13 +501,17 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		brokerstub.WriteJSON(w, http.StatusOK, map[string]string{"sessionId": sessionID})
 
 	case http.MethodDelete:
-		// Each goroutine calls DELETE exactly once on exit; count it toward the
-		// per-goroutine "#POST − #DELETE" total regardless of v2 vs v1 mode.
-		s.sessions.CountDelete()
-
 		// Identify the session by the sessionId query param (v1) or the Bearer
 		// token (v2, per-goroutine unique) and mark it deleted.
 		sessionID, _ := s.sessions.ResolveDelete(r.URL.Query().Get("sessionId"), brokerstub.Bearer(r))
+
+		// Each goroutine calls DELETE exactly once on exit; count it toward the
+		// per-goroutine "#POST − #DELETE" total regardless of v2 vs v1 mode.
+		// Counted after the registry flip so a waiter on ActiveSessionCount sees
+		// the session already inactive, and before the delete-notify close so a
+		// WaitForSessionDelete waiter sees both.
+		s.sessions.CountDelete()
+
 		if sessionID != "" {
 			s.mu.Lock()
 			s.deleted[sessionID] = true
@@ -667,7 +674,6 @@ func (s *Server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	n := s.acquireCount.Add(1)
 	w.Header().Set("Content-Type", "application/json")
 
 	// Fan-out accounting (Q260): map this delivery (jobMessageId == RunnerRequestID)
@@ -693,6 +699,10 @@ func (s *Server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 			s.reconcileLocked(job, false)
 		}
 		s.acctMu.Unlock()
+		// Publish the counter only after the delivery's acquired flag and the job
+		// state are committed (the handleCompleteJob / Q490 rule), so a waiter on
+		// AcquireJobCalls is a valid happens-before gate for the accounting.
+		s.acquireCount.Add(1)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"plan":            map[string]string{"planId": planID},
 			"runnerRequestId": req.JobMessageID,
@@ -710,6 +720,7 @@ func (s *Server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 	custom := s.acquireJobResponse
 	s.mu.Unlock()
 
+	n := s.acquireCount.Add(1)
 	if custom != nil {
 		_ = json.NewEncoder(w).Encode(custom)
 		return
