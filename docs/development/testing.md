@@ -309,6 +309,8 @@ Use the asynchronous mechanisms instead:
 
 The rule: a single point-in-time check is fine; a loop or a `--watch`/`-f` that blocks the main thread waiting for change is not.
 
+**A background task already wakes you — don't poll it.** Once work is launched detached, its completion notification is the signal; scheduling `sleep N; tail <log>` as a *second* background task to check on the first is the same anti-pattern wearing a different hat. It doesn't block the main thread, so it evades both the rule above and the foreground-guard hook, and it buys nothing the notification won't deliver. Launch, then do unrelated work or end the turn — you will be re-invoked when it exits.
+
 ### Slow tiers need an explicit timeout or a background run
 
 The Bash tool's default timeout is short (two minutes) and it **kills** anything that overruns — in the same two-week sample, 36 slow runs were killed mid-flight this way, wasting the whole run. Any invocation that can exceed the default — the envtest integration suites, the kind e2e tiers, and `go test -race` / `make test-race` above all — must therefore either:
@@ -330,6 +332,8 @@ make check > check.log 2>&1; echo "CHECK_EXIT=$?" >> check.log
 ```
 
 Then confirm with `grep -n CHECK_EXIT check.log` alongside the `ok` / `FAIL` lines. Either way the rule is the same: confirm a pass by reading the output, never from the reported exit code alone.
+
+**An empty result set is not a pass.** The recorded status can be a clean `0` for a run that never happened — a `$(MAKE)` typo (make syntax; the shell reads it as command substitution) or any unresolvable command leaves a log holding nothing but a `command not found`, and the trailing `echo` dutifully records success. So verify by presence, not absence of failure: the log must contain the `ok <package>` line for every package the tier was supposed to cover. Zero `ok` lines and zero `FAIL` lines means the suite did not run.
 
 Both rules in this section are enforced mechanically by the foreground-guard hook: it prompts on foreground watch/`sleep`-poll forms, and its slow-command registry in `.claude/foreground-guard.json` names the tiers above (`make test-race`, `make test-integration`, the `e2e` targets) with their minimum timeouts — keep that registry in sync when a tier's runtime or target name changes.
 
