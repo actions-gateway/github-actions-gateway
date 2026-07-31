@@ -402,9 +402,9 @@ func setAcquireJobResponse(payload map[string]interface{}) {
 	fakegithubControlRequest(nil, "POST", "/control/acquirejob", body)
 }
 
-// rerunCountForRun reports how many rerun-failed-jobs calls fakegithub has seen
-// for the given workflow run. Filtering by run rather than reading the global
-// count is what makes the assertion this spec's own.
+// rerunCountForRun reports how many rerun-failed-jobs calls fakegithub has
+// accepted (201) for the given workflow run. Filtering by run rather than
+// reading the global count is what makes the assertion this spec's own.
 func rerunCountForRun(runID string) int {
 	GinkgoHelper()
 	out := fakegithubControlRequest(nil, "GET", "/control/reruns?run=%2Fruns%2F"+runID+"%2F", nil)
@@ -413,6 +413,29 @@ func rerunCountForRun(runID string) int {
 	}
 	Expect(json.Unmarshal([]byte(out), &result)).To(Succeed(), "parse reruns response: %s", out)
 	return result.Count
+}
+
+// refusedRerunCountForRun reports how many rerun-failed-jobs calls fakegithub
+// refused with the 403 still-running answer for the given run — the run must
+// have been marked non-concluded via setRunConcluded (Q517).
+func refusedRerunCountForRun(runID string) int {
+	GinkgoHelper()
+	out := fakegithubControlRequest(nil, "GET", "/control/reruns?run=%2Fruns%2F"+runID+"%2F", nil)
+	var result struct {
+		RefusedCount int `json:"refusedCount"`
+	}
+	Expect(json.Unmarshal([]byte(out), &result)).To(Succeed(), "parse reruns response: %s", out)
+	return result.RefusedCount
+}
+
+// setRunConcluded marks a workflow run (non-)concluded on fakegithub: a
+// non-concluded run refuses rerun-failed-jobs with 403 "This workflow is
+// already running", the answer real GitHub gives until it concludes the
+// original run (Q503/Q517).
+func setRunConcluded(runID string, concluded bool) {
+	GinkgoHelper()
+	fakegithubControlRequest(nil, "POST",
+		fmt.Sprintf("/control/runstate?run=%s&concluded=%t", runID, concluded), nil)
 }
 
 // phaseRecorder samples a pod's phase/reason on an interval and keeps the

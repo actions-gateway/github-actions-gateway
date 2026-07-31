@@ -117,7 +117,12 @@ the conclusion wait pins **attempt 1**, which the accepted re-run's second attem
 would otherwise displace from the `filter=latest` jobs listing mid-measurement.
 Verified at the unit and envtest tiers against the measured refusal body; the
 live-GitHub re-validation rides the next run of this spec (live-GitHub is a
-singleton tier and out of scope for the fixing session).
+singleton tier and out of scope for the fixing session). The kind tier now
+reproduces the refusal too (Q517): fakegithub's `/control/runstate` gate answers
+the measured 403 until a spec concludes its run, and
+`E2E_AGC_PreemptedWorkerIsRecovered` drives the refused-then-accepted sequence —
+closing the fidelity gap that let the fire-once recovery pass every fake-backed
+tier while failing here.
 
 **Why the runner could not report, unlike Q459's drained worker.** The wrapper's
 relay *did* fire — `forwarding termination signal to child`, `grace: 25s`, and the
