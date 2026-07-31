@@ -2284,6 +2284,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewaygithubegressincomplete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayGitHubEgressIncomplete
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayagentrecycleerrors" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2953,6 +2964,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewaygithubegressincomplete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayGitHubEgressIncomplete
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayagentrecycleerrors" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3335,6 +3357,8 @@ procedure rather than just the alert's <code>summary</code>/<code>description</c
 <p><strong>Page.</strong> Worker pods are stuck <code>Pending</code> past the scheduling grace because the scheduler cannot place them (no matching node / affinity / taints — not quota); capacity is not materializing. See <a href="../troubleshooting/#runnergroup-reports-workersunschedulable">RunnerGroup Reports WorkersUnschedulable</a> and <a href="../troubleshooting/#worker-pods-stuck-pending">Worker Pods Stuck Pending</a>.</p>
 <h3 id="actionsgatewayegressrulesstale">ActionsGatewayEgressRulesStale<a class="headerlink" href="#actionsgatewayegressrulesstale" title="Permanent link">&para;</a></h3>
 <p><strong>Page.</strong> The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; the proxy <code>NetworkPolicy</code> may drift from GitHub's published ranges. See <a href="../troubleshooting/#actionsgateway-reports-egressrulesstale">ActionsGateway Reports EgressRulesStale</a>.</p>
+<h3 id="actionsgatewaygithubegressincomplete">ActionsGatewayGitHubEgressIncomplete<a class="headerlink" href="#actionsgatewaygithubegressincomplete" title="Permanent link">&para;</a></h3>
+<p><strong>Ticket.</strong> A referring gateway names a GitHub Enterprise Server host the <code>EgressProxy</code> pool's <code>CIDR</code>-mode allowlist cannot reach, so that tenant's GitHub traffic is denied and it acquires no jobs. The fix is yours to make — the appliance's ranges are knowable only to you, so this will not self-heal: supply them in <code>spec.destinationCIDRs</code> (a platform admin must allowlist them first) or switch the pool to an FQDN egress mode. See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">A GHES Tenant's Traffic Never Reaches the Appliance</a>.</p>
 <h3 id="actionsgatewayagentrecycleerrors">ActionsGatewayAgentRecycleErrors<a class="headerlink" href="#actionsgatewayagentrecycleerrors" title="Permanent link">&para;</a></h3>
 <p><strong>Ticket.</strong> Single-use JIT agent re-registration is failing; sustained growth shrinks listener capacity and decays tenant throughput job by job. See <a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner">Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)</a>.</p>
 <h3 id="actionsgatewayfanoutfallbacktimeout">ActionsGatewayFanoutFallbackTimeout<a class="headerlink" href="#actionsgatewayfanoutfallbacktimeout" title="Permanent link">&para;</a></h3>

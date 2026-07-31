@@ -2765,6 +2765,12 @@
 <td><code>1</code> when <code>EgressRulesStale=True</code> (Q157): the GitHub egress IP-range allowlist has not been refreshed within the staleness window (just over two of the ~24h refresh cycles), so a stalled refresh loop may have let the proxy <code>NetworkPolicy</code> drift from GitHub's published ranges. Advisory — does not gate <code>Ready</code>; page if sustained, as new GitHub ranges will be silently dropped. <code>name</code> is the v1 <code>ActionsGateway</code> or, on a v2 deploy, the CIDR-mode <code>EgressProxy</code> carrying the condition (an FQDN-mode proxy carries no refreshed CIDR rule, so it never trips) (Q320).</td>
 </tr>
 <tr>
+<td><code>actions_gateway_github_egress_incomplete</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when an <code>EgressProxy</code>'s <code>GitHubEgressIncomplete=True</code> (Q506): a referring gateway names a GitHub Enterprise Server host, and the pool's <code>CIDR</code>-mode allowlist carries only the ranges <code>api.github.com/meta</code> publishes — which never contain a customer appliance, so the tenant's GitHub traffic is denied. Advisory — does not gate <code>Ready</code>, but the affected tenant acquires no jobs; ticket it, as the fix is an operator config change (<code>spec.destinationCIDRs</code> or an FQDN egress mode) that will not self-heal. See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">A GHES Tenant's Traffic Never Reaches the Appliance</a>. v2 only, emitted only on a v2 install (Q537).</td>
+</tr>
+<tr>
 <td><code>actions_gateway_runnersets_degraded</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
@@ -2832,6 +2838,9 @@ EgressProxy reconciler sets those conditions with the same semantics as the v1
 CIDR-mode <code>NetworkPolicy</code> is refreshed from the shared GitHub IP-range cache) (Q320).
 The v1 and v2 series share one metric family; the <code>name</code> label distinguishes them by
 object. Unlike these, the worker-capacity gauges below stay v1-only.</p>
+<p><code>github_egress_incomplete</code> is the exception among the proxy gauges: its condition
+exists only on the <code>EgressProxy</code> — v1 has no twin — so the family is emitted only on
+a v2 install (Q537).</p>
 <p><strong>Worker-capacity conditions on v2 <code>RunnerSet</code>s.</strong> The <code>WorkerQuotaPressure</code>,
 <code>WorkerQuotaExceeded</code>, and <code>WorkersUnschedulable</code> conditions are also set on a v2
 <code>RunnerSet</code> (Q303) with the same semantics as the v1 <code>RunnerGroup</code>, so a stalled
