@@ -19,15 +19,19 @@ on:
         type: string
         default: kindnet
       timeout_minutes:
-        description: 'Job timeout in minutes. Calico bring-up (image pulls from quay + calico-node rollout) needs more headroom than kindnet.'
+        description: 'Job timeout in minutes. Calico bring-up (image pulls from quay + calico-node rollout) needs more headroom than kindnet. The default covers the kindnet lane plus the three post-suite chart checks (upgrade, reinstall, released-upgrade).'
         type: number
-        default: 45
+        default: 50
       chart_upgrade_check:
         description: 'Run the day-2 `helm upgrade` check after the suite (Q475). CNI-independent, so only one lane needs to pay for it.'
         type: boolean
         default: true
       chart_reinstall_check:
-        description: 'Run the day-2 uninstall/reinstall check after the suite (Q444/Q492). Destroys and recreates the release, so it runs last.'
+        description: 'Run the day-2 uninstall/reinstall check after the suite (Q444/Q492). Destroys and recreates the release, so it runs after the upgrade check.'
+        type: boolean
+        default: true
+      released_upgrade_check:
+        description: 'Run the released-chart upgrade check after the suite (Q507): install the last released chart from GHCR, upgrade it to HEAD along the documented path. Replaces the live release, so it runs last. CNI-independent, so only one lane needs to pay for it.'
         type: boolean
         default: true
 
@@ -536,6 +540,28 @@ jobs:
         # left behind are what matters, and reinstalling would destroy them.
         if: success() && inputs.chart_reinstall_check
         run: make chart-reinstall-check KIND_CLUSTER=actions-gateway-e2e
+
+      - name: Released-chart upgrade check
+        # The only coverage of the upgrade an operator actually performs: last
+        # RELEASED chart -> HEAD (Q507). chart-upgrade-check above proves HEAD's
+        # chart upgrades to a mutated copy of ITSELF; nothing before this step
+        # proved the chart a real installation runs upgrades to HEAD — Q492's
+        # CRD placement broke every v1.2.0 upgrade and passed all of CI. The
+        # script pulls the released chart artifact and the released GMC image
+        # from GHCR (both public; the pulls are retried), installs the released
+        # chart, and upgrades to HEAD along the documented path, asserting any
+        # failure is the render-time preflight kind, never Helm's bare
+        # "ensure CRDs are installed first".
+        #
+        # Runs LAST among the chart checks: it uninstalls the live release and
+        # leaves the cluster on a fresh released->HEAD release, which would
+        # invalidate the earlier checks' baseline if it ran before them.
+        #
+        # `if: success()` — not always(): on a failure the diagnostics the suite
+        # left behind are what matters, and replacing the release would destroy
+        # them.
+        if: success() && inputs.released_upgrade_check
+        run: make chart-released-upgrade-check KIND_CLUSTER=actions-gateway-e2e
 
       - name: Upload e2e test report
         if: always()

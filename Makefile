@@ -652,6 +652,19 @@ chart-reinstall-check: ## Verify the chart survives a helm uninstall/reinstall c
 chart-upgrade-check: ## Verify `helm upgrade` delivers chart + CRD changes to a live release (needs the release installed)
 	KIND_CLUSTER=$(KIND_CLUSTER) scripts/chart-upgrade-check.sh
 
+# Q507 — the released-chart upgrade gate. chart-upgrade-check proves HEAD's
+# chart upgrades to a copy of itself; nothing proved the chart an operator is
+# actually RUNNING upgrades to HEAD, and Q492's CRD placement broke every
+# v1.2.0 upgrade while CI stayed green. This one pulls the last released chart
+# from GHCR (highest stable v* tag on origin), installs it, and upgrades to
+# HEAD along the documented path. Wired into CI (e2e-reusable.yml) LAST among
+# the chart checks — it replaces the live release. Run it against a cluster
+# with the release already installed (after the e2e suite under
+# E2E_SKIP_TEARDOWN, or a manual `make deploy`).
+.PHONY: chart-released-upgrade-check
+chart-released-upgrade-check: ## Verify the last released chart upgrades to HEAD's chart (needs the release installed)
+	KIND_CLUSTER=$(KIND_CLUSTER) scripts/chart-released-upgrade-check.sh
+
 .PHONY: e2e-cluster-delete
 e2e-cluster-delete: ## Delete the local e2e kind cluster (no-op if it does not exist)
 	@if kind get clusters 2>/dev/null | grep -qx $(KIND_CLUSTER); then \

@@ -815,7 +815,7 @@ Every tier above starts from a cluster that has never had the chart installed, s
 make chart-reinstall-check KIND_CLUSTER=actions-gateway-e2e
 ```
 
-It ran as a **reproducer, not a gate**, while Q444 was open — the defect was unfixed, so wiring it in would have pinned every run red. **Q492 made it a gate**: the guard's `paramKind` moved from a `ConfigMap` to the cluster-scoped `PriorityClassAllowlist` CRD, for which the apiserver allocates a fresh dynamic informer per context rather than tearing down a shared one, so the cycle is now expected to pass. `e2e-reusable.yml` runs it after the Ginkgo suite and after the `helm upgrade` gate — `E2E_SKIP_TEARDOWN` leaves the release up, and this step destroys and recreates it, so it must go last. Kindnet only (`e2e-calico.yml` passes `chart_reinstall_check: false`): the property is a kube-apiserver informer behaviour, not a CNI one.
+It ran as a **reproducer, not a gate**, while Q444 was open — the defect was unfixed, so wiring it in would have pinned every run red. **Q492 made it a gate**: the guard's `paramKind` moved from a `ConfigMap` to the cluster-scoped `PriorityClassAllowlist` CRD, for which the apiserver allocates a fresh dynamic informer per context rather than tearing down a shared one, so the cycle is now expected to pass. `e2e-reusable.yml` runs it after the Ginkgo suite and after the `helm upgrade` gate — `E2E_SKIP_TEARDOWN` leaves the release up, and this step destroys and recreates it, so only the [released-chart upgrade gate](#the-released-chart-upgrade-gate-q507) (which replaces the release entirely) may follow it. Kindnet only (`e2e-calico.yml` passes `chart_reinstall_check: false`): the property is a kube-apiserver informer behaviour, not a CNI one.
 
 **What it protects.** A regression to any core-type `paramKind` — in this policy or a new one — brings the outage back. This is where that surfaces.
 
@@ -861,6 +861,28 @@ make chart-upgrade-check KIND_CLUSTER=actions-gateway-e2e
 Like the reinstall gate above, this one is wired into CI: `e2e-reusable.yml` runs it after the Ginkgo suite, which leaves the release up under `E2E_SKIP_TEARDOWN`, and before the reinstall gate (which destroys the release). It runs only on the kindnet leg — `helm upgrade` semantics are CNI-independent, so `e2e-calico.yml` passes `chart_upgrade_check: false` and the calico leg pays nothing for it. The step is `if: success()`: on a suite failure the diagnostic dump matters more, and mutating the release first would destroy it.
 
 The script fails loudly rather than silently injecting nothing if the controller-gen CRD layout or the Deployment's anchor annotation ever moves — the error names the awk anchors to re-point.
+
+### The released-chart upgrade gate (Q507)
+
+The upgrade gate above answers "does HEAD's chart upgrade to a copy of itself?" — never "does the chart an operator is actually **running** upgrade to HEAD?". Those differ whenever a change interacts with what Helm does *between* two chart versions, and **Q492** proved the gap: shipping the `PriorityClassAllowlist` CRD in the chart-root `crds/` dir (the only placement Helm applies early enough for a CR in the same release) broke **every** v1.2.0 upgrade with Helm's bare `ensure CRDs are installed first` — while `make check`, the full e2e suite, and both chart gates stayed green, because nothing in CI had an older release to upgrade from. It was caught in review, not by a gate.
+
+[`scripts/chart-released-upgrade-check.sh`](../../scripts/chart-released-upgrade-check.sh) closes it. Against a cluster that already has the release installed, it replaces the live release with the **last released chart — the published OCI artifact operators actually install, pulled from GHCR, not a rebuild from an old git ref** (a packaging difference between chart source and published artifact is exactly the kind of escape this gate exists to catch) — and walks the operator's upgrade path to HEAD:
+
+| Step | What it asserts |
+|---|---|
+| Upgrade with a values key HEAD removed (today: `priorityClassAllowlist.configMapName`) | Fails **at render** with the migration message pointing at `docs/operations/upgrade.md` — never midway through applying, and never silently accepted. The probe is anchored on the guard still existing in HEAD's templates, so retiring the guard after its deprecation window retires the probe with it. |
+| Plain `helm upgrade` to HEAD, no preparation | Succeeds outright, **or** fails at render with a message naming the documented pre-upgrade step. Any other failure — above all the bare `ensure CRDs are installed first` — is the Q492 shape reintroduced, and fails the gate with remediation guidance. |
+| The documented step (`helm show crds <chart> \| kubectl apply -f -`), then the upgrade | Must succeed; then every CRD HEAD ships in `crds/` must exist in the cluster (an upgrade can *succeed* while silently never delivering one), the restarted manager must come back, the validating webhook must enforce, and the PriorityClass guard's params must resolve. |
+
+The consequence for chart authors: **a deliberately upgrade-blocking change must fail at render with a message that names the pre-upgrade step and points at [`docs/operations/upgrade.md`](../operations/upgrade.md)** — the preflight in [`priorityclass-allowlist.yaml`](../../charts/actions-gateway/templates/priorityclass-allowlist.yaml) is the pattern — because those message anchors ("pre-upgrade step", the doc path) are what this gate accepts as a documented failure.
+
+**How "last released" is discovered.** The highest stable `vX.Y.Z` tag on the origin remote (`git ls-remote`; prerelease tags are excluded), which is the tag `publish.yml` keys the chart's OCI version on (`v` stripped). A new release re-points the gate automatically — nothing to bump. Two deliberate consequences: a stable tag whose chart publish failed **fails this gate loudly** at `helm pull` (operators can't install that release either — fix the publish, see [release.md](../operations/release.md)); and a repo with no stable tag yet (a fresh fork) **skips cleanly**. The chart package and the released GMC image must be publicly pullable from GHCR (they are — see release.md's one-time setup); both pulls are retried. Override `RELEASED_TAG` / `RELEASED_CHART_OCI` to test a specific tag or registry.
+
+```bash
+make chart-released-upgrade-check KIND_CLUSTER=actions-gateway-e2e
+```
+
+Wired into `e2e-reusable.yml` **last** among the chart checks — it uninstalls the live release and leaves the cluster on a fresh released→HEAD release, which would invalidate the other checks' baseline. Kindnet leg only (`e2e-calico.yml` passes `released_upgrade_check: false`): the property is pure Helm semantics, CNI-independent.
 
 ## CI workflows and scripts
 

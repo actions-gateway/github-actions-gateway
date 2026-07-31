@@ -97,7 +97,10 @@ The maintainer's job is to cut the tag and verify the result.
    `cosign verify` / `helm pull` (and for an air-gapped operator to pull), set each
    package to **public** in the org's GHCR package settings, or keep them private
    and distribute pull credentials. Verification by *this project's* CI and by
-   anyone with pull access works either way.
+   anyone with pull access works either way — but the **released-chart upgrade
+   gate** (`make chart-released-upgrade-check`, run by every e2e CI pass) pulls
+   the chart and the released `gmc` image **anonymously**, so those two packages
+   must be public for PR CI to stay green.
 2. **Workflow permissions** are already declared in `publish.yml`
    (`packages: write` to push, `id-token: write` for keyless cosign and
    provenance, `attestations: write` for the build-provenance attestation). No
@@ -348,6 +351,15 @@ into `.build/`):
 ```bash
 make verify-release VERSION=vX.Y.Z
 ```
+
+> **A broken or missing chart publish now reddens PR CI, not just operators.**
+> CI's released-chart upgrade gate
+> ([testing.md § The released-chart upgrade gate](../development/testing.md#the-released-chart-upgrade-gate-q507))
+> discovers the highest stable `vX.Y.Z` tag on the repo and `helm pull`s that
+> chart version from GHCR on every e2e run. Pushing a stable tag whose
+> `chart-publish` job failed therefore fails e2e on **every subsequent PR**
+> until the publish is repaired (re-run the `publish.yml` run for the tag) or
+> the tag is removed. Prerelease (`-rc`) tags are ignored by the gate.
 
 This verifies the five image signatures (`gmc`, `agc`, `proxy`, `worker`,
 `wrapper`) plus the chart (whose tag is `X.Y.Z`,
