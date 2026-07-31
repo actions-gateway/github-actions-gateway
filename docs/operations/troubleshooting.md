@@ -2314,12 +2314,12 @@ tiers**.
 
 **Fires — the interrupted run is re-run via `rerun-failed-jobs`:**
 
-| Disruption | `cause` label | Detected by |
+| Disruption | `cause`&nbsp;label | Detected by |
 |---|---|---|
-| Kubelet eviction (node pressure) | `eviction` | pod `Failed` with `reason: Evicted` |
-| Scheduler preemption (a preempting `priorityTiers` floor) | `preemption` | `DisruptionTarget` condition, reason `PreemptionByScheduler` |
-| Node drain of a running worker | `deletion` | terminal phase published while the pod carries a `deletionTimestamp` |
-| Bare `kubectl delete pod` of a running worker | `deletion` | same mark as a drain — indistinguishable, by design |
+| Kubelet eviction (node pressure) | <code class="gag-nowrap">eviction</code> | pod `Failed` with `reason: Evicted` |
+| Scheduler preemption (a preempting `priorityTiers` floor) | <code class="gag-nowrap">preemption</code> | `DisruptionTarget` condition, reason `PreemptionByScheduler` |
+| Node drain of a running worker | <code class="gag-nowrap">deletion</code> | terminal phase published while the pod carries a `deletionTimestamp` |
+| Bare `kubectl delete pod` of a running worker | <code class="gag-nowrap">deletion</code> | same mark as a drain — indistinguishable, by design |
 
 **Never fires, by design:**
 
