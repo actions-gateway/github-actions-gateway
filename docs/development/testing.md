@@ -815,11 +815,24 @@ reinstalling the chart underneath it (observed 2026-07-29) invalidates the run e
 way. Create one per run — `make e2e-cluster KIND_CLUSTER=<name>` shares the existing
 local registry, so no image rebuild is needed — and point the run at it with a private
 `KUBECONFIG` (`kind get kubeconfig --name <name>`) rather than the ambient context,
-which every other session shares. Note also that two concurrent live-GitHub runs dispatch
-the same fixture workflows in the same repo and register identically-named runners
-(Q500). A private `KUBECONFIG` is not optional either: the suite's own `kubectl` calls
-carry no `--context`, so they follow `current-context` in the file every parallel
-session shares.
+which every other session shares. A private `KUBECONFIG` is not optional either: the
+suite's own `kubectl` calls carry no `--context`, so they follow `current-context` in
+the file every parallel session shares.
+
+**live-GitHub is a singleton, enforced at suite start.** A throwaway cluster per run
+removes only half the collision. The other half is on GitHub's side: two concurrent runs
+dispatch the same fixture workflows in the same repo and register identically-named
+runners, and because runner names are unique per registration scope, the second
+registration *deletes the first*. That is `agentpool`'s conflict path — the correct
+repair when an AGC restarts, and mutual sabotage when two live runs take turns applying
+it to each other. Neither side errors; the only symptom is a job that never gets a
+worker. Diagnosing that from inside one of the two runs cost ~2.5 h (Q511).
+
+The suite's `BeforeAll` therefore refuses to start — before it swaps the GMC's env vars
+cluster-wide — while the fixture repo holds a runner it owns or a workflow run that has
+not completed. The failure names what it found and both remedies, because it cannot tell
+a live peer from a killed run's leftovers. One live-GitHub run at a time, across all
+worktrees, each on its own cluster.
 
 **Read a long run's clock from the suite, not from the host.** A live-GitHub run takes
 long enough to straddle a laptop sleep, and afterwards every host-side clock lies in the
@@ -837,6 +850,14 @@ anomaly out of a one-second one. Convert before you reason about a latency that 
 both.
 
 **Stop a live-GitHub run with SIGTERM, never `kill -9`.** Ginkgo runs its `AfterAll` on SIGTERM, which deletes the `ActionsGateway` CR while the tenant's AGC is still up — the only window in which the `agentpool-cleanup` finalizer can deregister that tenant's runners from the org. Kill the process outright and the namespace wedges in `Terminating` on a finalizer whose controller has already gone with it, and force-removing that finalizer strands the runner registrations: they keep accepting job assignments, so the *next* run's job goes `in_progress` against a runner that no longer exists and no worker pod is ever provisioned (observed 2026-07-29).
+
+If it has already happened, clear the GitHub side with:
+
+```bash
+make e2e-github-cleanup
+```
+
+It deregisters the suite's runners from the fixture repo and cancels any run still in flight there — a job assigned to a runner that no longer exists never completes on its own, and the preflight blocks on it either way. It reads `GITHUB_E2E_ORG`/`GITHUB_E2E_REPO`, confirms before acting, and takes `ARGS='--dry-run'` to report without changing anything. It is destructive against real GitHub and cannot distinguish a peer session's live run from wreckage, so confirm no live-GitHub run is in flight anywhere first.
 
 The live-GitHub tier is the only one that hands the harness a **live** App key — every other tier stamps the same Secret with a throwaway RSA key. `utils.CreateGitHubAppSecret` therefore routes the PEM through a `0600` temp file and `--from-file`, per [the credential rule](github-app-credentials.md#creating-the-kubernetes-secret). Never switch it back to `--from-literal`: `utils.Run` echoes each command's argv to the `GinkgoWriter` and folds it into the failure message, so a literal PEM would land in the run log, the JUnit report, and any `ps` snapshot taken mid-run (Q493).
 
