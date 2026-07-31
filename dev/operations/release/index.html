@@ -2921,7 +2921,8 @@ a git ref (for the matching CRDs) — an RC tag satisfies both by construction.<
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nv">PROJECT</span><span class="o">=</span>…<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>…<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>…<span class="w"> </span><span class="nv">REPO</span><span class="o">=</span>…<span class="w"> </span>scripts/dogfood/validate-release.sh<span class="w"> </span>vX.Y.Z-rc.N
 </code></pre></div>
 <p><code>validate-release.sh</code> bakes in all the env and ordering below — deploy → route CI →
-on-demand e2e → <code>gh run rerun</code> → CRD smoke → teardown — is idempotent, and
+on-demand e2e → dispatch the e2e matrix (run-scoped routing) → CRD smoke →
+teardown — is idempotent, and
 self-cleans back to 0 nodes on exit (success or failure). On failure it first
 dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the
 gate's output, because the teardown's scale-to-0 evicts every pod and destroys
@@ -2930,13 +2931,14 @@ the evidence — read the <code>Failure diagnostics</code> section of a failed r
 it fail again. The manual steps that
 follow document what it does (and the recovery path if a leg needs re-running by
 hand). From a detached checkout of the RC tag (<code>git switch --detach vX.Y.Z-rc.N</code>):</p>
-<p><strong>If you just merged something, the gate waits before it spends anything.</strong> <code>gh run
-rerun</code> refuses a run that is still in flight, and the latest <code>e2e-test.yml</code> run is
-usually the push-run of the merge you just made. The gate resolves and settles that
-run up front — before the node scale-up, the deploy, and the e2e AGC — so a collision
-costs a wait, not a cluster cycle. It polls for up to <code>E2E_WAIT_TIMEOUT</code> seconds
-(default 1800), then fails with the run id. To skip the wait, pin an already-completed
-run with <code>E2E_RUN_ID=&lt;id&gt;</code>; <code>E2E_WAIT_TIMEOUT=0</code> fails immediately instead of waiting.</p>
+<p><strong>If you just merged something, the gate waits before it spends anything.</strong> The
+gate's dispatched run enters the e2e workflow's per-ref concurrency group, whose
+single pending slot the next push to main would cancel it out of — and the latest
+<code>e2e-test.yml</code> run is usually the still-running push-run of the merge you just
+made. The gate settles the lane up front — before the node scale-up, the deploy,
+and the e2e AGC — so a collision costs a wait, not a cluster cycle. It polls for
+up to <code>E2E_WAIT_TIMEOUT</code> seconds (default 1800), then fails with the run id;
+<code>E2E_WAIT_TIMEOUT=0</code> fails immediately instead of waiting.</p>
 <p>The gate also checks every local tool it needs up front — including the pinned
 <code>cosign</code> the final CRD-smoke leg verifies with (<code>make cosign</code> downloads it to
 <code>.build/cosign</code>; <code>COSIGN=&lt;path&gt;</code> overrides) — so a missing binary fails the run
@@ -2954,29 +2956,33 @@ before it spends anything, not 25 minutes in.</p>
    Secret aren't set up yet. The cluster, context pinning, and prod-guard cautions are
    in <a href="../../plan/gke-dogfood/">gke-dogfood.md</a>.</li>
 <li><strong>Run the e2e job matrix on GAG runners.</strong> This is two moves, not one.
-   <code>scripts/dogfood/e2e-start.sh</code> only <strong>wires routing</strong>: it spins up the on-demand
-   e2e tenant's AGC and sets the <code>GAG_E2E_RUNNER</code> repo variable so <code>e2e-reusable.yml</code>
-   targets the GAG scale set — it does <strong>not</strong> start a run. Trigger the matrix by
-   <strong>re-running an existing e2e workflow run</strong> (<code>gh run rerun &lt;run-id&gt;</code> for
-   <code>e2e-test.yml</code> / <code>e2e-calico.yml</code>); the rerun's jobs pick up the new <code>runs-on</code> and
-   land on the RC's GAG-provisioned runners. Pick a <strong>completed</strong> run — <code>gh run rerun</code>
-   rejects one that is still in flight (<code>This workflow is already running</code>), so check
-   <code>gh run view &lt;run-id&gt; --json status</code> first when re-running this leg by hand. <strong>Node contention:</strong> the on-demand e2e AGC
+   <code>scripts/dogfood/e2e-start.sh</code> spins up the on-demand e2e tenant's AGC — it
+   does <strong>not</strong> start a run and does <strong>not</strong> touch routing. Trigger the matrix by
+   <strong>dispatching a run with routing scoped to it</strong>:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>e2e-test.yml<span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span>-f<span class="w"> </span><span class="nv">runner</span><span class="o">=</span><span class="s1">&#39;&quot;gag-ci-e2e&quot;&#39;</span>
+</code></pre></div>
+<p>(same for <code>e2e-calico.yml</code>). Only that dispatched run lands on the RC's
+   GAG-provisioned runners; every concurrent PR and merge keeps its normal
+   hosted runners. Do <strong>not</strong> reach for the repo-wide <code>GAG_E2E_RUNNER</code> variable
+   here — flipping it routes every e2e job in the window, and a caught job
+   wedged main CI when the teardown deleted the AGC under it (2026-07-31; the
+   variable remains only as an <code>E2E_ROUTE_VAR=1</code> opt-in for a standing dogfood
+   soak). <strong>Node contention:</strong> the on-demand e2e AGC
    (~500m CPU) does not fit on the single <code>e2-standard-2</code> system node beside the
    always-on CI AGCs (the CI AGC goes <code>Pending</code>/<code>Insufficient cpu</code>), so temporarily add
    a system node (e.g. scale <code>default-pool</code> to 2) for the duration of the e2e leg and
    scale it back after. Require the matrix <strong>green</strong> — this is GAG running its own CI
-   end-to-end on the RC images.</li>
-<li><strong>Smoke the signed v2 CRD asset.</strong> Download the RC release's
+   end-to-end on the RC images.
+3. <strong>Smoke the signed v2 CRD asset.</strong> Download the RC release's
    <code>actions-gateway-crds-v2.yaml</code> + <code>.cosign.bundle</code>, <code>cosign verify-blob</code> against the
    publish identity (step 3 below), <code>kubectl apply --server-side</code> it, and assert the
-   five v2 CRDs register — the helm-free install path operators actually use.</li>
-<li><strong>Assert the sizing profiles actuated.</strong> A profile that silently falls back to
+   five v2 CRDs register — the helm-free install path operators actually use.
+4. <strong>Assert the sizing profiles actuated.</strong> A profile that silently falls back to
    <code>Static</code> still provisions a healthy pod and still runs the matrix green, so
    without this leg every other check reports success while the release's
    headline feature sits inert. <code>sizing_leg</code> treats the two profiles differently
-   on purpose:</li>
-</ol>
+   on purpose:</p>
 <table>
 <thead>
 <tr>
@@ -3039,12 +3045,12 @@ before it spends anything, not 25 minutes in.</p>
 the GA tag</strong>: fix forward and cut a new RC — never promote a known-bad RC to a stable
 tag.</p>
 <h3 id="2-tag-and-push">2. Tag and push<a class="headerlink" href="#2-tag-and-push" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>git<span class="w"> </span>switch<span class="w"> </span>main<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>pull<span class="w"> </span>--ff-only
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>vX.Y.Z<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Release vX.Y.Z&quot;</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>git<span class="w"> </span>switch<span class="w"> </span>main<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>pull<span class="w"> </span>--ff-only
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>vX.Y.Z<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Release vX.Y.Z&quot;</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>vX.Y.Z
 </code></pre></div>
 <p>Pushing the tag starts <code>publish.yml</code>. Watch it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>gh<span class="w"> </span>run<span class="w"> </span>watch<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--workflow<span class="o">=</span>publish.yml<span class="w"> </span>--branch<span class="o">=</span>vX.Y.Z<span class="w"> </span>-L1<span class="w"> </span>--json<span class="w"> </span>databaseId<span class="w"> </span>-q<span class="w"> </span><span class="s1">&#39;.[0].databaseId&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>gh<span class="w"> </span>run<span class="w"> </span>watch<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--workflow<span class="o">=</span>publish.yml<span class="w"> </span>--branch<span class="o">=</span>vX.Y.Z<span class="w"> </span>-L1<span class="w"> </span>--json<span class="w"> </span>databaseId<span class="w"> </span>-q<span class="w"> </span><span class="s1">&#39;.[0].databaseId&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
 </code></pre></div>
 <blockquote>
 <p>A <code>workflow_dispatch</code> run with a <code>tag</code> input publishes the same way without a
@@ -3064,7 +3070,7 @@ seeding of releases cut before it landed, are documented in
 announcing the release. The one-command check uses the pinned cosign
 (<code>make</code> downloads <code>COSIGN_VERSION</code> — the same version <code>publish.yml</code> signs with —
 into <code>.build/</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>verify-release<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>make<span class="w"> </span>verify-release<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z
 </code></pre></div>
 <blockquote>
 <p><strong>A broken or missing chart publish now reddens PR CI, not just operators.</strong>
@@ -3087,22 +3093,22 @@ each is a <code>cosign verify --certificate-identity-regexp '…/publish\.yml@re
 GitHub Release's <strong>signed v2 CRD manifest</strong> asset (Q276), which is a <em>blob</em> signature —
 verify it against the same identity with <code>verify-blob</code>. Download the manifest and its
 bundle from the release, then:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span>--bundle<span class="w"> </span>actions-gateway-crds-v2.yaml.cosign.bundle<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>actions-gateway-crds-v2.yaml<span class="w"> </span>&gt;/dev/null<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>OK
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span>--bundle<span class="w"> </span>actions-gateway-crds-v2.yaml.cosign.bundle<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>actions-gateway-crds-v2.yaml<span class="w"> </span>&gt;/dev/null<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>OK
 </code></pre></div>
 <p>A <code>cosign verify</code> failure is a <strong>stop-ship</strong>: do not announce the release until it
 passes. Spot-check one SBOM attestation too so the attestation path is exercised —
 SBOM attestations are bound to the <strong>per-arch manifest digests</strong>, not the index,
 so resolve one first (the full command set is in
 <a href="../security-operations/#retrieve-and-inspect-the-sbom">security-operations.md § Retrieve and inspect the SBOM</a>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.manifests[] | select(.platform.os == &quot;linux&quot; and .platform.architecture == &quot;amd64&quot;) | .digest&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span><span class="s2">&quot;ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span>&gt;/dev/null<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>OK
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.manifests[] | select(.platform.os == &quot;linux&quot; and .platform.architecture == &quot;amd64&quot;) | .digest&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="s2">&quot;ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span>&gt;/dev/null<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>OK
 </code></pre></div>
 <p>Also spot-check that the index actually carries both platforms
 (<code>docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z</code> should
@@ -3110,10 +3116,10 @@ list <code>linux/amd64</code> and <code>linux/arm64</code> manifests).</p>
 <p>Finally, confirm the <strong>build-provenance attestation</strong> is present and was minted
 by <em>this</em> workflow. The attestation binds to the <strong>index</strong> digest (unlike the
 per-arch SBOMs), so a tag reference resolves correctly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Verifies the signed SLSA provenance against the publish workflow&#39;s identity.</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Verifies the signed SLSA provenance against the publish workflow&#39;s identity.</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
 </code></pre></div>
 <p>The equivalent cosign command and the predicate-inspection one-liner are in
 <a href="../security-operations/#verify-build-provenance">security-operations.md § Verify build provenance</a>.
@@ -3126,8 +3132,8 @@ Release notes</strong> (step 5). These are the <strong>multi-arch index digests<
 ref that serves both amd64 and arm64 nodes. Operators pin the workload to the
 digest (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>), not the mutable <code>vX.Y.Z</code> tag.
 You can also resolve a digest directly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span>--format<span class="w"> </span><span class="s1">&#39;{{json .Manifest.Digest}}&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:vX.Y.Z<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>--format<span class="w"> </span><span class="s1">&#39;{{json .Manifest.Digest}}&#39;</span>
 </code></pre></div>
 <h3 id="5-cut-the-github-release">5. Cut the GitHub Release<a class="headerlink" href="#5-cut-the-github-release" title="Permanent link">&para;</a></h3>
 <p><strong><code>publish.yml</code> creates the GitHub Release itself</strong> (Q293) — no manual step. The
@@ -3178,11 +3184,11 @@ per-release steps:</p>
 digests pinned via <code>--set</code>, exactly as
 <a href="../install/#pin-images-by-digest">install.md § Pin images by digest</a> and
 <a href="../upgrade/">upgrade.md</a> document (<code>X.Y.Z</code> is the release tag without the <code>v</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
 </code></pre></div>
 <h2 id="patch-releases-and-backports">Patch releases and backports<a class="headerlink" href="#patch-releases-and-backports" title="Permanent link">&para;</a></h2>
 <p>A patch release (<code>vX.Y.Z+1</code>) is <strong>bugfix-only</strong> by SemVer. That has a release-
@@ -3302,8 +3308,8 @@ SHA-pinned, but syft itself is a runtime download).</p>
 bump both the SHA <em>and</em> the <code># vX.Y.Z</code> comment, so the pins don't rot — review and
 merge those like any dependency PR. To pin or bump by hand, resolve the tag to its
 commit SHA and keep the comment in sync:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;owner&gt;/&lt;action&gt;/commits/&lt;tag&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.sha&#39;</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># -&gt; uses: &lt;owner&gt;/&lt;action&gt;@&lt;sha&gt; # &lt;tag&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;owner&gt;/&lt;action&gt;/commits/&lt;tag&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.sha&#39;</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># -&gt; uses: &lt;owner&gt;/&lt;action&gt;@&lt;sha&gt; # &lt;tag&gt;</span>
 </code></pre></div>
 <p><code>syft-version</code> is <strong>not</strong> Dependabot-managed (it's a tool download, not an action
 ref) — bump it by hand in <code>publish.yml</code> when you bump the <code>anchore/sbom-action</code>
