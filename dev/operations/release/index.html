@@ -2810,7 +2810,10 @@ the signing and chart-publish paths work.</p>
    <code>cosign verify</code> / <code>helm pull</code> (and for an air-gapped operator to pull), set each
    package to <strong>public</strong> in the org's GHCR package settings, or keep them private
    and distribute pull credentials. Verification by <em>this project's</em> CI and by
-   anyone with pull access works either way.</li>
+   anyone with pull access works either way — but the <strong>released-chart upgrade
+   gate</strong> (<code>make chart-released-upgrade-check</code>, run by every e2e CI pass) pulls
+   the chart and the released <code>gmc</code> image <strong>anonymously</strong>, so those two packages
+   must be public for PR CI to stay green.</li>
 <li><strong>Workflow permissions</strong> are already declared in <code>publish.yml</code>
    (<code>packages: write</code> to push, <code>id-token: write</code> for keyless cosign and
    provenance, <code>attestations: write</code> for the build-provenance attestation). No
@@ -3063,6 +3066,16 @@ announcing the release. The one-command check uses the pinned cosign
 into <code>.build/</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>verify-release<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z
 </code></pre></div>
+<blockquote>
+<p><strong>A broken or missing chart publish now reddens PR CI, not just operators.</strong>
+CI's released-chart upgrade gate
+(<a href="../../development/testing/#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a>)
+discovers the highest stable <code>vX.Y.Z</code> tag on the repo and <code>helm pull</code>s that
+chart version from GHCR on every e2e run. Pushing a stable tag whose
+<code>chart-publish</code> job failed therefore fails e2e on <strong>every subsequent PR</strong>
+until the publish is repaired (re-run the <code>publish.yml</code> run for the tag) or
+the tag is removed. Prerelease (<code>-rc</code>) tags are ignored by the gate.</p>
+</blockquote>
 <p>This verifies the five image signatures (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>,
 <code>wrapper</code>) plus the chart (whose tag is <code>X.Y.Z</code>,
 without the leading <code>v</code>) against the publish workflow's keyless identity. It
