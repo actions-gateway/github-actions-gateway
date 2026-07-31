@@ -110,6 +110,23 @@ today, so not a regression); if anonymous limits bite, `proxy.username` /
 `proxy.password` with a token from the platform Secret is the escape hatch —
 noted, not built.
 
+**Digest integrity is unaffected by the mirror.** Schema-2/OCI digests are
+pure content addressing — sha256 over the raw manifest and blob bytes, which
+contain no registry hostname or repository name — so a pull-through cache
+serving byte-identical upstream content preserves every digest. (The
+"mirroring changes digests" folklore comes from the long-dead Docker schema-1
+format, which embedded the repo name in the signed payload.) The repo already
+depends on this property twice:
+[air-gapped-install.md](../operations/air-gapped-install.md) relocates images
+with `crane copy` digest-preserved, and
+[p2p-image-distribution.md](../operations/p2p-image-distribution.md) routes
+digest-pinned pulls through containerd mirrors. The consequence is favorable
+for this plan: a digest-pinned pull re-verifies client-side, so even a
+compromised mirror cannot substitute content — the mirror is trusted only for
+tag→digest resolution, exactly as the upstream registry already was. Cosign
+signatures key on the manifest digest, not the pull location, so verification
+through the mirror also holds.
+
 ### 3.2 Wiring the three clients
 
 - **Inner dockerd** (Kata overlay dind sidecar `args`): add
@@ -162,6 +179,25 @@ the metadata server on its service ports.
 - **DNS names still recurse upstream** via cluster DNS — the established
   Q105 stance (attributable path); unchanged.
 
+### 3.5 The mirror role is a contract
+
+What the posture actually requires is not "CNCF Distribution" but an
+endpoint with four properties:
+
+1. **Selectable by NetworkPolicy** — a stable pod identity a `podSelector`
+   can name (rules out `hostNetwork` daemons, which force node-CIDR
+   `ipBlock` allows).
+2. **Fixed upstream set** — the endpoint fetches only from its configured
+   upstream(s), never from whatever registry the client names.
+3. **Read-only** — pushes and other non-GET registry operations are
+   refused, not forwarded.
+4. **Workers are clients only** — untrusted pods consume the endpoint; they
+   never join whatever distribution mesh sits behind it.
+
+Distribution's proxy mode satisfies all four **by construction**, which is
+why it is the reference implementation. Any backend meeting the same four
+tests can substitute — Dragonfly is the scheduled candidate ([§6](#6-follow-on-validations-q539-q540)).
+
 ## 4. Phases
 
 Each phase is a separate PR; 0 and 3 need live dogfood sessions
@@ -210,12 +246,18 @@ Each phase is a separate PR; 0 and 3 need live dogfood sessions
   content-scoped — `docker.io` allowlisted is `docker.io/<anyone>/<anything>`
   in both directions, i.e. the exfil surface stays open. The mirror gives a
   single auditable chokepoint instead.
-- **Spegel / Dragonfly P2P mirrors**
+- **Spegel / Dragonfly P2P mirrors as the first implementation**
   ([p2p-image-distribution.md](../operations/p2p-image-distribution.md)).
-  Wrong layer: they intercept at the **node's** containerd, and Spegel only
-  re-serves images already in the cluster's content store. The pulls that
-  matter here originate inside the guest (inner dockerd / inner kind) and
-  need a real upstream pull-through.
+  Their native layer is the **node's** containerd — pod-image distribution,
+  which the tenant NetworkPolicy never governs — and Spegel only re-serves
+  images already in the cluster's content store, so neither addresses the
+  in-guest pulls as installed. Dragonfly *can* be configured into the §3.5
+  mirror contract (seed-peer Service rather than the `hostNetwork`
+  dfdaemon, an explicit upstream allowlist, non-GET refused), but that is
+  hardening a manager + scheduler + seed-peer + per-node-daemon stack to
+  reach a property one stateless Deployment has by construction — so it is
+  sequenced as a follow-on validation ([§6](#6-follow-on-validations-q539-q540)),
+  not the reference posture.
 - **Harbor / zot.** Harbor is a full registry product (DB, core, jobservice)
   — heavy for a cache; zot's mirroring is sync-rule-shaped rather than a
   plain per-upstream pull-through. Distribution's proxy mode is the boring,
@@ -226,7 +268,31 @@ Each phase is a separate PR; 0 and 3 need live dogfood sessions
   bulk image traffic into the GitHub-attribution egress path, and buys no
   caching.
 
-## 6. Success criteria
+## 6. Follow-on validations (Q539, Q540)
+
+Decision 2026-07-31: both alternates get validated, sequenced **after** this
+plan's Phase 3 proves the reference posture — the contract must be validated
+on the simple implementation before variants are graded against it.
+
+- **[Q539](../STATUS.md#Q539) — Kata + Dragonfly as the mirror backend.**
+  Substitute a Dragonfly deployment for the Distribution instances behind
+  the same wiring and the same tight NetworkPolicy, and prove it meets the
+  §3.5 contract: workers reach only a seed-peer ClusterIP Service (the
+  `hostNetwork` dfdaemon is not policy-selectable), back-to-source is
+  restricted to the Phase-0 upstream allowlist, non-GET registry operations
+  are refused, and workers never participate in the P2P mesh. Same Phase-3
+  validation battery, plus negatives for the contract points. Needs its own
+  plan doc when picked up.
+- **[Q540](../STATUS.md#Q540) — the composed stack as a milestone: Kata +
+  Dragonfly (node layer) + pull-through cache (guest layer).** The two
+  operate at different layers (§5), so this validates the composition an
+  image-heavy fleet would actually run: Dragonfly accelerating node-level
+  pod-image distribution via containerd mirror config, the in-guest mirror
+  serving untrusted job pulls, each with its own policy scope — and
+  confirms neither weakens the other's posture (in particular that the
+  node-layer P2P mesh stays unreachable from worker pods).
+
+## 7. Success criteria
 
 Q408 closes when the Phase 3 validation lands: the dogfood Kata e2e variant
 runs green with `e2e-open-egress` deleted, the negative probes confirm
