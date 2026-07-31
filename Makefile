@@ -237,6 +237,7 @@ SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-tes
                  shellcheck-scripts-test release-version-hook-test check-path-filters-test \
                  validate-throttle-test qos-cluster-probe-test git-merge-status-test \
                  check-codegen-drift-test pull-image-with-retry-test coverage-test \
+                 e2e-github-cleanup-test \
                  updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
@@ -739,6 +740,15 @@ e2e: $(GINKGO) ## Run e2e tests; SUITE=standard|multi-node selects a subset, uns
 .PHONY: e2e-clean
 e2e-clean: e2e-cluster-delete e2e-registry-delete ## Tear down the e2e cluster and registry, and delete .build/
 	rm -rf .build
+
+# The GitHub-side counterpart to e2e-clean: a live-GitHub run killed with `kill -9`
+# skips its AfterAll and strands runner registrations on the fixture repo that no
+# cluster teardown can reach. The suite's preflight refuses to start while they are
+# there. Destructive against real GitHub — the script confirms before acting, and
+# --dry-run reports without changing anything (ARGS='--dry-run').
+.PHONY: e2e-github-cleanup
+e2e-github-cleanup: ## Clear stranded live-GitHub runners/runs from the fixture repo (ARGS='--dry-run' to preview)
+	scripts/e2e-github-cleanup.sh $(ARGS)
 
 ##@ Live autoscaler
 

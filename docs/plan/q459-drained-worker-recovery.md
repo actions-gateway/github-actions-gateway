@@ -335,9 +335,9 @@ nothing to re-run — and it has since been fixed.
   2026-07-29. `dispatchAndResolveRun`'s snapshot keeps each spec on its own run, and
   this measurement's binding was confirmed directly (the pod's job began at 13:21:00Z,
   matching its run's 13:20:55Z job start, and the namespace did not exist when the
-  other run started) — but the runner-name collision is not defended against.
-  [Q511](../STATUS.md#Q511) carries it, via
-  [q511-live-github-run-isolation.md](q511-live-github-run-isolation.md).
+  other run started) — but the runner-name collision was not defended against.
+  [q511-live-github-run-isolation.md](q511-live-github-run-isolation.md) settled it:
+  the suite's `BeforeAll` now refuses to start while the fixture repo is not idle.
 
 Earlier attempts were blocked before even reaching it, by the
 PriorityClass VAP param-resolution failure that

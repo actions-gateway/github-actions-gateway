@@ -229,7 +229,9 @@ move: it removes the *other* half of the collision, where a parallel session's
 `helm upgrade` and `kubectl set env` fight over one GMC. It just does not make two
 live-GitHub runs independent. Both halves have to hold, so treat live-GitHub as a
 **singleton**: one session at a time, across all worktrees, each on its own
-cluster. Q500 tracks the GitHub-side half.
+cluster. The GitHub-side half is settled in
+[q511-live-github-run-isolation.md](q511-live-github-run-isolation.md): the suite's
+`BeforeAll` now refuses to start while the fixture repo is not idle.
 
 This is the same contention that kept `E2E_GitHub_CancelledRunLeavesNoDeletionMark`
 pending in [q459-drained-worker-recovery.md](q459-drained-worker-recovery.md), seen

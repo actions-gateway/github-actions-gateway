@@ -100,6 +100,9 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		creds.privateKeyPEM, err = loadPEMForTest(pkValue)
 		Expect(err).NotTo(HaveOccurred(), "load GitHub App private key")
 
+		By("verifying no other live-GitHub run holds the fixture repo")
+		preflightFixtureRepoIdle(creds.org+"/"+creds.repo, agName)
+
 		By("swapping fakegithub overrides for real GitHub on the GMC so AGC talks to real GitHub")
 		orgURL := fmt.Sprintf("https://github.com/%s/%s", creds.org, creds.repo)
 		cmd := exec.Command("kubectl", "set", "env",
@@ -742,6 +745,101 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			fmt.Sprintf("%s / %s", cancelledAt.UTC().Format(time.RFC3339), firstJobCompletedAt(Default, repoSlug, runID)))
 	})
 })
+
+// suiteRunnerPrefixes are the runner-name prefixes this suite's tenant registers with
+// GitHub, given its gateway name. agentpool names an agent "<runnerGroup>-<index>", or
+// "rs-<runnerSet>-<index>" under the v2 scheme, and the group name is derived from the
+// gateway name — so every runner this suite owns carries one of these prefixes, and no
+// other tenant's does.
+//
+// scripts/e2e-github-cleanup.sh applies the same rule, and has to: the preflight below
+// blocks on exactly what that script clears, so a narrower filter there wedges the next
+// run behind a runner the cleanup reports as handled.
+func suiteRunnerPrefixes(gateway string) []string {
+	return []string{gateway + "-", "rs-" + gateway + "-"}
+}
+
+// fixtureRepoRunners returns this suite's runners currently registered against the
+// fixture repo, each rendered as "<name> (<status>, busy=<bool>)".
+func fixtureRepoRunners(repoSlug, gateway string) []string {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/actions/runners", repoSlug),
+		"--jq", `.runners[] | "\(.name) (\(.status), busy=\(.busy))"`))
+	Expect(err).NotTo(HaveOccurred(), "list self-hosted runners on %s", repoSlug)
+
+	prefixes := suiteRunnerPrefixes(gateway)
+	var mine []string
+	for _, line := range nonEmptyLines(out) {
+		for _, p := range prefixes {
+			if strings.HasPrefix(line, p) {
+				mine = append(mine, line)
+				break
+			}
+		}
+	}
+	return mine
+}
+
+// fixtureRepoActiveRuns returns the fixture repo's workflow runs that have not reached
+// "completed", each rendered as "<id> <workflow> (<status>)". The repo exists only to
+// serve this suite, so any run still in flight there belongs to a peer session.
+func fixtureRepoActiveRuns(repoSlug string) []string {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/actions/runs?per_page=50", repoSlug),
+		"--jq", `.workflow_runs[] | select(.status != "completed") | "\(.id) \(.path) (\(.status))"`))
+	Expect(err).NotTo(HaveOccurred(), "list workflow runs on %s", repoSlug)
+	return nonEmptyLines(out)
+}
+
+// nonEmptyLines splits jq's line-per-record output, dropping the trailing blank.
+func nonEmptyLines(out string) []string {
+	var lines []string
+	for _, line := range strings.Split(out, "\n") {
+		if l := strings.TrimSpace(line); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	return lines
+}
+
+// preflightFixtureRepoIdle fails the suite unless the fixture repo carries no state
+// from another live-GitHub run. Call it before the first mutation of anything shared —
+// ahead of the GMC env swap, which is itself cluster-wide.
+//
+// Concurrency here is not merely noisy, it is silent. Runner names are unique per
+// registration scope and the fixture repo is one scope, so a second run registering the
+// same name takes agentpool's 409 path: it resolves the conflicting record, deletes it,
+// and registers its own. Both runs then hold a listener the other has deregistered
+// underneath it, and each acquires jobs the other dispatched. Nothing errors on either
+// side — the conflict path is the intended recovery for an AGC restart, where deleting
+// the incumbent is correct. Diagnosing it from inside one run cost ~2.5 h (Q511).
+//
+// The check cannot tell a live peer from wreckage left by a killed run, so it reports
+// what it saw and names both remedies rather than guessing.
+func preflightFixtureRepoIdle(repoSlug, gateway string) {
+	GinkgoHelper()
+	runners := fixtureRepoRunners(repoSlug, gateway)
+	runs := fixtureRepoActiveRuns(repoSlug)
+	if len(runners) == 0 && len(runs) == 0 {
+		return
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "live-GitHub preflight: %s is not idle, so this run would collide with another (Q511).\n", repoSlug)
+	if len(runners) > 0 {
+		fmt.Fprintf(&b, "  registered runners owned by this suite: %s\n", strings.Join(runners, ", "))
+	}
+	if len(runs) > 0 {
+		fmt.Fprintf(&b, "  workflow runs not yet completed:         %s\n", strings.Join(runs, ", "))
+	}
+	b.WriteString("\nlive-GitHub is a singleton: one run at a time across every worktree and cluster.\n")
+	b.WriteString("Either a peer run is in flight — wait for it — or one was killed with `kill -9`,\n")
+	b.WriteString("stranding this state. Once you have confirmed no peer is running, clear it with:\n")
+	b.WriteString("    make e2e-github-cleanup\n")
+	Fail(b.String())
+}
 
 // dispatchAndResolveRun dispatches a workflow_dispatch workflow on main and returns
 // the database ID of the run it created.
