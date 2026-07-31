@@ -239,6 +239,14 @@ jobs:
       SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # `make scripts-test` below shells out to go (go-vet-tags-test.sh runs a
+      # real `go vet`), and the GAG dogfood runner image omits go by design —
+      # without this step every target_gag=true dispatch failed here (Q482).
+      # ubuntu-latest happens to preinstall go, but the pinned go-version-file
+      # toolchain keeps the verdict identical across both runner types.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
       - name: install pinned shellcheck
         run: |
           set -euo pipefail

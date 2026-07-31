@@ -802,15 +802,13 @@ gh workflow run integration-test.yml -f target_gag=true --ref main --repo "$REPO
 To route **all** production CI to GAG (the Q224 milestone end-state, not a
 day-to-day turn-up), see "Route all CI to GAG" below.
 
-> **Expect one known red: the `shellcheck` job ([Q482](../STATUS.md#Q482)).** It
-> runs `make scripts-test` without a `setup-go` step, and one of those
-> behavioural tests (`scripts/go-vet-tags-test.sh`) shells out to `go` — which
-> the [dogfood runner image](../../scripts/dogfood/runner/Dockerfile) omits
-> on purpose, relying on `setup-go` to supply it. `ubuntu-latest` hides this by
-> preinstalling Go. So the job fails `go: command not found` on **every**
-> `target_gag=true` dispatch, deterministically. It is a job/image mismatch, not
-> a GAG defect and not a flake — don't spend a session re-diagnosing it, and
-> don't read it as the validation burst failing.
+The [dogfood runner image](../../scripts/dogfood/runner/Dockerfile) omits `go`
+on purpose, relying on each job's `setup-go` step to supply it — a job that
+shells out to `go` without declaring that step fails `go: command not found`
+on every `target_gag=true` dispatch while passing on `ubuntu-latest`, which
+preinstalls Go. The `shellcheck` job had exactly this mismatch (Q482, fixed by
+adding the step); read a deterministic single-job red like that as a job/image
+mismatch, not a GAG defect or a flake.
 
 ### Stop dogfooding
 
