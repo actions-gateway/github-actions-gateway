@@ -293,6 +293,53 @@ func TestBuildAGCDeployment_GitHubURLExtraEnvWins(t *testing.T) {
 	assert.Equal(t, "https://github.com/extra-org", vals[len(vals)-1], "AGC_EXTRA_ override must be last")
 }
 
+// TestBuildAGCDeployment_APIBaseURL pins the GITHUB_API_BASE_URL derivation (Q506).
+// Nothing set the variable before, so the AGC's token exchange defaulted to
+// api.github.com and a GHES gateway could never mint an installation token. The
+// public case must keep the value it already had, so no github.com tenant changes
+// behaviour on the rollout.
+func TestBuildAGCDeployment_APIBaseURL(t *testing.T) {
+	cases := []struct {
+		name      string
+		gitHubURL string
+		want      string
+	}{
+		{"public GitHub keeps the incumbent default", "https://github.com/acme-org", "https://api.github.com"},
+		{"GHES addresses its own appliance", "https://ghes.example.com/acme-org", "https://ghes.example.com/api/v3"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ag := newTestAG("gateway", "team-a")
+			ag.Spec.GitHubURL = tc.gitHubURL
+			dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
+			env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
+			v, ok := env["GITHUB_API_BASE_URL"]
+			require.True(t, ok, "GITHUB_API_BASE_URL must be set: an absent var silently defaults to api.github.com")
+			assert.Equal(t, tc.want, v.Value)
+		})
+	}
+}
+
+// TestBuildAGCDeployment_APIBaseURLExtraEnvWins keeps the e2e suite's fakegithub
+// override working: AGC_EXTRA_GITHUB_API_BASE_URL is appended after the derived
+// value, and Kubernetes honors the last duplicate.
+func TestBuildAGCDeployment_APIBaseURLExtraEnvWins(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	ag.Spec.GitHubURL = "https://github.com/spec-org"
+	extra := []corev1.EnvVar{{Name: "GITHUB_API_BASE_URL", Value: "http://fakegithub.e2e-infra.svc.cluster.local:8080"}}
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", extra)
+
+	var vals []string
+	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		if e.Name == "GITHUB_API_BASE_URL" {
+			vals = append(vals, e.Value)
+		}
+	}
+	require.NotEmpty(t, vals)
+	assert.Equal(t, "http://fakegithub.e2e-infra.svc.cluster.local:8080", vals[len(vals)-1],
+		"AGC_EXTRA_ override must be last")
+}
+
 func TestBuildProxyDeployment_DefaultResources(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	dep := buildProxyDeployment(ag, "proxy:latest")

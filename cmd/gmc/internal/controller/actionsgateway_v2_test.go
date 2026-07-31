@@ -640,6 +640,24 @@ func TestBuildAGCDeploymentV2_DirectEgress(t *testing.T) {
 	}
 }
 
+// TestBuildAGCDeploymentV2_APIBaseURL: githubURL determines the REST API base the
+// AGC's token exchange addresses (Q506). Without the injection the AGC defaults to
+// api.github.com, so a GHES gateway never mints an installation token.
+func TestBuildAGCDeploymentV2_APIBaseURL(t *testing.T) {
+	ag := v2Gateway("gw", "team-a", "github-app", "")
+	dep := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)
+	env := agcEnv(dep)
+	require.Contains(t, env, "GITHUB_API_BASE_URL",
+		"an absent var silently defaults to api.github.com")
+	assert.Equal(t, "https://api.github.com", env["GITHUB_API_BASE_URL"],
+		"a public-GitHub gateway keeps the value the AGC already defaulted to")
+
+	ghes := v2Gateway("gw", "team-a", "github-app", "")
+	ghes.Spec.GitHubURL = "https://ghes.example.com/example-org"
+	depGHES := buildAGCDeploymentV2(ghes, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)
+	assert.Equal(t, "https://ghes.example.com/api/v3", agcEnv(depGHES)["GITHUB_API_BASE_URL"])
+}
+
 // TestBuildAGCDeploymentV2_WorkloadIdentity: a delegation-model AGC carries the
 // signer config env, projects a Vault-audience ServiceAccount token (not a Secret
 // mount), and mounts NO GitHub App credential Secret — the App key never enters the
