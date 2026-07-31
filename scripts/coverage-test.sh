@@ -35,6 +35,7 @@ example.com/repo/agc/test/load/harness.go:1.1,2.2 1 1
 example.com/repo/agcutil/b.go:1.1,2.2 1 1
 example.com/repo/broker/broker.go:1.1,2.2 1 1
 example.com/repo/broker/brokertest/stub.go:1.1,2.2 1 1
+example.com/repo/broker/brokerstub/core.go:1.1,2.2 1 1
 example.com/repo/api/groupversion_info.go:1.1,2.2 1 1
 example.com/repo/test/fakegithub/fake.go:1.1,2.2 1 1
 EOF
@@ -63,8 +64,8 @@ expect_slice agc example.com/repo/agc \
 expect_slice prefix-sibling example.com/repo/agcutil \
 	$'mode: set\nexample.com/repo/agcutil/b.go:1.1,2.2 1 1'
 
-# The `<pkg>test` external-helper convention is excluded (Q110), the production
-# package is not.
+# Both helper conventions are excluded — `<pkg>test` (Q110) and the `<pkg>stub`
+# protocol model it is built on (Q528) — while the production package is not.
 expect_slice pkgtest-helper example.com/repo/broker \
 	$'mode: set\nexample.com/repo/broker/broker.go:1.1,2.2 1 1'
 

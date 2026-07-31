@@ -1,4 +1,7 @@
-package scalesettest_test
+// The protocol model's own tests. They drive it through scalesettest's httptest
+// wrapper — the transport is not what they are about, and an external test package
+// may import a package that imports the one under test.
+package scalesetstub_test
 
 import (
 	"context"
