@@ -464,6 +464,10 @@ Two things tell it apart from a real flake:
 
 Avoid it by pacing — many short runs (`for i in $(seq 1 20); do … -count=5; done`) rather than one long `-count=200`, so sockets drain between processes. Measured on the `brokertest`-backed `cmd/agc/internal/listener` suite (macOS), where `Server.HTTPClient()` hands out `http.DefaultClient`; the mechanism is not specific to that double, so treat any long single-process `-count` over an `httptest` suite as suspect. Q490 hit it twice while deflaking the Q260 fan-out gate and burned a full baseline comparison to rule it out.
 
+### A `-count≥2` run fails absolute assertions on process-global metrics
+
+The other stress-run look-alike. `runnercore.NewMetrics` registers with the global controller-runtime registry, which panics on duplicate registration, so a test binary builds it once and every test — and every `-count` repetition — shares the instance. A test asserting a counter's **absolute** value passes at `-count=1` and fails deterministically from the second repetition on, because the previous run already incremented the same series. Reached exactly when stress-running a flake, and it reads like one, but the tell is the inverse of a real flake's: it reproduces at any load and any `GOMAXPROCS`, always at repetition ≥ 2, with `actual = expected × count`. Assert the delta around the action (read the counter before, compare after) rather than an absolute, and stress with many `-count=1` processes — which the port trap above already requires. Q527 tracks the known instance (`TestProvisioner_ScaleUpRateLimitDelaysPodCreation`, found while ruling out Q498).
+
 ### A negative assertion must be able to fail for only one reason
 
 A test that asserts something *did not happen* passes when the mechanism is absent — and
