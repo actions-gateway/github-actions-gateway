@@ -131,10 +131,22 @@ for how to run each of the above.
 Work that is scoped and actively being built — adoption-enabling polish and the
 last gaps an outside operator hits.
 
-Nothing sits here today. Every capability on this roadmap has either shipped
-(above) or is waiting on a gate rather than on engineering time (below); the
-active backlog is bug-fix, measurement, and test work behind capability that
-already exists. This section fills again when the next capability is scoped.
+- **CI for untrusted pull requests on Kata workers.** <!-- q:Q408 --> Kata micro-VM workers are
+  validated today, but only for *trusted* CI: the isolation bounds the guest
+  kernel, while the runner's egress stays permissive because its jobs pull from
+  CDN-fronted public registries that no CIDR allowlist can pin and that GKE
+  Dataplane V2 cannot enforce by fully-qualified domain name. The path to
+  running an external contributor's pull request safely is two pieces on top of
+  what already ships: an in-cluster pull-through registry mirror, so a worker
+  needs no direct registry egress at all, and a tight egress policy scoped to
+  that mirror, GitHub, and DNS. An operator asked for this as a supported
+  posture, so it is now scheduled work with a phased plan; the remaining
+  phases are measurement, the mirror deployment, and live-validated
+  enforcement on our own end-to-end CI.
+
+Everything else on this roadmap has either shipped (above) or is waiting on a
+gate rather than on engineering time (below); the active backlog also carries
+bug-fix, measurement, and test work behind capability that already exists.
 
 ## Exploring / longer-term
 
@@ -156,16 +168,6 @@ release that carries it.
   moves a tenant across without changing how jobs are acquired.
   Detail: the [deprecation and removal notice](operations/v1alpha1-deprecation.md).
 
-- **CI for untrusted pull requests on Kata workers.** <!-- q:Q408 --> Kata micro-VM workers are
-  validated today, but only for *trusted* CI: the isolation bounds the guest
-  kernel, while the runner's egress stays permissive because its jobs pull from
-  CDN-fronted public registries that no CIDR allowlist can pin and that GKE
-  Dataplane V2 cannot enforce by fully-qualified domain name. The path to
-  running an external contributor's pull request safely is two pieces on top of
-  what already ships: an in-cluster pull-through registry mirror, so a worker
-  needs no direct registry egress at all, and a tight egress policy scoped to
-  that mirror, GitHub, and DNS. Designed, not built. If you run public OSS CI
-  and want this, say so on an issue: it is the trigger that schedules the work.
 - **Controller horizontal scaling / high availability.** <!-- q:Q169 --> The per-tenant
   controller is single-replica by design today; distributed session state would
   enable multi-replica HA if a single controller becomes a measured bottleneck.
