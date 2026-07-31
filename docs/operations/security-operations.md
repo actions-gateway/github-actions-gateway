@@ -1459,7 +1459,7 @@ re-validates the whole stored object on every update — and the GMC webhooks do
 same on the tenant-facing kinds. Once a class leaves the allowlist, **every write
 to a stored object still naming it is denied**, including the finalizer-removal
 update the AGC issues during teardown. A tenant deleted in that state wedges: the
-`actions-gateway.com/agentpool-cleanup` finalizer can never clear and the
+`agentpool-cleanup` finalizers can never clear and the
 namespace hangs in `Terminating` — no controller can free it
 ([recovery](troubleshooting.md#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist)).
 This holds for every narrowing route — the chart's `allowedPriorityClasses`
