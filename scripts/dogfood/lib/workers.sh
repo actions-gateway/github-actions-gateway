@@ -39,6 +39,23 @@ worker_kubectl() {
 	fi
 }
 
+# WORKER_POD_NAMESPACE — optional namespace scope for the pod probes below.
+# Empty (the default) reads all namespaces, which is what the whole-cluster
+# teardown (stop.sh) wants. e2e-stop.sh sets it to the e2e tenant namespace so
+# its pre-delete drain does not wait on the always-on CI tenant's workers, which
+# keep flowing after the e2e window closes.
+WORKER_POD_NAMESPACE="${WORKER_POD_NAMESPACE:-}"
+
+# worker_pod_scope — print the kubectl namespace argument the probes use:
+# --all-namespaces, or --namespace=<ns> when WORKER_POD_NAMESPACE scopes them.
+worker_pod_scope() {
+	if [[ -n "${WORKER_POD_NAMESPACE}" ]]; then
+		echo "--namespace=${WORKER_POD_NAMESPACE}"
+	else
+		echo "--all-namespaces"
+	fi
+}
+
 # WORKER_POD_SELECTOR — the label selector matching every AGC-provisioned worker
 # pod on both tiers. The AGC stamps the recommended app.kubernetes.io/* set on
 # every worker pod it builds (provisioner's buildPod, via apilabels.Recommended
@@ -78,7 +95,7 @@ WORKER_DRAIN_SETTLE_READINGS=2
 # idle one.
 count_inflight_workers() {
 	local out
-	out="$(worker_kubectl get pods --all-namespaces \
+	out="$(worker_kubectl get pods "$(worker_pod_scope)" \
 		--selector="${WORKER_POD_SELECTOR}" \
 		--field-selector='status.phase!=Succeeded,status.phase!=Failed' \
 		--no-headers 2>/dev/null)" || {
@@ -138,9 +155,71 @@ wait_for_worker_drain() {
 # nothing when the cluster cannot be read, since the caller has already reported
 # that.
 describe_inflight_workers() {
-	worker_kubectl get pods --all-namespaces \
+	worker_kubectl get pods "$(worker_pod_scope)" \
 		--selector="${WORKER_POD_SELECTOR}" \
 		--field-selector='status.phase!=Succeeded,status.phase!=Failed' \
-		-o custom-columns='POD:.metadata.namespace/.metadata.name,PHASE:.status.phase,NODE:.spec.nodeName' \
+		-o custom-columns='NS:.metadata.namespace,POD:.metadata.name,PHASE:.status.phase,NODE:.spec.nodeName' \
 		2>/dev/null || true
+}
+
+# count_queued_scale_set_jobs LABEL — print how many queued GitHub Actions jobs
+# in REPO target LABEL as a runs-on label, or "unknown" when GitHub cannot be
+# read. Worker pods only exist for jobs an AGC has already acquired; a job still
+# queued at GitHub has no pod, so the pod probes above cannot see it — yet
+# deleting the AGC strands it just as surely (nothing is left to acquire it, and
+# its run wedges the workflow's concurrency group; 2026-07-31 incident). Reads
+# REPO from the environment like the callers' other gh touchpoints.
+#
+# A read failure is "unknown", never 0: callers gate an AGC delete on this, and
+# an unreachable GitHub must not read as an empty queue.
+count_queued_scale_set_jobs() {
+	local label="$1"
+	local runs
+	runs="$(gh run list --repo "${REPO}" --status queued -L 50 \
+		--json databaseId --jq '.[].databaseId' 2>/dev/null)" || {
+		echo "unknown"
+		return
+	}
+	local run n count=0
+	while IFS= read -r run; do
+		[[ -z "${run}" ]] && continue
+		n="$(gh api "repos/${REPO}/actions/runs/${run}/jobs" \
+			--jq "[.jobs[] | select(.status == \"queued\" and (.labels | index(\"${label}\")))] | length" \
+			2>/dev/null)" || {
+			echo "unknown"
+			return
+		}
+		count=$((count + n))
+	done <<<"${runs}"
+	echo "${count}"
+}
+
+# wait_for_scale_set_idle LABEL [TIMEOUT_SECONDS] [INTERVAL_SECONDS] — block
+# until no queued job targets LABEL, polling every INTERVAL. Returns 0 once the
+# queue is empty, 1 if TIMEOUT elapses first or GitHub stays unreadable. A
+# single clean reading suffices (no settle window): routing is reset before the
+# callers drain, so nothing new targets the label, and a job acquired between
+# polls becomes a worker pod the pod drain that follows still sees.
+wait_for_scale_set_idle() {
+	local label="$1"
+	local timeout="${2:-${WORKER_DRAIN_TIMEOUT_DEFAULT}}"
+	local interval="${3:-${WORKER_DRAIN_INTERVAL_DEFAULT}}"
+
+	local attempts=$((timeout / interval + 1))
+	local i queued
+	for ((i = 1; i <= attempts; i++)); do
+		queued="$(count_queued_scale_set_jobs "${label}")"
+		if [[ "${queued}" == "0" ]]; then
+			return 0
+		fi
+		if [[ "${queued}" == "unknown" ]]; then
+			echo "  cannot read the job queue — an unreachable GitHub is not an empty queue" >&2
+		else
+			echo "  ${queued} queued job(s) still target '${label}'; waiting (up to ${timeout}s)..."
+		fi
+		if ((i < attempts)); then
+			sleep "${interval}"
+		fi
+	done
+	return 1
 }

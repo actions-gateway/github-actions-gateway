@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
 #
 # Unit tests for scripts/dogfood/validate-release.sh: the pre-billable steps —
-# resolve_e2e_run_id (which e2e run the gate re-runs) and preflight_cosign (the
-# local-tool check for the CRD smoke) — plus the teardown-time failure
-# diagnostics.
+# settle_e2e_lane (the lane must be idle before the gate dispatches into its
+# concurrency group) and preflight_cosign (the local-tool check for the CRD
+# smoke) — plus dispatch_e2e_run (the run-scoped e2e dispatch) and the
+# teardown-time failure diagnostics.
 #
-# Why the pre-billable steps are tested: both used to fail LATE. `gh run rerun`
-# refuses an in-flight run — and the latest run usually is one, minutes after a
-# merge — which aborted the gate *after* the node scale-up, RC deploy, and
-# on-demand e2e AGC (PR #710); a missing .build/cosign aborted the CRD-smoke leg
-# ~25 minutes in, after a full cluster cycle (Q356). Both now run before any
-# billable work, and the paths that regress (in-flight wait, timeout, E2E_RUN_ID
-# override, missing/overridden cosign) are asserted here.
+# Why the pre-billable steps are tested: both used to fail LATE. A run
+# dispatched into a busy concurrency group parks in its single pending slot,
+# where the next push to main cancels it — and the latest run usually is in
+# flight, minutes after a merge — which would abort the gate *after* the node
+# scale-up, RC deploy, and on-demand e2e AGC (PR #710 hit the rerun-era analog);
+# a missing .build/cosign aborted the CRD-smoke leg ~25 minutes in, after a full
+# cluster cycle (Q356). Both now run before any billable work, and the paths
+# that regress (in-flight wait, timeout, missing/overridden cosign) are
+# asserted here. dispatch_e2e_run is tested because it carries the run-scoped
+# routing (the `runner` input) that replaced the repo-wide GAG_E2E_RUNNER flip
+# (2026-07-31 incident) — a dispatch that silently dropped the input would
+# re-run the matrix on GitHub-hosted runners and validate nothing.
 #
 # Why the diagnostics are tested: teardown's scale-to-0 evicts every pod and so
 # destroys the evidence (FailedScheduling reasons above all) that explains a
@@ -47,16 +53,33 @@ reset_statuses() {
 	echo 0 >"${CURSOR}"
 }
 
-# Stubs replacing the two `gh` touchpoints of the resolver.
+# Stubs replacing the `gh` touchpoints. run_status consumes the STATUSES queue;
+# gh logs its argv (so a test can assert what was dispatched) and consumes the
+# GH_OUTPUTS queue, repeating the last entry once exhausted — so a test scripts
+# only the outputs that differ. `EMPTY` prints nothing (a workflow with no runs).
 run_status() {
 	local i
 	i="$(cat "${CURSOR}")"
 	echo $((i + 1)) >"${CURSOR}"
 	echo "${STATUSES[i]:-completed}"
 }
-# FAKE_LATEST is what `gh run list ... --jq '.[0].databaseId'` prints; empty
-# models a workflow with no runs at all.
-gh() { echo "${FAKE_LATEST:-}"; }
+
+GH_LOG="${WORKDIR}/gh.log"
+GH_OUTPUTS_FILE="${WORKDIR}/gh-outputs"
+reset_gh() {
+	printf '%s\n' "$@" >"${GH_OUTPUTS_FILE}"
+	: >"${GH_LOG}"
+}
+gh() {
+	printf '%s\n' "$*" >>"${GH_LOG}"
+	local head
+	head="$(head -n 1 "${GH_OUTPUTS_FILE}")"
+	if (($(wc -l <"${GH_OUTPUTS_FILE}") > 1)); then
+		tail -n +2 "${GH_OUTPUTS_FILE}" >"${GH_OUTPUTS_FILE}.next"
+		mv "${GH_OUTPUTS_FILE}.next" "${GH_OUTPUTS_FILE}"
+	fi
+	[[ "${head}" == "EMPTY" ]] || printf '%s\n' "${head}"
+}
 
 check() {
 	local name="$1" want="$2" got="$3"
@@ -78,50 +101,98 @@ check_contains() {
 	fi
 }
 
+# Pacing sleeps are stubbed out: every sleep in the tested paths is loop pacing,
+# and the dispatch-timeout test otherwise takes 24 real seconds.
+sleep() { :; }
+
 echo "scripts/dogfood/validate-release-test.sh"
 
-# The E2E_RUN_ID override still bypasses selection.
-reset_statuses completed
-E2E_RUN_ID=999 E2E_RESOLVED_RUN_ID=""
-resolve_e2e_run_id >/dev/null
-check "E2E_RUN_ID override is honored" "999" "${E2E_RESOLVED_RUN_ID}"
-unset E2E_RUN_ID
+# --- settle_e2e_lane: the lane must be idle before the gate dispatches into it ---
 
-# An in-flight latest run is waited out, not passed straight to `gh run rerun`.
-# Not `$(...)`: the function must set E2E_RESOLVED_RUN_ID in THIS shell.
+# An in-flight latest run is waited out, not dispatched into.
+reset_gh 555
 reset_statuses in_progress queued completed
-FAKE_LATEST=555 E2E_WAIT_TIMEOUT=60 E2E_RESOLVED_RUN_ID=""
-resolve_e2e_run_id >"${WORKDIR}/out"
-check "in-flight run is waited out, then used" "555" "${E2E_RESOLVED_RUN_ID}"
+E2E_WAIT_TIMEOUT=60
+if settle_e2e_lane >"${WORKDIR}/out"; then
+	echo "ok   an in-flight run is waited out, then the lane settles"
+else
+	echo "FAIL an in-flight run that completes must settle the lane" >&2
+	fails=$((fails + 1))
+fi
 check_contains "the wait is announced" "waiting for it to complete" "$(cat "${WORKDIR}/out")"
 
 # Still in flight at the deadline: fail, before the caller does anything billable.
+reset_gh 556
 reset_statuses in_progress
-FAKE_LATEST=556 E2E_WAIT_TIMEOUT=0 E2E_RESOLVED_RUN_ID=""
-if err="$(resolve_e2e_run_id 2>&1)"; then
-	echo "FAIL a run still in flight at the deadline must fail the resolver" >&2
+E2E_WAIT_TIMEOUT=0
+if err="$(settle_e2e_lane 2>&1)"; then
+	echo "FAIL a run still in flight at the deadline must fail the settle" >&2
 	fails=$((fails + 1))
 else
-	echo "ok   a run still in flight at the deadline fails the resolver"
+	echo "ok   a run still in flight at the deadline fails the settle"
 	check_contains "the timeout error names E2E_WAIT_TIMEOUT" "E2E_WAIT_TIMEOUT" "${err}"
-	check_contains "the timeout error names E2E_RUN_ID" "E2E_RUN_ID" "${err}"
+	check_contains "the timeout error explains the pending-slot hazard" "pending slot" "${err}"
 fi
 
-# A workflow with no runs at all still fails with the original message.
+# A workflow with no runs at all is a FREE lane, not a failure — there is
+# nothing to collide with (the rerun-era resolver had to fail here; the
+# dispatcher does not need a prior run to exist).
+reset_gh EMPTY
 reset_statuses completed
-FAKE_LATEST="" E2E_WAIT_TIMEOUT=60 E2E_RESOLVED_RUN_ID=""
-if err="$(resolve_e2e_run_id 2>&1)"; then
-	echo "FAIL an empty run selection must fail the resolver" >&2
-	fails=$((fails + 1))
+E2E_WAIT_TIMEOUT=60
+if out="$(settle_e2e_lane 2>&1)"; then
+	echo "ok   a workflow with no runs settles as a free lane"
 else
-	check_contains "no run found fails clearly" "no e2e-test.yml run found" "${err}"
+	echo "FAIL a workflow with no runs must settle as a free lane" >&2
+	fails=$((fails + 1))
 fi
+check_contains "the free lane is announced" "lane is free" "${out}"
 
 # E2E_WORKFLOW is respected (e.g. the e2e-calico.yml lane).
+reset_gh 777
 reset_statuses completed
-E2E_WORKFLOW=e2e-calico.yml FAKE_LATEST=777 E2E_RESOLVED_RUN_ID=""
-resolve_e2e_run_id >"${WORKDIR}/out"
-check_contains "E2E_WORKFLOW selects the lane" "e2e-calico.yml run 777" "$(cat "${WORKDIR}/out")"
+E2E_WORKFLOW=e2e-calico.yml E2E_WAIT_TIMEOUT=60
+settle_e2e_lane >"${WORKDIR}/out"
+check_contains "E2E_WORKFLOW selects the lane" "e2e-calico.yml" "$(cat "${WORKDIR}/out")"
+unset E2E_WORKFLOW
+
+# --- dispatch_e2e_run: the run-scoped routing that replaced the repo-wide flip ---
+
+# The dispatched run is resolved by the newest dispatch id changing from the
+# pre-dispatch baseline. gh outputs: baseline list, the (ignored) dispatch, the
+# post-dispatch list. Not `$(...)`: E2E_RESOLVED_RUN_ID must land in THIS shell.
+reset_gh 100 EMPTY 200
+E2E_RESOLVED_RUN_ID=""
+if dispatch_e2e_run >"${WORKDIR}/out"; then
+	echo "ok   a dispatched run resolves to the new run id"
+else
+	echo "FAIL a dispatched run that appears must resolve" >&2
+	fails=$((fails + 1))
+fi
+check "the new dispatch run id is resolved" "200" "${E2E_RESOLVED_RUN_ID}"
+# The load-bearing argument: without the runner input the matrix re-runs on
+# GitHub-hosted runners and the gate validates nothing.
+check_contains "the dispatch pins the runner input" 'runner="gag-ci-e2e"' "$(cat "${GH_LOG}")"
+check_contains "the dispatch targets the workflow" "workflow run e2e-test.yml" "$(cat "${GH_LOG}")"
+check_contains "the dispatch pins the ref" "--ref main" "$(cat "${GH_LOG}")"
+
+# A first-ever dispatch (no baseline run) still resolves.
+reset_gh EMPTY EMPTY 300
+E2E_RESOLVED_RUN_ID=""
+dispatch_e2e_run >/dev/null
+check "a first-ever dispatch resolves from an empty baseline" "300" "${E2E_RESOLVED_RUN_ID}"
+
+# A dispatch whose run never appears must fail rather than watch the baseline
+# run (rerun-era bug shape: watching a stale run reads its old green result).
+reset_gh 100 EMPTY 100
+E2E_RESOLVED_RUN_ID=""
+if err="$(dispatch_e2e_run 2>&1)"; then
+	echo "FAIL a dispatch that never appears must fail" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   a dispatch that never appears fails instead of watching a stale run"
+fi
+check "  ...and resolves no run id" "" "${E2E_RESOLVED_RUN_ID}"
 
 # A missing cosign binary fails the preflight — before anything billable.
 if err="$(COSIGN="${WORKDIR}/no-such-cosign" preflight_cosign 2>&1)"; then

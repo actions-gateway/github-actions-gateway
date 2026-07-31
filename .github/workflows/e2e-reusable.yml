@@ -18,6 +18,10 @@ on:
         description: 'CNI to install in the kind cluster: kindnet (kind default) or calico (egress-enforcing).'
         type: string
         default: kindnet
+      runner:
+        description: 'JSON-encoded runs-on for the e2e job (e.g. ''"gag-ci-e2e"''), same encoding as vars.GAG_E2E_RUNNER. Overrides the variable for THIS run only — the release gate routes its dispatched run here so no repo-wide routing window exists. Empty falls through to the variable, then ubuntu-latest.'
+        type: string
+        default: ''
       timeout_minutes:
         description: 'Job timeout in minutes. Calico bring-up (image pulls from quay + calico-node rollout) needs more headroom than kindnet. The default covers the kindnet lane plus the three post-suite chart checks (upgrade, reinstall, released-upgrade).'
         type: number
@@ -37,10 +41,12 @@ on:
 
 jobs:
   e2e:
-    # Route to GAG self-hosted runners when GAG_E2E_RUNNER is set (Q231 / runbook
-    # Part F2); defaults to GitHub-hosted when unset or "ubuntu-latest". Mirrors
-    # the GAG_RUNNER wiring on unit-test.yml / integration-test.yml.
-    runs-on: ${{ fromJSON(vars.GAG_E2E_RUNNER || '"ubuntu-latest"') }}
+    # Routing precedence: the caller's run-scoped `runner` input (the release
+    # gate's dispatch — routes ONE run with no repo-wide window), then
+    # vars.GAG_E2E_RUNNER (the opt-in standing window, Q231 / runbook Part F2),
+    # then GitHub-hosted. Mirrors the GAG_RUNNER wiring on unit-test.yml /
+    # integration-test.yml.
+    runs-on: ${{ fromJSON(inputs.runner || vars.GAG_E2E_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       contents: read

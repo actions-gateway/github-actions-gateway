@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# Spin up the on-demand e2e tenant and route e2e CI jobs to its GAG self-hosted
-# runners on GKE. The system pool must already be running (run dogfood/start.sh
-# first) and the one-time e2e setup must have run once (dogfood/e2e-setup.sh —
-# node pool + Kata runtime + GitHub App Secret).
+# Spin up the on-demand e2e tenant on GKE. The system pool must already be
+# running (run dogfood/start.sh first) and the one-time e2e setup must have run
+# once (dogfood/e2e-setup.sh — node pool + Kata runtime + GitHub App Secret).
 # See docs/plan/gke-dogfood.md Part F.
+#
+# Routing is NOT wired by default (2026-07-31 incident): flipping the repo-wide
+# vars.GAG_E2E_RUNNER routes EVERY e2e job — other sessions' PRs and merges
+# included — onto this tenant for as long as it stays set; a job caught mid-
+# window wedged main CI when the teardown deleted the AGC under it. Route a
+# single run instead via the workflows' `runner` dispatch input (what
+# validate-release.sh does), or opt into the repo-wide window with
+# E2E_ROUTE_VAR=1 for a standing dogfood soak.
 #
 # On-demand (Q231): the e2e tenant's ~500m-CPU AGC pod is NOT kept always-on —
 # it competes with the CI AGC + GMC + Athens on the system pool. This script
@@ -24,6 +31,9 @@
 #   REPO         GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
 #
 # Optional:
+#   E2E_ROUTE_VAR=1  Set vars.GAG_E2E_RUNNER to the scale set (repo-wide routing
+#                window; e2e-stop.sh resets it). Default: leave routing alone
+#                and print the run-scoped dispatch command instead.
 #   E2E_VARIANT  Worker-isolation overlay: "kata" (unprivileged kind in a Kata
 #                micro-VM — the default, live-validated green under Q286) or
 #                "dind" (privileged DinD — explicit opt-in fallback for
@@ -105,14 +115,21 @@ main() {
 
 	# ScaleSet routing (Q231): the v2beta1 RunnerSet declares exactly one
 	# runnerLabel (gag-ci-e2e), which is both the runs-on target and the
-	# scale-set name registered at GitHub. e2e-reusable.yml resolves
-	# fromJSON(vars.GAG_E2E_RUNNER), so the value is a single JSON string, not
-	# the old Classic multi-label array.
-	gh variable set GAG_E2E_RUNNER \
-		--body '"gag-ci-e2e"' \
-		--repo "${REPO}"
-
-	echo "E2e jobs will now route to GAG (${E2E_VARIANT} runners on GKE)."
+	# scale-set name registered at GitHub. Both routing paths resolve it through
+	# fromJSON — the reusable workflow's `runner` input for a single dispatched
+	# run, vars.GAG_E2E_RUNNER for the opt-in repo-wide window — so the value is
+	# a single JSON string, not the old Classic multi-label array.
+	if [[ "${E2E_ROUTE_VAR:-0}" == "1" ]]; then
+		gh variable set GAG_E2E_RUNNER \
+			--body '"gag-ci-e2e"' \
+			--repo "${REPO}"
+		echo "ALL e2e jobs now route to GAG (${E2E_VARIANT} runners on GKE) until"
+		echo "e2e-stop.sh resets vars.GAG_E2E_RUNNER — including other sessions' PRs."
+	else
+		echo "Tenant is up (${E2E_VARIANT}). Routing left untouched — send a single run:"
+		echo "  gh workflow run e2e-test.yml --repo ${REPO} --ref main -f runner='\"gag-ci-e2e\"'"
+		echo "(repo-wide routing is an explicit opt-in: re-run with E2E_ROUTE_VAR=1)"
+	fi
 	echo "e2e pool nodes will autoscale 0→2 as jobs arrive."
 }
 
