@@ -2465,10 +2465,23 @@ for how to run each of the above.</p>
 <h2 id="in-progress--near-term">In progress / near-term<a class="headerlink" href="#in-progress--near-term" title="Permanent link">&para;</a></h2>
 <p>Work that is scoped and actively being built — adoption-enabling polish and the
 last gaps an outside operator hits.</p>
-<p>Nothing sits here today. Every capability on this roadmap has either shipped
-(above) or is waiting on a gate rather than on engineering time (below); the
-active backlog is bug-fix, measurement, and test work behind capability that
-already exists. This section fills again when the next capability is scoped.</p>
+<ul>
+<li><strong>CI for untrusted pull requests on Kata workers.</strong> <!-- q:Q408 --> Kata micro-VM workers are
+  validated today, but only for <em>trusted</em> CI: the isolation bounds the guest
+  kernel, while the runner's egress stays permissive because its jobs pull from
+  CDN-fronted public registries that no CIDR allowlist can pin and that GKE
+  Dataplane V2 cannot enforce by fully-qualified domain name. The path to
+  running an external contributor's pull request safely is two pieces on top of
+  what already ships: an in-cluster pull-through registry mirror, so a worker
+  needs no direct registry egress at all, and a tight egress policy scoped to
+  that mirror, GitHub, and DNS. An operator asked for this as a supported
+  posture, so it is now scheduled work with a phased plan; the remaining
+  phases are measurement, the mirror deployment, and live-validated
+  enforcement on our own end-to-end CI.</li>
+</ul>
+<p>Everything else on this roadmap has either shipped (above) or is waiting on a
+gate rather than on engineering time (below); the active backlog also carries
+bug-fix, measurement, and test work behind capability that already exists.</p>
 <h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
 <p>Directions we expect to pursue as demand and validated evidence accumulate. These
 are intentionally unscheduled — each waits on a real operator need, a measured
@@ -2490,20 +2503,10 @@ release that carries it.</p>
   Detail: the <a href="../operations/v1alpha1-deprecation/">deprecation and removal notice</a>.</p>
 </li>
 <li>
-<p><strong>CI for untrusted pull requests on Kata workers.</strong> <!-- q:Q408 --> Kata micro-VM workers are
-  validated today, but only for <em>trusted</em> CI: the isolation bounds the guest
-  kernel, while the runner's egress stays permissive because its jobs pull from
-  CDN-fronted public registries that no CIDR allowlist can pin and that GKE
-  Dataplane V2 cannot enforce by fully-qualified domain name. The path to
-  running an external contributor's pull request safely is two pieces on top of
-  what already ships: an in-cluster pull-through registry mirror, so a worker
-  needs no direct registry egress at all, and a tight egress policy scoped to
-  that mirror, GitHub, and DNS. Designed, not built. If you run public OSS CI
-  and want this, say so on an issue: it is the trigger that schedules the work.</p>
-</li>
-<li><strong>Controller horizontal scaling / high availability.</strong> <!-- q:Q169 --> The per-tenant
+<p><strong>Controller horizontal scaling / high availability.</strong> <!-- q:Q169 --> The per-tenant
   controller is single-replica by design today; distributed session state would
-  enable multi-replica HA if a single controller becomes a measured bottleneck.</li>
+  enable multi-replica HA if a single controller becomes a measured bottleneck.</p>
+</li>
 <li><strong>Richer egress proxy.</strong> <!-- q:Q19 --> Optional allow-listing, rate-limiting, audit logging,
   and per-runner-group proxy pools.</li>
 <li><strong>Bring-your-own proxy infrastructure.</strong> <!-- q:Q174 --> Supply your own proxy autoscaler

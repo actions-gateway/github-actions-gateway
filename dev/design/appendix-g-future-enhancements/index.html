@@ -3190,11 +3190,11 @@ Kata-isolated runners are still only suitable for <em>trusted</em> CI.</p>
 in-cluster pull-through registry mirror (so workers need no direct registry egress)
 plus a tight egress policy scoped to the mirror, GitHub, and DNS. Operator-facing
 context: <a href="../../operations/kata-dind-workloads/">kata-dind-workloads.md</a>.</p>
-<p><strong>Status: parked, tracked as <a href="../../STATUS/#Q408">Q408</a> in Deferred, and published
-on the <a href="../../roadmap/#exploring--longer-term">public roadmap</a> as the named path to
-untrusted-PR CI.</strong> Trigger: GAG starts running CI for untrusted /
-external-contributor PRs on its own runners, or a user asks for the hardened
-posture as a supported configuration.</p>
+<p><strong>Status: active — the Demand trigger fired 2026-07-31 (operator ask), moving
+<a href="../../STATUS/#Q408">Q408</a> into the Queue with a phased plan:
+<a href="../../plan/q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a>.</strong> Published
+on the <a href="../../roadmap/#exploring--longer-term">public roadmap</a> as the named path
+to untrusted-PR CI.</p>
 <hr />
 <h2 id="g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool">G.15. Extract the Batch Right-Sizer into a Standalone / Reusable Tool<a class="headerlink" href="#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool" title="Permanent link">&para;</a></h2>
 <p><strong>Current behavior.</strong> The worker right-sizing loop (Q359) ships <strong>inside</strong> the
