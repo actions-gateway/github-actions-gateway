@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
-# Unit tests for the pure change-scoping helpers in scripts/go-lint.sh:
-# lint_scope (workspace-wide full-sweep triggers, file→module ownership,
-# transitive dependent expansion) and owning_module (longest-match rule).
-# These decide which modules golangci-lint covers on a local run, so they are
+# Unit tests for the pure helpers in scripts/go-lint.sh: lint_scope
+# (workspace-wide full-sweep triggers, file→module ownership, transitive
+# dependent expansion), owning_module (longest-match rule), and lint_cache_dir
+# (per-worktree analysis cache scoping). These decide which modules
+# golangci-lint covers on a local run and where its cache lives, so they are
 # asserted here without invoking the linter. Runs under `make check` (via
 # `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
@@ -99,6 +100,23 @@ expect_owner() {
 expect_owner nested-longest-match 'cmd/agc/main.go' $'cmd\ncmd/agc' 'cmd/agc'
 expect_owner nested-parent-owns 'cmd/other/main.go' $'cmd\ncmd/agc' 'cmd'
 expect_owner no-owner 'docs/index.md' $'cmd\ncmd/agc' ''
+
+# expect_cache NAME REPO_ROOT CI EXPLICIT WANT — assert lint_cache_dir's
+# decision: a per-worktree dir locally, nothing on CI or an explicit override.
+expect_cache() {
+	local name="$1" want="$5" got
+	got="$(lint_cache_dir "$2" "$3" "$4")"
+	if [[ "$got" == "$want" ]]; then
+		printf 'ok   cache %-24s -> [%s]\n' "$name" "$got"
+	else
+		printf 'FAIL cache %-24s want=[%s] got=[%s]\n' "$name" "$want" "$got" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+expect_cache local-per-worktree '/wt/a' '' '' '/wt/a/tmp/golangci-lint'
+expect_cache ci-keeps-default '/wt/a' 'true' '' ''
+expect_cache explicit-wins '/wt/a' '' '/custom/cache' ''
 
 if (( fails > 0 )); then
 	echo "go-lint-scope-test: $fails failure(s)" >&2

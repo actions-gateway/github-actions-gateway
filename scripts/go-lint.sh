@@ -25,6 +25,9 @@
 # Env:
 #   GOLANGCI_LINT  Path to the golangci-lint binary (default .build/golangci-lint
 #                  at the repo root — build it with `make golangci-lint`).
+#   GOLANGCI_LINT_CACHE  Analysis cache dir; respected when set. Otherwise
+#                  local runs use the worktree's own tmp/golangci-lint and CI
+#                  keeps golangci-lint's user-level default — see lint_cache_dir.
 #   LINT_ALL=1     Force the full per-module sweep on a local run.
 #
 # Applies the local throttle (GOMAXPROCS + `-j` cap and a low-priority QoS
@@ -79,6 +82,22 @@ owning_module() {
 	done <<<"$modules"
 	[[ -n "$best" ]] && printf '%s\n' "$best"
 	return 0
+}
+
+# lint_cache_dir REPO_ROOT CI EXPLICIT — print the analysis cache dir to use,
+# or nothing to leave the environment alone. Local runs get a per-worktree dir:
+# the user-level default is shared across worktrees and a cached entry keeps
+# the absolute path of the worktree that produced it, so a hit produced by a
+# since-deleted sibling makes the postprocessors report phantom findings
+# (Q516). Sharing is cheap to lose — off a warm GOCACHE the analysis re-runs
+# in ~1 s per module. CI keeps the default (runners are fresh, and
+# unit-test.yml caches that path); an explicit GOLANGCI_LINT_CACHE wins.
+lint_cache_dir() {
+	local repo_root="$1" ci="$2" explicit="$3"
+	if [[ -n "$ci" || -n "$explicit" ]]; then
+		return 0
+	fi
+	printf '%s/tmp/golangci-lint\n' "$repo_root"
 }
 
 # lint_scope MODULES EDGES — decide which modules golangci-lint must cover for
@@ -233,6 +252,12 @@ main() {
 	if [[ ! -x "$GOLANGCI_LINT" ]]; then
 		echo "golangci-lint not found at $GOLANGCI_LINT — build it with: make golangci-lint" >&2
 		exit 1
+	fi
+
+	local cache_dir
+	cache_dir="$(lint_cache_dir "$REPO_ROOT" "${CI:-}" "${GOLANGCI_LINT_CACHE:-}")"
+	if [[ -n "$cache_dir" ]]; then
+		export GOLANGCI_LINT_CACHE="$cache_dir"
 	fi
 
 	init_throttle
