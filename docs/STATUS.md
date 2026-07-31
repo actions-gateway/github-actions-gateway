@@ -39,7 +39,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [Per-module coverage ≥75%](plan/coverage-to-75-per-module.md) | `tests` | ✅ |
 | [GKE dogfood](plan/gke-dogfood.md) | `infra` `docs` | ✅ |
 | <a id="Q248"></a>[Dogfood runner right-sizing](plan/dogfood-runner-rightsizing.md) | `infra` | ✅ |
-| [Release 1.3](plan/release-1.3.md) | `milestone` | ✅ |
+| [Release 1.3](plan/release-1.3.md) | `milestone` | ⚠️ |
 | [v2 GA graduation](plan/v2-ga.md) | `milestone` `infra` | ✅ |
 | [v1 sunset → v2-only](plan/v1-classic-sunset-review.md) | `infra` | ✅ |
 | [Worker right-sizing profiles](plan/runner-sizing-profiles.md) | `infra` | ✅ |
@@ -53,6 +53,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q550"></a>Q550 | [Reaping a worker pod leaks its scale-set runner registration](../cmd/agc/internal/scalesetlistener/listener.go) | `bug` `1.3-gate` | 🔲 | M | Provision→reap never deregisters the runner at GitHub; names derive from the job ID, so retries 409 against their own leftovers (22 stale `gag-ci-e2e` records wedged the 2026-07-31 RC gate). Deregister on reap; sweep offline records at start. |
+| <a id="Q551"></a>Q551 | [A persistent runner name conflict drops the job permanently](../cmd/agc/internal/scalesetlistener/listener.go) | `bug` `1.3-gate` | 🔲 | S | After 4 attempts the listener skips the job with no retry, condition, or Event — the run queues forever while the AGC idles (2026-07-31: the rc.1 gate's own dispatched job). Re-offer after backoff and surface the skip on RunnerSet status. |
 | <a id="Q549"></a>Q549 | [`E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC` flaked on main](../cmd/gmc/test/e2e/worker_scaleset_recovery_test.go) | `flake` `tests` | 🔲 | S | Failed once on `main` (run 30658951388, 2026-07-31, hosted): 90s timeout at worker_scaleset_recovery_test.go:247. Passed on the next two main commits untouched — flake, not a Q528 regression. Diagnose the timed-out wait; flake cost compounds. |
 | <a id="Q408"></a>Q408 | [Untrusted-PR egress posture for Kata workers](plan/q408-untrusted-pr-egress.md) | `security` `infra` | 🔲 | L | Demand fired 2026-07-31; plan written. Athens pattern (Q244) applied to images: per-upstream pull-through mirrors, then swap `e2e-open-egress` for a mirror-scoped NP. Next: Phase 0 egress inventory. |
 | <a id="Q536"></a>Q536 | [A GHES appliance behind a private CA is not trusted by the AGC](plan/archive/q506-ghes-endpoint-audit.md#6-legitimately-githubcom) | `bug` `infra` | 🔲 | M | `BuildProxyTrustPool` builds system roots + the proxy CA, so a private-CA appliance fails the TLS handshake. Named as out of scope by Q506's audit, "needs its own item if the project commits to GHES" — Q506 shipping Option A is that commitment. |
