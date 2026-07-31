@@ -249,6 +249,14 @@ func reapWorkerPodsByLabel(
 		return 0, workerPodCounts{}, fmt.Errorf("reaper: list worker pods: %w", err)
 	}
 
+	// runner_set aliases name on scale-set reaps so the reap series join the
+	// runner_set-labelled scaleset_* gauges; runner_group carries name on both
+	// tiers unchanged (Q514).
+	runnerSet := ""
+	if labelKey == provisioner.LabelRunnerSet {
+		runnerSet = name
+	}
+
 	var next time.Duration
 	var counts workerPodCounts
 	for i := range pods.Items {
@@ -322,7 +330,7 @@ func reapWorkerPodsByLabel(
 		}
 		log.Info("reaped worker pod", "pod", pod.Name, "phase", pod.Status.Phase, "reason", reason)
 		if metrics != nil {
-			metrics.WorkerPodsReaped.WithLabelValues(namespace, name, reason).Inc()
+			metrics.WorkerPodsReaped.WithLabelValues(namespace, name, runnerSet, reason).Inc()
 		}
 		if reason == reapReasonPendingDeadline && emitStuckPending != nil {
 			emitStuckPending(pod.Name, deadline)

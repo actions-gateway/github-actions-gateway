@@ -80,10 +80,10 @@ func TestRunnerSetReaper_LifetimeExceededIsDistinctFromCompletedTTL(t *testing.T
 	assert.Error(t, get("runner-evicted"))
 
 	assert.Equal(t, 1.0, testutil.ToFloat64(
-		r.Metrics.WorkerPodsReaped.WithLabelValues(ns, "set", "lifetime_exceeded")),
+		r.Metrics.WorkerPodsReaped.WithLabelValues(ns, "set", "set", "lifetime_exceeded")),
 		"a DeadlineExceeded pod must be counted under its own reap reason")
 	assert.Equal(t, 2.0, testutil.ToFloat64(
-		r.Metrics.WorkerPodsReaped.WithLabelValues(ns, "set", "completed_ttl")),
+		r.Metrics.WorkerPodsReaped.WithLabelValues(ns, "set", "set", "completed_ttl")),
 		"an ordinary failure and an eviction must still be counted under completed_ttl")
 
 	var lifetimeEvent string

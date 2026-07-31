@@ -829,9 +829,9 @@ curl --resolve dogfood-agc.gag-dogfood.svc:18443:127.0.0.1 \
 ```
 
 Used by the §9e/§9f (Q469/Q462) and §9h (Q513) capacity-gate measurements in
-[capacity-aware-intake.md](capacity-aware-intake.md); the scale-set gauges are
-labelled `runner_set` while `worker_pods_reaped_total` is labelled
-`runner_group` (the Q514 join mismatch), so filter by both when sampling one set.
+[capacity-aware-intake.md](capacity-aware-intake.md); since Q514,
+`worker_pods_reaped_total` stamps `runner_set` on scale-set reaps alongside
+`runner_group`, so one `runner_set` filter covers it and the `scaleset_*` gauges.
 
 ### Stop dogfooding
 

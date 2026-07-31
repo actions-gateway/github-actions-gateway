@@ -38,7 +38,7 @@ func reaperMetrics() *runnercore.Metrics {
 	return &runnercore.Metrics{
 		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_reaper_worker_pods_reaped_total",
-		}, []string{"namespace", "runner_group", "reason"}),
+		}, []string{"namespace", "runner_group", "runner_set", "reason"}),
 	}
 }
 
@@ -131,9 +131,9 @@ func TestReconcile_ReapsExpiredWorkerPods(t *testing.T) {
 		"RequeueAfter must be the time until the earliest retained pod is due")
 
 	assert.Equal(t, 1.0, testutil.ToFloat64(
-		r.Metrics.WorkerPodsReaped.WithLabelValues("default", "reap-rg", "completed_ttl")))
+		r.Metrics.WorkerPodsReaped.WithLabelValues("default", "reap-rg", "", "completed_ttl")))
 	assert.Equal(t, 1.0, testutil.ToFloat64(
-		r.Metrics.WorkerPodsReaped.WithLabelValues("default", "reap-rg", "pending_deadline")))
+		r.Metrics.WorkerPodsReaped.WithLabelValues("default", "reap-rg", "", "pending_deadline")))
 
 	// The Pending reap is operator-visible as a Warning event; TTL reaps are
 	// routine and emit none. Drain events and find the stuck-Pending one.

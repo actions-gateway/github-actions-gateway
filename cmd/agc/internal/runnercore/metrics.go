@@ -230,8 +230,8 @@ func NewMetrics() *Metrics {
 
 		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_worker_pods_reaped_total",
-			Help: "Worker pods deleted by the reaper, by reason (completed_ttl, pending_deadline).",
-		}, []string{"namespace", "runner_group", "reason"}),
+			Help: "Worker pods deleted by the reaper, by reason (completed_ttl, pending_deadline, orphaned_running, lifetime_exceeded). runner_group carries the owning CR's name on both acquisition tiers; runner_set additionally carries it on scale-set reaps (empty on classic) so the series join the runner_set-labelled scaleset_* gauges (Q514).",
+		}, []string{"namespace", "runner_group", "runner_set", "reason"}),
 
 		AgentRecyclesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_agent_recycles_total",

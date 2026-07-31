@@ -975,11 +975,14 @@ with it; read as written it would have produced a flat-zero series and the false
 reading that the gate never engaged.
 
 Two observability snags found on the way, since filed as their own Queue rows
-([Q514](../STATUS.md#Q514), [Q515](../STATUS.md#Q515)):
+(Q514 — since fixed, [Q515](../STATUS.md#Q515)):
 
 * `worker_pods_reaped_total` is labelled `runner_group`, while every
   `scaleset_*` gauge is labelled `runner_set`. A dashboard that joins the reaper
-  counter to the advertisement gauges by label silently returns nothing.
+  counter to the advertisement gauges by label silently returns nothing. Fixed
+  by Q514: the counter now also stamps a `runner_set` label on scale-set reaps
+  (empty on classic; `runner_group` unchanged on both tiers), so the join works
+  without breaking existing `runner_group`-keyed queries.
 * The `v2alpha1 is deprecated` warning is logged at info level per API read. On
   a set reconciling under a stuck burst it dominates the AGC log to the point of
   making it unusable for diagnosis.
