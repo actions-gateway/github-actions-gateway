@@ -243,9 +243,10 @@ spec:
 # e2e pulls from Docker Hub / quay / registry.k8s.io / get.helm.sh, all
 # CDN-fronted (a CIDR allowlist would rot; an FQDN allowlist isn't enforceable
 # on GKE DPv2 — Q245). The durable hardening that would let this variant carry
-# untrusted-PR CI is an in-cluster pull-through mirror + tight egress — future
-# work, tracked in docs/plan/archive/kata-on-gke.md. Until then Kata hardens the
-# kernel-escape axis while egress stays trusted-CI-shaped.
+# untrusted-PR CI is an in-cluster pull-through mirror + tight egress — planned
+# as docs/plan/q408-untrusted-pr-egress.md (Q408), whose Phase 3 replaces this
+# policy. Until then Kata hardens the kernel-escape axis while egress stays
+# trusted-CI-shaped.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

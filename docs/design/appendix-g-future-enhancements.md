@@ -713,11 +713,11 @@ in-cluster pull-through registry mirror (so workers need no direct registry egre
 plus a tight egress policy scoped to the mirror, GitHub, and DNS. Operator-facing
 context: [kata-dind-workloads.md](../operations/kata-dind-workloads.md).
 
-**Status: parked, tracked as [Q408](../STATUS.md#Q408) in Deferred, and published
-on the [public roadmap](../roadmap.md#exploring--longer-term) as the named path to
-untrusted-PR CI.** Trigger: GAG starts running CI for untrusted /
-external-contributor PRs on its own runners, or a user asks for the hardened
-posture as a supported configuration.
+**Status: active — the Demand trigger fired 2026-07-31 (operator ask), moving
+[Q408](../STATUS.md#Q408) into the Queue with a phased plan:
+[q408-untrusted-pr-egress.md](../plan/q408-untrusted-pr-egress.md).** Published
+on the [public roadmap](../roadmap.md#exploring--longer-term) as the named path
+to untrusted-PR CI.
 
 ---
 
