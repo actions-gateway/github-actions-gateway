@@ -1454,6 +1454,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2782,6 +2793,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3287,6 +3309,7 @@
 <ul>
 <li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
+<li><a href="#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before">Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)</a></li>
 <li><a href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github">Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)</a></li>
 <li><a href="#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes">Non-breaking: eviction auto-retry now honours GITHUB_API_BASE_URL (it never did on GHES)</a></li>
 <li><a href="#non-breaking-preempted-workers-are-now-re-run-automatically-eviction-counters-gain-a-cause-label">Non-breaking: preempted workers are now re-run automatically; eviction counters gain a cause label</a></li>
@@ -3345,6 +3368,31 @@
 - Behavior changes that require configuration updates before the new binary takes effect.</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
+<h3 id="non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before">Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)<a class="headerlink" href="#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before" title="Permanent link">&para;</a></h3>
+<p>No action required, but two observable behaviours change (Q503).</p>
+<p>Previously the AGC fired <code>rerun-failed-jobs</code> exactly once, <code>evictionRetryDelay</code>
+(default 5s) after seeing a worker evicted. Against real GitHub that call always lost
+a race it could not win: an ungracefully killed runner reports nothing, GitHub
+concludes the run only when the job lock's TTL lapses (~10 minutes, measured 9m36s),
+and until then the API refuses re-runs with <code>403 This workflow is already running</code>.
+The retry budget was spent, <code>actions_gateway_eviction_retries_total</code> incremented, and
+the job was never re-run — every evicted job needed a manual re-run despite the
+metrics saying recovery had happened.</p>
+<p>The AGC now treats that refusal as "not yet" and retries the re-run every 30 seconds
+inside a 15-minute window, on both acquisition tiers, still spending one budget slot
+per recovery. What you will observe after upgrading:</p>
+<ul>
+<li>Evicted jobs actually re-run — expect the <code>disruption auto-retry triggered</code> log
+  line and the second run attempt <strong>~10 minutes</strong> after the eviction, not seconds.
+  Preempted jobs are unaffected in timing: their runner reports before dying, GitHub
+  concludes in seconds, and the first or second call is accepted.</li>
+<li>A new counter, <code>actions_gateway_eviction_rerun_failures_total</code>
+  (<code>reason="run_never_concluded"</code> | <code>"api_error"</code>), and a new <code>EvictionRerunFailed</code>
+  Warning Event surface the recoveries whose re-run never landed — those still need
+  a manual re-run. Expected to be zero; see
+  <a href="../observability-metrics/">observability-metrics.md</a> and the
+  <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">runbook</a>.</li>
+</ul>
 <h3 id="non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes">Non-breaking: eviction auto-retry now honours <code>GITHUB_API_BASE_URL</code> (it never did on GHES)<a class="headerlink" href="#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> any deployment that sets <code>GITHUB_API_BASE_URL</code> — that is, every
 GitHub Enterprise Server install. Deployments against <code>github.com</code> (the default) are

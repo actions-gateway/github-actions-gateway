@@ -5354,6 +5354,12 @@ few seconds; the metric is the real-time signal.</p>
 <td>An evicted worker pod's auto-retry budget (<code>maxEvictionRetries</code>) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, which share one per-run budget.</td>
 <td><a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a> · <a href="#evicted-scale-set-jobs-are-not-re-run-automatically">Evicted Scale-Set Jobs Are Not Re-Run Automatically</a></td>
 </tr>
+<tr>
+<td><code>EvictionRerunFailed</code></td>
+<td>Warning</td>
+<td>A disrupted run's automatic re-run was never accepted by GitHub — refused past the 15-minute re-run window, or a terminal API error (Q503). The budget slot is spent; the named run needs a manual re-run.</td>
+<td><a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a></td>
+</tr>
 </tbody>
 </table>
 <p><strong>Diagnostics.</strong></p>
@@ -6002,19 +6008,23 @@ AGC — see
 On a fixed AGC, check the pod's annotation first:
 <code>kubectl get pod -n &lt;namespace&gt; &lt;pod&gt; -o jsonpath='{.metadata.annotations.actions-gateway\.com/run-id}'</code>
 — empty there means the payload genuinely carried no identity.</p>
-<p><strong><code>eviction_retries_total</code> incrementing but the job still never re-runs?</strong> On a
-post-Q495 AGC the re-run is now <em>attempted</em>, and against real GitHub it is
-currently <em>refused</em>. Measured (Q396): a kubelet eviction SIGKILLs the runner
-before it can report, so GitHub does not conclude the run until the job lock's
-TTL lapses — <strong>about 9–10 minutes</strong> — while the AGC fires <code>rerun-failed-jobs</code>
-only <code>evictionRetryDelay</code> (default 5s) after the eviction. The API answers
-<code>403 This workflow is already running</code>, the budget slot is spent anyway, and the
-counter increments regardless. <strong>Treat <code>eviction_retries_total</code> as "a re-run was
-attempted", not "a job was recovered"</strong>, and look for
-<code>eviction auto-retry failed; manual rerun may be required</code> with a 403 in the AGC
-log to confirm this case. Until <a href="../../STATUS/#Q503">Q503</a> lands, evicted jobs need
-a manual re-run; raising <code>evictionRetryDelay</code> past GitHub's conclusion latency is
-the interim workaround.</p>
+<p><strong><code>eviction_retries_total</code> incrementing but the job still never re-runs?</strong> An
+evicted run's re-run is deliberately slow to land: a kubelet eviction SIGKILLs
+the runner before it can report, so GitHub does not conclude the run until the
+job lock's TTL lapses — measured at 9m36s (Q396) — and until then it refuses
+<code>rerun-failed-jobs</code> with <code>403 This workflow is already running</code>. The AGC retries
+that refusal every 30 seconds inside a 15-minute re-run window (Q503), so expect
+<code>disruption auto-retry triggered</code> in the AGC log <strong>~10 minutes</strong> after the
+eviction, not seconds. A recovery that gave up instead logs
+<code>disruption auto-retry failed</code>, increments
+<code>actions_gateway_eviction_rerun_failures_total</code>, and emits an
+<code>EvictionRerunFailed</code> Warning Event naming the run — that job needs a manual
+re-run. <code>reason="run_never_concluded"</code> means the original run outlived the
+15-minute window (check whether GitHub still shows it in progress);
+<code>reason="api_error"</code> means the API failed outright — check the AGC log line's
+error for a permissions 403 or an endpoint problem. On an AGC older than the
+Q503 fix, the single un-retried re-run always lost this race and every evicted
+job needed a manual re-run.</p>
 </blockquote>
 <p><strong>Symptoms.</strong> <code>actions_gateway_eviction_retries_exhausted_total</code> is incrementing. Jobs are being cancelled after eviction despite automatic retries. <code>kubectl describe</code> on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> shows a <code>Warning</code> event with reason <code>EvictionRetriesExhausted</code> (Q170) naming the affected run — the event-based companion to the metric.</p>
 <p><strong>Likely causes.</strong>
@@ -6027,20 +6037,21 @@ the interim workaround.</p>
 <a id="__codelineno-79-3" name="__codelineno-79-3" href="#__codelineno-79-3"></a><span class="c1"># preemption); the retry budget itself is shared across every combination.</span>
 <a id="__codelineno-79-4" name="__codelineno-79-4" href="#__codelineno-79-4"></a><span class="c1"># actions_gateway_eviction_retries_total{namespace, runner_group, tier, cause}</span>
 <a id="__codelineno-79-5" name="__codelineno-79-5" href="#__codelineno-79-5"></a><span class="c1"># actions_gateway_eviction_retries_exhausted_total{namespace, runner_group, tier, cause}</span>
-<a id="__codelineno-79-6" name="__codelineno-79-6" href="#__codelineno-79-6"></a><span class="c1"># Start here: the cause that is climbing decides which resolution below applies.</span>
-<a id="__codelineno-79-7" name="__codelineno-79-7" href="#__codelineno-79-7"></a>
-<a id="__codelineno-79-8" name="__codelineno-79-8" href="#__codelineno-79-8"></a><span class="c1"># Check recent evicted pods</span>
-<a id="__codelineno-79-9" name="__codelineno-79-9" href="#__codelineno-79-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--field-selector<span class="o">=</span>status.phase<span class="o">=</span>Failed<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>Evicted
-<a id="__codelineno-79-10" name="__codelineno-79-10" href="#__codelineno-79-10"></a>
-<a id="__codelineno-79-11" name="__codelineno-79-11" href="#__codelineno-79-11"></a><span class="c1"># Describe an evicted pod for the eviction reason</span>
-<a id="__codelineno-79-12" name="__codelineno-79-12" href="#__codelineno-79-12"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;evicted-pod-name&gt;
-<a id="__codelineno-79-13" name="__codelineno-79-13" href="#__codelineno-79-13"></a><span class="c1"># Look for: &quot;The node was low on resource: memory&quot; or &quot;Preempted by another pod&quot;</span>
-<a id="__codelineno-79-14" name="__codelineno-79-14" href="#__codelineno-79-14"></a>
-<a id="__codelineno-79-15" name="__codelineno-79-15" href="#__codelineno-79-15"></a><span class="c1"># Check node events around the eviction time</span>
-<a id="__codelineno-79-16" name="__codelineno-79-16" href="#__codelineno-79-16"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--sort-by<span class="o">=</span><span class="s1">&#39;.lastTimestamp&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>evict
-<a id="__codelineno-79-17" name="__codelineno-79-17" href="#__codelineno-79-17"></a>
-<a id="__codelineno-79-18" name="__codelineno-79-18" href="#__codelineno-79-18"></a><span class="c1"># See the budget-exhaustion event on the owner (RunnerGroup or RunnerSet)</span>
-<a id="__codelineno-79-19" name="__codelineno-79-19" href="#__codelineno-79-19"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A1<span class="w"> </span>EvictionRetriesExhausted
+<a id="__codelineno-79-6" name="__codelineno-79-6" href="#__codelineno-79-6"></a><span class="c1"># actions_gateway_eviction_rerun_failures_total{namespace, runner_group, tier, cause, reason}</span>
+<a id="__codelineno-79-7" name="__codelineno-79-7" href="#__codelineno-79-7"></a><span class="c1"># Start here: the cause that is climbing decides which resolution below applies.</span>
+<a id="__codelineno-79-8" name="__codelineno-79-8" href="#__codelineno-79-8"></a>
+<a id="__codelineno-79-9" name="__codelineno-79-9" href="#__codelineno-79-9"></a><span class="c1"># Check recent evicted pods</span>
+<a id="__codelineno-79-10" name="__codelineno-79-10" href="#__codelineno-79-10"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--field-selector<span class="o">=</span>status.phase<span class="o">=</span>Failed<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>Evicted
+<a id="__codelineno-79-11" name="__codelineno-79-11" href="#__codelineno-79-11"></a>
+<a id="__codelineno-79-12" name="__codelineno-79-12" href="#__codelineno-79-12"></a><span class="c1"># Describe an evicted pod for the eviction reason</span>
+<a id="__codelineno-79-13" name="__codelineno-79-13" href="#__codelineno-79-13"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;evicted-pod-name&gt;
+<a id="__codelineno-79-14" name="__codelineno-79-14" href="#__codelineno-79-14"></a><span class="c1"># Look for: &quot;The node was low on resource: memory&quot; or &quot;Preempted by another pod&quot;</span>
+<a id="__codelineno-79-15" name="__codelineno-79-15" href="#__codelineno-79-15"></a>
+<a id="__codelineno-79-16" name="__codelineno-79-16" href="#__codelineno-79-16"></a><span class="c1"># Check node events around the eviction time</span>
+<a id="__codelineno-79-17" name="__codelineno-79-17" href="#__codelineno-79-17"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--sort-by<span class="o">=</span><span class="s1">&#39;.lastTimestamp&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>evict
+<a id="__codelineno-79-18" name="__codelineno-79-18" href="#__codelineno-79-18"></a>
+<a id="__codelineno-79-19" name="__codelineno-79-19" href="#__codelineno-79-19"></a><span class="c1"># See the budget-exhaustion event on the owner (RunnerGroup or RunnerSet)</span>
+<a id="__codelineno-79-20" name="__codelineno-79-20" href="#__codelineno-79-20"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>runnergroup<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A1<span class="w"> </span>EvictionRetriesExhausted
 </code></pre></div>
 <p><strong>Resolution.</strong>
 - <code>cause="eviction"</code> climbing — node memory pressure: increase the worker pod's memory requests to discourage the kubelet from evicting it, or investigate the workload's actual memory usage.
