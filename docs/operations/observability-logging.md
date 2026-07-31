@@ -43,6 +43,8 @@ acquired job's worker pod.
 
 Admission **rejections** (reserved-namespace, cross-namespace `gitHubAppRef`, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at **info** — they need no debug flag — as `ActionsGateway admission denied` with the `operation`, `namespace`, `name`, and `reason` fields, giving an audit trail of denied attempts.
 
+**API server warnings** (e.g. the [`v2alpha1` deprecation warning](upgrade.md#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns)) are logged at info, **deduplicated to one line per unique message per process** in both controllers. The apiserver attaches such a warning to every read and write of a deprecated API version, so without dedup a set reconciling under churn would drown the log in repeats; expect the first occurrence only, not one per API call.
+
 ---
 
 ## Distributed Tracing (AGC)

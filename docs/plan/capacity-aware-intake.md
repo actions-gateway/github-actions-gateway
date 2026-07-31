@@ -975,7 +975,7 @@ with it; read as written it would have produced a flat-zero series and the false
 reading that the gate never engaged.
 
 Two observability snags found on the way, since filed as their own Queue rows
-(Q514 — since fixed, [Q515](../STATUS.md#Q515)):
+(Q514, Q515 — both since fixed):
 
 * `worker_pods_reaped_total` is labelled `runner_group`, while every
   `scaleset_*` gauge is labelled `runner_set`. A dashboard that joins the reaper
@@ -985,7 +985,8 @@ Two observability snags found on the way, since filed as their own Queue rows
   without breaking existing `runner_group`-keyed queries.
 * The `v2alpha1 is deprecated` warning is logged at info level per API read. On
   a set reconciling under a stuck burst it dominates the AGC log to the point of
-  making it unusable for diagnosis.
+  making it unusable for diagnosis. Fixed (Q515): both managers install a
+  deduplicating warning handler — one line per unique message per process.
 
 ## 9f. What the dogfood run measured for the quota rung (Q462)
 
