@@ -284,15 +284,16 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 	// from when this spec's polling happened to notice. Poll cadence must not appear in
 	// a published latency figure.
 	//
-	// The re-run half is asserted conditionally, and deliberately so. Q495 measured
-	// that a classic-tier worker for a *real* GitHub job carries no run-id annotation,
-	// which means repoInfo() hands handleEviction a run ID of "0" and it returns
-	// before doing anything. Until that is fixed, "the re-run fires" is not a property
-	// this tier has. Asserting it anyway would produce a red spec that says nothing
-	// about eviction, so the spec instead asserts the thing that is true either way —
-	// that the AGC *saw* the eviction and reached a decision about it — and then
-	// asserts the full budget invariant only on the branch where recovery ran. The
-	// skip branch is a recorded Q495 confirmation, not a silent pass.
+	// The re-run half is asserted outright, and a refused re-run FAILS the spec
+	// (Q510). Earlier revisions recorded the outcome as a report entry instead:
+	// first because Q495 left this tier unable to name the run it had to re-run
+	// (fixed, #967), then because the 2026-07-29 measurement found the re-run
+	// firing ~9.5 minutes before GitHub concludes the run and being refused with
+	// `403 This workflow is already running` (Q503). The AGC now retries a refused
+	// re-run until GitHub concludes the run and accepts it, so "the re-run landed
+	// and a second attempt ran" is a property this tier is required to have — and
+	// a spec that records a refusal and passes can neither verify that nor catch
+	// its regression (testing.md § negative assertions).
 	//
 	// Placed ahead of the Q459 spec below on purpose: a re-run this spec triggers
 	// would hold a worker for the fixture's full ten-minute sleep, and with no run-id
@@ -402,10 +403,13 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		By("waiting for GitHub to conclude the job it can no longer hear from")
 		// The measurement. Bounded at 20 minutes: the design puts the job lock's TTL at
 		// ~10 minutes from the last renewal, so anything beyond this is a finding in
-		// its own right rather than a wait worth extending.
+		// its own right rather than a wait worth extending. Pinned to attempt 1: the
+		// AGC's re-run starts a second attempt as soon as GitHub concludes the run
+		// (Q503), at which point the "latest" filter stops naming the job under
+		// measurement.
 		var jobConclusion string
 		Eventually(func(g Gomega) {
-			status, conclusion := firstJobState(g, repoSlug, runID)
+			status, conclusion := firstJobStateForAttempt(g, repoSlug, runID, 1)
 			g.Expect(status).To(Equal("completed"), "job is still %q", status)
 			jobConclusion = conclusion
 		}, 20*time.Minute, 15*time.Second).Should(Succeed())
@@ -413,7 +417,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		// GitHub's own record of when it gave up, not this spec's record of noticing.
 		// The latency below is the whole deliverable, so neither end of it may carry a
 		// poll interval: this is GitHub's timestamp and evictedAt is the kubelet's.
-		concludedAtRaw := firstJobCompletedAt(Default, repoSlug, runID)
+		concludedAtRaw := firstJobCompletedAtForAttempt(Default, repoSlug, runID, 1)
 		concludedAt, err := time.Parse(time.RFC3339, concludedAtRaw)
 		Expect(err).NotTo(HaveOccurred(), "parse job completed_at %q", concludedAtRaw)
 
@@ -428,39 +432,23 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		agcLog := agcEvictionLog(tenantNS)
 		AddReportEntry("Q396 AGC eviction log lines", agcLog)
 
-		scheduled := strings.Count(agcLog, "pod evicted; scheduling auto-retry")
-		identityUnknown := strings.Contains(agcLog, "pod evicted but run_id unknown")
-
-		By("asserting the AGC observed the eviction at all")
-		// The one assertion that holds on both branches, and the one that separates
-		// "recovery declined to act" from "detection never happened". Silence here
-		// would mean the classic tier's pod watch missed a textbook kubelet eviction,
-		// which is a far bigger defect than the one Q495 already tracks.
-		Expect(scheduled+boolToInt(identityUnknown)).To(BeNumerically(">", 0),
-			"the AGC logged no eviction decision for a worker the kubelet evicted; "+
-				"neither recovery nor the run-id skip was reached. Log:\n%s", agcLog)
-
-		if identityUnknown {
-			// Q495, observed directly rather than inferred. Recorded as the spec's
-			// outcome instead of failing it: the eviction latency above is measured and
-			// valid regardless, and the missing run identity is a tracked defect in the
-			// acquisition payload, not a failure of eviction recovery.
-			AddReportEntry("Q396 outcome",
-				"eviction detected, but the AGC had no run identity to recover with (Q495) — "+
-					"no re-run was attempted, and the latency above is GitHub's own detection with "+
-					"no gateway intervention at all")
-			Expect(scheduled).To(Equal(0),
-				"the AGC both skipped for an unknown run_id and scheduled a retry; those are "+
-					"exclusive branches of handleEviction and cannot both have run. Log:\n%s", agcLog)
-			return
-		}
+		By("asserting the AGC observed the eviction and reached recovery")
+		// "run_id unknown" was a recorded Q495 confirmation while that defect was open;
+		// it shipped fixed in #967, so a worker the AGC cannot attribute to its run is
+		// a regression now, not an outcome (Q510).
+		Expect(agcLog).NotTo(ContainSubstring("worker pod disrupted but run_id unknown"),
+			"the AGC saw the eviction but had no run identity to recover with — "+
+				"the Q495 regression. Log:\n%s", agcLog)
 
 		By("asserting the retry budget was spent exactly once")
 		// The Q106 sharded-reservation invariant, at the one tier that can exercise it
 		// against real GitHub. One eviction must reserve one slot: a second
 		// "scheduling auto-retry" for this run would mean the budget is being refilled
 		// or the eviction counted twice, which is precisely the over-budget bug that
-		// invariant exists to prevent.
+		// invariant exists to prevent. The budget counts recoveries, not HTTP calls —
+		// one recovery may retry a refused re-run several times (Q503) and still holds
+		// one slot.
+		scheduled := strings.Count(agcLog, "worker pod disrupted; scheduling auto-retry")
 		Expect(scheduled).To(Equal(1),
 			"one eviction must reserve exactly one retry slot, saw %d. Log:\n%s", scheduled, agcLog)
 		// Both spellings: the AGC ships a JSON handler, but a text handler renders the
@@ -468,29 +456,37 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		// encoding.
 		Expect(agcLog).To(SatisfyAny(ContainSubstring(`"attempt":1`), ContainSubstring("attempt=1")),
 			"the reserved slot was not the run's first. Log:\n%s", agcLog)
-		Expect(agcLog).NotTo(ContainSubstring("eviction retry budget exhausted"),
+		Expect(agcLog).NotTo(ContainSubstring("disruption retry budget exhausted"),
 			"a single eviction exhausted the retry budget. Log:\n%s", agcLog)
 
-		By("recording whether the re-run call GitHub received actually succeeded")
-		// The second half of what Q396 was filed to answer. The AGC fires the re-run
-		// evictionRetryDelay (5s) after it sees the eviction — which, per the latency
-		// measured above, is while GitHub still believes the run is in progress.
-		// Whether the API accepts a re-run inside that window has never been observed.
-		switch {
-		case strings.Contains(agcLog, "eviction auto-retry triggered"):
-			AddReportEntry("Q396 outcome", "eviction detected, retry budget spent once, re-run ACCEPTED by GitHub")
-			Eventually(func(g Gomega) {
-				g.Expect(runAttemptCount(g, repoSlug, runID)).To(BeNumerically(">=", 2),
-					"the AGC's re-run was accepted but GitHub created no second attempt")
-			}, 5*time.Minute, 10*time.Second).Should(Succeed())
-		default:
-			// A decline is a legitimate outcome and a load-bearing one: it would mean
-			// recovery fires into a window GitHub rejects, and that the delay needs to
-			// outlast the conclusion rather than anticipate it.
-			AddReportEntry("Q396 outcome",
-				"eviction detected and the retry budget spent, but the re-run call did NOT succeed — "+
-					"the AGC fires it ~5s after the eviction, well before GitHub concludes the run")
-		}
+		By("waiting for the AGC's re-run to be accepted by GitHub")
+		// The second half of what Q396 was filed to answer, now an assertion (Q510).
+		// GitHub refuses rerun-failed-jobs until the conclusion measured above, so the
+		// AGC retries on its re-run interval (Q503) and logs the acceptance; a refusal
+		// that outlasts the AGC's re-run window, or a terminal API error, logs a
+		// terminal failure instead and must fail this spec rather than become a report
+		// entry — that pass-through is exactly how Q503 went unverified.
+		Eventually(func(g Gomega) {
+			agcLog := agcEvictionLog(tenantNS)
+			if strings.Contains(agcLog, "disruption auto-retry failed") {
+				StopTrying("the AGC gave up on the re-run — refused past the re-run window, " +
+					"or a terminal API error. Log:\n" + agcLog).Now()
+			}
+			g.Expect(agcLog).To(ContainSubstring("disruption auto-retry triggered"),
+				"the re-run has not been accepted yet")
+		}, 5*time.Minute, 10*time.Second).Should(Succeed())
+
+		By("asserting GitHub actually started a second attempt")
+		// Accepted is necessary but not the deliverable: the deliverable is a second
+		// attempt actually running, which is what "recovery" means to the tenant.
+		Eventually(func(g Gomega) {
+			g.Expect(runAttemptCount(g, repoSlug, runID)).To(BeNumerically(">=", 2),
+				"the AGC's re-run was accepted but GitHub created no second attempt")
+		}, 5*time.Minute, 10*time.Second).Should(Succeed())
+
+		AddReportEntry("Q396 outcome",
+			"eviction detected, retry budget spent once, re-run accepted after the run concluded, "+
+				"and a second attempt ran (Q503 verified)")
 	})
 
 	// The Q459 measurement. Q421 established at fake-GitHub that a graceful worker-pod
@@ -922,6 +918,36 @@ func firstJobCompletedAt(g Gomega, repoSlug, runID string) string {
 	return strings.TrimSpace(out)
 }
 
+// firstJobStateForAttempt is firstJobState pinned to one attempt. The eviction spec
+// reads attempt 1 while the AGC's accepted re-run (Q503) may already be starting
+// attempt 2, at which point the "latest" filter stops naming the job under
+// measurement.
+func firstJobStateForAttempt(g Gomega, repoSlug, runID string, attempt int) (status, conclusion string) {
+	out, err := utils.Run(exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/actions/runs/%s/attempts/%d/jobs", repoSlug, runID, attempt)))
+	g.Expect(err).NotTo(HaveOccurred())
+	var resp struct {
+		Jobs []struct {
+			Status     string `json:"status"`
+			Conclusion string `json:"conclusion"`
+		} `json:"jobs"`
+	}
+	g.Expect(json.Unmarshal([]byte(out), &resp)).To(Succeed(), "parse jobs response: %s", out)
+	g.Expect(resp.Jobs).NotTo(BeEmpty(), "run %s attempt %d has no jobs yet", runID, attempt)
+	return resp.Jobs[0].Status, resp.Jobs[0].Conclusion
+}
+
+// firstJobCompletedAtForAttempt is firstJobCompletedAt pinned to one attempt, for the
+// same reason as firstJobStateForAttempt: the published latency figure must come from
+// the interrupted attempt, not from whichever attempt is latest by the time it is read.
+func firstJobCompletedAtForAttempt(g Gomega, repoSlug, runID string, attempt int) string {
+	out, err := utils.Run(exec.Command("gh", "api",
+		fmt.Sprintf("repos/%s/actions/runs/%s/attempts/%d/jobs", repoSlug, runID, attempt),
+		"--jq", ".jobs[0].completed_at"))
+	g.Expect(err).NotTo(HaveOccurred())
+	return strings.TrimSpace(out)
+}
+
 // podPhaseReason returns a pod's "phase/reason", the projection eviction detection
 // itself keys on.
 func podPhaseReason(ns, name string) string {
@@ -1027,18 +1053,12 @@ func agcEvictionLog(ns string) string {
 	Expect(err).NotTo(HaveOccurred(), "read AGC logs in %s", ns)
 	var kept []string
 	for _, line := range strings.Split(out, "\n") {
-		if strings.Contains(line, "evicted") || strings.Contains(line, "eviction") {
+		if strings.Contains(line, "evicted") || strings.Contains(line, "eviction") ||
+			strings.Contains(line, "disrupt") || strings.Contains(line, "re-run") {
 			kept = append(kept, line)
 		}
 	}
 	return strings.Join(kept, "\n")
-}
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 // runAttemptCount returns the run's current attempt number. A re-run that GitHub
