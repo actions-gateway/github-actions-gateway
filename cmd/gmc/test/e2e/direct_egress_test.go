@@ -273,7 +273,7 @@ spec:
   templateRef:
     name: tmpl
   maxListeners: 2
-  acquisitionProtocol: Classic   # e2e fakegithub is classic-only; default is now ScaleSet (Q264 P5)
+  acquisitionProtocol: Classic   # pinned to the classic tier; the default is ScaleSet (Q264 P5)
   runnerLabels: ["e2e-direct"]
 `, ns, secretName, workerImage)
 }
