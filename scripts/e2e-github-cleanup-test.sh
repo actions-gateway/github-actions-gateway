@@ -59,6 +59,9 @@ expect_selected 'v1 agent, index 0' real-ag '42 real-ag-e2e-6d8749c-0 online bus
 expect_selected 'v1 agent, index 1' real-ag '43 real-ag-e2e-6d8749c-1 offline busy=false'
 expect_selected 'v2 RunnerSet agent' real-ag '44 rs-real-ag-e2e-6d8749c-0 online busy=true'
 expect_selected 'a different gateway name' probe-ag '45 probe-ag-e2e-1a2b3c4-0 online busy=false'
+# The Q422 sibling gateway is named by EXTENDING the suite's gateway name, so that one
+# prefix reaches both. A sibling named independently would strand runners here.
+expect_selected 'the Q422 sibling gateway' real-ag '51 real-ag-sib-e2e-9f3c1a2-0 online busy=false'
 
 echo
 echo '== runners this suite does not own are left alone =='
