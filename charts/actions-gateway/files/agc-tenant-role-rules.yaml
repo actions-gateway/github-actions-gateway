@@ -1,6 +1,13 @@
+# patch on pods (Q502): metadata-only annotation stamps, never a spec or status
+# write — the reaper marks its own deletions (deletion-reason) so they are never
+# read as recoverable disruptions, the scale-set recovery claim (eviction-handled-at)
+# makes re-runs at-most-once per disrupted pod, and the job-completed-at stamp gives
+# an orphaned Running worker its reap deadline. The latter two writes shipped before
+# this grant existed and were silently 403'd on real clusters; envtest does not
+# enforce RBAC, which is how that stayed invisible.
 - apiGroups: [""]
   resources: ["pods"]
-  verbs: ["get", "list", "watch", "create", "delete"]
+  verbs: ["get", "list", "watch", "create", "patch", "delete"]
 - apiGroups: [""]
   resources: ["pods/status"]
   verbs: ["get"]

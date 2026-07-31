@@ -76,8 +76,9 @@ import (
 // connected has no report of its own to fall back on.
 //
 // The operator-facing behaviour is docs/operations/troubleshooting.md — "A Preempted
-// Worker's Job Is Not Re-Run" for this path, and "Draining a Worker Does Not Auto-Re-Run
-// the Jobs It Interrupts" for the slice that is still deliberately excluded.
+// Worker's Job Is Not Re-Run" for this path, and "Draining a Worker Auto-Re-Runs the
+// Jobs It Interrupts" for the drain slice, recovered separately via the deletion mark
+// (Q502).
 //
 // Serial and multi-node: it advertises a resource on a named node, creates
 // cluster-scoped PriorityClasses, edits the cluster-scoped PriorityClassAllowlist, and

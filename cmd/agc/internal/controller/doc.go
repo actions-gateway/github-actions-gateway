@@ -4,7 +4,10 @@
 // +kubebuilder:rbac:groups=actions-gateway.github.com,resources=runnergroups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=actions-gateway.github.com,resources=runnergroups/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;delete
+// pods patch: metadata-only annotation stamps — the reaper's deletion-reason mark
+// (Q502), the scale-set eviction-recovery claim, and the job-completed-at reap
+// deadline. Never a spec or status write.
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;patch;delete
 // +kubebuilder:rbac:groups="",resources=pods/status,verbs=get
 // events: both the core ("") and events.k8s.io grants are required — the
 // new-style recorder (mgr.GetEventRecorder) writes events.k8s.io/v1 Events.

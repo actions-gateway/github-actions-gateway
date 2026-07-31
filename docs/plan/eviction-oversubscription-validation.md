@@ -34,7 +34,7 @@ clean run with no `timeout-minutes` set.
 | Q419 | **Shipped 2026-07-26** with Q417 — the docs half of the same gap. The tier-agnostic claims in the exec summary, README, and why-gag are now true of both tiers rather than needing a qualification. Independent of these experiments. |
 | Q420 | **Shipped 2026-07-26**, ahead of Q417 and independently of it — the reap deadline came from a pod annotation, not a pod watch. Orphaned Running workers would otherwise have contaminated 3 and 5 by holding quota, which is exactly the idle-capacity signature those experiments measure. |
 | [Q418](../STATUS.md#Q418) | Deferred, event-gated on experiment 1 attributing the delay. |
-| [Q459](q459-drained-worker-recovery.md) | **Filed by experiment 2**, 2026-07-27. Its residual: neither tier recovers a drained worker, and whether that matters turns on what GitHub does with the runner's own relayed report — a live-GitHub question. Both halves measured 2026-07-29; decided **close, gated on `deletionTimestamp`**, and the Queue row is retired in favour of [Q502](../STATUS.md#Q502). |
+| [Q459](q459-drained-worker-recovery.md) | **Filed by experiment 2**, 2026-07-27. Its residual: neither tier recovers a drained worker, and whether that matters turns on what GitHub does with the runner's own relayed report — a live-GitHub question. Both halves measured 2026-07-29; decided **close, gated on `deletionTimestamp`**, and Q502 shipped that implementation on both tiers. |
 
 ## Experiment 1: mid-job eviction latency, both tiers ([Q396](../STATUS.md#Q396))
 
@@ -534,9 +534,9 @@ Q497 then made the original claim true rather than leaving the correction standi
 both documents are corrected back — this time with a measurement behind them. The
 residual cost is no longer a manual re-run but the displaced job's own elapsed time: the
 re-run starts from the beginning rather than resuming, which is why the guidance to put
-cheap-to-repeat work in displaceable tiers survives. The drain path keeps the original
-correction until [Q502](../STATUS.md#Q502) implements Q459's decision;
-[troubleshooting.md](../operations/troubleshooting.md#draining-a-worker-does-not-auto-re-run-the-jobs-it-interrupts)
+cheap-to-repeat work in displaceable tiers survives. The drain path has since followed: Q502 implemented Q459's decision, so a drained
+worker whose terminal phase publishes with the deletion mark is re-run too;
+[troubleshooting.md](../operations/troubleshooting.md#draining-a-worker-auto-re-runs-the-jobs-it-interrupts)
 now covers the drain alone, with
 [a separate runbook](../operations/troubleshooting.md#a-preempted-workers-job-is-not-re-run)
 for a preemption recovery that fails to fire.

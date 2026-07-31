@@ -57,10 +57,17 @@ import (
 // here is the half that decides recovery: what a real drain does to the worker
 // *pod object*, which is the only thing either tier's eviction detection reads.
 //
-// The measured result and the design reasoning behind the exclusion live in
-// docs/design/04-operational-flows.md §4.2; the operator-facing consequence is
-// docs/operations/troubleshooting.md, "Draining or Preempting a Worker Does Not Auto-Re-Run
-// the Jobs It Interrupts". Q459 carries the residual.
+// The held-Pending shape also pins this spec on the side of the Q502 boundary that
+// stays unrecovered — and it is the spec that caught a mark-only rule crossing it: a
+// real kubelet publishes a transient Failed-with-deletionTimestamp even for a deleted
+// worker whose container never started, so recovery must (and does) additionally
+// require a recorded container exit that the mark predates. This worker has none, no
+// report ever reached GitHub, and "no rerun fired" remains the correct assertion. The
+// recovered side — a running worker publishing Failed with the mark and the exit — is
+// the envtest TerminalWithMark pair. Design boundary:
+// docs/design/04-operational-flows.md §4.2; operator-facing behaviour:
+// docs/operations/troubleshooting.md, "Draining a Worker Auto-Re-Runs the Jobs It
+// Interrupts".
 //
 // Serial and multi-node. Serial because it cordons a node and sets fakegithub's
 // global AcquireJob response; multi-node because a cordoned node must leave

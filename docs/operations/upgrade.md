@@ -12,6 +12,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")](#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion)
   - [Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)](#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before)
   - [Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)](#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github)
   - [Non-breaking: eviction auto-retry now honours GITHUB_API_BASE_URL (it never did on GHES)](#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes)
@@ -77,6 +78,49 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: drained and hand-deleted workers are now re-run automatically (`cause="deletion"`)
+
+**Who is affected:** every tenant on either acquisition tier. No configuration
+changes; the behaviour change fires only on disruptions that previously needed a
+manual re-run.
+
+Before this version, a `kubectl drain` (or a bare `kubectl delete pod`) of a running
+worker interrupted its job with no automatic recovery. Now the interrupted run is
+re-run automatically when the worker's terminal phase publishes while the pod is
+marked for deletion — the shape a drained running worker takes (measured, Q459). The
+mark is absent on a human-cancelled run and on a genuine job failure, so neither can
+trigger it; the AGC's own reaper deletions are excluded by a new controller-set
+annotation. Behaviour and boundary: the
+[drain runbook](troubleshooting.md#draining-a-worker-auto-re-runs-the-jobs-it-interrupts).
+
+Operational consequences:
+
+- **A node drain now spends re-run budget.** Each interrupted run consumes one slot of
+  its shared `maxEvictionRetries` budget (default 2), under `cause="deletion"` on the
+  eviction counters. Routine node maintenance across busy runner pools may warrant a
+  higher budget.
+- **A bare `kubectl delete pod` of a running worker re-runs its job.** If you delete a
+  worker to *stop* its job, cancel the run at GitHub instead — a cancel is never
+  re-run.
+- **New annotation:** worker pods deleted by the AGC's reaper are stamped
+  `actions-gateway.com/deletion-reason` just before deletion. Never set it by hand on
+  a live worker; a hand-set stamp suppresses automatic recovery for that pod.
+- **New `cause` label value:** dashboards or alerts that enumerate
+  `cause="eviction"|"preemption"` on `actions_gateway_eviction_retries_total` /
+  `eviction_retries_exhausted_total` should add `deletion`. No series is renamed.
+- **RBAC:** the chart's `agc-tenant-role` gains `patch` on `pods` — metadata-only
+  annotation stamps, never a spec or status write. Installs that mirror the role by
+  hand must add the verb; without it the reaper cannot mark its own deletions and
+  worker-pod cleanup stops (and the scale-set tier's recovery-claim and
+  job-completed-at stamps, which always needed this verb, remain broken).
+- **Timing:** the drain path's measured GitHub conclusion latency (15–26s) exceeds
+  the default `evictionRetryDelay` (5s), so the first re-run call may be refused
+  `403 This workflow is already running`; the Q503 retry loop (see the next note)
+  absorbs that and lands the re-run within a few paced attempts.
+
+**Rolling back** restores the old behaviour: drained workers' runs need a manual
+re-run again. Leftover `deletion-reason` annotations are inert on older versions.
 
 ### Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)
 
@@ -166,10 +210,10 @@ causes. A run that is alternately evicted and preempted spends one budget, not t
 tenant running a preempting floor may see the budget exhaust sooner than before, and may
 want to raise `maxEvictionRetries` (default 2, max 10).
 
-**What did NOT change.** A `kubectl drain`, a `kubectl delete pod`, and the worker-pod
-reaper still get no automatic re-run. Those removals are indistinguishable from an
-operator deliberately cancelling a run, so recovering on them would restart work someone
-had just stopped.
+**What did NOT change at the time.** A `kubectl drain`, a `kubectl delete pod`, and the
+worker-pod reaper got no automatic re-run in this version. That has since changed for
+the first two — see the `cause="deletion"` migration note above; the reaper's own
+deletions remain excluded.
 
 **Metric change.** Three counters gained a `cause` label (`eviction` | `preemption`):
 

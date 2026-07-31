@@ -85,24 +85,6 @@ func (r *RunnerGroupReconciler) reapWorkerPods(ctx context.Context, log *slog.Lo
 		})
 }
 
-// podTerminalTime returns when pod reached its terminal phase: the latest
-// container terminated.finishedAt (set by the kubelet). Pods with no
-// termination record (e.g. Unknown after node loss) fall back to the
-// creation timestamp, which overstates the age and so reaps sooner — the
-// conservative direction for a pod that is already terminal.
-func podTerminalTime(pod *corev1.Pod) time.Time {
-	var t time.Time
-	for i := range pod.Status.ContainerStatuses {
-		if term := pod.Status.ContainerStatuses[i].State.Terminated; term != nil && term.FinishedAt.Time.After(t) {
-			t = term.FinishedAt.Time
-		}
-	}
-	if t.IsZero() {
-		return pod.CreationTimestamp.Time
-	}
-	return t
-}
-
 // nowFunc returns the clock used by the reaper: Now when set (test seam),
 // time.Now otherwise.
 func (r *RunnerGroupReconciler) nowFunc() func() time.Time {

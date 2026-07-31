@@ -51,9 +51,9 @@ const (
 )
 
 // RecoverEvictedScaleSetWorkers finds this owner's scale-set worker pods that lost their
-// job to a disruption — the kubelet's node-pressure eviction, or kube-scheduler
-// preemption (Q497) — claims each one, and triggers the same automatic re-run the
-// classic tier performs. It returns a done channel that closes once every recovery this
+// job to a disruption — the kubelet's node-pressure eviction, kube-scheduler preemption
+// (Q497), or an external graceful deletion such as a drain (Q502) — claims each one, and
+// triggers the same automatic re-run the classic tier performs. It returns a done channel that closes once every recovery this
 // call started has finished, so a caller may block on it (tests) or ignore it (the
 // reconciler, which must not stall a reconcile on GitHub).
 //
@@ -167,30 +167,40 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 // adjudicated yet. The returned cause labels which one, for the metrics and the
 // operator-facing wording.
 //
-// Two causes qualify — the kubelet's node-pressure eviction (PodFailed + Status.Reason
-// "Evicted") and kube-scheduler preemption (a DisruptionTarget=True/PreemptionByScheduler
-// condition). Every other graceful removal is deliberately NOT covered: a drain, a
-// `kubectl delete pod`, and the reaper are indistinguishable from a human cancelling a
-// run by anything the pod carries, so recovering them would re-run work an operator just
-// stopped. Q459 decided that slice separately and Q502 carries it.
+// Three causes qualify — the kubelet's node-pressure eviction (PodFailed + Status.Reason
+// "Evicted"), kube-scheduler preemption (a DisruptionTarget=True/PreemptionByScheduler
+// condition, Q497), and an external graceful deletion — a drain or a `kubectl delete
+// pod` — whose victim reached PodFailed before the object went away (Q502; see
+// deletion.go for the discriminator and its AGC-own-deletion exclusion). A pod deleted
+// without ever publishing a terminal phase is NOT recovered: it never ran its job to a
+// reportable end, so there is no failed job for rerun-failed-jobs to act on. A human
+// cancelling the run at GitHub deletes nothing, so it never enters any arm (measured,
+// Q459).
 //
 // The full boundary, with the row-by-row reasoning for what is in and out, is the table
 // in docs/design/04-operational-flows.md §4.2 ("Which disruptions are recovered").
 //
-// Two invariants live here rather than in the doc, because breaking either is a code
+// Three invariants live here rather than in the doc, because breaking each is a code
 // change away:
 //
 //   - A pod already carrying AnnotationEvictionHandledAt is skipped. That is what makes
 //     recovery at-most-once per disrupted pod across reconciles, restarts, and replicas.
-//   - The preemption arm is on a deadline the eviction arm is not. An evicted pod sits
-//     in PodFailed until the reaper takes it, so a late scan still finds it; a preempted
-//     pod is being deleted and is readable only for its termination grace period (30s by
-//     default). Preemption recovery is therefore NOT restart-safe and cannot be made so —
-//     the evidence is the pod and the scheduler removes it. What keeps the window
-//     reachable at all is the worker-pod watch predicate admitting the update where a pod
-//     newly becomes a preemption victim; a preemption changes no phase, so the
-//     phase-change edge alone would deliver nothing until the delete event, by which
-//     point the pod is out of the cache. Do not narrow that predicate.
+//   - The preemption and deletion arms are on a deadline the eviction arm is not. An
+//     evicted pod sits in PodFailed until the reaper takes it, so a late scan still
+//     finds it; a preempted or drained pod is being deleted and is readable only until
+//     the kubelet finishes tearing it down — the whole termination grace period for a
+//     preemption victim (the condition is stamped before the delete), only the tail of
+//     it for a drain (the terminal phase publishes as the container exits). Neither is
+//     restart-safe, and cannot be made so — the evidence is the pod and the deletion
+//     removes it. What keeps the windows reachable at all is the worker-pod watch
+//     predicate admitting the update where a pod newly becomes a preemption victim, and
+//     the phase-change edge for the drain shape. Do not narrow that predicate.
+//   - The deletion arm shares the classic waiter's predicate
+//     (externallyDeletedBeforeTerminal), which orders the mark against the pod's
+//     terminal time. Without that, a cleanup delete of a pod whose job genuinely
+//     failed earlier — by an operator, since the reaper stamps its own deletions —
+//     would read as a disruption and re-run the failed job, and a deleted worker
+//     whose container never started would re-run a job that never ran.
 func disruptionAwaitingRecovery(pod *corev1.Pod) (cause string, ok bool) {
 	if _, handled := pod.Annotations[AnnotationEvictionHandledAt]; handled {
 		return "", false
@@ -200,6 +210,8 @@ func disruptionAwaitingRecovery(pod *corev1.Pod) (cause string, ok bool) {
 		return recoveryCauseEviction, true
 	case PreemptedByScheduler(pod):
 		return recoveryCausePreemption, true
+	case pod.Status.Phase == corev1.PodFailed && externallyDeletedBeforeTerminal(pod):
+		return recoveryCauseDeletion, true
 	default:
 		return "", false
 	}

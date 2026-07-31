@@ -274,7 +274,7 @@ func reapWorkerPodsByLabel(
 			due = completedAt.Add(completedJobRunningGrace)
 			reason = reapReasonOrphanedRunning
 		case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
-			due = podTerminalTime(pod).Add(ttl)
+			due = provisioner.PodTerminalTime(pod).Add(ttl)
 			reason = reapReasonCompletedTTL
 			// A pod the kubelet killed for exceeding activeDeadlineSeconds is
 			// retained and reaped exactly like any other terminal pod — only its
@@ -298,6 +298,22 @@ func reapWorkerPodsByLabel(
 			continue
 		}
 
+		// Stamp the deletion as the AGC's own before issuing it, so neither tier's
+		// graceful-deletion recovery reads a reaper delete as a disruption and re-runs
+		// a job the AGC itself gave up on (Q502). Stamp-then-delete: a stamp that lands
+		// without its delete only suppresses recovery for a pod the AGC had already
+		// condemned, while the reverse order would leave a re-run trigger.
+		patch := client.MergeFrom(pod.DeepCopy())
+		if pod.Annotations == nil {
+			pod.Annotations = map[string]string{}
+		}
+		pod.Annotations[provisioner.AnnotationDeletionReason] = reason
+		if err := c.Patch(ctx, pod, patch); err != nil {
+			if client.IgnoreNotFound(err) == nil {
+				continue
+			}
+			return next, counts, fmt.Errorf("reaper: mark worker pod %s for deletion: %w", pod.Name, err)
+		}
 		if err := c.Delete(ctx, pod, client.Preconditions{UID: &pod.UID}); err != nil {
 			if client.IgnoreNotFound(err) == nil {
 				continue

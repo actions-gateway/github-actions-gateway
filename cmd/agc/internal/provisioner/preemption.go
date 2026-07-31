@@ -20,7 +20,8 @@ import (
 //     phase/reason pair separates a disruption from an ordinary outcome.
 //   - It must match the full type/status/REASON triple, never the condition type alone.
 //     The eviction API stamps the same type with its own reason, so a type-only match
-//     would silently pull in the drain path that Q459/Q502 deliberately gate separately.
+//     would silently pull in the drain path, which is gated separately — on the deletion
+//     mark, not on this condition (Q459/Q502; see deletion.go).
 //
 // The full reasoning — why the scheduler deletes rather than evicts, why the worker's
 // disruption-safety annotations and a PodDisruptionBudget cannot deflect it, why
@@ -54,13 +55,15 @@ func PreemptedByScheduler(pod *corev1.Pod) bool {
 
 // Recovery causes, carried into the log line, the Kubernetes Event, and the `cause`
 // label on the eviction counters. The retry budget is deliberately NOT split by cause:
-// maxEvictionRetries stays a hard lifetime cap per run_id across both causes together,
-// so a run that is alternately evicted and preempted cannot spend two budgets. The label
-// exists because the operator response differs — a climbing eviction count means node
-// pressure, a climbing preemption count means the priorityTiers floor is displacing more
-// opportunistic work than the tenant expected — and troubleshooting sends an operator
-// looking for different things in each case.
+// maxEvictionRetries stays a hard lifetime cap per run_id across all causes together,
+// so a run that is alternately evicted, preempted, and drained cannot spend multiple
+// budgets. The label exists because the operator response differs — a climbing eviction
+// count means node pressure, a climbing preemption count means the priorityTiers floor
+// is displacing more opportunistic work than the tenant expected, a climbing deletion
+// count means something (a drain, an operator, an autoscaler) is removing live workers
+// — and troubleshooting sends an operator looking for different things in each case.
 const (
 	recoveryCauseEviction   = "eviction"
 	recoveryCausePreemption = "preemption"
+	recoveryCauseDeletion   = "deletion"
 )
