@@ -1,5 +1,12 @@
 # Capacity-Aware Job Intake
 
+> **Status: ✅ Complete (2026-07-31).** Every build item (0a–2d) and every
+> measurement row (V1–V3) is done. The one residual is item 3 — the
+> `ProvisioningRequest` probe — deferred as [Q407](../STATUS.md#Q407) with its
+> triggers in [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity);
+> [§9h](#9h-what-the-dogfood-re-run-measured-for-the-latch-q513) supplies the
+> number its trigger (a) reads against (~1 probe claim per window).
+
 The admission ladder in
 [`cmd/agc/internal/provisioner/admission.go`](../../cmd/agc/internal/provisioner/admission.go)
 gates job acquisition on two rungs today: observed namespace-ResourceQuota
@@ -38,8 +45,8 @@ durable rationale in
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
 A numbered row means code shipped; a `V` row means that code's effect was
-measured where it runs. **The V rows are the open work — item 3's deferral does
-not close this plan.** A ✅ on 0a, 1 or 2 records an envtest proof of the
+measured where it runs. **All V rows have run — item 3's deferral is the plan's
+only residual.** A ✅ on 0a, 1 or 2 records an envtest proof of the
 *mechanism*, never a measurement of what it removes.
 
 **V2 ran twice.** The first run ([§9e](#9e-what-the-dogfood-run-measured-q469))
