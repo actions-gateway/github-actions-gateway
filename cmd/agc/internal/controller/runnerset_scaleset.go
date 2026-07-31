@@ -257,8 +257,8 @@ func (r *RunnerSetReconciler) buildScaleSetClient(rs *v2alpha1.RunnerSet, gw *v2
 	// derived from the result — so the stub path goes through that same resolver
 	// rather than carrying a second copy of the GHES rule.
 	configURL := gw.Spec.GitHubURL
-	if r.ScaleSetStubBaseURL != "" {
-		configURL = scaleSetStubConfigURL(r.ScaleSetStubBaseURL, configURL)
+	if stubURL, ok := scaleSetStubConfigURL(r.ScaleSetStubBaseURL, configURL); ok {
+		configURL = stubURL
 	}
 	return scaleset.New(scaleset.Config{
 		TokenProvider: r.TokenManager,
@@ -271,16 +271,28 @@ func (r *RunnerSetReconciler) buildScaleSetClient(rs *v2alpha1.RunnerSet, gw *v2
 // keeping the org (or owner/repo) path — the client derives the runners REST prefix
 // from it and rejects a pathless one outright, so dropping the path would wedge the
 // bootstrap rather than merely misaddress it.
-func scaleSetStubConfigURL(stubBase, githubURL string) string {
+//
+// It applies only to a gateway whose githubURL ALREADY names the stub's host:port,
+// which is the whole scope of the rewrite — swapping that gateway's https scheme for
+// the plaintext one the stub actually serves, since the CRD pattern and the webhook
+// forbid writing http into the field. A gateway naming any other host is left alone,
+// so pointing one at an unreachable host still fails to bootstrap on a cluster where
+// the stub env is set. `E2E_AGC_ScaleSetRecovery` depends on exactly that: its
+// subject is the recovery scan running on a set whose listener is NOT up, and a
+// blanket rewrite silently started that listener and broke it.
+func scaleSetStubConfigURL(stubBase, githubURL string) (string, bool) {
+	if stubBase == "" {
+		return "", false
+	}
 	stub, err := url.Parse(stubBase)
 	if err != nil || stub.Host == "" {
-		return githubURL
+		return "", false
 	}
-	path := ""
-	if u, err := url.Parse(githubURL); err == nil {
-		path = u.Path
+	gw, err := url.Parse(githubURL)
+	if err != nil || gw.Host != stub.Host {
+		return "", false
 	}
-	return stub.Scheme + "://" + stub.Host + path
+	return stub.Scheme + "://" + stub.Host + gw.Path, true
 }
 
 // stopScaleSetListener cancels and drops the scale-set listener for key, if present,

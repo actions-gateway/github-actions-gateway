@@ -398,12 +398,14 @@ func podContainerEnv(ns, pod, container, envName string) string {
 // scaleSetAcquisitionManifest renders the tenant: one gateway, one template, one
 // ScaleSet-protocol RunnerSet.
 //
-// The gateway's githubURL is the ordinary https placeholder every fixture tenant
-// carries. It is NOT how the AGC reaches fakegithub here: the CRD pattern and the
-// webhook pin the field to https, so the scale-set bootstrap is re-pointed at the
-// stub by the STUB_AUTH_URL + STUB_BROKER_URL pair the suite already injects for the
-// classic tier (cmd/agc/config.go, scaleSetStubBaseURL). The org path is still read
-// off githubURL, so the REST prefix the client derives is a real one.
+// The gateway's githubURL names the fakegithub Service over https, at the port it
+// serves plaintext on. The CRD pattern and the webhook forbid writing http into that
+// field, so the AGC swaps the scheme for the plaintext one the stub actually serves —
+// but only because this host:port is the one STUB_BROKER_URL names
+// (cmd/agc/internal/controller.scaleSetStubURLs). A gateway pointed anywhere else is
+// left alone, which is what keeps E2E_AGC_ScaleSetRecovery's listener down. The org
+// path is read off githubURL either way, so the REST prefix the client derives is a
+// real one.
 //
 // The worker container's command is deliberately NOT overridden: the provisioner
 // replaces it with the wrapper binary either way (provisioner/pod.go), so a template
@@ -411,13 +413,15 @@ func podContainerEnv(ns, pod, container, envName string) string {
 // container then does is out of scope — the spec asserts the pod's shape and the
 // staged JIT config, not the runner's execution.
 func scaleSetAcquisitionManifest(ns, secretName, workerImage string) string {
+	githubURL := fmt.Sprintf("https://%s.%s.svc.cluster.local:%s/ssacqorg",
+		fakegithubServiceName, infraNamespace, fakegithubServicePort)
 	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
 metadata:
   name: ssacq
   namespace: %[1]s
 spec:
-  githubURL: https://github.com/ssacqorg
+  githubURL: %[4]s
   credentials:
     type: GitHubApp
     githubApp:
@@ -456,5 +460,5 @@ spec:
     name: tmpl
   acquisitionProtocol: ScaleSet
   runnerLabels: ["e2e-ssacq"]
-`, ns, secretName, workerImage)
+`, ns, secretName, workerImage, githubURL)
 }
