@@ -109,6 +109,11 @@ Operational consequences:
 - **New `cause` label value:** dashboards or alerts that enumerate
   `cause="eviction"|"preemption"` on `actions_gateway_eviction_retries_total` /
   `eviction_retries_exhausted_total` should add `deletion`. No series is renamed.
+- **RBAC:** the chart's `agc-tenant-role` gains `patch` on `pods` — metadata-only
+  annotation stamps, never a spec or status write. Installs that mirror the role by
+  hand must add the verb; without it the reaper cannot mark its own deletions and
+  worker-pod cleanup stops (and the scale-set tier's recovery-claim and
+  job-completed-at stamps, which always needed this verb, remain broken).
 - **Timing:** the drain path's measured GitHub conclusion latency (15–26s) exceeds
   the default `evictionRetryDelay` (5s), so the first re-run call may be refused
   `403 This workflow is already running`; the Q503 retry loop (see the next note)

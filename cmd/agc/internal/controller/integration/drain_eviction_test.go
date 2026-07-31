@@ -34,17 +34,20 @@ import (
 // kubelet's node-pressure eviction, which leaves a pod in PodFailed with
 // Status.Reason == "Evicted". A real drain of a *running* worker ends in the kubelet
 // winning the race against the object's removal: the pod publishes PodFailed with an
-// empty reason while carrying its deletionTimestamp (measured at live GitHub, Q459).
-// Since Q502 that shape IS recovered on both tiers, gated on the deletion mark; a pod
-// deleted *without* ever publishing a terminal phase never ran its job to a reportable
-// end and is deliberately still not recovered.
+// empty reason while carrying its deletionTimestamp and a container exit the mark
+// predates (measured at live GitHub, Q459). Since Q502 that shape IS recovered on both
+// tiers — gated on the mark ordered against the recorded exit. A deleted worker with
+// no container exit on record never ran its job to a reportable end and is
+// deliberately not recovered, whether it vanishes outright or (as a real kubelet does
+// even for a drained Pending pod — the fake-GitHub E2E_AGC_WorkerNodeDrain caught a
+// mark-only rule firing on exactly that) publishes a transient Failed-with-mark first.
 //
 // These tests pin both sides of that boundary against a REAL apiserver, with worker
 // pods that came out of the real provisioning path. envtest runs no kubelet, so an
 // admitted eviction ordinarily removes the pod at once with no terminal phase — the
 // unrecovered side. The recovered side is reproduced by holding the pod with a
-// finalizer while its terminal phase is written, which is exactly the object sequence
-// a real kubelet produces (mark first, terminal phase second). The design boundary is
+// finalizer while its terminal status is written, which is exactly the object sequence
+// a real kubelet produces (mark first, then the terminal phase with the exit record). The design boundary is
 // docs/design/04-operational-flows.md §4.2; the operator-facing behaviour is
 // docs/operations/troubleshooting.md, "Draining a Worker Auto-Re-Runs the Jobs It
 // Interrupts".
@@ -165,9 +168,9 @@ func TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun(t *testing.T) {
 	// The measurement. handleEviction waits out evictionRetryDelay before calling
 	// GitHub, so give a fired rerun room to appear before concluding none did.
 	assert.Never(t, func() bool { return rerunCalls.Load() > 0 }, 3*time.Second, 100*time.Millisecond,
-		"a classic worker deleted without ever publishing a terminal phase must not reach "+
-			"disruption recovery: Q502's deletion arm is gated on the mark being present at "+
-			"terminal publish, and this pod never published one")
+		"a classic worker deleted without ever running its container must not reach "+
+			"disruption recovery: Q502's deletion arm requires a recorded container exit "+
+			"that the mark predates, and this pod has neither a terminal phase nor an exit")
 }
 
 // holdWithFinalizer pins the pod in the API through its deletion, so the object

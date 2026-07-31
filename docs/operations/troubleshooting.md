@@ -2304,10 +2304,10 @@ keys on that mark. Consequences an operator should know:
   stamped `actions-gateway.com/deletion-reason: <reason>` first, and stamped deletions
   are excluded from recovery. Never set that annotation by hand on a live worker — it
   suppresses automatic recovery for that pod.
-- **A worker deleted before it ever reached a terminal phase is not re-run** — e.g. a
-  drain catching a still-`Pending` worker, which vanishes with no terminal phase
-  (Q421). Its job never ran to a reportable end, so there is no failed job for
-  `rerun-failed-jobs` to act on.
+- **A worker whose container never ran is not re-run** — e.g. a drain catching a
+  still-`Pending` worker. Its job never ran to a reportable end, so there is no
+  failed job for `rerun-failed-jobs` to act on; detection requires a recorded
+  container exit that the deletion preceded, which such a pod does not have.
 - **A cancelled run is never re-run.** Nothing in the gateway deletes a cancelled
   run's pod, so it carries no mark.
 - **The re-run rides `evictionRetryDelay`** (default 5s), while GitHub's conclusion on

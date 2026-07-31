@@ -42,16 +42,19 @@ func deletedByAGC(pod *corev1.Pod) bool {
 	return ok
 }
 
-// externallyDeletedBeforeTerminal reports whether pod — read from a List some time
-// after the fact, as the scale-set recovery scan does — was externally deleted before
-// it reached its terminal phase. The waiter's event-driven capture answers the same
-// question by construction (the mark is read off the event that publishes the terminal
-// phase); a post-hoc read cannot, because a deletionTimestamp is also what a later
-// cleanup of an already-failed pod carries. Ordering the mark against the pod's
-// terminal time is what separates them: a disrupting delete precedes the container's
-// exit, a cleanup follows it. A pod with no container termination record falls back to
-// its creation time (see PodTerminalTime), which reads as "deleted after", the
-// no-recovery direction — safe, because such a pod never ran its job.
+// externallyDeletedBeforeTerminal reports whether pod was externally deleted before it
+// reached its terminal phase — the predicate both tiers' detection shares: the waiter's
+// terminalPhase capture on classic, the recovery scan's arm on scale-set.
+//
+// The mark alone is not enough, for two reasons that ordering it against the pod's
+// terminal time fixes at once. A deletionTimestamp is also what a later cleanup of an
+// already-failed pod carries — a disrupting delete precedes the container's exit, a
+// cleanup follows it. And a real kubelet publishes a transient Failed-with-mark even
+// for a deleted worker whose container never started (a drain catching a still-Pending
+// pod — the shape the fake-GitHub drain spec pins): such a pod has no termination
+// record, falls back to its creation time (see PodTerminalTime), reads as "deleted
+// after", and is excluded — correctly, because a job that never ran produced no
+// reportable failure for rerun-failed-jobs to act on.
 func externallyDeletedBeforeTerminal(pod *corev1.Pod) bool {
 	if pod.DeletionTimestamp.IsZero() || deletedByAGC(pod) {
 		return false

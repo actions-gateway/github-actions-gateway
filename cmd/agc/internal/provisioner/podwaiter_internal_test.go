@@ -263,11 +263,25 @@ func TestInformerPodWaiter_OrdinaryCompletionIsNotPreempted(t *testing.T) {
 
 // deletingPod is a pod with a deletionTimestamp, in the given phase — the shape a
 // graceful external removal (a drain, a `kubectl delete pod`) leaves while the kubelet
-// tears the pod down.
+// tears the pod down, before any container exit is recorded.
 func deletingPod(ns, name string, phase corev1.PodPhase) *corev1.Pod {
 	p := pod(ns, name, phase, "")
-	now := metav1.Now()
-	p.DeletionTimestamp = &now
+	delTime := metav1.NewTime(time.Now().Add(-10 * time.Second))
+	p.DeletionTimestamp = &delTime
+	return p
+}
+
+// drainedPod is deletingPod plus the container exit a drained *running* worker records
+// as the kubelet tears it down: terminated after the delete was issued (Q459's
+// measured shape).
+func drainedPod(ns, name string) *corev1.Pod {
+	p := deletingPod(ns, name, corev1.PodFailed)
+	p.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: "runner",
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+			FinishedAt: metav1.NewTime(p.DeletionTimestamp.Add(5 * time.Second)),
+		}},
+	}}
 	return p
 }
 
@@ -285,7 +299,7 @@ func TestInformerPodWaiter_TerminalPhaseCarriesDeletionMark(t *testing.T) {
 	}()
 
 	waitForRegistration(t, w, "ns/p")
-	w.onPodEvent(deletingPod("ns", "p", corev1.PodFailed))
+	w.onPodEvent(drainedPod("ns", "p"))
 
 	res := mustResolve(t, done)
 	if res.outcome.Phase != corev1.PodFailed || res.outcome.Reason != "" {
@@ -309,8 +323,8 @@ func TestInformerPodWaiter_AGCOwnDeletionIsNotExternal(t *testing.T) {
 	}()
 
 	waitForRegistration(t, w, "ns/p")
-	reaped := deletingPod("ns", "p", corev1.PodFailed)
-	reaped.Annotations = map[string]string{AnnotationDeletionReason: "pending_deadline"}
+	reaped := drainedPod("ns", "p")
+	reaped.Annotations = map[string]string{AnnotationDeletionReason: "orphaned_running"}
 	w.onPodEvent(reaped)
 
 	if res := mustResolve(t, done); res.outcome.ExternallyDeleted {
@@ -318,10 +332,32 @@ func TestInformerPodWaiter_AGCOwnDeletionIsNotExternal(t *testing.T) {
 	}
 }
 
+// A deleted worker whose container never started publishes a transient Failed with the
+// mark on a real kubelet (a drain catching a still-Pending pod — the fake-GitHub drain
+// spec's shape), but carries no container exit for the mark to be ordered against, so
+// it must NOT read as external: its job never ran, so there is no reportable failure
+// to re-run.
+func TestInformerPodWaiter_NeverRanDeletionIsNotExternal(t *testing.T) {
+	w := newTestWaiter(pod("ns", "p", corev1.PodPending, ""))
+
+	done := make(chan podResult, 1)
+	go func() {
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	w.onPodEvent(deletingPod("ns", "p", corev1.PodFailed))
+
+	if res := mustResolve(t, done); res.outcome.ExternallyDeleted {
+		t.Fatal("a deleted worker with no container exit was reported as externally deleted; " +
+			"recovery would re-run a job that never ran")
+	}
+}
+
 // A pod deleted without ever publishing a terminal phase resolves through the delete
-// path as before, with no deletion mark: Q459's decision gates recovery on the mark
-// being present at terminal publish, and this is also the path the reaper's
-// pending-deadline deletions resolve through.
+// path as before, with no deletion mark: this is also the path the reaper's
+// pending-deadline deletions resolve through in envtest.
 func TestInformerPodWaiter_DeletePathDoesNotCarryDeletionMark(t *testing.T) {
 	w := newTestWaiter(pod("ns", "p", corev1.PodRunning, ""))
 

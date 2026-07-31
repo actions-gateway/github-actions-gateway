@@ -33,11 +33,13 @@ type PodOutcome struct {
 	// Preempted reports a DisruptionTarget=True/PreemptionByScheduler condition, which
 	// only kube-scheduler writes (Q497).
 	Preempted bool
-	// ExternallyDeleted reports that the pod carried a deletionTimestamp at the moment
-	// its terminal phase published, and the deletion was not the AGC's own (see
-	// AnnotationDeletionReason). It is the drained/deleted-worker discriminator Q459
-	// measured: a human cancel and a genuine job failure publish the same
-	// Failed/empty-reason shape with no deletion mark (Q502).
+	// ExternallyDeleted reports that the pod's terminal phase published while an
+	// external (non-AGC) deletion that interrupted its running container was in
+	// flight — the drained/deleted-worker discriminator Q459 measured: a human cancel
+	// and a genuine job failure publish the same Failed/empty-reason shape with no
+	// deletion mark (Q502). See externallyDeletedBeforeTerminal for the two
+	// exclusions folded in (the AGC's own stamped deletions, and a deletion whose
+	// container never ran or had already exited).
 	ExternallyDeleted bool
 }
 
@@ -62,7 +64,7 @@ func terminalPhase(pod *corev1.Pod) (PodOutcome, bool) {
 			Phase:             pod.Status.Phase,
 			Reason:            pod.Status.Reason,
 			Preempted:         PreemptedByScheduler(pod),
-			ExternallyDeleted: !pod.DeletionTimestamp.IsZero() && !deletedByAGC(pod),
+			ExternallyDeleted: externallyDeletedBeforeTerminal(pod),
 		}, true
 	default:
 		return PodOutcome{}, false

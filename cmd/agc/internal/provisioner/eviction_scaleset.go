@@ -195,10 +195,12 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 //     removes it. What keeps the windows reachable at all is the worker-pod watch
 //     predicate admitting the update where a pod newly becomes a preemption victim, and
 //     the phase-change edge for the drain shape. Do not narrow that predicate.
-//   - The deletion arm orders the mark against the pod's terminal time
-//     (externallyDeletedBeforeTerminal). Without that, a cleanup delete of a pod whose
-//     job genuinely failed earlier — by an operator, since the reaper stamps its own
-//     deletions — would read as a disruption and re-run the failed job.
+//   - The deletion arm shares the classic waiter's predicate
+//     (externallyDeletedBeforeTerminal), which orders the mark against the pod's
+//     terminal time. Without that, a cleanup delete of a pod whose job genuinely
+//     failed earlier — by an operator, since the reaper stamps its own deletions —
+//     would read as a disruption and re-run the failed job, and a deleted worker
+//     whose container never started would re-run a job that never ran.
 func disruptionAwaitingRecovery(pod *corev1.Pod) (cause string, ok bool) {
 	if _, handled := pod.Annotations[AnnotationEvictionHandledAt]; handled {
 		return "", false

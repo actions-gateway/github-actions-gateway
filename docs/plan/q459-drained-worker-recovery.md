@@ -431,10 +431,14 @@ the implementation. What landed, against the four constraints:
    `provision()` recovers on `PodFailed` + that mark (`cause="deletion"`), through the
    same `handleEviction` and shared budget as eviction and preemption.
 2. *Exclude the AGC's own deletions.* The reaper stamps
-   `actions-gateway.com/deletion-reason` on every pod before deleting it, and both
-   tiers' detection treats a stamped pod's deletion as the AGC's own. The scale-set
-   scan additionally orders the mark against the container's `finishedAt`, so an
-   operator's cleanup delete of an already-failed pod is not read as a disruption.
+   `actions-gateway.com/deletion-reason` on every pod before deleting it — which
+   needed a `pods:patch` grant the AGC role never had; adding it also un-broke the
+   shipped scale-set claim and completed-at stamps, silently 403'd on real clusters
+   until now. Both tiers additionally order the mark against the container's
+   recorded `finishedAt`: that excludes an operator's cleanup delete of an
+   already-failed pod, and a deleted worker that never ran — a real kubelet
+   publishes a transient `Failed`-with-mark even for a drained still-`Pending` pod,
+   which CI's fake-GitHub drain spec caught a mark-only rule recovering.
 3. *Classic needs Q495.* Fixed previously; the live-GitHub confirmation of the
    annotation on a real worker is still owed (see below).
 4. *Do not fold in the cancel path.* Untouched — a cancelled run's worker is not

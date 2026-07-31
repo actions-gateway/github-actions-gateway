@@ -58,9 +58,12 @@ import (
 // *pod object*, which is the only thing either tier's eviction detection reads.
 //
 // The held-Pending shape also pins this spec on the side of the Q502 boundary that
-// stays unrecovered: a worker deleted without ever publishing a terminal phase leaves
-// no failed job to re-run, so "no rerun fired" remains the correct assertion here. The
-// recovered side — a running worker publishing Failed with its deletionTimestamp — is
+// stays unrecovered — and it is the spec that caught a mark-only rule crossing it: a
+// real kubelet publishes a transient Failed-with-deletionTimestamp even for a deleted
+// worker whose container never started, so recovery must (and does) additionally
+// require a recorded container exit that the mark predates. This worker has none, no
+// report ever reached GitHub, and "no rerun fired" remains the correct assertion. The
+// recovered side — a running worker publishing Failed with the mark and the exit — is
 // the envtest TerminalWithMark pair. Design boundary:
 // docs/design/04-operational-flows.md §4.2; operator-facing behaviour:
 // docs/operations/troubleshooting.md, "Draining a Worker Auto-Re-Runs the Jobs It
