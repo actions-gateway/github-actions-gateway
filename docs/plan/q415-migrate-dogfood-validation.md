@@ -9,12 +9,13 @@ before the migration for attribution. The v2 GA Definition of Done row
 been **fixed** by parallel sessions (#911, #912, #915, and the Q467 fix). Full
 evidence in [Findings](#findings).
 
-> **This run confirms none of those fixes.** It ran against dogfood's released
-> `agc` image, which predates all of them, and with `noProxyCIDRs` pinned as the Q465
-> workaround and a deliberately short gateway name as the Q467 one. The
-> [Q466 coexistence fix](#defect-v1-and-v2-collide-during-coexistence-q466), the Q465
-> default and the Q467 pod-name fix are all still unconfirmed live; re-validating them
-> — and restoring the tenant's natural name — needs a new image on the cluster.
+> That 2026-07-28 run confirmed none of those fixes — it ran against an `agc` image
+> predating all of them, with `noProxyCIDRs` pinned and a deliberately short gateway
+> name as workarounds. **All three are now confirmed live** on a control plane built
+> from `2715e7f8`, with both workarounds removed:
+> [Re-validation (Q472)](#re-validation-on-a-fixed-control-plane-2026-07-31-q472).
+> That run found one new defect of its own,
+> [Q535](#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535).
 **Scope:** the last unverified item in the v2 GA Definition of Done —
 [v2-ga.md § Definition of Done audit](v2-ga.md#definition-of-done-audit-as-of-this-change)
 row *"≥1 representative tenant migrated v1→v2 with the tool for real"*, today
@@ -370,10 +371,10 @@ it. `kubernetes.default.svc` joins the static half for clusters whose cluster do
 is not `cluster.local`. Worker pods lose the range outright and gain nothing: they
 hold no kubeconfig and never dial the API server. The net effect is a *narrower*
 default on every distribution — one API server address instead of a /12 of
-unrelated hosts. Live re-confirmation is outstanding: the workaround
-`noProxyCIDRs: [34.118.224.0/20]` has been removed from
+unrelated hosts. The workaround `noProxyCIDRs: [34.118.224.0/20]` was removed from
 [`deploy/dogfood-migrate/resources.yaml`](../../deploy/dogfood-migrate/resources.yaml)
-so that a clean AGC startup at the next dogfood sitting is itself the verification.
+so that a clean AGC startup would itself be the verification —
+[confirmed live 2026-07-31](#re-validation-on-a-fixed-control-plane-2026-07-31-q472).
 
 ### Defect: v1 and v2 collide during coexistence (Q466)
 
@@ -417,8 +418,10 @@ second listener pool and a second set of GitHub registrations for a set the migr
 gateway's AGC was already serving. Convention written up in
 [kubernetes-conventions.md § Derive a per-owner name from the owner's kind](../development/kubernetes-conventions.md#derive-a-per-owner-name-from-the-owners-kind-not-just-its-name-q466).
 
-Still to confirm live: the fix is covered by envtest coexistence suites, not yet by a
-re-run on the dogfood cluster. Re-validate at the next dogfood sitting.
+[Confirmed live 2026-07-31](#re-validation-on-a-fixed-control-plane-2026-07-31-q472):
+both symptoms absent, the two pools' Secrets disjoint and owner-referenced. That run
+also found the symmetric case this fix left open —
+[Q535](#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535).
 
 ### Defect: a truncated worker pod name can be invalid, and then no job ever runs (Q467)
 
@@ -482,8 +485,74 @@ API server's message to the owner object, so the next rejection of any kind is
 diagnosable from `kubectl describe` instead of a live debugging session
 ([convention](../development/kubernetes-conventions.md#derive-every-name-through-apiapinames-q467-q473) ·
 [runbook](../operations/troubleshooting.md#runner-lost-communication-and-no-worker-pod-was-ever-created)).
-The dogfood tenant keeps its short name until a release carrying the fix reaches the
-cluster — restoring it sooner would re-break the tenant against the released image.
+The dogfood tenant's natural name was restored once the cluster ran a build carrying
+the fix, and both tiers then produced valid 63-char names —
+[confirmed live 2026-07-31](#re-validation-on-a-fixed-control-plane-2026-07-31-q472).
+
+### Re-validation on a fixed control plane (2026-07-31, Q472)
+
+The run the caveat above asks for. Dogfood now pins `2715e7f8` for both GMC and AGC,
+which carries all three fixes, so each is live-verifiable for the first time. The
+tenant ran with `noProxyCIDRs` unset **and** its natural gateway name `dogfood-migrate`
+restored — both workarounds removed, so a clean run is itself the evidence.
+
+| Fix | Verdict | Evidence |
+|---|---|---|
+| Q465 — `NO_PROXY` default | ✅ confirmed | Generated `NO_PROXY` is `kubernetes.default.svc,svc.cluster.local,localhost,127.0.0.1,34.118.224.1`. The hardcoded `10.96.0.0/12` is gone; `34.118.224.1` equals this cluster's live `kubernetes` Service ClusterIP. `HTTPS_PROXY` is set, so this is the proxied path that used to crashloop — the AGC reached Ready in 37 s with 0 restarts. |
+| Q466 — pool disjointness | ✅ confirmed | Both symptoms absent across the coexistence window: 0 × `already exists`, 0 × `is forbidden` on either AGC. Agent Secrets are kind-disjoint and owner-referenced: `agentpool-…-{0,1}` owned by `RunnerGroup`, `agentpool-rs-…-{0,1}` owned by `RunnerSet`. Pre-fix these collided and carried no owner reference. |
+| Q467 — worker pod name | ✅ confirmed, both tiers | Classic: `runner-dogfood-migrate-gag-3994471-78a9ae58-cfa8-44a4-a-4dcd6f9`. ScaleSet: `runner-dogfood-migrate-gag-3994471-1085497c-3aa7-5385-b-e51b992`. Both exactly 63 chars, both ending alphanumeric, each truncated segment ending in a hash rather than a bare cut. |
+
+Both smoke jobs went green with the natural name — baseline
+[run 30647304201](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30647304201)
+on the v1 classic path (runner `dogfood-migrate-gag-migrate-v1-18c32e1-0`) and
+[run 30647976704](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30647976704)
+after the migration on the scale-set path (runner
+`gag-migrate-v1-1085497c-…`, provisioned via `scaleSetPodName`). The
+Q231 recreate flipped the stored annotation `Classic` → `ScaleSet` as before.
+Teardown followed the documented order and deadlocked nowhere: RunnerSets, gateway,
+namespace and the cluster-scoped `ClusterRunnerTemplate` all cleared without a
+stranded finalizer, leaving no orphan. Both workarounds are now removed from
+[`resources.yaml`](../../deploy/dogfood-migrate/resources.yaml) permanently.
+
+**The workarounds were load-bearing, and removing them proved it.** The natural name
+is the case Q467 originally failed on: the old derivation cut
+`runner-dogfood-migrate-gag-migrate-v1-18c32e1-<planID>` at index 63, landing on the
+UUID's hyphen at index 8, and every worker pod was rejected.
+
+### Defect: a v2 AGC also reconciles the v1 RunnerGroups in its namespace (Q535)
+
+Found by this run, in the window Q466 was being re-checked. It is **not** a Q466
+regression — the registration below is unconditional at `#915`'s parent too — but it
+is the mirror image of the case Q466 closed, and Q466's fix did not close it.
+
+The v1 `RunnerGroupReconciler` is registered unconditionally on every AGC
+([main.go:433](../../cmd/agc/main.go)), and gateway scoping is a field selector on
+`RunnerSet` alone ([main.go:294](../../cmd/agc/main.go)) — nothing scopes the
+RunnerGroup informer. So during coexistence the migrated per-gateway AGC serves the
+v1 tenant's `RunnerGroup` *as well as* the v1 AGC that owns it. Measured, both live at
+once:
+
+- **Duplicate listener pools on one group.** The v2 AGC started its own listener at
+  `agentIndex: 0` for `dogfood-migrate-gag-migrate-v1-18c32e1` — the index the v1 AGC
+  was already running. Same index means the same agent Secret and the same GitHub
+  runner name, which is exactly the hazard the Q466 fix text describes ("two
+  controllers on one object, which no amount of naming can separate") in the direction
+  it did not fix.
+- **A hot retry loop against GitHub.** The duplicate listener took
+  `409` from the broker on every `CreateSession` — **153 in ~2.5 minutes**, roughly
+  1/s, listener index climbing monotonically, no backoff.
+- **Continuous status contention.** Both AGCs' RunnerGroup reconcilers wrote the same
+  object: ~35 `the object has been modified` errors per minute *each*, not settling.
+
+**Proof by controlled change.** Deleting the v1 gateway — the only variable altered —
+removed the v1 `RunnerGroup` and the 409s stopped at that instant (last one 16:37:29),
+leaving the v2 AGC quiet.
+
+Why the first run missed it: the v1 AGC's own Secret-collision and RBAC errors
+dominated that window, and the v2 AGC was checked for *its* kind rather than for the
+v1 kind it had also picked up. Filed as [Q535](../STATUS.md#Q535). The shape of the fix
+mirrors Q466's: an AGC that names a gateway should decline RunnerGroups that gateway
+does not own, rather than widening anything.
 
 ### The teardown order is load-bearing and undocumented
 
