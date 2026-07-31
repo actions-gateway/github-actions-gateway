@@ -61,6 +61,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -300,7 +301,14 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("configure metrics server: %w", err)
 	}
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	// Dedupe API server warnings to one log line per unique message per process.
+	// The default handler logs every occurrence, and the v2alpha1 deprecation
+	// warning repeats on every RunnerSet read/write — under reconcile churn it
+	// dominates the log (Q515).
+	restCfg := ctrl.GetConfigOrDie()
+	restCfg.WarningHandlerWithContext = logf.NewKubeAPIWarningLogger(
+		logf.KubeAPIWarningLoggerOptions{Deduplicate: true})
+	mgr, err := ctrl.NewManager(restCfg, ctrl.Options{
 		Scheme:  scheme,
 		Cache:   cacheOpts,
 		Metrics: metricsOpts,

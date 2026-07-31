@@ -410,7 +410,10 @@ Warning: actions-gateway.com/v2alpha1 RunnerSet is deprecated; use actions-gatew
 removes nothing: `v2alpha1` stays fully served, the conversion webhook still
 round-trips it against the `v2beta1` storage version, and existing objects keep
 reconciling untouched. The warning is advisory client-side output; it does not fail an
-`apply`, and controllers or CI that ignore warnings are unaffected.
+`apply`, and controllers or CI that ignore warnings are unaffected. The AGC and GMC
+receive the same warning through their Kubernetes clients but log it once per unique
+message per process (deduplicated), so a controller reconciling `v2alpha1` objects
+under churn does not flood its own log.
 
 **What to do about it.** Onboard new tenants on `v2beta1` (see
 [tenant onboarding](tenant-onboarding.md)), and move existing `v2alpha1` objects to

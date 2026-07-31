@@ -10,6 +10,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -29,7 +30,14 @@ import (
 // (safe because main() exits immediately after mgr.Start returns).
 func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Options,
 	webhookServer webhook.Server) (ctrl.Manager, error) {
-	return ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	// Dedupe API server warnings to one log line per unique message per process.
+	// The default handler logs every occurrence, and the v2alpha1 deprecation
+	// warning repeats on every read/write of a v2 CR — under reconcile churn it
+	// dominates the log (Q515).
+	restCfg := ctrl.GetConfigOrDie()
+	restCfg.WarningHandlerWithContext = logf.NewKubeAPIWarningLogger(
+		logf.KubeAPIWarningLoggerOptions{Deduplicate: true})
+	return ctrl.NewManager(restCfg, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsOpts,
 		WebhookServer:          webhookServer,
