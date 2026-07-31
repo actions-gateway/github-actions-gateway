@@ -260,7 +260,7 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		// not address fakegithub the call would leave for the real api.github.com and
 		// fakegithub would report zero whatever the preemption did. Checked first so a
 		// failure here reads as "the measurement is broken", not "recovery regressed".
-		Expect(agcEnvValue(tenantNS, "GITHUB_API_BASE_URL")).To(ContainSubstring(fakegithubServiceName),
+		Expect(agcEnvValue(tenantNS, agcName, "GITHUB_API_BASE_URL")).To(ContainSubstring(fakegithubServiceName),
 			"the AGC must address fakegithub for REST calls, or the rerun assertion proves nothing")
 
 		By("recording the pre-existing rerun count for this run")

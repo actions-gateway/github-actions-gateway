@@ -184,7 +184,7 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 		// GITHUB_API_BASE_URL; if that did not point at fakegithub, a rerun would
 		// leave for the real api.github.com and fakegithub would report zero no
 		// matter what the drain did.
-		Expect(agcEnvValue(tenantNS, "GITHUB_API_BASE_URL")).To(ContainSubstring(fakegithubServiceName),
+		Expect(agcEnvValue(tenantNS, agcName, "GITHUB_API_BASE_URL")).To(ContainSubstring(fakegithubServiceName),
 			"the AGC must address fakegithub for REST calls, or an absent rerun proves nothing")
 
 		By("recording the pre-existing rerun count for this run")
@@ -341,10 +341,11 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 	})
 })
 
-// agcEnvValue reads one env var off the AGC Deployment's manager container.
-func agcEnvValue(ns, name string) string {
+// agcEnvValue reads one env var off an AGC Deployment's manager container —
+// the shared v1 deployment (agcName) or a v2 per-gateway "<gw>-agc" one.
+func agcEnvValue(ns, deploy, name string) string {
 	GinkgoHelper()
-	out, err := utils.Run(exec.Command("kubectl", "get", "deployment", agcName,
+	out, err := utils.Run(exec.Command("kubectl", "get", "deployment", deploy,
 		"-n", ns,
 		"-o", fmt.Sprintf("jsonpath={.spec.template.spec.containers[0].env[?(@.name=='%s')].value}", name),
 	))

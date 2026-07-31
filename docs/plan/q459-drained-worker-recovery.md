@@ -454,6 +454,42 @@ troubleshooting.md "Draining a Worker Auto-Re-Runs the Jobs It Interrupts". Pinn
 retained `DoesNotRerun`/`DoesNotRecover` pair (no-terminal-phase side), plus the
 podwaiter/scan/reaper unit tests.
 
+**Q519's first run caught the deletion arm inert on real clusters — a timestamp-shape
+bug, fixed with the gate.** The spec's field sampler recorded the disrupted worker as
+`Running/2026-07-31T07:02:00Z/` → `Failed/2026-07-31T07:02:00Z/` against a delete
+issued at 07:01:32: the apiserver stamps `deletionTimestamp` as request time **plus
+the grace period**, so on a real kubelet the mark sits ~28s in the *future* of the
+exit a SIGTERM-honouring runner records seconds after the request.
+`externallyDeletedBeforeTerminal` compared the raw mark and read every real drain as
+"deleted after terminal" — the cleanup shape — so no recovery fired; the shipped form
+could only ever recover a worker that ignored SIGTERM to its SIGKILL (exit at
+mark == grace expiry). Both tiers shared the predicate, so classic drain recovery was
+equally inert. Every prior gate missed it for venue reasons: envtest pods are
+unscheduled, so their deletion collapses grace to zero and the mark *equals* the
+request time (the `TerminalWithMark` pair passes against that artifact shape), and the
+unit fixture restated the same wrong ordering (`finishedAt = deletionTimestamp + 5s`).
+The fix orders the deletion *request* — `deletionTimestamp` minus
+`deletionGracePeriodSeconds`, the two fields the apiserver stamps together — against
+the termination record, and makes the never-ran exclusion explicit (no termination
+record → nothing reportable to re-run) rather than an accident of the creation-time
+fallback. The unit fixtures now model the real stamp shape.
+
+**The RBAC gate this shipped without now exists (Q519).** The claim and completed-at
+patches ran 403-broken on real clusters because every local tier's client is admin —
+envtest does not enforce RBAC, and the fake-GitHub disruption specs were classic-tier.
+`E2E_AGC_ScaleSetRecovery`
+(`cmd/gmc/test/e2e/worker_scaleset_recovery_test.go`) closes that class at the
+fake-GitHub kind tier: a ScaleSet-protocol RunnerSet whose AGC runs under the chart's
+shipped `agc-tenant-role`, a running scale-set-shaped worker deleted gracefully, and
+the assertion that exactly one rerun lands — which, by the reconciler's ordering, is
+also the assertion that the claim patch landed (recovery calls GitHub only after the
+claim succeeds). Two scope limits, stated plainly: the e2e fakegithub speaks only the
+classic protocol, so the spec stages the worker pod itself rather than provisioning it
+from an assignment (the acquisition half's kind-e2e gap is
+[Q528](../STATUS.md#Q528)), and the deliberately-failing listener bootstrap — the
+gateway's `githubURL` names fakegithub's plaintext port over https — is what keeps the
+reconcile loop fast enough to win the real teardown window.
+
 The remaining work was carried by these Queue rows:
 
 1. ~~**Q495 first.**~~ Done — the run identity is read from the payload's `github`
