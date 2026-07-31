@@ -810,6 +810,29 @@ preinstalls Go. The `shellcheck` job had exactly this mismatch (Q482, fixed by
 adding the step); read a deterministic single-job red like that as a job/image
 mismatch, not a GAG defect or a flake.
 
+### Sampling AGC metrics during a measurement run
+
+The AGC serves `/metrics` on **8443 behind mTLS** (per-gateway self-signed PKI;
+see `generateMetricsCertsV2`). Scraping it ad hoc needs the scraper's client
+leaf from the `<gateway>-agc-metrics-client` Secret and a hostname that matches
+the server cert's Service SANs — `curl -k` is not enough (the server still
+demands a client cert) and `localhost` fails SAN verification, so pin the
+Service name to the forwarded port with `--resolve`:
+
+```bash
+kubectl get secret dogfood-agc-metrics-client -n gag-dogfood -o jsonpath='{.data}' \
+  # -> extract ca.crt / tls.crt / tls.key (base64) to tmp/certs/
+kubectl port-forward svc/dogfood-agc -n gag-dogfood 18443:8443 &
+curl --resolve dogfood-agc.gag-dogfood.svc:18443:127.0.0.1 \
+  --cacert tmp/certs/ca.crt --cert tmp/certs/tls.crt --key tmp/certs/tls.key \
+  https://dogfood-agc.gag-dogfood.svc:18443/metrics
+```
+
+Used by the §9e/§9f (Q469/Q462) and §9h (Q513) capacity-gate measurements in
+[capacity-aware-intake.md](capacity-aware-intake.md); the scale-set gauges are
+labelled `runner_set` while `worker_pods_reaped_total` is labelled
+`runner_group` (the Q514 join mismatch), so filter by both when sampling one set.
+
 ### Stop dogfooding
 
 Opt-in dispatches are one-shot, so there is no standing CI route to revert —
