@@ -203,6 +203,51 @@ func TestBuildBrokerConfig(t *testing.T) {
 	})
 }
 
+// TestScaleSetStubBaseURL pins the scale-set tier to the same stub signal the
+// classic tier's registrar uses. The negative cases are the load-bearing ones: a
+// production AGC carries GITHUB_ORG_URL and neither stub var, and a half-configured
+// AGC must fall through to real GitHub on BOTH tiers rather than splitting them
+// across two backends.
+func TestScaleSetStubBaseURL(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  agcConfig
+		want string
+	}{
+		{
+			name: "both stub URLs select the stub",
+			cfg: agcConfig{
+				StubAuthURL:   "http://stub/token",
+				StubBrokerURL: "http://stub",
+				GitHubOrgURL:  "https://github.com/org",
+			},
+			want: "http://stub",
+		},
+		{
+			name: "only the auth URL falls through to GitHub",
+			cfg:  agcConfig{StubAuthURL: "http://stub/token", GitHubOrgURL: "https://github.com/org"},
+			want: "",
+		},
+		{
+			name: "only the broker URL falls through to GitHub",
+			cfg:  agcConfig{StubBrokerURL: "http://stub", GitHubOrgURL: "https://github.com/org"},
+			want: "",
+		},
+		{
+			name: "production",
+			cfg:  agcConfig{GitHubOrgURL: "https://github.com/org"},
+			want: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := scaleSetStubBaseURL(tc.cfg); got != tc.want {
+				t.Errorf("scaleSetStubBaseURL = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestBuildScheme verifies the AGC client scheme registers the core, v1alpha1,
 // and v2alpha1 kinds it wires reconcilers for.
 func TestBuildScheme(t *testing.T) {

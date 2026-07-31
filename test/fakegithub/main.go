@@ -1,6 +1,7 @@
 // Command fakegithub is a deployable HTTP stub that implements the GitHub App
-// token exchange endpoint, the Actions runner registration API, and the
-// Actions broker v2 protocol. It is used in fake-GitHub e2e tests so the AGC can
+// token exchange endpoint, the Actions runner registration API, and BOTH job
+// acquisition protocols — the Actions broker v2 protocol (classic) and the
+// runner-scale-set protocol. It is used in fake-GitHub e2e tests so the AGC can
 // start and process jobs without real GitHub credentials.
 //
 // Endpoints served:
@@ -15,6 +16,10 @@
 //	GET  /api/v3/.../actions/runners?name=<n>    — list runners (name filter)
 //	DELETE /api/v3/.../actions/runners/{id}      — deregister runner
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/rerun-failed-jobs — eviction auto-retry
+//	POST /api/v3/.../actions/runners/registration-token — scale-set bootstrap, hop 1
+//	POST /api/v3/actions/runner-registration     — scale-set bootstrap, hop 2 (RemoteAuth)
+//	     /_apis/runtime/...                      — scale-set Actions Service
+//	     /queue/{id}/...                         — scale-set message queue
 //
 // Jobs are injected via the HTTP control API (only reachable from within the
 // pod; bind address is configurable via CONTROL_ADDR, default :9090):
@@ -24,6 +29,24 @@
 //	POST /control/singleuse?enabled=true  — toggle single-use JIT simulation
 //	GET  /control/reruns                  — eviction auto-retry calls observed
 //	POST /control/runstate?run=<id>&concluded=false — refuse re-runs for the run
+//	POST /control/scaleset/enqueue?name=<set>      — queue a scale-set job
+//	POST /control/scaleset/acquireflow?ghes=<bool> — pick the acquire flow
+//	GET  /control/scaleset/state?name=<set>        — session/assignment/call state
+//
+// # The scale-set protocol (Q528)
+//
+// The scale-set half is scaleset/scalesetstub — the same protocol model the
+// scaleset client's own unit tests run against, so the two doubles cannot drift.
+// Everything scale-set-specific lives there; this command only mounts it, gives it
+// the request-derived base its self-referential URLs need, and exposes the control
+// verbs above.
+//
+// The two tiers share the process and nothing else. In particular they keep
+// separate runner registries: the classic tier registers through
+// /api/v3/.../generate-jitconfig, the scale-set tier through generatejitconfig on
+// the Actions Service. They never have to agree, because the scale-set tier reaches
+// the REST list/delete routes only on a runner-name 409, which this venue does not
+// produce.
 //
 // # Eviction auto-retry observability (Q421)
 //
@@ -123,6 +146,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/broker/brokerstub"
+	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesetstub"
 )
 
 func main() {
@@ -178,7 +202,11 @@ type server struct {
 	// tracks each session's owner/agent/version, and resolves a DELETE by its
 	// sessionId query param or bearer token. The single-use and redelivery
 	// state below is fakegithub-specific and keyed off the IDs it mints.
-	sessions  *brokerstub.Sessions
+	sessions *brokerstub.Sessions
+	// scaleSet is the runner-scale-set protocol, served alongside the classic
+	// broker one from the same listener. It carries its own state and lock; the
+	// two tiers share nothing but the process (Q528).
+	scaleSet  *scalesetstub.Stub
 	jobQueues map[string][]message // sessionID → jobs enqueued directly to it
 	// ownerPending holds jobs awaiting opportunistic delivery to any live
 	// session of an owner — GitHub redelivers a job whose session went away
@@ -310,6 +338,7 @@ type message struct {
 
 func newServer() *server {
 	return &server{
+		scaleSet:          scalesetstub.New(externalBase),
 		sessions:          brokerstub.NewSessions(),
 		jobQueues:         make(map[string][]message),
 		ownerPending:      make(map[string][]message),
@@ -346,7 +375,22 @@ func (s *server) mainMux() http.Handler {
 	mux.HandleFunc("/message", s.handleMessage)
 	mux.HandleFunc("/acquirejob", s.handleAcquireJob)
 	mux.HandleFunc("/renewjob", s.handleRenewJob)
+	// Runner-scale-set protocol (Q528). The Actions Service and message-queue
+	// routes are scale-set-only, so they mount straight onto the stub; the two
+	// REST bootstrap hops live under the GHES /api/v3 prefix the scaleset client
+	// derives for a non-github.com host, and reach the stub through
+	// handleRunnerAPI below.
+	mux.Handle("/_apis/", s.scaleSet.Handler())
+	mux.Handle("/queue/", s.scaleSet.Handler())
 	return mux
+}
+
+// scaleSetAPIV3 serves the two REST hops of the scale-set bootstrap — the
+// registration-token call and the RemoteAuth runner-registration hop — off the
+// /api/v3 prefix. The stub's patterns are absolute paths, so the prefix is
+// stripped before it sees them.
+func (s *server) scaleSetAPIV3() http.Handler {
+	return http.StripPrefix("/api/v3", s.scaleSet.Handler())
 }
 
 func (s *server) controlMux() http.Handler {
@@ -360,6 +404,9 @@ func (s *server) controlMux() http.Handler {
 	mux.HandleFunc("/control/jobstats", s.handleJobStats)
 	mux.HandleFunc("/control/reruns", s.handleReruns)
 	mux.HandleFunc("/control/runstate", s.handleSetRunState)
+	mux.HandleFunc("/control/scaleset/enqueue", s.handleScaleSetEnqueue)
+	mux.HandleFunc("/control/scaleset/acquireflow", s.handleSetScaleSetAcquireFlow)
+	mux.HandleFunc("/control/scaleset/state", s.handleScaleSetState)
 	return mux
 }
 
@@ -394,10 +441,21 @@ func (s *server) handleInstallationToken(w http.ResponseWriter, r *http.Request)
 //
 // where {prefix} is orgs/{org} or repos/{owner}/{repo}. The prefix itself is
 // not validated — any org/repo works.
+//
+// The scale-set tier's two REST bootstrap hops share this prefix and are handed
+// off to the scale-set stub. They address distinct paths, so the two tiers'
+// runner registries never have to agree: the scale-set tier mints its runners
+// through generatejitconfig on the Actions Service, and reaches the REST
+// list/delete routes below only on a runner-name 409 this venue does not produce.
 func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if strings.HasSuffix(path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
 		s.handleRerunFailedJobs(w, r)
+		return
+	}
+	if path == "/api/v3/actions/runner-registration" ||
+		strings.HasSuffix(path, "/actions/runners/registration-token") {
+		s.scaleSetAPIV3().ServeHTTP(w, r)
 		return
 	}
 	idx := strings.Index(path, "/actions/runners")
@@ -1139,6 +1197,97 @@ func (s *server) handleSetRedelivery(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	s.redelivery.Store(enabled)
 	w.WriteHeader(http.StatusOK)
+}
+
+// scaleSetIDByName resolves the scale set the AGC registered under name, writing
+// the 400/404 and returning false when it cannot. The AGC names a scale set after
+// the RunnerSet's single runs-on label, so a spec addresses it by the label it
+// declared rather than by an id only the AGC ever saw.
+func (s *server) scaleSetIDByName(w http.ResponseWriter, r *http.Request) (int, bool) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		http.Error(w, "name required", http.StatusBadRequest)
+		return 0, false
+	}
+	id, ok := s.scaleSet.ScaleSetIDByName(name)
+	if !ok {
+		http.Error(w, fmt.Sprintf("no scale set named %q is registered", name), http.StatusNotFound)
+		return 0, false
+	}
+	return id, true
+}
+
+// handleScaleSetEnqueue is the control API:
+//
+//	POST /control/scaleset/enqueue?name=<scale set>
+//
+// Queues one job on the scale set and returns the identity its assignment will
+// carry — {runnerRequestId, jobId, ownerName, repositoryName, workflowRunId} — so a
+// spec asserts the worker pod against what the server actually delivered rather
+// than against values it restated.
+func (s *server) handleScaleSetEnqueue(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id, ok := s.scaleSetIDByName(w, r)
+	if !ok {
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(s.scaleSet.Enqueue(id))
+}
+
+// handleSetScaleSetAcquireFlow is the control API:
+//
+//	POST /control/scaleset/acquireflow?ghes=true|false
+//
+// Selects the GHES JobAvailable→acquire flow or the dotcom auto-assign one
+// (the default). Unlike the classic single-use and redelivery toggles this is
+// process-wide rather than owner-scoped — the flow is a property of the backend,
+// not of one tenant — so a spec that flips it must not run in parallel with
+// another scale-set spec.
+func (s *server) handleSetScaleSetAcquireFlow(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	ghes, err := strconv.ParseBool(r.URL.Query().Get("ghes"))
+	if err != nil {
+		http.Error(w, "ghes=true|false required", http.StatusBadRequest)
+		return
+	}
+	s.scaleSet.SetGHESAcquireFlow(ghes)
+	w.WriteHeader(http.StatusOK)
+}
+
+// handleScaleSetState is the control API:
+//
+//	GET /control/scaleset/state?name=<scale set>
+//
+// Reports what the server saw: whether a message-queue session is live, how many
+// jobs are assigned-but-not-completed, the acquirejobs/generatejitconfig call
+// counts, and the call log. A spec asserts acquisition against this rather than
+// inferring it from AGC logs — an absent session and an absent claim are otherwise
+// indistinguishable from a job that was never enqueued.
+func (s *server) handleScaleSetState(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id, ok := s.scaleSetIDByName(w, r)
+	if !ok {
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"scaleSetId":       id,
+		"activeSession":    s.scaleSet.HasActiveSession(id),
+		"assignedJobs":     s.scaleSet.AssignedJobCount(id),
+		"acquireJobsCalls": s.scaleSet.AcquireJobsCalls(),
+		"generateJITCalls": s.scaleSet.GenerateJITCalls(),
+		"calls":            s.scaleSet.Calls(),
+	})
 }
 
 // handleJobStats is the control API: GET /control/jobstats?requestId=<id>

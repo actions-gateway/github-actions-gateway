@@ -2,6 +2,18 @@ module github.com/actions-gateway/github-actions-gateway/test/fakegithub
 
 go 1.26.5
 
-require github.com/actions-gateway/github-actions-gateway/broker v0.0.0-00010101000000-000000000000
+require (
+	github.com/actions-gateway/github-actions-gateway/broker v0.0.0-00010101000000-000000000000
+	github.com/actions-gateway/github-actions-gateway/scaleset v0.0.0-00010101000000-000000000000
+)
+
+require (
+	github.com/actions-gateway/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+)
 
 replace github.com/actions-gateway/github-actions-gateway/broker => ../../broker
+
+replace github.com/actions-gateway/github-actions-gateway/scaleset => ../../scaleset
+
+replace github.com/actions-gateway/github-actions-gateway/githubapp => ../../githubapp

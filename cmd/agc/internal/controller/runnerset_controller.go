@@ -135,6 +135,14 @@ type RunnerSetReconciler struct {
 	// fake so the wiring is exercised offline.
 	ScaleSetClientFactory func(rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (*scaleset.Client, error)
 
+	// ScaleSetStubBaseURL re-points the scale-set bootstrap at a fake-GitHub stub,
+	// for the deployed fake-GitHub e2e tier — the gateway's githubURL cannot name it,
+	// being pinned to https by the CRD and the webhook. Empty in production: main()
+	// sets it only from the STUB_AUTH_URL + STUB_BROKER_URL pair that also selects the
+	// classic tier's StubRegistrar, which reaches a GMC-provisioned AGC only under the
+	// testing-only --allow-agc-extra-env flag.
+	ScaleSetStubBaseURL string
+
 	conditionCh chan conditionUpdate
 
 	// eventCh carries owner-scoped Kubernetes Events pushed from listener/provisioner

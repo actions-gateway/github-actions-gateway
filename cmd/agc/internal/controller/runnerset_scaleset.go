@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
@@ -251,11 +252,47 @@ func (r *RunnerSetReconciler) buildScaleSetClient(rs *v2alpha1.RunnerSet, gw *v2
 	// answering "which GitHub API?" across the AGC and the GMC (Q506). GHES also
 	// needs the JobAvailable→acquire path, which the client already handles by the
 	// one rule (§5a-U8).
+	//
+	// The fake-GitHub re-point rewrites only the CONFIG URL, and the API base is then
+	// derived from the result — so the stub path goes through that same resolver
+	// rather than carrying a second copy of the GHES rule.
+	configURL := gw.Spec.GitHubURL
+	if stubURL, ok := scaleSetStubConfigURL(r.ScaleSetStubBaseURL, configURL); ok {
+		configURL = stubURL
+	}
 	return scaleset.New(scaleset.Config{
 		TokenProvider: r.TokenManager,
-		ConfigURL:     gw.Spec.GitHubURL,
-		APIBase:       githubapp.DeriveAPIBaseURL(gw.Spec.GitHubURL),
+		ConfigURL:     configURL,
+		APIBase:       githubapp.DeriveAPIBaseURL(configURL),
 	})
+}
+
+// scaleSetStubConfigURL re-points a gateway's config URL at a fake-GitHub stub,
+// keeping the org (or owner/repo) path — the client derives the runners REST prefix
+// from it and rejects a pathless one outright, so dropping the path would wedge the
+// bootstrap rather than merely misaddress it.
+//
+// It applies only to a gateway whose githubURL ALREADY names the stub's host:port,
+// which is the whole scope of the rewrite — swapping that gateway's https scheme for
+// the plaintext one the stub actually serves, since the CRD pattern and the webhook
+// forbid writing http into the field. A gateway naming any other host is left alone,
+// so pointing one at an unreachable host still fails to bootstrap on a cluster where
+// the stub env is set. `E2E_AGC_ScaleSetRecovery` depends on exactly that: its
+// subject is the recovery scan running on a set whose listener is NOT up, and a
+// blanket rewrite silently started that listener and broke it.
+func scaleSetStubConfigURL(stubBase, githubURL string) (string, bool) {
+	if stubBase == "" {
+		return "", false
+	}
+	stub, err := url.Parse(stubBase)
+	if err != nil || stub.Host == "" {
+		return "", false
+	}
+	gw, err := url.Parse(githubURL)
+	if err != nil || gw.Host != stub.Host {
+		return "", false
+	}
+	return stub.Scheme + "://" + stub.Host + gw.Path, true
 }
 
 // stopScaleSetListener cancels and drops the scale-set listener for key, if present,

@@ -32,10 +32,15 @@ import (
 // The recovery half of the scale-set tier runs for real: the deployed AGC's
 // RunnerSet reconciler (under the chart role), its worker-pod watch, the
 // Failed-with-deletion-mark discriminator (Q502), the optimistic-lock claim patch,
-// and the rerun-failed-jobs call to fakegithub. The ACQUISITION half does not: the
-// e2e fakegithub speaks only the classic protocol, so the scale-set listener's
-// session can never open here and the worker pod is staged by the spec rather than
-// provisioned from an assignment. The pod restates the recovery-relevant shape
+// and the rerun-failed-jobs call to fakegithub. The ACQUISITION half does not: this
+// spec's gateway points at a host that does not resolve (see below), so the
+// listener's session never opens here and the worker pod is staged by the
+// spec rather than provisioned from an assignment. That is now a property of this
+// spec rather than of the venue — fakegithub serves the scale-set protocol as of
+// Q528, and E2E_AGC_ScaleSetAcquisition drives the acquisition half through it. The
+// deliberately-failing bootstrap is retained here because this spec's subject is the
+// recovery scan running on a set whose listener is NOT up (see below), which is the
+// harder case. The pod restates the recovery-relevant shape
 // ProvisionScaleSetWorker stamps — the runner-set owner label, the
 // acquisition-protocol label the recovery scan filters on, and the run-identity
 // annotations it re-runs from (cmd/agc/internal/provisioner/target.go,
@@ -58,12 +63,17 @@ import (
 // The reconciler runs the recovery scan every reconcile BEFORE routing to the
 // acquisition tier, so a ScaleSet-protocol set whose listener cannot bootstrap
 // still recovers disrupted workers on every worker-pod event. The gateway's
-// githubURL points at fakegithub's plaintext port over https, so each bootstrap
-// attempt dies on the TLS handshake in milliseconds — an in-cluster, fast, clean
-// failure rather than a dial timeout that would stall reconciles through the
-// claim window. The spec waits for that failure to surface on the RunnerSet's
-// Ready condition before staging anything: it proves the reconciler is live on
-// this set and past the recovery step's position in the loop.
+// githubURL names a host that does not resolve, so each bootstrap attempt dies on
+// NXDOMAIN in milliseconds — a fast, clean failure rather than a dial timeout that
+// would stall reconciles through the claim window. The spec waits for that failure
+// to surface on the RunnerSet's Ready condition before staging anything: it proves
+// the reconciler is live on this set and past the recovery step's position in the
+// loop.
+//
+// Do not "fix" that URL to something reachable. The condition wait below is the
+// spec's precondition, not a formality: point it at the stub and the listener comes
+// up, the wait times out after four minutes, and the spec fails having tested
+// nothing (which is how Q528 first broke it).
 var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 	const (
 		tenantNS   = "tenant-ss-recovery"
@@ -248,16 +258,22 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 })
 
 // scaleSetRecoveryManifest renders the tenant: one gateway, one template, one
-// ScaleSet-protocol RunnerSet. The gateway's githubURL deliberately names the
-// fakegithub service over https: the CRD requires an https URL, fakegithub serves
-// plaintext, and the scale-set client's bootstrap therefore fails on the TLS
-// handshake — in-cluster and in milliseconds, never a dial timeout that would
-// stall the reconcile loop this spec depends on (see the package comment).
+// ScaleSet-protocol RunnerSet. The gateway's githubURL deliberately names a host
+// that does not resolve, so the scale-set client's bootstrap fails in milliseconds
+// on NXDOMAIN — never a dial timeout that would stall the reconcile loop this spec
+// depends on (see the package comment).
+//
+// It used to name the fakegithub service over https, failing on the TLS handshake
+// against the plaintext port. That stopped working when Q528 taught the AGC to swap
+// exactly that scheme for exactly that host: the bootstrap started succeeding and
+// this spec's precondition evaporated. An unresolvable host is outside the rewrite's
+// scope (cmd/agc/internal/controller.scaleSetStubURLs) and cannot be re-pointed by
+// anything, which is the property this spec actually needs.
+//
 // workerImage is a placeholder: no job is ever assigned, so no worker is ever
 // provisioned from the template.
 func scaleSetRecoveryManifest(ns, secretName, workerImage string) string {
-	githubURL := fmt.Sprintf("https://%s.%s.svc.cluster.local:%s/%s",
-		fakegithubServiceName, infraNamespace, fakegithubServicePort, "ssrecorg")
+	githubURL := "https://ghes.invalid/ssrecorg"
 	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
 metadata:

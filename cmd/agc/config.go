@@ -123,6 +123,22 @@ func buildRegistrar(cfg agcConfig) (agentpool.Registrar, error) {
 	}
 }
 
+// scaleSetStubBaseURL returns the fake-GitHub base the scale-set tier should
+// bootstrap against, or "" for production (derive it from the gateway's githubURL).
+//
+// It keys off exactly the pair buildRegistrar's stub case does, so the two
+// acquisition tiers cannot end up pointed at different backends: a stub-backed AGC
+// is stub-backed on both, and unsetting the pair returns both to real GitHub. The
+// scale-set tier needs its own signal because its endpoints are derived from
+// spec.gitHubURL, which the CRD pattern and the webhook pin to https and so cannot
+// name the plaintext stub.
+func scaleSetStubBaseURL(cfg agcConfig) string {
+	if cfg.StubAuthURL != "" && cfg.StubBrokerURL != "" {
+		return cfg.StubBrokerURL
+	}
+	return ""
+}
+
 // buildBrokerConfig maps the broker-related env into controller.BrokerConfig. The
 // long-poll HTTPClient (broker.NewHTTPClient) is the sanctioned no-read-timeout
 // exception (Q108); UseV2Flow is on unless GITHUB_USE_VSTS_FLOW=="true", and

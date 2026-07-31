@@ -483,12 +483,19 @@ fake-GitHub kind tier: a ScaleSet-protocol RunnerSet whose AGC runs under the ch
 shipped `agc-tenant-role`, a running scale-set-shaped worker deleted gracefully, and
 the assertion that exactly one rerun lands — which, by the reconciler's ordering, is
 also the assertion that the claim patch landed (recovery calls GitHub only after the
-claim succeeds). Two scope limits, stated plainly: the e2e fakegithub speaks only the
-classic protocol, so the spec stages the worker pod itself rather than provisioning it
-from an assignment (the acquisition half's kind-e2e gap is
-[Q528](../STATUS.md#Q528)), and the deliberately-failing listener bootstrap — the
-gateway's `githubURL` names fakegithub's plaintext port over https — is what keeps the
-reconcile loop fast enough to win the real teardown window.
+claim succeeds). Two scope limits, stated plainly: the spec stages the worker pod
+itself rather than provisioning it from an assignment, and the deliberately-failing
+listener bootstrap — the gateway's `githubURL` names fakegithub's plaintext port over
+https — is what keeps the reconcile loop fast enough to win the real teardown window.
+
+Both limits were originally forced by the venue: the e2e fakegithub spoke only the
+classic protocol, so no scale-set session could open there at all. That is no longer
+true — Q528 taught it the scale-set protocol, and
+[`E2E_AGC_ScaleSetAcquisition`](archive/q528-scaleset-acquisition-e2e.md) drives the
+acquisition half through it end to end. The limits above are now this spec's
+deliberate scope: a recovery scan running on a set whose listener is *not* up is the
+harder case, and the staged pod is a faithful subject for it because recovery selects
+by label and reads annotations, never caring who created the pod.
 
 The remaining work was carried by these Queue rows:
 
