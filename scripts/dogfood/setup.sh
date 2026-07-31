@@ -55,9 +55,17 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 # whose tree carries the v2beta1+v2alpha1 conversion-webhook CRD chart (Q281). This
 # is a plain git ref, not a `v*` release: dogfood tracks pre-release code and must
 # not wait for a cut release, and the publish pipeline builds images only on `v*`
-# tags — so the post-Q74 image at this ref was built + pushed by hand (see the
+# tags — so the image at this ref was built + pushed by hand (see the
 # GAG_IMAGE_TAG note above). `latest` is never published, so never float to it.
-GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-0ef4c6fa50fc78f3ea1ddee84e7237be251ea971}"
+#
+# This default only ever moves forward, and re-running with it must never roll the
+# cluster BACK. The script is advertised as safe to re-run, so a default older than
+# what is deployed turns an innocuous re-run into a silent downgrade of the whole
+# control plane — CRDs included. That is not hypothetical: the default sat at a
+# 2026-07-07 ref while dogfood ran 2026-07-24 and then 2026-07-31 code, so a
+# defaults run would have withdrawn the capacity-gate rung and re-blocked Q472.
+# When you pin a newer ref by hand, update this line in the same change.
+GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-4567097216ff38e4415ddb23a036569a2104801d}"
 
 # Optional build-capable worker image for the RunnerTemplate (Q239). When set,
 # the runner container pins this image instead of staying image-less; the AGC

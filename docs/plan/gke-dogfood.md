@@ -229,13 +229,13 @@ allowFloatingImageTags: true
 replicaCount: 1
 gmc:
   image:
-    tag: 0ef4c6fa50fc78f3ea1ddee84e7237be251ea971
+    tag: 4567097216ff38e4415ddb23a036569a2104801d
 agc:
   image:
-    tag: 0ef4c6fa50fc78f3ea1ddee84e7237be251ea971
+    tag: 4567097216ff38e4415ddb23a036569a2104801d
 proxy:
   image:
-    tag: 0ef4c6fa50fc78f3ea1ddee84e7237be251ea971
+    tag: 4567097216ff38e4415ddb23a036569a2104801d
 # WRAPPER_IMAGE drives Q235 worker-wrapper injection — the GMC forwards it to
 # every AGC, which injects the wrapper into each worker pod so the runner
 # container can be the unmodified upstream actions-runner. Pin it: the chart's
@@ -243,7 +243,7 @@ proxy:
 # and ImagePullBackOffs the injection.
 wrapper:
   image:
-    tag: 0ef4c6fa50fc78f3ea1ddee84e7237be251ea971
+    tag: 4567097216ff38e4415ddb23a036569a2104801d
 
 # Self-signed webhook cert — no cert-manager dependency.
 # The cert rotates on helm upgrade; acceptable for a personal dogfood cluster.
@@ -364,7 +364,7 @@ whose multi-version CRDs route CR conversion through `/convert`, the same step a
 automatically with no further change.
 
 **Live-validated post-Q74 (Q281, 2026-07-07).** `GAG_IMAGE_TAG` is now pinned to a
-post-Q74 `main` SHA (`0ef4c6f…`) whose control-plane image was built + pushed by hand
+post-Q74 `main` SHA (`4567097…`) whose control-plane image was built + pushed by hand
 (see [Tracking post-Q74 pre-release builds](#tracking-post-q74-pre-release-builds)),
 so the full **apply → convert → read-back round-trip is live on dogfood**. Confirmed
 end-to-end on `gag-dogfood`: with the post-Q74 GMC serving `/convert`, `ActionsGateway`,
@@ -418,6 +418,23 @@ default to private and `ImagePullBackOff`; flip it to public in the GHCR UI). Pu
 `ghcr.io/actions-gateway` needs the `write:packages` scope (`gh auth refresh -s
 write:packages` if your token lacks it). This is a dev/dogfood convenience only —
 **production always pins release digests**, never a floating SHA tag.
+
+> **Move the default forward in the same change.** `setup.sh` is idempotent and
+> advertised as safe to re-run, which is what makes a stale `GAG_IMAGE_TAG`
+> default sharp: a re-run with no explicit tag reinstalls the *default* ref and
+> takes the CRDs with it, silently **downgrading** a cluster running anything
+> newer. The default sat at a 2026-07-07 ref while the cluster ran 2026-07-24 and
+> then 2026-07-31 code, so a defaults run in that window would have withdrawn the
+> capacity-gate rung and re-blocked [Q472](../STATUS.md#Q472). Nothing detects it —
+> the install path has no notion of "older than what is deployed" — so when you pin
+> a newer ref by hand, update the default in
+> [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh) and the pins above
+> together. Read what is actually running before re-running:
+>
+> ```bash
+> kubectl get deploy gmc-controller-manager -n gmc-system \
+>   -o jsonpath='{.spec.template.spec.containers[*].image}'
+> ```
 
 ### B4. Create tenant namespace
 
