@@ -99,6 +99,67 @@ func TestActionsGatewayCustomValidator_ValidateUpdate(t *testing.T) {
 	})
 }
 
+// TestV2GatewayAndEgressProxy_DeletionOnlyUpdateExemption covers the Q518
+// exemption on the infra-allowlist kinds: narrowing
+// --allowed-infra-priority-classes must not wedge teardown of a gateway or proxy
+// still naming a removed class (Q499). Deletion-only writes are admitted; live
+// objects and spec changes on deleting ones stay denied.
+func TestV2GatewayAndEgressProxy_DeletionOnlyUpdateExemption(t *testing.T) {
+	now := metav1.Now()
+
+	t.Run("ActionsGateway", func(t *testing.T) {
+		v := &ActionsGatewayCustomValidator{InfraPriorityClasses: nil} // class since removed
+		deleting := func(finalizers ...string) *agcv2alpha1.ActionsGateway {
+			ag := newV2Gateway("team-a", "gw", "removed-infra-class")
+			ag.DeletionTimestamp = &now
+			ag.Finalizers = finalizers
+			return ag
+		}
+
+		_, err := v.ValidateUpdate(context.Background(), deleting("actions-gateway.com/gmc-cleanup"), deleting())
+		require.NoError(t, err, "finalizer removal on a deleting gateway must be admitted")
+
+		old := newV2Gateway("team-a", "gw", "removed-infra-class")
+		old.Finalizers = []string{"actions-gateway.com/gmc-cleanup"}
+		_, err = v.ValidateUpdate(context.Background(), old, newV2Gateway("team-a", "gw", "removed-infra-class"))
+		require.Error(t, err, "live objects keep the stored-object re-validation")
+
+		changed := deleting()
+		changed.Spec.LogLevel = "debug"
+		_, err = v.ValidateUpdate(context.Background(), deleting("actions-gateway.com/gmc-cleanup"), changed)
+		require.Error(t, err, "the exemption must not admit spec changes on a deleting object")
+	})
+
+	t.Run("EgressProxy", func(t *testing.T) {
+		v := &EgressProxyCustomValidator{Allowlist: allowlist.NewEgressDestination(nil, nil)}
+		deleting := func(finalizers ...string) *agcv2alpha1.EgressProxy {
+			ep := &agcv2alpha1.EgressProxy{
+				ObjectMeta: metav1.ObjectMeta{Name: "ep", Namespace: "team-a"},
+				Spec:       agcv2alpha1.EgressProxySpec{Scheduling: &agcv2alpha1.PodScheduling{PriorityClassName: "removed-infra-class"}},
+			}
+			ep.DeletionTimestamp = &now
+			ep.Finalizers = finalizers
+			return ep
+		}
+
+		_, err := v.ValidateUpdate(context.Background(), deleting("actions-gateway.com/gmc-cleanup"), deleting())
+		require.NoError(t, err, "finalizer removal on a deleting proxy must be admitted")
+
+		live := deleting()
+		live.DeletionTimestamp = nil
+		liveOld := deleting("actions-gateway.com/gmc-cleanup")
+		liveOld.DeletionTimestamp = nil
+		_, err = v.ValidateUpdate(context.Background(), liveOld, live)
+		require.Error(t, err, "live objects keep the stored-object re-validation")
+
+		changed := deleting()
+		three := int32(3)
+		changed.Spec.MinReplicas = &three
+		_, err = v.ValidateUpdate(context.Background(), deleting("actions-gateway.com/gmc-cleanup"), changed)
+		require.Error(t, err, "the exemption must not admit spec changes on a deleting object")
+	})
+}
+
 func TestActionsGatewayCustomValidator_ValidateDelete(t *testing.T) {
 	v := &ActionsGatewayCustomValidator{InfraPriorityClasses: nil}
 	_, err := v.ValidateDelete(context.Background(), newV2Gateway("team-a", "gw", "system-cluster-critical"))

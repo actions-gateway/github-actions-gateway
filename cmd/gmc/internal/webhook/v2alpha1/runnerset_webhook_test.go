@@ -253,6 +253,42 @@ func TestRunnerSetWebhook_UpdateCannotSmuggleTierClass(t *testing.T) {
 	assert.Contains(t, err.Error(), "priorityTiers[0]")
 }
 
+// TestRunnerSetWebhook_DeletionOnlyUpdateExemption covers the Q518 exemption: the
+// AGC's finalizer-removal write on a deleting RunnerSet naming a since-removed
+// class must be admitted, or teardown wedges (Q499). Only deletion-only writes
+// are exempt — live objects and spec changes on deleting ones stay denied.
+func TestRunnerSetWebhook_DeletionOnlyUpdateExemption(t *testing.T) {
+	v := &RunnerSetCustomValidator{PriorityClasses: allowlist.New([]string{"runner-standard"})}
+	now := metav1.Now()
+
+	deleting := func(finalizers ...string) *agcv2alpha1.RunnerSet {
+		rs := tieredRS("self", "removed-class")
+		rs.DeletionTimestamp = &now
+		rs.Finalizers = finalizers
+		return rs
+	}
+
+	t.Run("finalizer removal on a deleting set is admitted", func(t *testing.T) {
+		_, err := v.ValidateUpdate(context.Background(),
+			deleting("actions-gateway.com/agentpool-cleanup"), deleting())
+		require.NoError(t, err)
+	})
+
+	t.Run("the same write on a live set is still denied", func(t *testing.T) {
+		old := tieredRS("self", "removed-class")
+		old.Finalizers = []string{"actions-gateway.com/agentpool-cleanup"}
+		_, err := v.ValidateUpdate(context.Background(), old, tieredRS("self", "removed-class"))
+		require.Error(t, err, "live objects keep the stored-object re-validation")
+	})
+
+	t.Run("a spec change on a deleting set is still denied", func(t *testing.T) {
+		changed := deleting()
+		changed.Spec.RunnerLabels = append(changed.Spec.RunnerLabels, "extra")
+		_, err := v.ValidateUpdate(context.Background(), deleting("actions-gateway.com/agentpool-cleanup"), changed)
+		require.Error(t, err, "the exemption must not admit spec changes on a deleting object")
+	})
+}
+
 func TestRunnerSetWebhook_NoTiersNeedsNoAllowlist(t *testing.T) {
 	// A RunnerSet with no priorityTiers is admitted under the secure default — the
 	// gate must not forbid ordinary, unprioritized runner sets.

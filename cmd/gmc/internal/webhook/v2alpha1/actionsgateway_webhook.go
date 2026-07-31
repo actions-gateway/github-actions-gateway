@@ -121,8 +121,13 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 // (gitHubURL itself is immutable) at a proxy whose noProxyCIDRs exclude its GitHub
 // host. The reserved-namespace guard is create-only (namespace is immutable), and
 // the structural gitHubURL check re-runs as version-agnostic defense even though
-// the CRD's immutability CEL should make it unreachable on update.
-func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.ActionsGateway) (admission.Warnings, error) {
+// the CRD's immutability CEL should make it unreachable on update. Deletion-only
+// updates — deletionTimestamp set, spec unchanged — are admitted without
+// re-validation (Q518; see validation.DeletionOnlyUpdate).
+func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2alpha1.ActionsGateway) (admission.Warnings, error) {
+	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
+		return nil, nil
+	}
 	if err := validation.GitHubURL(newObj.Spec.GitHubURL); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}

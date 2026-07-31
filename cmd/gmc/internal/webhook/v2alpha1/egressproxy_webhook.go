@@ -207,8 +207,13 @@ func (v *EgressProxyCustomValidator) ValidateCreate(ctx context.Context, obj *ag
 }
 
 // ValidateUpdate applies the same gates on update, so widening the destinations or
-// switching mode on an existing EgressProxy is checked too.
-func (v *EgressProxyCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
+// switching mode on an existing EgressProxy is checked too. Deletion-only updates —
+// deletionTimestamp set, spec unchanged — are admitted without re-validation
+// (Q518; see validation.DeletionOnlyUpdate).
+func (v *EgressProxyCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
+	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
+		return nil, nil
+	}
 	return v.validate(ctx, "update", newObj)
 }
 

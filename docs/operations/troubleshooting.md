@@ -955,10 +955,17 @@ kubectl --context "$CTX" get priorityclassallowlist -o jsonpath='{.items[*].spec
 ```
 
 **Cause.** The allowlist was narrowed while stored objects still named the removed
-class. The guard policy (and the GMC webhooks on the tenant-facing kinds)
-re-validate the **whole stored object on every update**, and removing a finalizer
-is an update — so the AGC's teardown write is denied on every retry. This is not a
-slow reconcile: nothing clears it until admission admits the write. See
+class, on a chart version **without the Q518 deletion-only exemption**. The guard
+policy (and the GMC webhooks on the tenant-facing kinds) re-validate the **whole
+stored object on every update**, and removing a finalizer is an update — so the
+AGC's teardown write was denied on every retry. This is not a slow reconcile:
+nothing clears it until admission admits the write.
+
+Current versions exempt deletion-only updates (deletionTimestamp set, spec
+unchanged) from re-validation in both admission layers, so this wedge no longer
+occurs: teardown completes even when the deleting objects name a removed class.
+If you hit these symptoms, the cluster is running a pre-Q518 policy/webhook —
+upgrade the chart, or recover in place as below. See
 [Narrowing the allowlist: drain stored references first](security-operations.md#narrowing-the-allowlist-drain-stored-references-first).
 
 **Recovery.**

@@ -17,6 +17,8 @@ import (
 
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // defaultReservedNamespaces are namespaces in which tenant-facing GAG CRs are
@@ -65,6 +67,24 @@ func ReservedNamespaces(podNamespace string) map[string]bool {
 func PrivilegedGrantPresent(nsLabels map[string]string) bool {
 	return nsLabels[gmcv1alpha1.PrivilegedProfileLabel] == gmcv1alpha1.PrivilegedProfileAllowed ||
 		nsLabels[v2alpha1.PrivilegedProfileLabel] == v2alpha1.PrivilegedProfileAllowed
+}
+
+// DeletionOnlyUpdate reports whether an update is a deletion-only write: the
+// object already carries a deletionTimestamp (set only by the API server on
+// delete, immutable once set) and the incoming spec is deep-equal to the stored
+// spec — the shape of a finalizer removal or any other metadata-only teardown
+// write. ValidateUpdate admits such writes without re-running the platform gates
+// (Q518): an object whose spec is identical to the already-stored spec cannot
+// reference anything the stored object does not, so skipping re-validation
+// widens nothing — while denying the write wedges teardown whenever a dynamic
+// gate has tightened since the object was stored (a PriorityClass allowlist
+// narrowed, an eligibility label removed), leaving finalizers permanently stuck
+// and the tenant namespace in Terminating (the Q499 wedge). A spec CHANGE on a
+// deleting object is not exempt and stays fully validated. The
+// priorityclass-allowlist-guard VAP carries the same exemption as a
+// matchCondition, so the two admission layers agree.
+func DeletionOnlyUpdate(newObj metav1.Object, oldSpec, newSpec any) bool {
+	return newObj.GetDeletionTimestamp() != nil && apiequality.Semantic.DeepEqual(oldSpec, newSpec)
 }
 
 // GitHubURL rejects a spec.gitHubURL that is not a well-formed GitHub

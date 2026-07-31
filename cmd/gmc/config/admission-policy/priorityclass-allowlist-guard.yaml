@@ -74,6 +74,22 @@ spec:
         apiVersions: ["v2alpha1", "v2beta1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["runnersets", "runnertemplates"]
+  matchConditions:
+    # Deletion-only updates are exempt (Q518): once the apiserver has set
+    # deletionTimestamp (set only on delete, immutable, never client-settable),
+    # an update whose spec is identical to the stored spec — finalizer removal
+    # above all — cannot change which classes the object names, so re-validating
+    # it widens nothing. Denying it wedges teardown after the allowlist is
+    # narrowed: the AGC's finalizer-removal write is refused forever and the
+    # tenant namespace hangs in Terminating (Q499). A spec CHANGE on a deleting
+    # object stays validated, so even a deleting object can never acquire a new
+    # class name. The GMC webhooks carry the same exemption
+    # (validation.DeletionOnlyUpdate), so the two admission layers agree.
+    - name: exclude-deletion-only-updates
+      expression: >-
+        oldObject == null || !has(object.metadata.deletionTimestamp)
+        || !has(object.spec) || !has(oldObject.spec)
+        || object.spec != oldObject.spec
   variables:
     # The allowlist, read straight off the param CR. The CRD schema constrains each
     # entry to a DNS 1123 subdomain and the list to a set, so there is no string to

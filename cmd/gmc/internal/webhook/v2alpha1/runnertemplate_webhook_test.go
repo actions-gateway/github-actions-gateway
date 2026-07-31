@@ -168,6 +168,41 @@ func TestRunnerTemplate_PodTemplatePriorityClassBypass(t *testing.T) {
 	})
 }
 
+// TestRunnerTemplate_DeletionOnlyUpdateExemption covers the Q518 exemption: a
+// deletion-only write (deletionTimestamp set, spec unchanged) on a template
+// naming a since-removed class is admitted so teardown cannot wedge (Q499);
+// live objects and spec changes on deleting ones stay denied.
+func TestRunnerTemplate_DeletionOnlyUpdateExemption(t *testing.T) {
+	v := &RunnerTemplateCustomValidator{} // nil allowlist: every named class is off-allowlist
+	now := metav1.Now()
+
+	deleting := func(finalizers ...string) *agcv2alpha1.RunnerTemplate {
+		rt := rtWithPriorityClass("removed-class")
+		rt.DeletionTimestamp = &now
+		rt.Finalizers = finalizers
+		return rt
+	}
+
+	t.Run("finalizer removal on a deleting template is admitted", func(t *testing.T) {
+		_, err := v.ValidateUpdate(context.Background(), deleting("example.com/cleanup"), deleting())
+		require.NoError(t, err)
+	})
+
+	t.Run("the same write on a live template is still denied", func(t *testing.T) {
+		old := rtWithPriorityClass("removed-class")
+		old.Finalizers = []string{"example.com/cleanup"}
+		_, err := v.ValidateUpdate(context.Background(), old, rtWithPriorityClass("removed-class"))
+		require.Error(t, err, "live objects keep the stored-object re-validation")
+	})
+
+	t.Run("a spec change on a deleting template is still denied", func(t *testing.T) {
+		changed := deleting()
+		changed.Spec.PodTemplate.Spec.Containers = append(changed.Spec.PodTemplate.Spec.Containers, corev1.Container{Name: "extra"})
+		_, err := v.ValidateUpdate(context.Background(), deleting("example.com/cleanup"), changed)
+		require.Error(t, err, "the exemption must not admit spec changes on a deleting object")
+	})
+}
+
 func TestRunnerTemplateCustomValidator_ValidateCreate(t *testing.T) {
 	v := &RunnerTemplateCustomValidator{}
 	clean := corev1.Container{Name: "runner"}

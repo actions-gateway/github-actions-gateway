@@ -45,6 +45,18 @@ spec:
         apiVersions: ["v2alpha1", "v2beta1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["runnersets", "runnertemplates"]
+  matchConditions:
+    # Deletion-only updates are exempt (Q518): deletionTimestamp is apiserver-set
+    # and immutable, and an update whose spec equals the stored spec (finalizer
+    # removal above all) cannot change which classes the object names — while
+    # denying it wedges teardown after the allowlist is narrowed (Q499). A spec
+    # change on a deleting object stays validated. The GMC webhooks carry the
+    # same exemption (validation.DeletionOnlyUpdate).
+    - name: exclude-deletion-only-updates
+      expression: >-
+        oldObject == null || !has(object.metadata.deletionTimestamp)
+        || !has(object.spec) || !has(oldObject.spec)
+        || object.spec != oldObject.spec
   variables:
     # The allowlist, read straight off the param CR. The CRD schema already
     # constrains each entry to a DNS 1123 subdomain and the list to a set, so
