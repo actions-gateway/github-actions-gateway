@@ -80,11 +80,11 @@ func (s *statusSink) eventCount(reason string) int {
 // startListenerWithSink starts a listener wired to a statusSink, with fast backoff
 // and a short sustained-rate-limit window so the condition paths are drivable in
 // test time.
-func startListenerWithSink(t *testing.T, srv *scalesettest.Server, sink *statusSink) (*scalesetlistener.Listener, int) {
+func startListenerWithSink(t *testing.T, srv *scalesettest.Server, sink *statusSink, opts ...func(*scalesetlistener.Config)) (*scalesetlistener.Listener, int) {
 	t.Helper()
 	client := newClient(t, srv)
 
-	l, err := scalesetlistener.New(scalesetlistener.Config{
+	cfg := scalesetlistener.Config{
 		Client:                  client,
 		ScaleSetName:            "linux",
 		OwnerName:               "acme/linux",
@@ -94,7 +94,11 @@ func startListenerWithSink(t *testing.T, srv *scalesettest.Server, sink *statusS
 		Events:                  sink,
 		PollBackoff:             5 * time.Millisecond,
 		RateLimitConditionAfter: 30 * time.Millisecond,
-	})
+	}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	l, err := scalesetlistener.New(cfg)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -127,7 +131,51 @@ func TestListener_PublishesHealthyBaselineOnStart(t *testing.T) {
 		"Start must publish Degraded=False/SessionAuthorized")
 	assert.True(t, sink.lastIs(v2alpha1.ConditionRateLimited, metav1.ConditionFalse, v2alpha1.ReasonPollingHealthy),
 		"Start must publish RateLimited=False/PollingHealthy")
+	assert.True(t, sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse, v2alpha1.ReasonJobsProvisioning),
+		"Start must publish JobProvisionStalled=False/JobsProvisioning")
 	assert.Zero(t, sink.eventCount("SessionUnauthorized"), "no warning events on the happy path")
+}
+
+// TestListener_StalledJobSurfacesConditionAndEvent is the Q551 status surface: a job
+// held for a re-offer must be visible on the RunnerSet — before the fix a permanently
+// conflicting job was dropped in silence, with the run left queued at GitHub and the
+// AGC reporting a healthy, idle listener. The condition clears when the job provisions.
+func TestListener_StalledJobSurfacesConditionAndEvent(t *testing.T) {
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	// Every runner name this scale set mints conflicts, so the one queued job exhausts
+	// the ladder. Staged before the listener starts: with capacity advertised from the
+	// first poll, a job enqueued afterwards is assigned at once.
+	srv.FailJITConfigNamePrefix("linux-")
+
+	sink := &statusSink{}
+	_, ssID := startListenerWithSink(t, srv, sink, func(c *scalesetlistener.Config) {
+		c.DeferredRetryBackoff = 20 * time.Millisecond
+	})
+	srv.EnqueueJob(ssID)
+
+	require.Eventually(t, func() bool {
+		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionTrue, v2alpha1.ReasonRunnerNameConflict)
+	}, 5*time.Second, 5*time.Millisecond,
+		"a job that cannot register a runner name must surface JobProvisionStalled=True")
+	require.Eventually(t, func() bool { return sink.eventCount("JobProvisionStalled") == 1 },
+		5*time.Second, 5*time.Millisecond, "the transition must record a JobProvisionStalled event")
+
+	cond, _ := sink.last(v2alpha1.ConditionJobProvisionStalled)
+	assert.Contains(t, cond.Message, "1 assigned job", "the message must say how many jobs are held")
+
+	// The re-offers keep failing while the conflict holds; the episode must not spam
+	// further events.
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 1, sink.eventCount("JobProvisionStalled"),
+		"one JobProvisionStalled event per episode, not one per re-offer")
+
+	srv.ClearJITConfigConflicts()
+	require.Eventually(t, func() bool {
+		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse, v2alpha1.ReasonJobsProvisioning)
+	}, 5*time.Second, 5*time.Millisecond,
+		"the job provisioning on a re-offer must clear the condition")
 }
 
 // TestListener_SustainedRateLimitSetsAndClearsCondition drives message polling into

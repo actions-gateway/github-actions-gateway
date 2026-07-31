@@ -116,6 +116,7 @@ type countingMetrics struct {
 	mu                           sync.Mutex
 	assigned, provisionedC, errs int
 	completed                    int
+	deferred                     int
 	completedResults             map[string]int
 }
 
@@ -131,10 +132,18 @@ func (m *countingMetrics) IncJobCompleted(result string) {
 	m.completedResults[result]++
 	m.mu.Unlock()
 }
+func (m *countingMetrics) SetDeferredJobs(n int) { m.mu.Lock(); m.deferred = n; m.mu.Unlock() }
 func (m *countingMetrics) completedCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.completed
+}
+
+// deferredCount returns the most recently published deferred-job gauge.
+func (m *countingMetrics) deferredCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.deferred
 }
 
 // provisionedCount returns the provisioned-worker metric. A test that asserts on this
@@ -147,6 +156,14 @@ func (m *countingMetrics) provisionedCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.provisionedC
+}
+
+// provisionErrors returns the provision-error counter on its own, for a test that
+// watches whether further attempts are still being made.
+func (m *countingMetrics) provisionErrors() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.errs
 }
 func (m *countingMetrics) snapshot() (assigned, provisioned, errs int) {
 	m.mu.Lock()

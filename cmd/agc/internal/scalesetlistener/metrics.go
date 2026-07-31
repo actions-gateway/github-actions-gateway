@@ -39,6 +39,11 @@ type Metrics struct {
 	// rung publishes a value each poll — zero when it did not bind — so a series never
 	// goes stale at its last non-zero reading.
 	CapacityWithheld *prometheus.GaugeVec
+	// JobsDeferred is how many assigned jobs the listener is holding for a re-offer
+	// because their runner name will not register (Q551) — the alertable mirror of the
+	// RunnerSet's JobProvisionStalled condition. Each one is a workflow run queued at
+	// GitHub with nothing running it.
+	JobsDeferred *prometheus.GaugeVec
 }
 
 // NewMetrics creates the scale-set tier's metrics and registers them with reg, which
@@ -84,6 +89,11 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "actions_gateway_scaleset_capacity_withheld",
 			Help: "Slots each admission rung removed from the declared worker ceiling on the most recent poll, by rung (reason).",
 		}, []string{"namespace", "runner_set", "reason"}),
+
+		JobsDeferred: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "actions_gateway_scaleset_jobs_deferred",
+			Help: "Assigned jobs held for a later re-offer because their runner name will not register; each is a queued workflow run with no worker (sets the JobProvisionStalled condition).",
+		}, []string{"namespace", "runner_set"}),
 	}
 	reg.MustRegister(
 		m.JobsAssignedTotal,
@@ -92,6 +102,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		m.JobsCompletedTotal,
 		m.AdvertisedCapacity,
 		m.CapacityWithheld,
+		m.JobsDeferred,
 	)
 	return m
 }
@@ -131,6 +142,7 @@ func (m *Metrics) DeleteRunnerSet(namespace, runnerSet string) {
 	labels := prometheus.Labels{"namespace": namespace, "runner_set": runnerSet}
 	m.AdvertisedCapacity.Delete(labels)
 	m.CapacityWithheld.DeletePartialMatch(labels)
+	m.JobsDeferred.Delete(labels)
 }
 
 // RecorderFor returns a MetricsRecorder that records into m's vectors under the given
@@ -165,4 +177,8 @@ func (r *recorder) IncProvisionError() {
 
 func (r *recorder) IncJobCompleted(result string) {
 	r.m.JobsCompletedTotal.WithLabelValues(r.namespace, r.runnerSet, result).Inc()
+}
+
+func (r *recorder) SetDeferredJobs(n int) {
+	r.m.JobsDeferred.WithLabelValues(r.namespace, r.runnerSet).Set(float64(n))
 }

@@ -13,6 +13,7 @@ Part of the [Observability](observability.md) guide. The metrics referenced belo
 | Jobs are not being acquired | `active_sessions` (should be ≥ 1 per RunnerGroup), `job_acquisition_errors_total` | Zero sessions = no polling |
 | Jobs are queuing but not starting | `active_sessions` (OK) vs `jobs_acquired_total` not incrementing | Check `RateLimited` condition |
 | Scale-set jobs assigned but not starting | `scaleset_jobs_assigned_total` rising vs `scaleset_jobs_provisioned_total` flat | Tier wedged; check `scaleset_provision_errors_total` and worker-pod quota (scale-set has no `active_sessions` gauge) |
+| One scale-set job never starts, the rest do | `scaleset_jobs_deferred` > 0 | Its runner name will not register; the listener re-offers it on a backoff. Read the `RunnerSet`'s `JobProvisionStalled` condition for the job ids; see the [runbook](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
 | Runner credentials are broken | `token_refresh_errors_total` | Spikes indicate Secret or GitHub App issue |
 | Evictions causing re-runs | `eviction_retries_total`, `eviction_retries_exhausted_total` | Exhausted budget requires manual intervention |
 | Quota rejecting worker pods | `quota_retries_total`, `quota_retries_exhausted_total` | Sustained retries mean tight quota headroom; exhausted budget requires manual intervention |
@@ -294,6 +295,18 @@ groups:
           runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetprovisionerrors"
           summary: "Scale-set provision errors for {{ $labels.runner_set }} in {{ $labels.namespace }}"
           description: "The scale-set acquisition tier is failing to provision worker pods (JIT-config mint or pod create) at >0.1/s for 10m. A transient failure retries on a later poll, but a sustained rate means provisioning is degraded — check the run service's generate-jitconfig responses and namespace quota headroom."
+
+      # Ticket: a job's runner name will not register, so nothing can run it (Q551)
+      - alert: ActionsGatewayScaleSetJobsDeferred
+        expr: |
+          actions_gateway_scaleset_jobs_deferred > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetjobsdeferred"
+          summary: "Scale-set job cannot register a runner name for {{ $labels.runner_set }} in {{ $labels.namespace }}"
+          description: "One or more jobs assigned to the scale set cannot register their runner name (generate-jitconfig 409), so no worker is running them; the listener keeps re-offering them. Each is a workflow run queued at GitHub. Read the RunnerSet's JobProvisionStalled condition for the job ids, then free the conflicting runner records."
 ```
 
 ---

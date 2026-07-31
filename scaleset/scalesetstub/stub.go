@@ -342,6 +342,17 @@ func (s *Stub) FailJITConfigNamePrefix(prefix string) {
 	s.mu.Unlock()
 }
 
+// ClearJITConfigConflicts drops every configured runner-name conflict, exact and
+// prefixed, modelling the stale registrations finally clearing. It is the lever for the
+// re-offer path: a job deferred because its name would not register must provision once
+// the conflict goes away, rather than staying queued at GitHub forever (Q551).
+func (s *Stub) ClearJITConfigConflicts() {
+	s.mu.Lock()
+	s.conflictJITNames = map[string]bool{}
+	s.conflictJITPrefixes = nil
+	s.mu.Unlock()
+}
+
 // jitConfigConflicts reports whether generatejitconfig should 409 for name. Caller
 // holds s.mu.
 func (s *Stub) jitConfigConflicts(name string) bool {

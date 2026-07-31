@@ -179,6 +179,10 @@ procedure rather than just the alert's `summary`/`description`. Severity classes
 
 **Ticket.** The scale-set tier is failing to provision worker pods (JIT-config mint or pod create) at a sustained rate. A transient failure retries on a later poll; a sustained rate means provisioning is degraded. Check the run service's `generate-jitconfig` responses and namespace quota headroom, then triage as for [Scale-set provisioning stalled](#scale-set-provisioning-stalled).
 
+### ActionsGatewayScaleSetJobsDeferred
+
+**Ticket.** One or more jobs assigned to a scale set cannot register their runner name (`generate-jitconfig` 409 that neither deleting the stale record nor a fresh suffixed name cleared), so no worker is running them. The listener holds each one and re-offers it on a backoff, so the run starts by itself as soon as the name is free — but until then it sits queued at GitHub. Read the job ids off the `RunnerSet`'s `JobProvisionStalled` condition, then free the conflicting runner records per [Scale-Set Job Stranded by a Stale Runner Record](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409).
+
 ### ActionsGatewayProxyConnectDenied
 
 **Ticket.** The egress proxy is refusing CONNECT requests to destinations off the egress allowlist at a sustained rate — a Server-Side Request Forgery (SSRF) / egress-policy signal. Every increment is an explicit allowlist denial (sharper than `dial_errors`, which also counts transient failures to *allowed* hosts).

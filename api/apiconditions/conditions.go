@@ -417,6 +417,32 @@ const (
 	ReasonSessionAuthorized = "SessionAuthorized"
 )
 
+// Job-provisioning stall condition (Q551), ScaleSet-only. A job GitHub assigned to
+// the scale set needs a runner registered under a name derived from its job id; when
+// a stale registration holds that name and neither deregistering it (Q334) nor a
+// bounded run of fresh suffixed names (Q270) clears it, no worker can be created for
+// that one job. The assignment is acked past so it cannot wedge the queue cursor, and
+// the queue never re-offers it — so the listener keeps re-offering it itself, and
+// reports the stall here meanwhile.
+//
+// Advisory (abnormal-is-True) and not in ImpairingConditionTypes: every other job the
+// set is assigned still provisions, so rolling it up as "this RunnerSet cannot serve
+// jobs" would overstate it. The stalled job ids are named in the message, and the
+// actions_gateway_scaleset_jobs_deferred gauge carries the same signal for alerting.
+const (
+	// ConditionJobProvisionStalled is True while one or more assigned jobs cannot be
+	// provisioned and are being re-offered on a backoff.
+	ConditionJobProvisionStalled = "JobProvisionStalled"
+
+	// ReasonRunnerNameConflict is the JobProvisionStalled=True reason: the runner
+	// name each stalled job needs is held by a registration that has not cleared.
+	ReasonRunnerNameConflict = "RunnerNameConflict"
+	// ReasonJobsProvisioning is the JobProvisionStalled=False reason: no assigned job
+	// is waiting on a runner name — either none ever was (published when the listener
+	// starts) or the last stalled job provisioned or completed.
+	ReasonJobsProvisioning = "JobsProvisioning"
+)
+
 // ImpairingConditionTypes returns the abnormal-is-True RunnerSet condition types
 // that, when True, mean the set cannot serve jobs: a listener that could register no
 // session (ConditionDegraded from revoked/invalid credentials, ConditionRunnerVersionTooOld
