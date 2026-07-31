@@ -311,6 +311,8 @@ The rule: a single point-in-time check is fine; a loop or a `--watch`/`-f` that 
 
 **A background task already wakes you — don't poll it.** Once work is launched detached, its completion notification is the signal; scheduling `sleep N; tail <log>` as a *second* background task to check on the first is the same anti-pattern wearing a different hat. It doesn't block the main thread, so it evades both the rule above and the foreground-guard hook, and it buys nothing the notification won't deliver. Launch, then do unrelated work or end the turn — you will be re-invoked when it exits.
 
+**"A single point-in-time check is fine" is not a licence to check fifteen times.** The carve-out above exists for *one* look when you need the state right now; repeating it every turn is a poll loop with the sleep outsourced to the conversation, and it evades the hooks for the same reason. The Q528 session spent ~15 turns on `grep -c '' <log>` and `ps aux | grep ginkgo` against runs that were already going to wake it. Two things make this tempting and both are traps: a buffered command (`make e2e-images` emits nothing until it finishes) makes progress look stalled, and a partially-written log invites reading a conclusion out of a line count. Neither is evidence — the exit notification is. If you genuinely cannot act until the run lands, end the turn.
+
 ### Slow tiers need an explicit timeout or a background run
 
 The Bash tool's default timeout is short (two minutes) and it **kills** anything that overruns — in the same two-week sample, 36 slow runs were killed mid-flight this way, wasting the whole run. Any invocation that can exceed the default — the envtest integration suites, the kind e2e tiers, and `go test -race` / `make test-race` above all — must therefore either:
@@ -513,6 +515,25 @@ So when you write a negative assertion:
 
 This is the negative-control idea above, aimed at the test's *premise* rather than its
 fix: ask what else would produce this same green, and close off the answers.
+
+**A positive assertion can be vacuous too — make the double testify.** The rule above is
+about "X did not happen"; the mirror case is "X happened" satisfied by state that
+predated the test. It bites hardest where the whole chain is fast: `E2E_AGC_ScaleSetAcquisition`
+drives an in-cluster stub whose long polls wake on enqueue, so its
+JobAvailable→acquire spec completes in ~34 ms — enqueue, claim, provision, assert. At
+that resolution a real pass and one satisfied by a leftover pod or an earlier spec's
+claim count are indistinguishable from the spec's own timings, and the first green run
+looked exactly like the vacuous one would have.
+
+The fix is not a sleep or a tighter matcher; it is to assert against the *server's*
+record of what it was asked to do. That spec attaches fakegithub's ordered call log —
+`create-session`, `poll cap=10`, `acquirejobs auth=queue ids=[…]`, `generatejitconfig` —
+as a report entry. It is diagnostics, not a gate (the assertions remain the gate), but it
+is what distinguishes "the AGC did this" from "this was already true." Reach for it when
+a spec's subject is a *sequence of calls* rather than a final state: the in-repo doubles
+all keep an ordered log (`Calls()` on the scale-set stub, `/control/reruns` and
+`/control/scaleset/state` on fakegithub) precisely so a spec can assert on what the
+server saw instead of inferring it from the client's logs.
 
 ### A measurement that reproduces a call is not a test of the code that makes it
 
