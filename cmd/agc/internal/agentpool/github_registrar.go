@@ -379,14 +379,7 @@ func (r *GithubRegistrar) runnerAPIPrefix() string {
 
 // apiBase returns the REST API root for the server hosting OrgURL.
 func (r *GithubRegistrar) apiBase() string {
-	if isHostedServer(r.OrgURL) {
-		return "https://api.github.com"
-	}
-	return extractHost(r.OrgURL) + "/api/v3"
-}
-
-func isHostedServer(githubURL string) bool {
-	return strings.Contains(githubURL, "github.com")
+	return githubapp.DeriveAPIBaseURL(r.OrgURL)
 }
 
 // isRepoURL reports whether githubURL refers to a repository (owner + repo)
@@ -418,19 +411,4 @@ func extractRepoPath(githubURL string) string {
 		return parts[3] + "/" + parts[4]
 	}
 	return ""
-}
-
-func extractHost(githubURL string) string {
-	// e.g. "https://github.example.com/myorg" → "https://github.example.com"
-	u := strings.TrimRight(githubURL, "/")
-	idx := strings.Index(u, "://")
-	if idx < 0 {
-		return u
-	}
-	rest := u[idx+3:]
-	slashIdx := strings.Index(rest, "/")
-	if slashIdx < 0 {
-		return u
-	}
-	return u[:idx+3+slashIdx]
 }

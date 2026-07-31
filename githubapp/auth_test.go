@@ -446,3 +446,36 @@ func TestResolveAPIBaseURL(t *testing.T) {
 		})
 	}
 }
+
+// ── DeriveAPIBaseURL (Q506) ──────────────────────────────────────────────────
+
+// TestDeriveAPIBaseURL pins the gitHubURL → API base derivation the GMC, the runner
+// registrar, and the scale-set client now share. The github.com-in-the-path case is
+// the defect that motivated collapsing them: the registrar's old substring test read
+// that GHES gateway as public SaaS and sent its registration calls to api.github.com.
+func TestDeriveAPIBaseURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		githubURL string
+		want      string
+	}{
+		{"public org", "https://github.com/acme", "https://api.github.com"},
+		{"public repo", "https://github.com/acme/repo", "https://api.github.com"},
+		{"www host", "https://www.github.com/acme", "https://api.github.com"},
+		{"api host", "https://api.github.com", "https://api.github.com"},
+		{"public host with port", "https://github.com:443/acme", "https://api.github.com"},
+		{"ghes org", "https://ghes.example.com/acme", "https://ghes.example.com/api/v3"},
+		{"ghes repo", "https://ghes.example.com/acme/repo", "https://ghes.example.com/api/v3"},
+		{"ghes on a non-default port keeps the port", "https://ghes.example.com:8443/acme", "https://ghes.example.com:8443/api/v3"},
+		{"ghes org path named github.com is not public", "https://ghes.example.com/github.com", "https://ghes.example.com/api/v3"},
+		{"trailing slash", "https://ghes.example.com/acme/", "https://ghes.example.com/api/v3"},
+		{"empty falls back to the public API", "", "https://api.github.com"},
+		{"unparseable falls back to the public API", "not a url", "https://api.github.com"},
+		{"scheme is preserved for the e2e stub", "http://fakegithub.e2e-infra.svc.cluster.local:8080/acme", "http://fakegithub.e2e-infra.svc.cluster.local:8080/api/v3"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, githubapp.DeriveAPIBaseURL(tc.githubURL))
+		})
+	}
+}

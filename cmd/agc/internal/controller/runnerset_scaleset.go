@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -246,28 +246,16 @@ func (r *RunnerSetReconciler) buildScaleSetClient(rs *v2alpha1.RunnerSet, gw *v2
 	if r.ScaleSetClientFactory != nil {
 		return r.ScaleSetClientFactory(rs, gw)
 	}
+	// APIBase is stated rather than left empty for the public case: the client's own
+	// default is the same value, and passing it explicitly keeps one resolver
+	// answering "which GitHub API?" across the AGC and the GMC (Q506). GHES also
+	// needs the JobAvailable→acquire path, which the client already handles by the
+	// one rule (§5a-U8).
 	return scaleset.New(scaleset.Config{
 		TokenProvider: r.TokenManager,
 		ConfigURL:     gw.Spec.GitHubURL,
-		APIBase:       scaleSetAPIBase(gw.Spec.GitHubURL),
+		APIBase:       githubapp.DeriveAPIBaseURL(gw.Spec.GitHubURL),
 	})
-}
-
-// scaleSetAPIBase returns the REST API base for a gateway's githubURL: empty (the
-// client's public-GitHub default) for github.com, or the GHES "/api/v3" base for a
-// GitHub Enterprise Server host. GHES also needs the JobAvailable→acquire path, which
-// the client already handles by the one rule (§5a-U8).
-func scaleSetAPIBase(githubURL string) string {
-	u, err := url.Parse(githubURL)
-	if err != nil || u.Host == "" {
-		return ""
-	}
-	switch u.Host {
-	case "github.com", "www.github.com", "api.github.com":
-		return ""
-	default:
-		return u.Scheme + "://" + u.Host + "/api/v3"
-	}
 }
 
 // stopScaleSetListener cancels and drops the scale-set listener for key, if present,

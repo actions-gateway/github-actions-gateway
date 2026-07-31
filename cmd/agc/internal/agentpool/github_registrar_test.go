@@ -152,6 +152,30 @@ func TestGithubRegistrar_Register(t *testing.T) {
 	assert.Equal(t, fixture.rsaKey.N, rsaKey.N, "returned key must match fixture")
 }
 
+// TestGithubRegistrar_Register_GHESOrgNamedGithubCom pins the registrar to the host
+// of its OrgURL rather than to a substring of the whole URL (Q506 #4). A GHES org
+// literally named "github.com" made the old strings.Contains test classify the
+// gateway as public SaaS, sending an installation token to api.github.com — a host
+// that never issued it. The stub server here is the only endpoint that answers, so
+// the request has to reach it for the call to succeed.
+func TestGithubRegistrar_Register_GHESOrgNamedGithubCom(t *testing.T) {
+	fixture := newJITFixture(t, 777)
+	srv := newGithubAPISrv(t, "orgs/github.com", 777, fixture)
+	defer srv.Close()
+
+	r := &agentpool.GithubRegistrar{
+		OrgURL:     srv.URL + "/github.com",
+		GroupID:    1,
+		HTTPClient: srv.Client(),
+	}
+	creds, err := r.Register(context.Background(), "install-token", agentpool.RegisterParams{
+		Name:    "test-runner",
+		Version: "2.335.1",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(777), creds.AgentID)
+}
+
 func TestGithubRegistrar_Register_JITConfigError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "generate-jitconfig") {

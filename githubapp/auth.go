@@ -210,6 +210,33 @@ func ResolveAPIBaseURL(allowInsecure bool) (string, error) {
 	return apiBase, nil
 }
 
+// DeriveAPIBaseURL returns the REST API base a gateway's GitHub URL implies:
+// https://api.github.com for public GitHub, or https://<host>/api/v3 for a GitHub
+// Enterprise Server appliance. A URL that does not parse or names no host yields the
+// public default rather than a base assembled from garbage; the CRD's ^https://
+// pattern keeps admitted gateways out of that branch.
+//
+// This is the single answer to "which GitHub API does this gateway address?". The GMC
+// injects it as GITHUB_API_BASE_URL so the AGC's token exchange resolves the same host
+// through ResolveAPIBaseURL; the runner registrar and the scale-set client call it
+// directly. Three call sites each derived it their own way before Q506, and the
+// substring test one of them used read a GHES org path named github.com as public SaaS.
+func DeriveAPIBaseURL(githubURL string) string {
+	u, err := url.Parse(githubURL)
+	if err != nil || u.Host == "" {
+		return defaultAPIBaseURL
+	}
+	switch u.Hostname() {
+	case "github.com", "www.github.com", "api.github.com":
+		return defaultAPIBaseURL
+	}
+	scheme := u.Scheme
+	if scheme == "" {
+		scheme = "https"
+	}
+	return scheme + "://" + u.Host + "/api/v3"
+}
+
 // validateAPIBaseURL enforces HTTPS for the token-exchange base URL. A plaintext
 // (http://) URL is rejected unless allowInsecure is set — the explicit dev/test
 // opt-in. The error names the offending URL (a non-secret) but never any token
