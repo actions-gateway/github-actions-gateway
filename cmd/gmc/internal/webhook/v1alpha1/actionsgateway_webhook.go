@@ -447,10 +447,9 @@ func validateSecurityProfileTransition(oldObj, newObj *gmcv1alpha1.ActionsGatewa
 	// Dual-read the downgrade opt-in across both domains AND both value keywords for
 	// the v1/v2 coexistence window (§H.12, Q147): the legacy
 	// actions-gateway.github.com/allow-profile-downgrade="true" and the aligned
-	// actions-gateway.com/allow-profile-downgrade="allowed" are both honored. This
-	// widens the accepted *spelling* of an explicit, deliberate opt-in only — the
-	// invariant (a downgrade requires an explicit annotation; fail-closed otherwise)
-	// is unchanged, so the dual-read never weakens the check.
+	// actions-gateway.com/allow-profile-downgrade="allowed" are both honored
+	// across the v1/v2 coexistence window — only the accepted *spelling* of the
+	// explicit opt-in is widened (cf. validation.PrivilegedGrantPresent).
 	if newObj.Annotations[gmcv1alpha1.AllowProfileDowngradeAnnotation] == "true" ||
 		newObj.Annotations[v2alpha1.AllowProfileDowngradeAnnotation] == v2alpha1.AllowProfileDowngradeAllowed {
 		return nil // explicit, deliberate downgrade

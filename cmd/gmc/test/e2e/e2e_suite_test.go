@@ -100,8 +100,7 @@ var _ = SynchronizedBeforeSuite(
 		rsaKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 
 		// Images are distributed via the local registry stood up by
-		// scripts/kind-with-registry.sh; kind nodes pull on demand. No
-		// per-image kind load step is needed here.
+		// scripts/kind-with-registry.sh; kind nodes pull on demand.
 
 		// Populate package-level vars so setup helpers can reference them.
 		gmcImage = gmcImg

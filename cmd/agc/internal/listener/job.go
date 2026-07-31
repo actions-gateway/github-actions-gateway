@@ -124,28 +124,20 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		payload = []byte(msg.Body)
 	}
 
-	// Dedup gate (Q260): claim this job by its planID — the job identity that
-	// collapses across GitHub's broker fan-out and names the shared worker Secret
-	// — AFTER AcquireJob (planID is only known post-acquire) but BEFORE
-	// provisioning. Under a concurrent burst the broker fans one job out to several
-	// sibling sessions as messages with DISTINCT RunnerRequestIDs; each sibling
-	// acquires its own delivery and the response carries the SAME planID, so
-	// without this every sibling would race to create the per-job worker Secret
-	// "job-<planID>" — one wins, the rest collide ("already exists"), fail
-	// provisioning, and die with their runner slot burned (busy but pod-less),
-	// collapsing the pool to a single worker (the Q260 wedge). A losing sibling
-	// skips provisioning and returns acquired=true so its consumed single-use
-	// runner is recycled back online (slot reclaimed cleanly) rather than left
-	// busy/offline. The claim is held for the whole job and released on return, so
-	// a later GitHub redelivery is provisionable again. Keying on planID — not the
-	// pre-acquire RunnerRequestID, which differs per sibling and so never deduped
-	// the fan-out (the ineffective first fix, c850764) — is what converges the
-	// siblings onto one provision.
+	// Dedup gate (Q260): claim this job by its planID AFTER AcquireJob (planID is
+	// only known post-acquire) but BEFORE provisioning. Under a concurrent burst
+	// the broker fans one job out to several sibling sessions with DISTINCT
+	// RunnerRequestIDs but the SAME planID, so without this every sibling would
+	// race to create the per-job worker Secret "job-<planID>" and die with its
+	// runner slot burned. A losing sibling skips provisioning and returns
+	// acquired=true so its consumed single-use runner is recycled back online.
+	// The claim is held for the whole job and released on return, so a later
+	// GitHub redelivery is provisionable again. See Config.ClaimJob.
 	//
-	// jobResult is the winner's pod-phase-proxy result, reported when it fans
-	// completion out to the deduped sibling deliveries on completion (Q260 Option A).
-	// It defaults to succeeded and is overwritten by the JobHandler's terminal
-	// result below; it is unused on the loser path.
+	// jobResult is the winner's pod-phase-proxy result, fanned out to the deduped
+	// sibling deliveries on completion (Q260 Option A). It defaults to succeeded
+	// and is overwritten by the JobHandler's terminal result below; it is unused
+	// on the loser path.
 	jobResult := broker.TaskResultSucceeded
 	if cfg.ClaimJob != nil && acquired && planID != "" {
 		delivery := SiblingDelivery{
@@ -171,9 +163,8 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 			// linger window, when the winner is gone), resolve this delivery here with
 			// the winner's recorded result — keyed on this delivery's OWN jobID
 			// (distinct from the winner's), so under the per-delivery lock model
-			// (Q247) it resolves only this assignment. Off by default until the run
-			// service's per-delivery completion semantics are live-confirmed (see
-			// Config.FanoutCompletion).
+			// (Q247) it resolves only this assignment. Gated by
+			// Config.FanoutCompletion.
 			if cfg.FanoutCompletion && claim.LateResult != "" && runServiceURL != "" {
 				completeSiblingDelivery(ctx, cfg, log, planID, delivery, claim.LateResult)
 				return acquired, nil
@@ -307,9 +298,7 @@ func completeSiblingDeliveries(ctx context.Context, cfg Config, log *slog.Logger
 // from the winner's; under the per-delivery lock model (Q247) completing it resolves
 // only that assignment. result is the winner's pod-phase proxy. Best-effort: the
 // call is bounded by the control-plane timeout and failures are logged and counted,
-// never fatal — the runner still recycles its slot. Reached only when
-// Config.FanoutCompletion is enabled; see that field for why this outward call is
-// off by default.
+// never fatal — the runner still recycles its slot. Gated by Config.FanoutCompletion.
 func completeSiblingDelivery(ctx context.Context, cfg Config, log *slog.Logger, planID string, sib SiblingDelivery, result broker.TaskResult) {
 	cctx, cancel := context.WithTimeout(ctx, cfg.controlPlaneTimeout())
 	defer cancel()

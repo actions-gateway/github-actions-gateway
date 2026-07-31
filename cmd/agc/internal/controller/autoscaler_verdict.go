@@ -27,10 +27,7 @@ import (
 // implementations collapse to two event vocabularies. The managed offerings are not a
 // third: GKE's autoscaler is CA-derived, EKS runs upstream CA or Karpenter, AKS runs
 // CA or Node Auto Provisioning (which is Karpenter), OpenShift's MachineAutoscaler
-// wraps CA. A registry plus an interface plus a config field would be pure overhead
-// over two switch arms, because every autoscaler yields the same boolean and the same
-// action — pluggable backends earn their keep when the BEHAVIOR differs per provider,
-// not when only the recognized input does.
+// wraps CA.
 //
 // # The safety asymmetry, and what it buys
 //

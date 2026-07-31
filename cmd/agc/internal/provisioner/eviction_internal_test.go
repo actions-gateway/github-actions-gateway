@@ -359,16 +359,11 @@ func TestHandleEviction_TerminalFailuresDoNotRetry(t *testing.T) {
 
 // TestRerunFailedJobs_RequiresAnExplicitBaseURL is the Q504 regression test.
 //
-// The bug was not a wrong URL — it was an UNSET field with a silent default. Nothing
-// in cmd/agc ever assigned Provisioner.GitHubAPIURL, so rerunFailedJobs quietly used
-// api.github.com no matter what GITHUB_API_BASE_URL said. On a GHES deployment that
-// meant posting an installation token to a host that had never issued it, and the
-// only symptom was a 401 naming a server the operator had not configured.
-//
-// A test that merely asserted "the configured URL is used" would have passed
-// throughout, because the tests all configure it. What was missing is this: an
-// unconfigured provisioner must REFUSE rather than guess, so the misconfiguration
-// surfaces at the call instead of as someone else's authentication error.
+// The bug was not a wrong URL — it was an UNSET field with a silent default:
+// nothing in cmd/agc assigned Provisioner.GitHubAPIURL, so rerunFailedJobs
+// quietly used api.github.com no matter what GITHUB_API_BASE_URL said, posting
+// an installation token to a host that had never issued it (a bare 401 on
+// GHES). An unconfigured provisioner must REFUSE rather than guess.
 func TestRerunFailedJobs_RequiresAnExplicitBaseURL(t *testing.T) {
 	var called atomic.Bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

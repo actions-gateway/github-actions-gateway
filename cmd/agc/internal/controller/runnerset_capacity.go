@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -456,18 +455,7 @@ func runnerSetWorkerPodSpec(rs *v2alpha1.RunnerSet, tmpl *v2alpha1.RunnerTemplat
 // list is already gatewayRef-scoped on a GMC-provisioned AGC, and the Reconcile
 // scoping guard drops any foreign set as defense-in-depth.
 func (r *RunnerSetReconciler) quotaToRunnerSets(ctx context.Context, obj client.Object) []ctrl.Request {
-	var list v2alpha1.RunnerSetList
-	if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
-		return nil
-	}
-	reqs := make([]ctrl.Request, 0, len(list.Items))
-	for i := range list.Items {
-		reqs = append(reqs, ctrl.Request{NamespacedName: types.NamespacedName{
-			Namespace: list.Items[i].Namespace,
-			Name:      list.Items[i].Name,
-		}})
-	}
-	return reqs
+	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(*v2alpha1.RunnerSet) bool { return true })
 }
 
 // evalRunnerSetWorkersUnschedulable computes the WorkersUnschedulable condition for a

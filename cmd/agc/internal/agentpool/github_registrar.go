@@ -72,8 +72,6 @@ type GithubRegistrar struct {
 // routed through the proxy would fail the TLS handshake with "certificate signed by
 // unknown authority". Deferring construction to first use — which happens during a
 // reconcile, well after the patch — captures the proxy-trusting transport (Q219).
-// Calling it via the accessor below also means a revert to an eager `*http.Client`
-// will not compile.
 var defaultRegistrarClient = sync.OnceValue(httpx.NewClient)
 
 func (r *GithubRegistrar) httpClient() *http.Client {

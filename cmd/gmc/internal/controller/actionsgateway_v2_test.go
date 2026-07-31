@@ -575,8 +575,8 @@ func TestBuildWorkloadNetworkPolicyV2_DirectEgress(t *testing.T) {
 	assert.True(t, hasDNSEgress(proxied))
 }
 
-// hasGitHubCIDREgress reports whether np has an egress rule with an ipBlock peer for
-// cidr on 443.
+// hasGitHubCIDREgress reports whether np has an egress rule with an ipBlock peer
+// for cidr.
 func hasGitHubCIDREgress(np *networkingv1.NetworkPolicy, cidr string) bool {
 	for _, e := range np.Spec.Egress {
 		for _, peer := range e.To {

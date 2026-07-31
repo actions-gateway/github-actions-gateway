@@ -27,16 +27,12 @@ import (
 // that this is safe *because* a displaced job recovers automatically. The packing half
 // was already covered elsewhere; this spec is the recovery half.
 //
-// # It started as a measurement, and the measurement said no
-//
-// Q423 predicted preemption would produce PodFailed/Evicted and reach the existing
-// recovery. Run on 2026-07-29 this spec measured the opposite — kube-scheduler DELETES
-// its victim, so no re-run fired and the published safety claim was wrong — and Q497
-// then closed the gap by keying recovery on the DisruptionTarget condition. The spec
-// kept its whole apparatus and flipped its rerun assertion from "never" to "exactly
-// once". The never-Evicted assertion stays: recovery here must be reached by the
-// scheduler's marker rather than by the pod taking the kubelet shape, and a failure of
-// that assertion means this spec is no longer measuring what it believes.
+// kube-scheduler DELETES its victim rather than producing PodFailed/Evicted (the
+// Q423 measurement), so recovery is keyed on the DisruptionTarget condition (Q497)
+// and this spec asserts exactly one re-run. The never-Evicted assertion stays:
+// recovery here must be reached by the scheduler's marker rather than by the pod
+// taking the kubelet shape, and a failure of that assertion means this spec is no
+// longer measuring what it believes.
 //
 // Why the mechanism works this way, and why the worker's disruption-safety annotations
 // and PodDisruptionBudgets cannot deflect it: docs/design/04-operational-flows.md §4.2,

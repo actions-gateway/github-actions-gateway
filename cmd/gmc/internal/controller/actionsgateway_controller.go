@@ -87,15 +87,10 @@ type ActionsGatewayReconciler struct {
 	Scheme *runtime.Scheme
 	// IPCache supplies cached GitHub IP CIDRs for the proxy NetworkPolicy
 	// egress rule. It is populated and refreshed by IPRangeReconciler;
-	// reads here are non-blocking and never perform network I/O. A nil
-	// cache or an empty snapshot is tolerated — the periodic reconciler
-	// will patch any NetworkPolicies that were created without CIDRs once
-	// it completes its first fetch.
-	//
-	// Earlier revisions did a network fetch on every reconcile, which
-	// serialised behind a single goroutine (MaxConcurrentReconciles=1)
-	// and stalled the reconciler queue whenever the GitHub API was slow
-	// or unreachable. The cache removes that blocking call.
+	// reads here are non-blocking and never perform network I/O (see
+	// IPRangeCache for why). A nil cache or an empty snapshot is tolerated —
+	// the periodic reconciler will patch any NetworkPolicies that were
+	// created without CIDRs once it completes its first fetch.
 	IPCache     *IPRangeCache
 	AGCImage    string
 	ProxyImage  string

@@ -21,10 +21,8 @@ const maxNameLen = 52
 // long names cannot collide after truncation; the boolean reports whether
 // truncation happened so the caller can warn the operator that a name changed.
 //
-// The truncation itself is [apinames.Truncate], which additionally trims a hyphen
-// the cut exposes — so a cut landing on one now yields "<head>-<hash>" rather than
-// "<head>--<hash>". Both are valid; the doubled separator was only ever cosmetic,
-// since the hash tail already guaranteed a valid final character.
+// The truncation itself is [apinames.Truncate], which additionally trims a
+// hyphen the cut exposes.
 func cap52(name string) (string, bool) {
 	if len(name) <= maxNameLen {
 		return name, false

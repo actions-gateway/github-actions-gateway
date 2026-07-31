@@ -149,12 +149,8 @@ func TestBuildEgressProxyNetworkPolicy_FQDNModeDropsCIDR(t *testing.T) {
 			ep.Spec.EgressPolicyMode = mode
 		})
 		np := buildEgressProxyNetworkPolicy(ep, cidrs)
-		for _, rule := range np.Spec.Egress {
-			for _, peer := range rule.To {
-				if peer.IPBlock != nil && peer.IPBlock.CIDR == "140.82.112.0/20" {
-					t.Fatalf("%s mode must not add the GitHub CIDR egress rule", mode)
-				}
-			}
+		if hasGitHubCIDREgress(np, "140.82.112.0/20") {
+			t.Fatalf("%s mode must not add the GitHub CIDR egress rule", mode)
 		}
 		assert.NotEmpty(t, np.Spec.Egress, "DNS egress is always present")
 		// Two ingress rules regardless of egress mode: workload → proxy port, and the

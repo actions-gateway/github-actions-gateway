@@ -153,9 +153,9 @@ type Config struct {
 	// lingers for the owner's completedPodTTL so a LATE redelivery arriving while
 	// the winner's Completed-but-not-yet-reaped worker pod still exists is also
 	// deduped (rather than colliding on `create Pod`) — a genuine redelivery after
-	// the pod is reaped provisions again. Keying on planID (not the pre-acquire
-	// RunnerRequestID, which differs per sibling and so never deduped the fan-out —
-	// the ineffective first Q260 fix, c850764) is what collapses the siblings. Nil
+	// the pod is reaped provisions again. Keying on planID rather than the
+	// pre-acquire RunnerRequestID (which differs per sibling delivery) is what
+	// collapses the siblings. Nil
 	// disables dedup (stub-only tests, or a response with no planID). Passing this
 	// caller's own delivery lets the winner reconcile it on GitHub's books under
 	// Option A (see ClaimResult, SiblingDelivery, and FanoutCompletion).
@@ -170,19 +170,15 @@ type Config struct {
 	// winner issues completejob for each tracked sibling — keyed on the sibling's OWN
 	// RunnerRequestID and job token — with the winner's pod-phase-proxy result, and a
 	// late redelivery arriving during the linger window is resolved with the recorded
-	// terminal result. Losers do NOT complete early (that was the rejected #513
-	// per-loser-immediate path, live-tested worse than the default).
+	// terminal result. Losers do NOT complete early.
 	//
-	// ON BY DEFAULT. The re-route #5 dogfood experiment (2026-07-04) confirmed the
-	// run service's completion is per-delivery, not planID-scoped: completejob on a
-	// sibling's OWN jobID resolves only that assignment (returns OK, not "already
-	// resolved"), while the winner's own delivery still carries the real workflow
-	// result reported by its runner binary — so the sibling pod-phase proxy cannot
-	// green a red workflow. Previously-wedged concurrent jobs concluded green with
-	// the flag on, the Q259 recycle 422 cleared per job on winner completion, and no
-	// job cancelled at the ~15-minute unstarted timeout. Opt out with AGC env
-	// AGC_FANOUT_COMPLETION=false. The operator runbook is the Q260
-	// redelivery-accounting section in docs/operations/troubleshooting.md.
+	// ON BY DEFAULT: the run service's completion is per-delivery, not
+	// planID-scoped — completejob on a sibling's OWN jobID resolves only that
+	// assignment, while the winner's own delivery still carries the real workflow
+	// result reported by its runner binary, so the sibling pod-phase proxy cannot
+	// green a red workflow. Opt out with AGC env AGC_FANOUT_COMPLETION=false. The
+	// operator runbook is the Q260 redelivery-accounting section in
+	// docs/operations/troubleshooting.md.
 	FanoutCompletion bool
 	// LoserRecycleDeferTimeout bounds how long a deduped fan-out loser waits for its
 	// winner to conclude before recycling its slot anyway (Q266). Zero selects

@@ -285,15 +285,11 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 	// a published latency figure.
 	//
 	// The re-run half is asserted outright, and a refused re-run FAILS the spec
-	// (Q510). Earlier revisions recorded the outcome as a report entry instead:
-	// first because Q495 left this tier unable to name the run it had to re-run
-	// (fixed, #967), then because the 2026-07-29 measurement found the re-run
-	// firing ~9.5 minutes before GitHub concludes the run and being refused with
-	// `403 This workflow is already running` (Q503). The AGC now retries a refused
-	// re-run until GitHub concludes the run and accepts it, so "the re-run landed
-	// and a second attempt ran" is a property this tier is required to have — and
-	// a spec that records a refusal and passes can neither verify that nor catch
-	// its regression (testing.md § negative assertions).
+	// (Q510): the AGC retries a refused re-run until GitHub concludes the run and
+	// accepts it (Q503), so "the re-run landed and a second attempt ran" is a
+	// property this tier is required to have — a spec that records a refusal and
+	// passes can neither verify that nor catch its regression (testing.md §
+	// negative assertions).
 	//
 	// Placed ahead of the Q459 spec below on purpose: a re-run this spec triggers
 	// would hold a worker for the fixture's full ten-minute sleep, and with no run-id
@@ -522,9 +518,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		runID := dispatchAndResolveRun(repoSlug, creds.longWorkflow)
 		AddReportEntry("Q459 workflow run", fmt.Sprintf("https://github.com/%s/actions/runs/%s", repoSlug, runID))
 		defer func() {
-			// Unconditional: the fixture job sleeps for ten minutes, and every exit
-			// path from here — pass, fail, or panic — must leave nothing running on
-			// the shared org's Actions minutes or on this tenant's worker capacity.
+			// Unconditional — same reasoning as the eviction spec's deferred cancel.
 			_, _ = utils.Run(exec.Command("gh", "run", "cancel", runID, "--repo", repoSlug))
 		}()
 

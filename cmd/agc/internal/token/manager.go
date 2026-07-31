@@ -61,9 +61,8 @@ type Manager struct {
 
 	// Namespace, Metrics, and Logger are optional; set after NewManager if desired.
 	// Logger defaults to logr.Discard() so a silent loop never panics — set it to
-	// surface fetch attempts, errors, and successes in production. Without a real
-	// logger the loop is invisible: a pod stuck on the initial fetch produces
-	// zero output, which is exactly what hid an earlier CI hang.
+	// surface fetch attempts, errors, and successes in production (see loop's
+	// logging policy).
 	Namespace string
 	Metrics   MetricsRecorder
 	Logger    logr.Logger
@@ -127,10 +126,9 @@ func (m *Manager) Start(ctx context.Context) {
 
 // loop is the background refresh goroutine.
 //
-// Logging policy: every iteration is observable. The previous silent-retry
-// implementation made a stuck initial fetch indistinguishable from a healthy
-// process — kubectl logs returned nothing for minutes. The Info/Error pair
-// here ensures one log line per attempt regardless of outcome.
+// Logging policy: every iteration is observable — one log line per attempt
+// regardless of outcome, so a stuck initial fetch is distinguishable from a
+// healthy process in kubectl logs.
 func (m *Manager) loop(ctx context.Context) {
 	const baseBackoff = 5 * time.Second
 	const maxBackoff = 60 * time.Second

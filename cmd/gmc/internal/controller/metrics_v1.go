@@ -76,10 +76,8 @@ func (c *managedGatewaysCollector) countV1(ctx context.Context) (float64, bool) 
 
 // runnerGroupsDegradedCollector exports the RunnerGroupsDegraded rollup condition
 // (Q158) as a gauge so operators can alert on impaired tenant RunnerGroups from
-// the gateway's single pane without kube-state-metrics. Like the other collectors
-// it reads at scrape time from the cached reader: a deleted ActionsGateway simply
-// stops being listed. The gauge mirrors the condition the reconciler already wrote
-// to .status.conditions (1 when True, 0 otherwise).
+// the gateway's single pane without kube-state-metrics. Scrape-time reads and
+// gauge semantics as managedGatewaysCollector.
 type runnerGroupsDegradedCollector struct {
 	reader   client.Reader
 	degraded *prometheus.Desc

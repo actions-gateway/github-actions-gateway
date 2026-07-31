@@ -22,12 +22,11 @@ import (
 )
 
 // newManager constructs the controller-runtime manager from the resolved config,
-// metrics server options, and webhook server. It preserves main()'s original
-// manager options verbatim, including the two-layer Secret isolation (a
-// metadata-only Secret informer via WatchesMetadata on the controllers, plus
-// DisableFor here so r.Get() bypasses the cache and reads Secret bodies fresh),
-// and LeaderElectionReleaseOnCancel for fast failover (safe because main() exits
-// immediately after mgr.Start returns).
+// metrics server options, and webhook server. The options include the two-layer
+// Secret isolation (a metadata-only Secret informer via WatchesMetadata on the
+// controllers, plus DisableFor here so r.Get() bypasses the cache and reads
+// Secret bodies fresh) and LeaderElectionReleaseOnCancel for fast failover
+// (safe because main() exits immediately after mgr.Start returns).
 func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Options,
 	webhookServer webhook.Server) (ctrl.Manager, error) {
 	return ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{

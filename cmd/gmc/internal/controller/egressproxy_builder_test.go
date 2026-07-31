@@ -212,15 +212,7 @@ func TestBuildEgressProxyNetworkPolicy(t *testing.T) {
 	np := buildEgressProxyNetworkPolicy(managed, cidrs)
 	assert.Equal(t, "shared-proxy", np.Name)
 	assert.Equal(t, "shared", np.Spec.PodSelector.MatchLabels[egressProxyComponentLabel])
-	foundGitHub := false
-	for _, rule := range np.Spec.Egress {
-		for _, peer := range rule.To {
-			if peer.IPBlock != nil && peer.IPBlock.CIDR == "140.82.112.0/20" {
-				foundGitHub = true
-			}
-		}
-	}
-	assert.True(t, foundGitHub, "managed policy must allow egress to the GitHub CIDR")
+	assert.True(t, hasGitHubCIDREgress(np, "140.82.112.0/20"), "managed policy must allow egress to the GitHub CIDR")
 	// Two ingress rules: workload pods → proxy port, monitoring namespaces → metrics
 	// port (Q324).
 	require.Len(t, np.Spec.Ingress, 2)
@@ -235,13 +227,7 @@ func TestBuildEgressProxyNetworkPolicy(t *testing.T) {
 		ep.Spec.ManagedNetworkPolicy = ptr(false)
 	})
 	npU := buildEgressProxyNetworkPolicy(unmanaged, cidrs)
-	for _, rule := range npU.Spec.Egress {
-		for _, peer := range rule.To {
-			if peer.IPBlock != nil && peer.IPBlock.CIDR == "140.82.112.0/20" {
-				t.Fatal("unmanaged policy must not add the GitHub CIDR egress rule")
-			}
-		}
-	}
+	assert.False(t, hasGitHubCIDREgress(npU, "140.82.112.0/20"), "unmanaged policy must not add the GitHub CIDR egress rule")
 	assert.NotEmpty(t, npU.Spec.Egress, "DNS egress is always present")
 }
 

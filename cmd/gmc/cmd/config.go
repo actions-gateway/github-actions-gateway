@@ -35,7 +35,7 @@ type resolvedConfig struct {
 }
 
 // resolveConfig validates the GMC's cross-flag configuration and builds the live
-// objects the rest of startup consumes, in the same order main() did: construct
+// objects the rest of startup consumes: construct
 // both PriorityClass allowlists and reject an intersection (a class nameable from
 // both a worker and an infra pod would let a tenant lift its workers to infra
 // priority and preempt other tenants' proxies, Q284); parse the egress-CIDR
@@ -159,8 +159,7 @@ type gmcImages struct {
 // injected (os.Getenv/os.Environ in production; fakes in tests). Unless
 // --allow-floating-image-tags is set, every injected image must be pinned by
 // sha256 digest so a mutated tag cannot silently swap the code that runs inside a
-// tenant's gateway (supply-chain hardening). This preserves main()'s original
-// order: required-env check, then digest validation, then AGC_EXTRA_* / wrapper.
+// tenant's gateway (supply-chain hardening).
 func resolveImages(cfg *gmcFlags, getenv func(string) string, environ func() []string) (gmcImages, error) {
 	agcImage, err := mustEnv(getenv, "AGC_IMAGE")
 	if err != nil {

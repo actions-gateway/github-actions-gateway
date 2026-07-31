@@ -179,29 +179,21 @@ func parseRetentionConfig(getenv func(string) string) (retentionConfig, error) {
 			retentionPhaseArm, retentionPhaseCheck, retentionPhaseCleanup, cfg.Phase)
 	}
 
-	mustEnv := func(name string) (string, error) {
-		v := getenv(name)
-		if v == "" {
-			return "", fmt.Errorf("required environment variable %s is not set", name)
-		}
-		return v, nil
-	}
-
-	appIDStr, err := mustEnv("GITHUB_APP_ID")
+	appIDStr, err := mustEnv(getenv, "GITHUB_APP_ID")
 	if err != nil {
 		return retentionConfig{}, err
 	}
 	if _, err := fmt.Sscan(appIDStr, &cfg.AppID); err != nil {
 		return retentionConfig{}, fmt.Errorf("parse GITHUB_APP_ID: %w", err)
 	}
-	installIDStr, err := mustEnv("GITHUB_APP_INSTALLATION_ID")
+	installIDStr, err := mustEnv(getenv, "GITHUB_APP_INSTALLATION_ID")
 	if err != nil {
 		return retentionConfig{}, err
 	}
 	if _, err := fmt.Sscan(installIDStr, &cfg.InstallationID); err != nil {
 		return retentionConfig{}, fmt.Errorf("parse GITHUB_APP_INSTALLATION_ID: %w", err)
 	}
-	pemValue, err := mustEnv("GITHUB_APP_PRIVATE_KEY")
+	pemValue, err := mustEnv(getenv, "GITHUB_APP_PRIVATE_KEY")
 	if err != nil {
 		return retentionConfig{}, err
 	}
@@ -209,7 +201,7 @@ func parseRetentionConfig(getenv func(string) string) (retentionConfig, error) {
 	if err != nil {
 		return retentionConfig{}, fmt.Errorf("load GITHUB_APP_PRIVATE_KEY: %w", err)
 	}
-	cfg.ConfigURL, err = mustEnv("GITHUB_ORG_URL")
+	cfg.ConfigURL, err = mustEnv(getenv, "GITHUB_ORG_URL")
 	if err != nil {
 		return retentionConfig{}, err
 	}
@@ -273,10 +265,7 @@ type retentionProbe struct {
 }
 
 // newRetentionProbe builds the scenario around a scaleset.Client wired to the
-// probe's wire logger. apiBase is the REST API root (https://api.github.com in
-// production; an httptest URL under test); hc and pollClient are the client's
-// short-call and long-poll HTTP clients, and may be nil to take the library's
-// egress-proxy-aware defaults.
+// probe's wire logger. Arguments as newScalesetProbe.
 func newRetentionProbe(logger *slog.Logger, cfg retentionConfig, provider githubapp.TokenProvider,
 	apiBase string, hc, pollClient *http.Client) (*retentionProbe, error) {
 	client, err := scaleset.New(scaleset.Config{

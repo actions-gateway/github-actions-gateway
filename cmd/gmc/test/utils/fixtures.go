@@ -17,13 +17,9 @@ import (
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 )
 
-// This file holds the v1alpha1 tenant fixture the e2e suite applies. It replaces the
-// four near-duplicate ApplyActionsGatewayCR* builders that preceded it (Q414), each of
-// which carried its own copy of the same ~30-line YAML document and the same three
-// explanatory comment blocks, and differed only in which RunnerGroup knobs it set.
-// Adding a fifth for the DinD shape would have been the obvious move and the wrong
-// one: the fixture is a typed struct with chainable presets, so a new tenant shape is
-// a few fields rather than another copy of the whole document.
+// This file holds the v1alpha1 tenant fixture the e2e suite applies: a typed
+// struct with chainable presets, so a new tenant shape is a few fields rather
+// than another copy of the whole document (Q414).
 //
 // The CR is built from the real API types and marshalled, not string-formatted, so a
 // field renamed in cmd/gmc/api or cmd/agc/api breaks the compile instead of silently

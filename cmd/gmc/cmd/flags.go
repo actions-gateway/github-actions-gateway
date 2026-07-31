@@ -10,8 +10,7 @@ import (
 // gmcFlags holds every command-line flag the GMC binds. Declaring them into a
 // struct via addFlags (rather than inline in main) makes the ~25-flag surface and
 // its defaults visible in one place and unit-testable against a throwaway
-// flag.FlagSet, without changing what main() binds onto flag.CommandLine
-// (structural-debt-audit-2026-07 F8 / Q367).
+// flag.FlagSet (Q367).
 type gmcFlags struct {
 	metricsAddr     string
 	metricsCertPath string
@@ -49,9 +48,8 @@ type gmcFlags struct {
 }
 
 // addFlags declares the GMC's flags into fs and returns the struct they bind to.
-// main passes flag.CommandLine (so behavior is identical to the previous inline
-// declarations); tests pass a fresh flag.FlagSet to assert defaults and parsing.
-// The flag names, defaults, and help text are unchanged from the original main().
+// main passes flag.CommandLine; tests pass a fresh flag.FlagSet to assert
+// defaults and parsing.
 func addFlags(fs *flag.FlagSet) *gmcFlags {
 	f := &gmcFlags{}
 	fs.StringVar(&f.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+

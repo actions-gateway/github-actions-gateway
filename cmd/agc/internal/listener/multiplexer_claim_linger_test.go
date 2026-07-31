@@ -25,7 +25,6 @@ func TestMultiplexer_ClaimLinger_DedupsLateRedelivery(t *testing.T) {
 	m.now = func() time.Time { return now }
 	m.ClaimLinger = 5 * time.Minute
 
-	// The winner claims the planID.
 	winner := m.claimJob(planID, SiblingDelivery{})
 	if !winner.Won {
 		t.Fatal("winner should acquire the claim on a fresh planID")

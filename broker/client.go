@@ -236,7 +236,7 @@ func (c *Client) httpClient() *http.Client {
 	return defaultBrokerClient
 }
 
-// newRequest builds a JSON POST request to url with body marshalled from v.
+// newJSONRequest builds a request to url with body marshalled as JSON.
 func (c *Client) newJSONRequest(ctx context.Context, method, url string, body any) (*http.Request, error) {
 	var r io.Reader
 	if body != nil {
@@ -481,20 +481,16 @@ func (c *Client) AcquireJob(ctx context.Context, runServiceURL string, reqData J
 
 // RenewJob renews the job lock on the run service URL. Must be called every
 // 60 seconds after AcquireJob succeeds. runServiceURL must come from
-// RunnerJobRequestBody.RunServiceURL, not from Client.BrokerURL. Set
-// reqData.AuthToken to the acquirejob response's job-scoped token
-// (AcquireJobResponse.JobAuthToken); without it the run service rejects the
-// renewal with 401 "Not authorized for this job" (Q247).
+// RunnerJobRequestBody.RunServiceURL, not from Client.BrokerURL. reqData.AuthToken
+// must be the job-scoped token — see AcquireJobResponse.JobAuthToken (Q247).
 func (c *Client) RenewJob(ctx context.Context, runServiceURL string, reqData RenewJobRequest) (*RenewJobResponse, error) {
 	req, err := c.newJSONRequest(ctx, http.MethodPost, runServiceURL+"/renewjob", reqData)
 	if err != nil {
 		return nil, err
 	}
-	// A job's lock is renewed with the job-scoped token minted at acquisition (the
-	// SystemVssConnection AccessToken from the acquirejob response), not the broker
-	// session token: the run service returns 401 "Not authorized for this job" for
-	// the session token even though it accepted that same token to *claim* the job
-	// (Q247). Fall back to Client.Token when the caller has no job token.
+	// Job-scoped token, not the broker session token (see
+	// AcquireJobResponse.JobAuthToken). Fall back to Client.Token when the
+	// caller has no job token.
 	if reqData.AuthToken != "" {
 		req.Header.Set("Authorization", "Bearer "+reqData.AuthToken)
 	}
@@ -525,10 +521,8 @@ func (c *Client) RenewJob(ctx context.Context, runServiceURL string, reqData Ren
 
 // CompleteJob reports a job's terminal result to POST {run_service_url}/completejob.
 // runServiceURL must come from RunnerJobRequestBody.RunServiceURL, not from
-// Client.BrokerURL. Set reqData.AuthToken to the acquirejob response's job-scoped
-// token (AcquireJobResponse.JobAuthToken); without it the run service rejects the
-// call with 401 "Not authorized for this job", exactly as it does for renewjob
-// (Q247).
+// Client.BrokerURL. reqData.AuthToken must be the job-scoped token — see
+// AcquireJobResponse.JobAuthToken (Q247).
 //
 // In GAG the worker pod's runner binary makes this call for a job it ran; the AGC
 // calls it directly only to release a deduplicated duplicate delivery it acquired
@@ -544,10 +538,9 @@ func (c *Client) CompleteJob(ctx context.Context, runServiceURL string, reqData 
 	if err != nil {
 		return err
 	}
-	// Per-job completion is authorized with the job-scoped token from the acquirejob
-	// response, not the broker session token — the run service rejects the session
-	// token for per-job operations (401 "Not authorized for this job", Q247). Fall
-	// back to Client.Token when the caller has no job token (test/stub use).
+	// Job-scoped token, not the broker session token (see
+	// AcquireJobResponse.JobAuthToken). Fall back to Client.Token when the
+	// caller has no job token (test/stub use).
 	if reqData.AuthToken != "" {
 		req.Header.Set("Authorization", "Bearer "+reqData.AuthToken)
 	}

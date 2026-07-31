@@ -279,12 +279,7 @@ func TestProvisioner_CreatesPodAndSecret(t *testing.T) {
 	}()
 
 	// Wait for the pod to appear, then complete it.
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	assert.Equal(t, agcnames.ControllerName, pod.Labels["app.kubernetes.io/managed-by"])
 	assert.Equal(t, "mygroup", pod.Labels["actions-gateway/runner-group"])
 
@@ -385,14 +380,7 @@ func TestProvisioner_ScaleSetWorker_StagesJITAndSetsMode(t *testing.T) {
 	// The pod runs in scale-set mode and mounts its Secret.
 	pod := findPod(ctx, t, fc, "team-a")
 	require.NotNil(t, pod)
-	var runner *corev1.Container
-	for i := range pod.Spec.Containers {
-		if pod.Spec.Containers[i].Name == "runner" {
-			runner = &pod.Spec.Containers[i]
-			break
-		}
-	}
-	require.NotNil(t, runner, "runner container must exist")
+	runner := runnerOf(t, pod)
 	var mode string
 	for _, e := range runner.Env {
 		if e.Name == "WORKER_MODE" {
@@ -451,11 +439,7 @@ func TestProvisioner_DeletesSecretOnCompletion(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-del", stubPayload(1), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
 	require.NoError(t, <-done)
 
@@ -637,20 +621,8 @@ func TestProvisioner_WorkerImageFallback(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-img", stubPayload(1), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
-	var runnerContainer *corev1.Container
-	for i := range pod.Spec.Containers {
-		if pod.Spec.Containers[i].Name == "runner" {
-			runnerContainer = &pod.Spec.Containers[i]
-			break
-		}
-	}
-	require.NotNil(t, runnerContainer)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
+	runnerContainer := runnerOf(t, pod)
 	assert.Equal(t, "my-custom-image:latest", runnerContainer.Image)
 
 	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
@@ -677,12 +649,7 @@ func TestProvisioner_NamedImagelessRunnerGapFilled(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-gapfill", stubPayload(1), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	runner := runnerOf(t, pod)
 	assert.Equal(t, "my-custom-image:latest", runner.Image, "image-less runner must be gap-filled with the resolved worker image")
 
@@ -708,12 +675,7 @@ func TestProvisioner_NamedRunnerImageNotOverridden(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-nooverride", stubPayload(1), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	runner := runnerOf(t, pod)
 	assert.Equal(t, "tenant-image:pinned", runner.Image, "an explicitly-set runner image must not be overridden")
 
@@ -740,12 +702,7 @@ func TestProvisioner_ReservedFieldsOverwritten(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-reserved", stubPayload(1), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	assert.Equal(t, "agc-worker", pod.Spec.ServiceAccountName)
 	assert.False(t, pod.Spec.HostPID)
 	assert.False(t, pod.Spec.HostNetwork)
@@ -806,9 +763,7 @@ func TestProvisioner_ContextCancellation(t *testing.T) {
 	}()
 
 	// Wait for pod to be created, then cancel.
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
+	waitForPodCreated(ctx, t, fc, "team-a")
 
 	cancel()
 
@@ -833,12 +788,7 @@ func TestProvisioner_PodNameDNSSafe(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "PLAN/ID:with:COLONS/and/SLASHES", stubPayload(1), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
 	// Pod name must be a valid DNS label: lowercase, alphanumeric+hyphens, ≤63 chars.
 	assert.LessOrEqual(t, len(pod.Name), 63)
@@ -864,12 +814,7 @@ func TestProvisioner_SecretMountedInPod(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-mount", stubPayload(1), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
 	// Assert Secret volume exists.
 	var secretVol *corev1.Volume
@@ -882,14 +827,7 @@ func TestProvisioner_SecretMountedInPod(t *testing.T) {
 	require.NotNil(t, secretVol, "pod should have a Secret volume")
 
 	// Assert runner container has the volume mounted and env var set.
-	var runner *corev1.Container
-	for i := range pod.Spec.Containers {
-		if pod.Spec.Containers[i].Name == "runner" {
-			runner = &pod.Spec.Containers[i]
-			break
-		}
-	}
-	require.NotNil(t, runner)
+	runner := runnerOf(t, pod)
 
 	var hasMount bool
 	for _, m := range runner.VolumeMounts {
@@ -941,11 +879,7 @@ func TestProvisioner_EvictionAutoRetry(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-evict", payload, "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
 	// Job annotations must be stamped on the pod from the payload.
 	assert.Equal(t, "99", pod.Annotations["actions-gateway.com/run-id"])
@@ -1173,11 +1107,7 @@ func TestProvisioner_EvictionRerunAPI5xx(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-5xx", payload, "") }()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	evictPod(ctx, t, fc, "team-a", pod.Name)
 
 	// H2: 5xx response is non-fatal — provision must return nil.
@@ -1424,12 +1354,7 @@ func TestProvisioner_PodDeletedExternallySucceeds(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-extdel", payload, "") }()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
 	// Simulate operator deleting the pod externally.
 	require.NoError(t, fc.Delete(ctx, pod))
@@ -1465,12 +1390,7 @@ func TestBuildPod_InjectsProxyEnv(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-proxy", stubPayload(1), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
 	envMap := make(map[string]string)
 	for _, e := range pod.Spec.Containers[0].Env {
@@ -1516,12 +1436,7 @@ func TestBuildPod_MountsProxyCASecret(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-proxy-ca", stubPayload(1), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
 	var caVol *corev1.Volume
 	for i := range pod.Spec.Volumes {
@@ -1539,14 +1454,7 @@ func TestBuildPod_MountsProxyCASecret(t *testing.T) {
 	assert.Equal(t, corev1.TLSCertKey, caVol.Secret.Items[0].Key)
 	assert.Equal(t, testProxyCAFileName, caVol.Secret.Items[0].Path)
 
-	var runner *corev1.Container
-	for i := range pod.Spec.Containers {
-		if pod.Spec.Containers[i].Name == "runner" {
-			runner = &pod.Spec.Containers[i]
-			break
-		}
-	}
-	require.NotNil(t, runner)
+	runner := runnerOf(t, pod)
 
 	var caMount *corev1.VolumeMount
 	for i := range runner.VolumeMounts {
@@ -1588,12 +1496,7 @@ func TestBuildPod_NoProxyCAWhenSecretNameEmpty(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-no-proxy-ca", stubPayload(1), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
 	for _, v := range pod.Spec.Volumes {
 		assert.NotEqual(t, testProxyCAVolumeName, v.Name,
@@ -1658,11 +1561,7 @@ func TestProvisioner_RerunURLRejectsAdversarialRepository(t *testing.T) {
 			done := make(chan error, 1)
 			go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-adv-repo", payload, "") }()
 
-			require.Eventually(t, func() bool {
-				return findPod(ctx, t, fc, "team-a") != nil
-			}, 2*time.Second, 5*time.Millisecond)
-
-			pod := findPod(ctx, t, fc, "team-a")
+			pod := waitForPodCreated(ctx, t, fc, "team-a")
 			evictPod(ctx, t, fc, "team-a", pod.Name)
 			require.NoError(t, <-done) // eviction is non-fatal
 
@@ -1695,12 +1594,7 @@ func TestBuildPod_OverwritesTenantProxyEnv(t *testing.T) {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-overwrite", stubPayload(1), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
 	envMap := make(map[string]string)
 	for _, e := range pod.Spec.Containers[0].Env {
@@ -1741,11 +1635,7 @@ func TestProvisioner_RGMaxEvictionRetriesZero(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-zero-retry", payload, "") }()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	evictPod(ctx, t, fc, "team-a", pod.Name)
 	require.NoError(t, <-done)
 
@@ -1855,11 +1745,7 @@ func TestProvisioner_RGEvictionRetryDelay(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-delay", payload, "") }()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	evictAt := time.Now()
 	evictPod(ctx, t, fc, "team-a", pod.Name)
 	require.NoError(t, <-done)
@@ -1895,11 +1781,7 @@ func TestProvisioner_QuotaRetrySucceeds(t *testing.T) {
 	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-quota-ok", payload, "") }()
 
 	// Pod appears after the first (failed) attempt retries.
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	pod := findPod(ctx, t, fc, "team-a")
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
 	require.NoError(t, <-done)
 
@@ -2011,11 +1893,7 @@ func runAndGetPod(ctx context.Context, t *testing.T, p *provisioner.Provisioner,
 	go func() {
 		done <- errOnly(p.HandlerFor(rg))(ctx, "", planID, stubPayload(1), "")
 	}()
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, ns) != nil
-	}, 2*time.Second, 5*time.Millisecond)
-	pod := findPod(ctx, t, fc, ns)
-	require.NotNil(t, pod)
+	pod := waitForPodCreated(ctx, t, fc, ns)
 	completePod(ctx, t, fc, ns, pod.Name, corev1.PodSucceeded)
 	require.NoError(t, <-done)
 	return pod

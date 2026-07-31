@@ -2,16 +2,15 @@
 // wire protocol's session and credential mechanics shared by every in-repo
 // broker test double.
 //
-// Three doubles used to hand-reimplement the same protocol: broker/brokertest
-// (the in-process integration stub), test/fakegithub (the deployed fake-GitHub e2e
-// image), and cmd/agc/test/load (the load harness). They diverge in what a job
-// delivery and an AcquireJob mean — fan-out accounting, single-use JIT
-// consumption, saturated auto-delivery — but they agreed, byte for byte, on the
-// parts that are not scenario-specific: minting "session-<n>" IDs, resolving a
+// The doubles — broker/brokertest (the in-process integration stub),
+// test/fakegithub (the deployed fake-GitHub e2e image), and cmd/agc/test/load
+// (the load harness) — diverge in what a job delivery and an AcquireJob mean:
+// fan-out accounting, single-use JIT consumption, saturated auto-delivery. The
+// parts that are not scenario-specific — minting "session-<n>" IDs, resolving a
 // DELETE /session by its sessionId query param or its bearer token, listing the
 // live sessions, and the connection-reuse-safe JSON framing GitHub's clients
-// require. Those mechanics live here, implemented once, so a wire-protocol
-// change is made in one place rather than three.
+// require — live here, implemented once, so a wire-protocol change is made in
+// one place rather than three.
 //
 // The package is deliberately dependency-free (standard library only): the
 // fakegithub image links it into a distroless binary that is Trivy-scanned, so

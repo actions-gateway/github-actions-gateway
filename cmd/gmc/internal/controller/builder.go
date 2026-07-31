@@ -296,8 +296,8 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 					// Required (not preferred) anti-affinity: proxy replicas must
 					// land on distinct nodes so a single node failure or drain never
 					// takes the whole tenant's egress pool down at once. Preferred
-					// scheduling let both replicas co-locate, which silently defeated
-					// the PodDisruptionBudget. Trade-off: the proxy pool needs at
+					// scheduling would let both replicas co-locate, silently
+					// defeating the PodDisruptionBudget. Trade-off: the proxy pool needs at
 					// least Spec.Proxy.MinReplicas schedulable nodes — on a
 					// single-node dev/kind cluster (test/kind-config-1worker.yaml)
 					// the second replica stays Pending; set proxy.minReplicas=1
@@ -678,7 +678,7 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 	env = append(env, tracingEnv(ag.Spec.Tracing)...)
 	env = append(env, extraEnv...)
 
-	// v1 stamps no resources on the AGC container (unchanged behavior); only the
+	// v1 stamps no resources on the AGC container; only the
 	// v2 ActionsGateway exposes the tunable agcResources field (Q171). The zero
 	// ResourceRequirements is byte-identical to leaving the field unset.
 	return buildAGCDeploymentFrom(ag.Namespace,

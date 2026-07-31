@@ -58,10 +58,10 @@ func init() {
 // controllers, webhooks, and health checks before starting the manager. The
 // concern-scoped steps live in flags.go (addFlags), config.go (resolveConfig,
 // resolveImages, the option builders), and wiring.go (newManager,
-// registerControllers, registerWebhooks, setupHealthChecks) — extracted from what
-// was one 669-line function so each concern is test-reachable (Q367 / F8). The
-// ordering here is load-bearing: config validation and manager construction
-// precede image resolution and controller/webhook registration exactly as before.
+// registerControllers, registerWebhooks, setupHealthChecks) so each concern is
+// test-reachable (Q367). The ordering here is load-bearing: config validation
+// and manager construction precede image resolution and controller/webhook
+// registration.
 func main() {
 	cfg := addFlags(flag.CommandLine)
 	// Default to production logging: structured JSON at info level, which log

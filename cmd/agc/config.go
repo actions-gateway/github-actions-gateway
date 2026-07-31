@@ -9,15 +9,13 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/broker"
 )
 
-// agcConfig is the AGC's complete environment-variable surface, snapshotted in
-// one place so the config the GMC threads onto the AGC Deployment is visible and
-// unit-testable rather than strewn through run() as scattered os.Getenv calls
-// (structural-debt-audit-2026-07 F8 / Q367). It holds raw values only — every
-// field is a verbatim env read with no parsing or side effect — so hoisting all
-// reads to a single snapshot is provably identical to the original inline reads:
-// os.Getenv has no side effects and the process environment is immutable during
-// startup. Parsing and validation that can error or has side effects stays at the
-// original call sites in run() to preserve error ordering.
+// agcConfig is the environment-variable surface run() consumes, snapshotted in
+// one place so the config the GMC threads onto the AGC Deployment is visible
+// and unit-testable rather than strewn through run() as scattered os.Getenv
+// calls (Q367). It holds raw values only; parsing and validation that can error
+// or has side effects stays at the point of use to preserve error ordering.
+// The credential env vars (CREDENTIAL_TYPE, GITHUB_APP_*, VAULT_*) and OTEL_*
+// are read by credentials.go and tracing.go respectively, not through here.
 type agcConfig struct {
 	// LogLevel (LOG_LEVEL, info|debug) is the per-tenant verbosity knob the GMC
 	// threads from ActionsGateway.spec.logLevel.
@@ -98,13 +96,13 @@ func loadConfig(getenv func(string) string) agcConfig {
 	}
 }
 
-// buildRegistrar selects the agent registrar from config, preserving run()'s
-// original precedence: an explicitly-configured fakegithub stub (both STUB_AUTH_URL
-// and STUB_BROKER_URL set) wins even though a GMC-provisioned AGC always carries
-// GITHUB_ORG_URL, so a stub-backed AGC stays on the stub until the stub env is
-// unset. A GITHUB_ORG_URL install uses the GithubRegistrar; a malformed or
-// non-positive GITHUB_RUNNER_GROUP_ID falls back to group 1 (no error, as before).
-// Neither configured is a hard error.
+// buildRegistrar selects the agent registrar from config. An
+// explicitly-configured fakegithub stub (both STUB_AUTH_URL and STUB_BROKER_URL
+// set) wins even though a GMC-provisioned AGC always carries GITHUB_ORG_URL, so
+// a stub-backed AGC stays on the stub until the stub env is unset. A
+// GITHUB_ORG_URL install uses the GithubRegistrar; a malformed or non-positive
+// GITHUB_RUNNER_GROUP_ID falls back to group 1 without error. Neither
+// configured is a hard error.
 func buildRegistrar(cfg agcConfig) (agentpool.Registrar, error) {
 	switch {
 	case cfg.StubAuthURL != "" && cfg.StubBrokerURL != "":

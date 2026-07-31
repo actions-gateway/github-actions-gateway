@@ -67,10 +67,8 @@ func (d dictionaryContextData) str(key string) string {
 // run, trying each known source in turn and taking the first that answers.
 //
 // Both the eviction-retry path (repoInfo) and the worker-pod annotations
-// (jobMetaFrom) read it, so the two cannot again disagree about where identity
-// comes from — they previously read the same two sources independently, and when
-// neither source turned out to exist in a real payload, real worker pods carried no
-// run-id annotation and eviction recovery had no run to re-run (Q495).
+// (jobMetaFrom) read it, so the two cannot disagree about where identity
+// comes from (Q495).
 func (ap *acquirePayload) runIdentity() (runID, repository string) {
 	runID = runIDCandidate(ap.ContextData.GitHub.str("run_id"))
 	repository = ap.ContextData.GitHub.str("repository")
