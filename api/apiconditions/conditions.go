@@ -262,6 +262,19 @@ const (
 	// cluster, so an operator reading the reason learns which assertion their set is
 	// resting on.
 	ReasonScaleUpDeclined = "ScaleUpDeclined"
+	// ReasonAwaitingProbe is the WorkerCapacityDeclined=True reason for the latched
+	// state (Q512): every stuck worker pod that produced the declined verdict has been
+	// reaped, and nothing has yet shown that capacity returned, so the decline is
+	// retained rather than cleared. Intake is not closed — it is limited to one probe
+	// job per pendingPodDeadline window; the pod that job produces is the evidence
+	// that resolves the latch (it schedules and the condition clears, or it sticks and
+	// the live reason returns).
+	//
+	// The latch exists because the gate's evidence is the stuck pod itself, and the
+	// reaper deletes that pod: without it, clearing restored the scale-set tier's full
+	// advertisement every deadline window, and a measured burst of N wasted claims
+	// stayed N under the gate (Q512).
+	ReasonAwaitingProbe = "AwaitingProbe"
 	// ReasonGateModeUnsupported is a WorkerCapacityDeclined=False reason (Q406): the set
 	// selected a capacity-gate mode this AGC does not implement, so no rung is evaluated
 	// and intake is exactly today's behavior.

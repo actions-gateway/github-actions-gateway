@@ -772,9 +772,10 @@ pattern.
 The decision is published as `WorkerCapacityDeclined` and the rung reads that
 condition back rather than re-deriving the verdict, so `kubectl describe` and the
 AGC's intake behavior cannot disagree. Its `reason` names the signal that decided —
-`PodsUnschedulable`, `ScaleUpDeclined`, or the `False` reasons `CapacityAvailable` and
-`GateModeUnsupported` — so an operator can tell which rung stopped their jobs and on
-what evidence. It is a **separate** condition from `WorkersUnschedulable` even though
+`PodsUnschedulable`, `ScaleUpDeclined`, the latched `AwaitingProbe` (the declined
+pods were reaped and the decline is retained until a probe resolves it, Q512), or
+the `False` reasons `CapacityAvailable` and `GateModeUnsupported` — so an operator
+can tell which rung stopped their jobs and on what evidence. It is a **separate** condition from `WorkersUnschedulable` even though
 the fixed-size-cluster signal shares its source: it means something different to an
 operator ("intake is being refused" versus "pods are stuck"), it stays stable while the
 signal underneath it changes — the autoscaler-declination source (Q406) is exactly
@@ -787,9 +788,11 @@ summary. A set that did not opt in carries no such condition at all.
 Two properties bound what the gate is worth. It does **not** eliminate the first
 wasted claim — the signal is derived from a stuck pod, so one has to exist — and it
 does not remove the need for `pendingPodDeadline` and the reaper. What it bounds is
-the *rate*: because the condition is derived from that pod's existence, reaping the
-pod clears it, one job is claimed, and a still-unplaceable shape trips it again, so a
-burst of *N* wasted claims becomes roughly one per deadline window. Per-pool behavior
+the *rate*: reaping the pod latches the condition as `AwaitingProbe` rather than
+clearing it (Q512 — clearing restored the scale-set tier's whole advertisement each
+window, measured as a no-op), one probe job is admitted, and a still-unplaceable
+shape trips the live verdict again, so a burst of *N* wasted claims becomes roughly
+one per deadline window on both acquisition tiers. Per-pool behavior
 falls out of per-object keying rather than extra machinery — a verdict is only valid
 for the pod shape that produced it, and a `RunnerSet` resolves to exactly one worker
 template (§H.4), so a drained GPU pool gates the GPU sets while CPU sets keep claiming.

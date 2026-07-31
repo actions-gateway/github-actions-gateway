@@ -107,7 +107,25 @@ func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs
 
 	declined, reason, message, recheck := r.evalCapacityGate(ctx, mode, unsched, gw)
 
-	wasDeclined := meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	// The latch (Q512): a not-declined verdict reached only because the stuck pods
+	// are gone — the reaper deleted the gate's own evidence — retains the decline
+	// instead of clearing it. Clearing here is what §9e measured as the no-op: on
+	// the scale-set tier it restored the full advertisement every deadline window,
+	// so a burst of N wasted claims stayed N. The latched reason is what the two
+	// rung forms read to admit exactly one probe job; the pod that job produces is
+	// the evidence that resolves the latch, in whichever direction it lands.
+	prev := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	if !declined && capacityGateLatchHolds(prev, reason, unsched) {
+		declined = true
+		reason = v2alpha1.ReasonAwaitingProbe
+		message = latchedCapacityMessage(prev)
+		// Nothing re-triggers a reconcile when a probe pod binds but stays Pending
+		// (image pull) — the Pod watch fires on phase changes only — so the latched
+		// state polls at the same cadence the elastic signal already uses.
+		recheck = autoscalerVerdictRecheck
+	}
+
+	wasDeclined := prev != nil && prev.Status == metav1.ConditionTrue
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
 		Type:               v2alpha1.ConditionWorkerCapacityDeclined,
 		Status:             boolConditionStatus(declined),
@@ -123,6 +141,49 @@ func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs
 		r.recordEvent(rs, corev1.EventTypeWarning, "WorkerCapacityDeclined", "Reconcile", message)
 	}
 	return recheck
+}
+
+// capacityGateLatchHolds reports whether a fresh not-declined verdict must instead
+// retain the previous decline as the latched AwaitingProbe state (Q512).
+//
+// Entry is deliberately narrow — all four must hold:
+//
+//   - The condition is currently True (a live decline, or an already-held latch).
+//   - The gate actually evaluated and found capacity (reason CapacityAvailable). An
+//     unsupported mode's fail-open is not a capacity verdict and must not latch.
+//   - No stuck pod exists. A not-declined verdict reached WITH stuck pods present is
+//     the autoscaler's own answer (an acting signal, or fail-open on an unreadable or
+//     unrecognized vocabulary), and there the fail-open contract owns the decision.
+//   - No worker pod has scheduled since the condition became True. A post-decline
+//     binding — whenever the pod was created — is capacity returning, and clears.
+//
+// Holding on ABSENCE of evidence inverts the rung's fail-open habit, and is safe
+// only because the latch never closes intake: its floor is one probe job per
+// deadline window, so the cost of a wrongly-held latch is a briefly-throttled
+// tenant, never a starved one.
+func capacityGateLatchHolds(prev *metav1.Condition, freshReason string, unsched workersUnschedulable) bool {
+	if prev == nil || prev.Status != metav1.ConditionTrue {
+		return false
+	}
+	if freshReason != v2alpha1.ReasonCapacityAvailable {
+		return false
+	}
+	if len(unsched.stuckPods) > 0 {
+		return false
+	}
+	return !unsched.lastScheduledAt.After(prev.LastTransitionTime.Time)
+}
+
+// latchedCapacityMessage carries the reaped verdict into the latched condition, so
+// the operator still sees WHICH signal declined after its pod is gone. A latch
+// re-published over itself keeps its message rather than re-wrapping it.
+func latchedCapacityMessage(prev *metav1.Condition) string {
+	if prev.Reason == v2alpha1.ReasonAwaitingProbe {
+		return prev.Message
+	}
+	return fmt.Sprintf("job intake is limited to one probe job per pending-pod deadline window: "+
+		"the declined worker pods were reaped before capacity returned (%s: %s); the gate reopens when a worker pod schedules",
+		prev.Reason, truncate(prev.Message, 200))
 }
 
 // evalCapacityGate resolves an enabled gate to a verdict, the condition reason and

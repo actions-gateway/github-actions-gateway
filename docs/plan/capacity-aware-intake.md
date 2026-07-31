@@ -31,8 +31,9 @@ durable rationale in
 | 2a | Split the mode enum's two axes: tenant policy on the set, cluster fact on the gateway | S | ✅ Done ([§5a](#5a-the-single-enum-was-two-axes-q470), Q470, 2026-07-27) |
 | 2b | Assert phase 2's matcher against a real autoscaler's events, in kind | M | ✅ Done ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), Q474, 2026-07-28) — cluster-autoscaler only (V3) |
 | 2c | Stop one loop's two verdicts from gating: the concurrency window | S | ✅ Done ([§9d](#9d-the-concurrency-window-q478), Q478, 2026-07-28) |
+| 2d | The latch: a bound that survives the reap, with a probe slot on both tiers | M | ✅ Done ([§9g](#9g-the-latch--a-bound-that-survives-the-reap-q512), Q512, 2026-07-30) — effect unmeasured until the V2 re-run |
 | V1 | Measure item 0a's effect — the scale-set quota rung — on dogfood | M | ✅ Measured ([§9f](#9f-what-the-dogfood-run-measured-for-the-quota-rung-q462), Q462, 2026-07-31) — rung binds; bias-low margin 0–2 jobs, never inverted |
-| V2 | Measure items 1 and 2's effect — both capacity-gate signals — on dogfood | M | ✅ Measured ([§9e](#9e-what-the-dogfood-run-measured-q469), Q469, 2026-07-31) — **no reduction on the ScaleSet tier**; fix is [Q512](../STATUS.md#Q512) |
+| V2 | Measure items 1 and 2's effect — both capacity-gate signals — on dogfood | M | ✅ Measured ([§9e](#9e-what-the-dogfood-run-measured-q469), Q469, 2026-07-31) — **no reduction on the ScaleSet tier**; fixed by item 2d, re-run tracked as [Q513](../STATUS.md#Q513) |
 | V3 | Extend item 2b's live-autoscaler drift gate to Karpenter | M | ⏳ Unrun ([§9c](#9c-the-live-autoscaler-harness-and-what-it-measured-q474), [Q479](../STATUS.md#Q479)) |
 | 3 | `Probe`/`Provision` modes: `ProvisioningRequest` `check-capacity` | L | 💤 Deferred ([Q407](../STATUS.md#Q407), [Appendix G.16](../design/appendix-g-future-enhancements.md#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity)) |
 
@@ -47,8 +48,9 @@ exactly the same wasted-claim count as `mode: Off`. The mechanism behaved as
 specified; the integer expression of the rung cannot bound waste while its bound
 is the set's own in-flight pods and the reaper deletes those. **No effectiveness
 claim belongs in this doc, or in public copy, for either tier**: classic is still
-unmeasured, and scale-set is measured at zero. The remedy is
-[Q512](../STATUS.md#Q512), and V2 should be re-run once it lands.
+unmeasured, and scale-set is measured at zero. The remedy — the latch, item 2d —
+shipped as [§9g](#9g-the-latch--a-bound-that-survives-the-reap-q512) (Q512); V2
+should be re-run against it.
 
 That also changes what V2 hands to the Phase 3 decision. §8's trigger (a) asks
 whether residual burn survives *rate-bounding*; on this tier there was no
@@ -260,7 +262,12 @@ becomes roughly one per deadline window, and a Pending pod is present for much o
 that window, so an autoscaler (if any) keeps being asked. This is what makes even
 the Phase 1 mode non-suppressing in practice, and it is also the recovery
 mechanism on a fixed-size cluster, where capacity returns silently when in-flight
-jobs finish. **It must be asserted by a test, not assumed.**
+jobs finish. **It must be asserted by a test, not assumed.** As originally
+shipped this property held only on the classic tier — clearing the condition
+restored the scale-set tier's whole advertisement, measured as a no-op in
+[§9e](#9e-what-the-dogfood-run-measured-q469) — until
+[§9g](#9g-the-latch--a-bound-that-survives-the-reap-q512)'s latch gave both
+tiers a true one-probe-per-window trickle (Q512).
 
 **Fail-open everywhere.** Mode `Off`, an unreadable owner, an unresolved template
 chain, an unreadable pod list, an absent autoscaler, a missing CRD: all yield
@@ -900,8 +907,10 @@ better:
 the reason, the matcher against a real GKE autoscaler, and the withheld gauge
 all behaved as specified. It says the integer expression of the rung cannot
 bound claim waste while its bound is coupled to the pods the reaper deletes.
-The fix is tracked as [Q512](../STATUS.md#Q512) and is a design question, not a
-patch — a bound that survives the reap needs evidence that outlives the pod.
+The fix was a design question, not a patch — a bound that survives the reap
+needs evidence that outlives the pod — and shipped as
+[§9g](#9g-the-latch--a-bound-that-survives-the-reap-q512)'s latch (Q512); the
+re-measurement is [Q513](../STATUS.md#Q513).
 
 ### Step 3 — scale-up is not suppressed (pass)
 
@@ -960,9 +969,8 @@ table above reports. §9 was written before §9b's port and was never reconciled
 with it; read as written it would have produced a flat-zero series and the false
 reading that the gate never engaged.
 
-Two observability snags found on the way, recorded here rather than as their own
-Queue rows — [Q512](../STATUS.md#Q512) links this section, so whoever takes the
-fix has them in hand:
+Two observability snags found on the way, since filed as their own Queue rows
+([Q514](../STATUS.md#Q514), [Q515](../STATUS.md#Q515)):
 
 * `worker_pods_reaped_total` is labelled `runner_group`, while every
   `scaleset_*` gauge is labelled `runner_set`. A dashboard that joins the reaper
@@ -1037,6 +1045,84 @@ not a CPU/memory-shaped quota, where `QuotaHeadroomPods`' binary search over
 `WorkerFootprint` does the real work and this run exercised only its trivial
 case. And the classic tier's boolean rung remains unmeasured on a live cluster;
 this measures the integer form §9a ported.
+
+## 9g. The latch — a bound that survives the reap (Q512)
+
+[§9e](#9e-what-the-dogfood-run-measured-q469) measured the capacity rung removing
+zero wasted claims on the ScaleSet tier and named the arithmetic: the gate's only
+evidence is the stuck pod itself, the reaper deletes that pod at
+`pendingPodDeadline`, and clearing the condition restores the **full**
+advertisement — so a burst of *N* becomes *N* again, every window. The classic
+tier survives the same clearing because it re-decides per delivered job; the
+integer tier has no per-job decision point, so the clearing must not mean "back
+to ceiling". This section is the design for the bound that survives the reap.
+
+**The rule.** When every stuck pod has vanished *without evidence that capacity
+returned*, the condition does not clear — it **latches**:
+`WorkerCapacityDeclined` stays `True` with a new reason, `AwaitingProbe`. The
+latch is broken only by evidence, in either direction:
+
+* **Capacity returned** — a worker pod of this set has *scheduled* since the
+  condition became `True` (its `PodScheduled=True` transition post-dates the
+  condition's `lastTransitionTime`). The condition clears fully; the whole
+  advertisement is restored.
+* **Capacity still absent** — a new stuck pod re-earns the live verdict
+  (`PodsUnschedulable` / `ScaleUpDeclined`), and the gate is back where it
+  started, with fresh evidence.
+
+Latch entry is deliberately narrow: only the *no-stuck-pods* outcome latches. A
+not-declined verdict reached **with** stuck pods present — the autoscaler's
+acting signal, an unreadable Event list, an unrecognized vocabulary — clears the
+condition exactly as today, because there the fail-open contract (§5) and the
+concurrency-window protection ([§9d](#9d-the-concurrency-window-q478)) own the
+answer. Scheduling evidence is compared by the pod's `PodScheduled` transition
+time, not its creation time, so a burst pod that finally squeezes in also counts
+as capacity returning — whenever it was created.
+
+**The probe slot.** While latched, the rung's two forms both allow exactly one
+job through per deadline window — the integer trickle the tier never had:
+
+* `DeclinedCapacity` (scale-set): bound = own non-terminal worker pods, **plus
+  one** when no *probe* — a non-terminal worker pod created since the condition
+  became `True` — is outstanding. The slot admits one job; the pod it produces
+  is the probe. If it schedules, the latch clears; if it sticks, the live
+  verdict returns and the bound drops back to `active`.
+* `CapacityDeclined` (classic): while latched, declined *iff* a probe is
+  outstanding — so exactly one delivery is admitted per window here too. This
+  is Q443's invariant applied to the latch itself: a latch expressed only in
+  the integer form would ship the fix to one tier, and it would also *starve*
+  the classic tier outright (a latched `True` with no probe path would refuse
+  every delivery, and no probe pod would ever exist to clear it).
+
+Under a live (non-latched) decline both forms behave exactly as shipped: bound =
+`active`, declined = true. The probe slot exists only in the latched state.
+
+**Why this cannot starve a tenant.** The latch never fully closes intake — its
+floor is one probe slot per window, which is the classic tier's designed trickle
+rate (§5). A wrongly-held latch costs at most one poll-plus-reconcile of delay:
+the probe schedules, the Pod watch fires on the phase change, and the reconciler
+clears the condition. That bounded cost is why the latch may hold on *absence*
+of evidence even though the rest of the rung fails open on it — the failure mode
+is a briefly-throttled tenant, never a starved one.
+
+**What this deliberately does not fix.** The first batch is still wasted — the
+gate cannot close before the first pod sticks, and assignment is batch-granular
+per long-poll (§9e). Steady-state waste drops from *N* per window to ~1 per
+window, which is the rate §8's trigger (a) asks to re-measure before Phase 3 is
+armed. The ~`pendingPodDeadline/2` scheduling grace before the gate first closes
+is also unchanged: the grace is what keeps the sibling `WorkersUnschedulable`
+condition from flapping, and shortening it for the gate alone would re-split the
+"one stuck-set definition" §5 unified.
+
+**Operator surface.** `AwaitingProbe` joins the condition vocabulary
+(`api/apiconditions`, re-exported per version): `True/AwaitingProbe` reads "the
+declined evidence was reaped; intake is limited to one probe job until a worker
+pod schedules". On an idle gated set whose shape stays unplaceable the
+condition now persists `True` indefinitely — truthfully — where it previously
+flapped with every reap cycle. The withheld gauge
+(`actions_gateway_scaleset_capacity_withheld{reason="capacity"}`) now shows
+sustained withholding (`ceiling − active − 1`) across windows instead of the
+§9e sawtooth that always returned to zero.
 
 ## 10. Non-goals
 

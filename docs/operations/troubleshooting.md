@@ -545,17 +545,21 @@ condition's `reason` names it:
 |---|---|---|
 | `ScaleUpDeclined` | `nodeAutoscaling: Present` (default) | The cluster autoscaler itself recorded, on a stuck worker pod, that it will **not** add a node for it. The message carries the autoscaler's own per-node-group text. |
 | `PodsUnschedulable` | `nodeAutoscaling: Absent` | The scheduler's own verdict — the same `PodScheduled=False`/`Unschedulable` fact behind [`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable). |
+| `AwaitingProbe` | either | The stuck pods that produced the verdict were reaped at `pendingPodDeadline`, and nothing has yet shown that capacity returned — the decline is **retained** (Q512). Intake is limited to **one probe job** per deadline window, not closed; the message carries the reaped verdict. Clears when a worker pod schedules. |
 | `CapacityAvailable` (status `False`) | either | The gate is engaged and is **not** refusing intake. |
 | `GateModeUnsupported` (status `False`) | — | This AGC does not implement the mode the set selected, so no rung is evaluated. See [below](#the-mode-is-reported-as-unsupported). |
 
 A set with no `capacityGate` (the default) never carries this condition at all —
 its absence is not a failure to report, it means the set did not opt in.
 
-> **The gate throttles, it does not seal.** The condition is derived from a stuck
-> worker pod, so the reaper deleting that pod at `pendingPodDeadline` clears it and
-> one more job is claimed; if capacity is still missing, that job's pod trips it
-> again. Expect roughly one claim per deadline window, not zero — a `RunnerSet`
-> that never claims anything again has a different problem.
+> **The gate throttles, it does not seal.** When the reaper deletes the stuck pod
+> at `pendingPodDeadline`, the condition does not clear — it latches as
+> `AwaitingProbe` and admits exactly **one probe job**; if capacity is still
+> missing, that job's pod trips the live verdict again, and if it schedules the
+> gate clears completely. Expect roughly one claim per deadline window, not zero —
+> a `RunnerSet` that never claims anything again has a different problem. On an
+> idle gated set whose shape stays unplaceable, `AwaitingProbe` can persist
+> `True` indefinitely; that is truthful, and harmless until jobs arrive.
 
 **Diagnostics.**
 
