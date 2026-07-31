@@ -114,7 +114,7 @@ footprint.
 | Custom runner pod template & image | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
 | Workers scale to zero between jobs | :material-check-circle:{ .gag-yes } yes, with `minRunners: 0` | :material-check-circle:{ .gag-yes } yes, by default |
 | Safe under a per-tenant `ResourceQuota` | :material-close-circle:{ .gag-no } quota-blocked jobs stall; manual cleanup + rerun | :material-check-circle:{ .gag-yes } [won't take on a job it can't place](design/04-operational-flows.md#42-job-execution-flow-agc)<br><span class="gag-cont">live quota headroom is read *before* the job is claimed — on the default tier it bounds the capacity advertised to GitHub, on classic it declines the claim — so the job stays queued at GitHub. If headroom is lost afterwards, the pod create is retried in place while the lock is held</span> |
-| Auto-re-run jobs disrupted mid-flight (eviction / preemption / drain) | :material-close-circle:{ .gag-no } runner marked `Failed`; the job waits in GitHub's queue for a manual rerun | :material-check-circle:{ .gag-yes } [re-run automatically, with a per-run retry budget](operations/troubleshooting.md#draining-a-worker-auto-re-runs-the-jobs-it-interrupts)<br><span class="gag-cont">kubelet evictions, scheduler preemptions under a `priorityTiers` floor, node drains, and hand-deleted workers all re-run through GitHub's own re-run API — retried until GitHub accepts it — with `maxEvictionRetries` capping the budget per run</span> |
+| Auto-re-run jobs disrupted mid-flight (eviction / preemption / drain) | :material-close-circle:{ .gag-no } runner marked `Failed`; the job waits in GitHub's queue for a manual rerun | :material-check-circle:{ .gag-yes } [re-run automatically, with a per-run retry budget](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)<br><span class="gag-cont">kubelet evictions, scheduler preemptions under a `priorityTiers` floor, node drains, and hand-deleted workers all re-run through GitHub's own re-run API — retried until GitHub accepts it — with `maxEvictionRetries` capping the budget per run</span> |
 | Stop claiming jobs when the cluster can't place the worker | :material-close-circle:{ .gag-no } the runner claims its own job, so there is no seat before the claim to decide at | :material-check-circle:{ .gag-yes } opt-in [`capacityGate` on the runner set](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)<br><span class="gag-cont">off by default. When on, an unplaceable worker shape (drained pool, changed taint, spot gone) stops the gateway taking on more work, so jobs stay queued at GitHub instead of being claimed and cancelled. It bounds the *rate* of wasted claims — roughly one per `pendingPodDeadline` window — it does not eliminate the first one. The tenant turns it on; the platform states once, on the gateway, whether the cluster has a node autoscaler — so a runner set can never gate on a signal that is wrong for the cluster it runs in. Where a node may still arrive, the gate waits for cluster-autoscaler or Karpenter to say it will not add one</span> |
 | Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner set](design/02-architecture.md) |
 | Throttle the *rate* new workers start (anti-stampede) | :material-close-circle:{ .gag-no } only `maxRunners` caps the count — a burst starts all at once | :material-check-circle:{ .gag-yes } opt-in [`scaleUp` creation-rate limit per set](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)<br><span class="gag-cont">for shared-egress onset (NAT / firewall / VPN)</span> |
@@ -127,6 +127,22 @@ footprint.
 | Reusable runner pod templates | :material-close-circle:{ .gag-no } template inlined per `AutoscalingRunnerSet` | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> shared [`RunnerTemplate`](operations/migration-v1-to-v2.md)<br><span class="gag-cont">cluster-wide [`ClusterRunnerTemplate`](operations/migration-v1-to-v2.md)</span> |
 
 Every capability above is available today.
+
+<!-- The canonical fires/doesn't-fire matrix is
+     docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
+     When a case is added or removed there, update this box too. -->
+!!! info "Disruptions re-run themselves — failures and cancels never do"
+
+    The auto-re-run claim is scoped on purpose. What re-runs itself: a job whose
+    worker the *cluster* took away — a kubelet eviction, a scheduler preemption
+    under a `priorityTiers` floor, a node drain, even a stray
+    `kubectl delete pod` — each retried until GitHub accepts it, within a
+    per-run budget (`maxEvictionRetries`). What never does, by design: a job
+    that ran and **failed** (re-running it would mask real breakage), a run you
+    **cancelled** (a cancel is the intended stop), and workers the gateway's own
+    cleanup reaped as stuck (a re-run would loop them). The full boundary, with
+    the detection marks and metrics:
+    [which disruptions auto-re-run a job](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
 !!! info "Why measured right-sizing can't be bolted onto ARC"
 

@@ -20,7 +20,7 @@ hide:
 
 </div>
 
-<p class="gag-tagline">An Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes. Free up GPU nodes the moment a job finishes, keep critical jobs scheduling even on a full cluster, and let tenants self-manage runners under safe per-tenant quotas.</p>
+<p class="gag-tagline">An Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources — and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Watch the demo](demo.md){ .md-button }
