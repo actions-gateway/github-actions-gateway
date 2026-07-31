@@ -25,6 +25,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers](#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers)
 - [Tenant Namespace Stuck Terminating After Narrowing the PriorityClass Allowlist](#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
+- [AGC Exits at Startup: GATEWAY_NAME Set but the v2 RunnerSet CRD Is Missing](#agc-exits-at-startup-gateway_name-set-but-the-v2-runnerset-crd-is-missing)
 - [RunnerGroup ActiveSessions Exceeds maxListeners](#runnergroup-activesessions-exceeds-maxlisteners)
 - [RunnerGroup Stops Serving Jobs With Stale Ready=True](#runnergroup-stops-serving-jobs-with-stale-readytrue)
 - [Orphaned RunnerGroup After Removing It From the Spec](#orphaned-runnergroup-after-removing-it-from-the-spec)
@@ -1107,6 +1108,36 @@ kubectl describe runnergroup -n <namespace> <name>
 - If the private key format is wrong, ensure it is a PEM-encoded key starting with `-----BEGIN RSA PRIVATE KEY-----` (PKCS#1) or `-----BEGIN PRIVATE KEY-----` (PKCS#8, RSA or Ed25519). The Secret `stringData.privateKey` must include the full key including header and footer lines.
 - If the runner version is outdated, update `workerImage` in the RunnerGroup spec (or the AGC's `--worker-image` flag). Watch for `RunnerGroup` conditions with reason `VersionTooOld`.
 - If `appId` or `installationId` are wrong, update the Secret.
+
+---
+
+## AGC Exits at Startup: GATEWAY_NAME Set but the v2 RunnerSet CRD Is Missing
+
+**Symptoms.** A per-gateway AGC (`<gateway>-agc`) never becomes Ready, and its logs end at:
+
+```
+GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2alpha1 RunnerSet CRD is not
+installed: a gateway-scoped AGC serves RunnerSets only, so it would reconcile nothing
+(install the actions-gateway-crds-v2 chart)
+```
+
+**Cause.** Each AGC serves exactly one API: the v1 singleton (no `GATEWAY_NAME`)
+reconciles `RunnerGroup`s, and a gateway-scoped AGC reconciles only its own gateway's
+`RunnerSet`s. With the v2 CRDs absent there is nothing for the latter to serve, so it
+exits rather than run a pod that passes its probes and reconciles nothing.
+
+Normally unreachable — the GMC stamps `GATEWAY_NAME` only when provisioning from a v2
+`ActionsGateway`, which the v2 CRDs must exist to serve. In practice it means the
+opt-in `actions-gateway-crds-v2` chart was uninstalled (or rolled back) while v2
+gateways were still deployed.
+
+**Resolution.** Reinstall the CRD chart, or delete the v2 `ActionsGateway`s whose AGCs
+are failing:
+
+```bash
+helm upgrade --install actions-gateway-crds-v2 <chart> -n <gmc-namespace>
+kubectl get crd runnersets.actions-gateway.com
+```
 
 ---
 

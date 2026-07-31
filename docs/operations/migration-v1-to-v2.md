@@ -324,6 +324,26 @@ carries an `ownerReference` to the `RunnerGroup` or `RunnerSet` it belongs to, s
 `kubectl -n team-a get secret agentpool-web-0 -o jsonpath='{.metadata.ownerReferences}'`
 answers "which tenant owns this?" without guessing from the name.
 
+### Each AGC serves exactly one API
+
+The namespace runs two AGC Deployments during coexistence, and they divide the work by
+kind rather than sharing it:
+
+| AGC | `GATEWAY_NAME` | Reconciles |
+|---|---|---|
+| the v1 singleton (`agc`) | unset | `RunnerGroup`s only |
+| each migrated gateway's (`<gateway>-agc`) | the gateway's name | that gateway's `RunnerSet`s only |
+
+So a tenant is served by exactly one controller, and the AGC whose logs answer a question
+about a `RunnerGroup` is always the v1 one. Confirm which pod is which with:
+
+```bash
+kubectl -n team-a get deploy -l app.kubernetes.io/managed-by=gateway-manager-controller -o custom-columns='NAME:.metadata.name,GATEWAY:.spec.template.spec.containers[?(@.name=="agc")].env[?(@.name=="GATEWAY_NAME")].value'
+```
+
+A gateway-scoped AGC logs `v1alpha1 RunnerGroup reconciler disabled` at startup — that
+line is the division working, not a problem.
+
 Upgrading an install that already ran v2 **moves** its existing agent Secrets onto the
 `agentpool-rs-` names on the first reconcile, carrying each agent's GitHub registration
 with it. Nothing re-registers, and no Secret is left behind — but if you have scripts or

@@ -40,7 +40,11 @@ import (
 // working while v2 is up, and keeps working after v2 goes away.
 
 // startCoexistingReconcilers starts a RunnerGroup and a RunnerSet reconciler in one
-// manager, mirroring an AGC serving both APIs during a migration.
+// manager. No AGC is wired this way — the two are registered on different processes
+// (Q535) — but running them in one is strictly harsher than the real coexistence
+// window, and the properties asserted below are about the objects rather than the
+// process layout: disjoint Secret names, labels, GitHub runner names and owner
+// references keep the two pools separable however they are deployed.
 func startCoexistingReconcilers(t *testing.T) {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
