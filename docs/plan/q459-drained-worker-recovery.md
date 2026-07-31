@@ -454,6 +454,22 @@ troubleshooting.md "Draining a Worker Auto-Re-Runs the Jobs It Interrupts". Pinn
 retained `DoesNotRerun`/`DoesNotRecover` pair (no-terminal-phase side), plus the
 podwaiter/scan/reaper unit tests.
 
+**The RBAC gate this shipped without now exists (Q519).** The claim and completed-at
+patches ran 403-broken on real clusters because every local tier's client is admin —
+envtest does not enforce RBAC, and the fake-GitHub disruption specs were classic-tier.
+`E2E_AGC_ScaleSetRecovery`
+(`cmd/gmc/test/e2e/worker_scaleset_recovery_test.go`) closes that class at the
+fake-GitHub kind tier: a ScaleSet-protocol RunnerSet whose AGC runs under the chart's
+shipped `agc-tenant-role`, a running scale-set-shaped worker deleted gracefully, and
+the assertion that exactly one rerun lands — which, by the reconciler's ordering, is
+also the assertion that the claim patch landed (recovery calls GitHub only after the
+claim succeeds). Two scope limits, stated plainly: the e2e fakegithub speaks only the
+classic protocol, so the spec stages the worker pod itself rather than provisioning it
+from an assignment (the acquisition half's kind-e2e gap is
+[Q528](../STATUS.md#Q528)), and the deliberately-failing listener bootstrap — the
+gateway's `githubURL` names fakegithub's plaintext port over https — is what keeps the
+reconcile loop fast enough to win the real teardown window.
+
 The remaining work was carried by these Queue rows:
 
 1. ~~**Q495 first.**~~ Done — the run identity is read from the payload's `github`
