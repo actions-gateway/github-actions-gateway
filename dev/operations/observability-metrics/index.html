@@ -2624,7 +2624,7 @@
 <td><code>actions_gateway_eviction_retries_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
-<td>Recoveries <strong>started</strong> after a worker pod disruption — one per reserved retry-budget slot, incremented before the API calls. A recovery now outlasts GitHub's refusal window: the re-run is retried while GitHub answers <code>403 This workflow is already running</code> (which after an ungraceful eviction lasts until the job lock's TTL lapses, ~10 minutes — Q503), so in steady state each increment corresponds to a re-run that eventually lands. The recoveries that instead never landed are counted by <code>actions_gateway_eviction_rerun_failures_total</code> below — read the two together: <code>retries_total − rerun_failures_total</code> is the honest recovery count. <code>tier="classic"</code> is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; <code>tier="scaleset"</code> is the scale-set path, where the owning reconciler detects the disruption from the worker pod itself (Q417). <code>cause="eviction"</code> is the kubelet's node-pressure eviction; <code>cause="preemption"</code> is kube-scheduler displacing the worker for a higher <code>priorityTiers</code> tier (Q497). The retry budget is <strong>shared</strong> — it is keyed by run ID alone, so <code>maxEvictionRetries</code> bounds re-runs per run across both tiers <strong>and both causes</strong> together, not once per combination. Labels added in Q417 (<code>tier</code>) and Q497 (<code>cause</code>); see <a href="#breaking-observability-changes-q417">Breaking observability changes</a>.</td>
+<td>Recoveries <strong>started</strong> after a worker pod disruption — one per reserved retry-budget slot, incremented before the API calls. A recovery now outlasts GitHub's refusal window: the re-run is retried while GitHub answers <code>403 This workflow is already running</code> (which after an ungraceful eviction lasts until the job lock's TTL lapses, ~10 minutes — Q503), so in steady state each increment corresponds to a re-run that eventually lands. The recoveries that instead never landed are counted by <code>actions_gateway_eviction_rerun_failures_total</code> below — read the two together: <code>retries_total − rerun_failures_total</code> is the honest recovery count. <code>tier="classic"</code> is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; <code>tier="scaleset"</code> is the scale-set path, where the owning reconciler detects the disruption from the worker pod itself (Q417). <code>cause="eviction"</code> is the kubelet's node-pressure eviction; <code>cause="preemption"</code> is kube-scheduler displacing the worker for a higher <code>priorityTiers</code> tier (Q497); <code>cause="deletion"</code> is an external graceful deletion — a drain or a <code>kubectl delete pod</code> — whose worker published a terminal phase carrying the deletion mark (Q502; graceful too, with a measured 15–26s conclusion latency, so the retry loop lands it within a few paced attempts). The retry budget is <strong>shared</strong> — it is keyed by run ID alone, so <code>maxEvictionRetries</code> bounds re-runs per run across both tiers <strong>and all causes</strong> together, not once per combination. Labels added in Q417 (<code>tier</code>) and Q497 (<code>cause</code>); see <a href="#breaking-observability-changes-q417">Breaking observability changes</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
@@ -2799,18 +2799,22 @@
 <blockquote>
 <p><strong>Reading the eviction metrics across tiers and causes.</strong> Both <code>eviction_retries_total</code>
 and <code>eviction_retries_exhausted_total</code> are emitted on <strong>both</strong> acquisition tiers, split
-by the <code>tier</code> label (Q417), and for <strong>both</strong> recovered disruptions, split by the
-<code>cause</code> label (Q497). Detection differs across all four combinations — an inline pod
+by the <code>tier</code> label (Q417), and for the <strong>three</strong> recovered disruptions, split by the
+<code>cause</code> label (Q497, Q502). Detection differs across every combination — an inline pod
 wait on classic, the owning reconciler's recovery pass on scale-set; a <code>PodFailed</code>/
-<code>Evicted</code> phase for an eviction, a <code>DisruptionTarget</code> condition for a preemption — but
-they share one budget, keyed by workflow run alone, so <code>maxEvictionRetries</code> caps
-re-runs per run across the whole set rather than once per combination.</p>
+<code>Evicted</code> phase for an eviction, a <code>DisruptionTarget</code> condition for a preemption, the
+pod's <code>deletionTimestamp</code> at terminal publish for an external deletion — but they
+share one budget, keyed by workflow run alone, so <code>maxEvictionRetries</code> caps re-runs
+per run across the whole set rather than once per combination.</p>
 <p><strong>The <code>cause</code> split is a diagnosis, not decoration.</strong> A climbing <code>cause="eviction"</code>
 rate means node pressure: memory or disk exhaustion on the nodes, and the fix is
 capacity or worker sizing. A climbing <code>cause="preemption"</code> rate means a <code>priorityTiers</code>
 floor is displacing more opportunistic work than the tenant sized for, and the fix is
-tier thresholds or where the work is placed. Reading one as the other sends an operator
-hunting in entirely the wrong place.</p>
+tier thresholds or where the work is placed. A climbing <code>cause="deletion"</code> rate means
+something outside the gateway is deleting live workers — node drains from upgrades or
+autoscaler consolidation, a descheduler, or hand-run deletes — and the fix is finding
+the deleter. Reading one as another sends an operator hunting in entirely the wrong
+place.</p>
 <p>A flat zero on <code>tier="scaleset"</code> while workers are visibly being disrupted means the
 recovery is not firing, not that nothing happened. Check
 <code>kubectl get pods --field-selector=status.phase=Failed</code> for <code>Evicted</code> pods, then
@@ -3192,6 +3196,13 @@ overwrite them.</p>
 </tbody>
 </table>
 <p>All three are controller-set: never set them by hand.</p>
+<p>Worker pods on <strong>either</strong> tier gain one more annotation at end of life:
+<code>actions-gateway.com/deletion-reason</code>, stamped with the reap reason (e.g.
+<code>completed_ttl</code>, <code>pending_deadline</code>) immediately before the AGC's reaper deletes the
+pod (Q502). It marks the deletion as the AGC's own, which is what excludes reaper
+cleanup from the graceful-deletion recovery that a drain or a manual delete triggers.
+Controller-set; never set it by hand — a hand-set stamp suppresses automatic recovery
+for that pod.</p>
 <p>To see them in a table:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/runner-group<span class="o">=</span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;NAME:.metadata.name,PHASE:.status.phase,RUN:.metadata.annotations.actions-gateway\.com/run-id,JOB:.metadata.annotations.actions-gateway\.com/job-name,WORKFLOW:.metadata.annotations.actions-gateway\.com/workflow&#39;</span>

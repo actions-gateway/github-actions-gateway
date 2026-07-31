@@ -1454,6 +1454,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2793,6 +2804,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3309,6 +3331,7 @@
 <ul>
 <li><a href="#pre-upgrade-validation-checklist">Pre-Upgrade Validation Checklist</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
+<li><a href="#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion">Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")</a></li>
 <li><a href="#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before">Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)</a></li>
 <li><a href="#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github">Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)</a></li>
 <li><a href="#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes">Non-breaking: eviction auto-retry now honours GITHUB_API_BASE_URL (it never did on GHES)</a></li>
@@ -3368,6 +3391,45 @@
 - Behavior changes that require configuration updates before the new binary takes effect.</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
+<h3 id="non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion">Non-breaking: drained and hand-deleted workers are now re-run automatically (<code>cause="deletion"</code>)<a class="headerlink" href="#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> every tenant on either acquisition tier. No configuration
+changes; the behaviour change fires only on disruptions that previously needed a
+manual re-run.</p>
+<p>Before this version, a <code>kubectl drain</code> (or a bare <code>kubectl delete pod</code>) of a running
+worker interrupted its job with no automatic recovery. Now the interrupted run is
+re-run automatically when the worker's terminal phase publishes while the pod is
+marked for deletion — the shape a drained running worker takes (measured, Q459). The
+mark is absent on a human-cancelled run and on a genuine job failure, so neither can
+trigger it; the AGC's own reaper deletions are excluded by a new controller-set
+annotation. Behaviour and boundary: the
+<a href="../troubleshooting/#draining-a-worker-auto-re-runs-the-jobs-it-interrupts">drain runbook</a>.</p>
+<p>Operational consequences:</p>
+<ul>
+<li><strong>A node drain now spends re-run budget.</strong> Each interrupted run consumes one slot of
+  its shared <code>maxEvictionRetries</code> budget (default 2), under <code>cause="deletion"</code> on the
+  eviction counters. Routine node maintenance across busy runner pools may warrant a
+  higher budget.</li>
+<li><strong>A bare <code>kubectl delete pod</code> of a running worker re-runs its job.</strong> If you delete a
+  worker to <em>stop</em> its job, cancel the run at GitHub instead — a cancel is never
+  re-run.</li>
+<li><strong>New annotation:</strong> worker pods deleted by the AGC's reaper are stamped
+  <code>actions-gateway.com/deletion-reason</code> just before deletion. Never set it by hand on
+  a live worker; a hand-set stamp suppresses automatic recovery for that pod.</li>
+<li><strong>New <code>cause</code> label value:</strong> dashboards or alerts that enumerate
+  <code>cause="eviction"|"preemption"</code> on <code>actions_gateway_eviction_retries_total</code> /
+  <code>eviction_retries_exhausted_total</code> should add <code>deletion</code>. No series is renamed.</li>
+<li><strong>RBAC:</strong> the chart's <code>agc-tenant-role</code> gains <code>patch</code> on <code>pods</code> — metadata-only
+  annotation stamps, never a spec or status write. Installs that mirror the role by
+  hand must add the verb; without it the reaper cannot mark its own deletions and
+  worker-pod cleanup stops (and the scale-set tier's recovery-claim and
+  job-completed-at stamps, which always needed this verb, remain broken).</li>
+<li><strong>Timing:</strong> the drain path's measured GitHub conclusion latency (15–26s) exceeds
+  the default <code>evictionRetryDelay</code> (5s), so the first re-run call may be refused
+  <code>403 This workflow is already running</code>; the Q503 retry loop (see the next note)
+  absorbs that and lands the re-run within a few paced attempts.</li>
+</ul>
+<p><strong>Rolling back</strong> restores the old behaviour: drained workers' runs need a manual
+re-run again. Leftover <code>deletion-reason</code> annotations are inert on older versions.</p>
 <h3 id="non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before">Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)<a class="headerlink" href="#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before" title="Permanent link">&para;</a></h3>
 <p>No action required, but two observable behaviours change (Q503).</p>
 <p>Previously the AGC fired <code>rerun-failed-jobs</code> exactly once, <code>evictionRetryDelay</code>
@@ -3442,10 +3504,10 @@ lifetime cap per workflow run across both acquisition tiers <strong>and</strong>
 causes. A run that is alternately evicted and preempted spends one budget, not two — so a
 tenant running a preempting floor may see the budget exhaust sooner than before, and may
 want to raise <code>maxEvictionRetries</code> (default 2, max 10).</p>
-<p><strong>What did NOT change.</strong> A <code>kubectl drain</code>, a <code>kubectl delete pod</code>, and the worker-pod
-reaper still get no automatic re-run. Those removals are indistinguishable from an
-operator deliberately cancelling a run, so recovering on them would restart work someone
-had just stopped.</p>
+<p><strong>What did NOT change at the time.</strong> A <code>kubectl drain</code>, a <code>kubectl delete pod</code>, and the
+worker-pod reaper got no automatic re-run in this version. That has since changed for
+the first two — see the <code>cause="deletion"</code> migration note above; the reaper's own
+deletions remain excluded.</p>
 <p><strong>Metric change.</strong> Three counters gained a <code>cause</code> label (<code>eviction</code> | <code>preemption</code>):</p>
 <table>
 <thead>
