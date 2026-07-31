@@ -2314,7 +2314,7 @@ tiers**.
 
 **Fires — the interrupted run is re-run via `rerun-failed-jobs`:**
 
-| Disruption | `cause`&nbsp;label | Detected by |
+| Disruption | <span class="gag-nowrap">`cause` label</span> | Detected by |
 |---|---|---|
 | Kubelet eviction (node pressure) | <code class="gag-nowrap">eviction</code> | pod `Failed` with `reason: Evicted` |
 | Scheduler preemption (a preempting `priorityTiers` floor) | <code class="gag-nowrap">preemption</code> | `DisruptionTarget` condition, reason `PreemptionByScheduler` |
