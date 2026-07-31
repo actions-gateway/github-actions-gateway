@@ -34,7 +34,7 @@ Make-target backends — the root `Makefile` keeps recipes as thin target→scri
 | [validate-throttle.sh](validate-throttle.sh) | Run a real cold-cache `make check` phase under each candidate throttle prefix while [uijitter.c](uijitter.c) samples desktop scheduling latency, reporting throughput against desktop cost. macOS. |
 | [queue-unblock.sh](queue-unblock.sh) | List `docs/STATUS.md` Queue items blocked on a given ID. Backs `make queue-unblock`. |
 | [next-task.sh](next-task.sh) | Print a kickoff prompt (or `--title`) for the top ready 🔲 Queue row in `docs/STATUS.md`, for starting a fresh session on the next task. Vendored from the backlog skill. |
-| [backlog-metrics.sh](backlog-metrics.sh) | Replay `docs/STATUS.md` git history into per-item events and flow metrics (throughput, cycle time, prune ratio, aging WIP). Read-only. Vendored from the backlog skill. |
+| [backlog-metrics.sh](backlog-metrics.sh) | Replay `docs/STATUS.md` git history into per-item events and flow metrics (throughput, cycle time, prune ratio, aging WIP). Only Queue/Deferred rows count — a Progress-table anchor is not an item (Q509; asserted by `backlog-metrics-test.sh` under `make scripts-test`). Read-only. Vendored from the backlog skill. |
 
 Other helpers:
 

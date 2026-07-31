@@ -228,7 +228,8 @@ path-filters-check: ## Fail if a CI path filter misses a go.work module or names
 # or a $$-suffixed dir under tmp/), so they run concurrently — labeled output via
 # run-parallel.sh keeps a failure attributable to its suite.
 SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-test \
-                 lint-backlog-test check-dep-advisory-test claude-go-throttle-hook-test \
+                 lint-backlog-test backlog-metrics-test check-dep-advisory-test \
+                 claude-go-throttle-hook-test \
                  dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
                  go-lint-scope-test \
                  check-roadmap-test check-conflict-markers-test check-v2-api-sync-test \
@@ -239,7 +240,7 @@ SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-tes
                  updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution)
 	scripts/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of

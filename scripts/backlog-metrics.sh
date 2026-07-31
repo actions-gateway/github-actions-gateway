@@ -67,8 +67,12 @@ function jday(d,    y, m, dd, a, yy, mm) {
 }
 
 function row_id(line,    t) {
+    # Only Queue/Deferred rows repeat the bare ID right after the anchor
+    # (`<a id="Q123"></a>Q123`); a Progress-table anchor is followed by a plan
+    # link instead, and diff lines carry no section context, so this shape is
+    # what keeps plan anchors out of the replay.
     t = line
-    if (match(t, /<a id="Q[0-9]+">/)) {
+    if (match(t, /<a id="Q[0-9]+"><\/a>Q/)) {
         t = substr(t, RSTART, RLENGTH); gsub(/[^0-9]/, "", t); return "Q" t
     }
     return ""
