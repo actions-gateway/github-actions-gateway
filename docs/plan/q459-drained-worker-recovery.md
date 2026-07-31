@@ -504,9 +504,10 @@ The remaining work was carried by these Queue rows:
 3. ~~Take the decision.~~ Done — the decision table's first row, recorded above.
 4. ~~Q502 — implement the close, per the four constraints above.~~ Done — see Status.
 5. **[Q501](../STATUS.md#Q501)** — relay a run cancellation to the worker pod. Found by
-   this measurement, independent of the gap. If it is fixed by deleting the worker on
-   cancellation, that deletion must carry the `deletion-reason` stamp or it becomes
-   indistinguishable from a drain.
+   this measurement, independent of the gap. Split into a trigger and an actuator by
+   [q501-cancel-relay.md](q501-cancel-relay.md): the actuator shipped (a worker whose
+   job the gateway abandons is now deleted, stamped `deletion-reason: job_abandoned`
+   exactly as the constraint above requires), the trigger is still open.
 
 Operational note for whoever runs live-GitHub next, learned the expensive way: the suite
 teardown's `helm uninstall` deletes the `ValidatingAdmissionPolicyBinding`, which

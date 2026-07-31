@@ -3,6 +3,7 @@ package listener
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -42,9 +43,13 @@ import (
 // sibling session (a duplicate acquire) — the Q247 residual. A single/transient
 // failure stays non-fatal and is retried (GitHub grants ~10 min per renewal
 // window). cancelJob may be nil (test/stub use); teardown is then a no-op.
+//
+// The cause it cancels with wraps ErrJobAbandoned, which is what lets the JobHandler
+// reclaim the worker pod for this one job without a process-wide shutdown — which
+// cancels every job context too — doing the same to every live worker (Q501).
 func StartRenewLoop(
 	ctx context.Context,
-	cancelJob context.CancelFunc,
+	cancelJob context.CancelCauseFunc,
 	client *broker.Client,
 	runServiceURL, planID, jobID, jobToken string,
 	metrics *runnercore.Metrics,
@@ -99,7 +104,7 @@ func StartRenewLoop(
 							"reason", reason, "consecutiveFailures", consecutiveFailures, "error", err)
 					}
 					if cancelJob != nil {
-						cancelJob()
+						cancelJob(fmt.Errorf("%w: %s", ErrJobAbandoned, reason))
 					}
 					return
 				}

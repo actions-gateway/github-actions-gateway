@@ -19,13 +19,14 @@ import (
 // Q459's; the design boundary is the table in docs/design/04-operational-flows.md §4.2.
 //
 // The one deleter that must NOT trigger recovery is the AGC itself: the reaper deletes
-// pods it gave up on (a stuck-Pending worker, an orphaned Running one), and re-running
-// those would turn cleanup into a re-run trigger. Every AGC-issued worker-pod delete is
-// therefore preceded by an AnnotationDeletionReason stamp, and both tiers' detection
-// treats a stamped pod's deletion as the AGC's own. The same exclusion must be applied
-// to any future AGC deletion path — e.g. a Q501 cancel-relay that deletes the worker.
+// pods it gave up on (a stuck-Pending worker, an orphaned Running one), and the
+// provisioner reclaims the worker of a job the listener abandoned (job_abandoned,
+// Q501) — re-running either would turn cleanup into a re-run trigger. Every AGC-issued
+// worker-pod delete is therefore preceded by an AnnotationDeletionReason stamp, and
+// both tiers' detection treats a stamped pod's deletion as the AGC's own. Any deletion
+// path added later must apply the same exclusion.
 
-// AnnotationDeletionReason is stamped on a worker pod, with the reap reason as its
+// AnnotationDeletionReason is stamped on a worker pod, with the deletion reason as its
 // value, immediately before the AGC deletes that pod itself. Its presence is how both
 // tiers' graceful-deletion recovery (Q502) tells the AGC's own cleanup from an external
 // drain or delete — without it, every reaper delete would look like a disruption and
