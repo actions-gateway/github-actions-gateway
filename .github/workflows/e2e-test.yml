@@ -10,6 +10,16 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
+  # The release gate's entry point: dispatch one run routed to the dogfood GAG
+  # scale set via `runner`, scoped to that run alone. Replaces flipping the
+  # repo-wide vars.GAG_E2E_RUNNER, which routed every concurrent PR/merge onto
+  # the tenant for the whole window (2026-07-31 incident).
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'JSON-encoded runs-on for the e2e job, e.g. ''"gag-ci-e2e"''. Empty uses vars.GAG_E2E_RUNNER, then ubuntu-latest.'
+        type: string
+        default: ''
 
 # Cancel an in-progress e2e run when a newer commit is pushed to the same PR —
 # the old run's result is moot and finishing it just burns ~35 min of runner
@@ -99,13 +109,17 @@ jobs:
   # covers them (Q119).
   e2e:
     needs: [changes]
-    # Always run on push to main; skip on PRs where no e2e-relevant files changed.
-    if: needs.changes.outputs.e2e == 'true' || github.event_name == 'push'
+    # Always run on push to main and on dispatch; skip on PRs where no
+    # e2e-relevant files changed.
+    if: needs.changes.outputs.e2e == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/e2e-reusable.yml
     permissions:
       contents: read
     with:
       kind_cni: kindnet
+      # Empty on pull_request/push (the inputs context only populates on
+      # dispatch), so those events keep the variable-then-hosted fallback.
+      runner: ${{ inputs.runner || '' }}
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`e2e-gate`) required in the branch ruleset — never the path-gated

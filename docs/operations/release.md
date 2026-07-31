@@ -229,7 +229,8 @@ PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh vX
 ```
 
 `validate-release.sh` bakes in all the env and ordering below — deploy → route CI →
-on-demand e2e → `gh run rerun` → CRD smoke → teardown — is idempotent, and
+on-demand e2e → dispatch the e2e matrix (run-scoped routing) → CRD smoke →
+teardown — is idempotent, and
 self-cleans back to 0 nodes on exit (success or failure). On failure it first
 dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the
 gate's output, because the teardown's scale-to-0 evicts every pod and destroys
@@ -239,13 +240,14 @@ it fail again. The manual steps that
 follow document what it does (and the recovery path if a leg needs re-running by
 hand). From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
-**If you just merged something, the gate waits before it spends anything.** `gh run
-rerun` refuses a run that is still in flight, and the latest `e2e-test.yml` run is
-usually the push-run of the merge you just made. The gate resolves and settles that
-run up front — before the node scale-up, the deploy, and the e2e AGC — so a collision
-costs a wait, not a cluster cycle. It polls for up to `E2E_WAIT_TIMEOUT` seconds
-(default 1800), then fails with the run id. To skip the wait, pin an already-completed
-run with `E2E_RUN_ID=<id>`; `E2E_WAIT_TIMEOUT=0` fails immediately instead of waiting.
+**If you just merged something, the gate waits before it spends anything.** The
+gate's dispatched run enters the e2e workflow's per-ref concurrency group, whose
+single pending slot the next push to main would cancel it out of — and the latest
+`e2e-test.yml` run is usually the still-running push-run of the merge you just
+made. The gate settles the lane up front — before the node scale-up, the deploy,
+and the e2e AGC — so a collision costs a wait, not a cluster cycle. It polls for
+up to `E2E_WAIT_TIMEOUT` seconds (default 1800), then fails with the run id;
+`E2E_WAIT_TIMEOUT=0` fails immediately instead of waiting.
 
 The gate also checks every local tool it needs up front — including the pinned
 `cosign` the final CRD-smoke leg verifies with (`make cosign` downloads it to
@@ -264,14 +266,21 @@ before it spends anything, not 25 minutes in.
    Secret aren't set up yet. The cluster, context pinning, and prod-guard cautions are
    in [gke-dogfood.md](../plan/gke-dogfood.md).
 2. **Run the e2e job matrix on GAG runners.** This is two moves, not one.
-   `scripts/dogfood/e2e-start.sh` only **wires routing**: it spins up the on-demand
-   e2e tenant's AGC and sets the `GAG_E2E_RUNNER` repo variable so `e2e-reusable.yml`
-   targets the GAG scale set — it does **not** start a run. Trigger the matrix by
-   **re-running an existing e2e workflow run** (`gh run rerun <run-id>` for
-   `e2e-test.yml` / `e2e-calico.yml`); the rerun's jobs pick up the new `runs-on` and
-   land on the RC's GAG-provisioned runners. Pick a **completed** run — `gh run rerun`
-   rejects one that is still in flight (`This workflow is already running`), so check
-   `gh run view <run-id> --json status` first when re-running this leg by hand. **Node contention:** the on-demand e2e AGC
+   `scripts/dogfood/e2e-start.sh` spins up the on-demand e2e tenant's AGC — it
+   does **not** start a run and does **not** touch routing. Trigger the matrix by
+   **dispatching a run with routing scoped to it**:
+
+   ```bash
+   gh workflow run e2e-test.yml --ref main -f runner='"gag-ci-e2e"'
+   ```
+
+   (same for `e2e-calico.yml`). Only that dispatched run lands on the RC's
+   GAG-provisioned runners; every concurrent PR and merge keeps its normal
+   hosted runners. Do **not** reach for the repo-wide `GAG_E2E_RUNNER` variable
+   here — flipping it routes every e2e job in the window, and a caught job
+   wedged main CI when the teardown deleted the AGC under it (2026-07-31; the
+   variable remains only as an `E2E_ROUTE_VAR=1` opt-in for a standing dogfood
+   soak). **Node contention:** the on-demand e2e AGC
    (~500m CPU) does not fit on the single `e2-standard-2` system node beside the
    always-on CI AGCs (the CI AGC goes `Pending`/`Insufficient cpu`), so temporarily add
    a system node (e.g. scale `default-pool` to 2) for the duration of the e2e leg and

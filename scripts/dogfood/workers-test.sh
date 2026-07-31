@@ -144,6 +144,67 @@ wait_for_worker_drain 0 15 >/dev/null && rc=0 || rc=1
 check "a sub-settle timeout still completes the settle" 0 "${rc}"
 check "  ...taking the settle count of readings" "${WORKER_DRAIN_SETTLE_READINGS}" "$(count_of calls)"
 
+# --- count_queued_scale_set_jobs / wait_for_scale_set_idle ------------------
+#
+# The GitHub-side probes (2026-07-31 incident): a job still queued at GitHub
+# has no pod, so the pod probes cannot see it — and deleting the AGC under it
+# strands it. Stubbed like kubectl: one reading per gh call, `|` separating
+# lines within a reading, FAIL a gh that cannot reach GitHub.
+REPO="octo/repo"
+
+gh() {
+	echo x >>"${STUB_DIR}/calls"
+	local head
+	head="$(head -n 1 "${STUB_DIR}/gh-readings")"
+	if (($(wc -l <"${STUB_DIR}/gh-readings") > 1)); then
+		tail -n +2 "${STUB_DIR}/gh-readings" >"${STUB_DIR}/gh-readings.next"
+		mv "${STUB_DIR}/gh-readings.next" "${STUB_DIR}/gh-readings"
+	fi
+	case "${head}" in
+		FAIL) return 1 ;;
+		EMPTY) return 0 ;;
+		*) printf '%s\n' "${head//|/$'\n'}" ;;
+	esac
+}
+
+script_gh_readings() {
+	printf '%s\n' "$@" >"${STUB_DIR}/gh-readings"
+	: >"${STUB_DIR}/calls"
+	: >"${STUB_DIR}/sleeps"
+}
+
+# No queued runs at all: nothing can target the label.
+script_gh_readings EMPTY
+check "an empty queue counts 0 scale-set jobs" 0 "$(count_queued_scale_set_jobs gag-ci-e2e)"
+
+# Two queued runs; the per-run job lookups report one matching job, then none.
+script_gh_readings '11|12' 1 0
+check "queued jobs are summed across runs" 1 "$(count_queued_scale_set_jobs gag-ci-e2e)"
+
+# The load-bearing one, same shape as the kubectl probe: an unreadable GitHub
+# must never look like an empty queue — the caller turns "0" into an AGC delete.
+script_gh_readings FAIL
+check "an unreachable GitHub reads 'unknown', not 0" "unknown" "$(count_queued_scale_set_jobs gag-ci-e2e)"
+
+script_gh_readings '11|12' 1 FAIL
+check "a failed per-run lookup reads 'unknown', not a partial count" "unknown" \
+	"$(count_queued_scale_set_jobs gag-ci-e2e)"
+
+# A busy queue is waited out; the wait returns once a reading is clean.
+script_gh_readings '11' 1 EMPTY
+wait_for_scale_set_idle gag-ci-e2e 60 5 >/dev/null && rc=0 || rc=1
+check "a busy queue is waited out, then idles" 0 "${rc}"
+
+# A queue that never drains must time out rather than fall through.
+script_gh_readings '11' 1
+wait_for_scale_set_idle gag-ci-e2e 20 5 >/dev/null && rc=0 || rc=1
+check "a queue that never drains times out" 1 "${rc}"
+
+# 'unknown' readings run the clock out; they never count as idle.
+script_gh_readings FAIL
+wait_for_scale_set_idle gag-ci-e2e 20 5 >/dev/null 2>&1 && rc=0 || rc=1
+check "an unreadable queue times out, never idles" 1 "${rc}"
+
 # --- kubectl invocation ----------------------------------------------------
 #
 # Last, because these replace the recording kubectl stub above with an
@@ -159,6 +220,28 @@ count_inflight_workers >/dev/null
 check "queries in-flight workers by label, excluding terminal phases" \
 	"get pods --all-namespaces --selector=${WORKER_POD_SELECTOR} --field-selector=status.phase!=Succeeded,status.phase!=Failed --no-headers" \
 	"$(cat "${ARGS_FILE}")"
+
+# e2e-stop.sh scopes its pre-delete drain to the e2e tenant namespace so the CI
+# tenant's ordinary traffic never holds that teardown up; the scope must reach
+# the actual invocation.
+WORKER_POD_NAMESPACE="gag-dogfood-e2e"
+count_inflight_workers >/dev/null
+check "scopes to a namespace when WORKER_POD_NAMESPACE is set" \
+	"get pods --namespace=gag-dogfood-e2e --selector=${WORKER_POD_SELECTOR} --field-selector=status.phase!=Succeeded,status.phase!=Failed --no-headers" \
+	"$(cat "${ARGS_FILE}")"
+WORKER_POD_NAMESPACE=""
+
+# The drain-timeout diagnostic names the pod: a broken column spec printed
+# '<none>' for every pod name in the 2026-07-31 incident's output, hiding
+# exactly the thing an operator needed to chase.
+describe_inflight_workers >/dev/null
+check_args="$(cat "${ARGS_FILE}")"
+if [[ "${check_args}" == *"POD:.metadata.name"* && "${check_args}" == *"NS:.metadata.namespace"* ]]; then
+	echo "ok   the drain diagnostic asks for the pod name and namespace as columns"
+else
+	echo "FAIL the drain diagnostic must ask for the pod name and namespace as columns: ${check_args}" >&2
+	fails=$((fails + 1))
+fi
 
 # delete.sh pins the context per call instead of making it active; the probe
 # must actually pass it through, or that read silently targets whatever context

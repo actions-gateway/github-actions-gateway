@@ -9,6 +9,14 @@
 # NetworkPolicy are left in place — inert without the gateway and cheap to keep,
 # so a later e2e-start.sh re-applies the gateway and the AGC comes back.
 #
+# Drain BEFORE delete (2026-07-31 incident): the AGC is the only thing that
+# serves jobs already queued on the scale set and the only thing that reaps
+# worker pods. Deleting it under either strands them — a queued job waits
+# forever (wedging its workflow's concurrency group), and an orphaned worker pod
+# carries do-not-disrupt annotations that pin its billable node indefinitely. So
+# this script waits for both to clear first, and on timeout fails BEFORE the
+# delete, leaving the AGC alive to finish the work.
+#
 # Capacity (Q335/Q357): e2e-start.sh scaled the system pool up for the e2e
 # window; this script scales it back to the running size dogfood/start.sh
 # leaves it in (derived from the deployed always-on tenants — lib/pool.sh).
@@ -20,6 +28,13 @@
 #   CLUSTER   GKE cluster name (e.g. gag-dogfood)
 #   ZONE      GCP zone (e.g. us-east1-b)
 #   REPO      GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
+#
+# Optional:
+#   E2E_DRAIN_TIMEOUT  Seconds to wait for queued scale-set jobs, then for
+#                      in-flight e2e worker pods, before failing (default 1500 —
+#                      the e2e job timeout dominates both).
+#   SKIP_E2E_DRAIN=1   Skip both drains and delete the AGC regardless. Anything
+#                      still queued or running is knowingly stranded.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -27,6 +42,14 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "${REPO_ROOT}/scripts/lib/common.sh"
 # shellcheck source=scripts/dogfood/lib/pool.sh
 source "${REPO_ROOT}/scripts/dogfood/lib/pool.sh"
+# shellcheck source=scripts/dogfood/lib/workers.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/workers.sh"
+
+# The scale-set runnerLabel the on-demand e2e RunnerSet registers — the runs-on
+# target of routed jobs. Must stay in step with runnerLabel in
+# deploy/dogfood-e2e/base/resources.yaml.
+E2E_SCALE_SET_LABEL="gag-ci-e2e"
+E2E_DRAIN_TIMEOUT="${E2E_DRAIN_TIMEOUT:-1500}"
 
 # System pool sizing (Q335/Q357). After the e2e window this script restores the
 # running size dogfood/start.sh computes — derived from the deployed always-on
@@ -58,11 +81,42 @@ main() {
 	# so the teardown delete never lands on another cluster.
 	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
 
+	# Drain before delete (see header). Queued jobs first — they have no pod yet,
+	# so the pod probe cannot see them, and the still-alive AGC is what serves
+	# them; then the e2e tenant's worker pods. Scoped to the e2e namespace so the
+	# always-on CI tenant's ordinary traffic never holds this teardown up.
+	if [[ "${SKIP_E2E_DRAIN:-0}" == "1" ]]; then
+		echo "SKIP_E2E_DRAIN=1 — skipping the queued-job and worker-pod drains." >&2
+	else
+		echo "Waiting for jobs queued on '${E2E_SCALE_SET_LABEL}' to drain (up to ${E2E_DRAIN_TIMEOUT}s)..."
+		if ! wait_for_scale_set_idle "${E2E_SCALE_SET_LABEL}" "${E2E_DRAIN_TIMEOUT}"; then
+			echo "ERROR: jobs still queued on '${E2E_SCALE_SET_LABEL}' after ${E2E_DRAIN_TIMEOUT}s." >&2
+			echo "NOT deleting the AGC — it is the only thing that can serve them; deleting" >&2
+			echo "it now wedges each job's workflow concurrency group indefinitely." >&2
+			echo "Next steps:" >&2
+			echo "  - Let the AGC work the queue down, then re-run this script." >&2
+			echo "  - Or cancel the queued runs (gh run list --status queued), then re-run." >&2
+			echo "  - You accept stranding them: re-run with SKIP_E2E_DRAIN=1." >&2
+			exit 1
+		fi
+		echo "Waiting for in-flight e2e worker pods to drain (up to ${E2E_DRAIN_TIMEOUT}s)..."
+		WORKER_POD_NAMESPACE="${E2E_TENANT_NAMESPACE}"
+		if ! wait_for_worker_drain "${E2E_DRAIN_TIMEOUT}"; then
+			echo "ERROR: e2e worker pods were still in flight after ${E2E_DRAIN_TIMEOUT}s:" >&2
+			describe_inflight_workers >&2
+			echo "NOT deleting the AGC — it is the only thing that reaps these pods; an" >&2
+			echo "orphan's do-not-disrupt annotations pin its billable node indefinitely." >&2
+			echo "Wait or bounce the AGC, then re-run; or re-run with SKIP_E2E_DRAIN=1." >&2
+			exit 1
+		fi
+		WORKER_POD_NAMESPACE=""
+	fi
+
 	# Tear down only the ActionsGateway — the GMC deletes the AGC pod, releasing
 	# the standing ~500m CPU. Everything else in the tenant is left in place.
 	echo "Tearing down the on-demand e2e AGC (deleting the ActionsGateway)..."
 	kubectl delete actionsgateway dogfood-e2e \
-		--namespace gag-dogfood-e2e --ignore-not-found
+		--namespace "${E2E_TENANT_NAMESPACE}" --ignore-not-found
 
 	# Restore the system pool to the running size now the e2e window is over
 	# (Q335/Q357) — derived from the deployed always-on ActionsGateways unless

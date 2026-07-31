@@ -49,6 +49,13 @@ on:
       - '.github/workflows/e2e-calico.yml'
       - '.github/workflows/e2e-reusable.yml'
   workflow_dispatch:
+    inputs:
+      # Run-scoped routing for the release gate (E2E_WORKFLOW=e2e-calico.yml):
+      # same contract as e2e-test.yml's dispatch input.
+      runner:
+        description: 'JSON-encoded runs-on for the e2e job, e.g. ''"gag-ci-e2e"''. Empty uses vars.GAG_E2E_RUNNER, then ubuntu-latest.'
+        type: string
+        default: ''
 
 # Cancel a superseded in-progress run on the same PR (a newer push moots it);
 # pushes to main are a distinct ref and are never cancelled. Same keying rationale
@@ -107,6 +114,8 @@ jobs:
       contents: read
     with:
       kind_cni: calico
+      # Empty except on dispatch — see e2e-test.yml.
+      runner: ${{ inputs.runner || '' }}
       # Extra headroom over the kindnet leg's 50m: Calico adds the calico-node
       # rollout to cluster bring-up, and the egress-negative specs that self-skip
       # on kindnet actually run here — while this leg skips the three chart

@@ -3,8 +3,9 @@
 # whole gate end-to-end and self-cleans on exit:
 #
 #   deploy (setup.sh) -> route CI (start.sh) -> on-demand e2e (e2e-start.sh)
-#   -> re-run the e2e matrix on GAG runners (gh run rerun) -> sizing-profile
-#   assertion -> signed v2 CRD artifact smoke -> teardown (e2e-stop.sh + stop.sh)
+#   -> dispatch the e2e matrix on GAG runners (gh workflow run, run-scoped
+#   routing) -> sizing-profile assertion -> signed v2 CRD artifact smoke ->
+#   teardown (e2e-stop.sh + stop.sh)
 #
 # It bakes in the env and ordering that the manual runbook
 # (docs/operations/release.md § "Validate the release candidate on dogfood")
@@ -16,8 +17,11 @@
 #   * The cluster is at 0 nodes at rest — the system pool is scaled up before
 #     setup so setup's GMC-rollout wait has something to schedule on; start.sh
 #     and e2e-start.sh then derive the pool size from the deployed tenant AGCs.
-#   * The e2e leg is triggered by `gh run rerun` (+ GAG_E2E_RUNNER, set by
-#     e2e-start.sh), not by e2e-start.sh itself.
+#   * The e2e leg is a workflow_dispatch of E2E_WORKFLOW with the `runner`
+#     input pinned to the e2e scale set — routing scoped to that ONE run.
+#     vars.GAG_E2E_RUNNER is never touched: the repo-wide flip used to catch
+#     other sessions' PRs and merges mid-window, and a caught job wedged main
+#     CI when teardown deleted the AGC under it (2026-07-31 incident).
 #
 # Idempotent: every underlying script is idempotent (guarded creates,
 # apply/upsert, --ignore-not-found), so a re-run after a partial failure is
@@ -48,12 +52,16 @@
 #   DOGFOOD_RUNNER_IMAGE  Build-capable RunnerTemplate image. Deliberately NOT
 #                    reset here — leave unset to let setup.sh preserve the live
 #                    image (Q295); export it only to intentionally re-pin.
-#   E2E_WORKFLOW     e2e workflow to re-run for the matrix (default e2e-test.yml).
-#   E2E_RUN_ID       Specific run id to re-run (default: the latest E2E_WORKFLOW
-#                    run). Status-checked like the default selection.
-#   E2E_WAIT_TIMEOUT Seconds to wait for the selected run to finish if it is still
-#                    in flight, before any billable work (default 1800; 0 = fail
-#                    immediately instead of waiting).
+#   E2E_WORKFLOW     e2e workflow to dispatch for the matrix (default
+#                    e2e-test.yml). Must have the `runner` workflow_dispatch
+#                    input on E2E_DISPATCH_REF.
+#   E2E_DISPATCH_REF Ref to dispatch the workflow on (default main).
+#   E2E_WAIT_TIMEOUT Seconds to wait for an in-flight run of E2E_WORKFLOW to
+#                    finish before dispatching, before any billable work
+#                    (default 1800; 0 = fail immediately instead of waiting).
+#                    The dispatched run enters the workflow's per-ref
+#                    concurrency group; entering a busy group parks it in the
+#                    single pending slot, where the next push to main cancels it.
 #   COSIGN           Path to the cosign binary (default .build/cosign; `make cosign`).
 #                    Checked up front, like every other local tool — the CRD smoke
 #                    that consumes it runs last, after the billable legs.
@@ -99,8 +107,16 @@ EXPECTED_NODESHARE_CPU="1500m"
 # gate never asserts on it (the Throughput leg reports, never fails).
 MIN_SAMPLES_FOR_DRIFT="20"
 
-# E2E_RESOLVED_RUN_ID is the run id the e2e leg re-runs. resolve_e2e_run_id sets
-# it BEFORE any billable work; e2e_leg only consumes it.
+# GAG_E2E_RUNNER_INPUT — the value passed to the workflows' `runner` dispatch
+# input: the e2e scale set's runnerLabel, JSON-encoded because the reusable
+# workflow resolves the input through fromJSON (same convention as
+# vars.GAG_E2E_RUNNER). Must stay in step with runnerLabel in
+# deploy/dogfood-e2e/base/resources.yaml.
+GAG_E2E_RUNNER_INPUT='"gag-ci-e2e"'
+
+# E2E_RESOLVED_RUN_ID is the run id of the dispatched e2e run. dispatch_e2e_run
+# sets it; e2e_leg then watches it. The pre-billable guarantee lives in
+# settle_e2e_lane instead — the dispatch itself needs the e2e AGC up first.
 E2E_RESOLVED_RUN_ID=""
 
 # COSIGN_BIN is the cosign binary the CRD smoke verifies with. preflight_cosign
@@ -162,32 +178,26 @@ run_status() {
 	gh run view "$1" --repo "${REPO}" --json status --jq '.status'
 }
 
-# resolve_e2e_run_id — pick the e2e run the gate will re-run and set
-# E2E_RESOLVED_RUN_ID. Called BEFORE any billable work (no nodes, no deploy, no
-# e2e AGC), because the two ways this fails are both cheap to hit and expensive
-# to discover late.
-#
-# `gh run rerun` refuses a run that is still in flight ("This workflow is already
-# running"). The latest run very often *is* in flight: the gate is typically run
-# minutes after a merge, whose push-run of e2e-test.yml is still going. Selecting
-# it inside the e2e leg aborted the gate after the scale-up + deploy + e2e AGC —
-# a wasted cluster cycle. So: settle the run here. Waiting (rather than falling
-# back to an older completed run) keeps the semantics — the matrix that gets
-# re-run is the one for the commit under validation, not a stale one.
-resolve_e2e_run_id() {
+# settle_e2e_lane — wait until the latest run of E2E_WORKFLOW is completed.
+# Called BEFORE any billable work (no nodes, no deploy, no e2e AGC), because a
+# collision is cheap to hit and expensive to discover late: the workflow
+# serializes per-ref through a concurrency group with ONE pending slot, so a
+# run dispatched into a busy group parks there — where the next push to main
+# cancels it, aborting the gate after the scale-up + deploy + e2e AGC. The
+# latest run very often *is* in flight: the gate is typically run minutes after
+# a merge, whose push-run of e2e-test.yml is still going.
+settle_e2e_lane() {
 	local workflow="${E2E_WORKFLOW:-e2e-test.yml}"
 	local timeout="${E2E_WAIT_TIMEOUT:-1800}"
-	local run_id="${E2E_RUN_ID:-}"
 
+	echo "Checking the ${workflow} lane is settled before dispatching into it..."
+	local run_id
+	run_id="$(gh run list --workflow="${workflow}" --repo "${REPO}" \
+		-L1 --json databaseId --jq '.[0].databaseId')"
 	if [[ -z "${run_id}" ]]; then
-		echo "Resolving the latest ${workflow} run to re-run..."
-		run_id="$(gh run list --workflow="${workflow}" --repo "${REPO}" \
-			-L1 --json databaseId --jq '.[0].databaseId')"
+		echo "  no prior ${workflow} run — the lane is free."
+		return 0
 	fi
-	[[ -n "${run_id}" ]] || {
-		echo "no ${workflow} run found to re-run" >&2
-		return 1
-	}
 
 	local status waited=0
 	while :; do
@@ -195,43 +205,65 @@ resolve_e2e_run_id() {
 		[[ "${status}" == "completed" ]] && break
 		if ((waited >= timeout)); then
 			echo "error: ${workflow} run ${run_id} is still '${status}' after ${waited}s" >&2
-			echo "  gh run rerun cannot re-run an in-flight run. Let it finish, raise" >&2
-			echo "  E2E_WAIT_TIMEOUT (currently ${timeout}s), or pin a completed run with" >&2
-			echo "  E2E_RUN_ID=<id>." >&2
+			echo "  Dispatching now would park the gate's run in the concurrency group's" >&2
+			echo "  single pending slot, where the next push to main cancels it. Let the" >&2
+			echo "  run finish, or raise E2E_WAIT_TIMEOUT (currently ${timeout}s)." >&2
 			return 1
 		fi
 		echo "  run ${run_id} is '${status}' — waiting for it to complete (${waited}s/${timeout}s)..."
 		sleep "${E2E_POLL_INTERVAL}"
 		waited=$((waited + E2E_POLL_INTERVAL))
 	done
-
-	E2E_RESOLVED_RUN_ID="${run_id}"
-	echo "Will re-run ${workflow} run ${run_id} once the e2e tenant is routed."
+	echo "  lane settled — latest ${workflow} run ${run_id} is completed."
 }
 
-# e2e_leg — spin the on-demand e2e AGC + routing, then re-run the pre-resolved
-# e2e matrix on the RC's GAG runners and require it green. The e2e-window pool
-# sizing belongs to e2e-start.sh (it resizes to at least the derived running
-# size, Q357) — a fixed pre-resize here could briefly shrink a larger pool and
-# evict a tenant AGC.
-e2e_leg() {
-	local run_id="${E2E_RESOLVED_RUN_ID}"
+# latest_dispatch_run_id WORKFLOW — print the newest workflow_dispatch run id of
+# WORKFLOW, or nothing when it has never been dispatched.
+latest_dispatch_run_id() {
+	gh run list --workflow="$1" --repo "${REPO}" \
+		--event workflow_dispatch -L1 --json databaseId --jq '.[0].databaseId'
+}
 
-	echo "Spinning up the on-demand e2e tenant + routing (e2e-start.sh)..."
+# dispatch_e2e_run — trigger E2E_WORKFLOW with its runs-on pinned to the e2e
+# scale set for that single run, and set E2E_RESOLVED_RUN_ID to the new run.
+# `gh workflow run` prints no run id, so the id is resolved by watching the
+# newest workflow_dispatch run change from a pre-dispatch baseline.
+dispatch_e2e_run() {
+	local workflow="${E2E_WORKFLOW:-e2e-test.yml}"
+	local ref="${E2E_DISPATCH_REF:-main}"
+
+	local before
+	before="$(latest_dispatch_run_id "${workflow}")"
+	echo "Dispatching ${workflow} @ ${ref} routed to ${GAG_E2E_RUNNER_INPUT} (this run only)..."
+	gh workflow run "${workflow}" --repo "${REPO}" --ref "${ref}" \
+		-f runner="${GAG_E2E_RUNNER_INPUT}"
+
+	local i id
+	for ((i = 0; i < 24; i++)); do
+		id="$(latest_dispatch_run_id "${workflow}")"
+		if [[ -n "${id}" && "${id}" != "${before}" ]]; then
+			E2E_RESOLVED_RUN_ID="${id}"
+			echo "  dispatched run is ${id}."
+			return 0
+		fi
+		sleep "${E2E_POLL_INTERVAL}"
+	done
+	echo "error: the dispatched ${workflow} run did not appear within $((24 * E2E_POLL_INTERVAL))s" >&2
+	return 1
+}
+
+# e2e_leg — spin the on-demand e2e AGC, then dispatch the e2e matrix onto the
+# RC's GAG runners (run-scoped routing) and require it green. The e2e-window
+# pool sizing belongs to e2e-start.sh (it resizes to at least the derived
+# running size, Q357) — a fixed pre-resize here could briefly shrink a larger
+# pool and evict a tenant AGC. The AGC comes up before the dispatch: a job
+# queued against a scale set that never registers waits forever.
+e2e_leg() {
+	echo "Spinning up the on-demand e2e tenant (e2e-start.sh)..."
 	bash "${SCRIPT_DIR}/e2e-start.sh"
 
-	echo "Re-running run ${run_id} on GAG runners..."
-	gh run rerun "${run_id}" --repo "${REPO}"
-
-	# `gh run rerun` is async: the run reads 'completed' for a moment before it
-	# flips to 'queued'. Wait for that transition so `gh run watch` does not read
-	# the stale completed status and return before the rerun has even started.
-	local status i
-	for ((i = 0; i < 12; i++)); do
-		status="$(run_status "${run_id}")"
-		[[ "${status}" != "completed" ]] && break
-		sleep 5
-	done
+	dispatch_e2e_run
+	local run_id="${E2E_RESOLVED_RUN_ID}"
 
 	# Sample a live worker's derived sizing while the matrix runs. Worker pods are
 	# ephemeral — released the moment their job finishes — so this is the only
@@ -510,9 +542,9 @@ main() {
 
 	confirm_target
 
-	# Resolve (and settle) the e2e run BEFORE the trap arms and before anything
-	# billable: a collision with an in-flight run must not cost a cluster cycle.
-	resolve_e2e_run_id
+	# Settle the e2e lane BEFORE the trap arms and before anything billable: a
+	# collision with an in-flight run must not cost a cluster cycle.
+	settle_e2e_lane
 
 	# Everything below mutates the cluster — arm the self-cleaning teardown first.
 	trap teardown EXIT
@@ -533,7 +565,7 @@ main() {
 }
 
 # scripts/dogfood/validate-release-test.sh sources this file to exercise
-# resolve_e2e_run_id in isolation (it gates an hour-long billable run, so its
-# failure modes are asserted rather than discovered live). Only a direct
-# invocation runs the gate.
+# settle_e2e_lane and dispatch_e2e_run in isolation (they gate an hour-long
+# billable run, so their failure modes are asserted rather than discovered
+# live). Only a direct invocation runs the gate.
 [[ -n "${VALIDATE_RELEASE_LIB_ONLY:-}" ]] || main "$@"

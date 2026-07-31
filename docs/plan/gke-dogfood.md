@@ -1073,18 +1073,28 @@ runner.
 
 ### F2. Workflow change — already wired
 
-`.github/workflows/e2e-reusable.yml` already routes to GAG when `GAG_E2E_RUNNER`
-is set:
+`.github/workflows/e2e-reusable.yml` routes to GAG through two mechanisms with
+one precedence line:
 
 ```yaml
-runs-on: ${{ fromJSON(vars.GAG_E2E_RUNNER || '"ubuntu-latest"') }}
+runs-on: ${{ fromJSON(inputs.runner || vars.GAG_E2E_RUNNER || '"ubuntu-latest"') }}
 ```
+
+- **Run-scoped (the default path):** dispatch one run with the `runner` input —
+  `gh workflow run e2e-test.yml --ref main -f runner='"gag-ci-e2e"'` — and only
+  that run lands on GAG. This is what `validate-release.sh` does; there is no
+  window in which anyone else's PR or merge can be caught.
+- **Repo-wide window (explicit opt-in):** `E2E_ROUTE_VAR=1 e2e-start.sh` sets
+  `vars.GAG_E2E_RUNNER`, routing **every** e2e job — concurrent sessions'
+  included — until `e2e-stop.sh` resets it. A job caught mid-window wedged main
+  CI when the teardown deleted the AGC under it (2026-07-31), which is why this
+  stopped being the default.
 
 Both `e2e-test.yml` (kindnet) and `e2e-calico.yml` (Calico) call this reusable
 workflow, so the one line covers both CNI variants. Because the RunnerSet is
-ScaleSet (single-label), `GAG_E2E_RUNNER` is a single JSON **string**
-(`"gag-ci-e2e"`), not the old Classic multi-label array — `e2e-start.sh` sets it,
-`e2e-stop.sh` resets it to `"ubuntu-latest"`. CI is unaffected until you enable.
+ScaleSet (single-label), both the input and the variable are a single JSON
+**string** (`"gag-ci-e2e"`), not the old Classic multi-label array. CI is
+unaffected until you route.
 
 ### F3. E2e operations — on-demand
 
@@ -1095,6 +1105,13 @@ and the `SSD_TOTAL_GB=500` quota bounds the workers pool. So rather than keep it
 running, `e2e-start.sh` applies the tenant to spin the AGC up per e2e session and
 `e2e-stop.sh` deletes the `ActionsGateway` to tear it back down (the namespace,
 Secret, quota, template, and RunnerSet are inert without the gateway and kept).
+Before the delete, `e2e-stop.sh` **drains**: it waits for jobs still queued on
+the `gag-ci-e2e` scale set and for in-flight e2e worker pods, and on timeout
+fails *without* deleting — the AGC is the only thing that can serve a queued job
+or reap a worker pod, and deleting it under either strands them (2026-07-31: an
+orphaned worker pod's do-not-disrupt annotations pinned a billable node
+indefinitely, and a stranded queued run wedged main's e2e concurrency group).
+`SKIP_E2E_DRAIN=1` overrides knowingly.
 The e2e **node** pool is already on-demand independently (autoscales 0→2 on job
 arrival, back to 0 ~10 min after drain).
 
@@ -1121,17 +1138,19 @@ pins the size explicitly instead (a pin below the derived need warns).
 `scripts/dogfood/pool-test.sh` (in `make check` via `make scripts-test`)
 asserts the sizing against stubs.
 
-The e2e leg triggers the matrix with `gh run rerun`, which **refuses an in-flight
-run** (`This workflow is already running`). Since the gate is typically run minutes
-after a merge, the latest `e2e-test.yml` run is usually that merge's push-run and
-still going — selecting it inside the e2e leg aborted the gate after the scale-up,
-deploy, and e2e AGC were already paid for (observed 2026-07-20, after PR #709).
-`validate-release.sh` therefore resolves *and settles* the run in `main()` before
-the trap arms and before anything billable: it waits out an in-flight run for up to
-`E2E_WAIT_TIMEOUT` (default 1800s) and otherwise fails there, where failure is free.
-Waiting rather than falling back to an older completed run keeps the semantics — the
-matrix re-run is the one for the commit under validation. `E2E_RUN_ID` still pins a
-run explicitly (it is status-checked too, so a pinned in-flight run fails early).
+The e2e leg triggers the matrix with `gh workflow run` (a `workflow_dispatch`
+carrying the run-scoped `runner` input above). The dispatched run enters the
+workflow's per-ref concurrency group, which holds **one pending slot** — a run
+dispatched into a busy group parks there, and the next push to main cancels it,
+aborting the gate after the scale-up, deploy, and e2e AGC were already paid for
+(the rerun-era analog was observed 2026-07-20, after PR #709: `gh run rerun`
+refuses an in-flight run outright). `validate-release.sh` therefore *settles the
+lane* in `main()` before the trap arms and before anything billable: it waits
+out an in-flight run for up to `E2E_WAIT_TIMEOUT` (default 1800s) and otherwise
+fails there, where failure is free. The dispatch also resolves the **new** run's
+id (by watching the newest `workflow_dispatch` run change from a pre-dispatch
+baseline — `gh workflow run` prints no id) and fails rather than watching a
+stale run.
 `scripts/dogfood/validate-release-test.sh` (in `make check` via `make scripts-test`)
 asserts these paths against stubs.
 

@@ -19,6 +19,20 @@
 > the actual RC image and is deliberately not tracked as a Queue row. Residuals
 > deferred out of 1.3 are under
 > [Explicitly out of scope](#explicitly-out-of-scope).
+>
+> **`v1.3.0-rc.1` is published and verified; its dogfood validation is still
+> owed.** The RC was tagged 2026-07-31 off `2d85b4c6`; `publish.yml` ran green
+> and every artifact verification passed (`make verify-release`, the v2 CRD
+> blob signature, an SBOM attestation spot-check, SLSA provenance, both
+> arches). The first validation attempt the same day **aborted without a
+> verdict**: the gate's then-repo-wide e2e routing window caught concurrent
+> sessions' CI (two PRs and a merge landed mid-window), the teardown deleted
+> the e2e AGC under a caught job, and the stranded queued runs wedged `main`'s
+> e2e concurrency group until they were cancelled. The gate now routes via a
+> run-scoped `workflow_dispatch` input and `e2e-stop.sh` drains before deleting
+> the AGC; re-run `validate-release.sh v1.3.0-rc.1` for the verdict. The
+> orphaned-worker-pod product defect the incident exposed is Queue-tracked
+> (GMC cascade reap).
 
 The scope and Definition of Done for the `v1.3.0` tag. Queue rows that block this
 tag carry the `1.3-gate` label in [docs/STATUS.md](../STATUS.md); this file is what
