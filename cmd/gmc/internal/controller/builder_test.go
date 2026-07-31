@@ -1237,7 +1237,7 @@ func TestProxyDeployments_NoPreStopSharedGracePeriod(t *testing.T) {
 
 	for name, spec := range map[string]corev1.PodSpec{
 		"v1": buildProxyDeployment(ag, "proxy:latest").Spec.Template.Spec,
-		"v2": buildEgressProxyDeployment(ep, "proxy:latest").Spec.Template.Spec,
+		"v2": buildEgressProxyDeployment(ep, "proxy:latest", nil).Spec.Template.Spec,
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := spec.Containers[0]

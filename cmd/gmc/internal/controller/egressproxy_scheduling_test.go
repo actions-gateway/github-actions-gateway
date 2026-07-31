@@ -34,7 +34,7 @@ func nodePoolAffinity(pool string) *corev1.Affinity {
 // anti-affinity, and no nodeSelector/tolerations.
 func TestEgressProxyScheduling_NoneSetPreservesBuiltInAntiAffinity(t *testing.T) {
 	ep := newEP("shared", "team-a", nil)
-	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+	pod := buildEgressProxyDeployment(ep, "proxy:v1", nil).Spec.Template.Spec
 
 	require.NotNil(t, pod.Affinity)
 	require.NotNil(t, pod.Affinity.PodAntiAffinity)
@@ -67,7 +67,7 @@ func TestEgressProxyScheduling_NodeSelectorAndTolerationsPassThrough(t *testing.
 			Tolerations:  []corev1.Toleration{tol},
 		}
 	})
-	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+	pod := buildEgressProxyDeployment(ep, "proxy:v1", nil).Spec.Template.Spec
 
 	assert.Equal(t, map[string]string{"cloud.google.com/gke-nodepool": "pool-tenant-a"}, pod.NodeSelector)
 	assert.Equal(t, []corev1.Toleration{tol}, pod.Tolerations)
@@ -85,7 +85,7 @@ func TestEgressProxyScheduling_NodeAffinityPreservesBuiltInAntiAffinity(t *testi
 	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
 		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{Affinity: nodePoolAffinity("pool-tenant-a")}
 	})
-	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+	pod := buildEgressProxyDeployment(ep, "proxy:v1", nil).Spec.Template.Spec
 
 	require.NotNil(t, pod.Affinity)
 	require.NotNil(t, pod.Affinity.NodeAffinity, "supplied nodeAffinity must be applied")
@@ -112,7 +112,7 @@ func TestEgressProxyScheduling_PodAntiAffinityReplacesBuiltIn(t *testing.T) {
 			},
 		}
 	})
-	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+	pod := buildEgressProxyDeployment(ep, "proxy:v1", nil).Spec.Template.Spec
 
 	require.NotNil(t, pod.Affinity.PodAntiAffinity)
 	assert.Empty(t, pod.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
@@ -131,7 +131,7 @@ func TestEgressProxyScheduling_EmptyPodAntiAffinityOptsOut(t *testing.T) {
 			Affinity: &corev1.Affinity{PodAntiAffinity: &corev1.PodAntiAffinity{}},
 		}
 	})
-	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+	pod := buildEgressProxyDeployment(ep, "proxy:v1", nil).Spec.Template.Spec
 
 	require.NotNil(t, pod.Affinity)
 	require.NotNil(t, pod.Affinity.PodAntiAffinity)
@@ -150,7 +150,7 @@ func TestEgressProxyScheduling_DoesNotAliasSpec(t *testing.T) {
 			Affinity:     nodePoolAffinity("pool-tenant-a"),
 		}
 	})
-	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+	pod := buildEgressProxyDeployment(ep, "proxy:v1", nil).Spec.Template.Spec
 
 	pod.NodeSelector["pool"] = "MUTATED"
 	pod.Tolerations[0].Value = "MUTATED"
@@ -183,7 +183,7 @@ func TestEgressProxyScheduling_TopologySpreadComposesWithBuiltInAntiAffinity(t *
 			TopologySpreadConstraints: []corev1.TopologySpreadConstraint{zonalSpread()},
 		}
 	})
-	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+	pod := buildEgressProxyDeployment(ep, "proxy:v1", nil).Spec.Template.Spec
 
 	require.Len(t, pod.TopologySpreadConstraints, 1)
 	assert.Equal(t, "topology.kubernetes.io/zone", pod.TopologySpreadConstraints[0].TopologyKey)
@@ -201,7 +201,7 @@ func TestEgressProxyScheduling_PriorityClassNamePassThrough(t *testing.T) {
 	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
 		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{PriorityClassName: "gag-infra-critical"}
 	})
-	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+	pod := buildEgressProxyDeployment(ep, "proxy:v1", nil).Spec.Template.Spec
 	assert.Equal(t, "gag-infra-critical", pod.PriorityClassName)
 }
 
@@ -213,7 +213,7 @@ func TestEgressProxyScheduling_TopologySpreadDoesNotAliasSpec(t *testing.T) {
 			TopologySpreadConstraints: []corev1.TopologySpreadConstraint{zonalSpread()},
 		}
 	})
-	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+	pod := buildEgressProxyDeployment(ep, "proxy:v1", nil).Spec.Template.Spec
 
 	pod.TopologySpreadConstraints[0].TopologyKey = "MUTATED"
 	assert.Equal(t, "topology.kubernetes.io/zone",

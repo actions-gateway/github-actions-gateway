@@ -78,7 +78,7 @@ func TestBuildEgressProxyDeployment(t *testing.T) {
 	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
 		ep.Spec.MinReplicas = ptr(int32(3))
 	})
-	dep := buildEgressProxyDeployment(ep, "proxy:test")
+	dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
 
 	assert.Equal(t, "shared-proxy", dep.Name)
 	assert.Equal(t, "team-a", dep.Namespace)
@@ -155,7 +155,7 @@ func TestBuildEgressProxyDeployment_LogLevelOverride(t *testing.T) {
 	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
 		ep.Spec.LogLevel = "debug"
 	})
-	dep := buildEgressProxyDeployment(ep, "proxy:test")
+	dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
 
 	require.Len(t, dep.Spec.Template.Spec.Containers, 1)
 	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
@@ -349,7 +349,7 @@ func TestProxyHostSuffix_StripsWildcardPrefix(t *testing.T) {
 // unchanged.
 func TestProxyAllowlistEnv_NilWhenNoExtras(t *testing.T) {
 	ep := newEP("shared", "team-a", nil)
-	assert.Nil(t, proxyAllowlistEnv(ep))
+	assert.Nil(t, proxyAllowlistEnv(ep, nil))
 }
 
 // TestProxyAllowlistEnv_FQDNsOnly asserts that opting in via destinationFQDNs
@@ -360,7 +360,7 @@ func TestProxyAllowlistEnv_FQDNsOnly(t *testing.T) {
 	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
 		ep.Spec.DestinationFQDNs = []string{"npm.pkg.example.com"}
 	})
-	env := proxyAllowlistEnv(ep)
+	env := proxyAllowlistEnv(ep, nil)
 	require.Len(t, env, 1)
 	assert.Equal(t, "PROXY_ALLOWED_HOST_SUFFIXES", env[0].Name)
 
@@ -385,7 +385,7 @@ func TestProxyAllowlistEnv_CIDRsAddSecondEnvVar(t *testing.T) {
 		ep.Spec.DestinationFQDNs = []string{"npm.pkg.example.com"}
 		ep.Spec.DestinationCIDRs = []string{"10.0.0.0/8", "192.168.1.0/24"}
 	})
-	env := proxyAllowlistEnv(ep)
+	env := proxyAllowlistEnv(ep, nil)
 	require.Len(t, env, 2)
 	assert.Equal(t, "PROXY_ALLOWED_HOST_SUFFIXES", env[0].Name)
 	assert.Equal(t, "PROXY_ALLOWED_CIDRS", env[1].Name)
@@ -399,7 +399,7 @@ func TestProxyAllowlistEnv_CIDRsOnlyStillEmitsHostSuffixes(t *testing.T) {
 	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
 		ep.Spec.DestinationCIDRs = []string{"10.0.0.0/8"}
 	})
-	env := proxyAllowlistEnv(ep)
+	env := proxyAllowlistEnv(ep, nil)
 	require.Len(t, env, 2)
 	assert.Equal(t, "PROXY_ALLOWED_HOST_SUFFIXES", env[0].Name)
 	assert.Contains(t, env[0].Value, "github.com")

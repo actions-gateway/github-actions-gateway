@@ -130,14 +130,16 @@ var githubEgressFQDNs = []string{
 }
 
 // egressFQDNs returns the full FQDN allowlist an FQDN-mode CNI policy must permit:
-// the implicit GitHub hostnames (always allowed) plus the operator's extra
-// destinationFQDNs (Q242 G.1). The extras are valid only in an FQDN mode (the CRD's
-// CEL rule rejects destinationFQDNs without an FQDN-family egressPolicyMode), so they
-// only ever reach the CNI-native policy. A fresh slice is returned so callers never
-// mutate the shared githubEgressFQDNs backing array.
-func egressFQDNs(ep *gmcv2alpha1.EgressProxy) []string {
-	out := make([]string, 0, len(githubEgressFQDNs)+len(ep.Spec.DestinationFQDNs))
+// the implicit GitHub hostnames (always allowed), the GitHub Enterprise Server hosts
+// this proxy's referrers bind to it (Q506 #2, resolveReferrerGitHubHosts), plus the
+// operator's extra destinationFQDNs (Q242 G.1). The extras are valid only in an FQDN
+// mode (the CRD's CEL rule rejects destinationFQDNs without an FQDN-family
+// egressPolicyMode), so they only ever reach the CNI-native policy. A fresh slice is
+// returned so callers never mutate the shared githubEgressFQDNs backing array.
+func egressFQDNs(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) []string {
+	out := make([]string, 0, len(githubEgressFQDNs)+len(gitHubHosts)+len(ep.Spec.DestinationFQDNs))
 	out = append(out, githubEgressFQDNs...)
+	out = append(out, gitHubHosts...)
 	out = append(out, ep.Spec.DestinationFQDNs...)
 	return out
 }
@@ -181,8 +183,8 @@ func toUnstructuredLabels(in map[string]string) map[string]interface{} {
 // the resolved IPs) and TCP/443 to the GitHub FQDNs via toFQDNs. A CiliumNetworkPolicy
 // makes its selected endpoints default-deny for egress, so everything else is denied —
 // the same secure-by-default posture as the standard NetworkPolicy's CIDR rule.
-func buildEgressProxyCiliumNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructured.Unstructured {
-	allFQDNs := egressFQDNs(ep)
+func buildEgressProxyCiliumNetworkPolicy(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) *unstructured.Unstructured {
+	allFQDNs := egressFQDNs(ep, gitHubHosts)
 	fqdnRules := make([]interface{}, 0, len(allFQDNs))
 	for _, f := range allFQDNs {
 		if strings.Contains(f, "*") {
@@ -260,8 +262,8 @@ func buildEgressProxyCiliumNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructu
 // allows DNS to cluster DNS plus TCP/443 to the GitHub destination domains. The policy
 // declares types: [Egress] with no Allow rule beyond these, so Calico default-denies
 // all other egress — matching the CIDR default's posture.
-func buildEgressProxyCalicoNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructured.Unstructured {
-	allFQDNs := egressFQDNs(ep)
+func buildEgressProxyCalicoNetworkPolicy(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) *unstructured.Unstructured {
+	allFQDNs := egressFQDNs(ep, gitHubHosts)
 	domains := make([]interface{}, 0, len(allFQDNs))
 	for _, f := range allFQDNs {
 		domains = append(domains, f)
@@ -330,8 +332,8 @@ func buildEgressProxyCalicoNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructu
 // node-local-dns peer). So the fail-closed guarantee for gke DEPENDS on that base NP being
 // present: the FQDNNetworkPolicy only widens the union to permit GitHub, and if it is
 // absent or unenforced, GitHub egress stays denied by the base NP rather than opening wide.
-func buildEgressProxyGKEFQDNNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructured.Unstructured {
-	allFQDNs := egressFQDNs(ep)
+func buildEgressProxyGKEFQDNNetworkPolicy(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) *unstructured.Unstructured {
+	allFQDNs := egressFQDNs(ep, gitHubHosts)
 	matches := make([]interface{}, 0, len(allFQDNs))
 	for _, f := range allFQDNs {
 		if strings.Contains(f, "*") {

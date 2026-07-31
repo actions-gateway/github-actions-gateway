@@ -116,7 +116,7 @@ func TestEgressProxyReconcile_ReadyWhenReplicasMeetMin(t *testing.T) {
 	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
 		ep.Spec.MinReplicas = ptr(int32(1))
 	})
-	dep := buildEgressProxyDeployment(ep, "proxy:test")
+	dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
 	dep.Status.ReadyReplicas = 1
 
 	c := fake.NewClientBuilder().
@@ -150,7 +150,7 @@ func TestEgressProxyReconcile_ReadyFQDNModeRequeues(t *testing.T) {
 		ep.Spec.MinReplicas = ptr(int32(1))
 		ep.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
 	})
-	dep := buildEgressProxyDeployment(ep, "proxy:test")
+	dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
 	dep.Status.ReadyReplicas = 1
 
 	c := fake.NewClientBuilder().
@@ -249,7 +249,7 @@ func TestEgressProxyReconcile_UnmanagedScaleToZeroIsReady(t *testing.T) {
 		ep.Spec.ManagedAutoscaling = ptr(false)
 	})
 	// Simulate the external autoscaler having scaled the pool to zero.
-	dep := buildEgressProxyDeployment(ep, "proxy:test")
+	dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
 	dep.Spec.Replicas = ptr(int32(0))
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ep, dep).WithStatusSubresource(ep).Build()
