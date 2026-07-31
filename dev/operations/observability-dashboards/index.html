@@ -2494,6 +2494,11 @@
 <td><code>sum by (result) (increase(actions_gateway_scaleset_jobs_completed_total[1h]))</code></td>
 <td>Bar chart by result</td>
 </tr>
+<tr>
+<td>Worker pods reaped/s (by reason)</td>
+<td><code>sum by (namespace, runner_set, reason) (rate(actions_gateway_worker_pods_reaped_total{runner_set!=""}[5m]))</code></td>
+<td>Time series — the reaper counter's scale-set series (Q514), joinable with the capacity gauges above on <code>(namespace, runner_set)</code></td>
+</tr>
 </tbody>
 </table>
 <p><strong>Row 5 — Tenant Health Conditions</strong></p>
