@@ -4759,10 +4759,12 @@ idle gated set whose shape stays unplaceable, <code>AwaitingProbe</code> can per
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># nodeAutoscaling: Present only — the raw events the gate read, with their reporters.</span>
 <a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Both timestamp columns are printed because the two recorder generations populate</span>
-<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># different ones: cluster autoscaler sets lastTimestamp, Karpenter sets eventTime.</span>
-<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">  </span>--field-selector<span class="w"> </span>involvedObject.name<span class="o">=</span>&lt;worker-pod&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;TIME:.lastTimestamp,MICROTIME:.eventTime,SOURCE:.source.component,REASON:.reason,MESSAGE:.message&#39;</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># different ones. Today both autoscalers set lastTimestamp and leave eventTime empty</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># (measured: cluster autoscaler v1.36.1, Karpenter v1.14.0), but the gate reads</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="c1"># whichever is set, so the listing shows both.</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">  </span>--field-selector<span class="w"> </span>involvedObject.name<span class="o">=</span>&lt;worker-pod&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;TIME:.lastTimestamp,MICROTIME:.eventTime,SOURCE:.source.component,REASON:.reason,MESSAGE:.message&#39;</span>
 </code></pre></div>
 <blockquote>
 <p><strong>A declination is not always the last word, even when it is the last event.</strong> One
@@ -4781,8 +4783,8 @@ placement problem — the resolutions are the same ones listed under
 capacity, <code>nodeSelector</code>/affinity, tolerations). Under <code>nodeAutoscaling: Present</code>
 the autoscaler has already told you which one in the condition message: a node-group
 ceiling (<code>max node group size reached</code>, <code>max total nodes in cluster reached</code>), an
-untolerated taint, a cloud quota, or — for Karpenter — no instance type satisfying
-the pod. The condition clears on the next reconcile once a worker pod schedules,
+untolerated taint, a cloud quota, or — for Karpenter — no instance type with enough
+resources, or requirements no pool is compatible with. The condition clears on the next reconcile once a worker pod schedules,
 or once the autoscaler records that it <em>is</em> scaling up for one.</p>
 <blockquote>
 <p><strong>The taint case names a category, not a key.</strong> Cluster-autoscaler aggregates its
