@@ -106,7 +106,8 @@ func gaugeValue(families []*dto.MetricFamily, name string, labels map[string]str
 
 // TestV2_GaugeCollectors_ReflectV2 proves the v2-aware collectors, reading a real
 // apiserver, count a v2 ActionsGateway in managed_gateways and reflect a v2
-// EgressProxy's ProxyQuota/EgressRulesStale conditions. NewMetrics registers on the
+// EgressProxy's ProxyQuota/EgressRulesStale/GitHubEgressIncomplete (Q537)
+// conditions. NewMetrics registers on the
 // process-global controller-runtime registry, so it must be the SOLE caller in the
 // integration binary (the unit suite exercises NewMetrics in its own binary).
 func TestV2_GaugeCollectors_ReflectV2(t *testing.T) {
@@ -130,6 +131,10 @@ func TestV2_GaugeCollectors_ReflectV2(t *testing.T) {
 		Type: gmcv2alpha1.ConditionEgressRulesStale, Status: metav1.ConditionTrue,
 		Reason: gmcv2alpha1.ReasonRefreshStalled, Message: "test",
 	})
+	meta.SetStatusCondition(&ep.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionGitHubEgressIncomplete, Status: metav1.ConditionTrue,
+		Reason: gmcv2alpha1.ReasonApplianceRangesRequired, Message: "test",
+	})
 	require.NoError(t, k8sClient.Status().Update(ctx, ep))
 
 	// v2Enabled=true: the collectors also list the v2 kinds.
@@ -145,7 +150,8 @@ func TestV2_GaugeCollectors_ReflectV2(t *testing.T) {
 		managed, okM := gaugeValue(fams, "actions_gateway_managed_gateways", map[string]string{})
 		pressure, okP := gaugeValue(fams, "actions_gateway_proxy_quota_pressure", epLabels)
 		stale, okS := gaugeValue(fams, "actions_gateway_egress_rules_stale", epLabels)
-		return okM && managed >= 1 && okP && pressure == 1 && okS && stale == 1
+		gap, okG := gaugeValue(fams, "actions_gateway_github_egress_incomplete", epLabels)
+		return okM && managed >= 1 && okP && pressure == 1 && okS && stale == 1 && okG && gap == 1
 	}, 15*time.Second, 200*time.Millisecond).Should(gomega.BeTrue(),
 		"managed_gateways must count the v2 gateway and the proxy gauges must reflect the v2 EgressProxy conditions")
 

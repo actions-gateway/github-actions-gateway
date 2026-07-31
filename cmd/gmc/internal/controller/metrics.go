@@ -57,9 +57,58 @@ func NewMetrics(reader client.Reader, v2Enabled bool) *Metrics {
 	// cluster would spin a failed informer for the absent v2 ActionsGateway kind on
 	// every scrape.
 	if v2Enabled {
-		metrics.Registry.MustRegister(newActionsGatewayV2ConditionsCollector(reader))
+		metrics.Registry.MustRegister(newActionsGatewayV2ConditionsCollector(reader),
+			newGitHubEgressIncompleteCollector(reader))
 	}
 	return m
+}
+
+// gitHubEgressIncompleteCollector exports the EgressProxy GitHubEgressIncomplete
+// condition (Q506 #3) as a gauge, so a GHES tenant whose CIDR allowlist cannot
+// reach its appliance is alertable fleet-wide rather than one kubectl describe at
+// a time (Q537). Scrape-time reads and gauge semantics as managedGatewaysCollector.
+// The condition exists only on the v2 EgressProxy — v1 has no twin — so like the v2
+// ActionsGateway condition gauges it is registered only when the v2 CRDs are
+// installed (see [NewMetrics]).
+type gitHubEgressIncompleteCollector struct {
+	reader     client.Reader
+	incomplete *prometheus.Desc
+}
+
+func newGitHubEgressIncompleteCollector(reader client.Reader) *gitHubEgressIncompleteCollector {
+	return &gitHubEgressIncompleteCollector{
+		reader: reader,
+		incomplete: prometheus.NewDesc(
+			"actions_gateway_github_egress_incomplete",
+			"1 when the EgressProxy GitHubEgressIncomplete condition is True (a referring gateway names a GitHub Enterprise Server host the CIDR-mode egress allowlist cannot reach), else 0. Supplying spec.destinationCIDRs or an FQDN egress mode clears it.",
+			[]string{"namespace", "name"}, nil,
+		),
+	}
+}
+
+// Describe implements prometheus.Collector.
+func (c *gitHubEgressIncompleteCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.incomplete
+}
+
+// Collect implements prometheus.Collector. On a read failure it emits nothing
+// rather than a misleading value.
+func (c *gitHubEgressIncompleteCollector) Collect(ch chan<- prometheus.Metric) {
+	ctx, cancel := context.WithTimeout(context.Background(), collectorListTimeout)
+	defer cancel()
+
+	var epList gmcv2alpha1.EgressProxyList
+	if err := c.reader.List(ctx, &epList); err != nil {
+		return
+	}
+	for i := range epList.Items {
+		ep := &epList.Items[i]
+		if !ep.DeletionTimestamp.IsZero() {
+			continue
+		}
+		ch <- prometheus.MustNewConstMetric(c.incomplete, prometheus.GaugeValue,
+			conditionGaugeValue(ep.Status.Conditions, gmcv2alpha1.ConditionGitHubEgressIncomplete), ep.Namespace, ep.Name)
+	}
 }
 
 // egressRulesStaleCollector exports the EgressRulesStale condition (Q157) as a

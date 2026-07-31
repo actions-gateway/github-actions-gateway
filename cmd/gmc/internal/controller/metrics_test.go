@@ -356,6 +356,48 @@ actions_gateway_egress_rules_stale{name="v2stale",namespace="v2stale"} 1
 	assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
 }
 
+// TestGitHubEgressIncompleteCollector_ReflectsV2EgressProxy asserts the Q537 gauge
+// mirrors the GitHubEgressIncomplete condition per v2 EgressProxy — 1 for the GHES
+// referrer whose ranges are missing, 0 for a pool that can reach its GitHub — and
+// that a deleting proxy contributes no series.
+func TestGitHubEgressIncompleteCollector_ReflectsV2EgressProxy(t *testing.T) {
+	scheme := newV2MetricsScheme(t)
+
+	gap := v2EgressProxyWithCondition("gap", gmcv2alpha1.ConditionGitHubEgressIncomplete, metav1.ConditionTrue)
+	ok := v2EgressProxyWithCondition("ok", gmcv2alpha1.ConditionGitHubEgressIncomplete, metav1.ConditionFalse)
+	deleting := v2EgressProxyWithCondition("deleting", gmcv2alpha1.ConditionGitHubEgressIncomplete, metav1.ConditionTrue)
+	now := metav1.Now()
+	deleting.DeletionTimestamp = &now
+	// A deletion timestamp only persists in the fake client with a finalizer.
+	deleting.Finalizers = []string{"actions-gateway/test"}
+
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(gap, ok, deleting).Build()
+	c := newGitHubEgressIncompleteCollector(fc)
+
+	const expected = `
+# HELP actions_gateway_github_egress_incomplete 1 when the EgressProxy GitHubEgressIncomplete condition is True (a referring gateway names a GitHub Enterprise Server host the CIDR-mode egress allowlist cannot reach), else 0. Supplying spec.destinationCIDRs or an FQDN egress mode clears it.
+# TYPE actions_gateway_github_egress_incomplete gauge
+actions_gateway_github_egress_incomplete{name="gap",namespace="gap"} 1
+actions_gateway_github_egress_incomplete{name="ok",namespace="ok"} 0
+`
+	assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
+}
+
+// TestGitHubEgressIncompleteCollector_NoSeriesWithoutProxies asserts the collector
+// stays silent rather than emitting a phantom zero: with no EgressProxies, and with
+// the kind unreadable, absent beats a misleading value.
+func TestGitHubEgressIncompleteCollector_NoSeriesWithoutProxies(t *testing.T) {
+	t.Run("no proxies", func(t *testing.T) {
+		fc := fake.NewClientBuilder().WithScheme(newV2MetricsScheme(t)).Build()
+		assert.Equal(t, 0, testutil.CollectAndCount(newGitHubEgressIncompleteCollector(fc)))
+	})
+
+	t.Run("kind unreadable", func(t *testing.T) {
+		fc := fake.NewClientBuilder().WithScheme(runtime.NewScheme()).Build()
+		assert.Equal(t, 0, testutil.CollectAndCount(newGitHubEgressIncompleteCollector(fc)))
+	})
+}
+
 // TestManagedGatewaysCollector_ReadFailures pins the managed-gateways gauge's
 // partial-read contract across the version split: an unreadable v1 pass still
 // yields the v2 count, and the gauge is absent only when no version could be read

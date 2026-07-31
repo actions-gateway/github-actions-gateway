@@ -21,6 +21,7 @@ Part of the [Observability](observability.md) guide. The metrics referenced belo
 | Workers idling after their job is over | `worker_pods_reaped_total{reason="orphaned_running"}` | ScaleSet worker still Running five minutes after GitHub reported its job terminal — it never received the job, or a sidecar outlived the runner; see the [runbook](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning) |
 | Workers killed by the lifetime cap | `worker_pods_reaped_total{reason="lifetime_exceeded"}` | A worker outlived `maxWorkerLifetime` (default 12h) and the kubelet killed it. Either a wedged worker the cap correctly bounded, or a legitimately long job that needs the field raised — tell them apart before changing anything; see the [runbook](troubleshooting.md#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded) |
 | Jobs running but `ACTIVEJOBS` shows 0 | Check pod phase with `kubectl get pods -l actions-gateway/runner-group=<name>` (v1) or `-l actions-gateway.com/runner-set=<name>` (v2) | `ACTIVEJOBS` is updated on pod phase-change events; the column reflects the last reconcile snapshot — not a real-time gauge. A pod that changed phase after the last reconcile will show up after the next event fires. |
+| A GHES tenant acquires no jobs | `github_egress_incomplete` | `1` means the pool's `CIDR` allowlist cannot reach the appliance the tenant's gateway names; the connection times out with nothing else naming the cause. See the [runbook](troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance) |
 | Proxy autoscaling not working | HPA TARGETS showing `<unknown>` | `requests.cpu` not set on proxy pods |
 | GMC/AGC reconcile broken | `reconcile_errors_total` | Non-zero sustained rate indicates operator issue |
 
@@ -194,6 +195,18 @@ groups:
           runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayegressrulesstale"
           summary: "GitHub egress allowlist stale for {{ $labels.name }} in {{ $labels.namespace }}"
           description: "The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; a stalled refresh loop may let the proxy NetworkPolicy drift from GitHub's published ranges, silently dropping new ranges."
+
+      # Ticket: a GHES tenant's egress allowlist can't reach its appliance (Q506, Q537)
+      - alert: ActionsGatewayGitHubEgressIncomplete
+        expr: |
+          actions_gateway_github_egress_incomplete == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaygithubegressincomplete"
+          summary: "GHES egress ranges missing for {{ $labels.name }} in {{ $labels.namespace }}"
+          description: "A referring gateway names a GitHub Enterprise Server host the pool's CIDR-mode allowlist cannot reach, so the tenant's GitHub traffic is denied and it acquires no jobs. Supply the appliance's ranges in spec.destinationCIDRs or switch to an FQDN egress mode — this will not self-heal."
 
       # Ticket: agent re-registration failing — listener capacity decays job by job (Q267)
       - alert: ActionsGatewayAgentRecycleErrors
