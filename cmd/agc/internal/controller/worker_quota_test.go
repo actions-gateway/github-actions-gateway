@@ -3,15 +3,18 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -176,6 +179,80 @@ func TestEvalWorkerQuota_ListErrorIsBenign(t *testing.T) {
 	assert.False(t, st.pressure)
 	assert.False(t, st.exceeded)
 	assert.Equal(t, "QuotaUnknown", st.pressureReason)
+}
+
+// TestWorkerQuotaTwinsAgree pins the v1 RunnerGroup and v2 RunnerSet evaluations to
+// one verdict (Q521). Fed an equivalent pod shape, ceiling, and namespace quota, the
+// two must publish identical reasons AND messages in every tier — they were
+// byte-identical twins before evalWorkerQuotaFor merged them, and this is what
+// catches a re-divergence.
+func TestWorkerQuotaTwinsAgree(t *testing.T) {
+	const ns = "tenant-ns"
+	const ceiling = 3
+
+	quota := func(cpu string) *corev1.ResourceQuota {
+		return &corev1.ResourceQuota{
+			ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns},
+			Spec:       corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourceRequestsCPU: resource.MustParse(cpu)}},
+		}
+	}
+	workerPod := func(label, name string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: ns,
+				Labels: map[string]string{label: "pool"},
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		}
+	}
+
+	tests := []struct {
+		name string
+		// hard is the quota's requests.cpu ceiling; empty means no quota at all.
+		hard string
+		// active worker pods already counted against the pool's ceiling.
+		active      int
+		wantPReason string
+		wantEReason string
+	}{
+		{"no quota", "", 0, "NoQuota", "NoRejection"},
+		{"cannot admit one worker", "100m", 0, "Superseded", "QuotaExhausted"},
+		{"cannot reach the ceiling", "1", 0, "InsufficientQuotaHeadroom", "NoRejection"},
+		// 1200m fits the remaining 2 × 500m but not a full 3 × 500m, so the active
+		// count is load-bearing: a pool that counted its workers under the wrong
+		// label would report pressure here.
+		{"ceiling reachable from current count", "1200m", 1, "QuotaHeadroomSufficient", "NoRejection"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			objsFor := func(label string) []client.Object {
+				var objs []client.Object
+				if tc.hard != "" {
+					objs = append(objs, quota(tc.hard))
+				}
+				for i := 0; i < tc.active; i++ {
+					objs = append(objs, workerPod(label, fmt.Sprintf("worker-%d", i)))
+				}
+				return objs
+			}
+
+			rg := wqRunnerGroup(ceiling, "500m", "")
+			rg.Name = "pool"
+			rgr := &RunnerGroupReconciler{Client: fake.NewClientBuilder().WithScheme(wqScheme(t)).
+				WithObjects(objsFor(provisioner.LabelRunnerGroup)...).Build()}
+			v1 := rgr.evalWorkerQuota(context.Background(), rg)
+
+			rs := rsObj("pool", ns, func(r *v2alpha1.RunnerSet) { r.Spec.MaxWorkers = ptr.To(int32(ceiling)) })
+			rsr := &RunnerSetReconciler{Client: fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).
+				WithObjects(objsFor(provisioner.LabelRunnerSet)...).Build()}
+			v2 := rsr.evalRunnerSetWorkerQuota(context.Background(), rs, capTemplate("500m"))
+
+			assert.Equal(t, tc.wantPReason, v1.pressureReason)
+			assert.Equal(t, tc.wantEReason, v1.exceededReason)
+			assert.Equal(t, v1, v2, "the v1 and v2 evaluations must agree in full")
+		})
+	}
 }
 
 func TestResourceListEqual_AGC(t *testing.T) {

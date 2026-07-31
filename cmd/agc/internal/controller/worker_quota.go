@@ -46,7 +46,24 @@ type workerQuotaConditions struct {
 	exceededMessage string
 }
 
-// evalWorkerQuota computes WorkerQuotaPressure (warning) and WorkerQuotaExceeded
+// workerQuotaPool is the owner-shaped half of the worker-quota evaluation: the facts
+// that differ between a v1 RunnerGroup and a v2 RunnerSet. The caller resolves them
+// from its own spec; everything downstream of that is common.
+type workerQuotaPool struct {
+	namespace string
+	// podSpec is the shape of the worker this pool would provision right now. Nil
+	// (references unresolved) sizes an empty footprint.
+	podSpec *corev1.PodSpec
+	// ceiling is the pool's configured worker ceiling; bounded is false when it has none.
+	ceiling int32
+	bounded bool
+	// label and name select this pool's worker pods (LabelRunnerGroup for v1,
+	// LabelRunnerSet for v2).
+	label string
+	name  string
+}
+
+// evalWorkerQuotaFor computes WorkerQuotaPressure (warning) and WorkerQuotaExceeded
 // (error) against the platform-owned namespace ResourceQuota. Both are advisory
 // and do NOT gate Ready.
 //
@@ -60,7 +77,10 @@ type workerQuotaConditions struct {
 // Both read live quota .status (hard − used), so they move with namespace load —
 // a warning-grade signal, not a stable invariant. The headroom check ignores
 // quota scopes; face-value hard/used is sufficient for an advisory signal.
-func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha1.RunnerGroup) workerQuotaConditions {
+//
+// Shared by the v1 RunnerGroup and v2 RunnerSet evaluations so the two publish the
+// same reasons and messages from the same arithmetic.
+func evalWorkerQuotaFor(ctx context.Context, c client.Client, pool workerQuotaPool) workerQuotaConditions {
 	st := workerQuotaConditions{
 		pressureReason:  "QuotaHeadroomSufficient",
 		pressureMessage: "namespace ResourceQuota admits scaling workers to the configured ceiling",
@@ -69,7 +89,7 @@ func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha
 	}
 
 	var quotas corev1.ResourceQuotaList
-	if err := r.List(ctx, &quotas, client.InNamespace(rg.Namespace)); err != nil {
+	if err := c.List(ctx, &quotas, client.InNamespace(pool.namespace)); err != nil {
 		st.pressureReason = "QuotaUnknown"
 		st.pressureMessage = fmt.Sprintf("could not read namespace ResourceQuota: %v", err)
 		return st
@@ -83,7 +103,7 @@ func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha
 	// Resolve the pod shape ONCE — the error and warning tiers below must size a
 	// worker identically, and this is what folds in RuntimeClass overhead alongside
 	// the native sidecars the footprint arithmetic already counts (Q450).
-	spec := provisioner.ResolveWorkerPodSpec(ctx, r.Client, &rg.Spec.PodTemplate.Spec)
+	spec := provisioner.ResolveWorkerPodSpec(ctx, c, pool.podSpec)
 
 	// Error tier — can the quota admit even one more worker pod?
 	if over, msg := provisioner.QuotaHeadroomViolations(provisioner.WorkerFootprint(spec, 1), quotas.Items,
@@ -94,9 +114,9 @@ func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha
 	}
 
 	// Warning tier — can the pool still grow to its ceiling?
-	if ceiling, bounded := provisioner.WorkerCeiling(rg); bounded {
-		current := r.countActiveWorkerPods(ctx, rg)
-		if additional := ceiling - current; additional > 0 {
+	if pool.bounded {
+		current := countActiveWorkerPodsByLabel(ctx, c, pool.namespace, pool.label, pool.name)
+		if additional := pool.ceiling - current; additional > 0 {
 			if over, msg := provisioner.QuotaHeadroomViolations(provisioner.WorkerFootprint(spec, additional), quotas.Items,
 				"workers cannot scale to the configured ceiling with current quota headroom: "); over {
 				st.pressure = true
@@ -112,6 +132,21 @@ func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha
 		st.pressureMessage = "superseded by WorkerQuotaExceeded"
 	}
 	return st
+}
+
+// evalWorkerQuota computes the worker namespace-quota conditions for a RunnerGroup:
+// the footprint comes from spec.podTemplate, and the ceiling from the same
+// WorkerCeiling the admission gate enforces. See evalWorkerQuotaFor.
+func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha1.RunnerGroup) workerQuotaConditions {
+	ceiling, bounded := provisioner.WorkerCeiling(rg)
+	return evalWorkerQuotaFor(ctx, r.Client, workerQuotaPool{
+		namespace: rg.Namespace,
+		podSpec:   &rg.Spec.PodTemplate.Spec,
+		ceiling:   ceiling,
+		bounded:   bounded,
+		label:     provisioner.LabelRunnerGroup,
+		name:      rg.Name,
+	})
 }
 
 // countActiveWorkerPods counts this RunnerGroup's worker pods that count toward
