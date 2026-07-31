@@ -4778,15 +4778,23 @@ allowlist.</p>
 <p>Adding a class is safe in any order; <strong>removing one is not</strong>. The
 <a href="#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289">guard policy</a>
 re-validates the whole stored object on every update — and the GMC webhooks do the
-same on the tenant-facing kinds. Once a class leaves the allowlist, <strong>every write
-to a stored object still naming it is denied</strong>, including the finalizer-removal
-update the AGC issues during teardown. A tenant deleted in that state wedges: the
-<code>agentpool-cleanup</code> finalizers can never clear and the
-namespace hangs in <code>Terminating</code> — no controller can free it
+same on the tenant-facing kinds. Once a class leaves the allowlist, <strong>every
+spec-changing write to a stored object still naming it is denied</strong>: the GMC's
+reconcile writes freeze, and the object cannot be edited except to move off the
+class. This holds for every narrowing route — the chart's
+<code>allowedPriorityClasses</code> value, the <code>--allowed-priority-classes</code> flag, or an
+in-place edit of the <code>PriorityClassAllowlist</code> CR.</p>
+<p><strong>Teardown is exempt</strong> (Q518): both the guard policy and the webhooks admit a
+<em>deletion-only</em> update — one whose object already carries a <code>deletionTimestamp</code>
+and whose spec is unchanged, which is what the AGC's finalizer-removal write
+looks like — so deleting a tenant that still names a removed class completes
+normally. On chart versions without this exemption, that same teardown write was
+denied and the namespace hung in <code>Terminating</code>
 (<a href="../troubleshooting/#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist">recovery</a>).
-This holds for every narrowing route — the chart's <code>allowedPriorityClasses</code>
-value, the <code>--allowed-priority-classes</code> flag, or an in-place edit of the
-<code>PriorityClassAllowlist</code> CR.</p>
+The exemption admits nothing new: the write it admits stores a spec byte-identical
+to the one already stored, and a spec <em>change</em> on a deleting object is still
+validated (design rationale:
+<a href="../../design/05-security/#deletion-only-updates-are-exempt-from-re-validation-q518">05-security.md § Deletion-only updates</a>).</p>
 <p>Narrow in this order:</p>
 <ol>
 <li><strong>Enumerate stored references</strong> to the class you are removing. The three
@@ -4837,7 +4845,10 @@ off the allowlist. Unlike a webhook, the policy also <strong>re-validates every 
 to an existing object</strong>, so a pre-gate stored RunnerGroup naming an
 off-allowlist class is caught on its next update, not just its next re-create.
 The flip side: removing a class that stored objects still name freezes every
-later write to them, teardown included — see
+later spec-changing write to them. Deletion-only updates (deletionTimestamp set,
+spec unchanged — the finalizer-removal write teardown depends on) are exempt via
+the policy's <code>exclude-deletion-only-updates</code> match condition (Q518), so
+narrowing can freeze a live object but can no longer wedge its deletion — see
 <a href="#narrowing-the-allowlist-drain-stored-references-first">Narrowing the allowlist</a>.</p>
 <p>The policy matches the v2 kinds too (Q323): <code>runnersets</code>
 (<code>priorityTiers[].priorityClassName</code>) and <code>runnertemplates</code>

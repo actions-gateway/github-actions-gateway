@@ -5050,10 +5050,16 @@ carries:</p>
 <a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>priorityclassallowlist<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.items[*].spec.allowedPriorityClasses}&#39;</span>
 </code></pre></div>
 <p><strong>Cause.</strong> The allowlist was narrowed while stored objects still named the removed
-class. The guard policy (and the GMC webhooks on the tenant-facing kinds)
-re-validate the <strong>whole stored object on every update</strong>, and removing a finalizer
-is an update — so the AGC's teardown write is denied on every retry. This is not a
-slow reconcile: nothing clears it until admission admits the write. See
+class, on a chart version <strong>without the Q518 deletion-only exemption</strong>. The guard
+policy (and the GMC webhooks on the tenant-facing kinds) re-validate the <strong>whole
+stored object on every update</strong>, and removing a finalizer is an update — so the
+AGC's teardown write was denied on every retry. This is not a slow reconcile:
+nothing clears it until admission admits the write.</p>
+<p>Current versions exempt deletion-only updates (deletionTimestamp set, spec
+unchanged) from re-validation in both admission layers, so this wedge no longer
+occurs: teardown completes even when the deleting objects name a removed class.
+If you hit these symptoms, the cluster is running a pre-Q518 policy/webhook —
+upgrade the chart, or recover in place as below. See
 <a href="../security-operations/#narrowing-the-allowlist-drain-stored-references-first">Narrowing the allowlist: drain stored references first</a>.</p>
 <p><strong>Recovery.</strong></p>
 <ol>
