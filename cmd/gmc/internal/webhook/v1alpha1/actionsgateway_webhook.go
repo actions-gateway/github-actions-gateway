@@ -153,8 +153,13 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 
 // ValidateUpdate rejects updates that introduce a cross-namespace gitHubAppRef,
 // privileged containers, a silent securityProfile downgrade, or securityProfile:
-// privileged in a namespace the platform has not labelled eligible.
+// privileged in a namespace the platform has not labelled eligible. Deletion-only
+// updates — deletionTimestamp set, spec unchanged — are admitted without
+// re-validation (Q518; see validation.DeletionOnlyUpdate).
 func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
+	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
+		return nil, nil
+	}
 	if err := validateGitHubAppRef(newObj); err != nil {
 		return nil, logRejection(ctx, "update", newObj, err)
 	}

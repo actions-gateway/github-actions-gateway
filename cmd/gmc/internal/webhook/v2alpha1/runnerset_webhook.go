@@ -6,6 +6,7 @@ import (
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,8 +74,13 @@ func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv
 // edited to smuggle in an off-allowlist PriorityClass, and — acquisitionProtocol
 // itself being immutable (CRD CEL) — runnerLabels, gatewayRef, and proxyRef can
 // still change, so an update can still move a ScaleSet set onto a colliding label
-// or bind the gateway's GitHub host to a proxy that excludes it.
-func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
+// or bind the gateway's GitHub host to a proxy that excludes it. Deletion-only
+// updates — deletionTimestamp set, spec unchanged — are admitted without
+// re-validation (Q518; see validation.DeletionOnlyUpdate).
+func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
+	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
+		return nil, nil
+	}
 	if err := v.validatePriorityTiers(newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}

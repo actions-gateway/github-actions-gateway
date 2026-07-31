@@ -1456,15 +1456,24 @@ allowlist.
 Adding a class is safe in any order; **removing one is not**. The
 [guard policy](#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289)
 re-validates the whole stored object on every update — and the GMC webhooks do the
-same on the tenant-facing kinds. Once a class leaves the allowlist, **every write
-to a stored object still naming it is denied**, including the finalizer-removal
-update the AGC issues during teardown. A tenant deleted in that state wedges: the
-`agentpool-cleanup` finalizers can never clear and the
-namespace hangs in `Terminating` — no controller can free it
+same on the tenant-facing kinds. Once a class leaves the allowlist, **every
+spec-changing write to a stored object still naming it is denied**: the GMC's
+reconcile writes freeze, and the object cannot be edited except to move off the
+class. This holds for every narrowing route — the chart's
+`allowedPriorityClasses` value, the `--allowed-priority-classes` flag, or an
+in-place edit of the `PriorityClassAllowlist` CR.
+
+**Teardown is exempt** (Q518): both the guard policy and the webhooks admit a
+*deletion-only* update — one whose object already carries a `deletionTimestamp`
+and whose spec is unchanged, which is what the AGC's finalizer-removal write
+looks like — so deleting a tenant that still names a removed class completes
+normally. On chart versions without this exemption, that same teardown write was
+denied and the namespace hung in `Terminating`
 ([recovery](troubleshooting.md#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist)).
-This holds for every narrowing route — the chart's `allowedPriorityClasses`
-value, the `--allowed-priority-classes` flag, or an in-place edit of the
-`PriorityClassAllowlist` CR.
+The exemption admits nothing new: the write it admits stores a spec byte-identical
+to the one already stored, and a spec *change* on a deleting object is still
+validated (design rationale:
+[05-security.md § Deletion-only updates](../design/05-security.md#deletion-only-updates-are-exempt-from-re-validation-q518)).
 
 Narrow in this order:
 
@@ -1514,7 +1523,10 @@ off the allowlist. Unlike a webhook, the policy also **re-validates every write
 to an existing object**, so a pre-gate stored RunnerGroup naming an
 off-allowlist class is caught on its next update, not just its next re-create.
 The flip side: removing a class that stored objects still name freezes every
-later write to them, teardown included — see
+later spec-changing write to them. Deletion-only updates (deletionTimestamp set,
+spec unchanged — the finalizer-removal write teardown depends on) are exempt via
+the policy's `exclude-deletion-only-updates` match condition (Q518), so
+narrowing can freeze a live object but can no longer wedge its deletion — see
 [Narrowing the allowlist](#narrowing-the-allowlist-drain-stored-references-first).
 
 The policy matches the v2 kinds too (Q323): `runnersets`

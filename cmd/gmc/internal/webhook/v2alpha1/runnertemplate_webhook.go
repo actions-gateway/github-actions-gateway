@@ -11,6 +11,7 @@ import (
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -178,7 +179,12 @@ func (v *RunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj 
 
 // ValidateUpdate applies the same checks on update, so an existing RunnerTemplate
 // cannot be edited to smuggle in a reserved field or an off-allowlist PriorityClass.
-func (v *RunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.RunnerTemplate) (admission.Warnings, error) {
+// Deletion-only updates — deletionTimestamp set, spec unchanged — are admitted
+// without re-validation (Q518; see validation.DeletionOnlyUpdate).
+func (v *RunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2alpha1.RunnerTemplate) (admission.Warnings, error) {
+	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
+		return nil, nil
+	}
 	if err := v.validate(&newObj.Spec); err != nil {
 		return nil, logRejection(ctx, "RunnerTemplate", "update", newObj.Namespace, newObj.Name, err)
 	}

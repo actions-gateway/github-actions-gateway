@@ -598,6 +598,43 @@ func TestWebhook_UpdateRejectsDisallowedPriorityClass(t *testing.T) {
 	assert.Contains(t, err.Error(), "system-cluster-critical")
 }
 
+// TestWebhook_DeletionOnlyUpdateExemption covers the Q518 exemption: a stored
+// gateway names a class the allowlist no longer carries, and the teardown
+// finalizer-removal write must still be admitted — denying it wedges the tenant
+// namespace in Terminating (Q499). Only deletion-ONLY writes are exempt: the same
+// write on a live object, or a spec change on a deleting one, stays denied.
+func TestWebhook_DeletionOnlyUpdateExemption(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil) // every named class is now off-allowlist
+	now := metav1.Now()
+
+	deleting := func(finalizers ...string) *gmcv1alpha1.ActionsGateway {
+		ag := agWithPriorityTier("removed-class")
+		ag.DeletionTimestamp = &now
+		ag.Finalizers = finalizers
+		return ag
+	}
+
+	t.Run("finalizer removal on a deleting gateway is admitted", func(t *testing.T) {
+		_, err := v.ValidateUpdate(context.Background(),
+			deleting("actions-gateway.github.com/gmc-cleanup"), deleting())
+		require.NoError(t, err)
+	})
+
+	t.Run("the same write on a live gateway is still denied", func(t *testing.T) {
+		old := agWithPriorityTier("removed-class")
+		old.Finalizers = []string{"actions-gateway.github.com/gmc-cleanup"}
+		_, err := v.ValidateUpdate(context.Background(), old, agWithPriorityTier("removed-class"))
+		require.Error(t, err, "live objects keep the stored-object re-validation")
+	})
+
+	t.Run("a spec change on a deleting gateway is still denied", func(t *testing.T) {
+		changed := deleting()
+		changed.Spec.RunnerGroups[0].RunnerLabels = append(changed.Spec.RunnerGroups[0].RunnerLabels, "extra")
+		_, err := v.ValidateUpdate(context.Background(), deleting("actions-gateway.github.com/gmc-cleanup"), changed)
+		require.Error(t, err, "the exemption must not admit spec changes on a deleting object")
+	})
+}
+
 // agWithProfile returns a tenant-namespace AG with the given securityProfile.
 func agWithProfile(profile string) *gmcv1alpha1.ActionsGateway {
 	ag := newAG("team-a")

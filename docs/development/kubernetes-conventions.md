@@ -394,6 +394,14 @@ fresh. Upstream: [kubernetes/kubernetes#130887](https://github.com/kubernetes/ku
 (unfixed; do not wait for it). `scripts/chart-reinstall-check.sh` gates the
 product-level cycle in CI.
 
+**CRD schema/CEL validation runs before a policy sees the request.** An update
+that trips an `x-kubernetes-validations` rule is rejected with the CEL message
+and never reaches any `ValidatingAdmissionPolicy` — so a test asserting a
+policy's denial must mutate a field no CRD CEL rule constrains, or the CEL
+error masks the policy verdict (observed in the Q518 integration test:
+`maxWorkers` is CEL-coupled to the last tier threshold, so mutating it never
+exercised the policy).
+
 **Corollaries for a new policy:**
 
 - Give the policy a small, purpose-built cluster-scoped CRD for its params.

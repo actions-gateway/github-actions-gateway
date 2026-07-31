@@ -221,6 +221,70 @@ func TestGMC_PriorityClassGuard_GatesDirectRunnerGroupWrites(t *testing.T) {
 			"an update to a stored RunnerGroup naming a now-off-allowlist class must be denied")
 	})
 
+	t.Run("deletion-only updates are exempt from re-validation", func(t *testing.T) {
+		// Q518: the Q499 wedge fix. A stored RunnerGroup naming a since-removed
+		// class is being deleted; the finalizer-removal update must be ADMITTED
+		// (matchCondition exclude-deletion-only-updates) or the finalizer can
+		// never clear and the tenant namespace hangs in Terminating. A spec
+		// change stays DENIED — on the live object AND on the deleting one — so
+		// the exemption cannot widen what any object names.
+		rg := guardedRG(ns, "deletion-exempt", "runner-bursty", "")
+		rg.Finalizers = []string{"integration-test/hold"}
+		require.NoError(t, k8sClient.Create(ctx, rg),
+			"runner-bursty is on the allowlist at this point (previous subtest)")
+		t.Cleanup(func() {
+			// Best-effort unstick on failure: strip the finalizer so the object
+			// does not linger terminating in the shared envtest namespace.
+			var left agcv1alpha1.RunnerGroup
+			if getErr := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &left); getErr == nil {
+				left.Finalizers = nil
+				_ = k8sClient.Update(context.Background(), &left)
+				_ = k8sClient.Delete(context.Background(), &left)
+			}
+		})
+
+		// Remove the class from the allowlist and wait until the narrowing is
+		// enforced against the live stored object (spec updates become Forbidden).
+		// Each attempt bumps maxListeners so it is a REAL spec change even if an
+		// earlier attempt was admitted before the narrowed param propagated.
+		setGuardAllowlist(t)
+		listeners := int32(1)
+		gomega.NewWithT(t).Eventually(func() bool {
+			var live agcv1alpha1.RunnerGroup
+			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &live); err != nil {
+				return false
+			}
+			listeners++
+			live.Spec.MaxListeners = listeners
+			return apierrors.IsForbidden(k8sClient.Update(ctx, &live))
+		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(),
+			"a spec update on the live object must be denied once the class is removed")
+
+		// Delete: the apiserver sets deletionTimestamp; the finalizer holds the object.
+		require.NoError(t, k8sClient.Delete(ctx, rg))
+		var deleting agcv1alpha1.RunnerGroup
+		require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &deleting))
+		require.NotNil(t, deleting.DeletionTimestamp, "the finalizer must hold the object in the deleting state")
+
+		// Positive control: a spec change on the DELETING object is still denied —
+		// the exemption is deletion-ONLY, not deletion-wide.
+		specChange := deleting.DeepCopy()
+		specChange.Spec.MaxListeners = 100 // distinct from every value the loop above may have stored
+		err := k8sClient.Update(ctx, specChange)
+		require.True(t, apierrors.IsForbidden(err),
+			"a spec change on a deleting object must still be denied, got: %v", err)
+
+		// The exemption: the finalizer-removal (metadata-only) update is admitted,
+		// and the object then completes deletion.
+		deleting.Finalizers = nil
+		require.NoError(t, k8sClient.Update(ctx, &deleting),
+			"the finalizer-removal update on a deleting object must be admitted")
+		gomega.NewWithT(t).Eventually(func() bool {
+			return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &agcv1alpha1.RunnerGroup{}))
+		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(),
+			"the object must finish deleting once the finalizer clears")
+	})
+
 	t.Run("missing param object fails closed for every write", func(t *testing.T) {
 		// parameterNotFoundAction: Deny is the never-silently-off contract: the
 		// apiserver resolves binding params before any per-object filtering, so a
@@ -387,5 +451,66 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), func() string {
 			return fmt.Sprintf("a v2beta1 RunnerSet tier class must be denied by the policy; last error: %v", lastErr)
 		})
+	})
+
+	t.Run("v2: deletion-only updates are exempt from re-validation", func(t *testing.T) {
+		// Q518 on the v2 kinds: same wedge, same exemption. "high" stays on the
+		// suite's RunnerSet webhook allowlist throughout, so every denial below is
+		// the policy's.
+		setGuardAllowlist(t, "high")
+		rs := guardedV2RS(ns, "deletion-exempt", "high")
+		rs.Finalizers = []string{"integration-test/hold"}
+		gomega.NewWithT(t).Eventually(func() error {
+			return k8sClient.Create(ctx, rs)
+		}, 30*time.Second, 100*time.Millisecond).Should(gomega.Succeed(),
+			"the allowlisted tier class must be admitted once the param update propagates")
+		t.Cleanup(func() {
+			var left agcv2alpha1.RunnerSet
+			if getErr := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &left); getErr == nil {
+				left.Finalizers = nil
+				_ = k8sClient.Update(context.Background(), &left)
+				_ = k8sClient.Delete(context.Background(), &left)
+			}
+		})
+
+		// Narrow the allowlist back to empty and wait for enforcement on the live
+		// object. Each attempt bumps the tier threshold so it is a REAL spec change
+		// even if an earlier attempt was admitted before the narrowed param
+		// propagated. The threshold (not maxWorkers) is the mutation because CRD
+		// CEL validation runs BEFORE validating admission: an update that trips a
+		// CEL rule (maxWorkers != last threshold) never reaches the policy.
+		setGuardAllowlist(t)
+		threshold := int32(5)
+		var lastUpdateErr error
+		gomega.NewWithT(t).Eventually(func() bool {
+			var live agcv2alpha1.RunnerSet
+			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &live); err != nil {
+				return false
+			}
+			threshold++
+			live.Spec.PriorityTiers[0].Threshold = threshold
+			lastUpdateErr = k8sClient.Update(ctx, &live)
+			return lastUpdateErr != nil && strings.Contains(lastUpdateErr.Error(), "gag-priorityclass-allowlist-guard")
+		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), func() string {
+			return fmt.Sprintf("a spec update on the live RunnerSet must be denied by the policy once the class is removed; last error: %v", lastUpdateErr)
+		})
+
+		require.NoError(t, k8sClient.Delete(ctx, rs))
+		var deleting agcv2alpha1.RunnerSet
+		require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &deleting))
+		require.NotNil(t, deleting.DeletionTimestamp)
+
+		specChange := deleting.DeepCopy()
+		specChange.Spec.PriorityTiers[0].Threshold = 100 // distinct from every value the loop above may have stored
+		err := k8sClient.Update(ctx, specChange)
+		require.Error(t, err, "a spec change on a deleting RunnerSet must still be denied")
+		require.ErrorContains(t, err, "gag-priorityclass-allowlist-guard")
+
+		deleting.Finalizers = nil
+		require.NoError(t, k8sClient.Update(ctx, &deleting),
+			"the finalizer-removal update on a deleting RunnerSet must be admitted")
+		gomega.NewWithT(t).Eventually(func() bool {
+			return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &agcv2alpha1.RunnerSet{}))
+		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue())
 	})
 }
