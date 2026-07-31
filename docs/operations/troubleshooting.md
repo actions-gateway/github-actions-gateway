@@ -2310,11 +2310,13 @@ keys on that mark. Consequences an operator should know:
   container exit that the deletion preceded, which such a pod does not have.
 - **A cancelled run is never re-run.** Nothing in the gateway deletes a cancelled
   run's pod, so it carries no mark.
-- **The re-run rides `evictionRetryDelay`** (default 5s), while GitHub's conclusion on
-  this path takes 15–26s — see the Q503 note in
+- **The first re-run call may be refused.** GitHub's conclusion on this path takes
+  15–26s while `evictionRetryDelay` defaults to 5s, so the first `rerun-failed-jobs`
+  can land while the run is still in progress and be answered
+  `403 This workflow is already running`. The Q503 retry loop absorbs that — the
+  re-run is retried on a 30s pace until accepted — so no action is needed; see
   [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
-  for the refused-403 failure mode this can produce and the interim workaround (raise
-  `evictionRetryDelay` past the conclusion latency).
+  for the loop's own failure modes.
 
 Two related things operators reasonably expect to change this, and which do not:
 
