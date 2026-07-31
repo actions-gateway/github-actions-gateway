@@ -116,6 +116,19 @@ cluster (Q466). The fix was to stop the read, not to widen the grant: declining 
 that belongs to another controller is what keeps this table as short as it is, and it
 also stops the two AGCs from running competing listener pools for one `RunnerSet`.
 
+**The partition runs both ways.** A gateway-scoped AGC likewise declines `RunnerGroup`s:
+a `RunnerGroup` names no gateway — v1 is a namespace singleton — so the AGC that serves
+it is the one the v1 GMC provisioned, which stamps no `GATEWAY_NAME`. While that
+reconciler was registered on every AGC, the migrated gateway's AGC ran a second listener
+on the v1 group at the *same* `agentIndex` as the v1 AGC's, which means the same agent
+Secret and the same GitHub runner name — the hazard the disjoint-naming fix above cannot
+reach, because it separates kinds and not controllers. Measured live: 409 on every
+`CreateSession` (153 in ~2.5 minutes, no backoff) and both reconcilers writing the same
+`RunnerGroup` status (Q535). Nothing can scope a `RunnerGroup` informer the way
+`spec.gatewayRef.name` scopes the `RunnerSet` one, so declining the kind is the whole
+fix. Net effect: **each AGC process serves exactly one API**, and the two never contend
+for an object.
+
 The table above is enforced, not just documented. The shipped rules
 (`charts/actions-gateway/files/agc-clusterrunnertemplate-reader-rules.yaml`) and the
 `+kubebuilder:rbac` markers that declare the AGC's needs

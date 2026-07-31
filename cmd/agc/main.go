@@ -430,19 +430,67 @@ func run() error {
 		return err
 	}
 
-	r := &controller.RunnerGroupReconciler{
-		Client:       mgr.GetClient(),
-		Log:          slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnergroup"))),
-		TokenManager: tokenMgr,
-		Registrar:    registrar,
-		Metrics:      m,
-		Provisioner:  prov,
-		AgentKeyType: agentKeyType,
-		Recorder:     mgr.GetEventRecorder("runnergroup-controller"),
-		BrokerConfig: buildBrokerConfig(cfg),
+	if err := registerReconcilers(mgr, reconcilerDeps{
+		gatewayName:  gatewayName,
+		brokerCfg:    buildBrokerConfig(cfg),
+		tokenMgr:     tokenMgr,
+		registrar:    registrar,
+		metrics:      m,
+		scaleSet:     sm,
+		prov:         prov,
+		agentKeyType: agentKeyType,
+		usageSampler: usageSampler,
+	}); err != nil {
+		return err
 	}
-	if err := r.SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("setup reconciler: %w", err)
+
+	ctrl.Log.Info("starting AGC manager")
+	return mgr.Start(ctx)
+}
+
+// reconcilerDeps is the process-wide machinery the reconcilers share. The
+// TokenManager, Registrar, Metrics and Provisioner are single instances per
+// process (the provisioner Target seam own-refs whichever CR is being served).
+type reconcilerDeps struct {
+	gatewayName  string
+	brokerCfg    controller.BrokerConfig
+	tokenMgr     *token.Manager
+	registrar    agentpool.Registrar
+	metrics      *runnercore.Metrics
+	scaleSet     *scalesetlistener.Metrics
+	prov         *provisioner.Provisioner
+	agentKeyType agentpool.KeyType
+	usageSampler *usage.Sampler
+}
+
+// registerReconcilers registers the reconcilers this AGC's role calls for. The two
+// gates are complementary, so **each AGC process serves exactly one API**: the v1
+// singleton (no GATEWAY_NAME) reconciles RunnerGroups, and a gateway-scoped AGC
+// reconciles only its own gateway's RunnerSets. A migrated namespace therefore runs
+// the v1 RunnerGroup and the v2 RunnerSet it became in separate processes even when
+// they share a name, and neither can contend for the other's objects.
+func registerReconcilers(mgr ctrl.Manager, deps reconcilerDeps) error {
+	// Registered only on the v1 AGC — the mirror of the RunnerSet gate below (Q535).
+	// ServesRunnerGroups carries the rationale.
+	if controller.ServesRunnerGroups(deps.gatewayName) {
+		r := &controller.RunnerGroupReconciler{
+			Client:       mgr.GetClient(),
+			Log:          slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnergroup"))),
+			TokenManager: deps.tokenMgr,
+			Registrar:    deps.registrar,
+			Metrics:      deps.metrics,
+			Provisioner:  deps.prov,
+			AgentKeyType: deps.agentKeyType,
+			Recorder:     mgr.GetEventRecorder("runnergroup-controller"),
+			BrokerConfig: deps.brokerCfg,
+		}
+		if err := r.SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("setup reconciler: %w", err)
+		}
+	} else {
+		ctrl.Log.Info("GATEWAY_NAME set; v1alpha1 RunnerGroup reconciler disabled "+
+			"(RunnerGroups are served by the v1 AGC, which sets no GATEWAY_NAME)",
+			"gateway", deps.gatewayName)
 	}
 
 	// v2 RunnerSet reconciler (M3a). The RunnerSet CRD (and the sibling
@@ -459,12 +507,21 @@ func run() error {
 		return fmt.Errorf("detect actions-gateway.com/v2alpha1 RunnerSet CRD: %w", err)
 	}
 	switch {
+	case !v2Enabled && deps.gatewayName != "":
+		// This combination leaves the process with no reconciler at all. Fail fast
+		// rather than run a pod that passes its probes and reconciles nothing: the GMC
+		// stamps GATEWAY_NAME only from a v2 ActionsGateway, which needs these CRDs to
+		// exist, so this is a broken install rather than a supported mode.
+		return fmt.Errorf("GATEWAY_NAME=%s is set but the actions-gateway.com/v2alpha1 RunnerSet CRD is "+
+			"not installed: a gateway-scoped AGC serves RunnerSets only, so it would reconcile nothing "+
+			"(install the actions-gateway-crds-v2 chart)", deps.gatewayName)
+
 	case !v2Enabled:
 		ctrl.Log.Info("actions-gateway.com/v2alpha1 RunnerSet CRD not installed; " +
 			"v1-only mode, v2 RunnerSet reconciler disabled " +
 			"(install the actions-gateway-crds-v2 chart and restart the AGC to enable it)")
 
-	case gatewayName == "":
+	case deps.gatewayName == "":
 		// A RunnerSet is always served by the AGC of the gateway its spec.gatewayRef
 		// names, and the GMC stamps GATEWAY_NAME on every one of those AGC Deployments
 		// (§H.16 #1). An AGC without it is the v1 singleton, and it must not reconcile
@@ -483,13 +540,6 @@ func run() error {
 	default:
 		ctrl.Log.Info("actions-gateway.com/v2alpha1 RunnerSet CRD detected; enabling v2 RunnerSet reconciler")
 
-		// Runs alongside the v1 RunnerGroup reconciler during coexistence: a migrated
-		// tenant namespace holds both a v1 RunnerGroup and the v2 RunnerSet it became,
-		// often under the same name. They never act on the same objects — the two
-		// reconcilers key off different kinds and their agent pools derive disjoint
-		// Secret names, labels, and GitHub runner names (Q466). It shares the
-		// process-wide TokenManager, Registrar, Metrics, and Provisioner (the
-		// provisioner Target seam own-refs the real RunnerSet).
 		rsr := &controller.RunnerSetReconciler{
 			Client: mgr.GetClient(),
 			// Uncached: the v1alpha1 RunnerGroup probe that gates adoption of pre-Q466
@@ -497,25 +547,23 @@ func run() error {
 			// may not serve.
 			APIReader:       mgr.GetAPIReader(),
 			Log:             slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnerset"))),
-			TokenManager:    tokenMgr,
-			Registrar:       registrar,
-			Metrics:         m,
-			ScaleSetMetrics: sm,
-			Provisioner:     prov,
-			AgentKeyType:    agentKeyType,
-			GatewayName:     gatewayName,
+			TokenManager:    deps.tokenMgr,
+			Registrar:       deps.registrar,
+			Metrics:         deps.metrics,
+			ScaleSetMetrics: deps.scaleSet,
+			Provisioner:     deps.prov,
+			AgentKeyType:    deps.agentKeyType,
+			GatewayName:     deps.gatewayName,
 			Recorder:        mgr.GetEventRecorder("runnerset-controller"),
 			EventReader:     mgr.GetAPIReader(),
-			BrokerConfig:    r.BrokerConfig,
-			Sizing:          usageSampler,
+			BrokerConfig:    deps.brokerCfg,
+			Sizing:          deps.usageSampler,
 		}
 		if err := rsr.SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("setup runnerset reconciler: %w", err)
 		}
 	}
-
-	ctrl.Log.Info("starting AGC manager")
-	return mgr.Start(ctx)
+	return nil
 }
 
 // configureProxyTrust installs the per-tenant egress proxy's self-signed CA into

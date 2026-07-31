@@ -4,7 +4,7 @@
 
 Q414 asked for one reusable v1 tenant fixture carrying a
 Docker-in-Docker (DinD) worker shape, and for `gag-migrate`'s v1→v2 fan-out to be
-covered in e2e rather than only in unit tests. [Q415](../q415-migrate-dogfood-validation.md) — migrate a
+covered in e2e rather than only in unit tests. [Q415](q415-migrate-dogfood-validation.md) — migrate a
 representative tenant on the dogfood cluster for real — was blocked on it, because
 the [v2 GA Definition of Done](../v2-api.md#definition-of-done-v2-ga) wants exactly one
 real tenant migrated and our own dogfood e2e tenant is the only one that exists.
