@@ -53,7 +53,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)](#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)
 - [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
 - [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
-- [Draining a Worker Does Not Auto-Re-Run the Jobs It Interrupts](#draining-a-worker-does-not-auto-re-run-the-jobs-it-interrupts)
+- [Draining a Worker Auto-Re-Runs the Jobs It Interrupts](#draining-a-worker-auto-re-runs-the-jobs-it-interrupts)
 - [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run)
 - [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod)
 - [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically)
@@ -2245,8 +2245,8 @@ kubectl get secret -n <namespace> actions-gateway-proxy-tls \
 
 ```sh
 # Check disruption retry metrics. The tier label splits the two acquisition paths
-# (classic, scaleset) and the cause label splits the two disruptions (eviction,
-# preemption); the retry budget itself is shared across every combination.
+# (classic, scaleset) and the cause label splits the three disruptions (eviction,
+# preemption, deletion); the retry budget itself is shared across every combination.
 # actions_gateway_eviction_retries_total{namespace, runner_group, tier, cause}
 # actions_gateway_eviction_retries_exhausted_total{namespace, runner_group, tier, cause}
 # actions_gateway_eviction_rerun_failures_total{namespace, runner_group, tier, cause, reason}
@@ -2269,62 +2269,54 @@ kubectl describe runnergroup -n <namespace> <name> | grep -A1 EvictionRetriesExh
 **Resolution.**
 - `cause="eviction"` climbing — node memory pressure: increase the worker pod's memory requests to discourage the kubelet from evicting it, or investigate the workload's actual memory usage.
 - `cause="preemption"` climbing — a higher-priority tier is repeatedly displacing this group: reduce the priority of competing workloads, adjust `priorityTiers` to give this RunnerGroup a higher floor, or move the work to a tier that is not displaceable. A long job in an opportunistic tier is the usual culprit, since every displacement restarts it from the beginning.
+- `cause="deletion"` climbing — something outside the gateway is deleting live workers: a node drain (upgrades, autoscaler consolidation), a descheduler, or hand-run `kubectl delete pod`. Find the deleter before raising the budget; see [Draining a Worker Auto-Re-Runs the Jobs It Interrupts](#draining-a-worker-auto-re-runs-the-jobs-it-interrupts).
 - If the retry budget is simply too low for a workload that is legitimately disrupted more than twice per run: increase `maxEvictionRetries` on the RunnerGroup spec (default 2, max 10).
 - If the workload is consistently failing (OOM crash, not a disruption): the auto-retry is not appropriate. Set `maxEvictionRetries: 0` and investigate the underlying workload issue.
 
 ---
 
-## Draining a Worker Does Not Auto-Re-Run the Jobs It Interrupts
+## Draining a Worker Auto-Re-Runs the Jobs It Interrupts
 
-> **Applies to both acquisition tiers.** This is the one disruption path neither the
-> disruption-safety markers nor the automatic re-run covers. **Preemption is no longer
-> on this list** — a worker displaced by a higher `priorityTiers` tier *is* re-run
-> automatically; if yours is not, see
+> **Applies to both acquisition tiers.** Behaviour since Q502 — on earlier versions a
+> drained worker's run needed a manual re-run. **Preemption has its own runbook** —
 > [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run) below.
 
-**Symptoms.** You cordon and drain a node that has worker pods on it, or delete a
-worker pod by hand. The jobs those workers were running do not come back:
-`actions_gateway_eviction_retries_total` stays flat, no `rerun-failed-jobs` call is
-made, and the affected runs need a manual re-run in the GitHub UI. The same jobs, on a
-node whose workers were evicted by *node pressure* — or displaced by a preempting tier —
-would have been re-run automatically.
+**Behaviour.** You cordon and drain a node that has worker pods on it, or delete a
+running worker pod by hand. The eviction (a drain is a PDB-checked graceful **delete**
+of each pod) starts the pod's termination: the Q385 SIGTERM relay gives the runner the
+pod's grace period to abort its job and report, GitHub concludes the job `failure`
+within seconds (15–26s measured, Q459), and the AGC re-runs the interrupted run —
+`actions_gateway_eviction_retries_total{cause="deletion"}` increments and a
+`rerun-failed-jobs` call is made, spending one slot of the run's shared
+`maxEvictionRetries` budget.
 
-**Cause — this is deliberate behaviour, not a misconfiguration.** The disruptions reach
-the gateway as different things:
+**How it is detected, and the boundary.** A drained running worker lands in `Failed`
+with an **empty** `status.reason` — the same shape as a genuinely failed job and as a
+human-cancelled run — but it is the only one of the three that publishes that phase
+while carrying a `deletionTimestamp` (measured on both halves, Q459: a cancelled run's
+worker is never deleted, and a failed job's pod was never deleted either). Recovery
+keys on that mark. Consequences an operator should know:
 
-- **The kubelet evicting under node pressure** leaves the pod in `Failed` with
-  `status.reason: Evicted`. Recovered on both tiers.
-- **`PriorityClass` preemption** is kube-scheduler's, not the kubelet's, despite often
-  being described as eviction. The scheduler **deletes** the victim after stamping a
-  `DisruptionTarget` condition with reason `PreemptionByScheduler`. Measured on a real
-  cluster (Q423), a preempted worker keeps its phase, gains a `deletionTimestamp` and
-  that condition, and then reaches a terminal phase decided by its own container's exit
-  code — never `Evicted`. Recovered on both tiers, keyed on the condition (Q497).
-- **`kubectl drain`** does not fail the pod either. It POSTs to the pod's
-  `pods/<name>/eviction` subresource, and an admitted eviction is a graceful **delete**.
-  What the pod then publishes depends on whether it had started: a worker still
-  `Pending` goes straight to absent with no terminal phase (Q421), while a **running**
-  worker lands in `Failed` with an **empty** `status.reason` (Q459, measured against
-  real GitHub). It gains a `DisruptionTarget` condition too, but with reason
-  `EvictionByEvictionAPI`, **not** `PreemptionByScheduler` — so it does not reach the
-  preemption recovery, and no re-run happens.
+- **A bare `kubectl delete pod` of a running worker re-runs its job too.** It is
+  indistinguishable from a drain, and that is the intended reading: deleting a worker
+  mid-job interrupts a job you did not mean to fail.
+- **The AGC's own cleanup never triggers a re-run.** Every pod the reaper deletes is
+  stamped `actions-gateway.com/deletion-reason: <reason>` first, and stamped deletions
+  are excluded from recovery. Never set that annotation by hand on a live worker — it
+  suppresses automatic recovery for that pod.
+- **A worker deleted before it ever reached a terminal phase is not re-run** — e.g. a
+  drain catching a still-`Pending` worker, which vanishes with no terminal phase
+  (Q421). Its job never ran to a reportable end, so there is no failed job for
+  `rerun-failed-jobs` to act on.
+- **A cancelled run is never re-run.** Nothing in the gateway deletes a cancelled
+  run's pod, so it carries no mark.
+- **The re-run rides `evictionRetryDelay`** (default 5s), while GitHub's conclusion on
+  this path takes 15–26s — see the Q503 note in
+  [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
+  for the refused-403 failure mode this can produce and the interim workaround (raise
+  `evictionRetryDelay` past the conclusion latency).
 
-That last distinction is why preemption is recovered today and the drain path is not
-*yet*. `PreemptionByScheduler` has exactly one writer — kube-scheduler — so it can never
-mean "a human deliberately stopped this run", and needed no further measurement to be
-safe to act on. The drain path has to key on `deletionTimestamp` instead, which a human
-cancelling a run might also set. That was measured on 2026-07-29 and it does not: a
-cancelled run's worker publishes the same phase and empty reason with **no** deletion
-mark. So the drain gap is a decided, sequenced piece of work rather than an open
-question — [Q502](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md)
-carries it.
-
-Across both, the terminal *phase* is why this is not a one-line fix: `Failed` with an
-empty reason is exactly what a worker whose job genuinely failed leaves behind, and a
-preempted worker can land on `Succeeded` just as readily. Re-running on phase alone
-would re-run every failing job in the cluster.
-
-Two related things operators reasonably expect to help, and which do not:
+Two related things operators reasonably expect to change this, and which do not:
 
 - The worker pod's `cluster-autoscaler.kubernetes.io/safe-to-evict: false`,
   `karpenter.sh/do-not-disrupt: true`, and descheduler prefer-no-eviction annotations
@@ -2334,52 +2326,44 @@ Two related things operators reasonably expect to help, and which do not:
   scheduler.
 - Worker pods carry no PodDisruptionBudget, so nothing rejects the eviction either.
 
-What *does* happen is the Q385 SIGTERM relay: the wrapper forwards the signal, the
-runner gets the pod's grace period to abort its job and report the result, and GitHub
-concludes the job rather than waiting the lock out. That is why the job does not hang
-— but concluding a job is not re-running it.
-
 **Diagnostics.**
 
 ```sh
 # Which disruption was it? A kubelet eviction leaves the pod behind in Failed/Evicted;
-# a drain leaves nothing; a preemption records Preempted on the victim.
+# a preemption records Preempted on the victim; a drain shows up as the eviction API's
+# events and, briefly, a Failed pod with a deletionTimestamp.
 kubectl get events -n <namespace> --sort-by='.lastTimestamp' \
   | grep -E 'Evicted|Preempted|Killing|TaintManagerEviction'
 
-# Whether recovery fired at all for the window in question. The cause label separates
-# the two recovered disruptions:
+# Whether recovery fired for the window in question. The cause label separates the
+# three recovered disruptions (eviction, preemption, deletion):
 # actions_gateway_eviction_retries_total{namespace, runner_group, tier, cause}
-# Flat across a drain is expected; flat across a node-pressure eviction or a
-# preemption is not (see the runbooks above and below).
+# Flat across a drain of RUNNING workers is unexpected — check the AGC log below.
+# Flat across a drain that only caught Pending workers is correct.
 
 # Confirm the runner did get its chance to report before the pod went away.
 kubectl logs -n <namespace> <worker-pod> --previous \
   | grep -E 'forwarding termination signal|outlived the shutdown grace period'
+
+# The AGC logs the decision explicitly, with the cause.
+kubectl logs -n <namespace> deploy/<agc-deployment> \
+  | grep -E 'worker pod disrupted; scheduling auto-retry|disruption auto-retry'
 ```
 
-Reading the disruption reason directly, if you can catch the pod — the condition exists
-only while the pod does:
-
-```sh
-kubectl get pod <worker-pod> -n <namespace> \
-  -o jsonpath='{.status.conditions[?(@.type=="DisruptionTarget")].reason}'
-```
-
-`EvictionByEvictionAPI` (or no condition at all) means no automatic re-run will follow.
-`PreemptionByScheduler` means one should — see the next runbook if it did not.
+If a drain of running workers produced no re-run, check whether the pods carried the
+`actions-gateway.com/deletion-reason` stamp (then the AGC deleted them, not your
+drain), whether the run's retry budget was already spent
+(`eviction_retries_exhausted_total`), and — scale-set tier only — whether the AGC was
+down across the teardown window or the pods carried no run identity (see
+[A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run),
+whose scale-set failure modes apply to drains identically).
 
 **Resolution / how to drain safely.**
-- **Drain during a quiet window, or wait the workers out.** A worker pod is a
-  single-job pod with no replacement behind it. `kubectl get pods -n <namespace> -l
+- **Prefer a quiet window anyway.** The re-run restarts each interrupted job from the
+  beginning, so a drain mid-job still costs the work done so far — and each interrupted
+  run spends re-run budget. `kubectl get pods -n <namespace> -l
   app.kubernetes.io/managed-by=actions-gateway-controller` on the target node shows
-  what a drain would interrupt; an empty result is the safe moment.
-- **Re-run the affected workflow runs manually** after the drain. There is no automatic
-  recovery on this path today — but it is a decided gap rather than an open question:
-  the interrupted run is re-runnable, and the disruption stays distinguishable from a
-  deliberate cancellation (a cancelled run's worker publishes the same phase and empty
-  reason but carries no `deletionTimestamp`), so recovery will key on the deletion mark.
-  Preemption already recovers automatically and needs no manual step.
+  what a drain would interrupt; an empty result is the free moment.
 - **Give the runner room to report** before you drain, so the jobs at least conclude
   cleanly instead of hanging: raise `terminationGracePeriodSeconds` in the runner
   group's `podTemplate` and `WORKER_SHUTDOWN_GRACE` with it, per
@@ -2424,9 +2408,10 @@ preempted run.
 
 **Cause.** Work through these in order:
 
-1. **The victim was not actually preempted.** Only kube-scheduler preemption is
-   recovered. A `kubectl drain`, a manual delete, or a descheduler eviction looks
-   similar and is deliberately excluded — see the previous runbook.
+1. **The victim was not actually preempted.** A `kubectl drain`, a manual delete, or a
+   descheduler eviction looks similar but is recovered under `cause="deletion"` instead
+   (see the previous runbook) — and only if the worker reached a terminal phase before
+   the object went away. Check which cause, if any, actually moved.
 2. **The retry budget is spent.** `maxEvictionRetries` (default 2) is a hard lifetime
    cap per workflow run, shared across both tiers *and* both disruption causes: a run
    already re-run twice for node-pressure evictions has nothing left for a preemption.

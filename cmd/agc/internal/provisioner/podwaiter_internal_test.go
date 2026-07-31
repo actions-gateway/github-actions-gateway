@@ -256,6 +256,89 @@ func TestInformerPodWaiter_OrdinaryCompletionIsNotPreempted(t *testing.T) {
 	if out.Preempted {
 		t.Fatal("an ordinary completion was reported as preempted")
 	}
+	if out.ExternallyDeleted {
+		t.Fatal("an ordinary completion was reported as externally deleted")
+	}
+}
+
+// deletingPod is a pod with a deletionTimestamp, in the given phase — the shape a
+// graceful external removal (a drain, a `kubectl delete pod`) leaves while the kubelet
+// tears the pod down.
+func deletingPod(ns, name string, phase corev1.PodPhase) *corev1.Pod {
+	p := pod(ns, name, phase, "")
+	now := metav1.Now()
+	p.DeletionTimestamp = &now
+	return p
+}
+
+// A worker whose terminal phase publishes while its deletion is in flight must carry
+// the mark out of the wait — it is the entire discriminator between a drained worker
+// and a genuinely failed (or human-cancelled) one, which share the phase and the empty
+// reason (Q459/Q502).
+func TestInformerPodWaiter_TerminalPhaseCarriesDeletionMark(t *testing.T) {
+	w := newTestWaiter(pod("ns", "p", corev1.PodRunning, ""))
+
+	done := make(chan podResult, 1)
+	go func() {
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	w.onPodEvent(deletingPod("ns", "p", corev1.PodFailed))
+
+	res := mustResolve(t, done)
+	if res.outcome.Phase != corev1.PodFailed || res.outcome.Reason != "" {
+		t.Fatalf("got phase=%q reason=%q, want Failed/\"\"", res.outcome.Phase, res.outcome.Reason)
+	}
+	if !res.outcome.ExternallyDeleted {
+		t.Fatal("a drained worker's terminal phase resolved without its deletion mark; the classic tier would not recover it")
+	}
+}
+
+// The reaper stamps its own deletions before issuing them, and those must NOT read as
+// external — the reaper deletes pods the AGC gave up on, and re-running them would turn
+// cleanup into a re-run trigger (Q502).
+func TestInformerPodWaiter_AGCOwnDeletionIsNotExternal(t *testing.T) {
+	w := newTestWaiter(pod("ns", "p", corev1.PodRunning, ""))
+
+	done := make(chan podResult, 1)
+	go func() {
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	reaped := deletingPod("ns", "p", corev1.PodFailed)
+	reaped.Annotations = map[string]string{AnnotationDeletionReason: "pending_deadline"}
+	w.onPodEvent(reaped)
+
+	if res := mustResolve(t, done); res.outcome.ExternallyDeleted {
+		t.Fatal("a reaper-deleted worker was reported as externally deleted; the reaper would become a re-run trigger")
+	}
+}
+
+// A pod deleted without ever publishing a terminal phase resolves through the delete
+// path as before, with no deletion mark: Q459's decision gates recovery on the mark
+// being present at terminal publish, and this is also the path the reaper's
+// pending-deadline deletions resolve through.
+func TestInformerPodWaiter_DeletePathDoesNotCarryDeletionMark(t *testing.T) {
+	w := newTestWaiter(pod("ns", "p", corev1.PodRunning, ""))
+
+	done := make(chan podResult, 1)
+	go func() {
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	w.onPodDelete(deletingPod("ns", "p", corev1.PodRunning))
+
+	res := mustResolve(t, done)
+	if res.outcome.Phase != corev1.PodSucceeded || res.outcome.ExternallyDeleted {
+		t.Fatalf("got phase=%q externallyDeleted=%v, want Succeeded/false: a pod that vanished "+
+			"without a terminal phase has no reportable failure to re-run", res.outcome.Phase, res.outcome.ExternallyDeleted)
+	}
 }
 
 // NotFound at registration (cache hasn't observed the just-created pod) must not

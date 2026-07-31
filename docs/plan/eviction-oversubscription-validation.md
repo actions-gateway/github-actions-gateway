@@ -534,9 +534,9 @@ Q497 then made the original claim true rather than leaving the correction standi
 both documents are corrected back — this time with a measurement behind them. The
 residual cost is no longer a manual re-run but the displaced job's own elapsed time: the
 re-run starts from the beginning rather than resuming, which is why the guidance to put
-cheap-to-repeat work in displaceable tiers survives. The drain path keeps the original
-correction until [Q502](../STATUS.md#Q502) implements Q459's decision;
-[troubleshooting.md](../operations/troubleshooting.md#draining-a-worker-does-not-auto-re-run-the-jobs-it-interrupts)
+cheap-to-repeat work in displaceable tiers survives. The drain path has since followed: Q502 implemented Q459's decision, so a drained
+worker whose terminal phase publishes with the deletion mark is re-run too;
+[troubleshooting.md](../operations/troubleshooting.md#draining-a-worker-auto-re-runs-the-jobs-it-interrupts)
 now covers the drain alone, with
 [a separate runbook](../operations/troubleshooting.md#a-preempted-workers-job-is-not-re-run)
 for a preemption recovery that fails to fire.

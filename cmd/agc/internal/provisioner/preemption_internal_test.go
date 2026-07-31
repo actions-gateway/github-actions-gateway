@@ -3,6 +3,7 @@ package provisioner
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -19,6 +20,24 @@ import (
 // displaced run needed a manual re-run. These tests pin the discriminator that closes
 // it, both tiers' use of it, and — as importantly — the removals it must still NOT fire
 // on, since over-firing would re-run work an operator deliberately stopped.
+
+// drained marks a pod as a graceful external removal (a drain, a `kubectl delete pod`)
+// leaves it when the kubelet's terminal-phase update wins the race against the object's
+// removal — the shape Q459 measured at live GitHub: PodFailed with an empty reason, the
+// deletion mark, and a container exit after the delete was issued.
+func drained(pod *corev1.Pod) *corev1.Pod {
+	delTime := metav1.NewTime(time.Now().Add(-10 * time.Second))
+	pod.DeletionTimestamp = &delTime
+	pod.Finalizers = []string{"test.actions-gateway.com/hold"} // fake client rejects a delete-marked object without one
+	pod.Status.Phase = corev1.PodFailed
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: "runner",
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+			FinishedAt: metav1.NewTime(delTime.Add(5 * time.Second)),
+		}},
+	}}
+	return pod
+}
 
 // preempted marks a pod as kube-scheduler does when it selects it as a preemption
 // victim: the DisruptionTarget condition, plus the deletionTimestamp from the delete
@@ -98,9 +117,10 @@ func TestPreemptedByScheduler_RequiresTheFullTriple(t *testing.T) {
 }
 
 // TestDisruptionAwaitingRecovery covers the scale-set scan's filter: which pods it picks
-// up, with which cause, and — the load-bearing half — which disruptions it still leaves
-// alone. A graceful removal with no scheduler marker is Q459's open question; recovering
-// it here would re-run a run a human may have just cancelled.
+// up, with which cause, and — the load-bearing half — which removals it still leaves
+// alone: the AGC's own reaper deletions, cleanup of already-failed pods, ordinary
+// failures (which a human cancel is indistinguishable from at the pod — no deletion
+// mark, measured by Q459), and pods deleted without ever reaching a terminal phase.
 func TestDisruptionAwaitingRecovery(t *testing.T) {
 	deleted := func(pod *corev1.Pod) *corev1.Pod {
 		now := metav1.Now()
@@ -151,10 +171,41 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 			}(),
 		},
 		{
-			// A drain, a `kubectl delete pod`, or the reaper. deletionTimestamp alone is
-			// NOT enough: a human cancelling a run sets it too (Q459).
-			name: "gracefully deleted without a scheduler marker",
+			// Deleted without ever publishing a terminal phase — nothing ran to a
+			// reportable end, so there is no failed job to re-run. This is also the
+			// shape the reaper's pending-deadline deletions take.
+			name: "gracefully deleted without a terminal phase",
 			pod:  deleted(scaleSetWorkerPod("p", identityAnnotations())),
+		},
+		{
+			// The Q502 arm: an external graceful deletion whose victim reached Failed
+			// before the object went away. The mark predates the container exit, which
+			// is what separates a disrupting delete from a later cleanup.
+			name:      "drained worker that reached a terminal phase",
+			pod:       drained(scaleSetWorkerPod("p", identityAnnotations())),
+			wantCause: recoveryCauseDeletion, wantOK: true,
+		},
+		{
+			// The reaper stamps its own deletions; recovering them would re-run every
+			// job the AGC itself gave up on (Q502's reaper exclusion).
+			name: "reaper-deleted worker that reached a terminal phase",
+			pod: func() *corev1.Pod {
+				pod := drained(scaleSetWorkerPod("p", identityAnnotations()))
+				pod.Annotations[AnnotationDeletionReason] = "orphaned_running"
+				return pod
+			}(),
+		},
+		{
+			// An operator cleaning up an already-failed pod: the delete postdates the
+			// container exit, so it is cleanup, not a disruption — re-running here
+			// would re-run genuinely failing work.
+			name: "failed pod deleted later by an operator",
+			pod: func() *corev1.Pod {
+				pod := drained(scaleSetWorkerPod("p", identityAnnotations()))
+				pod.Status.ContainerStatuses[0].State.Terminated.FinishedAt =
+					metav1.NewTime(pod.DeletionTimestamp.Add(-time.Hour))
+				return pod
+			}(),
 		},
 		{
 			// An ordinary job failure. Recovering it would re-run genuinely failing work.
@@ -174,6 +225,12 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 			// victim's grace period would spend another slot of the run's budget.
 			name: "already-claimed preemption",
 			pod:  handled(preempted(scaleSetWorkerPod("p", identityAnnotations()))),
+		},
+		{
+			// And for the drain arm, whose victim stays readable until the kubelet
+			// finishes tearing it down.
+			name: "already-claimed drain",
+			pod:  handled(drained(scaleSetWorkerPod("p", identityAnnotations()))),
 		},
 	}
 	for _, tc := range tests {
@@ -241,12 +298,11 @@ func TestRecoverScaleSetWorkers_PreemptionIsAtMostOnce(t *testing.T) {
 		"repeated scans of one preempted pod must re-run its run exactly once")
 }
 
-// TestRecoverScaleSetWorkers_GracefulDeleteWithoutMarkerIsNotRecovered is the negative
-// that keeps this change scoped to the slice Q423 proved unambiguous. A drain, a
-// reaper delete, and a human's `kubectl delete pod` are indistinguishable from each
-// other by deletionTimestamp alone, and one of them is an operator deliberately stopping
-// work. Q459 owns that decision; nothing here may pre-empt it.
-func TestRecoverScaleSetWorkers_GracefulDeleteWithoutMarkerIsNotRecovered(t *testing.T) {
+// TestRecoverScaleSetWorkers_DeleteWithoutTerminalPhaseIsNotRecovered pins the boundary
+// of the Q502 arm: a deletion whose victim never published a terminal phase never ran
+// its job to a reportable end, so there is no failed job for rerun-failed-jobs to act
+// on. This is also the shape the reaper's pending-deadline deletions take.
+func TestRecoverScaleSetWorkers_DeleteWithoutTerminalPhaseIsNotRecovered(t *testing.T) {
 	ctx := context.Background()
 	pod := scaleSetWorkerPod("runner-gpu-job1", identityAnnotations())
 	now := metav1.Now()
@@ -260,5 +316,58 @@ func TestRecoverScaleSetWorkers_GracefulDeleteWithoutMarkerIsNotRecovered(t *tes
 	<-done
 
 	assert.Equal(t, int64(0), rerunCount.Load(),
-		"a graceful delete carrying no scheduler marker must not be re-run automatically")
+		"a deletion with no terminal phase must not be re-run automatically")
+}
+
+// TestRecoverScaleSetWorkers_RerunsTheDrainedRun is the scale-set half of Q502: the
+// scan finds a drained worker inside its teardown window — PodFailed with the deletion
+// mark, no scheduler condition — and re-runs the interrupted run, attributed to the
+// deletion cause so an operator does not read it as node pressure or preemption.
+func TestRecoverScaleSetWorkers_RerunsTheDrainedRun(t *testing.T) {
+	ctx := context.Background()
+	p, target, m, rerunCount, paths := recoveryFixture(t,
+		drained(scaleSetWorkerPod("runner-gpu-job1", identityAnnotations())))
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	require.Equal(t, int64(1), rerunCount.Load(), "the drained run must be re-run exactly once")
+	select {
+	case path := <-paths:
+		assert.Equal(t, "/repos/myorg/myrepo/actions/runs/4242/rerun-failed-jobs", path)
+	default:
+		t.Fatal("rerun API path was not recorded")
+	}
+
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseDeletion)),
+		"a drain recovery must be attributed to the deletion cause")
+
+	// Claimed like any other recovery, so the further reconciles the teardown window
+	// produces are no-ops rather than more slots of the run's budget.
+	var pod corev1.Pod
+	require.NoError(t, p.Client.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "runner-gpu-job1"}, &pod))
+	assert.Contains(t, pod.Annotations, AnnotationEvictionHandledAt,
+		"the drained pod must be stamped as handled")
+}
+
+// TestRecoverScaleSetWorkers_ReaperDeletionIsNotRecovered is the exclusion the Q459
+// plan calls out by name: the reaper's own deletions publish the same
+// Failed-with-deletion-mark shape a drain does, and recovering them would re-run every
+// job the AGC itself gave up on. The AnnotationDeletionReason stamp the reaper writes
+// before deleting is what keeps them apart.
+func TestRecoverScaleSetWorkers_ReaperDeletionIsNotRecovered(t *testing.T) {
+	ctx := context.Background()
+	pod := drained(scaleSetWorkerPod("runner-gpu-job1", identityAnnotations()))
+	pod.Annotations[AnnotationDeletionReason] = "orphaned_running"
+
+	p, target, _, rerunCount, _ := recoveryFixture(t, pod)
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Equal(t, int64(0), rerunCount.Load(),
+		"the reaper's own deletions must never trigger a re-run")
 }

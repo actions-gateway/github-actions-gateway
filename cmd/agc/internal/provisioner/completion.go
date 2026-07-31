@@ -52,9 +52,9 @@ func (p *Provisioner) waitForPodCompletion(ctx context.Context, namespace, podNa
 				return PodOutcome{}, fmt.Errorf("provisioner: watch pod: %w", err)
 			}
 			preempted = preempted || PreemptedByScheduler(&pod)
-			switch pod.Status.Phase {
-			case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
-				return PodOutcome{Phase: pod.Status.Phase, Reason: pod.Status.Reason, Preempted: preempted}, nil
+			if out, ok := terminalPhase(&pod); ok {
+				out.Preempted = out.Preempted || preempted
+				return out, nil
 			}
 		}
 	}

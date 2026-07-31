@@ -302,6 +302,19 @@ ScaleSet tier only:
   post-creation side effect keyed off a worker pod, follow the same pattern —
   claim first with `client.MergeFromWithOptimisticLock`, then act.
 
+One further controller-set annotation is stamped *after* pod creation, on **both**
+tiers:
+
+- `actions-gateway.com/deletion-reason` (`provisioner.AnnotationDeletionReason`) —
+  the reap reason (e.g. `completed_ttl`, `pending_deadline`), stamped immediately
+  before the reaper deletes the pod (Q502). It marks the deletion as the AGC's own,
+  which is what excludes reaper cleanup from graceful-deletion recovery — an
+  unstamped deletion of a worker that then publishes a terminal phase is read as a
+  drain and re-runs the interrupted job. **Any new AGC code path that deletes a
+  worker pod must stamp this annotation before the delete** (stamp-then-delete, in
+  that order), or its deletions become re-run triggers; the reaper's
+  `reapWorkerPodsByLabel` is the pattern.
+
 Alongside them, the scale-set tier stamps one controller-set **label** at pod
 creation:
 

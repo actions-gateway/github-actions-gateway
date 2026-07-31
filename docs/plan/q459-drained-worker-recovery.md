@@ -86,8 +86,8 @@ this state*, and nothing more.
 | `rerun-failed-jobs` declines the run | **Accept.** No re-run is available on this path; the operator-facing docs already say so and the design records why. |
 
 Whichever branch is taken, the operator-facing consequence is already documented in
-[troubleshooting.md](../operations/troubleshooting.md#draining-a-worker-does-not-auto-re-run-the-jobs-it-interrupts)
-and must be brought into line with the outcome.
+[troubleshooting.md](../operations/troubleshooting.md#draining-a-worker-auto-re-runs-the-jobs-it-interrupts)
+(retitled when Q502 shipped the close) and must be brought into line with the outcome.
 
 ## Result: the graceful-deletion path, measured 2026-07-28
 
@@ -422,13 +422,35 @@ of it is visible from the eviction path alone:
 
 ## Status
 
-**Decided, not yet implemented.** Both questions are answered and recorded above, the
-close-or-accept decision is taken (close, gated on the deletion mark), and the two
-live-GitHub specs that established it are checked in and passing. No production code has
-been changed *for this plan* — Q495, the defect this plan's measurement turned up, has
-been fixed on its own.
+**Decided and implemented.** Both questions are answered and recorded above, the
+close-or-accept decision is taken (close, gated on the deletion mark), and Q502 shipped
+the implementation. What landed, against the four constraints:
 
-The remaining work is carried by three Queue rows rather than by this plan:
+1. *Widen the waiter.* `PodOutcome` gained `ExternallyDeleted` — set when the terminal
+   phase publishes with a `deletionTimestamp` that is not the AGC's own — and
+   `provision()` recovers on `PodFailed` + that mark (`cause="deletion"`), through the
+   same `handleEviction` and shared budget as eviction and preemption.
+2. *Exclude the AGC's own deletions.* The reaper stamps
+   `actions-gateway.com/deletion-reason` on every pod before deleting it, and both
+   tiers' detection treats a stamped pod's deletion as the AGC's own. The scale-set
+   scan additionally orders the mark against the container's `finishedAt`, so an
+   operator's cleanup delete of an already-failed pod is not read as a disruption.
+3. *Classic needs Q495.* Fixed previously; the live-GitHub confirmation of the
+   annotation on a real worker is still owed (see below).
+4. *Do not fold in the cancel path.* Untouched — a cancelled run's worker is not
+   deleted, so it never enters this path; Q501 remains its own item, and any future
+   cancel-relay deletion must stamp the same annotation.
+
+The scale-set arm shares preemption's non-restart-safety, with a shorter window: the
+Failed-with-mark pod is readable only between terminal publish and the kubelet's final
+removal. Design boundary: 04-operational-flows.md §4.2; operator behaviour:
+troubleshooting.md "Draining a Worker Auto-Re-Runs the Jobs It Interrupts". Pinned by
+`TestAGC_Drain_ClassicWorkerTerminalWithMark_Reruns` /
+`TestAGC_Drain_ScaleSetWorkerTerminalWithMark_Recovers` (recovered side) and the
+retained `DoesNotRerun`/`DoesNotRecover` pair (no-terminal-phase side), plus the
+podwaiter/scan/reaper unit tests.
+
+The remaining work was carried by these Queue rows:
 
 1. ~~**Q495 first.**~~ Done — the run identity is read from the payload's `github`
    context, so the worker lookup can be made exact. **Still owed a live-GitHub
@@ -440,9 +462,11 @@ The remaining work is carried by three Queue rows rather than by this plan:
 2. ~~Un-pend `E2E_GitHub_CancelledRunLeavesNoDeletionMark` and run it.~~ Done — it no
    longer needed the annotation to become runnable (see above), and it passes.
 3. ~~Take the decision.~~ Done — the decision table's first row, recorded above.
-4. **[Q502](../STATUS.md#Q502)** — implement the close, per the four constraints above.
+4. ~~Q502 — implement the close, per the four constraints above.~~ Done — see Status.
 5. **[Q501](../STATUS.md#Q501)** — relay a run cancellation to the worker pod. Found by
-   this measurement, independent of the gap.
+   this measurement, independent of the gap. If it is fixed by deleting the worker on
+   cancellation, that deletion must carry the `deletion-reason` stamp or it becomes
+   indistinguishable from a drain.
 
 Operational note for whoever runs live-GitHub next, learned the expensive way: the suite
 teardown's `helm uninstall` deletes the `ValidatingAdmissionPolicyBinding`, which

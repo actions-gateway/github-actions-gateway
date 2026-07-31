@@ -33,6 +33,12 @@ type PodOutcome struct {
 	// Preempted reports a DisruptionTarget=True/PreemptionByScheduler condition, which
 	// only kube-scheduler writes (Q497).
 	Preempted bool
+	// ExternallyDeleted reports that the pod carried a deletionTimestamp at the moment
+	// its terminal phase published, and the deletion was not the AGC's own (see
+	// AnnotationDeletionReason). It is the drained/deleted-worker discriminator Q459
+	// measured: a human cancel and a genuine job failure publish the same
+	// Failed/empty-reason shape with no deletion mark (Q502).
+	ExternallyDeleted bool
 }
 
 // PodWaiter blocks until a worker pod reaches a terminal phase. It abstracts the
@@ -53,9 +59,10 @@ func terminalPhase(pod *corev1.Pod) (PodOutcome, bool) {
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
 		return PodOutcome{
-			Phase:     pod.Status.Phase,
-			Reason:    pod.Status.Reason,
-			Preempted: PreemptedByScheduler(pod),
+			Phase:             pod.Status.Phase,
+			Reason:            pod.Status.Reason,
+			Preempted:         PreemptedByScheduler(pod),
+			ExternallyDeleted: !pod.DeletionTimestamp.IsZero() && !deletedByAGC(pod),
 		}, true
 	default:
 		return PodOutcome{}, false
@@ -200,7 +207,8 @@ func (w *InformerPodWaiter) WaitForCompletion(ctx context.Context, namespace, na
 	case err == nil:
 		if out, ok := terminalPhase(&pod); ok {
 			log.Debug("pod already terminal at registration",
-				"phase", out.Phase, "reason", out.Reason, "preempted", out.Preempted)
+				"phase", out.Phase, "reason", out.Reason, "preempted", out.Preempted,
+				"externallyDeleted", out.ExternallyDeleted)
 			return out, nil
 		}
 		log.Debug("registered for pod completion; pod not yet terminal", "phase", pod.Status.Phase)
@@ -217,7 +225,8 @@ func (w *InformerPodWaiter) WaitForCompletion(ctx context.Context, namespace, na
 		return PodOutcome{}, ctx.Err()
 	case res := <-ch:
 		log.Debug("pod completion observed",
-			"phase", res.outcome.Phase, "reason", res.outcome.Reason, "preempted", res.outcome.Preempted)
+			"phase", res.outcome.Phase, "reason", res.outcome.Reason, "preempted", res.outcome.Preempted,
+			"externallyDeleted", res.outcome.ExternallyDeleted)
 		return res.outcome, nil
 	}
 }
@@ -299,6 +308,11 @@ func (w *InformerPodWaiter) onPodEvent(obj any) {
 // delivered object is the pod's last-known state — including the DisruptionTarget
 // condition the scheduler stamped before the delete — so the marker is read off it here
 // rather than from a re-Get that would race the object's removal (Q497).
+//
+// ExternallyDeleted is deliberately NOT set here. Q459's decision gates drained-worker
+// recovery on the deletion mark being present when a terminal phase publishes; a pod
+// that vanished without one never ran its job to a reportable end, and this is also the
+// path the reaper's pending-deadline deletions resolve through.
 func (w *InformerPodWaiter) onPodDelete(obj any) {
 	pod := podFromDeleteObj(obj)
 	if pod == nil {

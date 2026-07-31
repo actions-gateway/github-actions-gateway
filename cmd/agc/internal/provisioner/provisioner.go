@@ -558,11 +558,13 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		attribute.String("gateway.pod.phase", string(outcome.Phase)),
 		attribute.String("gateway.pod.reason", outcome.Reason),
 		attribute.Bool("gateway.pod.preempted", outcome.Preempted),
+		attribute.Bool("gateway.pod.externally_deleted", outcome.ExternallyDeleted),
 		attribute.Float64("gateway.provision.duration_seconds", duration.Seconds()),
 	)
 	// Per-pod completion line; podName is on the logger context. Debug (Q87, Theme D).
 	log.Debug("worker pod completed",
-		"phase", outcome.Phase, "reason", outcome.Reason, "preempted", outcome.Preempted, "duration", duration)
+		"phase", outcome.Phase, "reason", outcome.Reason, "preempted", outcome.Preempted,
+		"externallyDeleted", outcome.ExternallyDeleted, "duration", duration)
 	if p.Metrics != nil {
 		p.Metrics.JobDuration.WithLabelValues(key.Namespace, key.Name).Observe(duration.Seconds())
 	}
@@ -576,17 +578,23 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// the fan-out completion behind it) for that long is not an option — so the
 	// done channel is deliberately not waited on.
 	//
-	// Two causes reach the same recovery. The kubelet's node-pressure eviction is the
+	// Three causes reach the same recovery. The kubelet's node-pressure eviction is the
 	// PodFailed/Evicted shape; kube-scheduler preemption deletes its victim instead, so
 	// it is recognised by the DisruptionTarget condition the outcome carried out of the
-	// wait (Q497). Eviction is tested first only because its shape is the more specific
-	// one — the two are mutually exclusive in practice, and either way a single call
-	// spends a single slot of the run's one shared retry budget.
+	// wait (Q497); and a graceful external deletion — a drain, or a `kubectl delete pod`
+	// — is recognised by the deletion mark the outcome carried out of the wait (Q502).
+	// The deletion arm requires PodFailed: a worker whose job finished cleanly inside
+	// the termination grace period reported its own success and has nothing to re-run.
+	// The arms are ordered most-specific first — they are mutually exclusive in
+	// practice, and either way a single call spends a single slot of the run's one
+	// shared retry budget.
 	switch {
 	case outcome.Phase == corev1.PodFailed && outcome.Reason == podReasonEvicted:
 		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCauseEviction)
 	case outcome.Preempted:
 		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCausePreemption)
+	case outcome.Phase == corev1.PodFailed && outcome.ExternallyDeleted:
+		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCauseDeletion)
 	}
 
 	// 8. Cleanup. The job Secret is always deleted here. The pod is deleted

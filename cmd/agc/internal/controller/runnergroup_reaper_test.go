@@ -156,6 +156,39 @@ func TestReconcile_ReapsExpiredWorkerPods(t *testing.T) {
 	assert.Equal(t, int32(2), updatedRG.Status.PendingJobs, "both Pending pods counted (including the one just reaped)")
 }
 
+// TestReconcile_ReapStampsDeletionReason pins the reaper half of Q502's exclusion: every
+// pod the reaper deletes is first stamped with AnnotationDeletionReason, so a reaper
+// delete can never read as an external disruption and re-run a job the AGC gave up on.
+// The finalizer holds the reaped pod in the API so the stamp is observable after the
+// delete, the way both tiers' recovery would observe it.
+func TestReconcile_ReapStampsDeletionReason(t *testing.T) {
+	now := time.Now()
+	rg := newRunnerGroup("default", "stamp-rg", 1)
+	rg.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Minute}
+
+	expired := workerPod("default", "stamp-rg", "failed-old", corev1.PodFailed, now.Add(-10*time.Minute), now.Add(-2*time.Minute))
+	expired.Finalizers = []string{"test.actions-gateway.com/hold"}
+
+	fb := fake.NewClientBuilder().WithScheme(testScheme()).
+		WithObjects(rg, expired).
+		WithStatusSubresource(rg).
+		Build()
+
+	r := newTestReconciler(fb)
+	r.Now = func() time.Time { return now }
+	r.BaselineRecheckInterval = reaperTestBaselineRecheck
+
+	key := types.NamespacedName{Namespace: "default", Name: "stamp-rg"}
+	reconcile(t, r, key) // adds finalizer
+	reconcile(t, r, key)
+
+	var pod corev1.Pod
+	require.NoError(t, fb.Get(context.Background(), types.NamespacedName{Namespace: "default", Name: "failed-old"}, &pod))
+	require.False(t, pod.DeletionTimestamp.IsZero(), "the expired pod must have been deleted")
+	assert.Equal(t, "completed_ttl", pod.Annotations[provisioner.AnnotationDeletionReason],
+		"the reaper must stamp its deletion as the AGC's own before issuing it")
+}
+
 // TestReconcile_ReaperDefaults pins the defaulting contract: with both fields
 // omitted, a terminal pod younger than DefaultCompletedPodTTL and a Pending
 // pod younger than DefaultPendingPodDeadline are retained, and the requeue is
