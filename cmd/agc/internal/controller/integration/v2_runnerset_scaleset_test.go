@@ -704,3 +704,88 @@ func TestV2_RunnerSet_ScaleSet_QuotaHeadroomBoundsAdvertisedCapacity(t *testing.
 		return len(got.Items) > 0
 	}, 20*time.Second, 50*time.Millisecond, "the job that waited for headroom must provision its worker once assigned")
 }
+
+// TestV2_RunnerSet_ScaleSet_ReapDeregistersRunnerRecord is the Q550 fix proven through
+// the real reconciler wiring, which is where the defect actually lived: the listener
+// minted a runner name and the Provision closure dropped it, so the name never reached
+// the pod and no reap path could deregister anything. Only a tier that runs the real
+// reconciler against a real apiserver can observe that, which is why the unit tests
+// (which construct the listener handle by hand) are not sufficient here.
+//
+// The full chain: assignment -> minted name -> pod annotation -> reap -> record gone.
+func TestV2_RunnerSet_ScaleSet_ReapDeregistersRunnerRecord(t *testing.T) {
+	const ns = "v2-rs-scaleset-reap-dereg"
+	const label = "linux-reap-dereg"
+	createNSForAGC(t, ns)
+
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newScaleSetRunnerSet("ss-set", ns, "gw", label, 3)
+	// A short completedPodTTL so the reaper collects the worker within the test.
+	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Second}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		bg := context.Background()
+		_ = k8sClient.Delete(bg, &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "ss-set", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconcilerWithScaleSet(t, srv)
+
+	var ssID int
+	require.Eventually(t, func() bool {
+		id, ok := srv.ScaleSetIDByName(label)
+		ssID = id
+		return ok
+	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
+
+	srv.EnqueueJob(ssID)
+
+	// The pod carries the name its runner was pre-registered under, and that record
+	// exists at GitHub.
+	var pod corev1.Pod
+	require.Eventually(t, func() bool {
+		var pods corev1.PodList
+		if err := k8sClient.List(ctx, &pods, client.InNamespace(ns),
+			client.MatchingLabels{provisioner.LabelRunnerSet: "ss-set"}); err != nil {
+			return false
+		}
+		for _, p := range pods.Items {
+			if p.Annotations[provisioner.AnnotationRunnerName] != "" {
+				pod = p
+				return true
+			}
+		}
+		return false
+	}, 20*time.Second, 50*time.Millisecond,
+		"the provisioned worker must carry its runner name; without it nothing can deregister the record")
+
+	runnerName := pod.Annotations[provisioner.AnnotationRunnerName]
+	assert.Contains(t, srv.RegisteredRunners(), runnerName,
+		"minting the JIT config registers the runner, which is the record that leaks")
+
+	// Drive the worker terminal so the reaper collects it past completedPodTTL. envtest
+	// runs no kubelet, so the phase is staged.
+	pod.Status.Phase = corev1.PodSucceeded
+	require.NoError(t, k8sClient.Status().Update(ctx, &pod))
+
+	require.Eventually(t, func() bool {
+		var got corev1.Pod
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: pod.Name}, &got)
+		return apierrors.IsNotFound(err)
+	}, 30*time.Second, 100*time.Millisecond, "the terminal worker must be reaped past completedPodTTL")
+
+	require.Eventually(t, func() bool {
+		for _, n := range srv.RegisteredRunners() {
+			if n == runnerName {
+				return false
+			}
+		}
+		return true
+	}, 20*time.Second, 100*time.Millisecond,
+		"reaping the worker must deregister its runner record, or the name stays taken and the job's own retries 409 against it")
+}

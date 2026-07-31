@@ -282,6 +282,19 @@ when an opt-in sizing profile actually derived the pod's ask:
   against what the apiserver admitted and must not mistake a template-built pod for
   a profile-built one. Informational otherwise; never set it by hand.
 
+One controller-set annotation is stamped at pod creation on the ScaleSet tier only:
+
+- `actions-gateway.com/runner-name` (`provisioner.AnnotationRunnerName`) — the name
+  the listener pre-registered this pod's runner under at GitHub. `generatejitconfig`
+  creates the record before the pod exists, and nothing else remembers the name once
+  the listener goroutine that minted it has moved on, so the pod is the record: the
+  reaper reads it back to deregister the registration when it deletes the pod, and
+  the listener's start-up sweep treats a name stamped on a live pod as claimed and
+  therefore not collectable (Q550). Load-bearing in the same sense as `run-id` on
+  this tier — a pod without it is reaped with its GitHub registration left behind,
+  and because runner names derive from the job ID, that leftover is what the job's
+  own retries collide with. Never set it by hand.
+
 Two further controller-set annotations are stamped *after* pod creation, on the
 ScaleSet tier only:
 

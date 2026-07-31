@@ -632,6 +632,10 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 type ScaleSetJob struct {
 	JobID     string
 	JITConfig string
+	// RunnerName is the name the listener pre-registered this job's runner under, and
+	// is stamped on the pod as AnnotationRunnerName so the reap path can deregister the
+	// record it leaves behind (Q550). Empty stamps nothing.
+	RunnerName string
 
 	Owner      string
 	Repository string
@@ -758,6 +762,12 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	//    reap deadline on the pod rather than in memory.
 	pod := p.buildPod(target, spec, podName, secretName, priorityClass, job.jobMeta())
 	pod.Labels[LabelAcquisitionProtocol] = AcquisitionProtocolScaleSet
+	if job.RunnerName != "" {
+		if pod.Annotations == nil {
+			pod.Annotations = map[string]string{}
+		}
+		pod.Annotations[AnnotationRunnerName] = job.RunnerName
+	}
 	setScaleSetWorkerMode(pod)
 
 	if err := p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log); err != nil {

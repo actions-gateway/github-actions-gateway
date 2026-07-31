@@ -59,29 +59,33 @@ func (r *RunnerGroupReconciler) reapWorkerPods(ctx context.Context, log *slog.Lo
 		provisioner.LabelRunnerGroup,
 		provisioner.EffectiveCompletedPodTTL(rg), provisioner.EffectivePendingPodDeadline(rg),
 		log, r.Metrics,
-		func(podName string, deadline time.Duration) {
-			// Operator-visible: a stuck-Pending pod means the job never ran —
-			// usually an unpullable workerImage or unschedulable podTemplate.
-			r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodStuckPending", "ReapWorkerPods",
-				"worker pod %s was Pending for more than %s and has been deleted; "+
-					"check the pod template image and scheduling constraints", podName, deadline)
-		},
-		func(podName string, grace time.Duration) {
-			// Operator-visible: the pod outlived its own job, so it was holding a
-			// concurrency slot and a node for nothing.
-			r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodOrphanedRunning", "ReapWorkerPods",
-				"worker pod %s was still Running %s after its job completed and has been deleted; "+
-					"the runner never received its job, or a container in the pod outlived it", podName, grace)
-		},
-		func(podName string) {
-			// Operator-visible: say plainly that the lifetime cap killed the pod and
-			// name the field to raise, so a legitimately long job that hit it is a
-			// one-line diagnosis rather than an unexplained failure.
-			r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodLifetimeExceeded", "ReapWorkerPods",
-				"worker pod %s was killed by the kubelet after exceeding the %s worker lifetime "+
-					"(spec.maxWorkerLifetime) and has been deleted; if the job was legitimately "+
-					"this long, raise spec.maxWorkerLifetime on this RunnerGroup or set it to 0s "+
-					"to disable the cap", podName, provisioner.EffectiveMaxWorkerLifetime(rg))
+		// No deregisterRunner hook: the v1 tier's workers carry no pre-registered
+		// scale-set runner record — its JIT agents re-register per job (Q114).
+		reapHooks{
+			emitStuckPending: func(podName string, deadline time.Duration) {
+				// Operator-visible: a stuck-Pending pod means the job never ran —
+				// usually an unpullable workerImage or unschedulable podTemplate.
+				r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodStuckPending", "ReapWorkerPods",
+					"worker pod %s was Pending for more than %s and has been deleted; "+
+						"check the pod template image and scheduling constraints", podName, deadline)
+			},
+			emitOrphanedRunning: func(podName string, grace time.Duration) {
+				// Operator-visible: the pod outlived its own job, so it was holding a
+				// concurrency slot and a node for nothing.
+				r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodOrphanedRunning", "ReapWorkerPods",
+					"worker pod %s was still Running %s after its job completed and has been deleted; "+
+						"the runner never received its job, or a container in the pod outlived it", podName, grace)
+			},
+			emitLifetimeExceeded: func(podName string) {
+				// Operator-visible: say plainly that the lifetime cap killed the pod and
+				// name the field to raise, so a legitimately long job that hit it is a
+				// one-line diagnosis rather than an unexplained failure.
+				r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodLifetimeExceeded", "ReapWorkerPods",
+					"worker pod %s was killed by the kubelet after exceeding the %s worker lifetime "+
+						"(spec.maxWorkerLifetime) and has been deleted; if the job was legitimately "+
+						"this long, raise spec.maxWorkerLifetime on this RunnerGroup or set it to 0s "+
+						"to disable the cap", podName, provisioner.EffectiveMaxWorkerLifetime(rg))
+			},
 		})
 }
 
