@@ -108,6 +108,62 @@ func TestResolveReferrerGitHubHosts(t *testing.T) {
 	}
 }
 
+// TestEvalGitHubEgressIncomplete pins the one GHES gap the GMC cannot close (Q506 #3).
+// CIDR mode programs the ranges api.github.com/meta publishes and an appliance appears
+// in none of them, so the condition names the operator obligation instead of leaving a
+// GHES tenant with a connect timeout and no cause.
+func TestEvalGitHubEgressIncomplete(t *testing.T) {
+	unmanaged := false
+	cases := []struct {
+		name           string
+		spec           gmcv2alpha1.EgressProxySpec
+		hosts          []string
+		wantIncomplete bool
+		wantReason     string
+	}{
+		{
+			name:           "CIDR mode with a GHES referrer and no ranges",
+			hosts:          []string{"ghes.example.com"},
+			wantIncomplete: true,
+			wantReason:     "ApplianceRangesRequired",
+		},
+		{
+			name:       "public-GitHub referrers only",
+			wantReason: "GitHubEgressAllowed",
+		},
+		{
+			name:       "the operator supplied ranges",
+			spec:       gmcv2alpha1.EgressProxySpec{DestinationCIDRs: []string{"10.0.0.0/8"}},
+			hosts:      []string{"ghes.example.com"},
+			wantReason: "GitHubEgressAllowed",
+		},
+		{
+			name:       "an FQDN mode already carries the host",
+			spec:       gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN},
+			hosts:      []string{"ghes.example.com"},
+			wantReason: "GitHubEgressAllowed",
+		},
+		{
+			name:       "an operator-maintained policy is not ours to judge",
+			spec:       gmcv2alpha1.EgressProxySpec{ManagedNetworkPolicy: &unmanaged},
+			hosts:      []string{"ghes.example.com"},
+			wantReason: "GitHubEgressAllowed",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := evalGitHubEgressIncomplete(&gmcv2alpha1.EgressProxy{Spec: tc.spec}, tc.hosts)
+			assert.Equal(t, tc.wantIncomplete, got.incomplete)
+			assert.Equal(t, tc.wantReason, got.reason)
+			assert.NotEmpty(t, got.message, "an operator reading the condition needs the why")
+			if tc.wantIncomplete {
+				assert.Contains(t, got.message, "ghes.example.com", "the message must name the unreachable host")
+				assert.Contains(t, got.message, "destinationCIDRs", "the message must name the remedy")
+			}
+		})
+	}
+}
+
 // TestEgressFQDNs_CarriesReferrerHost is the FQDN-policy half of Q506 #2: without it
 // a GHES tenant's CNI policy names six public hosts and none of the appliance its
 // traffic actually uses.

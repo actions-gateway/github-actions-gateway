@@ -350,6 +350,18 @@ const (
 	// or before the first refresh completes.
 	ConditionEgressRulesStale = "EgressRulesStale"
 
+	// ConditionGitHubEgressIncomplete is True when a CIDR-mode proxy pool's egress
+	// allowlist provably cannot reach the GitHub a referrer binds to it: a referring
+	// ActionsGateway names a GitHub Enterprise Server host, and CIDR mode allows only
+	// the ranges api.github.com/meta publishes, which never contain a customer
+	// appliance (Q506 #3). The appliance's address space is knowable only to the
+	// operator, so the GMC cannot close this gap — it names it. Supplying
+	// spec.destinationCIDRs clears the condition; whether those ranges actually cover
+	// the appliance is not verifiable here, so the operator's declaration is taken at
+	// face value. Advisory: it does not gate Ready, because the pool is serving
+	// exactly the policy it was asked for.
+	ConditionGitHubEgressIncomplete = "GitHubEgressIncomplete"
+
 	// ReasonRefreshStalled is the EgressRulesStale=True reason (the last successful
 	// GitHub IP-range refresh is older than the staleness window). ReasonRefreshCurrent
 	// clears it (EgressRulesStale=False after a fresh refresh); ReasonRefreshPending is
@@ -357,6 +369,13 @@ const (
 	ReasonRefreshStalled = "RefreshStalled"
 	ReasonRefreshCurrent = "RefreshCurrent"
 	ReasonRefreshPending = "RefreshPending"
+
+	// ReasonApplianceRangesRequired is the GitHubEgressIncomplete=True reason: a GHES
+	// referrer is bound and no destinationCIDRs were supplied. ReasonGitHubEgressAllowed
+	// is the False reason — every referrer is on public GitHub, the operator supplied
+	// ranges, the mode is not CIDR, or the policy is operator-maintained.
+	ReasonApplianceRangesRequired = "ApplianceRangesRequired"
+	ReasonGitHubEgressAllowed     = "GitHubEgressAllowed"
 )
 
 // Listener session-failure condition vocabulary (Q309, Q325). Both acquisition

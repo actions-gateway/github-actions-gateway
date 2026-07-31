@@ -120,7 +120,7 @@ func (r *EgressProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return r.setDegraded(ctx, &ep, err)
 	}
 
-	return r.updateStatus(ctx, &ep)
+	return r.updateStatus(ctx, &ep, gitHubHosts)
 }
 
 // reconcileResources creates or patches every child of the EgressProxy. Each
@@ -478,7 +478,7 @@ func (r *EgressProxyReconciler) applyOwnedSecret(ctx context.Context, ep *gmcv2a
 // status/condition contract (§H.7): readyReplicas, observedGeneration, a Ready
 // condition (True once readyReplicas ≥ minReplicas), and a cleared Degraded
 // condition (the reconcile reached here, so provisioning succeeded).
-func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha1.EgressProxy) (ctrl.Result, error) {
+func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) (ctrl.Result, error) {
 	var dep appsv1.Deployment
 	readyReplicas := int32(0)
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: proxyResourceName(ep)}, &dep); err == nil {
@@ -502,6 +502,7 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 	// as Events, before setCondition mutates them, so we emit only on a genuine change.
 	prevReady := conditionStatusValue(ep.Status.Conditions, gmcv2alpha1.ConditionReady)
 	prevDegraded := conditionStatusValue(ep.Status.Conditions, gmcv2alpha1.ConditionDegraded)
+	prevEgressGap := conditionStatusValue(ep.Status.Conditions, gmcv2alpha1.ConditionGitHubEgressIncomplete)
 
 	setCondition := func(condType string, status bool, reason, msg string) {
 		s := metav1.ConditionFalse
@@ -534,6 +535,10 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 	setCondition(gmcv2alpha1.ConditionProxyQuotaExceeded, qc.exceeded, qc.exceededReason, qc.exceededMessage)
 	es := r.evalEgressProxyEgressRulesStale(ep, now.Time)
 	setCondition(gmcv2alpha1.ConditionEgressRulesStale, es.stale, es.reason, es.message)
+	// GitHubEgressIncomplete (Q506 #3): the one GHES gap the GMC cannot close, named
+	// rather than left to surface as a connect timeout with no cause.
+	eg := evalGitHubEgressIncomplete(ep, gitHubHosts)
+	setCondition(gmcv2alpha1.ConditionGitHubEgressIncomplete, eg.incomplete, eg.reason, eg.message)
 
 	ep.Status.ReadyReplicas = readyReplicas
 	ep.Status.ObservedGeneration = gen
@@ -553,6 +558,15 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 			etype = corev1.EventTypeWarning
 		}
 		r.recordEvent(ep, etype, readyReason, "Reconcile", "%d/%d proxy pods ready", readyReplicas, minReplicas)
+	}
+	// The egress gap is an operator obligation, not a reconcile failure, so it is
+	// announced once per transition rather than every reconcile.
+	if newGap := boolConditionStatus(eg.incomplete); prevEgressGap != newGap {
+		etype := corev1.EventTypeNormal
+		if eg.incomplete {
+			etype = corev1.EventTypeWarning
+		}
+		r.recordEvent(ep, etype, eg.reason, "Reconcile", "%s", eg.message)
 	}
 	// Degraded → recovered: a prior reconcile failed to provision and this one succeeded
 	// (updateStatus is only reached when reconcileResources returned no error).

@@ -64,6 +64,7 @@ func TestVocabularyIsDistinct(t *testing.T) {
 		"ConditionProxyQuotaPressure":          apiconditions.ConditionProxyQuotaPressure,
 		"ConditionProxyQuotaExceeded":          apiconditions.ConditionProxyQuotaExceeded,
 		"ConditionEgressRulesStale":            apiconditions.ConditionEgressRulesStale,
+		"ConditionGitHubEgressIncomplete":      apiconditions.ConditionGitHubEgressIncomplete,
 		"ConditionRateLimited":                 apiconditions.ConditionRateLimited,
 		"ConditionRunnerVersionTooOld":         apiconditions.ConditionRunnerVersionTooOld,
 		"ConditionSizingDrift":                 apiconditions.ConditionSizingDrift,

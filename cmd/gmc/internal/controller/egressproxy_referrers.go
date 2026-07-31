@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strings"
 
+	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -67,6 +69,50 @@ func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, namespace,
 		return nil, nil
 	}
 	return hosts, nil
+}
+
+// gitHubEgressGap is the computed GitHubEgressIncomplete condition (Q506 #3).
+type gitHubEgressGap struct {
+	incomplete bool
+	reason     string
+	message    string
+}
+
+// evalGitHubEgressIncomplete reports whether a CIDR-mode pool's egress allowlist
+// provably cannot reach the GitHub its referrers bind to it. CIDR mode programs the
+// ranges api.github.com/meta publishes; a GitHub Enterprise Server appliance sits in
+// the customer's own address space and appears in none of them, so the NetworkPolicy
+// denies the proxy's traffic to the one host it exists to reach — as a connect
+// timeout, with nothing naming the cause.
+//
+// Unlike the FQDN surfaces, this one has no code answer: the appliance's ranges are
+// knowable only to the operator. So the condition names the obligation rather than
+// closing it. Supplying spec.destinationCIDRs clears it; whether those ranges cover
+// the appliance is not checkable here.
+func evalGitHubEgressIncomplete(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) gitHubEgressGap {
+	allowed := func(msg string) gitHubEgressGap {
+		return gitHubEgressGap{reason: apiconditions.ReasonGitHubEgressAllowed, message: msg}
+	}
+	if ep.Spec.ManagedNetworkPolicy != nil && !*ep.Spec.ManagedNetworkPolicy {
+		return allowed("egress policy is operator-maintained")
+	}
+	if !egressUsesCIDR(ep.Spec) {
+		return allowed("FQDN mode carries every referrer's GitHub host")
+	}
+	if len(gitHubHosts) == 0 {
+		return allowed("every referrer targets public GitHub, which the CIDR allowlist covers")
+	}
+	if len(ep.Spec.DestinationCIDRs) > 0 {
+		return allowed(fmt.Sprintf("spec.destinationCIDRs supplies ranges for %s", strings.Join(gitHubHosts, ", ")))
+	}
+	return gitHubEgressGap{
+		incomplete: true,
+		reason:     apiconditions.ReasonApplianceRangesRequired,
+		message: fmt.Sprintf(
+			"CIDR mode allows only the ranges GitHub publishes, which never contain %s; "+
+				"set spec.destinationCIDRs to the appliance's ranges or switch spec.egressPolicyMode to an FQDN mode",
+			strings.Join(gitHubHosts, ", ")),
+	}
 }
 
 // referrerToEgressProxies maps an ActionsGateway or RunnerSet event to every
