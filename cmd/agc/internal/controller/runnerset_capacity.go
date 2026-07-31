@@ -22,11 +22,11 @@ import (
 //   - the scheduler-verdict signal (WorkersUnschedulable, Q157), ported from
 //     runnergroup_unschedulable.go.
 //
-// Both reuse the owner-agnostic cores those v1 files now expose
-// (workerFootprintForContainers, countActiveWorkerPodsByLabel, quotaHeadroomViolations,
-// evalWorkersUnschedulableForPods). Only the v2 sources of the pod shape (the resolved
-// RunnerTemplate) and the ceiling (spec.priorityTiers/maxWorkers) differ. Neither
-// condition gates Ready — they are advisory capacity signals, mirroring v1.
+// Both reuse the owner-agnostic cores those v1 files now expose (evalWorkerQuotaFor,
+// countActiveWorkerPodsByLabel, evalWorkersUnschedulableForPods). Only the v2 sources
+// of the pod shape (the resolved RunnerTemplate) and the ceiling
+// (spec.priorityTiers/maxWorkers) differ. Neither condition gates Ready — they are
+// advisory capacity signals, mirroring v1.
 
 // applyWorkerCapacityConditions computes and merges the WorkerQuota ladder and the
 // WorkersUnschedulable condition onto the RunnerSet status, emitting a Warning Event
@@ -366,77 +366,29 @@ func (r *RunnerSetReconciler) clearWorkerCapacityConditions(rs *v2alpha1.RunnerS
 	meta.RemoveStatusCondition(&rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
 }
 
-// evalRunnerSetWorkerQuota computes the WorkerQuotaPressure (warning) and
-// WorkerQuotaExceeded (error) conditions for a RunnerSet against the platform-owned
-// namespace ResourceQuota, mirroring RunnerGroupReconciler.evalWorkerQuota. The pod
-// footprint comes from the resolved RunnerTemplate's PodTemplate (the v2 source of the
-// v1 spec.podTemplate), and the ceiling from the set's priorityTiers/maxWorkers. Both
-// tiers read live quota .status (hard − used), so they move with namespace load — an
-// advisory signal, not a stable invariant — and neither gates Ready.
+// evalRunnerSetWorkerQuota computes the worker namespace-quota conditions for a
+// RunnerSet: the footprint comes from the resolved RunnerTemplate's PodTemplate (the
+// v2 source of the v1 spec.podTemplate) with the sizing profile applied, and the
+// ceiling from the set's priorityTiers/maxWorkers. See evalWorkerQuotaFor.
 func (r *RunnerSetReconciler) evalRunnerSetWorkerQuota(ctx context.Context, rs *v2alpha1.RunnerSet, tmpl *v2alpha1.RunnerTemplateSpec) workerQuotaConditions {
-	st := workerQuotaConditions{
-		pressureReason:  "QuotaHeadroomSufficient",
-		pressureMessage: "namespace ResourceQuota admits scaling workers to the configured ceiling",
-		exceededReason:  "NoRejection",
-		exceededMessage: "namespace ResourceQuota can admit more worker pods",
-	}
-
-	// Size the footprint off the SAME shape the Target would provision — sizing
-	// profile applied (Q359 Phase 3) — so these conditions and the admission gate's
-	// quota rung (#784) never contradict each other for a set on a Binpack/Throughput
-	// profile. Static/no profile passes the template through untouched.
-	podSpec := runnerSetWorkerPodSpec(rs, tmpl)
-
-	var quotas corev1.ResourceQuotaList
-	if err := r.List(ctx, &quotas, client.InNamespace(rs.Namespace)); err != nil {
-		st.pressureReason = "QuotaUnknown"
-		st.pressureMessage = fmt.Sprintf("could not read namespace ResourceQuota: %v", err)
-		return st
-	}
-	if len(quotas.Items) == 0 {
-		st.pressureReason = "NoQuota"
-		st.pressureMessage = "no namespace ResourceQuota constrains worker pods"
-		return st
-	}
-
-	// Resolve the pod shape ONCE, so the error and warning tiers below size a worker
-	// identically and both see the RuntimeClass overhead a Kata set carries (Q450).
-	spec := provisioner.ResolveWorkerPodSpec(ctx, r.Client, podSpec)
-
-	// Error tier — can the quota admit even one more worker pod?
-	if over, msg := provisioner.QuotaHeadroomViolations(provisioner.WorkerFootprint(spec, 1), quotas.Items,
-		"namespace ResourceQuota cannot admit another worker pod; new jobs will be rejected: "); over {
-		st.exceeded = true
-		st.exceededReason = "QuotaExhausted"
-		st.exceededMessage = msg
-	}
-
-	// Warning tier — can the pool still grow to its ceiling?
-	if ceiling, bounded := provisioner.WorkerCeilingFromTiers(runnerSetTierThresholds(rs.Spec.PriorityTiers), rs.Spec.MaxWorkers); bounded {
-		current := countActiveWorkerPodsByLabel(ctx, r.Client, rs.Namespace, provisioner.LabelRunnerSet, rs.Name)
-		if additional := ceiling - current; additional > 0 {
-			if over, msg := provisioner.QuotaHeadroomViolations(provisioner.WorkerFootprint(spec, additional), quotas.Items,
-				"workers cannot scale to the configured ceiling with current quota headroom: "); over {
-				st.pressure = true
-				st.pressureReason = "InsufficientQuotaHeadroom"
-				st.pressureMessage = msg
-			}
-		}
-	}
-
-	if st.exceeded {
-		st.pressure = false
-		st.pressureReason = "Superseded"
-		st.pressureMessage = "superseded by WorkerQuotaExceeded"
-	}
-	return st
+	ceiling, bounded := provisioner.WorkerCeilingFromTiers(runnerSetTierThresholds(rs.Spec.PriorityTiers), rs.Spec.MaxWorkers)
+	return evalWorkerQuotaFor(ctx, r.Client, workerQuotaPool{
+		namespace: rs.Namespace,
+		podSpec:   runnerSetWorkerPodSpec(rs, tmpl),
+		ceiling:   ceiling,
+		bounded:   bounded,
+		label:     provisioner.LabelRunnerSet,
+		name:      rs.Name,
+	})
 }
 
 // runnerSetWorkerPodSpec returns the pod spec of the worker this set would provision
-// right now: the resolved template's pod spec with the sizing profile applied,
-// exactly as runnerSetTarget.Resolve builds it. Shared by the WorkerQuota conditions
-// and the admission gate's quota rung so both size a worker identically. A nil
-// template (references unresolved) yields nil.
+// right now: the resolved template's pod spec with the sizing profile applied
+// (Q359 Phase 3), exactly as runnerSetTarget.Resolve builds it. Shared by the
+// WorkerQuota conditions and the admission gate's quota rung (#784) so both size a
+// worker identically and cannot contradict each other on a Binpack/Throughput
+// profile. Static/no profile passes the template through untouched. A nil template
+// (references unresolved) yields nil.
 //
 // The whole spec, not just its containers: a worker's quota charge includes its
 // native sidecars and its RuntimeClass overhead, and the DinD/Kata shapes this set
