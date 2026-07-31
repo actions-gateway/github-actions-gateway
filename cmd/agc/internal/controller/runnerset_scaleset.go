@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
@@ -251,11 +252,35 @@ func (r *RunnerSetReconciler) buildScaleSetClient(rs *v2alpha1.RunnerSet, gw *v2
 	// answering "which GitHub API?" across the AGC and the GMC (Q506). GHES also
 	// needs the JobAvailable→acquire path, which the client already handles by the
 	// one rule (§5a-U8).
+	//
+	// The fake-GitHub re-point rewrites only the CONFIG URL, and the API base is then
+	// derived from the result — so the stub path goes through that same resolver
+	// rather than carrying a second copy of the GHES rule.
+	configURL := gw.Spec.GitHubURL
+	if r.ScaleSetStubBaseURL != "" {
+		configURL = scaleSetStubConfigURL(r.ScaleSetStubBaseURL, configURL)
+	}
 	return scaleset.New(scaleset.Config{
 		TokenProvider: r.TokenManager,
-		ConfigURL:     gw.Spec.GitHubURL,
-		APIBase:       githubapp.DeriveAPIBaseURL(gw.Spec.GitHubURL),
+		ConfigURL:     configURL,
+		APIBase:       githubapp.DeriveAPIBaseURL(configURL),
 	})
+}
+
+// scaleSetStubConfigURL re-points a gateway's config URL at a fake-GitHub stub,
+// keeping the org (or owner/repo) path — the client derives the runners REST prefix
+// from it and rejects a pathless one outright, so dropping the path would wedge the
+// bootstrap rather than merely misaddress it.
+func scaleSetStubConfigURL(stubBase, githubURL string) string {
+	stub, err := url.Parse(stubBase)
+	if err != nil || stub.Host == "" {
+		return githubURL
+	}
+	path := ""
+	if u, err := url.Parse(githubURL); err == nil {
+		path = u.Path
+	}
+	return stub.Scheme + "://" + stub.Host + path
 }
 
 // stopScaleSetListener cancels and drops the scale-set listener for key, if present,

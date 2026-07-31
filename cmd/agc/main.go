@@ -440,6 +440,9 @@ func run() error {
 		prov:         prov,
 		agentKeyType: agentKeyType,
 		usageSampler: usageSampler,
+		// Keyed off exactly the pair buildRegistrar's stub case uses, so the two
+		// acquisition tiers cannot end up pointed at different backends.
+		scaleSetStubURL: scaleSetStubBaseURL(cfg),
 	}); err != nil {
 		return err
 	}
@@ -461,6 +464,12 @@ type reconcilerDeps struct {
 	prov         *provisioner.Provisioner
 	agentKeyType agentpool.KeyType
 	usageSampler *usage.Sampler
+	// scaleSetStubURL re-points the scale-set bootstrap at a fake-GitHub stub, for
+	// the deployed fake-GitHub e2e tier. Empty in production — it is set only from
+	// the same STUB_AUTH_URL + STUB_BROKER_URL pair that selects the classic tier's
+	// StubRegistrar, which reaches a GMC-provisioned AGC only under the testing-only
+	// --allow-agc-extra-env flag.
+	scaleSetStubURL string
 }
 
 // registerReconcilers registers the reconcilers this AGC's role calls for. The two
@@ -558,6 +567,9 @@ func registerReconcilers(mgr ctrl.Manager, deps reconcilerDeps) error {
 			EventReader:     mgr.GetAPIReader(),
 			BrokerConfig:    deps.brokerCfg,
 			Sizing:          deps.usageSampler,
+			// Empty unless the same stub env that selected the StubRegistrar does, so
+			// production always derives the scale-set endpoints from githubURL.
+			ScaleSetStubBaseURL: deps.scaleSetStubURL,
 		}
 		if err := rsr.SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("setup runnerset reconciler: %w", err)
