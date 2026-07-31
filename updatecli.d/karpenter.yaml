@@ -1,0 +1,74 @@
+# Keep KARPENTER_VERSION in scripts/karpenter-cluster.sh — the Karpenter the
+# live-autoscaler drift gate's second arm builds and installs — on the latest
+# kubernetes-sigs/karpenter release. updatecli resolves the newest release tag
+# and opens a PR moving the pin. The pin is a shell variable default, not a
+# package-manifest entry, so Dependabot is blind to it. Run by
+# .github/workflows/updatecli.yml.
+#
+# Why this manifest exists (Q529): the drift gate is triggered by the version
+# move, not by a clock, and before this manifest nothing moved KARPENTER_VERSION
+# automatically. Karpenter has no kind coupling to ride: it is not released per
+# Kubernetes minor (one release supports a wide range), so the kind bump PR that
+# moves CA_VERSION's minor never prompts this pin — it moved by hand or not at
+# all. Each release now gets its own PR, that PR edits
+# scripts/karpenter-cluster.sh, and that path is in autoscaler-drift.yml's
+# `changes` filter — so the gate runs and says whether upstream reworded.
+#
+# Unlike updatecli.d/cluster-autoscaler.yaml, this tracks the LATEST release,
+# not the newest patch within a pinned minor: with no Kubernetes-minor coupling
+# there is no skew a minor crossing could manufacture, and a Karpenter minor is
+# where a vocabulary reword most likely lands — minors are the drift. And unlike
+# that manifest's registry tag list, the source here is the GitHub release: the
+# harness builds from a `git clone` of the tag (upstream publishes no kwok
+# provider image), so the repo's releases are the only source that answers which
+# tag the harness can build today.
+#
+# Re-trigger the PR's checks (close + reopen) per
+# docs/development/dependency-updates.md — a GITHUB_TOKEN-authored PR starts with
+# none, and here the check IS the point of the PR.
+name: 'Bump Karpenter (drift gate) to the latest release'
+
+scms:
+  repo:
+    kind: github
+    spec:
+      owner: '{{ requiredEnv "UPDATECLI_OWNER" }}'
+      repository: '{{ requiredEnv "UPDATECLI_REPO" }}'
+      branch: main
+      username: '{{ requiredEnv "UPDATECLI_ACTOR" }}'
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      user: 'github-actions[bot]'
+      email: '41898282+github-actions[bot]@users.noreply.github.com'
+
+actions:
+  pr:
+    kind: github/pullrequest
+    scmid: repo
+    spec:
+      # No auto-merge: a Karpenter bump is the drift experiment, and a red gate
+      # wants a human decision — adopt the new vocabulary (update the matcher
+      # and its recorded unit table) or hold the bump.
+      labels:
+        - dependencies
+
+sources:
+  karpenterVersion:
+    name: 'Latest kubernetes-sigs/karpenter release tag'
+    kind: githubrelease
+    spec:
+      owner: kubernetes-sigs
+      repository: karpenter
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      versionfilter:
+        kind: semver
+
+targets:
+  pin:
+    name: 'KARPENTER_VERSION in scripts/karpenter-cluster.sh'
+    kind: file
+    disablesourceinput: true
+    scmid: repo
+    spec:
+      file: scripts/karpenter-cluster.sh
+      matchpattern: '(KARPENTER_VERSION=\$\{KARPENTER_VERSION:-)v\d+\.\d+\.\d+(\})'
+      replacepattern: '${1}{{ source "karpenterVersion" }}${2}'

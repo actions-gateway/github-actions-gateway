@@ -22,6 +22,7 @@ is automated, by what, and where the manual edges are.
 | kind node image | `KIND_NODE_IMAGE` in `e2e-reusable.yml` | **manual** (changes the tested Kubernetes version — a deliberate choice; keep the envtest version above on the same Kubernetes minor) |
 | cluster-autoscaler **patch** (drift harness) | `CA_VERSION` in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) | **updatecli** ([`updatecli.d/cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml), weekly — moves the patch *within* the pinned minor only, resolved from the registry's own tag list. **No auto-merge**: the PR edits `scripts/autoscaler-cluster.sh`, which is the [live-autoscaler drift gate's](testing.md#its-cadence-the-version-bump-not-a-clock) path filter, so it exists to run that gate against the new release) |
 | cluster-autoscaler **minor** + kwok (drift harness) | `CA_VERSION`'s minor / `KWOK_VERSION` in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) | **manual, prompted by the kind bump** — cluster-autoscaler is released per Kubernetes minor and the harness runs kind's *default* node image, so `CA_VERSION`'s minor is whatever kind ships. A kind bump that moves that minor fails the drift gate on skew; bump `CA_VERSION` to the matching CA minor in the same PR. See [testing.md](testing.md#its-cadence-the-version-bump-not-a-clock) |
+| Karpenter (drift harness) | `KARPENTER_VERSION` in [`scripts/karpenter-cluster.sh`](../../scripts/karpenter-cluster.sh) | **updatecli** ([`updatecli.d/karpenter.yaml`](../../updatecli.d/karpenter.yaml), weekly — the **latest** upstream release, minor or patch: Karpenter is not released per Kubernetes minor, so there is no minor for the kind bump to own. **No auto-merge**: the PR edits `scripts/karpenter-cluster.sh`, which is the [drift gate's](testing.md#its-cadence-the-version-bump-not-a-clock) path filter, so it exists to run that gate against the new release) |
 
 Dependabot config: [`.github/dependabot.yml`](../../.github/dependabot.yml). The
 supply-chain gates that catch drift on any of these (`vendor-check`,
@@ -99,13 +100,14 @@ a git tag exists before its image is published, and the release tags
 | [`buildkit.yaml`](../../updatecli.d/buildkit.yaml) | `BUILDKIT_IMAGE` digest in three files | none (`dockerdigest` resolves the digest directly) |
 | [`envtest.yaml`](../../updatecli.d/envtest.yaml) | `ENVTEST_K8S_VERSION` in three files | none (version-only; `shell` source from the envtest-releases index) |
 | [`cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml) | `CA_VERSION` patch in `scripts/autoscaler-cluster.sh` | none (version-only; `file` source reads the current pin, `shell` source resolves the newest patch in its minor from the registry tag list) |
+| [`karpenter.yaml`](../../updatecli.d/karpenter.yaml) | `KARPENTER_VERSION` in `scripts/karpenter-cluster.sh` | none (version-only; `githubrelease` — the harness builds from the git tag, so the repo's releases are the datasource) |
 
 **Gate tools open PRs that may go red.** shellcheck and polaris are lint/scan
 gates: a new release can add findings. The bump PR running CI is
 exactly the point — a human adopts the new version (fixing or justifying the new
 findings) or holds it, instead of the pin silently rotting. `cluster-autoscaler.yaml`
-is the strongest form of this: the bump is not a refresh with a test attached,
-it *is* the experiment. Its PR exists so the
+and `karpenter.yaml` are the strongest form of this: the bump is not a refresh
+with a test attached, it *is* the experiment. Their PRs exist so the
 [live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock)
 installs the new release and checks whether upstream reworded the event
 vocabulary the capacity gate matches on.
@@ -136,10 +138,11 @@ with `dry_run: true` runs `diff`.
   `GITHUB_TOKEN`-authored PR (the same constraint [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml)
   documents). The relevant gate must run before merge — e2e for a kind or Calico
   bump, the lint job for shellcheck — so a maintainer re-triggers checks by
-  closing and reopening the PR. **On a kind or cluster-autoscaler bump this step
-  is the whole point, not a formality:** those two PRs are the only triggers the
+  closing and reopening the PR. **On a kind, cluster-autoscaler, or Karpenter
+  bump this step is the whole point, not a formality:** those PRs are the only
+  triggers the
   [live-autoscaler drift gate](testing.md#its-cadence-the-version-bump-not-a-clock)
-  has, so merging either without re-running checks is the one path that lets an
+  has, so merging one without re-running checks is the one path that lets an
   upstream vocabulary reword through unobserved. A stored App token would remove this step; it is
   deliberately not used yet (one more secret to manage), matching the go-sync
   rationale.
@@ -166,7 +169,9 @@ rather than because automation is missing:
   release notes, not a clean datasource, and bumping it changes the tested
   Kubernetes version (and the Calico compatibility window). Review and bump it by
   hand in the kind updatecli PR when the Kubernetes version should move.
-- **`CA_VERSION`'s Kubernetes minor, and `KWOK_VERSION`**, in
+- **`CA_VERSION`'s Kubernetes minor, and `KWOK_VERSION`** (both copies — its
+  twin in [`scripts/karpenter-cluster.sh`](../../scripts/karpenter-cluster.sh)
+  is kept the same), in
   [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) — the
   cluster-autoscaler and kwok releases behind the
   [live-autoscaler drift gate](testing.md#the-live-autoscaler-drift-gate).
