@@ -570,7 +570,7 @@ Q459 answered it for a graceful delete at live-GitHub: the report gets out and
 `rerun-failed-jobs` returns `201`. A preemption is the same removal, so the same answer
 is expected — but it is inherited, not re-measured.
 
-## Experiment 4: quota gate under real pressure ([Q422](../STATUS.md#Q422))
+## Experiment 4: quota gate under real pressure (Q422)
 
 Fill the namespace `ResourceQuota`, submit more jobs than fit, and assert they
 stay queued server-side rather than claimed-and-stalled.
@@ -586,13 +586,12 @@ asserting it needs no new plumbing.
 - **Half A (envtest) — done 2026-07-26.** Covered by
   [`q422_quota_admission_test.go`](../../cmd/agc/internal/controller/integration/q422_quota_admission_test.go),
   one test per tier the rung serves. Findings below.
-- **Half B (live-GitHub) — spec written, not yet run.** Two AGC sessions on the same
-  runner group, one without headroom, and the job is picked up by the sibling. This is
-  the half that needs live GitHub redelivery and cannot be faked. The spec is
+- **Half B (live-GitHub) — done 2026-07-31.** Two AGC sessions on the same runner
+  group, one without headroom, and the job is picked up by the sibling. This is the
+  half that needed live GitHub redelivery and could not be faked. Covered by
   `E2E_GitHub_QuotaBlockedJobRunsOnSibling` in
-  [`github_e2e_test.go`](../../cmd/gmc/test/e2e/github_e2e_test.go); its shape and the
-  reasoning behind it are below. **The measurement is still owed** — live-GitHub is a
-  singleton and this has not had a run yet, so nothing here reports a result.
+  [`github_e2e_test.go`](../../cmd/gmc/test/e2e/github_e2e_test.go); the arrangement is
+  below, the [result](#half-b-result-measured-2026-07-31) after it.
 - **Not blocked.**
 
 ### Half A findings
@@ -662,7 +661,7 @@ demonstrating anything.
   carries the same `reason` label and states the consequence — the job is left queued
   — so it is the cheaper read of the same fact.
 
-Two known residuals, neither of which changes a result:
+Two known residuals, neither of which changed the result:
 
 - **Sizing the quota from live occupancy assumes occupancy holds.** If the tenant's
   proxy HPA scales back to its floor mid-spec, a pod is vacated and the gate gains the
@@ -677,6 +676,64 @@ Two known residuals, neither of which changes a result:
   `real-ag-` prefix that a stranded-runner sweep identifies the suite by
   ([Q511](q511-live-github-run-isolation.md)). A sibling named independently would
   have registered runners nothing knew to clean up.
+
+### Half B result, measured 2026-07-31
+
+Live-GitHub tier on a throwaway kind cluster, against `actions-gateway/gateway-test`
+([run 30649990040](https://github.com/actions-gateway/gateway-test/actions/runs/30649990040)),
+by `E2E_GitHub_QuotaBlockedJobRunsOnSibling`. The blocked tenant's namespace held two
+pods (its AGC and one proxy) and the quota was filled to exactly that: `pods=2`, all
+occupied.
+
+| Observation | Value |
+|---|---|
+| Quota the gate read | `needs 1 more pods but quota "q422-full" has 0 free` |
+| Job queued at GitHub | `created_at=17:08:29Z` |
+| First decline | `17:08:31Z` — 2s after dispatch |
+| Declines observed, all `reason=quota` | **≥63 in the first 9s** (~7/s) |
+| Post-claim backstop (`pod creation blocked by namespace quota`) | **0 lines** |
+| Job state while blocked | `queued` — GitHub held it |
+| Runner that ran it | **`real-ag-sib-e2e-6d8749c-0`** — the sibling's |
+| Job started / concluded | `started_at=17:09:32Z`, `success`, attempt **1** |
+| **Queued → running on the sibling** | **63s** |
+| Worker pods in the blocked namespace | unchanged across the whole window |
+
+**The premise holds.** GitHub redelivered the job the out-of-quota gateway declined,
+and a sibling on the same runner group ran it green on the first attempt — no re-run,
+no second attempt, no operator action. The `runner_name` on GitHub's own job record is
+the discriminator: `real-ag-sib-…`, not `real-ag-…`.
+
+**The rung refused before the claim, not after.** Zero `pod creation blocked by
+namespace quota` lines is the load-bearing negative: that backstop fires on every
+quota-rejected pod create, so its silence means `acquirejob` was never called. Had the
+gate not fired, the job would have been claimed and stalled against a pod the namespace
+could not admit — which is the failure this rung exists to prevent, and which "no worker
+pod appeared" would not have distinguished.
+
+**What was not expected: redelivery is a tight loop, not a retry with backoff.** The
+job came back **~7 times a second** for as long as it was watched. That is the first
+measurement of the redelivery cadence, and it retroactively justifies a decision made
+on suspicion: the per-delivery decline is logged at Debug precisely because it is
+"high-volume under sustained capacity pressure" (`listener/job.go`), with the metric as
+the operator-facing signal. At 7/s a tenant sitting at its quota ceiling would bury its
+own log at Info. It also means the rung is on a genuinely hot path — the quota read is
+cache-backed, which is what makes ~7 evaluations/s per blocked session affordable.
+
+Two caveats on the numbers, both in the conservative direction:
+
+- **The decline count is a floor, not a total.** The spec snapshots the AGC log once,
+  ~9s after dispatch, and the job did not reach the sibling for another 52s. Declines
+  almost certainly continued through that window; 63 is what had accumulated by the
+  snapshot. The rate is the meaningful figure, not the count.
+- **The 63s queued→running is this run's arrangement, not GitHub's latency.** Most of
+  it is the spec deliberately standing the sibling up after observing the decline —
+  namespace, Secret, CR, AGC rollout, and the RunnerGroup reaching
+  `observedGeneration`. It is an upper bound on redelivery latency, not a measurement
+  of it; the first decline landing 2s after dispatch is the tighter signal.
+
+Both gateways deregistered cleanly on teardown — the fixture repo listed zero runners
+afterwards — which also confirms the `real-ag-` prefix reasoning above against real
+registrations rather than against the naming code.
 
 ## Experiment 5: utilization delta ([Q424](../STATUS.md#Q424), deferred)
 
@@ -697,7 +754,9 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
    [Result](#result-measured-2026-07-27). Its residual is
    [Q459](q459-drained-worker-recovery.md), which needs live-GitHub and so sequences with the other
    live-GitHub work below rather than ahead of it.
-2. [Q422](../STATUS.md#Q422) (experiment 4).
+2. ~~Q422 (experiment 4)~~ — **done 2026-07-31**; see the
+   [result](#half-b-result-measured-2026-07-31). Both halves are now covered, and it
+   left no residual.
 3. [Q396](../STATUS.md#Q396) (experiment 1), which then gates
    [Q418](../STATUS.md#Q418). Fold [Q459](q459-drained-worker-recovery.md) in around here: both
    want a real GitHub run interrupted mid-job, and Q396 is already standing that
@@ -720,8 +779,12 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
   [Q459](q459-drained-worker-recovery.md). Extending the tiers is deliberately left to that row —
   the same code path carries deliberate cancellations, so it needs the live-GitHub answer
   before it can tell a drain from a `kubectl delete pod` worth honouring.
-- The quota gate demonstrated under contention, with the rejection counter as
-  the observable.
+- ~~The quota gate demonstrated under contention, with the rejection counter as
+  the observable.~~ **Met 2026-07-31** — see
+  [the result](#half-b-result-measured-2026-07-31). Half A asserts the rejection
+  counter directly; half B substituted the decline log line, which carries the same
+  `reason` label, because scraping the AGC's TLS/authn-gated metrics endpoint would
+  have meant scheduling a pod into the namespace the experiment had just filled.
 - ~~Preemption recovery demonstrated end to end before the oversubscription claim
   is published.~~ **Met 2026-07-29, in two steps.** The experiment first found there was
   nothing to demonstrate — a `PriorityClass` preemption is a graceful deletion, not a
