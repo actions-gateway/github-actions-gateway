@@ -22,6 +22,8 @@ func TestMetricsRecorderIncrements(t *testing.T) {
 	rec.IncJobCompleted("succeeded")
 	rec.IncJobCompleted("succeeded")
 	rec.IncJobCompleted("failed")
+	rec.SetDeferredJobs(2)
+	rec.SetDeferredJobs(1) // a gauge: the latest value wins, it does not accumulate
 
 	if got := testutil.ToFloat64(m.JobsAssignedTotal.WithLabelValues("tenant-a", "set-1")); got != 2 {
 		t.Errorf("JobsAssignedTotal = %v, want 2", got)
@@ -37,6 +39,9 @@ func TestMetricsRecorderIncrements(t *testing.T) {
 	}
 	if got := testutil.ToFloat64(m.JobsCompletedTotal.WithLabelValues("tenant-a", "set-1", "failed")); got != 1 {
 		t.Errorf("JobsCompletedTotal{result=failed} = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(m.JobsDeferred.WithLabelValues("tenant-a", "set-1")); got != 1 {
+		t.Errorf("JobsDeferred = %v, want 1", got)
 	}
 
 	// A second RunnerSet's recorder writes an independent series.

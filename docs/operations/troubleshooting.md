@@ -1468,6 +1468,15 @@ Note the ceiling you cannot raise past: GitHub terminates any job on a self-host
 
 **Fix.** Current versions self-heal: on the base-name `409` the listener deletes the stale record (REST `DELETE .../actions/runners/{id}`) and re-registers under the same name, so the job provisions and the offline records stop piling up. A record still running a job (`422`) is left in place and the job takes a fresh suffixed name instead. No operator action is needed on a fixed version.
 
+**If the conflict does not clear.** A name no attempt can register — a live runner holding it, or a record the AGC's credentials cannot delete — leaves that one job unprovisionable. It is not dropped: the listener holds it and re-offers it on a backoff (30s, doubling to 5 minutes) until it provisions or GitHub reports the job complete, so the run still starts whenever the conflict clears. While a job is held, the `RunnerSet` reports the advisory condition `JobProvisionStalled=True/RunnerNameConflict` naming the job ids, the `actions_gateway_scaleset_jobs_deferred` gauge is `> 0`, and a `JobProvisionStalled` Warning Event is recorded once per episode. Other jobs in the set are unaffected.
+
+```sh
+kubectl get runnerset <name> -n <namespace> \
+  -o jsonpath='{.status.conditions[?(@.type=="JobProvisionStalled")].message}'
+```
+
+Act on it by freeing the name: find the record the message's `<scaleSet>-<jobID>` names in the repo/org runner list and delete it if it is offline (the cleanup below), or wait out the live runner still using it.
+
 **Manual cleanup (older versions, or to clear an existing backlog).** Delete the offline records — they re-register on the next run:
 
 ```sh
@@ -1543,6 +1552,7 @@ few seconds; the metric is the real-time signal.
 | `WorkerPodCreateFailed` | Warning | The API server refused to create a worker pod (invalid name, admission webhook, pod-security policy). The note carries the API server's own message. No pod exists, so GitHub reports only that the runner lost communication. | ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created) |
 | `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, which share one per-run budget. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) |
 | `EvictionRerunFailed` | Warning | A disrupted run's automatic re-run was never accepted by GitHub — refused past the 15-minute re-run window, or a terminal API error (Q503). The budget slot is spent; the named run needs a manual re-run. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |
+| `JobProvisionStalled` | Warning | A scale-set job cannot register its runner name (`generate-jitconfig` 409 that no retry cleared), so no worker can be created for it. The job is held and re-offered on a backoff; the note names the job ids. Also sets the advisory `JobProvisionStalled` condition. Once per episode. | [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
 
 **Diagnostics.**
 

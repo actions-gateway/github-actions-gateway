@@ -35,6 +35,12 @@
 // idempotent per jobID (a deterministic worker name), so a replay never double-runs a
 // job.
 //
+// One job class is outside that replay: an assignment the Listener acked past because it
+// could not be provisioned (a runner name a stale registration holds). The cursor has
+// moved beyond it, so no session will deliver it again — the Listener keeps it and
+// re-offers it on a backoff until it runs or GitHub reports it complete, reporting the
+// stall as JobProvisionStalled meanwhile (Q551).
+//
 // # Security
 //
 // The Listener's Actions Service traffic routes through the per-tenant egress proxy
@@ -49,6 +55,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,10 +100,21 @@ const defaultRateLimitConditionAfter = 10 * time.Minute
 
 // maxJITNameConflictRetries bounds how many times provisioning re-mints a JIT config
 // under a fresh runner name after a RunnerNameConflictError. Past it, the assignment is
-// skipped (not replayed forever), so a persistently colliding name — a stale registered
-// runner — cannot wedge the queue cursor behind it (Q270). The skipped job is
-// re-assigned or timed out server-side.
+// acked past (not replayed forever), so a persistently colliding name — a stale registered
+// runner — cannot wedge the queue cursor behind it (Q270). The job is not dropped: it is
+// deferred and re-offered on a backoff, because the queue does not re-assign it (Q551).
 const maxJITNameConflictRetries = 3
+
+// defaultDeferredRetryBackoff is the wait before the first re-offer of a deferred job,
+// doubling per attempt up to maxDeferredRetryBackoff. The stall it paces is cleared by
+// something outside this process — an operator, the offline-record sweep, or the live
+// runner holding the name finishing — so the re-offer is a slow poll, not a retry loop.
+const defaultDeferredRetryBackoff = 30 * time.Second
+
+// maxDeferredRetryBackoff caps the exponential re-offer wait. A job stays assigned to
+// the scale set until it runs or GitHub times it out, so the cap only bounds how long
+// after a conflict clears the job waits to run.
+const maxDeferredRetryBackoff = 5 * time.Minute
 
 // Job is one assigned job the Listener hands to its ProvisionFunc. The listener has
 // already minted the JIT config; the provisioner stages it into the worker Secret and
@@ -186,6 +205,10 @@ type MetricsRecorder interface {
 	// IncJobCompleted counts a terminal JobCompleted, labelled by result — the
 	// completion signal the classic protocol never delivered (§2b-6).
 	IncJobCompleted(result string)
+	// SetDeferredJobs publishes how many assigned jobs the Listener is holding for a
+	// later re-offer because they cannot be provisioned (Q551) — the alertable mirror
+	// of the JobProvisionStalled condition.
+	SetDeferredJobs(n int)
 }
 
 // PollErrorRecorder counts GetMessage failures into the cross-tier
@@ -238,9 +261,10 @@ type Config struct {
 	// (False) states on start and clears an abnormal state when the session recovers.
 	// Nil disables condition reporting.
 	Conditions ConditionSetter
-	// Events records an owner-scoped Warning event (SessionUnauthorized) when the
-	// Degraded condition trips, so the incident surfaces in `kubectl describe`.
-	// Emitted once per episode, on the transition into the state. Nil disables.
+	// Events records an owner-scoped Warning event (SessionUnauthorized when the
+	// Degraded condition trips, JobProvisionStalled when a job cannot be provisioned),
+	// so the incident surfaces in `kubectl describe`. Emitted once per episode, on the
+	// transition into the state. Nil disables.
 	Events EventSink
 	// RateLimitConditionAfter is how long message polling must have been answered 429
 	// before RateLimited=True is surfaced. Non-positive selects
@@ -252,16 +276,22 @@ type Config struct {
 	// PollBackoff paces the transient-error retry path. Non-positive selects
 	// defaultPollBackoff.
 	PollBackoff time.Duration
+	// DeferredRetryBackoff is the wait before the first re-offer of a job that could
+	// not be provisioned; each further attempt doubles it, capped at
+	// maxDeferredRetryBackoff. Non-positive selects defaultDeferredRetryBackoff.
+	// Overridable in tests to drive the re-offer path deterministically.
+	DeferredRetryBackoff time.Duration
 }
 
 // Listener owns one scale set's acquisition session and provisions workers for its
 // assigned jobs. Construct it with New; drive it with Start.
 type Listener struct {
-	cfg            Config
-	log            *slog.Logger
-	workFolder     string
-	pollBackoff    time.Duration
-	rateLimitAfter time.Duration
+	cfg             Config
+	log             *slog.Logger
+	workFolder      string
+	pollBackoff     time.Duration
+	rateLimitAfter  time.Duration
+	deferredBackoff time.Duration
 
 	// Session-failure condition state (Q325), owned by Start and then the run
 	// goroutine — the goroutine-creation happens-before makes the handoff safe
@@ -270,6 +300,13 @@ type Listener struct {
 	rateLimitedSince time.Time // first 429 of the current episode; zero while polling is healthy
 	rateLimitedCond  bool      // RateLimited=True has been pushed for the current episode
 	unauthorizedCond bool      // Degraded=True/Unauthorized has been pushed
+	stalledCond      bool      // JobProvisionStalled=True has been pushed
+
+	// deferred holds assignments that could not be provisioned, keyed by jobID, each
+	// carrying the time of its next re-offer (Q551). Same ownership as the condition
+	// flags above: written only by the run goroutine (handleMessage, retryDeferred,
+	// completeJob), so it needs no mu.
+	deferred map[string]*deferredJob
 
 	// identityWarnOnce bounds the "assignment carried no run identity" warning to one
 	// line per listener (Q417). Unlike the condition flags above it is touched from the
@@ -299,13 +336,15 @@ func New(cfg Config) (*Listener, error) {
 		return nil, errors.New("scalesetlistener: Config.Capacity is required")
 	}
 	l := &Listener{
-		cfg:            cfg,
-		log:            cfg.Log,
-		workFolder:     cfg.WorkFolder,
-		pollBackoff:    cfg.PollBackoff,
-		rateLimitAfter: cfg.RateLimitConditionAfter,
-		provisioned:    make(map[string]bool),
-		completed:      make(map[string]bool),
+		cfg:             cfg,
+		log:             cfg.Log,
+		workFolder:      cfg.WorkFolder,
+		pollBackoff:     cfg.PollBackoff,
+		rateLimitAfter:  cfg.RateLimitConditionAfter,
+		deferredBackoff: cfg.DeferredRetryBackoff,
+		provisioned:     make(map[string]bool),
+		completed:       make(map[string]bool),
+		deferred:        make(map[string]*deferredJob),
 	}
 	if l.log == nil {
 		l.log = slog.Default()
@@ -318,6 +357,9 @@ func New(cfg Config) (*Listener, error) {
 	}
 	if l.rateLimitAfter <= 0 {
 		l.rateLimitAfter = defaultRateLimitConditionAfter
+	}
+	if l.deferredBackoff <= 0 {
+		l.deferredBackoff = defaultDeferredRetryBackoff
 	}
 	return l, nil
 }
@@ -383,6 +425,8 @@ func (l *Listener) Start(ctx context.Context) (<-chan struct{}, error) {
 		v2alpha1.ReasonSessionAuthorized, "scale-set session established")
 	l.setCondition(v2alpha1.ConditionRateLimited, metav1.ConditionFalse,
 		v2alpha1.ReasonPollingHealthy, "message polling healthy")
+	l.setCondition(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse,
+		v2alpha1.ReasonJobsProvisioning, "no assigned job is waiting on a runner name")
 
 	done := make(chan struct{})
 	go func() {
@@ -446,6 +490,10 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 		if ctx.Err() != nil {
 			return
 		}
+		// Re-offer any job the queue will not deliver again (Q551). Once per poll cycle
+		// is the natural cadence: each job carries its own backoff deadline, and the
+		// deadlines are minutes while the loop turns over at worst every long-poll window.
+		l.retryDeferred(ctx, ssID)
 		capacity := l.cfg.Capacity(ctx)
 		if capacity < 0 {
 			capacity = 0
@@ -701,8 +749,11 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 	ackable := true
 	for _, aj := range scaleset.AssignedJobs(jobs) {
 		l.metricsIncAssigned()
-		if l.provisionAssigned(ctx, ssID, aj) == provisionRetry {
+		switch l.provisionAssigned(ctx, ssID, aj) {
+		case provisionRetry:
 			ackable = false
+		case provisionSkip:
+			l.deferJob(aj)
 		}
 	}
 	for _, cj := range completedJobs(jobs) {
@@ -710,12 +761,135 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 	}
 
 	// Ack (advance the cursor) unless a job needs a redelivery retry. A provisioned or
-	// already-provisioned job is ackable; so is a permanently-skipped one (advancing past
-	// it is what stops one stuck assignment from wedging the batch — Q270). Only a
-	// transient failure (provisionRetry) holds the cursor so the message redelivers.
+	// already-provisioned job is ackable; so is a deferred one (advancing past it is what
+	// stops one stuck assignment from wedging the batch — Q270; the Listener re-offers it
+	// itself). Only a transient failure (provisionRetry) holds the cursor so the message
+	// redelivers.
 	if ackable {
 		l.advanceCursor(msg.MessageID)
 	}
+}
+
+// deferredJob is an assignment the Listener acked past but could not provision, held
+// for a later re-offer. Nothing else will retry it: the queue re-delivers a message
+// only to a re-created session, and even that stops at the advanced cursor — so
+// dropping it here leaves the workflow run queued at GitHub forever (Q551).
+type deferredJob struct {
+	job      scaleset.JobMessage
+	attempts int
+	nextAt   time.Time
+}
+
+// deferJob schedules an unprovisionable assignment for a re-offer and, when it is the
+// first of an episode, surfaces the stall on the owning RunnerSet. Re-deferring a job
+// already held only advances its backoff.
+func (l *Listener) deferJob(aj scaleset.JobMessage) {
+	d, held := l.deferred[aj.JobID]
+	if !held {
+		d = &deferredJob{job: aj}
+		l.deferred[aj.JobID] = d
+	}
+	d.attempts++
+	wait := l.backoffForAttempt(d.attempts)
+	d.nextAt = time.Now().Add(wait)
+	l.log.Warn("scaleset: job cannot be provisioned; re-offering after backoff",
+		"scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID, "attempt", d.attempts, "retryIn", wait)
+	if !held {
+		l.refreshStalled()
+	}
+}
+
+// resolveDeferred drops a job from the deferred set once it has provisioned or the
+// queue has reported it complete, clearing the stall condition with the last one. A
+// no-op for a job that was never deferred.
+func (l *Listener) resolveDeferred(jobID string) {
+	if _, held := l.deferred[jobID]; !held {
+		return
+	}
+	delete(l.deferred, jobID)
+	l.refreshStalled()
+}
+
+// retryDeferred re-offers every deferred job whose backoff has elapsed. A job that
+// provisions leaves the set; one that still cannot is rescheduled on the next backoff
+// step. Each re-offer walks the same conflict ladder the first attempt did, so a single
+// stalled job can hold the loop for a few pollBackoffs — bounded, and paid at most once
+// per backoff window per job.
+func (l *Listener) retryDeferred(ctx context.Context, ssID int) {
+	for _, d := range l.dueDeferred() {
+		if ctx.Err() != nil {
+			return
+		}
+		if l.provisionAssigned(ctx, ssID, d.job) == provisionAcked {
+			l.log.Info("scaleset: deferred job provisioned on re-offer",
+				"scaleSet", l.cfg.ScaleSetName, "jobID", d.job.JobID, "attempts", d.attempts)
+			l.resolveDeferred(d.job.JobID)
+			continue
+		}
+		l.deferJob(d.job)
+	}
+}
+
+// dueDeferred returns the deferred jobs whose next-attempt deadline has passed.
+func (l *Listener) dueDeferred() []*deferredJob {
+	now := time.Now()
+	var due []*deferredJob
+	for _, d := range l.deferred {
+		if !d.nextAt.After(now) {
+			due = append(due, d)
+		}
+	}
+	return due
+}
+
+// backoffForAttempt returns the wait before attempt n of a deferred job's re-offer: the
+// configured base doubled per attempt, capped at maxDeferredRetryBackoff.
+func (l *Listener) backoffForAttempt(attempts int) time.Duration {
+	wait := l.deferredBackoff
+	for i := 1; i < attempts && wait < maxDeferredRetryBackoff; i++ {
+		wait *= 2
+	}
+	if wait > maxDeferredRetryBackoff {
+		wait = maxDeferredRetryBackoff
+	}
+	return wait
+}
+
+// refreshStalled publishes the JobProvisionStalled condition for the current deferred
+// set — True naming the held jobs, False once the last one clears — and records the
+// Warning event once per episode, on the transition in (surfaceUnauthorized's rule).
+// Called on every membership change, so the message names the jobs an operator would
+// look for.
+func (l *Listener) refreshStalled() {
+	if len(l.deferred) == 0 {
+		l.metricsSetDeferred(0)
+		if l.stalledCond {
+			l.stalledCond = false
+			l.setCondition(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse,
+				v2alpha1.ReasonJobsProvisioning, "no assigned job is waiting on a runner name")
+		}
+		return
+	}
+	l.metricsSetDeferred(len(l.deferred))
+	msg := fmt.Sprintf("%d assigned job(s) cannot register a runner name and are being re-offered (up to every %s): %s",
+		len(l.deferred), maxDeferredRetryBackoff, strings.Join(l.deferredJobIDs(), ", "))
+	l.setCondition(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionTrue,
+		v2alpha1.ReasonRunnerNameConflict, msg)
+	if !l.stalledCond {
+		l.stalledCond = true
+		l.recordEvent(corev1.EventTypeWarning, "JobProvisionStalled", "ProvisionWorker", msg)
+	}
+}
+
+// deferredJobIDs returns the held jobIDs in a stable order, so a condition message that
+// names several does not churn on every republish.
+func (l *Listener) deferredJobIDs() []string {
+	ids := make([]string, 0, len(l.deferred))
+	for id := range l.deferred {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // provisionOutcome is the result of trying to provision one assigned job — the signal
@@ -729,15 +903,16 @@ const (
 	// the job is retried on a later poll.
 	provisionRetry
 	// provisionSkip: the job cannot be provisioned (a persistent runner-name conflict) —
-	// advance the cursor anyway so this one stuck assignment does not wedge the batch.
+	// advance the cursor anyway so this one stuck assignment does not wedge the batch,
+	// and defer the job for a later re-offer.
 	provisionSkip
 )
 
 // provisionAssigned mints a JIT config for an assigned job and provisions its worker,
 // idempotently. It returns provisionAcked when the job is provisioned (or already was),
 // provisionRetry on a transient failure that should redeliver, and provisionSkip when a
-// persistent runner-name conflict makes the job unprovisionable (skip it rather than
-// wedge the cursor — Q270).
+// persistent runner-name conflict makes the job unprovisionable now (ack past it rather
+// than wedge the cursor — Q270; the caller defers it for a re-offer — Q551).
 func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.JobMessage) provisionOutcome {
 	l.mu.Lock()
 	already := l.provisioned[aj.JobID]
@@ -789,8 +964,9 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 
 // generateJITConfig mints a JIT config for a job, returning the config and the runner
 // name actually registered on success (provisionAcked); provisionSkip when a runner-name
-// conflict persists past the bound (fail this one job rather than replay the same request
-// forever — Q270); and provisionRetry on any other error, so the message redelivers.
+// conflict persists past the bound (give up on this attempt rather than replay the same
+// request forever — Q270); and provisionRetry on any other error, so the message
+// redelivers.
 //
 // The deterministic base name ({scaleSet}-{jobID}) collides when a reaped never-started
 // worker left an offline record under it (Q334). The first recovery is to delete that
@@ -839,7 +1015,7 @@ func (l *Listener) generateJITConfig(ctx context.Context, ssID int, jobID string
 			return nil, "", provisionRetry
 		}
 		if attempt >= maxJITNameConflictRetries {
-			l.log.Warn("scaleset: runner name conflict persists, skipping job",
+			l.log.Warn("scaleset: runner name conflict persists, deferring job",
 				"scaleSet", l.cfg.ScaleSetName, "jobID", jobID, "attempts", attempt+1, "err", err)
 			l.metricsIncProvisionError()
 			return nil, "", provisionSkip
@@ -866,6 +1042,10 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) {
 	first := !l.completed[cj.JobID]
 	l.completed[cj.JobID] = true
 	l.mu.Unlock()
+	// A deferred job GitHub has given up on (timed out, or the run was cancelled) stops
+	// being re-offered here: the completion is the only signal that its assignment is
+	// gone (Q551).
+	l.resolveDeferred(cj.JobID)
 	if first && l.cfg.Metrics != nil {
 		l.cfg.Metrics.IncJobCompleted(cj.Result)
 	}
@@ -943,6 +1123,13 @@ func (l *Listener) metricsIncProvisioned() {
 func (l *Listener) metricsIncProvisionError() {
 	if l.cfg.Metrics != nil {
 		l.cfg.Metrics.IncProvisionError()
+	}
+}
+
+// metricsSetDeferred publishes how many jobs are held for a re-offer (Q551).
+func (l *Listener) metricsSetDeferred(n int) {
+	if l.cfg.Metrics != nil {
+		l.cfg.Metrics.SetDeferredJobs(n)
 	}
 }
 

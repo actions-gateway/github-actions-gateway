@@ -68,6 +68,7 @@ func TestVocabularyIsDistinct(t *testing.T) {
 		"ConditionRateLimited":                 apiconditions.ConditionRateLimited,
 		"ConditionRunnerVersionTooOld":         apiconditions.ConditionRunnerVersionTooOld,
 		"ConditionSizingDrift":                 apiconditions.ConditionSizingDrift,
+		"ConditionJobProvisionStalled":         apiconditions.ConditionJobProvisionStalled,
 	}
 
 	seen := make(map[string]string, len(types))
