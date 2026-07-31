@@ -1226,7 +1226,8 @@ then drives three cases (`karpenter_verdict_live_test.go`, build tag
 scheduler's identically-named event in the same list, a nomination that must
 leave the gate open and land the pod on a node that did not exist, and the
 recorder generation. CI runs it beside the CA arm in `autoscaler-drift.yml`;
-the version-move trigger is manual for now ([Q529](../STATUS.md#Q529)).
+[`updatecli.d/karpenter.yaml`](../../updatecli.d/karpenter.yaml) moves the pin
+weekly to the latest upstream release (Q529).
 
 **Measured against Karpenter v1.14.0 / Kubernetes 1.36.1, 2026-07-31.**
 
