@@ -60,9 +60,8 @@ func newMuxWithServersLog(t *testing.T, maxListeners int32, mux *brokerMux, log 
 			Agent:      agent,
 			Broker:     bc,
 			HTTPClient: oauthSrv.Client(),
-			// Prevent idle-exit during assertions: without this, replacement
-			// goroutines can idle-exit in < 10 ms now that the factory no
-			// longer delays on per-goroutine RSA key generation.
+			// Prevent idle-exit during assertions: replacement goroutines
+			// can idle-exit in < 10 ms otherwise.
 			IdleThreshold: 1_000_000,
 		}
 	}

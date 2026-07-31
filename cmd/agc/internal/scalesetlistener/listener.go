@@ -106,8 +106,6 @@ type Job struct {
 	JobID string
 	// RunnerName is the name the JIT config pre-registered the runner under.
 	RunnerName string
-	// RunnerRequestID is the acquire-flow id (0 on the auto-assign backend).
-	RunnerRequestID int64
 	// JITConfig is the base64 run.sh --jitconfig blob for this one job.
 	JITConfig string
 
@@ -676,8 +674,8 @@ func (l *Listener) recordEvent(eventtype, reason, action, note string) {
 }
 
 // handleMessage processes one queue envelope: claim any GHES-offered jobs, provision a
-// worker per newly assigned job, account completions, then advance the cursor and
-// best-effort delete-ack the message.
+// worker per newly assigned job, account completions, then advance the cursor
+// (see advanceCursor — the message is not delete-acked).
 func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.RunnerScaleSetSession, msg *scaleset.RunnerScaleSetMessage) {
 	if msg.Statistics != nil {
 		l.mu.Lock()
@@ -770,14 +768,13 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 		})
 	}
 	if err := l.cfg.Provision(ctx, Job{
-		JobID:           aj.JobID,
-		RunnerName:      runnerName,
-		RunnerRequestID: aj.RunnerRequestID,
-		JITConfig:       jit.EncodedJITConfig,
-		Owner:           owner,
-		Repository:      repo,
-		RunID:           runID,
-		JobName:         aj.JobDisplayName,
+		JobID:      aj.JobID,
+		RunnerName: runnerName,
+		JITConfig:  jit.EncodedJITConfig,
+		Owner:      owner,
+		Repository: repo,
+		RunID:      runID,
+		JobName:    aj.JobDisplayName,
 	}); err != nil {
 		l.log.Warn("scaleset: provision worker", "scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID, "err", err)
 		l.metricsIncProvisionError()

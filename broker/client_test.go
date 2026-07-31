@@ -43,8 +43,6 @@ func newTestClient(srv *httptest.Server) *broker.Client {
 func TestCreateSession_HappyPath(t *testing.T) {
 	t.Parallel()
 	// Declare srv before the closure so the handler can reference it.
-	// `:=` scope begins after the statement, so a forward reference inside
-	// the RHS would be undefined at compile time.
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)

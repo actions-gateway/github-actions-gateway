@@ -262,14 +262,12 @@ func hasPrivilegedContainer(spec *v2alpha1.RunnerTemplateSpec) bool {
 // this normally collapses to a single profile, but the tool handles it safely
 // regardless (the task's explicit requirement). An empty input returns baseline.
 //
-// The seed is the FIRST profile, not an unconditional baseline, and that distinction
-// is load-bearing (Q414). `privileged` ranks BELOW `baseline` — it is the least
-// restrictive level — so seeding at baseline meant a lone privileged tenant could
-// never beat the seed and silently migrated to `baseline`. That direction is safe but
-// wrong: the tenant's own DinD worker pods are then refused by Pod Security Admission,
-// so the migration produced a tenant that could not run its workload. Seeding from the
-// input leaves every genuine multi-gateway comparison unchanged — the strictest still
-// wins — while a single gateway now migrates to exactly its own profile.
+// The seed is the FIRST profile, not an unconditional baseline (Q414):
+// `privileged` ranks BELOW `baseline`, so a baseline seed could never be beaten
+// by a lone privileged tenant, silently migrating it to a profile under which
+// Pod Security Admission refuses its own DinD workers. Seeding from the input
+// leaves every genuine multi-gateway comparison unchanged — the strictest still
+// wins — while a single gateway migrates to exactly its own profile.
 func MostRestrictiveProfile(profiles ...string) string {
 	best := v2alpha1.SecurityProfileBaseline
 	bestRank, seeded := v2alpha1.SecurityProfileRank[best], false

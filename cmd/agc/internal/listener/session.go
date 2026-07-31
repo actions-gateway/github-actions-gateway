@@ -39,16 +39,14 @@ func refreshBrokerToken(ctx context.Context, cfg Config) error {
 // recycled agent, riding out the transient "Registration … was not found" 400
 // that GitHub's token endpoint returns in the brief window between
 // generate-jitconfig creating the runner record and the OAuth service
-// recognizing it (registration propagation, Q267). A single such 400 was
-// previously fatal on the recycle path: recycleAndRestart returned it, the
-// listener goroutine exited, and its polling slot churned a new runner record —
-// and under a sustained fan-out burst at a wide maxListeners enough listeners
-// exited that the online pool stayed near zero (the Q259/Q114 wide-pool recycle
-// seam). The retry is bounded (attempts + ctx cancellation) and jittered, and
-// re-uses the SAME fresh credentials — it never re-registers — so a registration
-// that genuinely never appears cannot spin or multiply records; on give-up the
-// error is returned and the caller exits exactly as before (the Multiplexer
-// re-registers), no worse than the pre-Q267 behaviour.
+// recognizing it (registration propagation, Q267). Without the retry, one such
+// 400 kills the listener goroutine and churns its polling slot with a new
+// runner record; under a sustained fan-out burst at a wide maxListeners that
+// drains the online pool to near zero (the Q259/Q114 wide-pool recycle seam).
+// The retry is bounded (attempts + ctx cancellation) and jittered, and re-uses
+// the SAME fresh credentials — it never re-registers — so a registration that
+// genuinely never appears cannot spin or multiply records; on give-up the
+// error is returned and the caller exits (the Multiplexer re-registers).
 //
 // It is applied only to the fresh, just-registered credentials on the recycle
 // path — not to the stored-credential exchange in healSession, where a token
@@ -101,17 +99,16 @@ const (
 // Detachment: the heal and recycle paths delete the old session as the first step
 // of an ownership handoff, having already cleared the goroutine's own sessionID so
 // the exit defer will not double-DELETE (in the v2 flow DELETE is keyed by bearer
-// token, so a re-delete could tear down the session the heal just created). Riding
-// the caller's context meant a SIGTERM landing in that window cancelled this call
-// instantly — and with sessionID already surrendered, nothing downstream ever
-// deleted the session. It leaked permanently, for the lifetime of the broker-side
-// session, on every rollout that caught a listener in its post-job recycle.
+// token, so a re-delete could tear down the session the heal just created). On the
+// caller's context, a SIGTERM landing in that window would cancel this call
+// instantly — and with sessionID already surrendered, nothing downstream would
+// ever delete the session: it would leak for the lifetime of the broker-side
+// session on every rollout that catches a listener in its post-job recycle.
 //
-// Retry: this is the only DELETE a session will ever get. A single transient
-// failure — a connection reset by the broker as the fleet tears down, a pool
-// exhausted by sibling goroutines' long-polls unwinding at once — used to be
-// swallowed as "best-effort" and leak the session just as permanently as no
-// attempt at all.
+// Retry: this is the only DELETE a session will ever get. A single unretried
+// transient failure — a connection reset by the broker as the fleet tears down,
+// a pool exhausted by sibling goroutines' long-polls unwinding at once — would
+// leak the session just as permanently as no attempt at all.
 func deleteSessionDetached(cfg *Config, sessionID string, log *slog.Logger) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), sessionDeleteTimeout)
 	defer cancel()

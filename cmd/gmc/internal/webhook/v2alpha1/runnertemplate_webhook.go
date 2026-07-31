@@ -48,7 +48,7 @@ var reservedProxyEnvNames = map[string]struct{}{
 //     securityProfile, remains the runtime enforcement backstop for both kinds — so
 //     allowing privileged on the cluster-scoped kind is no weaker than v1.
 func validateReservedPodFields(spec *agcv2alpha1.RunnerTemplateSpec, rejectPrivileged bool) error {
-	check := func(kind string, containers []corev1.Container, isInit bool) error {
+	check := func(containers []corev1.Container, isInit bool) error {
 		label := "containers"
 		if isInit {
 			label = "initContainers"
@@ -63,17 +63,17 @@ func validateReservedPodFields(spec *agcv2alpha1.RunnerTemplateSpec, rejectPrivi
 			}
 			if rejectPrivileged && isPrivileged(c.SecurityContext) {
 				return fmt.Errorf(
-					"podTemplate.spec.%s[%q]: privileged containers are not permitted in a namespaced %s; use a platform-owned ClusterRunnerTemplate for privileged (DinD/sysbox) worker shapes",
-					label, c.Name, kind)
+					"podTemplate.spec.%s[%q]: privileged containers are not permitted in a namespaced RunnerTemplate; use a platform-owned ClusterRunnerTemplate for privileged (DinD/sysbox) worker shapes",
+					label, c.Name)
 			}
 		}
 		return nil
 	}
 
-	if err := check("RunnerTemplate", spec.PodTemplate.Spec.Containers, false); err != nil {
+	if err := check(spec.PodTemplate.Spec.Containers, false); err != nil {
 		return err
 	}
-	return check("RunnerTemplate", spec.PodTemplate.Spec.InitContainers, true)
+	return check(spec.PodTemplate.Spec.InitContainers, true)
 }
 
 // isPrivileged reports whether a container SecurityContext explicitly sets

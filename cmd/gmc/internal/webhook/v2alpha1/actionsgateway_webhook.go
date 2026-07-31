@@ -24,12 +24,6 @@ import (
 // malformed gitHubURL, and rejects creation in a reserved namespace (both Q323 —
 // the same guards the v1 webhook enforces, via the shared validation package).
 //
-// This is a NEW webhook, not an extension of the v1alpha1 ActionsGateway webhook: that
-// one lives in a different API group (actions-gateway.github.com) and the v1 kind has no
-// spec.scheduling block at all. The v2 kind is where spec.scheduling lives, so its
-// priorityClassName needs its own validating webhook — the piece Q284 stood up from
-// scratch (there was no v2 ActionsGateway validating webhook before).
-//
 // +kubebuilder:object:generate=false
 type ActionsGatewayCustomValidator struct {
 	// InfraPriorityClasses is the infra-only PriorityClass allowlist

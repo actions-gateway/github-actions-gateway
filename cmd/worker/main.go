@@ -160,10 +160,9 @@ var runnerConfigFiles = map[string]bool{
 
 func main() {
 	// Emit structured JSON on stderr so the worker shares one log shape with the
-	// controllers (k8s audit F1); previously the package-level slog functions used
-	// the stdlib TEXT handler, which a JSON log pipeline cannot parse. LOG_LEVEL
-	// (info|debug, default info) is the single level source the GMC can crank per
-	// tenant without a code change (logging-audit Theme G).
+	// controllers (k8s audit F1). LOG_LEVEL (info|debug, default info) is the
+	// single level source the GMC can crank per tenant without a code change
+	// (logging-audit Theme G).
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: logLevelFromEnv()})))
 	// Install mode: copy this binary into a shared volume so a runner container —
 	// an unmodified upstream actions-runner image with no wrapper of its own — can

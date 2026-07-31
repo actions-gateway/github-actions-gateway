@@ -22,8 +22,7 @@ import (
 // intentional output change, then review the diff.
 var updateGolden = flag.Bool("update", false, "update golden manifest fixtures")
 
-// podTemplate builds a minimal but non-trivial PodTemplateSpec for tests. label
-// distinguishes two otherwise-identical templates when needed.
+// podTemplate builds a minimal but non-trivial PodTemplateSpec for tests.
 func podTemplate(containerImage string) corev1.PodTemplateSpec {
 	return corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{

@@ -974,9 +974,8 @@ func TestRenewLoop_TicksAt60s(t *testing.T) {
 
 	stop, done := listener.StartRenewLoop(ctx, nil, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 
-	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
-	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
-	// a race where the goroutine hasn't registered clk.After yet.
+	// The advance must stay inside Eventually to avoid a race where the
+	// goroutine hasn't registered clk.After yet.
 	for i := 0; i < 3; i++ {
 		assert.Eventually(t, func() bool {
 			clk.Advance(5 * time.Second)
@@ -987,11 +986,7 @@ func TestRenewLoop_TicksAt60s(t *testing.T) {
 	stop()
 	<-done
 	clk.Stop()
-	// Close server and drain connections before goleak.
-	srv.Close()
-	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
-		tr.CloseIdleConnections()
-	}
+	closeHTTP(srv)
 	time.Sleep(50 * time.Millisecond)
 	goleak.VerifyNone(t)
 }
@@ -1040,9 +1035,8 @@ func TestRenewLoop_NonOKContinues(t *testing.T) {
 
 	stop, done := listener.StartRenewLoop(ctx, nil, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 
-	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
-	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
-	// a race where the goroutine hasn't registered clk.After yet.
+	// The advance must stay inside Eventually to avoid a race where the
+	// goroutine hasn't registered clk.After yet.
 	for i := 0; i < 3; i++ {
 		assert.Eventually(t, func() bool {
 			clk.Advance(5 * time.Second)
@@ -1054,10 +1048,7 @@ func TestRenewLoop_NonOKContinues(t *testing.T) {
 	stop()
 	<-done
 	clk.Stop()
-	srv.Close()
-	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
-		tr.CloseIdleConnections()
-	}
+	closeHTTP(srv)
 	time.Sleep(50 * time.Millisecond)
 	goleak.VerifyNone(t)
 }
@@ -1090,10 +1081,7 @@ func TestRenewLoop_NoCallAfterStop(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, int32(0), calls.Load(), "no RenewJob calls expected after stop")
 
-	srv.Close()
-	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
-		tr.CloseIdleConnections()
-	}
+	closeHTTP(srv)
 	time.Sleep(50 * time.Millisecond)
 	goleak.VerifyNone(t)
 }
@@ -1156,10 +1144,7 @@ func TestRenewLoop_SlowCallDoesNotWedgeSubsequentRenewals(t *testing.T) {
 	stop()
 	<-done
 	clk.Stop()
-	srv.Close()
-	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
-		tr.CloseIdleConnections()
-	}
+	closeHTTP(srv)
 	time.Sleep(50 * time.Millisecond)
 	goleak.VerifyNone(t)
 }
@@ -1216,10 +1201,7 @@ func TestRenewLoop_DefinitiveJobNotFoundTearsDown(t *testing.T) {
 
 	stop()
 	clk.Stop()
-	srv.Close()
-	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
-		tr.CloseIdleConnections()
-	}
+	closeHTTP(srv)
 	time.Sleep(50 * time.Millisecond)
 	goleak.VerifyNone(t)
 }
@@ -1272,10 +1254,7 @@ func TestRenewLoop_ConsecutiveFailuresTearDown(t *testing.T) {
 
 	stop()
 	clk.Stop()
-	srv.Close()
-	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
-		tr.CloseIdleConnections()
-	}
+	closeHTTP(srv)
 	time.Sleep(50 * time.Millisecond)
 	goleak.VerifyNone(t)
 }
@@ -1329,10 +1308,7 @@ func TestRenewLoop_TransientFailuresDoNotTearDown(t *testing.T) {
 	stop()
 	<-done
 	clk.Stop()
-	srv.Close()
-	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
-		tr.CloseIdleConnections()
-	}
+	closeHTTP(srv)
 	time.Sleep(50 * time.Millisecond)
 	goleak.VerifyNone(t)
 }

@@ -255,11 +255,9 @@ func (s *Server) Close() {
 	s.server.Close()
 }
 
-// SetPollTimeout overrides how long an empty poll is held open before the stub answers
-// 202 (DefaultPollTimeout). Zero restores the non-blocking behavior — a poll with
-// nothing to deliver returns 202 immediately — which a test asserting that response
-// directly wants, but which makes a polling client hot-loop (Q287). Takes effect on the
-// next poll.
+// SetPollTimeout overrides the empty-poll window (see DefaultPollTimeout). Zero
+// makes an empty poll answer 202 immediately, for a test asserting that response
+// directly. Takes effect on the next poll.
 func (s *Server) SetPollTimeout(d time.Duration) {
 	s.mu.Lock()
 	s.pollTimeout = d
@@ -427,11 +425,9 @@ func (s *Server) PrequeueJobs(n int) []int64 {
 // queued against a live scale set) and PrequeueJobs (a job queued before the scale set
 // exists). Caller holds s.mu.
 //
-// One site, not two, because the two drifted the first time run identity was added:
-// EnqueueJob gained the fields and PrequeueJobs did not, so every test that pre-queues
-// — which is most of the probe's — was served assignments with the identity empty. That
-// is precisely the divergence the fake exists to prevent, since the real backend sends
-// these fields on every assignment.
+// newQueuedJobLocked is the single construction site for queued jobs, so
+// EnqueueJob and PrequeueJobs cannot drift on which identity fields they set —
+// the real backend sends them on every assignment.
 func (s *Server) newQueuedJobLocked() *job {
 	s.nextReqID++
 	s.nextJobSeq++
@@ -497,8 +493,6 @@ func (s *Server) EnqueueJob(scaleSetID int) (reqID int64, jobID string) {
 	if ss == nil {
 		panic(fmt.Sprintf("scalesettest: EnqueueJob on unknown scale set %d", scaleSetID))
 	}
-	s.nextReqID++
-	s.nextJobSeq++
 	j := s.newQueuedJobLocked()
 	ss.jobs = append(ss.jobs, j)
 	// A queued job produces no message until a poll re-evaluates it against the
@@ -1195,11 +1189,7 @@ func (s *Server) acquireURL(scaleSetID int) string {
 // handlePoll serves the message queue's long poll. It re-evaluates assignment against
 // the capacity this request advertised, and if that yields nothing deliverable it parks
 // the request — waking on any queue-state change (notifyLocked) to re-evaluate, and
-// answering 202 only once the poll window elapses. Returning 202 immediately, as the
-// stub used to, makes a polling client re-poll with no pause: ~5,000 requests/second per
-// listener, which burns CI CPU and amplifies timing flakes (Q287). The real queue blocks
-// ~50s; SetPollTimeout(0) restores the non-blocking behavior for a test that asserts the
-// 202 directly.
+// answering 202 only once the poll window elapses (see DefaultPollTimeout).
 //
 // The advertised capacity is fixed for the life of one request, exactly as on the real
 // backend — a client whose free-slot count grows mid-poll only advertises the new value

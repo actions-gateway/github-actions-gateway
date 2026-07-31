@@ -387,12 +387,8 @@ func runProbe(ctx context.Context, logger *slog.Logger, cfg probeConfig, provide
 //
 //	DELETE {poolBase}/messages/{messageId}?sessionId={sessionId}
 //
-// We make the call directly rather than via a dedicated Client method —
-// the method will only be added once Investigation A confirms this call is
-// required for correct delivery semantics.
-//
-// Document findings (HTTP status, response body, effect of omitting the call)
-// in the Milestone 1 plan §8.A before closing Milestone 1.
+// The call is made directly rather than via a dedicated Client method: the
+// probe reports the raw wire outcome, and no shipping code path needs it.
 func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.Client, messageID int64, sessionID string) string {
 	url := fmt.Sprintf("%s/messages/%d?sessionId=%s", bc.PoolBase(), messageID, sessionID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
@@ -575,23 +571,23 @@ type probeConfig struct {
 	PoolID         int
 }
 
+// mustEnv returns the value of the named variable from getenv, erroring when unset.
+func mustEnv(getenv func(string) string, name string) (string, error) {
+	v := getenv(name)
+	if v == "" {
+		return "", fmt.Errorf("required environment variable %s is not set", name)
+	}
+	return v, nil
+}
+
 // parseProbeConfig reads and validates all probe configuration from the
-// injected getenv function (normally os.Getenv). It performs the same parsing,
-// validation, ordering, and error wrapping as the inline logic it replaced,
-// which keeps the environment handling unit-testable without touching os.Getenv
-// directly. PEM literals are loaded via loadPEM and stay off disk.
+// injected getenv function (normally os.Getenv), keeping the environment
+// handling unit-testable without touching the process environment. PEM
+// literals are loaded via loadPEM and stay off disk.
 func parseProbeConfig(getenv func(string) string) (probeConfig, error) {
 	var cfg probeConfig
 
-	mustEnv := func(name string) (string, error) {
-		v := getenv(name)
-		if v == "" {
-			return "", fmt.Errorf("required environment variable %s is not set", name)
-		}
-		return v, nil
-	}
-
-	appIDStr, err := mustEnv("GITHUB_APP_ID")
+	appIDStr, err := mustEnv(getenv, "GITHUB_APP_ID")
 	if err != nil {
 		return probeConfig{}, err
 	}
@@ -599,7 +595,7 @@ func parseProbeConfig(getenv func(string) string) (probeConfig, error) {
 	if err != nil {
 		return probeConfig{}, fmt.Errorf("parse GITHUB_APP_ID: %w", err)
 	}
-	installIDStr, err := mustEnv("GITHUB_APP_INSTALLATION_ID")
+	installIDStr, err := mustEnv(getenv, "GITHUB_APP_INSTALLATION_ID")
 	if err != nil {
 		return probeConfig{}, err
 	}
@@ -607,7 +603,7 @@ func parseProbeConfig(getenv func(string) string) (probeConfig, error) {
 	if err != nil {
 		return probeConfig{}, fmt.Errorf("parse GITHUB_APP_INSTALLATION_ID: %w", err)
 	}
-	pemPath, err := mustEnv("GITHUB_APP_PRIVATE_KEY")
+	pemPath, err := mustEnv(getenv, "GITHUB_APP_PRIVATE_KEY")
 	if err != nil {
 		return probeConfig{}, err
 	}
@@ -615,19 +611,19 @@ func parseProbeConfig(getenv func(string) string) (probeConfig, error) {
 	if err != nil {
 		return probeConfig{}, fmt.Errorf("load GITHUB_APP_PRIVATE_KEY: %w", err)
 	}
-	cfg.BrokerURL, err = mustEnv("GITHUB_BROKER_URL")
+	cfg.BrokerURL, err = mustEnv(getenv, "GITHUB_BROKER_URL")
 	if err != nil {
 		return probeConfig{}, err
 	}
-	cfg.RunnerVersion, err = mustEnv("GITHUB_RUNNER_VERSION")
+	cfg.RunnerVersion, err = mustEnv(getenv, "GITHUB_RUNNER_VERSION")
 	if err != nil {
 		return probeConfig{}, err
 	}
-	cfg.AgentName, err = mustEnv("GITHUB_AGENT_NAME")
+	cfg.AgentName, err = mustEnv(getenv, "GITHUB_AGENT_NAME")
 	if err != nil {
 		return probeConfig{}, err
 	}
-	agentIDStr, err := mustEnv("GITHUB_AGENT_ID")
+	agentIDStr, err := mustEnv(getenv, "GITHUB_AGENT_ID")
 	if err != nil {
 		return probeConfig{}, err
 	}

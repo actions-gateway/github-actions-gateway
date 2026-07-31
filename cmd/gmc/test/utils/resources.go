@@ -22,22 +22,7 @@ import (
 // running kubectl apply -f. This avoids the stdin limitation of utils.Run which
 // uses cmd.CombinedOutput() and does not honour cmd.Stdin.
 func ApplyManifest(yaml string) error {
-	f, err := os.CreateTemp("", "e2e-manifest-*.yaml")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(f.Name()) }()
-	if _, err := f.WriteString(yaml); err != nil {
-		return err
-	}
-	// Close before apply, and CHECK it: a failed Close means the manifest was
-	// never fully flushed, so kubectl would apply a truncated document and the
-	// spec would fail somewhere far from the real cause.
-	if err := f.Close(); err != nil {
-		return err
-	}
-	cmd := exec.Command("kubectl", "apply", "-f", f.Name())
-	_, err = Run(cmd)
+	_, err := ApplyManifestOutput(yaml)
 	return err
 }
 
@@ -56,8 +41,9 @@ func ApplyManifestOutput(yaml string) (string, error) {
 	if _, err := f.WriteString(yaml); err != nil {
 		return "", err
 	}
-	// Checked for the same reason as ApplyManifest: an unflushed manifest would
-	// surface as a bogus kubectl parse error rather than the real I/O failure.
+	// Close before apply, and CHECK it: a failed Close means the manifest was
+	// never fully flushed, so kubectl would apply a truncated document and the
+	// spec would fail somewhere far from the real cause.
 	if err := f.Close(); err != nil {
 		return "", err
 	}

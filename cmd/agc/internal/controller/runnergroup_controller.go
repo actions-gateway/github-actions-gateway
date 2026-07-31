@@ -161,8 +161,7 @@ func (r *RunnerGroupReconciler) eventRecorder() *channelEventRecorder {
 	return &channelEventRecorder{ch: r.eventCh, wake: r.wakeCh}
 }
 
-// SetupWithManager registers the reconciler with the controller-runtime manager.
-func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *RunnerGroupReconciler) ensureMaps() {
 	if r.Log == nil {
 		r.Log = slog.Default()
 	}
@@ -181,6 +180,11 @@ func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.wakeCh == nil {
 		r.wakeCh = make(chan event.GenericEvent, 256)
 	}
+}
+
+// SetupWithManager registers the reconciler with the controller-runtime manager.
+func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.ensureMaps()
 	// Route provisioner-side quota/eviction-retry-exhaustion Events for this v1 path
 	// through the same channel the listener path uses (runnerGroupTarget is the only
 	// Target the shared Provisioner constructs, and it is v1-only).
@@ -286,24 +290,7 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}()
 
 	r.reconcileCount.Add(1)
-	if r.Log == nil {
-		r.Log = slog.Default()
-	}
-	if r.multiplexers == nil {
-		r.multiplexers = make(map[types.NamespacedName]*listener.Multiplexer)
-	}
-	if r.pools == nil {
-		r.pools = make(map[types.NamespacedName]*agentpool.Pool)
-	}
-	if r.conditionCh == nil {
-		r.conditionCh = make(chan conditionUpdate, 256)
-	}
-	if r.eventCh == nil {
-		r.eventCh = make(chan eventRecord, 256)
-	}
-	if r.wakeCh == nil {
-		r.wakeCh = make(chan event.GenericEvent, 256)
-	}
+	r.ensureMaps()
 	log := r.Log.With("namespace", req.Namespace, "name", req.Name)
 
 	// 1. Fetch the RunnerGroup.
@@ -321,7 +308,7 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// 2. Drain pending condition updates and Events from listener/provisioner goroutines.
-	r.drainConditions(ctx, &rg)
+	r.drainConditions(&rg)
 	r.drainEvents(&rg)
 
 	// 3. Handle deletion.
@@ -483,16 +470,13 @@ func (r *RunnerGroupReconciler) baselineRecheckInterval() time.Duration {
 }
 
 // reconcileDelete handles RunnerGroup deletion: stop goroutines, delete Secrets, remove finalizer.
+//
+//nolint:dupl // v1 twin of RunnerSetReconciler.reconcileDelete; folds in when v1alpha1 retires
 func (r *RunnerGroupReconciler) reconcileDelete(ctx context.Context, log *slog.Logger, rg *v1alpha1.RunnerGroup) (ctrl.Result, error) {
 	key := types.NamespacedName{Namespace: rg.Namespace, Name: rg.Name}
 
 	// Stop the multiplexer first so no new agents are claimed while we deregister.
-	r.multiplexersMu.Lock()
-	if mux, ok := r.multiplexers[key]; ok {
-		mux.Stop()
-		delete(r.multiplexers, key)
-	}
-	r.multiplexersMu.Unlock()
+	r.stopMultiplexer(key)
 
 	// Delete agent Secrets.
 	pool := r.getPool(key)
@@ -519,17 +503,22 @@ func (r *RunnerGroupReconciler) reconcileDelete(ctx context.Context, log *slog.L
 	return ctrl.Result{}, nil
 }
 
-// cleanupLocalState stops and removes any in-memory multiplexer and agent pool
-// for the given RunnerGroup. It never touches the API server, so it is safe on
-// both the deletion path and a NotFound reconcile, and it is idempotent —
-// calling it more than once for the same key is a no-op.
-func (r *RunnerGroupReconciler) cleanupLocalState(key types.NamespacedName) {
+// stopMultiplexer stops and removes the in-memory multiplexer for key, if any.
+func (r *RunnerGroupReconciler) stopMultiplexer(key types.NamespacedName) {
 	r.multiplexersMu.Lock()
 	if mux, ok := r.multiplexers[key]; ok {
 		mux.Stop()
 		delete(r.multiplexers, key)
 	}
 	r.multiplexersMu.Unlock()
+}
+
+// cleanupLocalState stops and removes any in-memory multiplexer and agent pool
+// for the given RunnerGroup. It never touches the API server, so it is safe on
+// both the deletion path and a NotFound reconcile, and it is idempotent —
+// calling it more than once for the same key is a no-op.
+func (r *RunnerGroupReconciler) cleanupLocalState(key types.NamespacedName) {
+	r.stopMultiplexer(key)
 
 	r.poolsMu.Lock()
 	delete(r.pools, key)
@@ -635,7 +624,7 @@ func (r *RunnerGroupReconciler) newListenerConfig(rg *v1alpha1.RunnerGroup, pool
 // drainConditions reads pending condition updates and merges them into rg.Status.
 // Updates for other RunnerGroups are collected and re-enqueued after the loop
 // to avoid re-processing them in the current iteration.
-func (r *RunnerGroupReconciler) drainConditions(_ context.Context, rg *v1alpha1.RunnerGroup) {
+func (r *RunnerGroupReconciler) drainConditions(rg *v1alpha1.RunnerGroup) {
 	key := types.NamespacedName{Namespace: rg.Namespace, Name: rg.Name}
 	// Re-apply any conditions a prior reconcile drained but did not persist (dropping
 	// those the live status now reflects), then drain fresh pushes over the top so the

@@ -64,10 +64,8 @@ func NewMetrics(reader client.Reader, v2Enabled bool) *Metrics {
 
 // egressRulesStaleCollector exports the EgressRulesStale condition (Q157) as a
 // gauge so operators can alert on a stalled GitHub IP-range refresh without
-// kube-state-metrics. Like the other collectors it reads at scrape time from the
-// cached reader: a deleted ActionsGateway simply stops being listed. The gauge
-// mirrors the condition the reconciler wrote to .status.conditions (1 when True,
-// 0 otherwise).
+// kube-state-metrics. Scrape-time reads and gauge semantics as
+// managedGatewaysCollector.
 type egressRulesStaleCollector struct {
 	reader    client.Reader
 	v2Enabled bool
@@ -122,12 +120,10 @@ func (c *egressRulesStaleCollector) Collect(ch chan<- prometheus.Metric) {
 // state without kube-state-metrics — the v2 twin of the v1 ActionsGateway
 // condition gauges above. This includes the advisory AGCAutoscalingUnavailable
 // condition (Q360/Q390), so an agcAutoscaling opt-in that cannot be satisfied is
-// alertable rather than only visible via kubectl describe. It reads at scrape time
-// from the cached reader: a deleted ActionsGateway simply stops being listed. Each
-// gauge mirrors the condition the v2 reconciler already wrote to .status.conditions
-// (1 when True, 0 otherwise). It is registered only when the v2 CRDs are installed
-// (see [NewMetrics]), so a v1-only cluster never lists the absent v2 ActionsGateway
-// kind.
+// alertable rather than only visible via kubectl describe. Scrape-time reads and
+// gauge semantics as managedGatewaysCollector. It is registered only when the v2
+// CRDs are installed (see [NewMetrics]), so a v1-only cluster never lists the
+// absent v2 ActionsGateway kind.
 type actionsGatewayV2ConditionsCollector struct {
 	reader                    client.Reader
 	runnerSetsDegraded        *prometheus.Desc
@@ -198,11 +194,8 @@ func (c *actionsGatewayV2ConditionsCollector) Collect(ch chan<- prometheus.Metri
 
 // proxyQuotaCollector exports the proxy ResourceQuota conditions (Q82) as
 // gauges, so operators can alert on them directly without kube-state-metrics
-// scraping CRD conditions. Like managedGatewaysCollector it reads at scrape time
-// from the cached reader: a deleted ActionsGateway simply stops being listed, so
-// its series disappears with no reconcile-path cost and no stale-series cleanup.
-// The gauge value mirrors the condition the reconciler already wrote to
-// .status.conditions (1 when True, 0 otherwise).
+// scraping CRD conditions. Scrape-time reads and gauge semantics as
+// managedGatewaysCollector.
 type proxyQuotaCollector struct {
 	reader    client.Reader
 	v2Enabled bool
@@ -275,7 +268,10 @@ func conditionGaugeValue(conds []metav1.Condition, condType string) float64 {
 // ActionsGateway CRs from the cached reader on each scrape. A custom collector
 // (rather than a Gauge updated on reconcile) avoids both staleness — the
 // periodic IP-range refresh is 24h, far too coarse — and per-reconcile List
-// overhead, while always reflecting the current cluster state.
+// overhead, while always reflecting the current cluster state. A deleted
+// ActionsGateway simply stops being listed, so its series disappears with no
+// stale-series cleanup; the condition-gauge collectors below share this shape
+// and mirror the reconciler-written condition (1 when True, 0 otherwise).
 type managedGatewaysCollector struct {
 	reader    client.Reader
 	v2Enabled bool

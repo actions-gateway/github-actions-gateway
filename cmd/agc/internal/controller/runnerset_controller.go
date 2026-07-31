@@ -237,11 +237,9 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// flips Ready the moment it syncs (§H.7). The namespace-scoped manager cache
 	// serves cluster-scoped kinds from a cluster-wide informer.
 	//
-	// Production no longer reaches this guard with an empty GatewayName — main.go
-	// declines to register the whole reconciler on an unscoped AGC (Q466), since a
-	// RunnerSet belongs to the AGC of the gateway it names. It stays because the guard
-	// is also what keeps unscoped test harnesses off the cluster-scoped informer, and
-	// because a cache-sync crash is a bad way to learn the invariant changed.
+	// Only a test harness reaches this with an empty GatewayName — main.go
+	// declines to register the reconciler on an unscoped AGC (Q466). The guard
+	// stays so an unscoped harness never establishes the cluster-scoped informer.
 	if r.GatewayName != "" {
 		b = b.Watches(
 			&v2alpha1.ClusterRunnerTemplate{},
@@ -511,6 +509,8 @@ func (r *RunnerSetReconciler) baselineRecheckInterval() time.Duration {
 }
 
 // reconcileDelete stops goroutines, deletes agent Secrets, and removes the finalizer.
+//
+//nolint:dupl // v2 twin of RunnerGroupReconciler.reconcileDelete; folds in when v1alpha1 retires
 func (r *RunnerSetReconciler) reconcileDelete(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) (ctrl.Result, error) {
 	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
 

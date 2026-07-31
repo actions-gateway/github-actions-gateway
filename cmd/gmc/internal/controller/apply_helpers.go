@@ -10,9 +10,7 @@ import (
 
 // applyManagedChild is the single CreateOrPatch code path shared by every GMC
 // child-object apply* helper across the three reconcilers (v1 ActionsGateway, v2
-// ActionsGateway, and EgressProxy). It replaces ~26 near-identical wrappers that
-// differed only by Kubernetes type, which controller-managed fields they wrote,
-// and whether they stamped a controller owner reference.
+// ActionsGateway, and EgressProxy).
 //
 // It keys obj by desired's namespace and name, then creates or patches the live
 // object: it writes the controller-managed labels, invokes copyManaged to copy

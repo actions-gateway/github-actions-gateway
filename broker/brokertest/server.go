@@ -532,6 +532,23 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleMessage serves GET /message — returns 202 (no job) or 200+JSON (job).
+// notifyFirstPollLocked closes the WaitForFirstPoll channel for sessionID on its
+// first GET /message, or records the poll as already seen when no waiter has
+// registered yet. Caller holds s.mu.
+func (s *Server) notifyFirstPollLocked(sessionID string) {
+	if pollCh, known := s.firstPollNotify[sessionID]; known {
+		select {
+		case <-pollCh: // already closed — nothing to do
+		default:
+			close(pollCh)
+		}
+		return
+	}
+	closedCh := make(chan struct{})
+	close(closedCh)
+	s.firstPollNotify[sessionID] = closedCh
+}
+
 func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -548,17 +565,7 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	s.acctMu.Unlock()
 	if fanoutOn {
 		s.mu.Lock()
-		if pollCh, known := s.firstPollNotify[sessionID]; known {
-			select {
-			case <-pollCh:
-			default:
-				close(pollCh)
-			}
-		} else {
-			closedCh := make(chan struct{})
-			close(closedCh)
-			s.firstPollNotify[sessionID] = closedCh
-		}
+		s.notifyFirstPollLocked(sessionID)
 		s.mu.Unlock()
 		if msg, ok := s.fanoutMessage(); ok {
 			w.Header().Set("Content-Type", "application/json")
@@ -572,18 +579,7 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	ch, ok := s.jobQueues[sessionID]
-	// Notify WaitForFirstPoll on the first GET /message for this session.
-	if pollCh, known := s.firstPollNotify[sessionID]; known {
-		select {
-		case <-pollCh: // already closed — nothing to do
-		default:
-			close(pollCh)
-		}
-	} else {
-		closedCh := make(chan struct{})
-		close(closedCh)
-		s.firstPollNotify[sessionID] = closedCh
-	}
+	s.notifyFirstPollLocked(sessionID)
 	s.mu.Unlock()
 
 	if ok {

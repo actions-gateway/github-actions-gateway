@@ -86,13 +86,9 @@ type AcquireJobResponse struct {
 	Plan struct {
 		PlanID string `json:"planId"`
 	} `json:"plan"`
-	// Resources carries the job's service endpoints. The SystemVssConnection
-	// endpoint's AccessToken is the job-scoped bearer token RenewJob must present:
-	// the run service accepts the broker/registration OAuth token to *claim* a job
-	// (acquirejob) but rejects that same token when *renewing* the job's lock,
-	// returning 401 "Not authorized for this job" — so on a job that outlives the
-	// initial ~10-minute lock TTL the lock is never renewed and GitHub recycles it
-	// at exactly the TTL boundary (Q247). See JobAuthToken.
+	// Resources carries the job's service endpoints, including the
+	// SystemVssConnection endpoint whose AccessToken is the job-scoped bearer
+	// token for per-job operations — see JobAuthToken (Q247).
 	Resources struct {
 		Endpoints []ServiceEndpoint `json:"endpoints"`
 	} `json:"resources"`
@@ -100,10 +96,10 @@ type AcquireJobResponse struct {
 
 // JobAuthToken returns the job-scoped bearer token from the acquirejob response —
 // the AccessToken authorization parameter of the SystemVssConnection endpoint — or
-// "" when the response carries no such endpoint. This is the same token the real
-// runner uses to renew a job lock (VssUtil.GetVssCredential over the message's
-// SystemVssConnection endpoint); the listener passes it to RenewJob as
-// RenewJobRequest.AuthToken so per-job renewal is authorized (Q247).
+// "" when the response carries no such endpoint. The run service accepts the
+// broker session token to *claim* a job but rejects it for per-job operations
+// (renewjob, completejob) with 401 "Not authorized for this job", so callers
+// must present this token instead, as the real runner does (Q247).
 func (r *AcquireJobResponse) JobAuthToken() string {
 	for i := range r.Resources.Endpoints {
 		if !strings.EqualFold(r.Resources.Endpoints[i].Name, systemVssConnectionName) {
@@ -128,12 +124,9 @@ type RenewJobRequest struct {
 	PlanID string `json:"planId"`
 	// JobID is RunnerJobRequestBody.RunnerRequestID.
 	JobID string `json:"jobId"`
-	// AuthToken is the job-scoped bearer token (AcquireJobResponse.JobAuthToken)
-	// that authorizes this renewal. When non-empty, RenewJob presents it as the
-	// Authorization header instead of Client.Token, because the run service rejects
-	// the broker session token for per-job lock renewal with 401 "Not authorized
-	// for this job" (Q247). Empty falls back to Client.Token. Never serialized into
-	// the request body.
+	// AuthToken authorizes this renewal — the job-scoped token, see
+	// AcquireJobResponse.JobAuthToken (Q247). Empty falls back to Client.Token.
+	// Never serialized into the request body.
 	AuthToken string `json:"-"`
 }
 
@@ -193,10 +186,8 @@ type CompleteJobRequest struct {
 	JobID string `json:"jobId"`
 	// Result is the terminal result reported for the job assignment.
 	Result TaskResult `json:"result"`
-	// AuthToken is the job-scoped bearer token (AcquireJobResponse.JobAuthToken)
-	// that authorizes this call. Like renewjob, the run service rejects the broker
-	// session token for per-job operations (401 "Not authorized for this job",
-	// Q247), so completejob must present the job token. Empty falls back to
-	// Client.Token. Never serialized into the request body.
+	// AuthToken authorizes this call — the job-scoped token, see
+	// AcquireJobResponse.JobAuthToken (Q247). Empty falls back to Client.Token.
+	// Never serialized into the request body.
 	AuthToken string `json:"-"`
 }

@@ -369,14 +369,7 @@ func TestReconcile_VersionTooOldCondition(t *testing.T) {
 	var updated v1alpha1.RunnerGroup
 	require.NoError(t, fb.Get(context.Background(), key, &updated))
 
-	found := false
-	for _, c := range updated.Status.Conditions {
-		if c.Type == "RunnerVersionTooOld" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "expected RunnerVersionTooOld condition to appear in status")
+	assert.NotNil(t, apimeta.FindStatusCondition(updated.Status.Conditions, "RunnerVersionTooOld"), "expected RunnerVersionTooOld condition to appear in status")
 }
 
 func TestReconcile_RateLimitedCondition(t *testing.T) {
@@ -405,14 +398,7 @@ func TestReconcile_RateLimitedCondition(t *testing.T) {
 	var updated v1alpha1.RunnerGroup
 	require.NoError(t, fb.Get(context.Background(), key, &updated))
 
-	found := false
-	for _, c := range updated.Status.Conditions {
-		if c.Type == "RateLimited" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "expected RateLimited condition to appear in status")
+	assert.NotNil(t, apimeta.FindStatusCondition(updated.Status.Conditions, "RateLimited"), "expected RateLimited condition to appear in status")
 }
 
 func TestReconcile_StatusActiveSessions(t *testing.T) {
@@ -602,14 +588,8 @@ func TestReconcile_DrainConditionsIsolation(t *testing.T) {
 
 	var updatedB v1alpha1.RunnerGroup
 	require.NoError(t, fb.Get(context.Background(), keyB, &updatedB))
-	found := false
-	for _, c := range updatedB.Status.Conditions {
-		if c.Type == "RateLimited" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "RateLimited condition should appear on rg-b after reconcile")
+	assert.NotNil(t, apimeta.FindStatusCondition(updatedB.Status.Conditions, "RateLimited"),
+		"RateLimited condition should appear on rg-b after reconcile")
 }
 
 // ── Gap 11: pool-exhausted non-retriable error ────────────────────────────────

@@ -214,8 +214,6 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	if sa != "" {
 		template.Spec.ServiceAccountName = sa
 	}
-	hostFalse := false
-	_ = hostFalse
 	template.Spec.HostPID = false
 	template.Spec.HostNetwork = false
 	template.Spec.HostIPC = false

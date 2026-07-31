@@ -327,9 +327,9 @@ type Provisioner struct {
 	// installation token was minted against.
 	//
 	// REQUIRED for the disruption auto-retry path; there is deliberately no default
-	// (Q504). Resolve it with githubapp.ResolveAPIBaseURL so it cannot drift from the
-	// token exchange's endpoint: the two disagreeing is what made recovery unusable on
-	// GHES, silently, for as long as the field went unassigned.
+	// (Q504): a default that diverges from the token exchange's endpoint posts a
+	// valid installation token to a host that never issued it (a bare 401 on GHES).
+	// Resolve it with githubapp.ResolveAPIBaseURL so the two cannot drift.
 	GitHubAPIURL string
 
 	// HTTPClient is used for GitHub API calls. nil uses a bounded
@@ -456,9 +456,9 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	}()
 
 	// Extract owner/repo/run_id for eviction retry (best-effort; missing is fine).
-	// A malformed payload only degrades eviction-retry context, so we log and
-	// continue rather than failing provisioning — but we no longer swallow the
-	// error silently, since that hid genuine payload corruption.
+	// A malformed payload only degrades eviction-retry context, so log and
+	// continue rather than failing provisioning — a silent drop would hide
+	// genuine payload corruption.
 	var ap acquirePayload
 	if err := json.Unmarshal(payload, &ap); err != nil {
 		log.Warn("could not parse AcquireJob payload for eviction-retry context; continuing without it", "error", err)
@@ -588,13 +588,17 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// The arms are ordered most-specific first — they are mutually exclusive in
 	// practice, and either way a single call spends a single slot of the run's one
 	// shared retry budget.
+	var cause string
 	switch {
 	case outcome.Phase == corev1.PodFailed && outcome.Reason == podReasonEvicted:
-		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCauseEviction)
+		cause = recoveryCauseEviction
 	case outcome.Preempted:
-		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCausePreemption)
+		cause = recoveryCausePreemption
 	case outcome.Phase == corev1.PodFailed && outcome.ExternallyDeleted:
-		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, recoveryCauseDeletion)
+		cause = recoveryCauseDeletion
+	}
+	if cause != "" {
+		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, cause)
 	}
 
 	// 8. Cleanup. The job Secret is always deleted here. The pod is deleted

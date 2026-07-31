@@ -19,12 +19,11 @@
 //
 // # What drives the wire, and what the probe still asserts on its own
 //
-// Every call above is issued by the shipping scaleset package (Q362). The probe
-// used to hand-build these requests against its own copies of the wire types,
-// which meant a divergence between the library and the wire — the single bug
-// class this scenario exists to catch — was invisible: the probe validated its
-// own dialect. It now drives scaleset.Client, so a live run is evidence about
-// the code GAG actually ships.
+// Every call above is issued by the shipping scaleset package (Q362): the probe
+// drives scaleset.Client, so a live run is evidence about the code GAG actually
+// ships, and a divergence between the library and the wire — the single bug
+// class this scenario exists to catch — cannot hide behind a probe-local
+// dialect of the protocol.
 //
 // Three things stay deliberately outside the library, because delegating them
 // would make the probe agree with itself instead of with GitHub:
@@ -123,29 +122,21 @@ type scalesetConfig struct {
 func parseScalesetConfig(getenv func(string) string) (scalesetConfig, error) {
 	var cfg scalesetConfig
 
-	mustEnv := func(name string) (string, error) {
-		v := getenv(name)
-		if v == "" {
-			return "", fmt.Errorf("required environment variable %s is not set", name)
-		}
-		return v, nil
-	}
-
-	appIDStr, err := mustEnv("GITHUB_APP_ID")
+	appIDStr, err := mustEnv(getenv, "GITHUB_APP_ID")
 	if err != nil {
 		return scalesetConfig{}, err
 	}
 	if _, err := fmt.Sscan(appIDStr, &cfg.AppID); err != nil {
 		return scalesetConfig{}, fmt.Errorf("parse GITHUB_APP_ID: %w", err)
 	}
-	installIDStr, err := mustEnv("GITHUB_APP_INSTALLATION_ID")
+	installIDStr, err := mustEnv(getenv, "GITHUB_APP_INSTALLATION_ID")
 	if err != nil {
 		return scalesetConfig{}, err
 	}
 	if _, err := fmt.Sscan(installIDStr, &cfg.InstallationID); err != nil {
 		return scalesetConfig{}, fmt.Errorf("parse GITHUB_APP_INSTALLATION_ID: %w", err)
 	}
-	pemValue, err := mustEnv("GITHUB_APP_PRIVATE_KEY")
+	pemValue, err := mustEnv(getenv, "GITHUB_APP_PRIVATE_KEY")
 	if err != nil {
 		return scalesetConfig{}, err
 	}
@@ -153,7 +144,7 @@ func parseScalesetConfig(getenv func(string) string) (scalesetConfig, error) {
 	if err != nil {
 		return scalesetConfig{}, fmt.Errorf("load GITHUB_APP_PRIVATE_KEY: %w", err)
 	}
-	cfg.ConfigURL, err = mustEnv("GITHUB_ORG_URL")
+	cfg.ConfigURL, err = mustEnv(getenv, "GITHUB_ORG_URL")
 	if err != nil {
 		return scalesetConfig{}, err
 	}

@@ -416,10 +416,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 // The health listener is stopped last, so probes get a 503 for the whole
 // sequence rather than a refused connection.
 func (s *Server) shutdown(proxySrv, healthSrv, metricsSrv *http.Server) {
-	log := s.Log
-	if log == nil {
-		log = slog.Default()
-	}
+	log := s.logger()
 	drainTimeout := s.ShutdownDrainTimeout
 	if drainTimeout == 0 {
 		drainTimeout = defaultShutdownDrainTimeout
@@ -550,6 +547,14 @@ func (s *Server) lingerForEndpointRemoval(ctx context.Context, log *slog.Logger)
 			return
 		}
 	}
+}
+
+// logger returns s.Log, or slog.Default() when unset.
+func (s *Server) logger() *slog.Logger {
+	if s.Log != nil {
+		return s.Log
+	}
+	return slog.Default()
 }
 
 // metricsTLSConfig builds the mTLS server config for the metrics listener:
@@ -688,11 +693,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	dialAddr, allowed := s.checkDestination(r.Context(), r.Host)
 	if !allowed {
 		s.connectDenied.WithLabelValues().Inc()
-		log := s.Log
-		if log == nil {
-			log = slog.Default()
-		}
-		log.Warn("CONNECT destination not allowed", "host", r.Host)
+		s.logger().Warn("CONNECT destination not allowed", "host", r.Host)
 		http.Error(w, "destination not allowed", http.StatusForbidden)
 		return
 	}
@@ -700,11 +701,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	upstream, err := net.DialTimeout("tcp", dialAddr, dialTimeout)
 	if err != nil {
 		s.dialErrors.WithLabelValues().Inc()
-		log := s.Log
-		if log == nil {
-			log = slog.Default()
-		}
-		log.Error("upstream dial failed", "host", r.Host, "error", err)
+		s.logger().Error("upstream dial failed", "host", r.Host, "error", err)
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 		return
 	}
@@ -738,11 +735,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		// tunneling a connection whose CONNECT-200 reply never landed would
 		// dirty the metrics and immediately die in io.Copy. Bail before either.
 		// The deferred conn.Close()/upstream.Close() handle cleanup.
-		log := s.Log
-		if log == nil {
-			log = slog.Default()
-		}
-		log.Debug("CONNECT response write failed", "host", r.Host, "error", err)
+		s.logger().Debug("CONNECT response write failed", "host", r.Host, "error", err)
 		return
 	}
 

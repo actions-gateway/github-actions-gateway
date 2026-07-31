@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"strings"
 	"testing"
@@ -108,12 +109,12 @@ func TestIPRangeReconciler_IncrementsUpdateCounter(t *testing.T) {
 		Metrics:  m,
 	}
 
-	require.NoError(t, r.reconcileAll(ctx, slogDefault()))
+	require.NoError(t, r.reconcileAll(ctx, slog.Default()))
 	assert.Equal(t, 1.0, testutil.ToFloat64(m.IPRangeUpdates.WithLabelValues("team-a")),
 		"one successful patch should record one update")
 
 	// A second refresh patches again.
-	require.NoError(t, r.reconcileAll(ctx, slogDefault()))
+	require.NoError(t, r.reconcileAll(ctx, slog.Default()))
 	assert.Equal(t, 2.0, testutil.ToFloat64(m.IPRangeUpdates.WithLabelValues("team-a")))
 }
 
@@ -140,7 +141,7 @@ func TestIPRangeReconciler_NoUpdateWhenNetworkPolicyMissing(t *testing.T) {
 		Metrics:  m,
 	}
 
-	require.NoError(t, r.reconcileAll(ctx, slogDefault()))
+	require.NoError(t, r.reconcileAll(ctx, slog.Default()))
 	assert.Equal(t, 0.0, testutil.ToFloat64(m.IPRangeUpdates.WithLabelValues("team-a")),
 		"a missing NetworkPolicy must not record an update")
 }

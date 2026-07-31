@@ -20,18 +20,15 @@ import (
 // status.sizingProfileState still reports Active, every other signal looks correct,
 // and jobs simply stop bursting (Q489).
 //
-// This reports the EFFECT, not a cause. The obvious cause is a namespace LimitRange
-// with a Container-type cpu default, and reading LimitRanges was the first design;
-// it was wrong twice over. It infers an effect from a policy — and it sees only that
-// one policy, while a mutating admission webhook, a policy engine's mutate rule, or a
-// VPA in Auto mode injects the same limit just as silently and would go unreported.
-//
-// What the AGC actually has is better than either: it built the pod without a CPU
-// limit and the apiserver admitted it with one. Comparing the two needs no new RBAC
-// (worker pods are already granted, listed, and watched), no LimitRange informer, and
-// no inference — a pod running a CPU limit the profile removed IS the failure, not
-// evidence of it. The existing worker-pod watch makes it event-driven for free: the
-// pod event that carries the injected limit is itself what re-reconciles the set.
+// This reports the EFFECT, not a cause: the AGC built the pod without a CPU limit
+// and the apiserver admitted it with one, and comparing the two needs no new RBAC
+// (worker pods are already granted, listed, and watched), no LimitRange informer,
+// and no inference — a pod running a CPU limit the profile removed IS the failure.
+// Reading admission policies instead would see only a namespace LimitRange, while
+// a mutating webhook, a policy engine's mutate rule, or a VPA in Auto mode injects
+// the same limit just as silently. The existing worker-pod watch makes it
+// event-driven for free: the pod event that carries the injected limit is itself
+// what re-reconciles the set.
 //
 // The one thing the pod cannot tell us is WHO injected the limit, so the message says
 // what was observed and names the usual suspects rather than asserting a cause.

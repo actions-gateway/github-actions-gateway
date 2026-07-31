@@ -871,11 +871,7 @@ func parseJWTExpiry(token string) (time.Time, error) {
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		// Tolerate padded encodings just in case.
-		payload, err = base64.URLEncoding.DecodeString(parts[1])
-		if err != nil {
-			return time.Time{}, fmt.Errorf("decode JWT payload: %w", err)
-		}
+		return time.Time{}, fmt.Errorf("decode JWT payload: %w", err)
 	}
 	var claims struct {
 		Exp int64 `json:"exp"`

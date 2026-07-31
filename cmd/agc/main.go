@@ -96,11 +96,8 @@ const (
 	metricsBindAddress = ":8443"
 
 	// metricsCertDir is where the GMC mounts the metrics mTLS server bundle
-	// (ca.crt + tls.crt + tls.key). When present, the metrics endpoint is served
-	// over HTTPS requiring a client cert signed by ca.crt. When absent (local
-	// dev/test where the GMC has not mounted it), metrics fall back to plain
-	// HTTP — mirroring the proxy's TLS-when-mounted pattern. The GMC always
-	// mounts it in production, so the effective default there is mTLS.
+	// (ca.crt + tls.crt + tls.key). See buildMetricsOptions for the
+	// TLS-when-mounted behavior.
 	metricsCertDir = "/etc/actions-gateway/metrics-tls"
 
 	// healthProbeBindAddress pins the controller-runtime health/ready endpoint
@@ -168,19 +165,17 @@ func run() error {
 	// and default to production logging: structured JSON at info level, which log
 	// aggregators can parse. The GMC stamps no logging args onto the AGC
 	// Deployment, so this default is what actually ships in production — correct
-	// by default rather than relying on an operator remembering to flip a flag
-	// (the original hard-coded UseDevMode(true) emitted console logs in prod).
+	// by default rather than relying on an operator remembering to flip a flag.
 	// Developers pass --zap-devel for human-readable console logs at debug level
 	// when running locally. Kept consistent with the GMC (cmd/gmc/cmd/main.go).
 	zapOpts := zap.Options{Development: false}
 	zapOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	// Snapshot the AGC's full environment-variable config surface once, right after
-	// flag parsing, so every downstream read is a struct-field access rather than a
-	// scattered os.Getenv (structural-debt-audit-2026-07 F8 / Q367). loadConfig is a
-	// pure snapshot — see agcConfig — so this does not change startup behavior or
-	// ordering; each erroring/side-effecting parse still happens at its point of use.
+	// Snapshot the AGC's environment-variable config surface once, right after
+	// flag parsing, so every downstream read is a struct-field access rather than
+	// a scattered os.Getenv (Q367). loadConfig is raw reads only; each
+	// erroring/side-effecting parse still happens at its point of use.
 	cfg := loadConfig(os.Getenv)
 
 	// LOG_LEVEL (info|debug, default info) is the per-tenant verbosity knob the
@@ -540,9 +535,8 @@ func configureProxyTrust() error {
 	proxyCACert := filepath.Join(proxyCACertDir, "tls.crt")
 	certPEM, err := os.ReadFile(proxyCACert)
 	if err != nil {
-		// Absent file: no TLS proxy configured. Any other read error is also
-		// non-fatal here — the original inline block only acted on a successful
-		// read — so fall through and leave the default transport unchanged.
+		// Absent or unreadable file: treated as no TLS proxy configured; the
+		// default transport is left unchanged.
 		return nil
 	}
 	pool, err := transport.BuildProxyTrustPool(certPEM)
@@ -558,8 +552,7 @@ func configureProxyTrust() error {
 // setupProvisioner builds the worker provisioner from config and registers its
 // manager Runnables (the informer-backed pod-completion watcher and the
 // eviction-counter sweeper). It returns the wired provisioner for the reconcilers
-// to consume. The construction and mgr.Add ordering here is preserved verbatim
-// from run(); the wrapper-delivery detection makes a live apiserver-version
+// to consume. The wrapper-delivery detection makes a live apiserver-version
 // discovery call, so this must run after the manager is constructed.
 func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *runnercore.Metrics,
 	tokenMgr *token.Manager) (*provisioner.Provisioner, error) {
@@ -602,15 +595,10 @@ func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *runnercore.Metrics,
 		prov.UseImageVolume = useImageVolume(mgr.GetConfig(), cfg.WrapperDelivery)
 	}
 	prov.TokenFunc = tokenMgr.Token
-	// The provisioner's own GitHub REST calls (rerun-failed-jobs, on the
-	// eviction/preemption recovery path) must address the SAME endpoint the token
-	// exchange does. Without this the field stayed empty and rerunFailedJobs fell back
-	// to api.github.com, so on GHES — or anywhere GITHUB_API_BASE_URL is set — recovery
-	// posted a valid installation token to a host that had never issued it and got a
-	// 401 (Q504). Resolved through the shared helper so the two can no longer diverge,
-	// under the same STUB_AUTH_URL opt-in buildTokenProvider uses: a plaintext base URL
-	// stays rejected in production.
-	apiBaseURL, err := githubapp.ResolveAPIBaseURL(os.Getenv("STUB_AUTH_URL") != "")
+	// Resolved through the shared helper, under the same STUB_AUTH_URL opt-in
+	// buildTokenProvider uses, so the rerun endpoint cannot diverge from the
+	// token exchange's (see provisioner.Provisioner.GitHubAPIURL, Q504).
+	apiBaseURL, err := githubapp.ResolveAPIBaseURL(cfg.StubAuthURL != "")
 	if err != nil {
 		return nil, err
 	}

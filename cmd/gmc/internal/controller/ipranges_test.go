@@ -78,7 +78,7 @@ func TestIPRangeReconciler_UpdatesNetworkPolicy(t *testing.T) {
 	}
 
 	// Run one tick synchronously.
-	_ = r.reconcileAll(ctx, slogDefault())
+	_ = r.reconcileAll(ctx, slog.Default())
 
 	// Check that the proxy NetworkPolicy was updated with the new CIDRs.
 	var updated networkingv1.NetworkPolicy
@@ -118,7 +118,7 @@ func TestIPRangeReconciler_SkipsManagedFalse(t *testing.T) {
 
 	cidrs := []net.IPNet{parseCIDR(t, "140.82.112.0/20")}
 	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{cidrs: cidrs}}
-	_ = r.reconcileAll(ctx, slogDefault())
+	_ = r.reconcileAll(ctx, slog.Default())
 
 	// Proxy NetworkPolicy should not contain the GitHub CIDR.
 	var updated networkingv1.NetworkPolicy
@@ -151,7 +151,7 @@ func TestIPRangeReconciler_FetchError(t *testing.T) {
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag, np).Build()
 
 	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{err: errors.New("network error")}}
-	_ = r.reconcileAll(ctx, slogDefault()) // must not panic
+	_ = r.reconcileAll(ctx, slog.Default()) // must not panic
 
 	// Proxy NetworkPolicy should be unchanged.
 	var updated networkingv1.NetworkPolicy
@@ -181,7 +181,7 @@ func TestIPRangeReconciler_WorkloadEgressPreservedAfterRefresh(t *testing.T) {
 
 	cidrs := []net.IPNet{parseCIDR(t, "140.82.112.0/20")}
 	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{cidrs: cidrs}}
-	_ = r.reconcileAll(ctx, slogDefault())
+	_ = r.reconcileAll(ctx, slog.Default())
 
 	// Workload NP must still have the proxy egress rule (PodSelector on the proxy
 	// app label) — the reconciler must not touch it.
@@ -203,8 +203,6 @@ func TestIPRangeReconciler_WorkloadEgressPreservedAfterRefresh(t *testing.T) {
 	}
 	assert.True(t, found, "workload NP proxy egress rule must survive an IP range reconcile (M-9 regression)")
 }
-
-func slogDefault() *slog.Logger { return slog.Default() }
 
 // §3 — HTTPGitHubIPRangeFetcher production path
 
@@ -485,14 +483,7 @@ func proxyNPHasCIDR(t *testing.T, fc client.Client, ns, cidr string) bool {
 	if err := fc.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: npProxyName}, &np); err != nil {
 		return false
 	}
-	for _, rule := range np.Spec.Egress {
-		for _, peer := range rule.To {
-			if peer.IPBlock != nil && peer.IPBlock.CIDR == cidr {
-				return true
-			}
-		}
-	}
-	return false
+	return hasGitHubCIDREgress(&np, cidr)
 }
 
 // TestIPRangeReconciler_Start_RetriesInitialFetch is the regression test for Q61.
