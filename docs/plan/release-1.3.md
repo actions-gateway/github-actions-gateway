@@ -1,6 +1,17 @@
 # Release 1.3 Milestone Definition
 
-> **Status: no gating Queue row remains.** The original six closed 2026-07-26
+> **Status: two gating rows are OPEN — Q550 and Q551, filed 2026-07-31 from the
+> `v1.3.0-rc.2` validation window.** The RC gate's dispatched e2e job was wedged
+> by the AGC itself: provisioning retries leaked runner registrations at GitHub
+> (reap never deregisters, and names derive from the job ID, so retries 409
+> against their own leftovers — Q550), and after four attempts the listener
+> dropped the job permanently with no retry, condition, or Event (Q551). Both
+> are availability bugs in the scale-set listener an ordinary tenant can hit —
+> any burst of provisioning failures (quota, stockout, admission) starts the
+> same cycle — so they gate the tag rather than ride the backlog. The paragraph
+> below records the pre-2026-07-31 history.
+>
+> **Previously: no gating Queue row remained.** The original six closed 2026-07-26
 > (Q359, Q400, Q404, Q411, Q412, Q393), and all four rows the
 > [API review](#e-api-review-satisfied) opened closed 2026-07-28:
 > Q485 with the `windowStartTime` rename shipped, Q484 with a CEL rule requiring
