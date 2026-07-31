@@ -308,11 +308,14 @@ done
 # multi-arch image ("content digest ... not found"), and kubelet's own retried
 # pull is a working fallback everywhere — the chart's imagePullPolicy is
 # IfNotPresent, so a successful load is still a per-node cache hit.
+# awk consumes the whole stream (no early exit): exiting at the first match
+# closes the pipe while tar may still be writing, and the resulting EPIPE fails
+# the pipeline under pipefail — a timing-dependent flake (Q548, 2026-07-31).
 released_gmc_repo="$(tar -xzOf "${released_tgz}" actions-gateway/values.yaml | awk '
 	/^gmc:$/ { in_gmc = 1; next }
 	in_gmc && /^[^[:space:]]/ { in_gmc = 0 }
 	in_gmc && /^  image:$/ { in_img = 1; next }
-	in_img && /^    repository:/ { print $2; exit }
+	in_img && !found && /^    repository:/ { found = 1; print $2 }
 ')"
 if [[ -n "${released_gmc_repo}" ]] && command -v docker >/dev/null && command -v kind >/dev/null &&
 	[[ "${KUBE_CONTEXT}" == "kind-${KIND_CLUSTER}" ]]; then
