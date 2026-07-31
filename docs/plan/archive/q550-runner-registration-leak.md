@@ -6,10 +6,19 @@ provision→reap lifecycle removes it. Because the runner name is derived from t
 job ID, a job's own leftovers collide with its retries — the failure mode that
 wedged the `v1.3.0-rc.2` validation window with 22 stale `gag-ci-e2e` records.
 
-Queue row: [Q550](../STATUS.md#Q550) (`bug`, `1.3-gate`, M). Sibling row
-[Q551](../STATUS.md#Q551) covers what the listener does *after* the collisions
+Closed 2026-07-31 (Q550, `bug` `1.3-gate`). Sibling row
+[Q551](../../STATUS.md#Q551) covers what the listener does *after* the collisions
 become unrecoverable (permanent skip, no retry/condition/Event); it is a separate
-concern and ships separately.
+concern and ships separately. This fix removes most of what *causes* the
+collisions, but does not change the skip behaviour, so Q551 stays open.
+
+> **Verified at unit and integration; not yet re-verified live.** The defect was
+> found in the `v1.3.0-rc.2` dogfood window, and no tier below a live-GitHub run
+> can confirm that the REST listing behaves as the fake models it. The release
+> gate's own dogfood validation is where that confirmation lands — it is part of
+> the [Release 1.3](../release-1.3.md) Definition of Done rather than a Queue row.
+> The `Warn` line added to the unresolvable-reclaim branch is what will name the
+> live mechanism if it is still the one suspected here.
 
 ## Status
 
@@ -55,17 +64,17 @@ The fix closes the leak under either mechanism, so nothing here blocked implemen
 These come from reading the code and from the incident, not from a live probe:
 
 - `Client.GenerateJITConfig` pre-registers a runner record server-side
-  ([client.go:512](../../scaleset/client.go)). The listener mints one per assigned
+  ([client.go:512](../../../scaleset/client.go)). The listener mints one per assigned
   job before provisioning.
 - The runner name is `{scaleSetName}-{jobID}`, deterministic per job
   (`Listener.runnerName`), with `-1`/`-2`/`-3` suffixes on the conflict-retry path.
 - Nothing in the reap path deregisters anything. `reapWorkerPodsByLabel`
-  ([runner_shared.go:232](../../cmd/agc/internal/controller/runner_shared.go))
+  ([runner_shared.go:232](../../../cmd/agc/internal/controller/runner_shared.go))
   patches a deletion reason and deletes the pod. It has no GitHub client and no
   runner name to act on.
 - **The minted runner name never leaves the listener.** `scalesetlistener.Job`
   carries `RunnerName`, but `ensureScaleSetListener`'s `Provision` closure
-  ([runnerset_scaleset.go:165](../../cmd/agc/internal/controller/runnerset_scaleset.go))
+  ([runnerset_scaleset.go:165](../../../cmd/agc/internal/controller/runnerset_scaleset.go))
   copies `JobID`, `JITConfig`, and the run identity into `provisioner.ScaleSetJob`
   and drops `RunnerName` on the floor. `ScaleSetJob` has no such field. So no
   downstream component *could* deregister the right record today.
@@ -198,7 +207,7 @@ Tests:
 - e2e: assert the stub holds no leftover records after a scale-set run completes.
 
 Docs (per the change-type mapping in
-[doc-update-matrix.md](../development/doc-update-matrix.md)) — this change adds a
+[doc-update-matrix.md](../../development/doc-update-matrix.md)) — this change adds a
 pod annotation, changes a failure mode, and adds GitHub API traffic, so the
 operator half is required, not optional:
 
