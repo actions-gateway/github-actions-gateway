@@ -769,7 +769,7 @@ To prove a window like this rather than guess at it, widen it: drop a `time.Slee
 
 ### Script tests: neutralize the clock, never measure it
 
-The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion. `make scripts-test` runs all 26 suites concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh), inside a `make check` that is already saturating the machine with the Go tests. A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.
+The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion. `make scripts-test` runs all 32 suites concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh), inside a `make check` that is already saturating the machine with the Go tests. A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.
 
 **So a script test must never assert on wall-clock time it actually spent.** Stub `sleep` — it is a plain command, so a shell function shadows it — and assert on what the stub recorded. Two established shapes, both in-tree:
 
@@ -779,6 +779,20 @@ The rules above are written for the Go tiers, but the `scripts/` tier needs its 
 The second shape needs a seam in the script under test: **read the clock through a named function** (`now_seconds`), never an inline `date +%s`, so a test can substitute it. This is the same constraint as the `BASH_SOURCE` guard and the "keep new parsing in a named function" rule above — an inline call in the middle of a code path is untestable by construction.
 
 Q471 is the worked example, and it shows the cost of getting this wrong is not just a flake: `validate-cluster-test.sh` bounded real seconds (`date +%s`, max 1–5 s) around sleep-based retries, so it passed standalone and failed under a loaded `make check` — a flake that only ever fires where it is hardest to reproduce. Converting it to a fake clock also took the suite from ~4 s of real sleeping to under 0.5 s, because a test that stubs `sleep` does not wait for anything.
+
+### Testing a `main`-shaped script: the entry-point seam, and the errexit trap
+
+A script whose logic lives in `main()` needs a seam before it can be sourced at all. The dogfood scripts use an env guard on the last line — `[[ -n "${START_LIB_ONLY:-}" ]] || main "$@"` in [`start.sh`](../../scripts/dogfood/start.sh), and the same shape in [`e2e-start.sh`](../../scripts/dogfood/e2e-start.sh) and [`validate-release.sh`](../../scripts/dogfood/validate-release.sh) — so a test sources the file for its functions without running it. It is the `BASH_SOURCE`-guard idea applied to an entry point; **keep the guard when editing these scripts**, or their suites stop being able to load them.
+
+**Then: never call `main` as an operand of `||` or `if`.** Bash suppresses `errexit` inside a subshell in a condition context, and re-running `set -e` inside that subshell does *not* re-arm it — measured on bash 5.3:
+
+```bash
+f() { false; echo REACHED; }
+rc=0; ( set -e; f ) || rc=$?   # rc=0 — the subshell sailed past the failure
+set +e; ( set -e; f ); rc=$?; set -e   # rc=1 — errexit actually armed
+```
+
+This matters because the interesting assertion about a bring-up script is usually that a failure *aborts* it: that a failed readiness wait stops the run before it flips routing at a tenant that never came up. Written the first way, that test passes no matter what the script does — a false green in the same family as Q404 and Q432. Use the second form, and mutation-check it: break the abort (append `|| true` to the wait), confirm the assertion goes red, restore.
 
 ## Where each tier can physically run (and what it costs)
 

@@ -133,4 +133,4 @@ main() {
 	echo "e2e pool nodes will autoscale 0→2 as jobs arrive."
 }
 
-main "$@"
+[[ -n "${E2E_START_LIB_ONLY:-}" ]] || main "$@"

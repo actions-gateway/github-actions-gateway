@@ -210,7 +210,12 @@ path-filters-check: ## Fail if a CI path filter misses a go.work module or names
 # pinned download never writes bytes it did not verify (Q433), the shellcheck
 # gate's own file selection (an untracked-but-present script must be linted,
 # Q432), the dogfood worker-drain gate (an unreadable cluster must never read
-# as idle and let a teardown strand worker nodes, Q434), and the CI path-filter
+# as idle and let a teardown strand worker nodes, Q434), the on-demand e2e
+# tenant bring-up (its readiness wait is the bring-up's whole verdict and both
+# directions are silent: an undersized system pool leaves the AGC Pending, so a
+# healthy cluster reads as a timeout, and a wait whose failure did not abort
+# would point repo-wide e2e routing at a tenant that never came up, Q578), and
+# the CI path-filter
 # gate (a workspace module missing from a filter must fail, since the gate it
 # would skip reports green either way, Q429), the image-pull retry schedule
 # (exponential, jittered and capped, so concurrent CI callers cannot retry in
@@ -236,7 +241,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/git-merge-status-test docs/lint-backlog-test \
                  docs/release-version-hook-test docs/source-links-hook-test \
                  dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
-                 dogfood/start-test \
+                 dogfood/start-test dogfood/e2e-start-test \
                  e2e/e2e-github-cleanup-test e2e/validate-cluster-test \
                  fetch/download-verified-test fetch/pull-image-with-retry-test \
                  go/check-codegen-drift-test go/check-v2-api-sync-test \
@@ -245,7 +250,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations)
 	scripts/ci/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of
