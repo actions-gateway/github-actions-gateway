@@ -9,7 +9,7 @@ redistributed — including inside the container images, which ship this file at
 /licenses/THIRD-PARTY-NOTICES alongside the project LICENSE and NOTICE.
 
 GENERATED FILE — DO NOT EDIT BY HAND.
-Regenerate with `make third-party-notices` (scripts/gen-third-party-notices.sh),
+Regenerate with `make third-party-notices` (scripts/release/gen-third-party-notices.sh),
 which reads only the committed, version-pinned vendor/ tree.
 
 ================================================================================

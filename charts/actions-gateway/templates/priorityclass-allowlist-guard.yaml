@@ -18,7 +18,7 @@
 # allowlist or a cluster-wide denial of every matched write, recoverable only by an
 # apiserver restart (impossible on GKE/EKS/AKS). A CRD paramKind gets a fresh
 # dynamic informer per context and survives the same transition; the contrast is
-# measured by scripts/vap-param-informer-check.sh. See
+# measured by scripts/e2e/vap-param-informer-check.sh. See
 # docs/development/kubernetes-conventions.md (paramKind: never a core type).
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy

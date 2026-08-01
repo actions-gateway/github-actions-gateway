@@ -42,7 +42,7 @@ type PriorityClassAllowlistSpec struct {
 // once the set of bindings naming it goes empty for one refresh tick — which a
 // `helm uninstall` does. The apiserver allocates a fresh dynamic informer per
 // context for a CRD paramKind, so this kind is structurally immune; the contrast
-// is measured by scripts/vap-param-informer-check.sh. Background:
+// is measured by scripts/e2e/vap-param-informer-check.sh. Background:
 // docs/design/05-security.md (PriorityClass allowlist).
 //
 // Whose fact is it (api-review.md § Ask whose fact it is): the platform's, in

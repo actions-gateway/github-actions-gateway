@@ -3,7 +3,7 @@
 # given pin already names, as "vX.Y.Z", with no trailing newline.
 #
 # Used by updatecli (updatecli.d/cluster-autoscaler.yaml) as a shell source so
-# CA_VERSION in scripts/autoscaler-cluster.sh — the cluster-autoscaler the
+# CA_VERSION in scripts/e2e/autoscaler-cluster.sh — the cluster-autoscaler the
 # live-autoscaler drift gate installs — picks up patch releases weekly instead of
 # waiting for the next kind minor bump (Q483). The gate exists to catch an
 # upstream event-vocabulary reword, and it only ever runs against the version
@@ -27,7 +27,7 @@
 # Usage: latest-cluster-autoscaler-patch.sh <current-pin>   # e.g. v1.36.1
 set -euo pipefail
 
-# The OCI tag-list endpoint for the image scripts/autoscaler-cluster.sh installs.
+# The OCI tag-list endpoint for the image scripts/e2e/autoscaler-cluster.sh installs.
 CA_TAGS_URL='https://registry.k8s.io/v2/autoscaling/cluster-autoscaler/tags/list'
 
 main() {

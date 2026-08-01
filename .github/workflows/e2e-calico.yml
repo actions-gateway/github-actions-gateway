@@ -43,8 +43,8 @@ on:
       - 'cmd/proxy/**'
       - 'Dockerfile'
       - 'charts/actions-gateway/templates/**'
-      - 'scripts/kind-with-registry.sh'
-      - 'scripts/bake-with-retry.sh'
+      - 'scripts/e2e/kind-with-registry.sh'
+      - 'scripts/e2e/bake-with-retry.sh'
       - 'Makefile'
       - '.github/workflows/e2e-calico.yml'
       - '.github/workflows/e2e-reusable.yml'
@@ -94,8 +94,15 @@ jobs:
               - 'cmd/proxy/**'         # the egress proxy (ProxyConnectWorks)
               - 'Dockerfile'           # builds the gmc + proxy images this lane deploys
               - 'charts/actions-gateway/templates/**'  # manager NetworkPolicy templates (ManagerMetricsNP); templates-only so a metadata Chart.yaml bump doesn't fire this lane (Q296)
-              - 'scripts/kind-with-registry.sh'  # CNI/cluster bring-up incl. Calico install
-              - 'scripts/bake-with-retry.sh'     # image bake/push retry on the bring-up critical path
+              # The scripts behind e2e-reusable.yml, which this lane and the
+              # kindnet lane both run — so these three must match e2e-test.yml's
+              # `e2e` filter exactly, and check-path-filters.sh asserts it. The
+              # two lanes used to disagree by ~60×: this list named 2 of the ≥6
+              # scripts the reusable workflow calls, so a free-runner-disk.sh
+              # change skipped the lane that exercises it (Q571).
+              - 'scripts/e2e/**'
+              - 'scripts/fetch/**'
+              - 'scripts/lib/**'
               - 'Makefile'             # e2e targets + CALICO_VERSION
               - '.github/workflows/e2e-calico.yml'
               - '.github/workflows/e2e-reusable.yml'

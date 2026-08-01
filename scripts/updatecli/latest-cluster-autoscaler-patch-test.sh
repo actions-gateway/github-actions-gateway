@@ -17,7 +17,7 @@
 #
 # `curl` is stubbed on PATH to serve a fixture tag list, so the whole resolution
 # path — fetch, parse, filter, order — runs here with no network. jq is real
-# (a required tool; see scripts/check-tools.sh).
+# (a required tool; see scripts/ci/check-tools.sh).
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
 

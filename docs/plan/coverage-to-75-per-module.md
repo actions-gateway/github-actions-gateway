@@ -6,7 +6,7 @@
 
 ## Overview
 
-**Goal:** bring every Go module's hand-written unit-test coverage to **≥75%**, as measured by [`scripts/coverage.sh`](../../scripts/coverage.sh) (generated DeepCopy/scheme boilerplate and test-helper packages already excluded).
+**Goal:** bring every Go module's hand-written unit-test coverage to **≥75%**, as measured by [`scripts/go/coverage.sh`](../../scripts/go/coverage.sh) (generated DeepCopy/scheme boilerplate and test-helper packages already excluded).
 
 **Why now:** the coverage gate is a [no-regression ratchet, not an absolute target](../development/testing.md#coverage-measurement-and-the-ratchet) — deliberately, to avoid manufacturing low-value tests. So this plan is *not* about chasing a number for its own sake. It is about closing the specific gaps where the untested code carries real production risk, and doing so lands every module at ≥75% as a side effect. Where a gap is a genuinely-thin entrypoint whose logic is already factored into tested helpers, we leave it uncovered by design and say so.
 

@@ -279,7 +279,7 @@ low-value tests or churn.
 - [x] **Test coverage measured + gated** ([Q77](../STATUS.md), *gating*):
   a `coverage` job in `unit-test.yml` measures per-module `go test` coverage
   and gates it with a *no-regression ratchet* rather than an arbitrary absolute
-  percentage. [`scripts/coverage.sh`](../../scripts/coverage.sh) is the single
+  percentage. [`scripts/go/coverage.sh`](../../scripts/go/coverage.sh) is the single
   source of truth (`make cover`/`cover-check`/`cover-update`); per module it
   takes `go test -coverprofile` and computes the aggregate with `go tool cover
   -func` over a profile **filtered** of mechanically-generated code

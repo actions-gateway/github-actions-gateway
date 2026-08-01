@@ -10,14 +10,14 @@ on:
   pull_request:
     paths:
       - '**.md'
-      - 'scripts/check-doc-links.sh'
+      - 'scripts/docs/check-doc-links.sh'
       - 'Makefile'
       - '.github/workflows/doc-links.yml'
   push:
     branches: [main]
     paths:
       - '**.md'
-      - 'scripts/check-doc-links.sh'
+      - 'scripts/docs/check-doc-links.sh'
       - 'Makefile'
       - '.github/workflows/doc-links.yml'
 
@@ -32,7 +32,7 @@ permissions:
 jobs:
   # Walk every tracked, non-vendored Markdown file and fail on dead relative
   # file links or `#anchors` that match no GitHub heading slug / explicit
-  # <a id>. `make doc-links` (scripts/check-doc-links.sh) is the single source
+  # <a id>. `make doc-links` (scripts/docs/check-doc-links.sh) is the single source
   # of truth, so the local and CI verdicts match. No Go toolchain needed — just
   # a checkout so `git ls-files` sees the tracked tree.
   doc-links:

@@ -84,7 +84,7 @@ python3 hooks/release_version.py
 
 The tag-selection rules (numeric ordering, prerelease exclusion, the
 `$GAG_DOCS_RELEASE` override, degrading to `""` outside a repository) are asserted
-by `scripts/release-version-hook-test.sh`, which `make check` runs via
+by `scripts/docs/release-version-hook-test.sh`, which `make check` runs via
 `make scripts-test`.
 
 ## Versioned deploy (mike)
@@ -307,7 +307,7 @@ make docs-build   # strict build of both scopes into site/ and site-dev/
 Both targets provision an **isolated venv** (`.venv-docs/`, gitignored) from the
 pinned `requirements-docs.txt` and reuse it across runs, so the docs toolchain
 never touches the host Python — `python3` is the only host prerequisite
-(`scripts/check-tools.sh`, extended tier). On Debian/Ubuntu the stdlib venv
+(`scripts/ci/check-tools.sh`, extended tier). On Debian/Ubuntu the stdlib venv
 module ships separately: `apt-get install python3-venv` if `python3 -m venv`
 fails.
 
@@ -321,7 +321,7 @@ cannot cover both** (Q560):
 
 | Gate | Oracle | Runs in |
 |---|---|---|
-| `make doc-links` (`scripts/check-doc-links.sh`) | github.com — GitHub's heading slugger, directory listings | `doc-links.yml`, `make check` |
+| `make doc-links` (`scripts/docs/check-doc-links.sh`) | github.com — GitHub's heading slugger, directory listings | `doc-links.yml`, `make check` |
 | `make docs-build` (`mkdocs build --strict`) | the published site — Python-Markdown slugs, MkDocs path resolution | `pages.yml`'s PR `build` job |
 
 A link can pass one and 404 on the other. Three divergences have actually shipped
@@ -503,7 +503,7 @@ link, so covering only the first would leave the rarer form silently dead.
 This was already needed before the backlog page: `design/` and `operations/`
 shipped such links dead. Publishing the repo-internal docs made it load-bearing
 — 724 links across the tree, 34 on `STATUS.md` alone.
-`scripts/source-links-hook-test.sh` asserts the rewrite in both directions under
+`scripts/docs/source-links-hook-test.sh` asserts the rewrite in both directions under
 `make check`.
 
 ### Unpublished is per build, not per path (Q561)

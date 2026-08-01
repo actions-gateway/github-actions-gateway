@@ -11,7 +11,7 @@ make wait-cert-manager
 make e2e-images           # builds and pushes gmc/agc/proxy/worker/wrapper/fakegithub
 ```
 
-The Makefile pipeline pushes to `127.0.0.1:5000` and the kind nodes pull from there on demand. The `scripts/kind-with-registry.sh` script wires the kind nodes' containerd to resolve `127.0.0.1:5000/*` against the host registry. (The literal IPv4 loopback is used, not `localhost`: the registry is published IPv4-only, so a pusher that resolves `localhost` to IPv6 `[::1]` first fails intermittently with "connection refused".)
+The Makefile pipeline pushes to `127.0.0.1:5000` and the kind nodes pull from there on demand. The `scripts/e2e/kind-with-registry.sh` script wires the kind nodes' containerd to resolve `127.0.0.1:5000/*` against the host registry. (The literal IPv4 loopback is used, not `localhost`: the registry is published IPv4-only, so a pusher that resolves `localhost` to IPv6 `[::1]` first fails intermittently with "connection refused".)
 
 ### CNI selection: kindnet (default) vs Calico
 
@@ -40,7 +40,7 @@ kubectl --context kind-<cluster> get pods -A            # kind e2e (see KIND_CLU
 kubectl --context gke_<project>_<zone>_<cluster> get ns # GKE dogfood
 ```
 
-The repo scripts already do this — `scripts/kind-with-registry.sh` threads `kubectl --context "kind-${KIND_CLUSTER}"` through every call, and `scripts/lib/common.sh` (`gke_get_credentials_and_verify`) fails closed if `current-context` isn't the expected GKE context before any write. Match that pattern in ad-hoc commands.
+The repo scripts already do this — `scripts/e2e/kind-with-registry.sh` threads `kubectl --context "kind-${KIND_CLUSTER}"` through every call, and `scripts/lib/common.sh` (`gke_get_credentials_and_verify`) fails closed if `current-context` isn't the expected GKE context before any write. Match that pattern in ad-hoc commands.
 
 The same ambient-state hazard applies to **`gcloud`**: the active project/account/region live in the shared `~/.config/gcloud` active configuration, so a parallel `gcloud config set` repoints your invocations too. Pass `--project`, `--account`, and `--zone`/`--region` explicitly on each command rather than depending on `gcloud config` (or scope a private config with `CLOUDSDK_ACTIVE_CONFIG_NAME` / `gcloud --configuration=<name>`).
 

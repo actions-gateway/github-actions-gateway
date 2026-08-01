@@ -1,6 +1,6 @@
 # Probe test workflow for Milestone 1 live run.
 # Triggered manually via workflow_dispatch; picked up by the self-hosted probe
-# runner registered by scripts/probe-live-run.sh.
+# runner registered by scripts/dev/probe-live-run.sh.
 on:
   workflow_dispatch:
 jobs:

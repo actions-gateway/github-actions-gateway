@@ -43,7 +43,6 @@ jobs:
       pull-requests: read
     outputs:
       e2e: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.e2e || 'true' }}
-      nondocs: ${{ steps.nondocs.outcome == 'success' && steps.nondocs.outputs.nondocs || 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
@@ -70,17 +69,17 @@ jobs:
               - 'vendor/**'
               - 'go.work'
               - 'go.work.sum'
-              # All of scripts/ EXCEPT scripts/dogfood/. dorny/paths-filter ORs
-              # its patterns (filter.ts: patterns.some), so a leading-'!' item is
-              # NOT a subtraction — picomatch reads '!scripts/dogfood/**' as "match
-              # anything outside dogfood", which OR's to true for nearly every file.
-              # Instead enumerate positively: top-level scripts (scripts/*) plus any
-              # non-dogfood subdir (scripts/!(dogfood)/**, an extglob — MatchOptions
-              # leaves extglob enabled). Dogfood/GKE tooling is never run by the kind
-              # e2e job (it provisions the GAG-hosted DinD runner, a separate deploy
-              # target), so a dogfood-only change must not trigger this job.
-              - 'scripts/*'
-              - 'scripts/!(dogfood)/**'
+              # scripts/ is grouped by blast radius (Q571), so the scripts this
+              # tier runs are three prefixes rather than the whole directory:
+              # e2e/ is its cluster bring-up, image bake and chart install checks;
+              # fetch/ is the download/retry/prepull family e2e-reusable.yml calls
+              # directly; lib/ is sourced by both. Every other group — docs/, go/,
+              # dogfood/, … — is invisible here by construction. Keep these three
+              # identical to e2e-calico.yml's, which runs the same reusable
+              # workflow; scripts/ci/check-path-filters.sh asserts that.
+              - 'scripts/e2e/**'
+              - 'scripts/fetch/**'
+              - 'scripts/lib/**'
               # The chart is the sole cluster-install path (Q142) and this tier
               # deploys it via `make deploy`. Absent here, a chart-only change
               # skipped the one job that exercises the chart against a real
@@ -98,47 +97,8 @@ jobs:
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
       # after `Invoking listFiles` with no error anywhere (Q363). Say it plainly.
-      # `scripts/*` above is a deliberate catch-all: most top-level scripts feed
-      # this tier, and enumerating them invites the Q400 false negative the
-      # path-filters gate exists to prevent. The cost is that a docs-only PR
-      # touching one docs-site script — a MkDocs hook's unit test, say — pulls in
-      # a ~13 min e2e run it cannot affect (Q561 shipped two of them).
-      #
-      # So subtract rather than narrow: `nondocs` is true when at least one
-      # changed file is NOT docs-site material, and the e2e job needs both it and
-      # the filter above. A single non-docs file re-enables e2e, so this can only
-      # ever skip a diff that is entirely docs — it cannot create the kind of
-      # false negative narrowing `scripts/*` would.
-      #
-      # `predicate-quantifier: every` is what makes the `!` entries subtract: it
-      # tests each file against ALL patterns instead of any one. It is a
-      # step-level input, so this needs its own paths-filter step — folding these
-      # into the block above would apply `every` to `e2e` too and match nothing.
-      # (Note the live-path assertion in scripts/check-path-filters.sh skips `!`
-      # patterns, since `!` reads as a glob metacharacter — these are not checked
-      # against the tree, so keep them literal and current by hand.)
-      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
-        id: nondocs
-        continue-on-error: true
-        with:
-          predicate-quantifier: 'every'
-          filters: |
-            nondocs:
-              - '**'
-              - '!**.md'
-              - '!docs/**'
-              - '!hooks/**'
-              - '!overrides/**'
-              - '!mkdocs.yml'
-              - '!requirements-docs.txt'
-              - '!scripts/docs-preview.sh'
-              - '!scripts/check-doc-links.sh'
-              - '!scripts/source-links-hook-test.sh'
-              - '!scripts/release-version-hook-test.sh'
-              - '!scripts/check-roadmap.sh'
-              - '!scripts/check-roadmap-test.sh'
       - name: warn when change detection failed
-        if: steps.filter.outcome == 'failure' || steps.nondocs.outcome == 'failure'
+        if: steps.filter.outcome == 'failure'
         run: echo "::warning::paths-filter could not classify the diff; assuming every filter matched so the gated jobs run"
 
   # The per-PR / push-to-main e2e leg: kindnet (kind's default CNI). The
@@ -150,8 +110,8 @@ jobs:
   e2e:
     needs: [changes]
     # Always run on push to main and on dispatch; skip on PRs where no
-    # e2e-relevant files changed, or where the whole diff is docs-site material.
-    if: (needs.changes.outputs.e2e == 'true' && needs.changes.outputs.nondocs == 'true') || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # e2e-relevant files changed.
+    if: needs.changes.outputs.e2e == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/e2e-reusable.yml
     permissions:
       contents: read

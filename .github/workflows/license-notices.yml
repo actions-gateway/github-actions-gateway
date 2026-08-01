@@ -53,7 +53,7 @@ jobs:
             notices:
               - 'vendor/**'
               - 'THIRD-PARTY-NOTICES'
-              - 'scripts/gen-third-party-notices.sh'
+              - 'scripts/release/gen-third-party-notices.sh'
               - 'Makefile'
               - '.github/workflows/license-notices.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun

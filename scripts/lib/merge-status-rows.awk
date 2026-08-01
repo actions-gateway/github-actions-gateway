@@ -1,5 +1,5 @@
 # merge-status-rows.awk — three-way merge of docs/STATUS.md Queue rows by ID
-# set-semantics. Driven by scripts/git-merge-status.sh; see that script's header
+# set-semantics. Driven by scripts/docs/git-merge-status.sh; see that script's header
 # for the why, and docs/development/queue-id-allocation.md for the conflict
 # classes this exists to absorb.
 #
@@ -39,7 +39,7 @@ function side_name(s) {
 }
 
 # row_id LINE — the Queue ID this row belongs to, or "" when the line is not a
-# well-formed row. Mirrors scripts/lint-backlog.sh's parse_id: the ID cell is
+# well-formed row. Mirrors scripts/docs/lint-backlog.sh's parse_id: the ID cell is
 # field 2 of the pipe-split row, and its `<a id="QN"></a>` anchor must match the
 # visible ID, because every cross-reference in the file resolves through the
 # anchor.

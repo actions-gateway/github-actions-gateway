@@ -19,7 +19,7 @@ and not a restructure.
 
 **All findings resolved.** The Layer 3 metrics gap was closed by Q51 (see
 [q51-metrics-reconcile.md](archive/q51-metrics-reconcile.md)). The optional Layer 2
-link-check CI gate was subsequently delivered by Q52 (`scripts/check-doc-links.sh`,
+link-check CI gate was subsequently delivered by Q52 (`scripts/docs/check-doc-links.sh`,
 slug-aware, wired into `make check`).
 
 ---
@@ -103,7 +103,7 @@ Tasks:
    (`§11.A` said `investigation`, heading is `protocol`), and 1 in `security.md` (the
    `worker-egress-proxy.md` "Implementation status" heading carried a volatile
    date+commit — stabilized the heading so the anchor is durable). Now 0 broken anchors.
-3. **Link-check CI gate — delivered (Q52).** A slug-aware markdown link/anchor check (`scripts/check-doc-links.sh`, run by `make doc-links` in `make check`). Originally framed as a lightweight markdown-link-check step in
+3. **Link-check CI gate — delivered (Q52).** A slug-aware markdown link/anchor check (`scripts/docs/check-doc-links.sh`, run by `make doc-links` in `make check`). Originally framed as a lightweight markdown-link-check step in
    `unit-test.yml` would fit the repo's recent CI-gate culture (the lint gate just
    landed). Flagged as optional — decide separately; do not bundle.
 

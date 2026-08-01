@@ -14,7 +14,7 @@ properties the throttle exists to protect.
 ## Baseline measurement (2026-07-26)
 
 Machine: MacBook Pro, Intel i7-1068NG7, **4 physical / 8 logical cores**, 32 GB.
-`scripts/local-throttle.sh` sizes parallelism at `physical - 2 = 2`, so one run
+`scripts/agent/local-throttle.sh` sizes parallelism at `physical - 2 = 2`, so one run
 uses ~2 of 8 hardware threads at `utility` QoS while holding the exclusive lock.
 
 Every `make check` prerequisite, timed individually, in a worktree checked out at
@@ -61,7 +61,7 @@ re-runs the suite; with it, B prints `(cached)` on its first invocation.
 targets): [`cmd/gmc/test/e2e/e2e_suite_test.go`](../../../cmd/gmc/test/e2e/e2e_suite_test.go)
 resolves the v2 CRD chart directory from `runtime.Caller(0)`, which returns a
 trimmed, non-existent path under the flag. It is applied in the unit-tier
-scripts only (`scripts/go-test.sh`, `scripts/coverage.sh`), which the e2e and
+scripts only (`scripts/go/go-test.sh`, `scripts/go/coverage.sh`), which the e2e and
 integration tiers do not use. The release images already build with `-trimpath`
 (`cmd/*/Dockerfile`), so the flag is not new to the repo.
 
@@ -69,8 +69,8 @@ integration tiers do not use. The release images already build with `-trimpath`
 
 ### 1. `-trimpath` in the unit tier ✓
 
-`scripts/go-test.sh` (backing `make test` and `make test-race`) and
-`scripts/coverage.sh` (backing `make cover*`) pass `-trimpath`. A fresh worktree
+`scripts/go/go-test.sh` (backing `make test` and `make test-race`) and
+`scripts/go/coverage.sh` (backing `make cover*`) pass `-trimpath`. A fresh worktree
 at an already-tested commit pays ~0 for the unit suite instead of ~19 min; only
 the packages whose content actually changed re-run.
 
@@ -98,7 +98,7 @@ wants the old strict serialization (`GAG_HEAVY_BUILD_SLOTS=1`).
 ### 3. The cheap gates run in parallel ✓
 
 The 14 non-heavy `check` gates took no lock and ran strictly serially (~50 s).
-They now run through `scripts/run-parallel.sh` (labeled, attributable output —
+They now run through `scripts/ci/run-parallel.sh` (labeled, attributable output —
 GNU make 3.81 ships on macOS and has no `-O` output sync, so `make -j` would
 interleave failures unreadably). `scripts-test`'s 11 assertion scripts are
 parallelized the same way.
@@ -115,7 +115,7 @@ constraint.
 
 ### Step 1 — what each prefix can reach
 
-[`scripts/qos-cluster-probe.sh`](../../../scripts/qos-cluster-probe.sh) saturates one
+[`scripts/agent/qos-cluster-probe.sh`](../../../scripts/agent/qos-cluster-probe.sh) saturates one
 thread per logical CPU under a candidate prefix and samples per-cluster HW active
 residency and clock with `powermetrics`, reporting effective compute as
 `sum(residency × cores × clock)`:
@@ -149,8 +149,8 @@ pure-CPU synthetic load, not as the ceiling for real builds.
 Spin threads generate no I/O, no memory pressure, and no process churn, so the
 sweep cannot show whether a faster prefix keeps the desktop responsive — and
 `-d throttle` gives up CPU priority, which is the protection being traded.
-[`scripts/validate-throttle.sh`](../../../scripts/validate-throttle.sh) runs a real
-gate phase under each candidate while [`scripts/uijitter.c`](../../../scripts/uijitter.c)
+[`scripts/agent/validate-throttle.sh`](../../../scripts/agent/validate-throttle.sh) runs a real
+gate phase under each candidate while [`scripts/agent/uijitter.c`](../../../scripts/agent/uijitter.c)
 samples scheduling latency at `QOS_CLASS_USER_INTERACTIVE`, where the compositor
 runs. Idle floor on this machine: p50 2.9 ms, p99 4.1 ms.
 
@@ -201,19 +201,19 @@ that then exists. Done below.
 ## Change 4: the prefix switches, and the two knobs are re-derived ✓
 
 The macOS prefix is now `nice -n 10 taskpolicy -d throttle`
-([`scripts/local-throttle.sh`](../../../scripts/local-throttle.sh)), on the evidence
+([`scripts/agent/local-throttle.sh`](../../../scripts/agent/local-throttle.sh)), on the evidence
 above. Linux is untouched — `nice -n 19` + `ionice -c 3` already expresses the
 two demotions separately, which is exactly what macOS was missing.
 
 With the ceiling lifted, both parallelism knobs were re-measured against it.
-[`scripts/validate-throttle.sh`](../../../scripts/validate-throttle.sh) grew the two
+[`scripts/agent/validate-throttle.sh`](../../../scripts/agent/validate-throttle.sh) grew the two
 axes needed for that: `GAG_THROTTLE_CANDIDATES` entries take `|jobs=N` (so a
 parallelism sweep interleaves within a trial, and thermal drift hits every level
 equally) and `|holders=M` (M copies run concurrently, as M sessions holding M
 semaphore slots would). A `test` workload was added alongside `lint`, because
 `jobs` is spent in two different places — `golangci-lint -j` in
-`scripts/go-lint.sh`, `go test -p` plus `GOMAXPROCS` in `scripts/go-test.sh` and
-`scripts/coverage.sh` — and a lint-only sweep cannot speak for the other.
+`scripts/go/go-lint.sh`, `go test -p` plus `GOMAXPROCS` in `scripts/go/go-test.sh` and
+`scripts/go/coverage.sh` — and a lint-only sweep cannot speak for the other.
 
 ### `jobs`: not a lever for lint at any level from 8 to 24
 
@@ -399,7 +399,7 @@ before.
 
 ## Change 6: the coverage loop adopts `make test`'s shape ✓ (Q377)
 
-`scripts/coverage.sh` ran its 10 modules one at a time, where `make test` issues
+`scripts/go/coverage.sh` ran its 10 modules one at a time, where `make test` issues
 a single workspace-wide invocation. It now issues the same single invocation —
 one `./<module>/...` pattern per go.work module — and **splits the merged
 profile back per module by import path** to recover the per-module numbers the
@@ -471,7 +471,7 @@ being exact.
 
 The split rule (longest module import path, `/`-bounded, then the same
 `EXCLUDE_RE` filter) is asserted by
-[`scripts/coverage-test.sh`](../../../scripts/coverage-test.sh) under `make
+[`scripts/go/coverage-test.sh`](../../../scripts/go/coverage-test.sh) under `make
 scripts-test`: the per-module invocation could not get attribution wrong by
 construction, and the split can, so the boundary and exclusion cases are pinned
 rather than left to a full coverage run to notice.

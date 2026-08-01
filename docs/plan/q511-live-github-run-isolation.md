@@ -87,7 +87,7 @@ try: it prints what it found and names both remedies. The `kill -9` remedy is
 holding them. The two filters have to agree — a cleanup narrower than the
 preflight would report success and leave the next run still blocked — so the
 runner-name rule is stated in both places with a cross-reference, and
-`scripts/e2e-github-cleanup-test.sh` pins it from the shell side against the
+`scripts/e2e/e2e-github-cleanup-test.sh` pins it from the shell side against the
 actual name observed on 2026-07-29.
 
 ## Acceptance criteria
@@ -113,6 +113,6 @@ Not demonstrated: the destructive half. The fixture repo held zero runners and n
 in-flight run when this was written, so nothing exercised a real DELETE, a real
 cancel, or the 422 wait that follows one. The runner filter is asserted at the
 unit level against the name observed on 2026-07-29
-(`scripts/e2e-github-cleanup-test.sh`), and the preflight's failure path has not
+(`scripts/e2e/e2e-github-cleanup-test.sh`), and the preflight's failure path has not
 been observed against real GitHub state at all. The next `kill -9` is the
 opportunity — take it rather than assuming the second acceptance criterion above.

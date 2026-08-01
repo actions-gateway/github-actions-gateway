@@ -54,7 +54,7 @@ jobs:
     env:
       # The CNI to build the kind cluster with, threaded to `make e2e-cluster`
       # as a make argument below. Trusted enum (kindnet|calico) validated by
-      # scripts/kind-with-registry.sh; surfaced as an env var rather than
+      # scripts/e2e/kind-with-registry.sh; surfaced as an env var rather than
       # interpolated into a run: script directly (no script-injection surface).
       KIND_CNI: ${{ inputs.kind_cni }}
       # Calico release for the egress-enforcing profile (KIND_CNI=calico).
@@ -98,7 +98,7 @@ jobs:
       # registry is published IPv4-only, and a buildx/docker pusher that resolves
       # "localhost" to IPv6 [::1] first fails intermittently with "connection
       # refused". Must match docker-bake.hcl's IMAGE_REGISTRY default and the
-      # containerd certs.d host dir in scripts/kind-with-registry.sh.
+      # containerd certs.d host dir in scripts/e2e/kind-with-registry.sh.
       GMC_IMG: 127.0.0.1:5000/gmc:e2e-${{ github.sha }}
       AGC_IMG: 127.0.0.1:5000/agc:e2e-${{ github.sha }}
       PROXY_IMG: 127.0.0.1:5000/proxy:e2e-${{ github.sha }}
@@ -133,7 +133,7 @@ jobs:
       - name: Start freeing runner disk space
         # Drops the preinstalled toolchains this job never touches (~15–20 GB)
         # so the bake + kind-load peak cannot hit ENOSPC (Q292 — see
-        # scripts/free-runner-disk.sh for the full disk-pressure story).
+        # scripts/e2e/free-runner-disk.sh for the full disk-pressure story).
         #
         # Detached, not serial: nothing between here and the image build needs
         # the headroom, so the deletions overlap with the toolchain setup and
@@ -152,7 +152,7 @@ jobs:
           rm -f "${DONE_SENTINEL}"
           # setsid detaches from this step's process group so the runner tearing
           # the step down cannot take the cleanup with it.
-          setsid scripts/free-runner-disk.sh >/tmp/free-runner-disk.log 2>&1 &
+          setsid scripts/e2e/free-runner-disk.sh >/tmp/free-runner-disk.log 2>&1 &
           echo "started disk cleanup in the background (pid $!)"
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -172,7 +172,7 @@ jobs:
           # (observed: curl 22 / HTTP 504, HTTP 403) in-step instead of failing
           # the run, and gates on KIND_BINARY_SHA256 before anything lands at
           # the output path.
-          scripts/download-verified.sh \
+          scripts/fetch/download-verified.sh \
             "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64" \
             "${KIND_BINARY_SHA256}" /tmp/kind
           sudo install -m 0755 /tmp/kind /usr/local/bin/kind
@@ -191,7 +191,7 @@ jobs:
         # carry the tar cache the security-scan trivy job gained in Q460: that
         # cache exists to collapse six matrix shards pulling at once, and this is
         # a single pull. The exponential, jittered retry schedule covers it.
-        run: scripts/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
+        run: scripts/fetch/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -263,7 +263,7 @@ jobs:
           else
             echo "==> pulling ${E2E_CURL_UPSTREAM}"
             PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
-              scripts/pull-image-with-retry.sh "${E2E_CURL_UPSTREAM}"
+              scripts/fetch/pull-image-with-retry.sh "${E2E_CURL_UPSTREAM}"
             mkdir -p /tmp/curl-image
             docker save -o "$tar" "${E2E_CURL_UPSTREAM}"
           fi
@@ -291,7 +291,7 @@ jobs:
           else
             echo "==> pulling ${E2E_VAULT_UPSTREAM}"
             PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
-              scripts/pull-image-with-retry.sh "${E2E_VAULT_UPSTREAM}"
+              scripts/fetch/pull-image-with-retry.sh "${E2E_VAULT_UPSTREAM}"
             mkdir -p /tmp/vault-image
             docker save -o "$tar" "${E2E_VAULT_UPSTREAM}"
           fi
@@ -314,13 +314,13 @@ jobs:
         # Those pulls happen *before* the local registry is wired into the nodes,
         # so they cannot be mirrored like the curl image. Instead pre-pull the
         # exact image refs the pinned manifest references into the runner's Docker
-        # daemon here (cached + retried); scripts/kind-with-registry.sh then
+        # daemon here (cached + retried); scripts/e2e/kind-with-registry.sh then
         # kind-loads whatever is present onto the nodes, so the rollout never
         # touches quay.io. The image list is extracted from the same manifest the
         # script applies, so the two always agree.
         if: inputs.kind_cni == 'calico'
         run: |
-          scripts/prepull-manifest-images.sh calico \
+          scripts/fetch/prepull-manifest-images.sh calico \
             "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml" \
             /tmp/calico-images
 
@@ -344,7 +344,7 @@ jobs:
         # touches quay.io. The image list is persisted alongside the tar so the
         # load step needs neither a manifest fetch nor a re-extract.
         run: |
-          scripts/prepull-manifest-images.sh cert-manager \
+          scripts/fetch/prepull-manifest-images.sh cert-manager \
             "https://github.com/cert-manager/cert-manager/releases/download/${CERTMANAGER_VERSION}/cert-manager.yaml" \
             /tmp/cert-manager-images
 
@@ -371,7 +371,7 @@ jobs:
         # neither a manifest fetch nor a re-extract. Keep METRICSSERVER_VERSION in
         # sync with metricsServerVersion in cmd/gmc/test/e2e/e2e_suite_test.go.
         run: |
-          scripts/prepull-manifest-images.sh metrics-server \
+          scripts/fetch/prepull-manifest-images.sh metrics-server \
             "https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICSSERVER_VERSION}/components.yaml" \
             /tmp/metrics-server-images
 
@@ -402,7 +402,7 @@ jobs:
           echo "::endgroup::"
           if [[ ! -f "${DONE_SENTINEL}" ]]; then
             echo "::warning::background disk cleanup did not complete; running it synchronously"
-            scripts/free-runner-disk.sh
+            scripts/e2e/free-runner-disk.sh
           fi
           echo "==> disk available to the build"
           df -h /
@@ -423,7 +423,7 @@ jobs:
           # six concurrent pushes — a recurring e2e-calico bring-up flake, Q256)
           # is absorbed in-step instead of failing the run. Retries re-push from
           # the buildkit layer cache, so they are cheap.
-          scripts/bake-with-retry.sh --file docker-bake.hcl >"$bake_log" 2>&1 &
+          scripts/e2e/bake-with-retry.sh --file docker-bake.hcl >"$bake_log" 2>&1 &
           bake_pid=$!
           # If cluster bring-up fails (set -e aborts the step), don't leave the
           # build orphaned.
@@ -438,7 +438,7 @@ jobs:
           # e2e-cluster target creates the cluster with disableDefaultCNI, applies
           # the pinned Calico manifest, and blocks on calico-node rollout + all
           # nodes Ready before returning, so the tests below never race CNI
-          # startup (scripts/kind-with-registry.sh install_calico). When the
+          # startup (scripts/e2e/kind-with-registry.sh install_calico). When the
           # Calico images were pre-pulled into the runner's Docker daemon (the
           # step above, calico path only), install_calico kind-loads them onto the
           # nodes so the rollout never touches quay.io. CALICO_VERSION is passed

@@ -44,7 +44,7 @@ check would fire on a perfectly good install.
 # Its CRD ships in the chart-root crds/ dir rather than templates/, because Helm
 # resolves REST mappings for the whole manifest before applying any of it and would
 # otherwise fail this very object with "no matches for kind". See
-# scripts/sync-chart-crds.sh.
+# scripts/manifest/sync-chart-crds.sh.
 #
 # Editing this object in place is supported and takes effect without a restart;
 # `helm upgrade` reasserts .Values.allowedPriorityClasses over it, so persist

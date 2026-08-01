@@ -230,13 +230,13 @@ Items 1–4 had all shipped in `c4660ea`, so the revival re-measured where CI un
 
 | Job | Wall | Notes |
 |---|---|---|
-| lint | 233 s | **critical path** — gofmt + per-module `golangci-lint` loop ([go-lint.sh](../../../scripts/go-lint.sh)) |
-| unit-test (`-race`) | 189 s | was per-module-serial `go test` ([go-test.sh](../../../scripts/go-test.sh)) |
-| coverage | 139 s | per-module `-cover` loop ([coverage.sh](../../../scripts/coverage.sh)) — per-module profiles are load-bearing for the ratchet's per-module floors |
+| lint | 233 s | **critical path** — gofmt + per-module `golangci-lint` loop ([go-lint.sh](../../../scripts/go/go-lint.sh)) |
+| unit-test (`-race`) | 189 s | was per-module-serial `go test` ([go-test.sh](../../../scripts/go/go-test.sh)) |
+| coverage | 139 s | per-module `-cover` loop ([coverage.sh](../../../scripts/go/coverage.sh)) — per-module profiles are load-bearing for the ratchet's per-module floors |
 
 Inside the 189 s unit-test job, **compilation dominates, not test execution**: the sequential per-module loop spent ~39 s on `./api`, ~93 s on `./cmd/agc`, and ~35 s on `./cmd/gmc`, and within `cmd/agc` only ~20 s was actual test packages running — the rest was the `-race` compile of the controller-runtime/k8s dependency graph, serialized behind the smaller modules.
 
-**Change shipped by the Q17 revival PR:** `scripts/go-test.sh` now issues **one** `go test` invocation over every `./<module>/...` pattern (a repo-root `./...` still does not work in a workspace, but explicit multi-module patterns do). Go then schedules the whole workspace as a single parallel build graph — small modules overlap the big `cmd/agc`/`cmd/gmc` compiles instead of queueing behind them. Unit-only selection is preserved because the integration (envtest) and e2e packages are build-tagged. Applies to both `make test` and the CI `-race` gate (`make test-race`).
+**Change shipped by the Q17 revival PR:** `scripts/go/go-test.sh` now issues **one** `go test` invocation over every `./<module>/...` pattern (a repo-root `./...` still does not work in a workspace, but explicit multi-module patterns do). Go then schedules the whole workspace as a single parallel build graph — small modules overlap the big `cmd/agc`/`cmd/gmc` compiles instead of queueing behind them. Unit-only selection is preserved because the integration (envtest) and e2e packages are build-tagged. Applies to both `make test` and the CI `-race` gate (`make test-race`).
 
 **Measured outcome (first PR run):** the `-race` unit gate dropped 189s → 163s (−14%). Smaller than the compile-serialization arithmetic suggests because the 4-vCPU CI runner was already near CPU-bound during the `cmd/agc`/`cmd/gmc` compiles — the win is the removal of the inter-module barriers (small-module idle time), not extra parallelism during the big compiles.
 

@@ -11,7 +11,7 @@
 // would never close on any Karpenter cluster, and no test against recorded
 // samples could notice, because the samples carry the old attribution forever.
 //
-// scripts/karpenter-cluster.sh stands the cluster up (a real Karpenter built
+// scripts/e2e/karpenter-cluster.sh stands the cluster up (a real Karpenter built
 // from the pinned upstream tag, provisioning fake kwok nodes); `make
 // test-karpenter` runs this. Same posture as the CA arm: not in `make check`
 // or per-PR CI — it runs on the PRs that move the pins.
@@ -34,7 +34,7 @@ const (
 	// pool creates, so a test pod selecting on it is pinned to that pool the same
 	// way the CA tests pin to a kwok node group.
 	nodePoolLabel = "karpenter.sh/nodepool"
-	// karpenterPool is the one NodePool scripts/karpenter-cluster.sh installs
+	// karpenterPool is the one NodePool scripts/e2e/karpenter-cluster.sh installs
 	// (test/karpenter/nodepool.yaml): room to grow, so a pod selecting it is
 	// nominated and rescued.
 	karpenterPool = "standard"

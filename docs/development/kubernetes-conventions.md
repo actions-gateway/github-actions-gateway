@@ -406,11 +406,11 @@ outcomes, both bad:
 The only recovery is restarting kube-apiserver, which managed control planes
 (GKE/EKS/AKS) do not offer.
 
-Measured, not inferred: [`scripts/vap-param-informer-check.sh`](../../scripts/vap-param-informer-check.sh)
+Measured, not inferred: [`scripts/e2e/vap-param-informer-check.sh`](../../scripts/e2e/vap-param-informer-check.sh)
 runs the identical empty-binding-set transition against a ConfigMap `paramKind`
 and a CRD one on a single apiserver — the ConfigMap arm breaks, the CRD arm stays
 fresh. Upstream: [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887)
-(unfixed; do not wait for it). `scripts/chart-reinstall-check.sh` gates the
+(unfixed; do not wait for it). `scripts/e2e/chart-reinstall-check.sh` gates the
 product-level cycle in CI.
 
 **CRD schema/CEL validation runs before a policy sees the request.** An update
@@ -428,7 +428,7 @@ exercised the policy).
 - Keep `parameterNotFoundAction: Deny`. It is the fail-closed default and the
   reason a broken `paramKind` is so loud; the fix is the CRD, not weakening this.
 - Do **not** try to fix it by retaining the binding across uninstall
-  (`helm.sh/resource-policy: keep`). `scripts/manifest-validate.sh` forbids that
+  (`helm.sh/resource-policy: keep`). `scripts/manifest/manifest-validate.sh` forbids that
   on a VAPB, because a retained binding keeps enforcing after the release is gone
   and makes `admissionPolicy.enabled=false` a silent no-op.
 - A chart that renders both a CRD and a CR of it must ship that CRD in the

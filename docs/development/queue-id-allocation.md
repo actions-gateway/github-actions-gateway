@@ -6,7 +6,7 @@ Backlog IDs are allocated by claiming a git ref on the remote, not by a counter 
 make queue-id
 ```
 
-That prints one ID (`Q423`) and claims it. `make queue-id N=3` claims three; `make queue-id PEEK=1` shows what the next one would be without claiming it. The script is [`scripts/alloc-queue-id.sh`](../../scripts/alloc-queue-id.sh).
+That prints one ID (`Q423`) and claims it. `make queue-id N=3` claims three; `make queue-id PEEK=1` shows what the next one would be without claiming it. The script is [`scripts/docs/alloc-queue-id.sh`](../../scripts/docs/alloc-queue-id.sh).
 
 Claim an ID when you file the row, use it, and move on. There is nothing to release and nothing to clean up.
 
@@ -54,7 +54,7 @@ Every row in the table above is a *line-position* verdict. The [merge driver](ma
 
 **Move the backlog to GitHub issues.** Rejected. Issues would give free IDs, no backlog conflicts, and a native in-flight signal, but they cannot express *position is priority*: a single total ordering, readable in one file read and changeable in one reviewable diff. Projects v2 has a position field, but it lives outside the repo and cannot be diffed. Issues would also cost the lintable write path that keeps Notes under the cap and pushes rationale into a doc, and the atomicity of deleting the row in the same diff as the work. Revisit if outside contributors need to see and claim work; that is the one thing issues clearly win.
 
-**A custom merge driver for `STATUS.md`.** Shipped — [`scripts/git-merge-status.sh`](../../scripts/git-merge-status.sh), documented in [maintaining-backlog.md](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position). It resolves the Queue table by ID set-semantics during merge and rebase, which is where the pain is, and keeps the whole existing tooling stack. It needs a one-time `git config` per clone (`make merge-driver`; git will not let `.gitattributes` configure a driver, since that would be remote code execution on clone) and degrades to ordinary conflict markers both when unconfigured and whenever the resolution is not certain. It does not help GitHub's server-side squash-merge.
+**A custom merge driver for `STATUS.md`.** Shipped — [`scripts/docs/git-merge-status.sh`](../../scripts/docs/git-merge-status.sh), documented in [maintaining-backlog.md](maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position). It resolves the Queue table by ID set-semantics during merge and rebase, which is where the pain is, and keeps the whole existing tooling stack. It needs a one-time `git config` per clone (`make merge-driver`; git will not let `.gitattributes` configure a driver, since that would be remote code execution on clone) and degrades to ordinary conflict markers both when unconfigured and whenever the resolution is not certain. It does not help GitHub's server-side squash-merge.
 
 **One file per item** (`docs/queue/Q423.md`). The permanent answer to row conflicts, since adds and removes become file creates and deletes, which cannot conflict. Held in reserve: it rewrites `lint-backlog.sh`, this process, the shared backlog skill, and costs the single-file read of the prioritized queue.
 

@@ -249,7 +249,7 @@ against `go.work` rather than maintaining them by hand — was Q429, deliberatel
 left out of the gate because it is new tooling rather than a correctness fix.
 
 Q429 closed 2026-07-26 anyway, inside the release: `make path-filters-check`
-(`scripts/check-path-filters.sh`, also CI's `path-filters` job) now fails when a
+(`scripts/ci/check-path-filters.sh`, also CI's `path-filters` job) now fails when a
 `go.work` module is missing from a filter whose jobs exercise the whole
 workspace, when a `filters:` block declares a filter the gate has not been told
 to treat as workspace-covering or narrow-by-design, or when a pattern names a
@@ -268,7 +268,7 @@ release that motivated it: Q476 renamed `capacityGate.mode: On` to `Observe`
 days before this tag would have published it, caught by an unrelated
 conversation rather than by any step.
 
-**Reviewed:** the surface `scripts/api-surface-since.sh v1.2.0` reports — the
+**Reviewed:** the surface `scripts/release/api-surface-since.sh v1.2.0` reports — the
 `RunnerSet` additions (`spec.sizing`, `spec.capacityGate`,
 `spec.maxWorkerLifetime`, `status.sizingRecommendation`,
 `status.sizingProfileState`), the `ActionsGateway` additions

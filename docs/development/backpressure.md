@@ -24,7 +24,7 @@ could have told you.
 | **`make check`** | `gofmt` + `golangci-lint` + `STATUS.md` lint + plan-index/no-plan-refs drift + single-Go-version + v2 API package sync + `shellcheck` + chart CRD/RBAC/webhook drift + `scripts-test` + the [`claude-usage/` Python suite](testing.md#the-claude-usage-snapshot-gate) + doc link/anchor check + unit tests (with the coverage ratchet), all modules | manual, before requesting review | minutes cold / seconds warm | [`Makefile`](../../Makefile) `check` target |
 | **CI** | the above **plus** integration (envtest), end-to-end (e2e, `kind`), `govulncheck`, and `trivy` image scans | on every pull request and push to `main` | full | [`.github/workflows/`](../../.github/workflows/) |
 
-Installation: `make hooks` (or [`scripts/setup.sh`](../../scripts/setup.sh), which
+Installation: `make hooks` (or [`scripts/dev/setup.sh`](../../scripts/dev/setup.sh), which
 runs it for you) points `core.hooksPath` at the in-repo `.githooks/` directory.
 The path is relative, so it resolves correctly in the main checkout and every
 linked worktree. Bypass the hook for a single commit with `git commit --no-verify`.
@@ -39,7 +39,7 @@ linked worktree. Bypass the hook for a single commit with `git commit --no-verif
 | Integration tests | envtest, `integration` build tag, `cmd/agc` + `cmd/gmc` `internal/controller/integration/` | `make test-integration`; [`integration-test.yml`](../../.github/workflows/integration-test.yml) |
 | End-to-end tests | `kind` cluster, `e2e` build tag, cluster-only/fake-GitHub/live-GitHub (see [07-test-plan.md](../design/07-test-plan.md) §7.3) | `make e2e`; [`e2e-test.yml`](../../.github/workflows/e2e-test.yml) |
 | Linting / formatting | `gofmt -s`, `golangci-lint` (govet, staticcheck, ineffassign, unused) | `.githooks/pre-commit` (gofmt); `make check`; `unit-test.yml` |
-| Structural rules | `scripts/lint-backlog.sh` — `docs/STATUS.md` format: no `**Next ID:**` counter (IDs come from `make queue-id`), unique IDs + anchors, 🔲/🚫-only states, Notes/trigger caps with the doc-link rule | `.githooks/pre-commit` (also enforces isolated STATUS.md commits); `make check`; [`status-lint.yml`](../../.github/workflows/status-lint.yml) |
+| Structural rules | `scripts/docs/lint-backlog.sh` — `docs/STATUS.md` format: no `**Next ID:**` counter (IDs come from `make queue-id`), unique IDs + anchors, 🔲/🚫-only states, Notes/trigger caps with the doc-link rule | `.githooks/pre-commit` (also enforces isolated STATUS.md commits); `make check`; [`status-lint.yml`](../../.github/workflows/status-lint.yml) |
 | Vulnerability scan | `govulncheck` (symbol-reachable CVEs, per module) | `make vulncheck`; [`security-scan.yml`](../../.github/workflows/security-scan.yml) |
 | Image scan | `trivy` (OS + library CVEs, per image) | `make trivy-scan`; `security-scan.yml` |
 
@@ -69,7 +69,7 @@ Type checking (Go compiler + `go vet`), three test tiers (unit/integration/e2e),
 formatting and linting (`gofmt -s`, `golangci-lint` with govet/staticcheck/
 ineffassign/unused per [`.golangci.yml`](../../.golangci.yml)), supply-chain
 scanning (`govulncheck`, `trivy`), and custom structural eval scripts
-(`scripts/lint-backlog.sh`, `scripts/queue-unblock.sh`). Browser/screenshot
+(`scripts/docs/lint-backlog.sh`, `scripts/docs/queue-unblock.sh`). Browser/screenshot
 sensors are correctly absent — there is no user interface.
 
 ### Layer by speed — A
@@ -98,14 +98,14 @@ the one command rather than a single consolidated checklist.
 ### Self-reinforcing (correct twice → automate) — A
 The article's core principle is visibly practiced. [`.golangci.yml`](../../.golangci.yml)
 states its scope is to "catch regressions of the bugs and idiom violations
-tracked in Queue items 38–41." `scripts/lint-backlog.sh` exists solely because
+tracked in Queue items 38–41." `scripts/docs/lint-backlog.sh` exists solely because
 the `docs/STATUS.md` format (e.g. the 250-char Notes cap) kept getting violated.
 The workspace-guard PreToolUse hook is real-time backpressure on file
 operations, and branch-guard is the same on git operations — prompting
 before commits, pushes, or destructive commands on a protected branch. (These
 two guards are harness/`CLAUDE.md`-level, not repo-tracked hook scripts; the
-repo does track two PreToolUse hooks of its own, `scripts/claude-go-throttle-hook.sh`
-and `scripts/claude-no-subagent-workers-hook.sh`.) Each is a repeated correction
+repo does track two PreToolUse hooks of its own, `scripts/agent/claude-go-throttle-hook.sh`
+and `scripts/agent/claude-no-subagent-workers-hook.sh`.) Each is a repeated correction
 turned into an automated gate.
 
 ### Compress success, expand failure — A−
@@ -120,11 +120,11 @@ helps).
 Backpressure now fires at commit latency, not only CI latency: a tracked,
 auto-installable, sub-second pre-commit hook plus the `make check` aggregate
 gate. The only deduction is that git cannot set `core.hooksPath` automatically
-on clone, so installation is a one-time `make hooks` / `scripts/setup.sh` step
+on clone, so installation is a one-time `make hooks` / `scripts/dev/setup.sh` step
 rather than truly automatic.
 
 ## Remaining nits
 
-- **Hook install is one-time, not automatic on clone** — a git limitation; `make hooks` / `scripts/setup.sh` is the workaround.
+- **Hook install is one-time, not automatic on clone** — a git limitation; `make hooks` / `scripts/dev/setup.sh` is the workaround.
 - **`integration-test.yml` hard-codes `-v`** — noisy on green, but CI-only and useful for opaque envtest failures (deliberate).
 - **The pre-commit hook covers `gofmt` + `STATUS.md` only, not `golangci-lint`** — deliberate, to stay sub-second; `golangci-lint` runs in `make check` and CI.

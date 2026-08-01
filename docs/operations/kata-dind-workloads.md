@@ -104,7 +104,7 @@ restricted by machine family:
 | Requirement | Detail |
 |---|---|
 | Cluster mode | **GKE Standard.** Autopilot does **not** allow nested virtualization. |
-| Machine family | **N2, N2D, C2, C2D** support nested virtualization and are the families the shipped [`scripts/kata-node-pool.sh`](../../scripts/kata-node-pool.sh) accepts. **N1** also supports nested virtualization on GKE, but the provisioning script rejects it — provision an N1 pool manually if you need it. **E2 does not.** The GPU families (**A2, A3, G2**) do not either — GPU + Kata on cloud needs bare metal or dedicated instances. |
+| Machine family | **N2, N2D, C2, C2D** support nested virtualization and are the families the shipped [`scripts/dev/kata-node-pool.sh`](../../scripts/dev/kata-node-pool.sh) accepts. **N1** also supports nested virtualization on GKE, but the provisioning script rejects it — provision an N1 pool manually if you need it. **E2 does not.** The GPU families (**A2, A3, G2**) do not either — GPU + Kata on cloud needs bare metal or dedicated instances. |
 | Node image | **`UBUNTU_CONTAINERD`**, or `COS_CONTAINERD` at `1.28.4-gke.1083000`+. |
 | Flag | `--enable-nested-virtualization` (GA). Accepted by *both* `gcloud container node-pools create` and `gcloud container clusters create` — prefer the cluster form so a capacity stockout fails fast instead of wedging the cluster. |
 | Workload Identity | `--workload-pool` + `--workload-metadata=GKE_METADATA`. **Required**, not optional — Kata does not block the metadata server. See [the security rationale](#the-security-rationale). |
@@ -113,7 +113,7 @@ restricted by machine family:
 | Taints | If the pool is tainted, give the kata-deploy chart a matching `tolerations:` value (the chart ships none) — otherwise the installer can never reach the only nodes it targets (found live under Q286). |
 
 The repo ships a parameterized provisioning script —
-[`scripts/kata-node-pool.sh`](../../scripts/kata-node-pool.sh) — that wraps
+[`scripts/dev/kata-node-pool.sh`](../../scripts/dev/kata-node-pool.sh) — that wraps
 the `gcloud container node-pools create` call with these flags. Preview it
 with `DRY_RUN=1` before spending cloud time; see
 [runbook step 1](kata-ci-spike-runbook.md#step-1--create-a-nested-virt-cluster).

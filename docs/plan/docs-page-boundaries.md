@@ -26,7 +26,7 @@ Three measurements taken 2026-08-01, before the change:
   existed — `why-gag.md`'s table links every one of them — so the cause was not a
   documentation gap. A bullet with nowhere to point keeps explaining itself
   inline until it is a paragraph.
-- **The staleness had nowhere else to go.** `scripts/check-roadmap.sh` already
+- **The staleness had nowhere else to go.** `scripts/docs/check-roadmap.sh` already
   ties both forward-looking sections to `STATUS.md` through `<!-- q:QN -->`
   annotations, and all 15 markers resolved correctly. Its header records why
   "Available now" is exempt: shipped capability has no Queue row left to point
@@ -69,7 +69,7 @@ structural: **every capability line in `features.md` carries a link.** One line,
 one capability, one link to the doc that explains it. A capability with no doc to
 link is a documentation gap to file, not a longer bullet.
 
-`scripts/check-roadmap.sh` enforces it (rule 5), alongside the four rules that
+`scripts/docs/check-roadmap.sh` enforces it (rule 5), alongside the four rules that
 already gate the roadmap's `<!-- q: -->` annotations. That makes the failure mode
 that produced the wall of text mechanically impossible rather than a matter of
 review attention.
@@ -116,7 +116,7 @@ Deliberately a separate change — it is lint and anchor work, not prose:
 
 - `check-roadmap.sh` reads both `## Queue` and `## Deferred` out of one file to
   classify a bullet; it needs the second path.
-- `scripts/lint-backlog.sh` rules span both tables (rule 8 moves a `flake` row
+- `scripts/docs/lint-backlog.sh` rules span both tables (rule 8 moves a `flake` row
   from Queue to Flake watch).
 - `#QNNN` deep links from other docs resolve against `STATUS.md` today and would
   need retargeting.

@@ -40,7 +40,7 @@ KIND_CNI       ?= kindnet
 CALICO_VERSION ?= v3.31.5
 GIT_SHA       := $(shell git rev-parse --short HEAD)
 
-# Local OCI registry that kind nodes pull from. scripts/kind-with-registry.sh
+# Local OCI registry that kind nodes pull from. scripts/e2e/kind-with-registry.sh
 # runs a registry:2 container on REGISTRY_PORT and wires each kind node's
 # containerd to resolve IMAGE_REGISTRY/* against it. All four e2e image tags
 # are SHA-suffixed so kubelet's IfNotPresent cache cannot serve a stale image
@@ -49,7 +49,7 @@ REGISTRY_NAME  ?= kind-registry
 REGISTRY_PORT  ?= 5000
 # 127.0.0.1, not localhost: the registry is published IPv4-only, so a pusher
 # that resolves localhost to IPv6 [::1] first fails intermittently. This string
-# is also the containerd mirror key kind nodes resolve (scripts/kind-with-registry.sh).
+# is also the containerd mirror key kind nodes resolve (scripts/e2e/kind-with-registry.sh).
 IMAGE_REGISTRY ?= 127.0.0.1:$(REGISTRY_PORT)
 GMC_IMG        ?= $(IMAGE_REGISTRY)/gmc:e2e-$(GIT_SHA)
 AGC_IMG        ?= $(IMAGE_REGISTRY)/agc:e2e-$(GIT_SHA)
@@ -94,7 +94,7 @@ all: generate build test ## Generate, build, and test all modules
 # The cheap gates below take no heavy-build slot and are independent of each
 # other, so they run concurrently (~50s serial -> ~15s) and report first: a
 # STATUS.md format slip should not wait out the unit suite to tell you. They go
-# through scripts/run-parallel.sh rather than `make -j` because macOS ships GNU
+# through scripts/ci/run-parallel.sh rather than `make -j` because macOS ships GNU
 # make 3.81, which has no `-O` output sync — `-j` would interleave two failing
 # gates' output unreadably, while run-parallel.sh labels every line with its
 # gate. The heavy phases (build-tags-check, lint, cover-check) stay sequential
@@ -109,14 +109,14 @@ CHECK_FAST_GATES := lint-backlog roadmap-check plan-index-check no-plan-refs-che
 
 .PHONY: check
 check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + controller-gen manifest/DeepCopy drift + scripts-test + claude-usage tests + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
-	scripts/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")
+	scripts/ci/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")
 	$(MAKE) build-tags-check
 	$(MAKE) lint
 	$(MAKE) cover-check
 	@# Advisory, not a gate: the fast check deliberately omits the dependency-drift
 	@# gates (vendor-check/tidy-check/license-notices run in CI). This reminds you to
 	@# run `make vendor-sync` when a change touches dep files. Never fails the build.
-	@scripts/check-dep-advisory.sh
+	@scripts/ci/check-dep-advisory.sh
 
 # The complete set of gates a docs/STATUS.md-only diff can fail, so a backlog
 # edit can be verified in seconds instead of waiting out the full `make check`:
@@ -136,16 +136,16 @@ STATUS_GATES := lint-backlog roadmap-check plan-index-check \
 
 .PHONY: status-gates
 status-gates: ## Every gate a docs/STATUS.md-only change can fail — the seconds-long verify for a backlog edit
-	scripts/run-parallel.sh $(foreach gate,$(STATUS_GATES),"$(gate):$(MAKE) $(gate)")
+	scripts/ci/run-parallel.sh $(foreach gate,$(STATUS_GATES),"$(gate):$(MAKE) $(gate)")
 
-# Markdown link + anchor integrity gate (Q52). scripts/check-doc-links.sh walks
+# Markdown link + anchor integrity gate (Q52). scripts/docs/check-doc-links.sh walks
 # every tracked, non-vendored Markdown file and fails on dead relative file
 # links or `#anchors` that match no GitHub heading slug / explicit <a id>. The
 # dedicated doc-links.yml CI workflow runs this same target, so local and CI
 # verdicts match.
 .PHONY: doc-links
 doc-links: ## Fail on broken relative links / heading anchors in tracked Markdown
-	scripts/check-doc-links.sh
+	scripts/docs/check-doc-links.sh
 
 # Enforce the "all go modules use the same Go version" rule (Q68). The two
 # go.work.gen files feed `make manifests` via GOWORK= and have silently drifted
@@ -153,18 +153,18 @@ doc-links: ## Fail on broken relative links / heading anchors in tracked Markdow
 # `go` directive matches across go.work, every go.mod, and every go.work.gen.
 .PHONY: go-version-check
 go-version-check: ## Assert a single `go` directive across go.work / go.mod / go.work.gen
-	scripts/check-go-version.sh
+	scripts/go/check-go-version.sh
 
 # Forbid the scaffolded per-file Apache license header in first-party Go source
 # (Q331). The root LICENSE is canonical; the codegen boilerplate.go.txt sources
 # are empty so regeneration adds none. Vendored trees keep their headers.
 .PHONY: license-header-check
 license-header-check: ## Fail if any first-party .go file carries a per-file Apache license header
-	scripts/check-no-license-headers.sh
+	scripts/go/check-no-license-headers.sh
 
 .PHONY: conflict-markers-check
 conflict-markers-check: ## Fail if any tracked, non-vendored file contains a leftover merge-conflict marker line (Q379)
-	scripts/check-conflict-markers.sh
+	scripts/ci/check-conflict-markers.sh
 
 # Assert every file api/v2alpha1 and api/v2beta1 share stays byte-identical except
 # the differences an API version is entitled to — its package clause and the
@@ -175,7 +175,7 @@ conflict-markers-check: ## Fail if any tracked, non-vendored file contains a lef
 # including files added after this gate landed.
 .PHONY: v2-api-sync-check
 v2-api-sync-check: ## Fail if a shared api/v2alpha1 + api/v2beta1 file diverges (beyond the package/storageversion lines)
-	scripts/check-v2-api-sync.sh
+	scripts/go/check-v2-api-sync.sh
 
 # Compile and vet the build-tagged Go files no other fast gate builds (Q404).
 # `make lint` and `make test` both use the DEFAULT tag set, so the integration
@@ -185,7 +185,7 @@ v2-api-sync-check: ## Fail if a shared api/v2alpha1 + api/v2beta1 file diverges 
 # execution) and fails if a NEW tag appears that its list does not cover.
 .PHONY: build-tags-check
 build-tags-check: ## Fail if a build-tagged (integration/e2e/load) Go file does not compile or vet clean
-	scripts/go-vet-tags.sh
+	scripts/go/go-vet-tags.sh
 
 # Reconcile CI's hand-maintained `dorny/paths-filter` lists with `go.work` and
 # with the paths they name (Q429). A filter that omits a directory makes its gate
@@ -196,7 +196,7 @@ build-tags-check: ## Fail if a build-tagged (integration/e2e/load) Go file does 
 # narrow-by-design, or if a pattern points at a path that no longer exists.
 .PHONY: path-filters-check
 path-filters-check: ## Fail if a CI path filter misses a go.work module or names a path that no longer exists
-	scripts/check-path-filters.sh
+	scripts/ci/check-path-filters.sh
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — the tags-only release signing-identity regexp (Q124), the
@@ -227,23 +227,25 @@ path-filters-check: ## Fail if a CI path filter misses a go.work module or names
 # The suites are independent and each isolates its own scratch state (mktemp -d,
 # or a $$-suffixed dir under tmp/), so they run concurrently — labeled output via
 # run-parallel.sh keeps a failure attributable to its suite.
-SCRIPTS_TESTS := verify-release-test download-verified-test validate-cluster-test \
-                 lint-backlog-test backlog-metrics-test check-dep-advisory-test \
-                 claude-go-throttle-hook-test \
+SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
+                 agent/qos-cluster-probe-test agent/validate-throttle-test \
+                 ci/check-conflict-markers-test ci/check-dep-advisory-test \
+                 ci/check-path-filters-test ci/dependabot-rebase-stale-test \
+                 ci/shellcheck-scripts-test \
+                 docs/backlog-metrics-test docs/check-roadmap-test \
+                 docs/git-merge-status-test docs/lint-backlog-test \
+                 docs/release-version-hook-test docs/source-links-hook-test \
                  dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
-                 go-lint-scope-test \
-                 check-roadmap-test check-conflict-markers-test check-v2-api-sync-test \
-                 dependabot-rebase-stale-test go-vet-tags-test local-throttle-test \
-                 shellcheck-scripts-test release-version-hook-test source-links-hook-test \
-                 check-path-filters-test \
-                 validate-throttle-test qos-cluster-probe-test git-merge-status-test \
-                 check-codegen-drift-test pull-image-with-retry-test coverage-test \
-                 e2e-github-cleanup-test release-delta-test \
+                 e2e/e2e-github-cleanup-test e2e/validate-cluster-test \
+                 fetch/download-verified-test fetch/pull-image-with-retry-test \
+                 go/check-codegen-drift-test go/check-v2-api-sync-test \
+                 go/coverage-test go/go-lint-scope-test go/go-vet-tags-test \
+                 release/release-delta-test release/verify-release-test \
                  updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
 scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations)
-	scripts/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
+	scripts/ci/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of
 # the project's Claude Code usage, and its merge rule is what guarantees a re-run
@@ -258,11 +260,11 @@ scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, v
 # `claude-usage-test` job.
 .PHONY: claude-usage-test
 claude-usage-test: ## Byte-compile claude-usage/ and run its Python unit tests (usage-snapshot merge semantics)
-	scripts/claude-usage-test.sh
+	scripts/agent/claude-usage-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in
-# the main checkout and every linked worktree. Run once after cloning (scripts/setup.sh
+# the main checkout and every linked worktree. Run once after cloning (scripts/dev/setup.sh
 # does this for you). Bypass a single commit with `git commit --no-verify`.
 .PHONY: hooks
 hooks: ## Install the tracked git hooks (sets core.hooksPath to .githooks)
@@ -274,18 +276,18 @@ hooks: ## Install the tracked git hooks (sets core.hooksPath to .githooks)
 # define a driver's command (that would be remote code execution on clone), so
 # the config half is per-clone and opt-in. Until it is installed the attribute
 # names an undefined driver and git uses its built-in three-way merge — the
-# pre-driver behaviour. Run once after cloning (scripts/setup.sh does it for you);
+# pre-driver behaviour. Run once after cloning (scripts/dev/setup.sh does it for you);
 # repo-local, never --global, and shared with every linked worktree.
 .PHONY: merge-driver
 merge-driver: ## Install the docs/STATUS.md merge driver (Queue conflicts resolve by row ID)
-	scripts/git-merge-status.sh --install
+	scripts/docs/git-merge-status.sh --install
 
 # Diagnose the local toolchain: report which required/e2e/extended CLI tools are
 # missing or installed-but-not-on-PATH, with per-OS install and PATH-fix hints.
 # Runnable without the vendored tool binaries, so it works on a fresh clone.
 .PHONY: doctor
 doctor: ## Check required CLI tools are installed and on PATH (install/PATH-fix hints for any missing)
-	scripts/check-tools.sh
+	scripts/ci/check-tools.sh
 
 # Each module's `generate` is `manifests deepcopy`, so this regenerates the
 # manifests too — it supersets `make manifests` below, and there is no second
@@ -325,7 +327,7 @@ manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC/webhook manifests for all mo
 # tree. Fast: six controller-gen runs plus one ~30 MB tree copy, ~4s.
 .PHONY: codegen-check
 codegen-check: $(CONTROLLER_GEN) ## Fail if committed CRD/RBAC/webhook manifests or zz_generated.deepcopy.go drifted from the Go types controller-gen generates them from (Q440, Q477)
-	CONTROLLER_GEN=$(CONTROLLER_GEN) scripts/check-codegen-drift.sh
+	CONTROLLER_GEN=$(CONTROLLER_GEN) scripts/go/check-codegen-drift.sh
 
 .PHONY: build
 build: build-agc build-gmc build-probe build-proxy ## Build all binaries into .build/
@@ -364,25 +366,25 @@ compat-report: ## Regenerate docs/development/broker-compatibility.md from the b
 # prerequisite. Full context: docs/development/website.md.
 .PHONY: docs-serve
 docs-serve: ## Live-reload the docs/marketing site at http://localhost:8000 (isolated venv)
-	scripts/docs-preview.sh serve
+	scripts/docs/docs-preview.sh serve
 
 # Builds both publication scopes under --strict, so mkdocs' link/anchor
 # validation (Q560) gives the same verdict here as pages.yml's PR gate.
 .PHONY: docs-build
 docs-build: ## Build + strict-validate both docs site scopes (site/, site-dev/)
-	scripts/docs-preview.sh build
+	scripts/docs/docs-preview.sh build
 
 # The heavy phases (test: one workspace-wide `go test`; lint: a per-module
-# loop) live in scripts/go-test.sh and
-# scripts/go-lint.sh, which apply the local auto-throttle themselves
-# (scripts/local-throttle.sh: parallelism cap + low-priority QoS prefix on an
+# loop) live in scripts/go/go-test.sh and
+# scripts/go/go-lint.sh, which apply the local auto-throttle themselves
+# (scripts/agent/local-throttle.sh: parallelism cap + low-priority QoS prefix on an
 # interactive GUI dev shell; no-op on CI/headless — rationale in that script's
 # header). V=1 (or VERBOSE=1) streams `go test` output live (-v) for debugging
 # a slow or hanging test; make exports command-line variables to recipe
 # environments, so `make test V=1` (and `make check V=1`) reach the script.
 .PHONY: test
 test: ## Run unit tests for all modules (V=1 streams output live for debugging a hang)
-	scripts/go-test.sh
+	scripts/go/go-test.sh
 
 # The race-detector unit gate, run by the `unit-test` CI job. -race instruments
 # the concurrency core (agentpool, listener/mux, broker, token) that plain
@@ -396,10 +398,10 @@ test: ## Run unit tests for all modules (V=1 streams output live for debugging a
 # absorb the instrumentation slowdown.
 .PHONY: test-race
 test-race: ## Run unit tests under the race detector (the CI unit gate; throttled locally, full speed on CI)
-	scripts/go-test.sh --race
+	scripts/go/go-test.sh --race
 
 # --- Test-coverage measurement + no-regression ratchet ---------------------
-# scripts/coverage.sh measures per-module unit-test coverage (the same per-module
+# scripts/go/coverage.sh measures per-module unit-test coverage (the same per-module
 # `go test` the workspace requires — never a repo-root `./...`), filters out
 # generated/wiring code, and gates against the recorded floor in
 # coverage-baseline.txt. Like `make test`, the script applies the local throttle
@@ -408,15 +410,15 @@ test-race: ## Run unit tests under the race detector (the CI unit gate; throttle
 # docs/development/testing.md and docs/plan/release-1.0.md §F.
 .PHONY: cover
 cover: ## Report per-module unit-test coverage (writes nothing)
-	scripts/coverage.sh report
+	scripts/go/coverage.sh report
 
 .PHONY: cover-update
 cover-update: ## Re-record the coverage baseline floor (coverage-baseline.txt)
-	scripts/coverage.sh update
+	scripts/go/coverage.sh update
 
 .PHONY: cover-check
 cover-check: ## Fail if any module drops below its recorded coverage floor (the CI gate)
-	scripts/coverage.sh check
+	scripts/go/coverage.sh check
 
 .PHONY: test-integration
 test-integration: ## Run envtest-backed integration tests for cmd/agc and cmd/gmc
@@ -440,18 +442,18 @@ mem-profile: ## Isolate AGC-only per-session memory (Q181): 1,000 parked session
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Run gofmt (all modules) + golangci-lint, change-scoped locally to modules affected vs origin/main (LINT_ALL=1 or CI = full sweep; includes govet)
-	GOLANGCI_LINT=$(GOLANGCI_LINT) scripts/go-lint.sh
+	GOLANGCI_LINT=$(GOLANGCI_LINT) scripts/go/go-lint.sh
 
 .PHONY: lint-backlog
 lint-backlog: ## Enforce backlog format rules on docs/STATUS.md (vendored from the backlog skill)
-	scripts/lint-backlog.sh
+	scripts/docs/lint-backlog.sh
 
 # IDs come from a ref claim, not from a counter line in STATUS.md: a shared
 # mutable counter conflicted by construction whenever two sessions filed a row
 # (Q382). N=<n> claims several at once; PEEK=1 shows the next without claiming.
 .PHONY: queue-id
 queue-id: ## Allocate the next backlog Q-ID (make queue-id [N=3] [PEEK=1])
-	@scripts/alloc-queue-id.sh $(if $(PEEK),--peek,) $(if $(N),-n $(N),)
+	@scripts/docs/alloc-queue-id.sh $(if $(PEEK),--peek,) $(if $(N),-n $(N),)
 
 # The public roadmap and the backlog drift apart silently — a 2026-07-25 audit
 # found six of seven "near-term" items already shipped. Because done Queue rows
@@ -460,34 +462,34 @@ queue-id: ## Allocate the next backlog Q-ID (make queue-id [N=3] [PEEK=1])
 # script header.
 .PHONY: roadmap-check
 roadmap-check: ## Fail when docs/roadmap.md names backlog rows that shipped or moved tables
-	scripts/check-roadmap.sh
+	scripts/docs/check-roadmap.sh
 
 # Catches the "closed plan never archived" drift that makes docs/plan/README.md
 # read as stale. Rationale + the ⓘ exemption live in the script header.
 .PHONY: plan-index-check
 plan-index-check: ## Assert active plans in docs/plan/README.md are still STATUS-referenced (else archive them)
-	scripts/check-plan-index.sh
+	scripts/docs/check-plan-index.sh
 
 # Keeps plan archival a docs-only operation: code that path-links a plan would
 # force a code edit (and heavy CI) when that plan is archived. Rationale in the
 # script header.
 .PHONY: no-plan-refs-check
 no-plan-refs-check: ## Assert Go code doesn't reference docs/plan/ paths (cite durable docs / Q-IDs instead)
-	scripts/check-no-plan-refs-in-code.sh
+	scripts/docs/check-no-plan-refs-in-code.sh
 
 # Without this gate, standalone helper scripts ship unlinted: actionlint only
 # covers inline workflow `run:` blocks. Glob, version pin, and rationale live
 # in the script header.
 .PHONY: shellcheck
 shellcheck: ## Shellcheck every present scripts/*.sh — tracked or untracked-and-not-gitignored (recursive; matches the CI shellcheck gate)
-	scripts/shellcheck-scripts.sh
+	scripts/ci/shellcheck-scripts.sh
 
 .PHONY: queue-unblock
 queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock ID=Q12; bare 12 also accepted)
 	@if [ -z "$(ID)" ]; then echo "Usage: make queue-unblock ID=<id>" >&2; exit 1; fi
-	@scripts/queue-unblock.sh $(ID)
+	@scripts/docs/queue-unblock.sh $(ID)
 
-# Consolidated third-party license attribution. scripts/gen-third-party-notices.sh
+# Consolidated third-party license attribution. scripts/release/gen-third-party-notices.sh
 # concatenates every vendored module's LICENSE/NOTICE/COPYING text into the
 # committed THIRD-PARTY-NOTICES file, which each production Dockerfile COPYs into
 # /licenses/ to satisfy the reproduce-the-notice clauses of the bundled deps
@@ -496,11 +498,11 @@ queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock I
 # reviewable in the diff; `-check` is the CI drift gate (license-notices.yml).
 .PHONY: third-party-notices
 third-party-notices: ## Regenerate THIRD-PARTY-NOTICES from the committed vendor/ tree
-	scripts/gen-third-party-notices.sh
+	scripts/release/gen-third-party-notices.sh
 
 .PHONY: third-party-notices-check
 third-party-notices-check: ## Fail if THIRD-PARTY-NOTICES is stale vs vendor/ (CI drift gate)
-	scripts/gen-third-party-notices.sh --check
+	scripts/release/gen-third-party-notices.sh --check
 
 # Supply-chain integrity gate for the committed vendor trees. `-mod=vendor` only
 # checks modules.txt consistency, never that the vendored source matches go.sum;
@@ -510,7 +512,7 @@ third-party-notices-check: ## Fail if THIRD-PARTY-NOTICES is stale vs vendor/ (C
 # gate and runs as its own CI job (unit-test.yml vendor-check).
 .PHONY: vendor-check
 vendor-check: ## Fail if vendor/ + tools/vendor/ drift from go.sum (CI supply-chain gate)
-	scripts/vendor-check.sh
+	scripts/go/vendor-check.sh
 
 # Tidiness gate for the workspace module files (Q94). `go mod tidy` is the
 # canonical normaliser for go.mod/go.sum; a non-canonical committed go.sum makes
@@ -522,7 +524,7 @@ vendor-check: ## Fail if vendor/ + tools/vendor/ drift from go.sum (CI supply-ch
 # fast `make check` gate and runs as its own CI job (unit-test.yml tidy-check).
 .PHONY: tidy-check
 tidy-check: ## Fail if any go.mod/go.sum/go.work.sum is not tidy (CI tidiness gate)
-	scripts/go-tidy-check.sh
+	scripts/go/go-tidy-check.sh
 
 # One-shot remedy for the three drift gates above. Runs the full "Changing
 # dependencies" flow — tidy + go work sync + re-vendor (workspace + tools) +
@@ -533,7 +535,7 @@ tidy-check: ## Fail if any go.mod/go.sum/go.work.sum is not tidy (CI tidiness ga
 # vendor` itself. No-ops cleanly when nothing drifted.
 .PHONY: vendor-sync
 vendor-sync: ## Re-sync module files + vendor trees + THIRD-PARTY-NOTICES (the dependency-change / Dependabot remedy)
-	scripts/vendor-sync.sh
+	scripts/go/vendor-sync.sh
 
 ##@ Security
 
@@ -546,46 +548,46 @@ vendor-sync: ## Re-sync module files + vendor trees + THIRD-PARTY-NOTICES (the d
 
 .PHONY: vulncheck
 vulncheck: $(GOVULNCHECK) ## Run govulncheck across all workspace modules (matches the CI govulncheck gate)
-	GOVULNCHECK=$(GOVULNCHECK) scripts/go-vulncheck.sh
+	GOVULNCHECK=$(GOVULNCHECK) scripts/security/go-vulncheck.sh
 
 .PHONY: trivy-scan
 trivy-scan: ## Build each image locally and scan it with trivy (requires trivy + docker on PATH; matches the CI trivy gate)
-	scripts/trivy-scan.sh
+	scripts/security/trivy-scan.sh
 
 .PHONY: polaris-scan
 polaris-scan: ## Render the Helm chart and audit its Kubernetes posture with polaris (gates on danger findings; requires helm + polaris on PATH; matches the CI polaris gate)
-	scripts/polaris-scan.sh
+	scripts/security/polaris-scan.sh
 
 .PHONY: chart-crds
 chart-crds: ## Regenerate the Helm chart CRD templates from the controller-gen sources (single source of truth, Q73/Q142)
-	scripts/sync-chart-crds.sh
+	scripts/manifest/sync-chart-crds.sh
 
 .PHONY: chart-crds-check
 chart-crds-check: ## Fail if the chart CRD templates drifted from their sources, or the GMC-bundled RunnerGroup CRD drifted from the AGC copy (Q73)
-	scripts/sync-chart-crds.sh --check
+	scripts/manifest/sync-chart-crds.sh --check
 
 .PHONY: chart-rbac
 chart-rbac: ## Regenerate the Helm chart manager-role rules fragment from the controller-gen source (single source of truth, Q142)
-	scripts/sync-chart-rbac.sh
+	scripts/manifest/sync-chart-rbac.sh
 
 .PHONY: chart-rbac-check
 chart-rbac-check: ## Fail if the chart manager-role rules fragment drifted from cmd/gmc/config/rbac/role.yaml (Q142)
-	scripts/sync-chart-rbac.sh --check
+	scripts/manifest/sync-chart-rbac.sh --check
 
 .PHONY: chart-webhook
 chart-webhook: ## Regenerate the Helm chart validating-webhook template from the controller-gen source (single source of truth, Q143)
-	scripts/sync-chart-webhook.sh
+	scripts/manifest/sync-chart-webhook.sh
 
 .PHONY: chart-webhook-check
 chart-webhook-check: ## Fail if the chart webhook template drifted from cmd/gmc/config/webhook/manifests.yaml (Q143)
-	scripts/sync-chart-webhook.sh --check
+	scripts/manifest/sync-chart-webhook.sh --check
 
 .PHONY: manifest-validate
 manifest-validate: ## Validate the static install manifests + Helm chart (yamllint + kubeconform + helm lint; requires yamllint, kubeconform, helm on PATH; matches the CI manifest-validate gate)
-	scripts/sync-chart-crds.sh --check
-	scripts/sync-chart-rbac.sh --check
-	scripts/sync-chart-webhook.sh --check
-	scripts/manifest-validate.sh
+	scripts/manifest/sync-chart-crds.sh --check
+	scripts/manifest/sync-chart-rbac.sh --check
+	scripts/manifest/sync-chart-webhook.sh --check
+	scripts/manifest/manifest-validate.sh
 
 ##@ Operations
 
@@ -601,7 +603,7 @@ manifest-validate: ## Validate the static install manifests + Helm chart (yamlli
 # (docs/operations/install.md).
 .PHONY: validate-cluster
 validate-cluster: ## Preflight the target cluster before install (CNI enforcement, K8s>=1.30, cert-manager, metrics-server)
-	scripts/validate-cluster.sh
+	scripts/e2e/validate-cluster.sh
 
 ##@ e2e
 
@@ -611,7 +613,7 @@ e2e-up: e2e-cluster e2e-images e2e ## One-shot: create cluster, build+push image
 .PHONY: e2e-registry
 e2e-registry: ## Start just the local OCI registry (no-op if already running)
 	REGISTRY_NAME=$(REGISTRY_NAME) REGISTRY_PORT=$(REGISTRY_PORT) \
-		scripts/start-registry.sh
+		scripts/e2e/start-registry.sh
 
 .PHONY: e2e-cluster
 e2e-cluster: ## Create the local kind cluster + registry (no-op if both exist)
@@ -619,7 +621,7 @@ e2e-cluster: ## Create the local kind cluster + registry (no-op if both exist)
 		REGISTRY_NAME=$(REGISTRY_NAME) REGISTRY_PORT=$(REGISTRY_PORT) \
 		KIND_NODE_IMAGE=$(KIND_NODE_IMAGE) \
 		KIND_CNI=$(KIND_CNI) CALICO_VERSION=$(CALICO_VERSION) \
-		scripts/kind-with-registry.sh
+		scripts/e2e/kind-with-registry.sh
 
 .PHONY: apply-cert-manager
 apply-cert-manager: ## Apply cert-manager manifests (version defined in cmd/gmc/Makefile)
@@ -643,7 +645,7 @@ install-cert-manager: ## Apply cert-manager and wait for it to be ready
 # See docs/plan/archive/q444-vap-param-resolution.md.
 .PHONY: chart-reinstall-check
 chart-reinstall-check: ## Verify the chart survives a helm uninstall/reinstall cycle (needs the release installed)
-	KIND_CLUSTER=$(KIND_CLUSTER) scripts/chart-reinstall-check.sh
+	KIND_CLUSTER=$(KIND_CLUSTER) scripts/e2e/chart-reinstall-check.sh
 
 # Q475 — the day-2 `helm upgrade` gate. `make deploy` runs `helm upgrade
 # --install`, but never against a prior release, so upgrade over a LIVE release
@@ -655,7 +657,7 @@ chart-reinstall-check: ## Verify the chart survives a helm uninstall/reinstall c
 # E2E_SKIP_TEARDOWN, or a manual `make deploy`).
 .PHONY: chart-upgrade-check
 chart-upgrade-check: ## Verify `helm upgrade` delivers chart + CRD changes to a live release (needs the release installed)
-	KIND_CLUSTER=$(KIND_CLUSTER) scripts/chart-upgrade-check.sh
+	KIND_CLUSTER=$(KIND_CLUSTER) scripts/e2e/chart-upgrade-check.sh
 
 # Q507 — the released-chart upgrade gate. chart-upgrade-check proves HEAD's
 # chart upgrades to a copy of itself; nothing proved the chart an operator is
@@ -668,7 +670,7 @@ chart-upgrade-check: ## Verify `helm upgrade` delivers chart + CRD changes to a 
 # E2E_SKIP_TEARDOWN, or a manual `make deploy`).
 .PHONY: chart-released-upgrade-check
 chart-released-upgrade-check: ## Verify the last released chart upgrades to HEAD's chart (needs the release installed)
-	KIND_CLUSTER=$(KIND_CLUSTER) scripts/chart-released-upgrade-check.sh
+	KIND_CLUSTER=$(KIND_CLUSTER) scripts/e2e/chart-released-upgrade-check.sh
 
 .PHONY: e2e-cluster-delete
 e2e-cluster-delete: ## Delete the local e2e kind cluster (no-op if it does not exist)
@@ -751,7 +753,7 @@ e2e-clean: e2e-cluster-delete e2e-registry-delete ## Tear down the e2e cluster a
 # --dry-run reports without changing anything (ARGS='--dry-run').
 .PHONY: e2e-github-cleanup
 e2e-github-cleanup: ## Clear stranded live-GitHub runners/runs from the fixture repo (ARGS='--dry-run' to preview)
-	scripts/e2e-github-cleanup.sh $(ARGS)
+	scripts/e2e/e2e-github-cleanup.sh $(ARGS)
 
 ##@ Live autoscaler
 
@@ -769,7 +771,7 @@ AUTOSCALER_CLUSTER ?= gag-autoscaler
 .PHONY: autoscaler-cluster
 autoscaler-cluster: ## Create the kind cluster running a real cluster-autoscaler on kwok nodes (no-op if it exists)
 	AUTOSCALER_CLUSTER=$(AUTOSCALER_CLUSTER) KIND_NODE_IMAGE=$(KIND_NODE_IMAGE) \
-		scripts/autoscaler-cluster.sh
+		scripts/e2e/autoscaler-cluster.sh
 
 .PHONY: test-autoscaler
 test-autoscaler: ## Assert the autoscaler matcher against a live cluster-autoscaler's events (needs autoscaler-cluster)
@@ -795,7 +797,7 @@ KARPENTER_CLUSTER ?= gag-karpenter
 .PHONY: karpenter-cluster
 karpenter-cluster: ## Create the kind cluster running a real Karpenter (kwok provider) on fake nodes (no-op if it exists)
 	KARPENTER_CLUSTER=$(KARPENTER_CLUSTER) KIND_NODE_IMAGE=$(KIND_NODE_IMAGE) \
-		scripts/karpenter-cluster.sh
+		scripts/e2e/karpenter-cluster.sh
 
 .PHONY: test-karpenter
 test-karpenter: ## Assert the autoscaler matcher against a live Karpenter's events (needs karpenter-cluster)
@@ -832,7 +834,7 @@ cosign: $(COSIGN) ## Download pinned cosign (COSIGN_VERSION) into .build/
 
 .PHONY: verify-release
 verify-release: $(COSIGN) ## Verify cosign signatures for a published release: make verify-release VERSION=vX.Y.Z
-	@COSIGN=$(COSIGN) scripts/verify-release.sh $(VERSION)
+	@COSIGN=$(COSIGN) scripts/release/verify-release.sh $(VERSION)
 
 # The kubebuilder-ecosystem tools all build the same way from the vendored
 # tools/ module; only the package path differs (the target-specific TOOL_PKG
@@ -856,4 +858,4 @@ $(GINKGO):
 # vendor like the kubebuilder-ecosystem tools above), so it is downloaded at a
 # pinned version — the same pattern as the shellcheck/kubeconform CI installs.
 $(COSIGN):
-	scripts/download-cosign.sh $@ $(COSIGN_VERSION)
+	scripts/release/download-cosign.sh $@ $(COSIGN_VERSION)

@@ -957,7 +957,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 // gateway name — so every runner this suite owns carries one of these prefixes, and no
 // other tenant's does.
 //
-// scripts/e2e-github-cleanup.sh applies the same rule, and has to: the preflight below
+// scripts/e2e/e2e-github-cleanup.sh applies the same rule, and has to: the preflight below
 // blocks on exactly what that script clears, so a narrower filter there wedges the next
 // run behind a runner the cleanup reports as handled.
 //

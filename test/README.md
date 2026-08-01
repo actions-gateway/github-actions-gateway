@@ -9,7 +9,7 @@ Shared test fixtures and configuration used by integration and end-to-end tests.
 | [fakegithub/](fakegithub/) | Deployable HTTP stub implementing the GitHub App token exchange and the Actions broker v2 protocol. Lets the AGC start and process jobs in fake-GitHub e2e tests without real GitHub credentials. Jobs are injected via a pod-local control API. |
 | [kind-config-1worker.yaml](kind-config-1worker.yaml) | `kind` cluster config with one worker node. Default for cluster-only specs. |
 | [kind-config-2worker.yaml](kind-config-2worker.yaml) | `kind` cluster config with two worker nodes. Used by specs that need scheduling across nodes. |
-| [autoscaler/](autoscaler/) | Manifests for the live-autoscaler drift gate: a real upstream cluster-autoscaler on its kwok cloud provider, plus the fake node groups it scales. Applied by [`scripts/autoscaler-cluster.sh`](../scripts/autoscaler-cluster.sh) into a cluster of its own — a live autoscaler adding and removing nodes underneath the e2e suite would perturb every spec in it. |
+| [autoscaler/](autoscaler/) | Manifests for the live-autoscaler drift gate: a real upstream cluster-autoscaler on its kwok cloud provider, plus the fake node groups it scales. Applied by [`scripts/e2e/autoscaler-cluster.sh`](../scripts/e2e/autoscaler-cluster.sh) into a cluster of its own — a live autoscaler adding and removing nodes underneath the e2e suite would perturb every spec in it. |
 
 ## Test tiers
 

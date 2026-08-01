@@ -205,7 +205,7 @@ Reuses existing tooling: the classic broker client
 its two-session delivery-observation primitive
 (`investigateJobDelivery`, [`cmd/probe/main.go`](../../cmd/probe/main.go)), and
 `config.sh`/JIT registration
-([`scripts/probe-investigations-cd.sh`](../../scripts/probe-investigations-cd.sh)).
+([`scripts/dev/probe-investigations-cd.sh`](../../scripts/dev/probe-investigations-cd.sh)).
 New: a `classic_dispatch.go` scenario that
 
 1. **Registers M distinct classic runners** into a runner group carrying a dedicated

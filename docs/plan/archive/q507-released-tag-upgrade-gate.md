@@ -1,6 +1,6 @@
 # Q507 — No gate upgrades from the last released chart tag
 
-**Status: SHIPPED.** [`scripts/chart-released-upgrade-check.sh`](../../../scripts/chart-released-upgrade-check.sh)
+**Status: SHIPPED.** [`scripts/e2e/chart-released-upgrade-check.sh`](../../../scripts/e2e/chart-released-upgrade-check.sh)
 (`make chart-released-upgrade-check`) runs last among the chart checks in
 `e2e-reusable.yml` (kindnet leg only). The design question below resolved to
 option (2) — `helm pull` of the published OCI artifact — with the tag discovered
@@ -21,8 +21,8 @@ Three paths exercise the chart, and none of them upgrades a **released** release
 | Path | What it installs | What it upgrades from |
 |---|---|---|
 | `make deploy` / e2e | HEAD's chart | nothing — always a first install |
-| [`chart-upgrade-check.sh`](../../../scripts/chart-upgrade-check.sh) (Q475) | HEAD's chart | HEAD's chart with two markers injected |
-| [`chart-reinstall-check.sh`](../../../scripts/chart-reinstall-check.sh) (Q444/Q492) | HEAD's chart | uninstall → reinstall, same chart |
+| [`chart-upgrade-check.sh`](../../../scripts/e2e/chart-upgrade-check.sh) (Q475) | HEAD's chart | HEAD's chart with two markers injected |
+| [`chart-reinstall-check.sh`](../../../scripts/e2e/chart-reinstall-check.sh) (Q444/Q492) | HEAD's chart | uninstall → reinstall, same chart |
 
 So every gate answers "does HEAD upgrade to HEAD?" — never "does the chart an
 operator is actually running upgrade to HEAD?". Those are different questions
@@ -96,6 +96,6 @@ existing release can upgrade to, because none of them has an older release to
 upgrade *from*. A reviewer would have to know Helm's `crds/` rule and think to ask.
 That is exactly the shape that belongs in CI rather than in a human's memory.
 
-Prior art for the harness: [`chart-upgrade-check.sh`](../../../scripts/chart-upgrade-check.sh)
+Prior art for the harness: [`chart-upgrade-check.sh`](../../../scripts/e2e/chart-upgrade-check.sh)
 already captures a live release's values, mutates the chart, upgrades, and
 restores — most of the scaffolding this needs exists there.

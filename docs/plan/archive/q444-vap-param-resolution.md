@@ -98,7 +98,7 @@ stale allowlist with no error anywhere.
 ## Measurements
 
 Run on a single-node kind cluster at v1.35.5 via
-[`scripts/vap-param-informer-check.sh`](../../../scripts/vap-param-informer-check.sh),
+[`scripts/e2e/vap-param-informer-check.sh`](../../../scripts/e2e/vap-param-informer-check.sh),
 all on one apiserver process, in order:
 
 | # | what | result |
@@ -197,7 +197,7 @@ always discoverable, and a restart *fixes* it.
 
 ## Reproducing
 
-- [`scripts/vap-param-informer-check.sh`](../../../scripts/vap-param-informer-check.sh)
+- [`scripts/e2e/vap-param-informer-check.sh`](../../../scripts/e2e/vap-param-informer-check.sh)
   — the deterministic three-arm reproducer above. Self-contained (its own CRDs,
   namespace and policies), no chart required. **Run it only against a disposable
   cluster**: arm 2 permanently breaks ConfigMap param resolution for that
@@ -205,7 +205,7 @@ always discoverable, and a restart *fixes* it.
   runs on, and it pins an *upstream* defect that our own code no longer depends
   on. It is the evidence for the fix, re-runnable by hand on a new Kubernetes
   minor to confirm arm 3 still holds.
-- [`scripts/chart-reinstall-check.sh`](../../../scripts/chart-reinstall-check.sh)
+- [`scripts/e2e/chart-reinstall-check.sh`](../../../scripts/e2e/chart-reinstall-check.sh)
   (`make chart-reinstall-check`) — the product-level check, driving a real
   uninstall/reinstall against an installed release. **Wired into CI as of Q492**,
   now that the cycle it exercises is expected to pass.
@@ -255,7 +255,7 @@ Two candidates were on the table, both entirely in our control:
 2. **Keep the binding alive across `helm uninstall`** with
    `helm.sh/resource-policy: keep` on the VAPB and its param ConfigMap, so the
    binding set never empties. Much cheaper — but it collides with an existing
-   invariant: [`scripts/manifest-validate.sh`](../../../scripts/manifest-validate.sh)
+   invariant: [`scripts/manifest/manifest-validate.sh`](../../../scripts/manifest/manifest-validate.sh)
    asserts that **no VAPB carries `helm.sh/resource-policy: keep`**, because a
    retained binding leaves the guard enforcing after the release is gone and makes
    `admissionPolicy.enabled=false` a silent no-op. That reason still holds and is
@@ -281,7 +281,7 @@ worked — is precisely the one we forbid retaining.
   resolves REST mappings for the whole manifest before applying any of it, so a CR
   whose CRD is a template in the same release fails the install outright. The cost
   is that `helm upgrade` does not carry schema changes to that CRD.
-- `scripts/chart-reinstall-check.sh` is now a CI gate.
+- `scripts/e2e/chart-reinstall-check.sh` is now a CI gate.
 
 ### Still open upstream
 

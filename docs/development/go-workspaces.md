@@ -46,7 +46,7 @@ proxy, worker   (standalone — no internal deps)
 `broker`-style leaf that depends only on `githubapp`; it has no importer yet —
 the AGC will import it in Q264 P3 when the scale-set acquisition tier lands.
 
-`githubapp` (GitHub App auth/JWT) and `broker` (the GitHub broker client) are the shared libraries; the `cmd/*` binaries depend *on* them, never the reverse. `api` (the shared v2 API kinds) is a third leaf both controllers depend on. The one cross-binary edge is `gmc → agc` (the Gateway Manager Controller imports the Actions Gateway Controller's API types to provision instances); the `api` leaf exists precisely so the AGC can read the GMC-group v2 kinds without an `agc → gmc` back-edge that would close a cycle. **Keep edges pointing toward the leaves:** a new import that makes `githubapp`, `broker`, or `api` depend on a `cmd/*` module, or makes `agc` depend on `gmc`, inverts the layering and should be restructured instead. Go's compiler rejects outright *cycles* for free; this graph captures the intended *direction* so a technically-legal-but-wrong edge is caught in review. `scripts/go-work-tidy.sh` derives this same order at runtime (via `go list -m all`) to tidy modules leaf-first.
+`githubapp` (GitHub App auth/JWT) and `broker` (the GitHub broker client) are the shared libraries; the `cmd/*` binaries depend *on* them, never the reverse. `api` (the shared v2 API kinds) is a third leaf both controllers depend on. The one cross-binary edge is `gmc → agc` (the Gateway Manager Controller imports the Actions Gateway Controller's API types to provision instances); the `api` leaf exists precisely so the AGC can read the GMC-group v2 kinds without an `agc → gmc` back-edge that would close a cycle. **Keep edges pointing toward the leaves:** a new import that makes `githubapp`, `broker`, or `api` depend on a `cmd/*` module, or makes `agc` depend on `gmc`, inverts the layering and should be restructured instead. Go's compiler rejects outright *cycles* for free; this graph captures the intended *direction* so a technically-legal-but-wrong edge is caught in review. `scripts/go/go-work-tidy.sh` derives this same order at runtime (via `go list -m all`) to tidy modules leaf-first.
 
 All runtime modules share a single `vendor/` at the repo root, produced by `go work vendor` and committed to git. Docker builds and CI rely on this — they invoke `go build` with `-mod=vendor` auto-selected (no proxy.golang.org during build).
 
@@ -64,24 +64,24 @@ When you need to *read* a dependency's source, read the committed `vendor/` (or 
 
 When you change any module's `go.mod` (add, upgrade, or remove a dep):
 
-1. Run `scripts/go-work-tidy.sh` to tidy all modules in dependency order.
+1. Run `scripts/go/go-work-tidy.sh` to tidy all modules in dependency order.
 2. Run `go work sync` to sync the workspace build list.
 3. Run `go work vendor` at the repo root to update the shared `vendor/`.
 4. Commit the `go.mod`, `go.sum`, and `vendor/` changes together in the same commit so they stay in sync.
 
-`make vendor-sync` (→ `scripts/vendor-sync.sh`) runs steps 1–3 plus the `THIRD-PARTY-NOTICES` regen in one shot, so you can do the whole sync with a single command and then commit the result. It is the same remedy the [Dependabot auto-sync workflow](#dependabot-go-bumps-are-auto-synced) runs.
+`make vendor-sync` (→ `scripts/go/vendor-sync.sh`) runs steps 1–3 plus the `THIRD-PARTY-NOTICES` regen in one shot, so you can do the whole sync with a single command and then commit the result. It is the same remedy the [Dependabot auto-sync workflow](#dependabot-go-bumps-are-auto-synced) runs.
 
 If the change **added, removed, or re-pointed an inter-module `replace` edge** (or added/deleted a workspace module), also update the module table's **Internal deps** column and the **Dependency direction** graph in [Workspace layout](#workspace-layout) above — those are maintained by hand and will otherwise drift.
 
-Do not run `go mod tidy` or `go mod vendor` inside an individual module — that produces state that conflicts with the workspace vendor. `scripts/go-work-tidy.sh` handles correct ordering across modules so you don't have to.
+Do not run `go mod tidy` or `go mod vendor` inside an individual module — that produces state that conflicts with the workspace vendor. `scripts/go/go-work-tidy.sh` handles correct ordering across modules so you don't have to.
 
 ### Module-file tidiness is gated in CI
 
-`go mod tidy` is the canonical normaliser for each module's `go.mod`/`go.sum`: it adds the missing entries (including a `/go.mod` hash row for every module in the build graph) and drops the unused ones. If a committed `go.sum` is not in that canonical shape, step 1 above re-adds those rows and step 2 re-resolves any stale indirect `require` versions — producing a spurious diff that contributors keep reverting (Q94). The `tidy-check` CI job (`make tidy-check` → `scripts/go-tidy-check.sh`) re-runs steps 1–2 and fails on any drift in `go.mod`/`go.sum`/`go.work.sum`, so the committed module files stay tidy-canonical. Run `make tidy-check` locally to reproduce the gate; like `vendor-check` it can need network on a cold cache, so it is intentionally **not** part of the fast `make check` gate. The remedy for a failure is steps 1–2 + commit, never an exemption.
+`go mod tidy` is the canonical normaliser for each module's `go.mod`/`go.sum`: it adds the missing entries (including a `/go.mod` hash row for every module in the build graph) and drops the unused ones. If a committed `go.sum` is not in that canonical shape, step 1 above re-adds those rows and step 2 re-resolves any stale indirect `require` versions — producing a spurious diff that contributors keep reverting (Q94). The `tidy-check` CI job (`make tidy-check` → `scripts/go/go-tidy-check.sh`) re-runs steps 1–2 and fails on any drift in `go.mod`/`go.sum`/`go.work.sum`, so the committed module files stay tidy-canonical. Run `make tidy-check` locally to reproduce the gate; like `vendor-check` it can need network on a cold cache, so it is intentionally **not** part of the fast `make check` gate. The remedy for a failure is steps 1–2 + commit, never an exemption.
 
 ### Vendor integrity is gated in CI
 
-`go build -mod=vendor` checks only `vendor/modules.txt` consistency — it never verifies that the vendored *source* matches the hashes in `go.sum`, so a tampered `vendor/` (or `tools/vendor/`) edit would compile into the signed release images undetected (Q126). The `vendor-check` CI job (`make vendor-check` → `scripts/vendor-check.sh`) re-runs the vendor flow above — which re-fetches every module verified against `go.sum` — and fails on any diff against the committed trees. Run `make vendor-check` locally to reproduce the gate; it needs network on a cold module cache (it re-fetches from the proxy), so it is intentionally **not** part of the fast `make check` gate.
+`go build -mod=vendor` checks only `vendor/modules.txt` consistency — it never verifies that the vendored *source* matches the hashes in `go.sum`, so a tampered `vendor/` (or `tools/vendor/`) edit would compile into the signed release images undetected (Q126). The `vendor-check` CI job (`make vendor-check` → `scripts/go/vendor-check.sh`) re-runs the vendor flow above — which re-fetches every module verified against `go.sum` — and fails on any diff against the committed trees. Run `make vendor-check` locally to reproduce the gate; it needs network on a cold module cache (it re-fetches from the proxy), so it is intentionally **not** part of the fast `make check` gate.
 
 A **Dependabot** `go.mod`/`go.sum` bump lands a desynced vendor tree (the bot can't run `go work vendor`), so it fails this gate by design — the fix is the follow-up vendor sync, which is now automated (see [Dependabot Go bumps are auto-synced](#dependabot-go-bumps-are-auto-synced) below), not an exemption.
 
@@ -91,13 +91,13 @@ A Dependabot Go-module PR updates one module's `go.mod`/`go.sum` but **cannot** 
 
 The `dependabot-go-sync` workflow (`.github/workflows/dependabot-go-sync.yml`, Q111) does that for you. It triggers on every PR but its job runs only for a same-repo, Dependabot-authored PR whose branch is a Go-module update (`dependabot/go_modules/…` — the branch slug is `go_modules`, not the `gomod` package-ecosystem key in `dependabot.yml`). It runs `make vendor-sync` — the one-shot remedy that performs the whole [Changing dependencies](#changing-dependencies) flow plus the notices regen — and pushes any resulting diff back onto the Dependabot branch as a `chore(deps): sync …` commit. It no-ops cleanly (no commit) when nothing drifted, so a metadata-only bump costs one fast run.
 
-Run the same remedy locally with `make vendor-sync` (→ `scripts/vendor-sync.sh`) whenever you change a dependency by hand.
+Run the same remedy locally with `make vendor-sync` (→ `scripts/go/vendor-sync.sh`) whenever you change a dependency by hand.
 
 ### A synced branch stops auto-rebasing, and is rebased for you
 
 Dependabot only rebases a branch it still owns, and the `chore(deps): sync …` commit marks the branch as modified by someone else. From that point Dependabot leaves it alone, so a synced PR that is not merged before `main` moves under it goes **permanently conflicting** and never self-heals on its own.
 
-The `dependabot-rebase-stale` workflow (`.github/workflows/dependabot-rebase-stale.yml`, Q427) rescues it. On every `main` push, plus a daily safety net at 07:47 UTC and `workflow_dispatch`, it looks for open, same-repo, `CONFLICTING` Dependabot `go_modules` PRs whose branch tip is no longer Dependabot's, and rebases each one with [`scripts/dependabot-rebase-stale.sh`](../../scripts/dependabot-rebase-stale.sh). The branch-tip check matters: a branch the bot still owns rebases itself, and force-pushing over that would clobber it mid-flight. A run is capped at `MAX_PRS=3` PRs and names any it defers to the next run.
+The `dependabot-rebase-stale` workflow (`.github/workflows/dependabot-rebase-stale.yml`, Q427) rescues it. On every `main` push, plus a daily safety net at 07:47 UTC and `workflow_dispatch`, it looks for open, same-repo, `CONFLICTING` Dependabot `go_modules` PRs whose branch tip is no longer Dependabot's, and rebases each one with [`scripts/ci/dependabot-rebase-stale.sh`](../../scripts/ci/dependabot-rebase-stale.sh). The branch-tip check matters: a branch the bot still owns rebases itself, and force-pushing over that would clobber it mid-flight. A run is capped at `MAX_PRS=3` PRs and names any it defers to the next run.
 
 **It replays, it never merges.** The conflicted tree is discarded outright: the branch is reset to current `main`, every version bump the PR introduced is re-applied there with `go get`, and `make vendor-sync` regenerates the vendor trees, `go.work.sum`, and `THIRD-PARTY-NOTICES`. Bumps are recovered by diffing the `require` directives of each `go.mod` between the merge base and the branch tip, so a *grouped* PR ("bump the go-deps group across 1 directory with 5 updates") replays every one of its modules. The branch name carries only the group's hash, so it cannot be parsed for this.
 
@@ -107,7 +107,7 @@ So **never hand-resolve that conflict**, and never reach for a merge commit. Mer
 
 **Why the workflow rebases instead of commenting `@dependabot recreate`.** Because it cannot. Dependabot accepts comment commands only from **users** with push access, and rejects GitHub Apps and bots outright with "Sorry, only users with push access can use that command" ([dependabot/dependabot-core#9147](https://github.com/dependabot/dependabot-core/issues/9147), still open). A comment posted by `github-actions[bot]` with the workflow's `GITHUB_TOKEN` is ignored. This repo deliberately stores no Personal Access Token, so the automation has to do the rebase itself. A maintainer typing `@dependabot recreate` by hand still works, and remains the equivalent manual remedy.
 
-Run it locally against the live repo with `scripts/dependabot-rebase-stale.sh --list` (print what it would act on), `--dry-run` (rebase locally, push nothing), or `--bumps A/go.mod B/go.mod` (print the bumps it would extract from a pair of files).
+Run it locally against the live repo with `scripts/ci/dependabot-rebase-stale.sh --list` (print what it would act on), `--dry-run` (rebase locally, push nothing), or `--bumps A/go.mod B/go.mod` (print the bumps it would extract from a pair of files).
 
 ### Both bot pushes leave the checks needing a re-trigger
 

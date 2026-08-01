@@ -10,7 +10,7 @@
 // call site keeps compiling, but the values and the rationale live here alone (Q374).
 //
 // Adding a condition or reason: declare it here, then add the one-line re-export to
-// BOTH version packages' conditions.go. scripts/check-v2-api-sync.sh fails on a
+// BOTH version packages' conditions.go. scripts/go/check-v2-api-sync.sh fails on a
 // one-sided re-export.
 package apiconditions
 

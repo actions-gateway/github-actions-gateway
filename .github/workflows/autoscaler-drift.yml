@@ -32,7 +32,7 @@
 #   * CA_VERSION itself, for PATCH releases (Q483). The kind coupling above only
 #     fires on a minor, which left every CA patch untested until the next minor
 #     came round. updatecli.d/cluster-autoscaler.yaml now moves the patch inside
-#     the pinned minor weekly; that PR edits scripts/autoscaler-cluster.sh, the
+#     the pinned minor weekly; that PR edits scripts/e2e/autoscaler-cluster.sh, the
 #     first path in the `changes` filter below. It cannot cross a minor — doing so
 #     would manufacture the node-image skew this gate exists to report.
 #
@@ -53,10 +53,10 @@ on:
   workflow_dispatch:
     inputs:
       ca_version:
-        description: 'cluster-autoscaler image tag to test (default: the CA_VERSION pin in scripts/autoscaler-cluster.sh). Probe a new minor here before committing to it.'
+        description: 'cluster-autoscaler image tag to test (default: the CA_VERSION pin in scripts/e2e/autoscaler-cluster.sh). Probe a new minor here before committing to it.'
         type: string
       karpenter_version:
-        description: 'kubernetes-sigs/karpenter tag to build and test (default: the KARPENTER_VERSION pin in scripts/karpenter-cluster.sh). Probe a new release here before committing to it.'
+        description: 'kubernetes-sigs/karpenter tag to build and test (default: the KARPENTER_VERSION pin in scripts/e2e/karpenter-cluster.sh). Probe a new release here before committing to it.'
         type: string
 
 # One run per PR; a superseded run's verdict is moot. Keyed on github.ref (the
@@ -98,7 +98,10 @@ jobs:
               # The version pins and the cluster recipe. Also the reason the
               # weekly cluster-autoscaler patch bump reaches this job: updatecli
               # rewrites CA_VERSION in this file (updatecli.d/cluster-autoscaler.yaml).
-              - 'scripts/autoscaler-cluster.sh'
+              - 'scripts/e2e/autoscaler-cluster.sh'
+              # The verified kind download both arms run before bring-up.
+              - 'scripts/fetch/**'
+              - 'scripts/lib/**'
               - 'test/autoscaler/**'
               # The matcher under test and its test files. A matcher edit that
               # stays consistent with the recorded unit table can still be wrong
@@ -112,7 +115,10 @@ jobs:
             karpenter:
               # The Karpenter arm's pins and recipe (KARPENTER_VERSION lives in
               # the script), plus the same four shared surfaces as above.
-              - 'scripts/karpenter-cluster.sh'
+              - 'scripts/e2e/karpenter-cluster.sh'
+              # The verified kind download both arms run before bring-up.
+              - 'scripts/fetch/**'
+              - 'scripts/lib/**'
               - 'test/karpenter/**'
               - 'cmd/agc/internal/controller/autoscaler_verdict.go'
               - 'cmd/agc/internal/controller/autoscaler_verdict_test.go'
@@ -141,7 +147,7 @@ jobs:
       # surface.
       KIND_VERSION: v0.32.0
       KIND_BINARY_SHA256: 50030de23cf40a18505f20426f6a8506bedf13c6e509244bd1fa9463721b0f54
-      # Empty on every trigger but a dispatch that set it; scripts/autoscaler-cluster.sh
+      # Empty on every trigger but a dispatch that set it; scripts/e2e/autoscaler-cluster.sh
       # uses `${CA_VERSION:-<pin>}`, which falls back on empty as well as unset.
       # Threaded as an env var rather than interpolated into a run: script — no
       # script-injection surface from the dispatch input.
@@ -159,7 +165,7 @@ jobs:
         # download-verified.sh retries a transient GitHub releases CDN error and
         # gates on KIND_BINARY_SHA256 before anything lands at the output path.
         run: |
-          scripts/download-verified.sh \
+          scripts/fetch/download-verified.sh \
             "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64" \
             "${KIND_BINARY_SHA256}" /tmp/kind
           sudo install -m 0755 /tmp/kind /usr/local/bin/kind
@@ -212,7 +218,7 @@ jobs:
       # current cluster.
       KIND_VERSION: v0.32.0
       KIND_BINARY_SHA256: 50030de23cf40a18505f20426f6a8506bedf13c6e509244bd1fa9463721b0f54
-      # Empty on every trigger but a dispatch that set it; scripts/karpenter-cluster.sh
+      # Empty on every trigger but a dispatch that set it; scripts/e2e/karpenter-cluster.sh
       # uses `${KARPENTER_VERSION:-<pin>}`, which falls back on empty as well as
       # unset. Threaded as an env var rather than interpolated into a run:
       # script — no script-injection surface from the dispatch input.
@@ -227,7 +233,7 @@ jobs:
 
       - name: Install kind ${{ env.KIND_VERSION }}
         run: |
-          scripts/download-verified.sh \
+          scripts/fetch/download-verified.sh \
             "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64" \
             "${KIND_BINARY_SHA256}" /tmp/kind
           sudo install -m 0755 /tmp/kind /usr/local/bin/kind

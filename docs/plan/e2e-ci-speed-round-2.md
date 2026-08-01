@@ -189,7 +189,7 @@ budget.
   [security-scan.yml](../../.github/workflows/security-scan.yml),
   [dockerfile-lint.yml](../../.github/workflows/dockerfile-lint.yml) — matrices
   select a stage instead of a file
-- [scripts/trivy-scan.sh](../../scripts/trivy-scan.sh) — `--target`; also gained
+- [scripts/security/trivy-scan.sh](../../scripts/security/trivy-scan.sh) — `--target`; also gained
   the `wrapper` leg it was missing relative to the CI matrix
 - [cmd/agc/names/runner_version_test.go](../../cmd/agc/names/runner_version_test.go)
   — the runner-version lockstep guard reads the root Dockerfile
@@ -210,7 +210,7 @@ until the bake needs that headroom.
 
 ### Approach (shipped)
 
-The deletions moved into [scripts/free-runner-disk.sh](../../scripts/free-runner-disk.sh)
+The deletions moved into [scripts/e2e/free-runner-disk.sh](../../scripts/e2e/free-runner-disk.sh)
 and now run in two workflow steps:
 
 - **Start freeing runner disk space**, at the top of the job, launches the

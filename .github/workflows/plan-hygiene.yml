@@ -12,8 +12,8 @@ on:
       - 'docs/plan/README.md'
       - 'docs/STATUS.md'
       - '**.go'
-      - 'scripts/check-plan-index.sh'
-      - 'scripts/check-no-plan-refs-in-code.sh'
+      - 'scripts/docs/check-plan-index.sh'
+      - 'scripts/docs/check-no-plan-refs-in-code.sh'
       - '.github/workflows/plan-hygiene.yml'
 
 # Cancel superseded runs on the same PR; pushes to main are never cancelled.
@@ -48,8 +48,8 @@ jobs:
               - 'docs/plan/README.md'
               - 'docs/STATUS.md'
               - '**.go'
-              - 'scripts/check-plan-index.sh'
-              - 'scripts/check-no-plan-refs-in-code.sh'
+              - 'scripts/docs/check-plan-index.sh'
+              - 'scripts/docs/check-no-plan-refs-in-code.sh'
               - '.github/workflows/plan-hygiene.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
@@ -66,9 +66,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: active plans are still STATUS-referenced (else archive)
-        run: scripts/check-plan-index.sh
+        run: scripts/docs/check-plan-index.sh
       - name: Go code does not reference plan-doc paths
-        run: scripts/check-no-plan-refs-in-code.sh
+        run: scripts/docs/check-no-plan-refs-in-code.sh
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`plan-hygiene-gate`) required in the branch ruleset — never the path-gated

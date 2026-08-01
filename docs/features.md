@@ -67,7 +67,7 @@ under its first stability contract.
 
 ## Install and day-2 operations
 
-- **[Helm install](operations/install.md)** — the OCI chart, digest pinning, healthy-install verification, and a `scripts/validate-cluster.sh` pre-flight that fails loudly on a network-policy-less CNI.
+- **[Helm install](operations/install.md)** — the OCI chart, digest pinning, healthy-install verification, and a `scripts/e2e/validate-cluster.sh` pre-flight that fails loudly on a network-policy-less CNI.
 - **[Air-gapped install](operations/air-gapped-install.md)** — relocate images and the OCI chart to a private registry with digests preserved, including pull Secrets for the runtime pods.
 - **[GitOps install](operations/gitops.md)** — declarative Argo CD `Application` and Flux `HelmRelease` examples, with the CRD-pruning gotcha handled.
 - **[Upgrade and rollback](operations/upgrade.md)** — versioned upgrade procedures and the rollback path for each release.

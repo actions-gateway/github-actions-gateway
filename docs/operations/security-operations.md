@@ -1609,9 +1609,9 @@ informer per context, so the same transition is survivable. Moving the parameter
 the cluster-scoped `PriorityClassAllowlist` CR (Q492) therefore removes the
 exposure at its root rather than mitigating it. The contrast is measured directly —
 the same empty-binding-set transition, one GVK apart — by
-[`scripts/vap-param-informer-check.sh`](https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/vap-param-informer-check.sh),
+[`scripts/e2e/vap-param-informer-check.sh`](https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh),
 and the uninstall/reinstall cycle is now a CI gate
-(`scripts/chart-reinstall-check.sh`). Mechanism and measurements:
+(`scripts/e2e/chart-reinstall-check.sh`). Mechanism and measurements:
 [`q444-vap-param-resolution.md`](../plan/archive/q444-vap-param-resolution.md).
 
 **If you are still on an affected release**, upgrade in place — `helm upgrade`
@@ -1665,7 +1665,7 @@ label every image already carries.
 
 - **How it is kept current.** `THIRD-PARTY-NOTICES` lives at the repo root and is
   **generated and committed** by `make third-party-notices`
-  ([`scripts/gen-third-party-notices.sh`](../../scripts/gen-third-party-notices.sh)),
+  ([`scripts/release/gen-third-party-notices.sh`](../../scripts/release/gen-third-party-notices.sh)),
   which concatenates the `LICENSE`/`NOTICE`/`COPYING` files of every module under
   the committed, version-pinned `vendor/` tree — offline, no network or module
   cache. The CI `license-notices` workflow runs `make third-party-notices-check`

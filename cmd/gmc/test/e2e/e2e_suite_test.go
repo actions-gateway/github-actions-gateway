@@ -81,7 +81,7 @@ var _ = SynchronizedBeforeSuite(
 	func() []byte {
 		// Fallback defaults match the local-registry naming the root Makefile
 		// emits; `make e2e-up` overrides via env. Kind nodes pull these names
-		// via scripts/kind-with-registry.sh's containerd config. The host is the
+		// via scripts/e2e/kind-with-registry.sh's containerd config. The host is the
 		// literal IPv4 loopback (not localhost) so the host-side push target is
 		// unambiguously IPv4 — matches the containerd certs.d mirror key.
 		gmcImg := envOrDefault("GMC_IMG", "127.0.0.1:5000/gmc:e2e")
@@ -100,7 +100,7 @@ var _ = SynchronizedBeforeSuite(
 		rsaKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 
 		// Images are distributed via the local registry stood up by
-		// scripts/kind-with-registry.sh; kind nodes pull on demand.
+		// scripts/e2e/kind-with-registry.sh; kind nodes pull on demand.
 
 		// Populate package-level vars so setup helpers can reference them.
 		gmcImage = gmcImg

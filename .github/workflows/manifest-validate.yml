@@ -60,7 +60,7 @@ jobs:
           filters: |
             manifests:
               # The five v2 CRDs under api/config/crd/ are in
-              # scripts/manifest-validate.sh's standalone_manifests list, but this
+              # scripts/manifest/manifest-validate.sh's standalone_manifests list, but this
               # filter only knew about cmd/*/config — so a regenerated v2 CRD
               # skipped its own kubeconform+yamllint run until Q400. Scoped to
               # api/config/** (not all of api/**) to match cmd/*/config/**: a Go
@@ -72,10 +72,11 @@ jobs:
               - 'charts/**'
               - '.yamllint.yaml'
               - 'Makefile'
-              - 'scripts/manifest-validate.sh'
-              - 'scripts/sync-chart-crds.sh'
-              - 'scripts/sync-chart-rbac.sh'
-              - 'scripts/sync-chart-webhook.sh'
+              # scripts/manifest/ is exactly this gate's backends — the validator
+              # plus the three chart-sync generators it drift-checks (Q571).
+              # fetch/ installs the pinned kubeconform/yamllint binaries.
+              - 'scripts/manifest/**'
+              - 'scripts/fetch/**'
               - 'scripts/lib/**'
               - '.github/workflows/manifest-validate.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
@@ -113,7 +114,7 @@ jobs:
       - name: install kubeconform
         run: |
           set -euo pipefail
-          scripts/download-verified.sh \
+          scripts/fetch/download-verified.sh \
             "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
             "${KUBECONFORM_SHA256}" "${RUNNER_TEMP}/kubeconform.tar.gz"
           tar -xzf "${RUNNER_TEMP}/kubeconform.tar.gz" -C "${RUNNER_TEMP}" kubeconform
@@ -122,7 +123,7 @@ jobs:
       # Cache kubeconform's schema dir keyed on the validated Kubernetes version.
       # The schema set for a fixed version is immutable, so a hit makes the run
       # fully offline; the key changes only when MANIFEST_K8S_VERSION (pinned in
-      # scripts/manifest-validate.sh) does.
+      # scripts/manifest/manifest-validate.sh) does.
       - name: cache kubeconform schemas
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

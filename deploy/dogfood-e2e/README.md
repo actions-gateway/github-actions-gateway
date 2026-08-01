@@ -99,11 +99,11 @@ because:
 - The embedded version is pinned by the kubectl version, which is already a
   managed, registered dependency. An unpinned standalone binary would *add*
   version skew across contributor machines and CI, not remove it.
-- One less host dependency to install, register in `scripts/check-tools.sh`,
+- One less host dependency to install, register in `scripts/ci/check-tools.sh`,
   and supply-chain-audit.
 
 **Revisit trigger:** an overlay needs a kustomize feature or bugfix the embedded
-copy doesn't have. Then re-add the binary via the `scripts/check-tools.sh`
+copy doesn't have. Then re-add the binary via the `scripts/ci/check-tools.sh`
 registry — version-pinned this time — rather than working around it.
 
 ## Load-bearing caveats (learned the hard way, 2026-06-30)

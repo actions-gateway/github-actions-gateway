@@ -95,7 +95,7 @@ RunnerSets, tenants opt into ScaleSet by editing the set, then move to `v2beta1`
 - **Production CRD conversion stanza is a chart-sync-layer injection.** The
   deployment-specific `spec.conversion` (strategy `Webhook`, `clientConfig` → the GMC
   webhook service, cert-manager CA annotation) is Helm-templated, injected by
-  `scripts/sync-chart-crds.sh` — the authoritative `api/config/crd` output stays
+  `scripts/manifest/sync-chart-crds.sh` — the authoritative `api/config/crd` output stays
   conversion-free (controller-gen emits none, and envtest overrides it anyway). Mirrors
   how `sync-chart-webhook.sh` re-injects Helm wiring.
 

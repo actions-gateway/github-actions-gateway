@@ -7,12 +7,12 @@ SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
 LOCALBIN       := $(REPO_ROOT)/.build
 YEAR           ?= $(shell date +%Y)
 
-# e2e image defaults reference the local registry that scripts/kind-with-registry.sh
+# e2e image defaults reference the local registry that scripts/e2e/kind-with-registry.sh
 # stands up alongside the kind cluster. Override with registry-prefixed, SHA-suffixed
 # tags for e2e runs (the root Makefile sets these automatically via GMC_IMG/AGC_IMG/PROXY_IMG).
 # 127.0.0.1 (not localhost): the registry is published IPv4-only, so pushing/
 # resolving via localhost can hit IPv6 [::1] and fail. Matches the containerd
-# mirror key in scripts/kind-with-registry.sh.
+# mirror key in scripts/e2e/kind-with-registry.sh.
 GMC_IMG     ?= 127.0.0.1:5000/gmc:e2e
 AGC_IMG     ?= 127.0.0.1:5000/agc:e2e
 PROXY_IMG   ?= 127.0.0.1:5000/proxy:e2e

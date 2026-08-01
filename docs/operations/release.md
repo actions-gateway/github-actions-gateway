@@ -64,7 +64,7 @@ A release is a `vX.Y.Z` git tag plus its outputs:
   `contents: write`).
 - The **`gag-migrate` CLI binaries** (Q306), cross-compiled by `chart-publish` for
   the operator platform matrix (`linux/amd64`, `linux/arm64`, `darwin/amd64`,
-  `darwin/arm64`, `windows/amd64`) via `scripts/build-migrate-binaries.sh` and
+  `darwin/arm64`, `windows/amd64`) via `scripts/release/build-migrate-binaries.sh` and
   attached to the **GitHub Release** as `gag-migrate-<tag>-<os>-<arch>` assets. A
   single `SHA256SUMS` manifest is keyless **cosign `sign-blob`**-signed
   (`SHA256SUMS.cosign.bundle`) — the same no-secret Fulcio/Rekor path as the v2 CRD
@@ -116,7 +116,7 @@ work from `STATUS.md` by design, so nothing in the backlog shows what has piled 
 since the last tag:
 
 ```bash
-scripts/release-delta.sh
+scripts/release/release-delta.sh
 ```
 
 It reports, for `<last stable tag>..origin/main`, the commits by Conventional
@@ -167,7 +167,7 @@ and let the ledger's `-gate` rows answer "is it done?" until the tag.
   can pass or fail mechanically.
 
   ```bash
-  scripts/api-surface-since.sh
+  scripts/release/api-surface-since.sh
   ```
 
   Apply the checklist in
@@ -188,7 +188,7 @@ and let the ledger's `-gate` rows answer "is it done?" until the tag.
   so the decision belongs here, not after.
 
   ```bash
-  scripts/operator-caveats-since.sh
+  scripts/release/operator-caveats-since.sh
   ```
 
   It needs no bookkeeping to stay current: the
@@ -681,7 +681,7 @@ enforce that a signature can only ever be a tag signature:
   (sourced from `release_identity_regexp` in
   [`scripts/lib/common.sh`](../../scripts/lib/common.sh)), so a signature minted
   from `refs/heads/…` is rejected even if one were somehow produced. The
-  `scripts/verify-release-test.sh` assertions (run by `make check` and CI) guard
+  `scripts/release/verify-release-test.sh` assertions (run by `make check` and CI) guard
   that the regexp stays tags-only.
 
 Together these close the hole where repo-write could dispatch `publish.yml` from a
@@ -700,7 +700,7 @@ that verifies them*.
   in `go.sum`. A malicious or accidental edit under `vendor/` (or `tools/vendor/`)
   would otherwise compile straight into the signed release images. The
   `vendor-check` job (in `unit-test.yml`, single source of truth `make
-  vendor-check` → `scripts/vendor-check.sh`) re-runs the workspace-vendor flow —
+  vendor-check` → `scripts/go/vendor-check.sh`) re-runs the workspace-vendor flow —
   which re-fetches every module verified against `go.sum` — and fails on any diff
   against the committed trees. A Dependabot `go.mod` bump legitimately fails this
   gate until a follow-up vendor sync lands; that is the intended signal (see
@@ -710,7 +710,7 @@ that verifies them*.
   on its own. The publish pipeline obtains cosign via the SHA-pinned
   `sigstore/cosign-installer` action (which performs its own signature
   verification); the *local* verify path (`make verify-release` →
-  `scripts/download-cosign.sh`) pins the expected SHA256 per platform in-repo and
+  `scripts/release/download-cosign.sh`) pins the expected SHA256 per platform in-repo and
   refuses to install a binary whose bytes don't match. Bumping `COSIGN_VERSION`
   must add the new digests to that script (it fails closed on an unpinned
   version) — the same deliberate-pin discipline as `KIND_BINARY_SHA256` in

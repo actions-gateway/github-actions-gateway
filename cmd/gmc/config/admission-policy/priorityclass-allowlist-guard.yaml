@@ -43,7 +43,7 @@
 # bindings naming it goes empty for one refresh tick, which `helm uninstall` does
 # (Q444). The apiserver allocates a fresh dynamic informer per context for a CRD
 # paramKind, so this kind survives the same transition; the contrast is measured by
-# scripts/vap-param-informer-check.sh.
+# scripts/e2e/vap-param-informer-check.sh.
 #
 # The empty-list object shipped below is the secure default: no named class is
 # permitted until the platform admin lists it.
