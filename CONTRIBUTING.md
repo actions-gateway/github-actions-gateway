@@ -192,6 +192,12 @@ say. Branching that off `main` leaves the first PR red with no path forward, so 
 off `main`, then rebase the blocked PR **onto the fix branch** and say so in the PR body.
 Reviewers merge the fix first.
 
+The same stacking applies to work that *depends on* an open PR (needs a file only that
+branch has): base on its branch and open the stacked PR against it. **Re-check the base
+PR's state immediately before `gh pr create`** — it can merge (and its branch delete)
+between your fetch and the create, at which point the create fails with `Base ref must
+be a branch`; the fix is the `--onto` rebase below, then a plain PR against `main`.
+
 Two mechanics make the follow-through safe once the base lands:
 
 - **Rebase with `--onto` to drop the merged commits.** PRs here squash-merge, so the
