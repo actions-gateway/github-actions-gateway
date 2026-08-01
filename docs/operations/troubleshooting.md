@@ -418,6 +418,13 @@ ReplicaSet — trivially complete — as a successful rollout.
   startup time. The AGC's 60s termination grace period still applies, so in-flight
   session work drains as it would on a rollout.
 
+**What a working restart still does not do.** Either path replaces the control-plane
+pod and nothing else. It deletes no worker pod — see [Workers Left Behind by an AGC
+That Was Down](#workers-left-behind-by-an-agc-that-was-down) for what actually
+reclaims those — so a restart is not a remedy for workers that will not drain. The
+reaper runs on the live AGC on deadlines measured from each pod, so a fresh one reaps
+no sooner than the one it replaced.
+
 **Verify either path took effect** — check that the pod is actually new rather than
 trusting the rollout message:
 

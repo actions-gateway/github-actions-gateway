@@ -90,11 +90,13 @@ drain_workers() {
 	echo "    A pod stuck on FailedMount or FailedScheduling never starts, and it" >&2
 	echo "    holds one of its tenant's concurrency slots until it is deleted —" >&2
 	echo "    which is what stops the rest of the queue from draining." >&2
-	echo "  - Bouncing the AGC (scripts/dogfood/ops.sh agc-bounce <tenant>) is" >&2
-	echo "    worth trying only if the pods are gone but the listener still holds" >&2
-	echo "    assignments; a bounce does not clear stuck pods, and a fresh listener" >&2
-	echo "    re-acquires the same assignments." >&2
 	echo "  - You accept stranding them: re-run with SKIP_DRAIN=1." >&2
+	echo >&2
+	echo "What will not help: bouncing the AGC (ops.sh agc-bounce ci|e2e). It is a" >&2
+	echo "real rolling restart on a GMC carrying the Q552 fix, but this drain counts" >&2
+	echo "worker pods and a restart deletes none of them. The reaper that clears a" >&2
+	echo "stuck pod already runs on the live AGC, on deadlines measured from the pod," >&2
+	echo "so a fresh one reaps no sooner. Delete the pods above instead." >&2
 	exit 1
 }
 
