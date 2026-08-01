@@ -2332,6 +2332,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Scope ledger">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-rc4-carries-and-the-two-scope-calls-behind-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What rc.4 carries, and the two scope calls behind it
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2626,6 +2643,48 @@ The prose below carries the <em>why</em> of each; this table is the state.</p>
 <td>✅ shipped 2026-07-31</td>
 </tr>
 <tr>
+<td>Q576</td>
+<td>Ceiling-blocked provisioning retries hot, one deregister per attempt</td>
+<td><code>1.3-gate</code></td>
+<td>✅ shipped 2026-08-01</td>
+</tr>
+<tr>
+<td>Q552</td>
+<td>GMC reverts a <code>kubectl rollout restart</code> of a managed AGC</td>
+<td><code>1.3-gate</code></td>
+<td>✅ shipped 2026-08-01</td>
+</tr>
+<tr>
+<td>Q553</td>
+<td>AGC re-provisions jobs GitHub no longer has, livelocking a drain</td>
+<td><code>1.3-gate</code></td>
+<td>✅ shipped 2026-08-01</td>
+</tr>
+<tr>
+<td>Q582</td>
+<td>v1/v2 proxy pools collide throughout migration coexistence</td>
+<td><code>1.3-gate</code></td>
+<td>✅ shipped 2026-08-01</td>
+</tr>
+<tr>
+<td><a href="../../STATUS/#Q575">Q575</a></td>
+<td>A worker whose <code>job-payload</code> secret is absent stalls</td>
+<td><code>1.3-gate</code></td>
+<td>🔲 in flight (#1119)</td>
+</tr>
+<tr>
+<td><a href="../../STATUS/#Q577">Q577</a></td>
+<td><code>stop.sh</code> leaves the pool up when its drain cannot converge</td>
+<td><code>1.3-gate</code></td>
+<td>🚫 blocked by Q575 — re-verify when it lands</td>
+</tr>
+<tr>
+<td><a href="../../STATUS/#Q583">Q583</a></td>
+<td>An AGC restart replays the queue and re-provisions jobs long gone</td>
+<td>rides</td>
+<td>⤴ measure at the rc.4 gate first — see below</td>
+</tr>
+<tr>
 <td>Q406</td>
 <td>Capacity gate <code>AutoscalerVerdict</code> mode</td>
 <td>rides</td>
@@ -2645,17 +2704,44 @@ The prose below carries the <em>why</em> of each; this table is the state.</p>
 </tr>
 </tbody>
 </table>
-<p><strong>Cut condition: zero open <code>1.3-gate</code> rows</strong> (<code>grep '1.3-gate' docs/STATUS.md</code> —
-currently none) <strong>plus the release-candidate dogfood validation</strong>, the ledger's
-last row. It has no Q-ID because it cannot be a Queue item — it only runs against
-a published RC — but it carries a row so its state is visible rather than buried
-in prose.</p>
+<p><strong>Cut condition: zero open gating rows in this ledger</strong> <strong>plus the
+release-candidate dogfood validation</strong>, the ledger's last row. It has no Q-ID
+because it cannot be a Queue item — it only runs against a published RC — but it
+carries a row so its state is visible rather than buried in prose. Read the
+ledger, not <code>grep '1.3-gate' docs/STATUS.md</code>, as authoritative: the rc.3-derived
+gates were filed as ordinary <code>bug</code> rows and pulled into scope by the decision
+recorded below, so the label grep under-reports them.</p>
 <p><strong>No RC has produced a verdict yet.</strong> rc.1 aborted when the gate's then-repo-wide
 e2e routing caught concurrent CI; rc.2 reached the live API and returned Q550 and
 Q551 instead of a result; rc.3 aborted at <code>start.sh</code>'s AGC wait, which raced every
 rollout and reported a healthy AGC as timed out (fixed in #1090). Each was
 diagnosed on its own, which is how three consecutive misses went unremarked — the
 row exists so the fourth does not.</p>
+<h3 id="what-rc4-carries-and-the-two-scope-calls-behind-it">What rc.4 carries, and the two scope calls behind it<a class="headerlink" href="#what-rc4-carries-and-the-two-scope-calls-behind-it" title="Permanent link">&para;</a></h3>
+<p>rc.3's validation window produced five defects (Q575–Q578, Q580) plus a revive
+trigger on Q553. Q576, Q578, and Q580 have shipped; Q575 is in flight and Q577 is
+blocked behind it. <strong>Q576, Q552, and Q553 gate rather than ride</strong> for the same
+reason Q550 and Q551 did: each is an availability bug an ordinary tenant reaches,
+not a dogfood-harness artifact. Q576 in particular spun a saturated scale set at
+~0.8 provisioning attempts/s for 14 minutes, issuing 704 GitHub deregister calls
+for a single job.</p>
+<p><strong>Q582 was pulled into scope by an explicit maintainer decision (2026-08-01),
+though it was not an rc.3 finding.</strong> It surfaced while diagnosing the Q570 e2e
+flake: the v1 and v2 proxy pools both stamp <code>app: actions-gateway-proxy</code>, so
+during coexistence each pool's pods match the other's PDB and both HPAs wedge on
+<code>AmbiguousSelector</code> — neither autoscales. The reasoning for gating on it: 1.3 <em>is</em>
+the <code>v2.0.0</code> deprecation notice, so shipping it with a documented v1→v2 migration
+path that silently disables autoscaling on both pools undercuts the release's own
+message.</p>
+<p><strong>Q583 rides, pending a measurement the gate itself supplies.</strong> Q553's give-up
+guard is process-local, so a restarted AGC may poll from cursor 0 and re-provision
+jobs long gone — but the row's premise (that the queue still retains those
+messages, and the <code>DeleteMessage</code> wire shape) is unproven, and it cannot be
+confirmed below a live run. Building against an unmeasured mechanism is how a
+session repairs a working path, so the call is to <strong>measure it during the rc.4
+gate, which restarts AGCs anyway</strong>, and let a confirmed result gate rc.5 if it is
+real. Capture the queue's retention behaviour across an AGC restart while the gate
+is running — it is the cheapest window there is.</p>
 <h2 id="what-13-means">What 1.3 means<a class="headerlink" href="#what-13-means" title="Permanent link">&para;</a></h2>
 <p>Two things, one of which only a release can deliver.</p>
 <p><strong>The headline is worker right-sizing.</strong> Per-<code>RunnerSet</code> usage observability,
