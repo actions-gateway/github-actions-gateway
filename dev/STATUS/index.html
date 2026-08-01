@@ -2639,6 +2639,14 @@
 <td>Both stamp <code>app: actions-gateway-proxy</code>, so post-<code>gag-migrate</code> each pool's pods match the other's PDB, both HPAs wedge on <code>AmbiguousSelector</code> (neither autoscales), and hostname anti-affinity makes coexistence cost v1+v2 nodes. Found via Q570.</td>
 </tr>
 <tr>
+<td><a id="Q585"></a>Q585</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go">The migration spec's teardown deletes the namespace without deleting the gateway first</a></td>
+<td><code>tests</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Its <code>AfterAll</code> is the only one that skips <code>utils.DeleteActionsGatewayCR</code>, so namespace cascade races the AGC against the CRs whose finalizers need it alive. Observed 11+ min <code>Terminating</code> on <code>agentpool-cleanup</code>/<code>gmc-cleanup</code>, cleared only by hand.</td>
+</tr>
+<tr>
 <td><a id="Q501"></a>Q501</td>
 <td><a href="../plan/q501-cancel-relay/">A cancelled run's worker pod keeps running to completion</a></td>
 <td><code>bug</code> <code>infra</code></td>
