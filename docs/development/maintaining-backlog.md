@@ -110,6 +110,14 @@ The trigger for writing a doc is **information loss, not item size**: `Sz` estim
 
 When a plan closes, **promote its load-bearing conclusions into `docs/design/`** rather than letting them archive out of reach — Queue rows and code cite the durable layer, never a plan path.
 
+## A row's asserted defect is a claim, not a finding
+
+A Queue row is read months later as established fact. Write it so a future session can tell what was measured from what was inferred: state the measurement that establishes the defect, or say plainly that the mechanism is unverified.
+
+An unmeasured mechanism costs more than the row saves. Q584 was filed asserting that `check-path-filters.sh`'s awk YAML parsing could "mis-read as full coverage, failing green". That was wrong — the gate iterates a hardcoded filter registry against `go.work`, so a parse failure *removes* patterns and fails closed — and the row reached `main` before anyone tried to reproduce it, costing a second PR to correct. The real defect had the opposite sign: a valid reformat made the gate emit twelve errors naming patterns that were already present.
+
+Rows that name an unknown are honest and useful — several in the Queue say "unmeasured live — confirm X before building". That phrasing is the pattern: it tells the next session where to start, instead of sending it to repair something that already works. Only a stated *mechanism* needs this; a symptom ("this test flaked on run N, passed on rerun") is already an observation.
+
 ## Flake fixes go first
 
 When a CI flake is observed (test passes on rerun, no code change in between), file it as a Queue item **and move it to the top of the Queue** before continuing other work. Then pick it up next. Flake cost compounds: a 1-hour fix saves cumulative CI wait + diagnosis + context-switch overhead across every future PR that hits it. This overrides default ordering even over critical security items — those are typically M/L-sized and themselves benefit from flake-free CI. Annotate the row's Notes with "**Top of queue per flakes-first rule**" linking this section.
