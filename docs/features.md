@@ -26,11 +26,13 @@ under its first stability contract.
 - **[Priority tiers per runner set](design/02-architecture.md)** — reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.
 - **[Worker scale-up rate limiting](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)** — opt-in token bucket capping how *fast* workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.
 - **[Scale-to-zero workers](design/02-architecture.md)** — worker pods exist only while a job runs; listeners are ~12 KiB goroutines in one shared pod, not a listener pod per runner group.
+- **[Unmodified upstream runner images](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)** — the wrapper is injected into each worker pod at runtime — an OCI image volume on Kubernetes 1.33+, an initContainer below — so the stock `actions/runner` image, or any derivative, runs with no rebuild.
 
 ## Capacity, cost, and right-sizing
 
 - **[Measured worker right-sizing](operations/worker-rightsizing.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — per-job CPU/memory peaks sampled and turned into recommended `requests`/`limits` in `RunnerSet` status, with an advisory `SizingDrift` condition.
 - **[Sizing profiles](operations/worker-rightsizing.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — opt-in `Binpack`, `Throughput`, and `NodeShare` profiles apply the measurement at pod-build time, with clamps, a confidence fallback, and GPUs never touched.
+- **[Managed AGC right-sizing](operations/tenant-onboarding.md#letting-an-autoscaler-size-the-agc-agcautoscaling)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — opt-in `agcAutoscaling` stamps a `VerticalPodAutoscaler` next to a gateway's AGC so requests track observed usage; explicit `agcResources` become the floor and ceiling, and a missing VPA install degrades to an advisory condition.
 - **[`ResourceQuota` sizing guide](operations/resourcequota-sizing.md)** — turn runner shapes and concurrency ceilings into the quota numbers a platform admin sets, including what the quota actually counts.
 - **[Per-tenant cost attribution](operations/cost-attribution.md)** — map tenant namespaces and `app.kubernetes.io/*` labels to OpenCost/Kubecost allocation queries for real dollars per tenant.
 - **[Savings calculator](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc)** — the interactive cost model behind the ARC comparison.
@@ -41,6 +43,7 @@ under its first stability contract.
 - **[Per-tenant egress IPs](design/network-architecture.md)** — a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.
 - **[Standalone `EgressProxy`](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — the proxy becomes its own object, optionally shared, or omitted entirely for direct — still `NetworkPolicy`-restricted — egress.
 - **[FQDN egress policy](operations/security-operations.md#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in)** — express GitHub egress by hostname instead of CIDR on Cilium, Calico, or GKE Dataplane V2.
+- **[Auto-refreshed GitHub egress rules](operations/troubleshooting.md#actionsgateway-reports-egressrulesstale)** — the GMC re-reads GitHub's published IP ranges every 24 hours into each tenant's `NetworkPolicy`, and an `EgressRulesStale` condition — with a paging alert — fires when the refresh stalls past its window.
 - **[Bring your own proxy autoscaler](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — `managedAutoscaling: false` hands the proxy pool to KEDA, VPA, or a custom HorizontalPodAutoscaler.
 - **[Service mesh coexistence](operations/service-mesh-coexistence.md)** — run alongside Istio, Linkerd, or ambient mode with injection opt-out and egress exclusions that keep the per-tenant proxy honored.
 - **[One resource per tenant](operations/tenant-onboarding.md)** — a single `ActionsGateway` provisions an isolated controller, proxy pool, RBAC, and network policies inside the platform-owned quota.
@@ -53,6 +56,9 @@ under its first stability contract.
 - **[Signed images, SBOM, and SLSA provenance](operations/release.md)** — every published image is keyless-signed and carries a Software Bill of Materials (SBOM) attestation.
 - **[Admission policy compatibility](operations/admission-policies.md)** — a Kyverno/Gatekeeper matrix covering whether GAG pods comply with common cluster policies, plus sample enforce and exception policies.
 - **[Optional CONNECT destination allow-listing](operations/security-operations.md)** — defense in depth, off by default: an opted-in proxy refuses a CONNECT outside the permitted set and counts each refusal as an alertable Server-Side Request Forgery (SSRF) signal. The mandatory default-deny NetworkPolicy stays the primary gate.
+- **[Self-confining controller privileges](design/05-security.md#gmc-privilege-escalation-blast-radius-and-compensating-controls)** — shipped `ValidatingAdmissionPolicy` guards deny the GMC's own cluster-wide writes outside admin-marked tenant namespaces, so a compromised manager cannot touch `kube-system` or any unmarked namespace.
+- **[Restart-free platform allowlists](operations/security-operations.md#self-service-additions-via-the-priorityclassallowlist-cr-q188)** — grow the PriorityClass and egress-destination allowlists by editing a watched `PriorityClassAllowlist` CR or ConfigMap, no GMC restart; a missing or invalid object fails safe back to the flag baseline.
+- **[Credential redaction in logs](operations/observability-logging.md#what-never-appears-in-logs)** — every GitHub response body passes one sanitizer that strips tokens, JWTs, and JIT configs before it can reach a log line, at every log level.
 - **[Abuse detection and response](operations/security-operations.md)** — the threat model's abuse heuristics mapped to operator alerts, with compromise-response playbooks.
 - **[Workload-identity credentials](design/05-security.md#57-workload-identity-the-no-pem-delegation-model)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — mint short-lived GitHub credentials through an external signer so the GitHub App private key never enters the cluster.
 
@@ -68,6 +74,7 @@ under its first stability contract.
 ## Install and day-2 operations
 
 - **[Helm install](operations/install.md)** — the OCI chart, digest pinning, healthy-install verification, and a `scripts/e2e/validate-cluster.sh` pre-flight that fails loudly on a network-policy-less CNI.
+- **[Highly available manager](operations/install.md#verify-a-healthy-install)** — the GMC installs as two replicas with leader election, a `PodDisruptionBudget`, and anti-co-location spread by default, releasing its lease on shutdown so failover takes seconds rather than a lease timeout.
 - **[Air-gapped install](operations/air-gapped-install.md)** — relocate images and the OCI chart to a private registry with digests preserved, including pull Secrets for the runtime pods.
 - **[GitOps install](operations/gitops.md)** — declarative Argo CD `Application` and Flux `HelmRelease` examples, with the CRD-pruning gotcha handled.
 - **[Upgrade and rollback](operations/upgrade.md)** — versioned upgrade procedures and the rollback path for each release.
