@@ -22,8 +22,15 @@ copyright: Licensed under the Apache License 2.0.
 # See website.md § Publication scope.
 exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/development/\n/assets/README.md\n/assets/fonts/README.md\n"]
 
-# Published on `dev` but deliberately absent from the nav, which stays the
-# operator-facing table of contents on every version.
+# Published but deliberately absent from the nav, which stays the operator-facing
+# table of contents on every version: the repo-internal tree the `dev` version
+# publishes (Q558), plus `/operations/examples/` — sample manifests reached from
+# the page that explains them (admission-policies.md), not a TOC entry.
+#
+# Declaring every deliberate omission is what makes MkDocs' "not included in the
+# nav" list mean something: what remains is a page a reader can reach only by
+# search or URL. It reports at INFO, so read it — three operator pages sat there
+# unnoticed under green builds (Q562). See website.md § What belongs in nav.
 not_in_nav: |
   /README.md
   /STATUS.md
@@ -31,6 +38,7 @@ not_in_nav: |
   /development/
   /assets/README.md
   /assets/fonts/README.md
+  /operations/examples/
 
 theme:
   name: material
@@ -191,6 +199,8 @@ nav:
       - "Appendix E — Capacity planning": design/appendix-e-capacity-planning.md
       - "Appendix F — Cost model": design/appendix-f-cost-model.md
       - "Appendix G — Future enhancements": design/appendix-g-future-enhancements.md
+      - "Appendix H — v2 API decomposition": design/appendix-h-v2-api-decomposition.md
+      - "GitHub protocol dependencies": design/github-protocol-dependencies.md
   - Operations:
       - Overview: operations/README.md
       - Install: operations/install.md
@@ -221,5 +231,6 @@ nav:
       - Velero backup & restore: operations/velero-backup-restore.md
       - Troubleshooting: operations/troubleshooting.md
       - Security operations: operations/security-operations.md
+      - "Admission policies (Kyverno / Gatekeeper)": operations/admission-policies.md
       - Release: operations/release.md
       - "Kata-on-GKE spike runbook": operations/kata-ci-spike-runbook.md

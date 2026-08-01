@@ -380,17 +380,34 @@ Two traps worth keeping in mind when editing that wiring:
   and publish the internal docs everywhere.
 - **`docs/README.md` stays excluded on every version**, including `dev`. MkDocs
   drops it anyway as a conflict with the `index.md` landing page; leaving it in
-  the list keeps that from surfacing as a build warning.
-
-The repo-internal pages are deliberately **not** in the `nav` — that stays the
-operator-facing table of contents on every version — so they are reachable by
-URL, by search, and from the roadmap's backlog link. `not_in_nav` in
-`mkdocs.yml` declares this so the build doesn't report them as an oversight.
+  the list keeps that from surfacing as a build warning. Because it is never a
+  site page, a doc that links to it must use the absolute `github.com` URL — a
+  relative `../README.md` fails `mkdocs build --strict`.
 
 PR builds validate **both** scopes (`pages.yml`'s `build` job runs `mkdocs build`
 twice), so a PR that breaks a plan or development page fails there rather than on
 `main`. `make docs-build` does the same locally — see
 [§ The two link gates](#the-two-link-gates).
+
+### What belongs in `nav`
+
+The `nav` is the operator-facing table of contents, so a published page is
+either in it or declared in `not_in_nav`. Two kinds are declared:
+
+- the repo-internal tree the `dev` version publishes (`STATUS.md`, `plan/`,
+  `development/`), reachable by URL, by search, and from the roadmap's backlog
+  link;
+- `operations/examples/`, sample manifests reached from the page that explains
+  them ([admission-policies.md](../operations/admission-policies.md)) rather
+  than browsed from the TOC.
+
+Everything else in `nav`. That makes MkDocs' "pages exist in the docs directory,
+but are not included in the `nav` configuration" list the accidental omissions
+only, and **the list should be empty** — treat an entry as a page a reader can
+now reach only by search or URL. Q562 was three such pages (the admission-policy
+matrix, Appendix H, the protocol-dependency register) sitting unnoticed in it.
+MkDocs reports this at INFO, so it never fails the build; read the
+`make docs-build` output after adding a page.
 
 ### The backlog page
 
@@ -409,7 +426,7 @@ is a read-only view of it.
 |---|---|
 | The **version banner** (below) | any page of a non-default version — the only site-chrome entry point |
 | [`roadmap.md`](../roadmap.md) | the intro paragraph and § How priorities are set, on **every** version (the URL is version-pinned, so it stays honest from `stable`, where the page does not exist) |
-| [`docs/README.md`](../README.md) | github.com, where contributors start |
+| [`docs/README.md`](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/README.md) | github.com, where contributors start |
 
 Site search finds it too, but only *within* the `dev` version — Material's search
 index is per-version, so a search run from `stable` will never surface it.
