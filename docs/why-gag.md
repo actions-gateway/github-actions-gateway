@@ -253,7 +253,7 @@ ships as reconciled defaults, not a post-install project.
     still runs a permissive egress policy, because its jobs pull from CDN-fronted
     public registries no CIDR allowlist can pin. Closing it takes an in-cluster
     pull-through mirror plus egress scoped to the mirror, GitHub, and DNS: see
-    the [roadmap](roadmap.md#exploring--longer-term).
+    the [roadmap](roadmap.md#in-progress--near-term).
 
 For the full threat model, per-profile controls, and the abuse-response
 playbooks, see [Security](design/05-security.md) and

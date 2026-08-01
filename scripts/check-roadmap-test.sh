@@ -41,8 +41,8 @@ status() {
 roadmap() {
     local file="$WORKDIR/roadmap.md" line in_exploring=0
     {
-        printf '# Roadmap\n\n## Available now (1.0)\n\n'
-        printf -- '- **Something shipped.** No annotation needed here.\n'
+        printf '# Roadmap\n\n## How to read this page\n\n'
+        printf -- '- **An ungated section.** No annotation needed here.\n'
         printf '\n## In progress / near-term\n\n'
         for line in "$@"; do
             if [[ "$line" == "--" ]]; then
@@ -58,12 +58,29 @@ roadmap() {
     printf '%s\n' "$file"
 }
 
+# features NAME BULLETS… — write features-NAME.md with the given raw bullet
+# lines under one capability heading. Echoes the file path. NAME keeps each
+# fixture on its own path, since $FEATURES_FILE outlives the call that made it.
+features() {
+    local file="$WORKDIR/features-$1.md" line
+    shift
+    {
+        printf '# Features\n\nIntro prose, not a bullet.\n\n## Job intake\n\n'
+        for line in "$@"; do printf '%s\n' "$line"; done
+    } >"$file"
+    printf '%s\n' "$file"
+}
+
+# The features fixture every assertion runs against unless it overrides this.
+FEATURES_FILE="$(features clean '- **[A linked capability](operations/runbook.md)** — one clause.')"
+
 # expect NAME EXPECTED_RC ROADMAP STATUS [SUBSTRING] — run the gate and assert
-# its exit code, and optionally that its stderr mentions SUBSTRING.
+# its exit code, and optionally that its stderr mentions SUBSTRING. The features
+# page comes from $FEATURES_FILE so the roadmap cases need not name it.
 expect() {
     local name="$1" want_rc="$2" rm_file="$3" st_file="$4" needle="${5:-}"
     local out rc=0
-    out="$("$CHECK" "$rm_file" "$st_file" 2>&1)" || rc=$?
+    out="$("$CHECK" "$rm_file" "$st_file" "$FEATURES_FILE" 2>&1)" || rc=$?
     if (( rc != want_rc )); then
         printf 'FAIL %-34s rc=%d, want %d\n' "$name" "$rc" "$want_rc"
         printf '%s\n' "$out" | awk '{ print "       " $0 }'
@@ -86,8 +103,8 @@ EXPL='- **Far thing.** <!-- q:Q2 --> Body text.'
 expect "clean: both sections backed" 0 \
     "$(roadmap "$NEAR" -- "$EXPL")" "$(status "Q1" "Q2")"
 
-# An "Available now" bullet carries no annotation and must not be gated.
-expect "clean: available-now ungated" 0 \
+# A bullet outside the two gated sections carries no annotation and isn't gated.
+expect "clean: other sections ungated" 0 \
     "$(roadmap "$NEAR" -- "$EXPL")" "$(status "Q1" "Q2")"
 
 # The drift this gate exists for: the row was deleted because the work shipped.
@@ -140,6 +157,40 @@ expect "STATUS tables unparseable" 2 \
     "$(roadmap "$NEAR" -- "$EXPL")" "$WORKDIR/no-rows.md" 'parsed no Q-IDs'
 
 expect "missing file" 2 "$WORKDIR/nope.md" "$(status "Q1" "Q2")" 'file not found'
+
+# --- Rule 5: the feature index stays a link index, not prose. ---------------
+#
+# The failure this pins: docs/features.md was extracted from a roadmap section
+# whose bullets had grown to 126 words each *because* nothing made them link
+# out. Both halves of the rule are load-bearing — a word cap alone still allows
+# an unlinked stub, and a link alone still allows a paragraph.
+
+RM_OK="$(roadmap "$NEAR" -- "$EXPL")"
+ST_OK="$(status "Q1" "Q2")"
+
+FEATURES_FILE="$(features nolink '- **A capability with no doc behind it** — nothing to click.')"
+expect "feature bullet without a link" 1 "$RM_OK" "$ST_OK" 'has no link'
+
+# 60 words past a valid link: the shape the extraction removed.
+long_bullet="- **[A capability that will not stop talking](operations/runbook.md)** —$(printf ' word%.0s' $(seq 1 60))"
+FEATURES_FILE="$(features toolong "$long_bullet")"
+expect "feature bullet over the word cap" 1 "$RM_OK" "$ST_OK" 'Move the detail into the linked doc'
+
+# A badge span is presentation, not prose, and must not spend the word budget.
+# Sized to the boundary so this actually discriminates: 38 body words count as
+# 45 with the spans stripped (the cap, so green) and 47 without (so red). A
+# shorter bullet would pass either way and pin nothing.
+badge_bullet="- **[A v2 capability](operations/runbook.md)** <span class=\"gag-v2-badge\">v2</span> <span class=\"gag-maturity-badge\">beta</span> —$(printf ' word%.0s' $(seq 1 38))"
+FEATURES_FILE="$(features badges "$badge_bullet")"
+expect "badge markup is not counted" 0 "$RM_OK" "$ST_OK"
+
+# Format drift on the features page is a hard error, not a silent pass — the
+# same stance the two roadmap-side rc=2 cases above take.
+printf '# Features\n\nProse only, no bullets.\n' >"$WORKDIR/features-empty.md"
+FEATURES_FILE="$WORKDIR/features-empty.md"
+expect "features page has no bullets" 2 "$RM_OK" "$ST_OK" 'found no capability bullets'
+
+FEATURES_FILE="$WORKDIR/features-clean.md"
 
 if (( fails )); then
     printf '\ncheck-roadmap-test: %d assertion(s) failed\n' "$fails" >&2
