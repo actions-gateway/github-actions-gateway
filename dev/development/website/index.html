@@ -644,6 +644,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1146,6 +1150,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1164,6 +1224,8 @@
       
         
           
+        
+      
         
       
         
@@ -2105,6 +2167,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/release/" class="md-nav__link">
         
   
@@ -2337,6 +2427,17 @@
   
     <nav class="md-nav" aria-label="Publication scope">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-belongs-in-nav" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What belongs in nav
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#the-backlog-page" class="md-nav__link">
@@ -2872,16 +2973,32 @@ repo-internal page.</p>
   and publish the internal docs everywhere.</li>
 <li><strong><code>docs/README.md</code> stays excluded on every version</strong>, including <code>dev</code>. MkDocs
   drops it anyway as a conflict with the <code>index.md</code> landing page; leaving it in
-  the list keeps that from surfacing as a build warning.</li>
+  the list keeps that from surfacing as a build warning. Because it is never a
+  site page, a doc that links to it must use the absolute <code>github.com</code> URL — a
+  relative <code>../README.md</code> fails <code>mkdocs build --strict</code>.</li>
 </ul>
-<p>The repo-internal pages are deliberately <strong>not</strong> in the <code>nav</code> — that stays the
-operator-facing table of contents on every version — so they are reachable by
-URL, by search, and from the roadmap's backlog link. <code>not_in_nav</code> in
-<code>mkdocs.yml</code> declares this so the build doesn't report them as an oversight.</p>
 <p>PR builds validate <strong>both</strong> scopes (<code>pages.yml</code>'s <code>build</code> job runs <code>mkdocs build</code>
 twice), so a PR that breaks a plan or development page fails there rather than on
 <code>main</code>. <code>make docs-build</code> does the same locally — see
 <a href="#the-two-link-gates">§ The two link gates</a>.</p>
+<h3 id="what-belongs-in-nav">What belongs in <code>nav</code><a class="headerlink" href="#what-belongs-in-nav" title="Permanent link">&para;</a></h3>
+<p>The <code>nav</code> is the operator-facing table of contents, so a published page is
+either in it or declared in <code>not_in_nav</code>. Two kinds are declared:</p>
+<ul>
+<li>the repo-internal tree the <code>dev</code> version publishes (<code>STATUS.md</code>, <code>plan/</code>,
+  <code>development/</code>), reachable by URL, by search, and from the roadmap's backlog
+  link;</li>
+<li><code>operations/examples/</code>, sample manifests reached from the page that explains
+  them (<a href="../../operations/admission-policies/">admission-policies.md</a>) rather
+  than browsed from the TOC.</li>
+</ul>
+<p>Everything else in <code>nav</code>. That makes MkDocs' "pages exist in the docs directory,
+but are not included in the <code>nav</code> configuration" list the accidental omissions
+only, and <strong>the list should be empty</strong> — treat an entry as a page a reader can
+now reach only by search or URL. Q562 was three such pages (the admission-policy
+matrix, Appendix H, the protocol-dependency register) sitting unnoticed in it.
+MkDocs reports this at INFO, so it never fails the build; read the
+<code>make docs-build</code> output after adding a page.</p>
 <h3 id="the-backlog-page">The backlog page<a class="headerlink" href="#the-backlog-page" title="Permanent link">&para;</a></h3>
 <p><code>docs/STATUS.md</code> renders at
 <a href="https://actions-gateway.com/dev/STATUS/"><code>/dev/STATUS/</code></a> with filter chips over
@@ -2909,7 +3026,7 @@ is a read-only view of it.</p>
 <td>the intro paragraph and § How priorities are set, on <strong>every</strong> version (the URL is version-pinned, so it stays honest from <code>stable</code>, where the page does not exist)</td>
 </tr>
 <tr>
-<td><a href="../README.md"><code>docs/README.md</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/README.md"><code>docs/README.md</code></a></td>
 <td>github.com, where contributors start</td>
 </tr>
 </tbody>

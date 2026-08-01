@@ -13,6 +13,10 @@
         <link rel="canonical" href="https://actions-gateway.com/dev/design/appendix-h-v2-api-decomposition/">
       
       
+        <link rel="prev" href="../appendix-g-future-enhancements/">
+      
+      
+        <link rel="next" href="../github-protocol-dependencies/">
       
       
         
@@ -23,7 +27,7 @@
     
     
       
-        <title>Appendix H — v2 API Decomposition - GitHub Actions Gateway</title>
+        <title>Appendix H — v2 API decomposition - GitHub Actions Gateway</title>
       
     
     
@@ -174,7 +178,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Appendix H — v2 API Decomposition
+              Appendix H — v2 API decomposition
             
           </span>
         </div>
@@ -380,10 +384,12 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
+      <li class="md-tabs__item md-tabs__item--active">
         <a href="../" class="md-tabs__link">
           
   
@@ -603,6 +609,8 @@
       
   
   
+    
+  
   
   
     
@@ -644,20 +652,27 @@
       
         
       
+        
+      
+        
+      
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -679,13 +694,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1146,6 +1161,531 @@
 
               
             
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#h1-why-decompose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.1. Why decompose
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="H.1. Why decompose">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#non-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-goals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#risks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Risks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h2-design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.2. Design principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h3-the-crd-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.3. The CRD set
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="H.3. The CRD set">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#runtime-view--what-the-kinds-become" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime view — what the kinds become
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h4-spec-sketches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.4. Spec sketches
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="H.4. Spec sketches">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#worked-example--minimal-proxy-less-onboarding-three-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worked example — minimal proxy-less onboarding (three objects)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h5-how-each-pressure-is-resolved" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.5. How each pressure is resolved
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h6-naming-and-length-budgets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.6. Naming and length budgets
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="H.6. Naming and length budgets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#field-naming-freezes-at-ga--do-the-pass-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Field naming freezes at GA — do the pass now
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h7-reference-integrity--runtime-conditions-not-admission" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.7. Reference integrity — runtime conditions, not admission
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h8-ownership-gc-and-deletion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.8. Ownership, GC, and deletion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h9-cross-namespace-proxy-sharing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.9. Cross-namespace proxy sharing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h10-the-egress-proxy-becomes-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.10. The egress proxy becomes optional
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h11-migration-v2-tool-assisted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.11. Migration (v2, tool-assisted)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h12-folding-in-the-grandfathered-label-value-alignment-q147" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.12. Folding in the grandfathered label-value alignment (Q147)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h13-what-adopting-this-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.13. What adopting this changes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="H.13. What adopting this changes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#h131-crd-packaging-and-conditional-gmc-startup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.13.1. CRD packaging and conditional GMC startup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#h132-installupgrade-lifecycle--apply-render-not-helm-install-q276" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.13.2. Install/upgrade lifecycle — apply-render, not helm install (Q276)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h14-admin-policy-layer--deferred-until-tiering-is-real" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.14. Admin policy layer — deferred until tiering is real
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="H.14. Admin policy layer — deferred until tiering is real">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-capability-ladder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The capability ladder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#promote-flags--singleton-when" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Promote flags → singleton when
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-trigger-for-the-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The trigger for the class
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-deferring-costs-nothing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why deferring costs nothing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#v2-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        v2 decision
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h15-other-breaking-changes-worth-batching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.15. Other breaking changes worth batching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h16-open-questions--sign-off-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.16. Open questions / sign-off needed
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="H.16. Open questions / sign-off needed">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recommended-pending-ratification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended (pending ratification)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resolved" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolved
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#h17-migration-correctness--the-fan-outs-untested-invariants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        H.17. Migration correctness — the fan-out's untested invariants
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="H.17. Migration correctness — the fan-out&#39;s untested invariants">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#invariant-1--no-behavior-change-the-non-goal-most-at-risk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invariant 1 — "no behavior change" (the non-goal most at risk)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#invariant-2--reuse-the-object-size-justification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invariant 2 — "reuse" (the object-size justification)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#latent-v1-ambiguities-the-fan-out-forces-to-a-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Latent v1 ambiguities the fan-out forces to a decision
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1164,6 +1704,8 @@
       
         
           
+        
+      
         
       
         
@@ -2085,6 +2627,34 @@
     
   
     Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
   
 
     
@@ -4343,6 +4913,44 @@ at alpha cost, rather than from an adopter.</p>
       
         <footer class="md-footer">
   
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../appendix-g-future-enhancements/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Appendix G — Future enhancements">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Appendix G — Future enhancements
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../github-protocol-dependencies/" class="md-footer__link md-footer__link--next" aria-label="Next: GitHub protocol dependencies">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                GitHub protocol dependencies
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
     
   
   <div class="md-footer-meta md-typeset">

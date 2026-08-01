@@ -644,6 +644,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1146,6 +1150,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1164,6 +1224,8 @@
       
         
           
+        
+      
         
       
         
@@ -2105,6 +2167,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/release/" class="md-nav__link">
         
   
@@ -2543,12 +2633,12 @@
 <td>Release scopes exclude <code>plan/</code> and <code>development/</code>, so 120 links across 22 operator pages 404 on every numbered version. The site link gate leaves these at INFO deliberately. Absolutize to GitHub like <code>hooks/source_links.py</code> does, or drop them.</td>
 </tr>
 <tr>
-<td><a id="Q562"></a>Q562</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/mkdocs.yml">Four published pages are in no nav section</a></td>
-<td><code>docs</code></td>
+<td><a id="Q563"></a>Q563</td>
+<td><a href="../development/website/#what-belongs-in-nav">Nothing gates a published page that lands in no nav section</a></td>
+<td><code>docs</code> <code>infra</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>operations/admission-policies.md</code>, <code>design/appendix-h-v2-api-decomposition.md</code>, <code>design/github-protocol-dependencies.md</code>, <code>examples/policies/README.md</code> publish but sit in no nav section — reachable only by search/URL. Add to <code>nav</code> or <code>not_in_nav</code>.</td>
+<td>MkDocs reports an unlisted page at INFO, invisible under a green build — that is how Q562's three operator pages hid. <code>not_in_nav</code> declares every deliberate omission, so the list should be empty; fail <code>docs-preview.sh build</code> when it is not.</td>
 </tr>
 <tr>
 <td><a id="Q401"></a>Q401</td>
