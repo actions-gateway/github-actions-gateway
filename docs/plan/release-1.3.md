@@ -98,10 +98,20 @@ The prose below carries the *why* of each; this table is the state.
 | Q551 | A job the listener cannot provision is skipped permanently | `1.3-gate` | ✅ shipped 2026-07-31 |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
+| — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | 🔲 rc.3: gate aborted at leg 1, no verdict |
 
 **Cut condition: zero open `1.3-gate` rows** (`grep '1.3-gate' docs/STATUS.md` —
-currently none) **plus the release-candidate dogfood validation**, which is
-deliberately not a Queue row because it can only run against a published RC.
+currently none) **plus the release-candidate dogfood validation**, the ledger's
+last row. It has no Q-ID because it cannot be a Queue item — it only runs against
+a published RC — but it carries a row so its state is visible rather than buried
+in prose.
+
+**No RC has produced a verdict yet.** rc.1 aborted when the gate's then-repo-wide
+e2e routing caught concurrent CI; rc.2 reached the live API and returned Q550 and
+Q551 instead of a result; rc.3 aborted at `start.sh`'s AGC wait, which raced every
+rollout and reported a healthy AGC as timed out (fixed in #1090). Each was
+diagnosed on its own, which is how three consecutive misses went unremarked — the
+row exists so the fourth does not.
 
 ## What 1.3 means
 
