@@ -66,6 +66,14 @@ tagged chart. Check the release notes for the exact image digests to pin.
   DNS-aware (FQDN) egress-policy mode on Cilium/Calico. The managed
   HorizontalPodAutoscaler is an opt-out (`managedAutoscaling: false`) for teams
   that bring their own autoscaler (KEDA, VPA, a custom HPA).
+- **Optional CONNECT destination allow-listing on the proxy.** Worker egress is
+  gated by a mandatory default-deny NetworkPolicy regardless; on top of that, a
+  platform admin can opt a proxy into an application-layer allowlist, after
+  which it refuses a CONNECT to any destination outside the permitted set and
+  counts every refusal as an alertable Server-Side Request Forgery (SSRF)
+  signal. Defense in depth, not the primary gate: left unconfigured — the
+  default — the proxy stays transport-only and the NetworkPolicy remains the
+  sole destination boundary.
 - **GitHub Enterprise Server (GHES) gateways.** A gateway whose `gitHubURL`
   names a GHES appliance now addresses that appliance on every GitHub surface —
   token exchange, job acquisition, eviction re-runs — where earlier releases
@@ -181,8 +189,7 @@ last gaps an outside operator hits.
   CONNECT target is not readable by a cluster-wide network tap, and dedicated
   proxy pools so a bandwidth-heavy runner group cannot crowd out a quieter one.
   Destination allow-listing is deliberately absent from this list: it shipped
-  earlier, and the proxy already refuses a CONNECT to any destination outside
-  the configured allowlist.
+  earlier as an opt-in control (see "Available now" above).
 
 Everything else on this roadmap has either shipped (above) or is waiting on a
 gate rather than on engineering time (below); the active backlog also carries
