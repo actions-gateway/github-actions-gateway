@@ -207,6 +207,14 @@ Link each ID to its `STATUS.md` anchor while the row is open; a shipped or punte
 
 **The cut condition is one grep:** no `-gate` row for this release remains in the Queue (`grep '1.3-gate' docs/STATUS.md`), plus the release-candidate dogfood validation, which is deliberately not a Queue row because it can only run against a published RC.
 
+**That validation still gets a ledger row** — Q-ID `—`, since it has none:
+
+| — | RC validated on dogfood | gates | 🔲 rc.3: gate aborted at leg 1, no verdict |
+
+Not a Queue row, for the reason above; but left in prose it becomes the one cut condition with no state anywhere. 1.3 published three RCs and none produced a verdict — rc.1 aborted on routing, rc.2 returned two defects instead of a result, rc.3 aborted on a broken wait — and each was diagnosed alone, because nothing displayed the run of misses. A ledger row makes "no RC has ever passed this" answerable at a glance.
+
+It is the one row that does not flip to ✅ and vanish: rewrite it as each RC reports, and it is the last thing to go green before the tag.
+
 **Punt vs delay — the two ways scope changes:**
 
 - **Punt** (the item leaves the release): remove its `-gate` label and move it to the plan doc's *Explicitly out of scope* table with the reason. It **keeps its Queue position** — punting from a release is a statement about the tag, not a demotion; an item can be too important to rush and still be the next thing worked on.
