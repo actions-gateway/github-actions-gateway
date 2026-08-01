@@ -569,6 +569,15 @@ re-offer test is the routine case: disabling the one call the fix added turned i
 "the re-offer must provision the job once the conflict clears" — exactly the sentence the
 test exists to assert — and it went green again on restore.
 
+**A threshold assertion needs a fixture sized to the threshold.** The common way to fail
+the check above is a fixture so far from the boundary that it passes either way. A test
+for "badge markup is not counted against the 45-word cap" was first written with a
+ten-word bullet: green with the stripping, green without it, and pinning nothing. Sized
+to 38 body words — 45 counted with the spans stripped, 47 without — deleting the `gsub`
+turned it red, which is what made it a test. Whenever the behaviour under test is a
+limit, a cap, a timeout, or a retry count, put the fixture *at* the edge and confirm one
+step past it fails.
+
 ### A measurement that reproduces a call is not a test of the code that makes it
 
 The sibling of the rule above, and the one that survives a green **positive**. A
