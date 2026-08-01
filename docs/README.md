@@ -10,6 +10,8 @@ point see [DESIGN.md](../DESIGN.md).
 - [getting-started.md](getting-started.md) — deploy the system, wire up the GitHub
   App, validate, and rotate credentials.
 - [STATUS.md](STATUS.md) — single source of truth for progress and priorities.
+  Also published as a [filterable page](https://actions-gateway.com/dev/STATUS/)
+  on the `dev` docs site, with label, status, and size chips.
 
 ## Sections
 

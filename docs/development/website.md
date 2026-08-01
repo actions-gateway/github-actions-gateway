@@ -362,13 +362,51 @@ its tables — see [§ Progressive enhancement](#progressive-enhancement-docsjav
 The markdown file stays the single source of truth: the lint gate, the
 isolated-commit merge discipline, the `<a id="QN">` anchors, and the
 [backlog workflow](maintaining-backlog.md) all operate on the table, and the site
-is a read-only view of it. `roadmap.md` links to it from
-[§ How priorities are set](../roadmap.md#how-priorities-are-set), version-pinned
-so the link is honest from `stable`, where the page does not exist.
+is a read-only view of it.
+
+**How a reader reaches it.** The page is deliberately absent from the `nav` (see
+[§ Publication scope](#publication-scope)), so three routes carry the traffic:
+
+| Route | Reaches it from |
+|---|---|
+| The **version banner** (below) | any page of a non-default version — the only site-chrome entry point |
+| [`roadmap.md`](../roadmap.md) | the intro paragraph and § How priorities are set, on **every** version (the URL is version-pinned, so it stays honest from `stable`, where the page does not exist) |
+| [`docs/README.md`](../README.md) | github.com, where contributors start |
+
+Site search finds it too, but only *within* the `dev` version — Material's search
+index is per-version, so a search run from `stable` will never surface it.
 
 **Accepted wart:** mike's version switcher keeps the current path, so switching
 from the backlog page to `stable` lands on a 404. That is inherent to any
 per-version page.
+
+### The version banner
+
+The yellow bar reading *"You're not viewing the latest release"* is the
+`outdated` block in [`overrides/main.html`](../../overrides/main.html). Material
+renders that bar **only when a theme override fills the block** — the stock one
+is empty — so before this existed no version carried the not-canonical framing at
+all, `dev` included, despite `extra.version.default: stable` being set. Do not
+assume the version selector implies a banner; it does not.
+
+`stable` is the default, so every other version shows it: the unreleased `dev`
+docs and any older release. The backlog link inside it is gated on
+`config.extra.backlog_page`, which
+[`hooks/backlog_link.py`](../../hooks/backlog_link.py) derives from the build's
+own file set rather than from a second flag that could drift out of step with
+`exclude_docs` — the link renders exactly where the page exists. An older release
+therefore gets the warning without a link that would 404.
+
+Two traps if you edit that block:
+
+- **`exclude_docs` does not remove a file.** MkDocs keeps it and marks it
+  `InclusionLevel.EXCLUDED`, so presence in `files` proves nothing — the hook has
+  to read `file.inclusion.is_included()`. Testing only the former puts the link
+  on every release.
+- **`404.html` renders this block with no `page` in context.** Anything reading
+  `page.url` there fails the whole build (and hand-building `{{ base_url }}/…`
+  yields a protocol-relative `//STATUS/`). Hence the absolute `site_url` for the
+  release link and the `| url` filter for the per-page one.
 
 ## Links into the source tree
 
