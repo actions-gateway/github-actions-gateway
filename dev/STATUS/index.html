@@ -2607,6 +2607,14 @@
 <td>Live on the rc.3 gate (2026-08-01): 8 worker pods sat Pending ~10 min mounting a <code>job-ss-&lt;jobID&gt;</code> secret that did not exist, then recovered unaided. Find what deletes it, or what creates the pod first.</td>
 </tr>
 <tr>
+<td><a id="Q553"></a>Q553</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">The AGC re-provisions workers for jobs GitHub no longer has, livelocking any drain</a></td>
+<td><code>infra</code> <code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Trigger fired 2026-08-01 on rc.3: 15 assignments retried against 0 queued GitHub jobs, so Q501 did not end the churn. Hit the <code>ci</code> tenant and <code>stop.sh</code>, not just <code>e2e-stop</code>. Cleared only by hand.</td>
+</tr>
+<tr>
 <td><a id="Q577"></a>Q577</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/stop.sh"><code>stop.sh</code> leaves the pool up when its cluster-wide drain cannot converge</a></td>
 <td><code>infra</code> <code>bug</code></td>
@@ -2975,13 +2983,6 @@
 </tr>
 </thead>
 <tbody>
-<tr>
-<td><a id="Q553"></a>Q553</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-stop.sh"><code>e2e-stop</code> drain livelocks on zombie pods of cancelled runs</a></td>
-<td><code>infra</code></td>
-<td>S</td>
-<td><strong>Event:</strong> the drain times out against a ≥rc.3 AGC (Q501's fix ends cancelled-session churn). 2026-07-31: an rc.1 AGC re-provisioned zombies faster than the drain cleared; escaped by hand-deleting the gateway. Then add a cancelled-job escape.</td>
-</tr>
 <tr>
 <td><a id="Q530"></a>Q530</td>
 <td><a href="../plan/q511-live-github-run-isolation/#the-decision-forbid-concurrency">Isolate concurrent live-GitHub runs instead of forbidding them</a></td>
