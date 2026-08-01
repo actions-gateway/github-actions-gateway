@@ -2518,6 +2518,11 @@
 <td>Its runner name will not register; the listener re-offers it on a backoff. Read the <code>RunnerSet</code>'s <code>JobProvisionStalled</code> condition for the job ids; see the <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">runbook</a></td>
 </tr>
 <tr>
+<td>Scale-set assignments give up without running</td>
+<td><code>rate(scaleset_jobs_abandoned_total[15m])</code> &gt; 0</td>
+<td>GitHub stopped holding jobs the listener was still trying to place, so those runs will not start. Expected in a burst around a mass cancellation or a drain; investigate a sustained rate. See the <a href="../troubleshooting/#scale-set-assignments-abandoned-assignmentabandoned">runbook</a></td>
+</tr>
+<tr>
 <td>Scale-set jobs queue while its workers all run</td>
 <td><code>scaleset_jobs_deferred{reason="ceiling"}</code> &gt; 0</td>
 <td>Expected: the set is at the worker ceiling its spec declares, and the held jobs start as workers finish. Alert only on it being sustained; see the <a href="../troubleshooting/#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached">runbook</a></td>

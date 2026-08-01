@@ -2599,20 +2599,20 @@
 <td>Live on the rc.3 gate (2026-08-01): 8 worker pods sat Pending ~10 min mounting a <code>job-ss-&lt;jobID&gt;</code> secret that did not exist, then recovered unaided. Find what deletes it, or what creates the pod first.</td>
 </tr>
 <tr>
-<td><a id="Q553"></a>Q553</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">The AGC re-provisions workers for jobs GitHub no longer has, livelocking any drain</a></td>
-<td><code>infra</code> <code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Trigger fired 2026-08-01 on rc.3: 15 assignments retried against 0 queued GitHub jobs, so Q501 did not end the churn. Hit the <code>ci</code> tenant and <code>stop.sh</code>, not just <code>e2e-stop</code>. Cleared only by hand.</td>
-</tr>
-<tr>
 <td><a id="Q577"></a>Q577</td>
 <td><a href="../plan/gke-dogfood/#reading-a-timed-out-drain"><code>stop.sh</code> leaves the pool up when its drain cannot converge</a></td>
 <td><code>infra</code> <code>bug</code></td>
 <td>🚫</td>
 <td>S</td>
-<td>Blocked by <a href="#Q553">Q553</a>. Not a namespace-scope bug — the drain is cluster-wide because the resize evicts every tenant's AGC. Diagnostics shipped; the wedge that stalls it is Q553/Q575/Q576.</td>
+<td>Blocked by <a href="#Q575">Q575</a>. Not a namespace-scope bug — the drain is cluster-wide because the resize evicts every tenant's AGC. Q553's wedge is closed; re-verify on rc.4 whether Q575 alone still stalls it.</td>
+</tr>
+<tr>
+<td><a id="Q583"></a>Q583</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">An AGC restart replays the whole queue and provisions workers for jobs long gone</a></td>
+<td><code>infra</code> <code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q553's guard dies with the process; a fresh listener polls from cursor 0 because the tier never delete-acks (<code>DeleteMessage</code> wire shape unproven, a P2-surfaced P4 unknown). Unmeasured live — confirm the queue retains them before building.</td>
 </tr>
 <tr>
 <td><a id="Q166"></a>Q166</td>

@@ -3059,6 +3059,12 @@ emitted only on a v2 install and labelled per gateway (<code>namespace</code>, <
 <td>Assigned jobs the listener is holding for a later re-offer, by why. Each one is a workflow run queued at GitHub with no worker running it, and it is the metric twin of the <code>RunnerSet</code>'s advisory <code>JobProvisionStalled</code> condition, whose message names the job ids. <strong>Alert on the reason, not the total</strong> — the two mean different things. <code>reason="name_conflict"</code>: the runner name will not register — a <code>generate-jitconfig</code> 409 that neither deleting the stale record nor a fresh suffixed name could clear (Q551). An anomaly; <strong>any non-zero value is worth alerting on</strong>, fix per <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>. <code>reason="ceiling"</code>: the set is already running as many workers as its spec allows (Q576) — expected backpressure that clears as workers finish, so alert only on it being <em>sustained</em>, if at all; see <a href="../troubleshooting/#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached">Scale-Set Jobs Waiting at the Worker Ceiling</a>. Both reasons are published on every update, zero included, so a series never freezes at its last non-zero reading. Dropped when the <code>RunnerSet</code> is deleted.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_scaleset_jobs_abandoned_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Assigned jobs the listener gave up on because the scale set stopped counting them as assigned — GitHub is no longer holding the job and never reported it complete (Q553). Each is a <strong>workflow run that will not run</strong>, so unlike <code>…_jobs_deferred</code> this is a loss, not backpressure: it is what distinguishes a deferred set that cleared because its jobs ran from one that cleared because they evaporated. <strong>Any non-zero value is worth alerting on</strong>; see <a href="../troubleshooting/#scale-set-assignments-abandoned-assignmentabandoned">Scale-Set Assignments Abandoned</a>. It is expected to stay flat in steady state — a small burst around a mass run cancellation or a <code>stop.sh</code> drain is the designed behaviour, a sustained rate is not.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_scaleset_advertised_capacity</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
