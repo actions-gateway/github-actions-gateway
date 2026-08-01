@@ -119,9 +119,12 @@ extra:
 # was a hand-edited release step every stable tag missed. See
 # docs/development/website.md § The announce bar.
 #
-# A relative link that escapes docs/ resolves to a source file on github.com and
-# to a 404 on the site. source_links.py absolutizes those against repo_url so one
-# markdown link works in both (Q558). See website.md § Links into the source tree.
+# A relative link this build does not publish resolves on github.com and 404s on
+# the site — a target escaping docs/ (Q558), or a page the version's own scope
+# drops, like design/ citing plan/ on a release (Q561). source_links.py
+# absolutizes those against repo_url, deciding per build from its own file set,
+# so one markdown link works everywhere. See website.md § Links into the source
+# tree.
 #
 # backlog_link.py derives whether this build carries docs/STATUS.md, so the
 # version banner links the backlog only where the page exists (Q558).
@@ -137,8 +140,9 @@ hooks:
 # placeholder that Python-Markdown strips as a tag. These ship as INFO by
 # default, invisible under a green build; raised to warnings they
 # fail `mkdocs build --strict` in pages.yml. `absolute_links` and the `nav` keys
-# keep their defaults — a link to a page excluded from the built scope stays INFO,
-# which is what the per-version publication scope requires. See
+# keep their defaults. A link to a page the built scope excludes is NOT covered
+# here — MkDocs clamps that below warning level whatever this block says, so
+# source_links.py absolutizes it instead (Q561). See
 # docs/development/website.md § The two link gates.
 validation:
   links:

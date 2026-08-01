@@ -347,9 +347,12 @@ cut before this gate existed must stay publishable.
 
 `mkdocs.yml`'s `validation` block is what makes this fail at all: MkDocs reports
 these as INFO by default, invisible under a green build. `absolute_links` and the
-`nav` keys keep their defaults deliberately — a link to a page excluded from the
-built scope stays INFO, which is what [§ Publication scope](#publication-scope)
-requires.
+`nav` keys keep their defaults deliberately.
+
+Neither gate covers a link to a page the build's own scope excludes — MkDocs
+clamps that one below warning level whatever `validation` says. That is
+[`hooks/source_links.py`](../../hooks/source_links.py)'s job instead; see
+[§ Unpublished is per build, not per path](#unpublished-is-per-build-not-per-path-q561).
 
 ## Publication scope
 
@@ -469,8 +472,8 @@ Two traps if you edit that block:
 link like `../cmd/agc/main.go` resolves to the source file. MkDocs has no such
 file to serve, so it leaves the link alone and the published page 404s.
 [`hooks/source_links.py`](../../hooks/source_links.py) rewrites every relative
-target that escapes `docs/` into an absolute URL under `repo_url`, so one
-markdown link works in both places:
+target **this build does not publish** into an absolute URL under `repo_url`, so
+one markdown link works in both places:
 
 | Written in markdown | Published as |
 |---|---|
@@ -482,13 +485,52 @@ markdown link works in both places:
 the tag when deploying a release, so each version links to the source it
 documents. A target that **doesn't exist in the working tree is left alone** —
 a typo should keep failing MkDocs' link check rather than become a
-plausible-looking 404.
+plausible-looking 404. So is a **directory under `docs/`**, which resolves to
+that directory's page rather than to the tree ([§ The two link
+gates](#the-two-link-gates) owns that case).
 
 This was already needed before the backlog page: `design/` and `operations/`
 shipped such links dead. Publishing the repo-internal docs made it load-bearing
 — 724 links across the tree, 34 on `STATUS.md` alone.
 `scripts/source-links-hook-test.sh` asserts the rewrite in both directions under
 `make check`.
+
+### Unpublished is per build, not per path (Q561)
+
+"Does not publish" is decided **per build, from its own file set** — `on_files`
+records the src_uris whose `inclusion.is_included()`, the same derivation
+[`hooks/backlog_link.py`](../../hooks/backlog_link.py) uses for the banner link.
+Escaping `docs/` is only one way to qualify. The other is
+[publication scope](#publication-scope): `plan/`, `development/` and `STATUS.md`
+are pages on `dev` and absent from every release, so a `design/` page citing
+`../plan/milestone-4.md` must resolve **in-site on `dev`** and **on github.com
+from a release**. One markdown source, both renderings, no per-version editing:
+
+| Scope | `../plan/milestone-4.md` becomes |
+|---|---|
+| `dev` | `../../plan/milestone-4/` — the published page |
+| `stable`, every release | `{repo_url}/blob/{ref}/docs/plan/milestone-4.md` |
+
+Fragments ride along verbatim (`#12-live-multi-tenant-validation-evidence…`),
+which is why the two gates still get the last word on anchors: `make doc-links`
+already validates them with GitHub's slugger, and GitHub's blob view is exactly
+where a release now sends the reader.
+
+**Why this can't be a gate instead.** MkDocs reports a link to an excluded page
+as `Doc file 'X' contains a link to 'Y' which is excluded from the built site` —
+and clamps it with `min(logging.INFO, validation.links.not_found)`, so
+**no `validation` setting can raise it to a warning** and `--strict` will never
+fail on one. It also still emits the relative URL, so the page ships a
+live-looking link that 404s. Before this rewrite existed that was 120 links
+across 22 operator pages on every numbered version. Handling it in the hook, per
+build, is what makes the class of bug unreachable rather than merely fixed:
+there is no link left to write incorrectly.
+
+**`docs/README.md` is unpublished on every version, `dev` included** — MkDocs
+drops it outright where an `index.md` shares the directory, so it never reaches
+`files` at all (`exclude_docs` listing it only keeps that from surfacing as a
+build warning). The hook absolutizes it to github.com, which is where that link
+means to go anyway.
 
 ## Brand assets
 
