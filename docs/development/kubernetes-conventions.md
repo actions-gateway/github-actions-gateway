@@ -359,10 +359,12 @@ ScaleSet tier only:
 - `actions-gateway.com/job-completed-at` (`provisioner.AnnotationJobCompletedAt`)
   — RFC 3339 UTC time at which the scale-set listener saw the terminal
   `JobCompleted` for the job this pod was created for. It is the reap deadline
-  for a pod still `Running` after its own job is over (Q420): the reaper deletes
-  such a pod five minutes later. Set once — a completion replayed to a re-created
-  session must not push the deadline back — and never set on the classic path,
-  whose `provision()` goroutine owns its pod through to a terminal phase.
+  for a pod whose own job is over, in either non-terminal phase: five minutes for
+  one still `Running` (Q420), thirty seconds for one still `Pending` (Q575), which
+  can no longer start because the same completion reclaimed the JIT-config Secret
+  it mounts. Set once — a completion replayed to a re-created session must not
+  push the deadline back — and never set on the classic path, whose `provision()`
+  goroutine owns its pod through to a terminal phase.
 - `actions-gateway.com/eviction-handled-at`
   (`provisioner.AnnotationEvictionHandledAt`) — RFC 3339 UTC time at which the
   owning reconciler adjudicated this pod's eviction, whether it went on to
