@@ -40,6 +40,11 @@
 #   5. Every top-level bullet in docs/features.md carries a Markdown link and
 #      stays under MAX_FEATURE_WORDS words. A capability with no doc to link is
 #      a documentation gap to file, not a longer bullet.
+#   6. The same for the roadmap's own gated bullets, under MAX_ROADMAP_WORDS —
+#      looser, because a roadmap bullet also has to name the gate it waits on.
+#      The detail belongs in the plan doc or the Appendix G section behind it,
+#      both of which a release build absolutizes to github.com (Q561), so the
+#      link resolves on every version.
 #
 # Usage:
 #   check-roadmap.sh [path/to/roadmap.md] [path/to/STATUS.md] [path/to/features.md]
@@ -53,6 +58,11 @@ EXPLORING_HEADING="Exploring / longer-term"
 # bullet at extraction was 31 words. Tight enough that the 126-word paragraphs
 # this page replaced cannot come back.
 MAX_FEATURE_WORDS=45
+
+# Looser than the feature cap: a roadmap bullet carries what is missing, what
+# would change, and the gate it waits on. At extraction the five worst ran
+# 74-123 words by explaining the whole approach inline; all now fit here.
+MAX_ROADMAP_WORDS=60
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ROADMAP="${1:-$repo_root/docs/roadmap.md}"
@@ -103,7 +113,8 @@ in_list() {
 bullets() {
     awk -v near="^## $NEAR_TERM_HEADING\$" -v exploring="^## $EXPLORING_HEADING\$" '
         function flush() {
-            if (label != "") printf "%s\t%d\t%s\t%s\n", section, line_no, label, ids
+            if (label != "") printf "%s\t%d\t%d\t%d\t%s\t%s\n", \
+                section, line_no, words, has_link, label, ids
             label = ""; ids = ""
         }
         $0 ~ near      { flush(); section = "near-term"; next }
@@ -114,9 +125,19 @@ bullets() {
             flush()
             line_no = NR
             label = $0
+            words = 0; has_link = 0
             sub(/^- +/, "", label)
             sub(/\*\*/, "", label)
             sub(/\*\*.*$/, "", label)
+        }
+        # Same accounting as the features pass: the q-annotation and any badge
+        # span are markup, and a link costs its text but not its target.
+        label != "" {
+            text = $0
+            gsub(/<[^>]*>/, "", text)
+            gsub(/\]\([^)]*\)/, "]", text)
+            words += split(text, _, /[[:space:]]+/)
+            if ($0 ~ /\]\(/) has_link = 1
         }
         label != "" && /<!-- *q:/ {
             annotation = $0
@@ -137,9 +158,17 @@ report() {
     fail=1
 }
 
-while IFS=$'\t' read -r section line_no label ids; do
+while IFS=$'\t' read -r section line_no words has_link label ids; do
     [[ -n "$section" ]] || continue
     checked=$((checked + 1))
+
+    # Rule 6.
+    if (( ! has_link )); then
+        report "$line_no" "\"$label\" has no link. Point at the plan doc or Appendix G section carrying the detail."
+    fi
+    if (( words > MAX_ROADMAP_WORDS )); then
+        report "$line_no" "\"$label\" is $words words (max $MAX_ROADMAP_WORDS). Say what is missing, what changes, and what it waits on — the rest belongs in the linked doc."
+    fi
 
     if [[ -z "$ids" ]]; then
         report "$line_no" "\"$label\" has no <!-- q:QN --> annotation. Name the backlog row(s) behind it so this bullet fails when they ship."

@@ -96,8 +96,11 @@ expect() {
     printf 'ok   %-34s rc=%d\n' "$name" "$rc"
 }
 
-NEAR='- **Near thing.** <!-- q:Q1 --> Body text.'
-EXPL='- **Far thing.** <!-- q:Q2 --> Body text.'
+# Rule 6 applies to these too, so the baseline fixtures carry a link. Without
+# one, every roadmap assertion below would fail on the link check instead of the
+# rule it means to pin.
+NEAR='- **Near thing.** <!-- q:Q1 --> Body text. [detail](plan/thing.md)'
+EXPL='- **Far thing.** <!-- q:Q2 --> Body text. [detail](plan/thing.md)'
 
 # The happy path: near-term backed by a Queue row, exploring by a Deferred row.
 expect "clean: both sections backed" 0 \
@@ -114,7 +117,7 @@ expect "dangling ID (row deleted)" 1 \
 
 # A bullet nobody annotated cannot be checked at all.
 expect "missing annotation" 1 \
-    "$(roadmap '- **Near thing.** Body text.' -- "$EXPL")" "$(status "Q1" "Q2")" \
+    "$(roadmap '- **Near thing.** Body text. [d](plan/t.md)' -- "$EXPL")" "$(status "Q1" "Q2")" \
     'has no <!-- q:QN --> annotation'
 
 # Parked: the row moved to Deferred, so the bullet belongs under Exploring.
@@ -129,26 +132,26 @@ expect "exploring names only Queue" 1 \
 
 # A multi-item bullet stays green while any one of its rows is still open...
 expect "multi-ID, all live" 0 \
-    "$(roadmap '- **Near thing.** <!-- q:Q1,Q3 --> Body.' -- "$EXPL")" \
+    "$(roadmap '- **Near thing.** <!-- q:Q1,Q3 --> Body. [d](plan/t.md)' -- "$EXPL")" \
     "$(status "Q1 Q3" "Q2")"
 
 # ...but a deleted row is still reported, so a half-shipped bullet gets edited.
 expect "multi-ID, one shipped" 1 \
-    "$(roadmap '- **Near thing.** <!-- q:Q1,Q3 --> Body.' -- "$EXPL")" \
+    "$(roadmap '- **Near thing.** <!-- q:Q1,Q3 --> Body. [d](plan/t.md)' -- "$EXPL")" \
     "$(status "Q1" "Q2")" 'names Q3'
 
 # The annotation may sit on any line of the bullet, not just the first.
 expect "annotation on continuation line" 0 \
-    "$(roadmap '- **Near thing.** Body text runs on' '  and ends here. <!-- q:Q1 -->' -- "$EXPL")" \
+    "$(roadmap '- **Near thing.** Body text runs on' '  and ends here. <!-- q:Q1 --> [d](plan/t.md)' -- "$EXPL")" \
     "$(status "Q1" "Q2")"
 
 # A typo'd annotation must not silently pass as "unbacked but unchecked".
 expect "non-Q-ID annotation" 1 \
-    "$(roadmap '- **Near thing.** <!-- q:TODO --> Body.' -- "$EXPL")" \
+    "$(roadmap '- **Near thing.** <!-- q:TODO --> Body. [d](plan/t.md)' -- "$EXPL")" \
     "$(status "Q1" "Q2")" 'is not a Q-ID'
 
 # Format drift on either side is a hard error (rc 2), never a silent pass.
-printf '# Roadmap\n\n## Something Else\n\n- **Orphan.** Body.\n' >"$WORKDIR/no-sections.md"
+printf '# Roadmap\n\n## Something Else\n\n- **Orphan.** Body. [d](plan/t.md)\n' >"$WORKDIR/no-sections.md"
 expect "roadmap headings renamed" 2 \
     "$WORKDIR/no-sections.md" "$(status "Q1" "Q2")" 'found no bullets'
 
@@ -191,6 +194,29 @@ FEATURES_FILE="$WORKDIR/features-empty.md"
 expect "features page has no bullets" 2 "$RM_OK" "$ST_OK" 'found no capability bullets'
 
 FEATURES_FILE="$WORKDIR/features-clean.md"
+
+# --- Rule 6: roadmap bullets link out too, under a looser cap. --------------
+#
+# Same failure as rule 5 in the other section: at extraction the five worst
+# roadmap bullets ran 74-123 words by explaining the whole approach inline,
+# while the plan doc or Appendix G section holding that detail went unlinked.
+
+expect "roadmap bullet without a link" 1 \
+    "$(roadmap '- **Near thing.** <!-- q:Q1 --> No link anywhere.' -- "$EXPL")" \
+    "$ST_OK" 'Point at the plan doc or Appendix G section'
+
+# 70 words past a valid link — over the 60-word roadmap cap but well under
+# nothing, so this pins the cap itself rather than the presence of prose.
+long_near="- **Near thing.** <!-- q:Q1 --> [d](plan/t.md)$(printf ' word%.0s' $(seq 1 70))"
+expect "roadmap bullet over the word cap" 1 \
+    "$(roadmap "$long_near" -- "$EXPL")" "$ST_OK" \
+    'the rest belongs in the linked doc'
+
+# The roadmap cap is deliberately looser than the feature cap: a bullet that
+# would fail rule 5 still passes rule 6, because it must also name its gate.
+mid_near="- **Near thing.** <!-- q:Q1 --> [d](plan/t.md)$(printf ' word%.0s' $(seq 1 50))"
+expect "roadmap cap is looser than features" 0 \
+    "$(roadmap "$mid_near" -- "$EXPL")" "$ST_OK"
 
 if (( fails )); then
     printf '\ncheck-roadmap-test: %d assertion(s) failed\n' "$fails" >&2

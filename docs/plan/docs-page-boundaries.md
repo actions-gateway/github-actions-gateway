@@ -73,6 +73,18 @@ already gate the roadmap's `<!-- q: -->` annotations. That makes the failure mod
 that produced the wall of text mechanically impossible rather than a matter of
 review attention.
 
+The roadmap needed the same treatment, and rule 6 applies it there under a looser
+60-word cap — a roadmap bullet also has to name the gate it waits on, which the
+feature index never does. Its five worst bullets ran 74–123 words by explaining
+the whole approach inline while the plan doc holding that detail went unlinked;
+all fifteen now fit, and every one links out.
+
+What made that possible is recent: `plan/` is excluded from every release's
+publication scope, so until [Q561](../development/website.md#publication-scope)
+shipped `source_links.py`'s per-build absolutization, a roadmap link to a plan doc
+resolved on `dev` and 404'd on every numbered version. Appendix G was always safe
+(`design/` publishes everywhere); plan docs became safe on 2026-08-01.
+
 This is the repo's own
 [canonical-home-and-link rule](../development/documentation-standards.md#conventions)
 applied to a page that had drifted from it: state a fact once, in its natural

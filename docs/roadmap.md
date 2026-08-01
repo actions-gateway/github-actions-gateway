@@ -28,43 +28,35 @@ Work that is scoped and actively being built — adoption-enabling polish and th
 last gaps an outside operator hits.
 
 - **CI for untrusted pull requests on Kata workers.** <!-- q:Q408 --> [Kata
-  workers](operations/kata-dind-workloads.md) are validated today, but only for
-  *trusted* CI: the isolation bounds the guest kernel while the runner's egress
-  stays permissive, because its jobs pull from CDN-fronted public registries that
-  no CIDR allow-list can pin. Running an external contributor's pull request
-  safely takes two pieces on top of what ships: an in-cluster pull-through
-  registry mirror, so a worker needs no direct registry egress at all, and an
-  egress policy scoped to that mirror, GitHub, and DNS. An operator asked for this
-  as a supported posture, so it is scheduled work with a phased plan; the
-  remaining phases are measurement, the mirror deployment, and live-validated
-  enforcement on our own end-to-end CI.
+  workers](operations/kata-dind-workloads.md) are validated for *trusted* CI
+  only: the micro-VM bounds the guest kernel, the runner's egress stays
+  permissive. Untrusted PRs need an in-cluster pull-through registry mirror plus
+  egress scoped to it, GitHub, and DNS. Scheduled on an operator's ask;
+  measurement first — [phased plan](plan/q408-untrusted-pr-egress.md).
 
 - **A curated runner template library.** <!-- q:Q554 --> Every tenant writes its
-  own worker pod template from scratch today, including the fiddly parts: the
+  own worker pod template today, including the fiddly parts: the
   Docker-in-Docker sidecar, the Kata `runtimeClassName`, the volume and
-  security-context wiring. The templates our own end-to-end CI exercises on every
-  run become a shipped kustomize base you patch, rather than a snippet you copy
-  out of the docs. No new API surface, and the bar for publishing a template is
-  that CI actually runs it.
+  security-context wiring. The templates our own end-to-end CI exercises become a
+  [shipped kustomize base](plan/runner-template-library.md) you patch. No new API
+  surface.
 
 - **Opt-in auto-retry for flaky jobs.** <!-- q:Q555 --> A job the cluster
   disrupts already
-  [re-runs automatically](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
-  A job that simply failed flakily does not, so today that is someone re-running
-  it by hand. The same machinery can cover it, opted in per runner set and given
-  its own retry budget so a genuinely broken test cannot loop. Detection comes
-  first: the gateway has to measure re-run-then-pass rates before acting on them
-  is honest.
+  [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do);
+  one that failed flakily does not. Same machinery, opted in per runner set with
+  its own budget so a broken test cannot loop. Detection comes first —
+  [G.17](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)
+  has the prior art and costs.
 
-- **Richer egress proxy.** <!-- q:Q564,Q565,Q566,Q567 --> Four additions to the
-  [per-tenant proxy](design/network-architecture.md), each opt-in: a
-  per-connection audit trail of which tenant reached which destination,
-  per-tenant rate limiting so one looping workflow can be slowed before it
-  exhausts a shared GitHub quota, TLS on the in-cluster hop so the CONNECT target
-  is not readable by a cluster-wide network tap, and dedicated proxy pools so a
-  bandwidth-heavy runner group cannot crowd out a quieter one. Destination
-  allow-listing is deliberately absent from this list: it
-  [already ships](features.md#security-posture) as an opt-in control.
+- **Richer egress proxy.** <!-- q:Q564,Q565,Q566,Q567 --> Four opt-in additions
+  to the [per-tenant proxy](design/network-architecture.md):
+  [audit logging](design/appendix-g-future-enhancements.md#g3-proxy-side-audit-logging),
+  [per-tenant rate limiting](design/appendix-g-future-enhancements.md#g2-proxy-enforced-per-tenant-rate-limiting),
+  [TLS on the in-cluster hop](design/appendix-g-future-enhancements.md#g4-tls-between-agcworkers-and-the-proxy),
+  and [dedicated pools per runner group](design/appendix-g-future-enhancements.md#g5-per-runnergroup-dedicated-proxy-pool).
+  Destination allow-listing is absent deliberately: it
+  [already ships](features.md#security-posture).
 
 ## Exploring / longer-term
 
@@ -74,15 +66,11 @@ limit, or a gating release before it becomes scheduled work. The first entry is
 the exception that proves the rule: it is a firm commitment, waiting only on the
 release that carries it.
 
-- **Retiring `v1alpha1`, `v2alpha1`, and the classic acquisition protocol.** <!-- q:Q273 --> The
-  graduation that made this possible has shipped, so what remains is the removal
-  itself — committed, but not yet started. Policy is that a removal lands on a named
-  release announced at least one release ahead: `v1.3.0` is that announcement, and
-  **`v2.0.0` is the named release** that removes all three. They are one bundle
-  because `v2beta1` is already ScaleSet-only, so classic acquisition exists solely to
-  serve `v1alpha1` and `v2alpha1` objects. `v2.0.0` is itself gated on the `v2` GA API
-  being available and validated, not on a date, so the work stays parked until that
-  gate clears. Detail: the
+- **Retiring `v1alpha1`, `v2alpha1`, and the classic acquisition protocol.** <!-- q:Q273 -->
+  Committed, but not yet started. `v1.3.0` is the one-release-ahead announcement;
+  **`v2.0.0`** is the named release that removes all three together, since
+  `v2beta1` is already ScaleSet-only. Gated on the `v2` GA API being validated,
+  not on a date. Detail: the
   [deprecation and removal notice](operations/v1alpha1-deprecation.md).
 
 - **Controller horizontal scaling / high availability.** <!-- q:Q169 --> The per-tenant
