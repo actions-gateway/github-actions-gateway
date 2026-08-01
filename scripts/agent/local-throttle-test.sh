@@ -2,7 +2,8 @@
 #
 # Unit tests for the pure sizing helpers in scripts/agent/local-throttle.sh:
 # compute_slots (how many heavy runs may overlap, and the
-# GAG_HEAVY_BUILD_SLOTS override) and lock_file (slot 1 keeps the original
+# GAG_HEAVY_BUILD_SLOTS override), compute_workers (how many parallel-dispatch
+# sessions a machine should host) and lock_file (slot 1 keeps the original
 # filename so a pre-semaphore checkout still contends with us). These decide how
 # much of the machine a `make check` may take while siblings are running, so they
 # are asserted here rather than discovered when a desktop wedges. Runs under
@@ -51,6 +52,50 @@ expect_eq slots-override-empty 2 "$(GAG_HEAVY_BUILD_SLOTS='' compute_slots)"
 expect_eq slots-override-zero 2 "$(GAG_HEAVY_BUILD_SLOTS=0 compute_slots)"
 expect_eq slots-override-junk 2 "$(GAG_HEAVY_BUILD_SLOTS=lots compute_slots)"
 expect_eq slots-override-negative 2 "$(GAG_HEAVY_BUILD_SLOTS=-1 compute_slots)"
+
+# --- compute_workers -------------------------------------------------------
+# total_ram_mb and physical_cores are stubbed per case, so these assert the
+# sizing arithmetic rather than whatever machine happens to run the suite.
+
+# A wide machine is answered by the ceiling, not by its hardware: 128 GB leaves
+# room for ~138 sessions, and past the ceiling the binding constraints are
+# dispatcher review throughput and GitHub Actions concurrency, neither of which
+# this script can see.
+expect_eq workers-wide-machine 12 \
+	"$(total_ram_mb() { printf '131072'; }; physical_cores() { printf '18'; }; unset GAG_DISPATCH_WORKERS; compute_workers)"
+
+# Cores bind below the ceiling even when RAM is abundant.
+expect_eq workers-core-bound 6 \
+	"$(total_ram_mb() { printf '131072'; }; physical_cores() { printf '6'; }; unset GAG_DISPATCH_WORKERS; compute_workers)"
+
+# RAM binds on a small machine: 16 GB is entirely spoken for by the desktop
+# reserve and two gate holders, so one worker is all it can host.
+expect_eq workers-ram-bound 1 \
+	"$(total_ram_mb() { printf '16384'; }; physical_cores() { printf '8'; }; unset GAG_DISPATCH_WORKERS; compute_workers)"
+
+# 32 GB clears the reserve plus both gate holders with ~10 sessions' headroom,
+# so the 8-core term is what decides it.
+expect_eq workers-midsize 8 \
+	"$(total_ram_mb() { printf '32768'; }; physical_cores() { printf '8'; }; unset GAG_DISPATCH_WORKERS; compute_workers)"
+
+# An unreadable RAM figure must size DOWN, never open the machine up.
+expect_eq workers-unknown-ram 1 \
+	"$(total_ram_mb() { printf '0'; }; physical_cores() { printf '18'; }; unset GAG_DISPATCH_WORKERS; compute_workers)"
+
+# The override is the documented way past the ceiling — the constraints above it
+# are not ones the machine can measure.
+expect_eq workers-override-wide 20 \
+	"$(total_ram_mb() { printf '131072'; }; physical_cores() { printf '18'; }; GAG_DISPATCH_WORKERS=20 compute_workers)"
+expect_eq workers-override-serial 1 \
+	"$(total_ram_mb() { printf '131072'; }; physical_cores() { printf '18'; }; GAG_DISPATCH_WORKERS=1 compute_workers)"
+# A bad override falls back to the computed value rather than yielding zero
+# workers, which would stall a dispatch outright.
+expect_eq workers-override-empty 12 \
+	"$(total_ram_mb() { printf '131072'; }; physical_cores() { printf '18'; }; GAG_DISPATCH_WORKERS='' compute_workers)"
+expect_eq workers-override-zero 12 \
+	"$(total_ram_mb() { printf '131072'; }; physical_cores() { printf '18'; }; GAG_DISPATCH_WORKERS=0 compute_workers)"
+expect_eq workers-override-junk 12 \
+	"$(total_ram_mb() { printf '131072'; }; physical_cores() { printf '18'; }; GAG_DISPATCH_WORKERS=lots compute_workers)"
 
 # --- qos_prefix ------------------------------------------------------------
 # os_kind is stubbed per case so both platforms' prefixes are asserted wherever

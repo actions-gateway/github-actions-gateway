@@ -65,6 +65,7 @@
 #   scripts/agent/local-throttle.sh prefix     # command priority wrapper, or empty when off
 #   scripts/agent/local-throttle.sh lockfile [N] # Nth cross-session lock path (default 1)
 #   scripts/agent/local-throttle.sh slots      # how many concurrent heavy runs are allowed
+#   scripts/agent/local-throttle.sh workers    # concurrent parallel-dispatch sessions
 #
 # Capping parallelism (jobs) bounds ONE run's fan-out, but nothing stops three
 # concurrent worktree/session `make check` runs from each launching that many
@@ -94,6 +95,20 @@
 # much as throughput: two holders finish in 36.7 s where strict serialization
 # needs 23.0 + 23.0 = 46 s, and the sibling starts immediately instead of
 # blocking for a full run.
+#
+# `workers` sizes a different thing: how many parallel-dispatch worker SESSIONS
+# a machine should host (docs/development/parallel-dispatch.md). A worker costs
+# its own Claude Code session plus a share of the gate — but the gate share is
+# already bounded by `slots` no matter how many workers exist, so the marginal
+# cost of one more worker is the session alone (measured 0.43 GB mean / 0.60 GB
+# peak RSS). That is small enough that on a wide machine neither RAM nor cores
+# binds at any number worth running: 128 GB leaves room for ~138 sessions past a
+# desktop reserve and two gate holders. So the value is a MIN of the two
+# hardware terms under a flat ceiling, and on anything modern the ceiling is what
+# answers. Above it the binding constraints are not local at all — dispatcher
+# review throughput and GitHub Actions concurrency — which is why raising it is a
+# policy call (GAG_DISPATCH_WORKERS), not a hardware one. The terms still earn
+# their place downward: a 16 GB laptop correctly gets 1.
 set -euo pipefail
 
 # Physical cores left for the GUI/foreground apps when throttling.
@@ -104,6 +119,17 @@ readonly GUI_CORE_HEADROOM=2
 # and a second holder would just thrash the one core the UI is not using.
 readonly DEFAULT_HEAVY_BUILD_SLOTS=2
 readonly MIN_CORES_FOR_MULTIPLE_SLOTS=4
+
+# Parallel-dispatch worker sizing, in MB. WORKER_SESSION is one Claude Code
+# session's resident set (measured 0.60 GB peak, rounded up); HEAVY_GATE_PEAK is
+# one `make check` holder's peak across the go toolchain and linters (measured
+# 4.08 GB during cover-check on a fully cold build cache), charged once per slot
+# rather than per worker; DESKTOP_RESERVE is the OS plus the apps a developer
+# keeps open beside the batch.
+readonly WORKER_SESSION_MB=768
+readonly HEAVY_GATE_PEAK_MB=4096
+readonly DESKTOP_RESERVE_MB=16384
+readonly MAX_DISPATCH_WORKERS=12
 
 # os_kind prints a normalized platform tag: darwin | linux | other.
 os_kind() {
@@ -211,6 +237,50 @@ compute_slots() {
 	fi
 }
 
+# total_ram_mb prints physical RAM in MB, or 0 when it cannot be determined —
+# which sizes workers down to 1 rather than inventing capacity.
+total_ram_mb() {
+	local bytes kb
+	case "$(os_kind)" in
+		darwin)
+			bytes="$(sysctl -n hw.memsize 2>/dev/null || true)"
+			if [[ "$bytes" =~ ^[0-9]+$ ]]; then
+				printf '%s' $(( bytes / 1048576 ))
+				return
+			fi
+			;;
+		linux)
+			kb="$(awk '/^MemTotal:/ { print $2; exit }' /proc/meminfo 2>/dev/null || true)"
+			if [[ "$kb" =~ ^[0-9]+$ ]]; then
+				printf '%s' $(( kb / 1024 ))
+				return
+			fi
+			;;
+	esac
+	printf '0'
+}
+
+# compute_workers prints how many parallel-dispatch worker sessions this machine
+# should host: the smaller of what RAM and cores allow, under a flat ceiling.
+# GAG_DISPATCH_WORKERS overrides it; a non-numeric or zero override is ignored.
+compute_workers() {
+	local override="${GAG_DISPATCH_WORKERS:-}"
+	if [[ "$override" =~ ^[0-9]+$ ]] && (( override >= 1 )); then
+		printf '%s\n' "$override"
+		return
+	fi
+
+	local budget n cores
+	budget=$(( $(total_ram_mb) - DESKTOP_RESERVE_MB - $(compute_slots) * HEAVY_GATE_PEAK_MB ))
+	n=$(( budget / WORKER_SESSION_MB ))
+
+	cores="$(physical_cores)"
+	(( n > cores )) && n=$cores
+	(( n > MAX_DISPATCH_WORKERS )) && n=$MAX_DISPATCH_WORKERS
+	(( n < 1 )) && n=1
+	printf '%s\n' "$n"
+}
+
 # lock_file [N] prints the path of the Nth advisory lock (default 1) bounding the
 # heavy local build phases across concurrent worktrees/sessions on one machine.
 # They live in the per-user cache dir — OUTSIDE any worktree — so every checkout
@@ -244,6 +314,14 @@ lock_file() {
 main() {
 	local want="${1:-}"
 
+	# `workers` is sizing advice for a dispatcher, not a throttle applied to a
+	# build, so it answers on headless shells too — where an empty string would
+	# leave the dispatcher with no number at all.
+	if [[ "$want" == "workers" ]]; then
+		compute_workers
+		return
+	fi
+
 	# Off-switch and non-GUI/CI: print nothing so the Makefile runs unthrottled.
 	if ! throttle_active; then
 		return 0
@@ -255,7 +333,7 @@ main() {
 		lockfile) lock_file "${2:-1}" ;;
 		slots) compute_slots ;;
 		*)
-			printf 'usage: %s {jobs|prefix|lockfile [N]|slots}\n' "$0" >&2
+			printf 'usage: %s {jobs|prefix|lockfile [N]|slots|workers}\n' "$0" >&2
 			return 2
 			;;
 	esac
