@@ -2363,6 +2363,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#first-party-go-tooling-stays-outside-the-workspace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        First-party Go tooling stays outside the workspace
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="First-party Go tooling stays outside the workspace">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-it-stays-out-of-the-workspace-and-out-of-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why it stays out of the workspace, and out of scripts/
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wiring-a-new-first-party-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring a new first-party module
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#changing-dependencies" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2555,10 +2594,49 @@ the AGC will import it in Q264 P3 when the scale-set acquisition tier lands.</p>
 <p><code>githubapp</code> (GitHub App auth/JWT) and <code>broker</code> (the GitHub broker client) are the shared libraries; the <code>cmd/*</code> binaries depend <em>on</em> them, never the reverse. <code>api</code> (the shared v2 API kinds) is a third leaf both controllers depend on. The one cross-binary edge is <code>gmc → agc</code> (the Gateway Manager Controller imports the Actions Gateway Controller's API types to provision instances); the <code>api</code> leaf exists precisely so the AGC can read the GMC-group v2 kinds without an <code>agc → gmc</code> back-edge that would close a cycle. <strong>Keep edges pointing toward the leaves:</strong> a new import that makes <code>githubapp</code>, <code>broker</code>, or <code>api</code> depend on a <code>cmd/*</code> module, or makes <code>agc</code> depend on <code>gmc</code>, inverts the layering and should be restructured instead. Go's compiler rejects outright <em>cycles</em> for free; this graph captures the intended <em>direction</em> so a technically-legal-but-wrong edge is caught in review. <code>scripts/go/go-work-tidy.sh</code> derives this same order at runtime (via <code>go list -m all</code>) to tidy modules leaf-first.</p>
 <p>All runtime modules share a single <code>vendor/</code> at the repo root, produced by <code>go work vendor</code> and committed to git. Docker builds and CI rely on this — they invoke <code>go build</code> with <code>-mod=vendor</code> auto-selected (no proxy.golang.org during build).</p>
 <p><code>test/fakegithub</code> is an HTTP stub used by fake-GitHub e2e tests, listed in <code>go.work</code> so its packages are covered by <code>go work vendor</code>. It imports one internal package — <code>broker/brokerstub</code>, the shared session/credential mechanics every in-repo broker double now builds on (Q368) — which is deliberately standard-library-only, so the fakegithub binary links no third-party code and its distroless, Trivy-scanned image stays lean. Keep <code>broker/brokerstub</code> dependency-free for that reason: an import of the <code>broker</code> client (githubapp/JWT/Prometheus) would enlarge the scanned surface.</p>
-<p><code>tools/</code> has its own separate <code>vendor/</code> (<code>tools/vendor/</code>) for the kubebuilder/controller-gen toolchain. That's independent and managed by <code>make tools</code>. Do not merge it into the workspace vendor.</p>
+<p><code>tools/</code> has its own separate <code>vendor/</code> (<code>tools/vendor/</code>) for the kubebuilder/controller-gen toolchain. That's independent and managed by <code>make tools</code>. Do not merge it into the workspace vendor. It holds pinned third-party tools only — first-party Go tooling gets its own module, per <a href="#first-party-go-tooling-stays-outside-the-workspace">First-party Go tooling stays outside the workspace</a>.</p>
 <p>When you need to <em>read</em> a dependency's source, read the committed <code>vendor/</code> (or <code>tools/vendor/</code>) tree, not the module cache — <code>~/go/pkg/mod</code> sits outside the worktree (so workspace-guard prompts on it) <em>and</em> may hold a different version than the <code>-mod=vendor</code> build actually uses.</p>
 <h3 id="why-replace-directives-are-still-present">Why replace directives are still present<a class="headerlink" href="#why-replace-directives-are-still-present" title="Permanent link">&para;</a></h3>
 <p><code>broker</code>, <code>githubapp</code>, and the <code>cmd/*</code> modules depend on each other using <code>replace</code> directives in their individual <code>go.mod</code> files, even though the workspace <code>use</code> directives already provide local overrides at build time. This is necessary because <code>go mod tidy</code> and <code>go work sync</code> validate that required versions are resolvable; the zero pseudo-version placeholder (<code>v0.0.0-00010101000000-000000000000</code>) is only valid alongside a <code>replace</code> directive. Do not remove those <code>replace</code> lines — they are load-bearing for tidy.</p>
+<h2 id="first-party-go-tooling-stays-outside-the-workspace">First-party Go tooling stays outside the workspace<a class="headerlink" href="#first-party-go-tooling-stays-outside-the-workspace" title="Permanent link">&para;</a></h2>
+<p>Repo tooling written in Go — gate implementations, linters, report generators — goes in a module that is deliberately <strong>not</strong> listed in <code>go.work</code>. No such module exists yet; <code>devtools/</code> is the reserved name, and this section is the standing rule for whoever adds the first one.</p>
+<table>
+<thead>
+<tr>
+<th>Directory</th>
+<th>Holds</th>
+<th>In <code>go.work</code>?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tools/</code></td>
+<td>pinned <strong>third-party</strong> build tools (<code>tools.go</code> blank imports, built by <code>make tools</code> into <code>.build/</code>)</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>devtools/</code> <em>(planned)</em></td>
+<td><strong>first-party</strong> Go programs backing <code>make</code> targets</td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p>Packages inside <code>devtools/</code> are grouped by the gate that runs them, mirroring <code>scripts/</code>: <code>devtools/ci/pathfilters/</code> would be the Go implementation of a <code>ci/</code> gate the same way <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-path-filters.sh"><code>scripts/ci/check-path-filters.sh</code></a> is the shell one. That keeps "which gate runs this?" answerable from the path, which is what the CI path filters need — they are plain prefix globs.</p>
+<p>Run these with <code>go run</code>; a gate needs no separate compile step. <code>go run</code> caches its build, so a small program importing <code>gopkg.in/yaml.v3</code> costs ~0.2s warm against ~1.6s on a completely cold build cache. Invoke it from its own directory, like the <code>tools/</code> module:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">(</span><span class="nb">cd</span><span class="w"> </span>devtools<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>go<span class="w"> </span>run<span class="w"> </span>./ci/pathfilters<span class="o">)</span>
+</code></pre></div>
+<h3 id="why-it-stays-out-of-the-workspace-and-out-of-scripts">Why it stays out of the workspace, and out of <code>scripts/</code><a class="headerlink" href="#why-it-stays-out-of-the-workspace-and-out-of-scripts" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-path-filters.sh"><code>scripts/ci/check-path-filters.sh</code></a> fails any workspace-covering filter that does not match every <code>go.work</code> module, and that set includes <code>e2e-test.yml:e2e</code> and <code>security-scan.yml:code</code>. A module in the workspace therefore drags every change to it through an image bake and an e2e cluster — an unbounded per-PR cost to pay for a docs linter.</p>
+<p>It cannot live under <code>scripts/</code> either. A Go module brings a <code>vendor/</code> tree, and vendored dependencies ship shell scripts (41 across the current <code>vendor/</code> and <code>tools/vendor/</code> — <code>zap/checklicense.sh</code>, <code>kubebuilder/test_e2e.sh</code>, and others). <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/shellcheck-scripts.sh"><code>scripts/ci/shellcheck-scripts.sh</code></a> lints <code>scripts/**/*.sh</code> recursively, so third-party shell would land in the shellcheck gate.</p>
+<h3 id="wiring-a-new-first-party-module">Wiring a new first-party module<a class="headerlink" href="#wiring-a-new-first-party-module" title="Permanent link">&para;</a></h3>
+<p>Outside <code>go.work</code> the Go gates do not see the module: <code>go-test.sh</code>, <code>go-lint.sh</code>, <code>coverage.sh</code> and <code>go-vulncheck.sh</code> all iterate <code>workspace_modules()</code> (<code>go work edit -json</code>). Wire it up explicitly or the code is never linted, tested, or scanned:</p>
+<ol>
+<li>Vendor it in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh"><code>scripts/go/vendor-sync.sh</code></a>, beside the existing <code>tools/</code> line: <code>(cd devtools &amp;&amp; GOWORK=off go mod vendor)</code>.</li>
+<li>Extend those four gate scripts to cover it. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a> is the home for a <code>first_party_modules()</code> helper returning the workspace modules plus <code>devtools</code>.</li>
+<li>Classify <code>devtools/**</code> in a <strong>narrow</strong> CI path filter — the lint/scripts jobs, never e2e — so <code>check-path-filters.sh</code> assertion 1 passes.</li>
+<li>Add a pointer from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> so the gate map stays in one place.</li>
+</ol>
+<p><code>scripts/go/check-go-version.sh</code> needs no change: it already asserts a single <code>go</code> directive across every <code>go.mod</code>, so a new module inherits the check.</p>
 <h2 id="changing-dependencies">Changing dependencies<a class="headerlink" href="#changing-dependencies" title="Permanent link">&para;</a></h2>
 <p>When you change any module's <code>go.mod</code> (add, upgrade, or remove a dep):</p>
 <ol>
@@ -2592,7 +2670,7 @@ the AGC will import it in Q264 P3 when the scale-set acquisition tier lands.</p>
 <h2 id="worktrees">Worktrees<a class="headerlink" href="#worktrees" title="Permanent link">&para;</a></h2>
 <p>Worktrees (<code>.claude/worktrees/&lt;name&gt;/</code>) each have their own <code>go.work</code> that may differ from the root one.</p>
 <p><strong>Running go commands in a worktree:</strong> <code>go test ./...</code> from the worktree root fails because <code>.</code> is not in <code>go.work</code>'s <code>use</code> block. Use per-module commands instead — Go finds <code>go.work</code> by walking up parent directories from <code>cmd/agc</code>, <code>cmd/probe</code>, etc. To run a single go command against a specific module from the worktree root, set <code>GOWORK</code> explicitly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">GOWORK</span><span class="o">=</span>/path/to/worktree/go.work<span class="w"> </span>go<span class="w"> </span>build<span class="w"> </span>github.com/actions-gateway/github-actions-gateway/agc/...
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">GOWORK</span><span class="o">=</span>/path/to/worktree/go.work<span class="w"> </span>go<span class="w"> </span>build<span class="w"> </span>github.com/actions-gateway/github-actions-gateway/agc/...
 </code></pre></div>
 <p><strong>No root module at the repo root.</strong> There is no <code>./go.mod</code> and no <code>use .</code> in <code>go.work</code>. An earlier revision had a root module (<code>github.com/actions-gateway/github-actions-gateway</code>) that had to be supplied via <code>replace</code> rather than <code>use</code> to work around a Go workspace prefix-match bug (Go resolved packages under <code>.../agc/...</code> to the root module instead of <code>cmd/agc/</code> when both appeared in <code>use</code>). The root module was dropped entirely in the broker/githubapp refactor (commit <code>6c23b0d</code>), eliminating the ambiguity. Do not add <code>use .</code> or a <code>replace github.com/actions-gateway/github-actions-gateway =&gt; ./</code> back — it would reintroduce the prefix-match problem.</p>
 
