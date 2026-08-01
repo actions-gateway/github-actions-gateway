@@ -85,6 +85,13 @@ jobs:
           python-version: '3.x'
       - run: pip install -r requirements-docs.txt
       - run: mkdocs build --site-dir _site
+      # The `dev` version publishes the repo-internal docs as well (Q558), a
+      # scope the release build above never exercises. Build it too, so a PR
+      # that breaks a plan/development page fails here rather than on `main`.
+      - name: Build the dev scope (repo-internal docs included)
+        env:
+          MKDOCS_EXCLUDE_DOCS: /README.md
+        run: mkdocs build --site-dir _site-dev
 
   # Push/dispatch: update the mike version tree on gh-pages and deploy it.
   publish:
@@ -254,6 +261,7 @@ jobs:
           STABLE_TAG: ${{ steps.resolve.outputs.stable_tag }}
           TITLE: ${{ steps.resolve.outputs.title }}
           CONFIG: ${{ steps.source.outputs.config }}
+          DOCS_REF: ${{ github.event.inputs.docs_ref }}
         # mike commits each version into a subdir of gh-pages; the branch is pushed
         # once at the end. --alias-type=copy makes an alias (e.g. `stable`) a real
         # directory, not a symlink: GitHub Pages artifact deploys don't follow
@@ -267,6 +275,25 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          # `dev` is the only version that publishes the repo-internal docs —
+          # the backlog, plan docs, contributor guides (Q558). A release is a
+          # frozen build, so a backlog in one would be stale from tag day.
+          # Exported here rather than as a step `env:` because mkdocs.yml's
+          # !ENV default only applies when the variable is ABSENT: a
+          # conditional expression falling through to '' would publish the
+          # internal docs on every release instead.
+          if [[ "${VERSION}" == "dev" ]]; then
+            export MKDOCS_EXCLUDE_DOCS='/README.md'
+          fi
+
+          # Links from the docs into the source tree resolve against the ref
+          # this version documents, not always `main` (hooks/source_links.py).
+          if [[ -n "${DOCS_REF:-}" ]]; then
+            export GAG_DOCS_SOURCE_REF="${DOCS_REF}"
+          elif [[ "${STABLE_TAG}" == "true" ]]; then
+            export GAG_DOCS_SOURCE_REF="v${VERSION}"
+          fi
 
           # Every mike call reads the same config the build does, so a `docs_ref`
           # seed picks up the INHERIT overlay (and, through it, the tag's own

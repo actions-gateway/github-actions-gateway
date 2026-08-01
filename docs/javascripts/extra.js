@@ -148,6 +148,135 @@
       h.parentNode.insertBefore(rbar, h.nextElementSibling);
     }
   }
+
+  // Backlog tables (STATUS.md's Queue, Deferred, Flake watch and Progress) ->
+  // one chip bar per dimension: label, status, size. The three intersect.
+  // Recognised by shape rather than by page, but narrowly: a Labels column
+  // alone would also match the metric tables in the design and observability
+  // docs, so an ID/Item first column is required too.
+  var STATUS_NAMES = [["🔲", "Ready"], ["🚫", "Blocked"], ["✅", "Done"], ["⚠️", "Open"]];
+  var SIZE_ORDER = ["S", "M", "L"];
+
+  // Emoji in the source carry a variation selector; comparisons drop it.
+  function plain(s) {
+    return s.replace(/️/g, "").trim();
+  }
+
+  function byOrder(order) {
+    return function (a, b) {
+      var ia = order.indexOf(a), ib = order.indexOf(b);
+      if (ia < 0 && ib < 0) return a.localeCompare(b);
+      if (ia < 0) return 1;
+      if (ib < 0) return -1;
+      return ia - ib;
+    };
+  }
+
+  document.querySelectorAll(".md-typeset table:not([class])").forEach(function (table) {
+    var headers = Array.prototype.map.call(table.querySelectorAll("thead th"), function (th) {
+      return th.textContent.trim().toLowerCase();
+    });
+    if (headers.indexOf("labels") < 0) return;
+    if (headers[0] !== "id" && headers[0] !== "item") return;
+
+    function column() {
+      for (var i = 0; i < arguments.length; i++) {
+        var at = headers.indexOf(arguments[i]);
+        if (at >= 0) return at;
+      }
+      return -1;
+    }
+    var cols = { label: headers.indexOf("labels"), status: column("st", "status"), size: column("sz", "size") };
+
+    var rows = Array.prototype.slice.call(table.querySelectorAll("tbody tr"));
+    var seen = { label: [], status: [], size: [] };
+    rows.forEach(function (row) {
+      // Labels are backticked in the markdown, so each renders as its own <code>.
+      var labels = Array.prototype.map.call(row.cells[cols.label].querySelectorAll("code"), function (c) {
+        c.classList.add("backlog-label");
+        return c.textContent.trim();
+      });
+      var status = "";
+      if (cols.status >= 0) {
+        var cell = plain(row.cells[cols.status].textContent);
+        STATUS_NAMES.forEach(function (pair) {
+          if (cell.indexOf(plain(pair[0])) >= 0) status = pair[1];
+        });
+      }
+      var size = cols.size >= 0 ? row.cells[cols.size].textContent.trim() : "";
+
+      row.setAttribute("data-labels", labels.join("|"));
+      row.setAttribute("data-status", status);
+      row.setAttribute("data-size", size);
+      labels.forEach(function (l) {
+        if (seen.label.indexOf(l) < 0) seen.label.push(l);
+      });
+      [["status", status], ["size", size]].forEach(function (pair) {
+        if (pair[1] && seen[pair[0]].indexOf(pair[1]) < 0) seen[pair[0]].push(pair[1]);
+      });
+    });
+    if (!seen.label.length) return;
+
+    seen.label.sort();
+    seen.status.sort(byOrder(STATUS_NAMES.map(function (p) { return p[1]; })));
+    seen.size.sort(byOrder(SIZE_ORDER));
+
+    var picked = { label: "All", status: "All", size: "All" };
+    var count = document.createElement("p");
+    count.className = "backlog-count";
+    count.setAttribute("role", "status");
+    count.setAttribute("aria-live", "polite");
+
+    function apply() {
+      var shown = 0;
+      rows.forEach(function (row) {
+        var show =
+          (picked.label === "All" || row.getAttribute("data-labels").split("|").indexOf(picked.label) >= 0) &&
+          (picked.status === "All" || row.getAttribute("data-status") === picked.status) &&
+          (picked.size === "All" || row.getAttribute("data-size") === picked.size);
+        row.style.display = show ? "" : "none";
+        if (show) shown++;
+      });
+      count.textContent = shown === rows.length
+        ? rows.length + " items"
+        : shown + " of " + rows.length + " items";
+    }
+
+    var filters = document.createElement("div");
+    filters.className = "backlog-filters";
+    var bars = {};
+    [["label", "Label"], ["status", "Status"], ["size", "Size"]].forEach(function (pair) {
+      var key = pair[0];
+      if (!seen[key].length) return;
+      var row = document.createElement("div");
+      row.className = "backlog-filter";
+      var legend = document.createElement("span");
+      legend.className = "backlog-filter__legend";
+      legend.textContent = pair[1];
+      bars[key] = chipBar(["All"].concat(seen[key]), "Filter by " + pair[1].toLowerCase(), function (label) {
+        picked[key] = label;
+        apply();
+      });
+      row.appendChild(legend);
+      row.appendChild(bars[key]);
+      filters.appendChild(row);
+    });
+    filters.appendChild(count);
+
+    var anchor = table.closest(".md-typeset__scrollwrap") || table;
+    anchor.parentNode.insertBefore(filters, anchor);
+    apply();
+
+    // Clicking a label in a row selects its chip, as the persona pills do.
+    table.addEventListener("click", function (e) {
+      var code = e.target.closest("code.backlog-label");
+      if (!code) return;
+      var want = code.textContent.trim();
+      bars.label.querySelectorAll(".persona-chip").forEach(function (c) {
+        if (c.dataset.persona === want) c.click();
+      });
+    });
+  });
 })();
 
 // Savings calculator (Appendix F): enhance an empty `.gag-calc` mount into an

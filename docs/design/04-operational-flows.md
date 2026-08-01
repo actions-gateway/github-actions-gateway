@@ -158,7 +158,7 @@ The GMC reconciler is a standard `controller-runtime` reconciler. Errors are ret
 
 **What the tenant observes:** The `ActionsGateway` CR exists but has `Ready=False`. No AGC, proxy, or RunnerGroup resources are present. The condition message includes the underlying error.
 
-**Resolution:** See [Troubleshooting — GMC Not Provisioning Tenant Resources](../../docs/operations/troubleshooting.md#gmc-not-provisioning-tenant-resources).
+**Resolution:** See [Troubleshooting — GMC Not Provisioning Tenant Resources](../operations/troubleshooting.md#gmc-not-provisioning-tenant-resources).
 
 ---
 

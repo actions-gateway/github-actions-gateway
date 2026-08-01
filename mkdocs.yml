@@ -11,9 +11,20 @@ copyright: Licensed under the Apache License 2.0.
 
 # The docs/ tree doubles as the in-repo documentation browsed on github.com and
 # the source for this site. These paths are repo-internal (planning, contributor
-# guides) and stay GitHub-only — see docs/plan/website.md for the rationale.
+# guides, the backlog); released versions of the site carry operator docs only.
 # Anchored patterns (leading /) keep the per-section README.md indexes.
-exclude_docs: |
+#
+# The `dev` deploy overrides MKDOCS_EXCLUDE_DOCS with a shorter list so the
+# unreleased version publishes them too (Q558) — a release is a frozen build, so
+# a backlog in one would be a snapshot stale from tag day. Only the dev path in
+# .github/workflows/pages.yml sets it, and it keeps /README.md excluded on every
+# version: MkDocs drops it anyway as a conflict with the index.md landing page.
+# See website.md § Publication scope.
+exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/development/\n/assets/README.md\n/assets/fonts/README.md\n"]
+
+# Published on `dev` but deliberately absent from the nav, which stays the
+# operator-facing table of contents on every version.
+not_in_nav: |
   /README.md
   /STATUS.md
   /plan/
@@ -99,8 +110,13 @@ extra:
 # version from the git tags (Q393) keeps it out of overrides/main.html, where it
 # was a hand-edited release step every stable tag missed. See
 # docs/development/website.md § The announce bar.
+#
+# A relative link that escapes docs/ resolves to a source file on github.com and
+# to a 404 on the site. source_links.py absolutizes those against repo_url so one
+# markdown link works in both (Q558). See website.md § Links into the source tree.
 hooks:
   - hooks/release_version.py
+  - hooks/source_links.py
 
 plugins:
   - search

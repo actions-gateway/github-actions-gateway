@@ -224,3 +224,9 @@ breaks** — not stars or downloads. That feedback drives the ordering above far
 more than any internal plan. If something here is in your way, or missing
 entirely, [open an issue](https://github.com/actions-gateway/github-actions-gateway/issues)
 — it's the fastest way to move it up.
+
+The page above is the adopter-facing summary. The day-to-day ordering behind it
+is the **[working backlog](https://actions-gateway.com/dev/STATUS/)** — every
+open item, filterable by label, status, and size. It tracks the unreleased
+`main` branch, so it is published only on the `dev` version of this site and
+carries no commitment: rows are added, reordered, and deleted as work lands.
