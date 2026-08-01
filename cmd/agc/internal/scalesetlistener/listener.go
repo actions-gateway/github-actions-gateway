@@ -38,11 +38,17 @@
 // One job class is outside that replay: an assignment the Listener acked past because it
 // could not be provisioned — a runner name a stale registration holds (Q551), or a worker
 // ceiling already full (Q576). The cursor has moved beyond it, so no session will deliver
-// it again — the Listener keeps it and re-offers it until it runs or GitHub reports it
-// complete, reporting the stall as JobProvisionStalled meanwhile. Redelivery is reserved
-// for genuinely transient failures, because the queue redelivers immediately: a condition
-// that will still hold a moment later would spin the loop, and each pass would mint (and
-// then have to deregister) another runner registration.
+// it again — the Listener keeps it and re-offers it until it runs, reporting the stall as
+// JobProvisionStalled meanwhile. Redelivery is reserved for genuinely transient failures,
+// because the queue redelivers immediately: a condition that will still hold a moment
+// later would spin the loop, and each pass would mint (and then have to deregister)
+// another runner registration.
+//
+// Holding a job is only safe if something ends the hold. A terminal JobCompleted does,
+// but the backend does not always send one for an assignment it has stopped honouring,
+// and a re-offer of a job that no longer exists provisions a worker with nothing to run —
+// which is what livelocks a drain (Q553). So the Listener also reconciles what it holds
+// against the scale set's server-authoritative statistics: see reconcileDeferred.
 //
 // # Security
 //
@@ -135,6 +141,15 @@ const maxDeferredRetryBackoff = 5 * time.Minute
 // before the JIT config is minted), and the poll loop re-offers at most once per
 // iteration, so a short interval is cheap.
 const defaultCapacityRetryInterval = 5 * time.Second
+
+// defaultAssignmentCheckInterval paces the check that the assignments the Listener is
+// holding still exist at GitHub (Q553). It is deliberately far slower than either
+// re-offer schedule: a job whose stall is about to clear costs nothing by being checked
+// late, while the check itself is a session refresh rather than a free local read.
+//
+// The Listener only makes the call while it is holding something, so a healthy set
+// never pays for it at all.
+const defaultAssignmentCheckInterval = 60 * time.Second
 
 // Job is one assigned job the Listener hands to its ProvisionFunc. The listener has
 // already minted the JIT config; the provisioner stages it into the worker Secret and
@@ -262,6 +277,10 @@ type MetricsRecorder interface {
 	// reader never has to tell "not deferring for this reason" from a series that
 	// stopped being written.
 	SetDeferredJobs(byReason map[string]int)
+	// IncJobsAbandoned counts n assignments the Listener gave up on because the scale
+	// set no longer counts them as assigned (Q553). Each is a workflow run that will
+	// never run, so unlike the deferred gauge this is a loss, not backpressure.
+	IncJobsAbandoned(n int)
 }
 
 // DeferReason* name why the Listener is holding an assigned job, and are the values of
@@ -365,18 +384,24 @@ type Config struct {
 	// a different clock than a name conflict (see defaultCapacityRetryInterval, which a
 	// non-positive value selects).
 	CapacityRetryInterval time.Duration
+	// AssignmentCheckInterval is the wait between the server-authoritative checks that
+	// the jobs being re-offered still exist at GitHub (Q553). Non-positive selects
+	// defaultAssignmentCheckInterval. Overridable in tests to drive the check
+	// deterministically.
+	AssignmentCheckInterval time.Duration
 }
 
 // Listener owns one scale set's acquisition session and provisions workers for its
 // assigned jobs. Construct it with New; drive it with Start.
 type Listener struct {
-	cfg              Config
-	log              *slog.Logger
-	workFolder       string
-	pollBackoff      time.Duration
-	rateLimitAfter   time.Duration
-	deferredBackoff  time.Duration
-	capacityInterval time.Duration
+	cfg                Config
+	log                *slog.Logger
+	workFolder         string
+	pollBackoff        time.Duration
+	rateLimitAfter     time.Duration
+	deferredBackoff    time.Duration
+	capacityInterval   time.Duration
+	assignmentInterval time.Duration
 
 	// Session-failure condition state (Q325), owned by Start and then the run
 	// goroutine — the goroutine-creation happens-before makes the handoff safe
@@ -394,18 +419,29 @@ type Listener struct {
 	// deferred holds assignments that could not be provisioned, keyed by jobID, each
 	// carrying the time of its next re-offer (Q551). Same ownership as the condition
 	// flags above: written only by the run goroutine (handleMessage, retryDeferred,
-	// completeJob), so it needs no mu.
+	// completeJob, reconcileDeferred), so it needs no mu.
 	deferred map[string]*deferredJob
+	// Assignment-check state, same run-goroutine ownership (Q553). nextAssignmentCheck
+	// paces the session refresh the check reads its statistics from;
+	// lastZeroAssignedAt is when the current run of zero-assigned readings began, and
+	// is zero whenever the last reading counted an assignment.
+	nextAssignmentCheck time.Time
+	lastZeroAssignedAt  time.Time
 
 	// identityWarnOnce bounds the "assignment carried no run identity" warning to one
 	// line per listener (Q417). Unlike the condition flags above it is touched from the
 	// per-job provision path, so it is a sync.Once rather than a plain bool.
 	identityWarnOnce sync.Once
 
-	mu            sync.Mutex
-	scaleSetID    int
-	provisioned   map[string]bool // jobIDs provisioned this process (idempotency + replay guard)
-	completed     map[string]bool // jobIDs seen completed (guards double-counting on replay)
+	mu          sync.Mutex
+	scaleSetID  int
+	provisioned map[string]bool // jobIDs provisioned this process (idempotency + replay guard)
+	completed   map[string]bool // jobIDs seen completed (guards double-counting on replay)
+	// abandoned holds the jobIDs concluded gone at GitHub (Q553). Without it the fix
+	// would be undone by the ordinary 404 heal: a re-created session polls from cursor 0
+	// and replays the very JobAssigned the check acted on, and a jobID is a job's UUID —
+	// one GitHub has stopped holding is not coming back under the same id.
+	abandoned     map[string]bool
 	lastStats     scaleset.RunnerScaleSetStatistic
 	lastMessageID int64
 }
@@ -425,16 +461,18 @@ func New(cfg Config) (*Listener, error) {
 		return nil, errors.New("scalesetlistener: Config.Capacity is required")
 	}
 	l := &Listener{
-		cfg:              cfg,
-		log:              cfg.Log,
-		workFolder:       cfg.WorkFolder,
-		pollBackoff:      cfg.PollBackoff,
-		rateLimitAfter:   cfg.RateLimitConditionAfter,
-		deferredBackoff:  cfg.DeferredRetryBackoff,
-		capacityInterval: cfg.CapacityRetryInterval,
-		provisioned:      make(map[string]bool),
-		completed:        make(map[string]bool),
-		deferred:         make(map[string]*deferredJob),
+		cfg:                cfg,
+		log:                cfg.Log,
+		workFolder:         cfg.WorkFolder,
+		pollBackoff:        cfg.PollBackoff,
+		rateLimitAfter:     cfg.RateLimitConditionAfter,
+		deferredBackoff:    cfg.DeferredRetryBackoff,
+		capacityInterval:   cfg.CapacityRetryInterval,
+		assignmentInterval: cfg.AssignmentCheckInterval,
+		provisioned:        make(map[string]bool),
+		completed:          make(map[string]bool),
+		abandoned:          make(map[string]bool),
+		deferred:           make(map[string]*deferredJob),
 	}
 	if l.log == nil {
 		l.log = slog.Default()
@@ -454,6 +492,9 @@ func New(cfg Config) (*Listener, error) {
 	if l.capacityInterval <= 0 {
 		l.capacityInterval = defaultCapacityRetryInterval
 	}
+	if l.assignmentInterval <= 0 {
+		l.assignmentInterval = defaultAssignmentCheckInterval
+	}
 	return l, nil
 }
 
@@ -462,7 +503,7 @@ func New(cfg Config) (*Listener, error) {
 type Status struct {
 	// ScaleSetID is the server-assigned scale-set id (0 until ensured).
 	ScaleSetID int
-	// AssignedJobs is the server-authoritative totalAssignedJobs from the last poll —
+	// AssignedJobs is the server-authoritative totalAssignedJobs from the last reading —
 	// the ARC clamp target and the RunnerSet's ActiveSessions/ActiveJobs proxy. It is
 	// not a count of provisioned workers and leads one: a single poll may assign a
 	// whole batch, and every envelope carries the fresh statistics, so the first
@@ -654,6 +695,9 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 		if ctx.Err() != nil {
 			return
 		}
+		// Drop what GitHub no longer holds before re-offering the rest (Q553), so a
+		// dangling assignment is never handed to the provisioner again.
+		l.reconcileDeferred(ctx, ssID, sess)
 		// Re-offer any job the queue will not deliver again (Q551). Once per poll cycle
 		// is the natural cadence: each job carries its own backoff deadline, and the
 		// deadlines are minutes while the loop turns over at worst every long-poll window.
@@ -945,6 +989,10 @@ type deferredJob struct {
 	reason   string // DeferReason*, selecting the re-offer schedule and the reported stall
 	attempts int
 	nextAt   time.Time
+	// deferredAt is when the job entered the set, which is what the assignment check
+	// compares against: only a job already held when GitHub was first seen holding
+	// nothing can be concluded gone (Q553).
+	deferredAt time.Time
 }
 
 // deferJob schedules an unprovisionable assignment for a re-offer under the given
@@ -954,7 +1002,7 @@ type deferredJob struct {
 func (l *Listener) deferJob(aj scaleset.JobMessage, reason string) {
 	d, held := l.deferred[aj.JobID]
 	if !held {
-		d = &deferredJob{job: aj, reason: DeferReasonNameConflict}
+		d = &deferredJob{job: aj, reason: DeferReasonNameConflict, deferredAt: time.Now()}
 		l.deferred[aj.JobID] = d
 	}
 	reasonChanged := reason != "" && reason != d.reason
@@ -1012,6 +1060,100 @@ func (l *Listener) retryDeferred(ctx context.Context, ssID int) {
 		// under the one it already had rather than being reclassified by a blip.
 		l.deferJob(d.job, outcome.deferReason())
 	}
+}
+
+// reconcileDeferred gives up on the assignments GitHub no longer holds, so the Listener
+// stops re-offering — and eventually provisioning a worker for — a job that no longer
+// exists (Q553).
+//
+// Until this existed the only thing that ended a re-offer was a terminal JobCompleted,
+// and the backend does not always send one: a run deleted, a job re-queued elsewhere, a
+// queued job GitHub concluded on its own. The v1.3.0-rc.3 dogfood gate recorded the
+// end state — fifteen assignments still being retried against a scale set whose
+// statistics reported zero — and it clears only by hand, because every exit from the
+// deferred set is one the backend has to volunteer.
+//
+// The statistics are the missing signal. A deferred job is by construction assigned and
+// not complete, so GitHub counts it in totalAssignedJobs; a reading of zero while the
+// Listener holds any is a contradiction with exactly one resolution. Reading zero says
+// nothing about *which* jobs are gone when it is positive, so the check acts only on the
+// unambiguous case — and that is precisely the draining set this exists to unwedge.
+//
+// Two readings, not one. A count is server state the assignment may briefly lead, so a
+// job is abandoned only once a zero reading brackets it on both sides; the cutoff walks
+// forward each round, so a job deferred mid-run is caught on the round after the next.
+//
+// The reading comes from a session refresh because a stalled set has nothing to poll for:
+// GetMessage answers 202, and a 202 carries no statistics. The call is made only while
+// something is held, and at most once per assignmentInterval.
+func (l *Listener) reconcileDeferred(ctx context.Context, ssID int, sess *scaleset.RunnerScaleSetSession) {
+	if len(l.deferred) == 0 {
+		l.nextAssignmentCheck = time.Time{}
+		l.lastZeroAssignedAt = time.Time{}
+		return
+	}
+	now := time.Now()
+	if now.Before(l.nextAssignmentCheck) {
+		return
+	}
+	l.nextAssignmentCheck = now.Add(l.assignmentInterval)
+
+	if err := l.cfg.Client.RefreshSession(ctx, ssID, sess); err != nil {
+		// Nothing to conclude from a failed reading, and nothing else depends on it —
+		// the poll loop refreshes its own token on a 401.
+		l.log.Debug("scaleset: session refresh for the assignment check failed",
+			"scaleSet", l.cfg.ScaleSetName, "err", err)
+		return
+	}
+	stats := sess.Statistics
+	if stats == nil {
+		// The backend reported no statistics, which is not the same as reporting zero.
+		return
+	}
+	l.mu.Lock()
+	l.lastStats = *stats
+	l.mu.Unlock()
+
+	if stats.TotalAssignedJobs > 0 {
+		l.lastZeroAssignedAt = time.Time{}
+		return
+	}
+	cutoff := l.lastZeroAssignedAt
+	l.lastZeroAssignedAt = now
+	if cutoff.IsZero() {
+		return // first zero reading of this run — confirm it on the next
+	}
+	l.abandonDeferredBefore(cutoff)
+}
+
+// abandonDeferredBefore drops every deferred job that entered the set before cutoff,
+// reporting the loss on the log, the abandoned counter, and an owner Event. Each one is
+// a workflow run that will never run — GitHub has already stopped waiting for it, so
+// this reports the loss rather than causing it.
+func (l *Listener) abandonDeferredBefore(cutoff time.Time) {
+	var gone []string
+	for id, d := range l.deferred {
+		if d.deferredAt.Before(cutoff) {
+			gone = append(gone, id)
+		}
+	}
+	if len(gone) == 0 {
+		return
+	}
+	sort.Strings(gone)
+	l.mu.Lock()
+	for _, id := range gone {
+		delete(l.deferred, id)
+		l.abandoned[id] = true
+	}
+	l.mu.Unlock()
+	l.log.Warn("scaleset: giving up on assigned jobs the scale set no longer holds",
+		"scaleSet", l.cfg.ScaleSetName, "jobs", strings.Join(gone, ", "), "count", len(gone))
+	l.metricsIncAbandoned(len(gone))
+	// The note names no job ids, so repeats aggregate into one counted Event.
+	l.recordEvent(corev1.EventTypeWarning, "AssignmentAbandoned", "ProvisionWorker",
+		fmt.Sprintf("gave up on %d assigned job(s): the scale set reports no assigned jobs at all, so GitHub is no longer holding them and re-offering them would provision workers for jobs that no longer exist", len(gone)))
+	l.refreshStalled()
 }
 
 // dueDeferred returns the deferred jobs whose next-attempt deadline has passed.
@@ -1176,9 +1318,16 @@ func (o provisionOutcome) deferReason() string {
 // (ack past it rather than wedge the cursor — Q270; the caller defers it — Q551/Q576).
 func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.JobMessage) provisionOutcome {
 	l.mu.Lock()
-	already := l.provisioned[aj.JobID]
+	already, gone := l.provisioned[aj.JobID], l.abandoned[aj.JobID]
 	l.mu.Unlock()
 	if already {
+		return provisionAcked
+	}
+	if gone {
+		// A replay of an assignment the check concluded GitHub no longer holds. Ack past
+		// it rather than build a worker with nothing to run (Q553).
+		l.log.Debug("scaleset: skipping replayed assignment for a job GitHub no longer has",
+			"scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID)
 		return provisionAcked
 	}
 
@@ -1344,8 +1493,9 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) {
 	l.completed[cj.JobID] = true
 	l.mu.Unlock()
 	// A deferred job GitHub has given up on (timed out, or the run was cancelled) stops
-	// being re-offered here: the completion is the only signal that its assignment is
-	// gone (Q551).
+	// being re-offered here. It is the prompt signal that an assignment is gone, but not
+	// the only one — reconcileDeferred covers the losses that arrive as no message at all
+	// (Q553).
 	l.resolveDeferred(cj.JobID)
 	if first && l.cfg.Metrics != nil {
 		l.cfg.Metrics.IncJobCompleted(cj.Result)
@@ -1368,7 +1518,8 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) {
 // Client.DeleteMessage, whose wire shape is source-derived but unproven live (§2.2
 // caveat, a P2-surfaced unknown for P4). The consequence is that a re-created session
 // polls from cursor 0 and replays every message; the process-scoped provisioned/
-// completed sets make that replay idempotent (no double-provision, no double-count).
+// completed/abandoned sets make that replay idempotent (no double-provision, no
+// double-count, no worker for a job already concluded gone).
 //
 // Because those sets are never pruned, they grow with the jobs a listener handles over
 // its lifetime — an accepted P3 cost of cursor-only acking. Once P4 confirms the
@@ -1432,6 +1583,14 @@ func (l *Listener) metricsIncProvisionError() {
 func (l *Listener) metricsSetDeferred(byReason map[string]int) {
 	if l.cfg.Metrics != nil {
 		l.cfg.Metrics.SetDeferredJobs(byReason)
+	}
+}
+
+// metricsIncAbandoned counts assignments given up on because GitHub no longer holds
+// them (Q553).
+func (l *Listener) metricsIncAbandoned(n int) {
+	if l.cfg.Metrics != nil {
+		l.cfg.Metrics.IncJobsAbandoned(n)
 	}
 }
 

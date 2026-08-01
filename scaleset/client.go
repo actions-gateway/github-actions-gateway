@@ -772,6 +772,11 @@ func (c *Client) CreateSession(ctx context.Context, scaleSetID int, ownerName st
 // updating sess.MessageQueueAccessToken (and URL, if the server returns one) in
 // place. Call it after GetMessage or AcquireJobs returns *UnauthorizedError — the
 // queue token expired (Q264 plan §2b-2).
+//
+// The response also carries the scale set's current statistics, which makes this the
+// only call that answers "what does the server still consider assigned" without a
+// delivery: a poll with nothing to deliver answers 202, and a 202 carries no
+// statistics (Q553).
 func (c *Client) RefreshSession(ctx context.Context, scaleSetID int, sess *RunnerScaleSetSession) error {
 	var out RunnerScaleSetSession
 	if err := c.svcCall(ctx, http.MethodPatch,
@@ -784,9 +789,11 @@ func (c *Client) RefreshSession(ctx context.Context, scaleSetID int, sess *Runne
 	if out.MessageQueueURL != "" {
 		sess.MessageQueueURL = out.MessageQueueURL
 	}
-	if out.Statistics != nil {
-		sess.Statistics = out.Statistics
-	}
+	// Assigned unconditionally, unlike the token and URL above: a caller that reconciles
+	// against the snapshot cannot tell a preserved earlier one from a current one, so a
+	// response that carries no statistics must leave nil ("the server said nothing")
+	// rather than an older reading that still reads as authoritative.
+	sess.Statistics = out.Statistics
 	if c.metrics != nil {
 		c.metrics.IncTokenRefresh("queue")
 	}

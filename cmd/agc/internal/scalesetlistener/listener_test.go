@@ -116,6 +116,7 @@ type countingMetrics struct {
 	mu                           sync.Mutex
 	assigned, provisionedC, errs int
 	completed                    int
+	abandoned                    int
 	deferred                     map[string]int
 	completedResults             map[string]int
 }
@@ -139,6 +140,16 @@ func (m *countingMetrics) SetDeferredJobs(byReason map[string]int) {
 		m.deferred[reason] = n
 	}
 }
+func (m *countingMetrics) IncJobsAbandoned(n int) { m.mu.Lock(); m.abandoned += n; m.mu.Unlock() }
+
+// abandonedCount returns how many assignments the listener has given up on because
+// GitHub stopped counting them (Q553).
+func (m *countingMetrics) abandonedCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.abandoned
+}
+
 func (m *countingMetrics) completedCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
