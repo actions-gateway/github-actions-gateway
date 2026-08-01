@@ -435,6 +435,12 @@ its own chip. The tables are matched **by shape**: a `Labels` column *and* an
 `design/02-architecture.md` and `operations/observability-metrics.md` also head a
 column `Labels`, and the first-column test is what keeps chips off them.
 
+A dimension every row shares is dropped rather than rendered, since selecting it
+could only ever show the whole table: the Progress table's `Status` column is all
+✅ today, so it gets no Status bar — and grows one automatically the moment a plan
+goes ⚠️. The same rule means Deferred and Flake watch, which have no `St` column
+at all, show only Label and Size.
+
 ## Persona / audience tags live in two places
 
 A doc's audience is recorded twice, by design:

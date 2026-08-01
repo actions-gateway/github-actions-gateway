@@ -227,13 +227,27 @@
     count.setAttribute("role", "status");
     count.setAttribute("aria-live", "polite");
 
+    function matches(row, key, value) {
+      if (value === "All") return true;
+      if (key === "label") return row.getAttribute("data-labels").split("|").indexOf(value) >= 0;
+      return row.getAttribute("data-" + key) === value;
+    }
+
+    // A dimension every row shares filters nothing — the Progress table's
+    // all-✅ Status column would otherwise render a chip bar that can only
+    // ever show every row.
+    function discriminates(key) {
+      if (seen[key].length > 1) return true;
+      if (!seen[key].length) return false;
+      return rows.some(function (row) { return !matches(row, key, seen[key][0]); });
+    }
+
     function apply() {
       var shown = 0;
       rows.forEach(function (row) {
-        var show =
-          (picked.label === "All" || row.getAttribute("data-labels").split("|").indexOf(picked.label) >= 0) &&
-          (picked.status === "All" || row.getAttribute("data-status") === picked.status) &&
-          (picked.size === "All" || row.getAttribute("data-size") === picked.size);
+        var show = matches(row, "label", picked.label) &&
+          matches(row, "status", picked.status) &&
+          matches(row, "size", picked.size);
         row.style.display = show ? "" : "none";
         if (show) shown++;
       });
@@ -247,7 +261,7 @@
     var bars = {};
     [["label", "Label"], ["status", "Status"], ["size", "Size"]].forEach(function (pair) {
       var key = pair[0];
-      if (!seen[key].length) return;
+      if (!discriminates(key)) return;
       var row = document.createElement("div");
       row.className = "backlog-filter";
       var legend = document.createElement("span");
@@ -261,6 +275,7 @@
       row.appendChild(bars[key]);
       filters.appendChild(row);
     });
+    if (!bars.label && !bars.status && !bars.size) return;
     filters.appendChild(count);
 
     var anchor = table.closest(".md-typeset__scrollwrap") || table;
@@ -270,7 +285,7 @@
     // Clicking a label in a row selects its chip, as the persona pills do.
     table.addEventListener("click", function (e) {
       var code = e.target.closest("code.backlog-label");
-      if (!code) return;
+      if (!code || !bars.label) return;
       var want = code.textContent.trim();
       bars.label.querySelectorAll(".persona-chip").forEach(function (c) {
         if (c.dataset.persona === want) c.click();
