@@ -2441,6 +2441,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-stylesheet-docsstylesheetsextracss" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The stylesheet (docs/stylesheets/extra.css)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The stylesheet (docs/stylesheets/extra.css)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#changing-the-hero-headline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changing the hero headline
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#local-preview" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2937,9 +2965,41 @@ face arrives. Two coordinated pieces stop that:</p>
 finish loading ~30 ms in, well before first contentful paint, so text renders in
 the correct font on the first frame — no pop. If you add a weight that appears
 above the fold, preload it too, or it may briefly render in the fallback.</p>
+<h2 id="the-stylesheet-docsstylesheetsextracss">The stylesheet (<code>docs/stylesheets/extra.css</code>)<a class="headerlink" href="#the-stylesheet-docsstylesheetsextracss" title="Permanent link">&para;</a></h2>
+<p>Every custom class is namespaced <code>gag-</code>, in two families:</p>
+<ul>
+<li><strong>Components</strong> use BEM — <code>gag-hero</code>, <code>gag-hero__logo</code>, <code>gag-hero__phrase</code>. The
+  block name matches the wrapper <code>&lt;div&gt;</code> in the Markdown.</li>
+<li><strong>Utilities</strong> are bare and reusable — <code>gag-nowrap</code> (keeps a short code chip on
+  one line inside a narrow table column), <code>gag-cont</code>.</li>
+</ul>
+<p><strong>Grep the name before adding a class.</strong> A collision does not error — it resolves
+by specificity, silently. <code>.md-typeset .gag-nowrap</code> (0,2,0) beats a plain
+<code>.gag-nowrap</code> (0,1,0), so a new rule reusing that name has no effect and the
+symptom is "my CSS does nothing," with nothing in the build to explain it. A
+utility that must never change behaviour and a component that must change it at a
+breakpoint are different classes, even when the declaration is identical.</p>
+<h3 id="changing-the-hero-headline">Changing the hero headline<a class="headerlink" href="#changing-the-hero-headline" title="Permanent link">&para;</a></h3>
+<p>The headline's type size and its two breakpoints are <strong>derived from the longest
+unbreakable phrase</strong>, not chosen for looks. The display face is monospace, so a
+phrase's width is arithmetic: <code>characters × 0.61em</code>. <code>Self-hosted GitHub Actions</code>
+is 26 characters — 15.86em, or 920px at the 2.9rem the headline used to cap at,
+against a headline column of only 718px. That is why the cap is 2.2rem, why the
+logomark stacks above the headline below 56rem instead of eating 162px of the
+column, and why <code>gag-hero__phrase</code>'s <code>nowrap</code> releases below 44rem.</p>
+<p>Measure before changing any of the three. Serve the site, then in the browser
+console read the column against the phrase:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">document</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s1">&#39;.gag-hero h1&#39;</span><span class="p">);</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nx">h</span><span class="p">.</span><span class="nx">clientWidth</span><span class="p">;</span><span class="w">                                    </span><span class="c1">// column available</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nx">h</span><span class="p">.</span><span class="nx">querySelector</span><span class="p">(</span><span class="s1">&#39;.gag-hero__phrase&#39;</span><span class="p">).</span><span class="nx">getBoundingClientRect</span><span class="p">().</span><span class="nx">width</span><span class="p">;</span><span class="w">  </span><span class="c1">// phrase needed</span>
+</code></pre></div>
+<p>Sweep the viewport widths, not just your own — the binding case is ~1200px, where
+the logomark hits its 132px size cap while the hero is already at its 44rem max.
+Editing the headline <strong>text</strong> is subject to the same arithmetic: a phrase longer
+than 26 characters needs the cap lowered again, or it will overrun the column.</p>
 <h2 id="local-preview">Local preview<a class="headerlink" href="#local-preview" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>docs-serve<span class="w">   </span><span class="c1"># live-reload preview at http://localhost:8000/</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>make<span class="w"> </span>docs-build<span class="w">   </span><span class="c1"># strict build of both scopes into site/ and site-dev/</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>make<span class="w"> </span>docs-serve<span class="w">   </span><span class="c1"># live-reload preview at http://localhost:8000/</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>make<span class="w"> </span>docs-build<span class="w">   </span><span class="c1"># strict build of both scopes into site/ and site-dev/</span>
 </code></pre></div>
 <p>Both targets provision an <strong>isolated venv</strong> (<code>.venv-docs/</code>, gitignored) from the
 pinned <code>requirements-docs.txt</code> and reuse it across runs, so the docs toolchain
