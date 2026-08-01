@@ -297,6 +297,46 @@ finish loading ~30 ms in, well before first contentful paint, so text renders in
 the correct font on the first frame — no pop. If you add a weight that appears
 above the fold, preload it too, or it may briefly render in the fallback.
 
+## The stylesheet (`docs/stylesheets/extra.css`)
+
+Every custom class is namespaced `gag-`, in two families:
+
+- **Components** use BEM — `gag-hero`, `gag-hero__logo`, `gag-hero__phrase`. The
+  block name matches the wrapper `<div>` in the Markdown.
+- **Utilities** are bare and reusable — `gag-nowrap` (keeps a short code chip on
+  one line inside a narrow table column), `gag-cont`.
+
+**Grep the name before adding a class.** A collision does not error — it resolves
+by specificity, silently. `.md-typeset .gag-nowrap` (0,2,0) beats a plain
+`.gag-nowrap` (0,1,0), so a new rule reusing that name has no effect and the
+symptom is "my CSS does nothing," with nothing in the build to explain it. A
+utility that must never change behaviour and a component that must change it at a
+breakpoint are different classes, even when the declaration is identical.
+
+### Changing the hero headline
+
+The headline's type size and its two breakpoints are **derived from the longest
+unbreakable phrase**, not chosen for looks. The display face is monospace, so a
+phrase's width is arithmetic: `characters × 0.61em`. `Self-hosted GitHub Actions`
+is 26 characters — 15.86em, or 920px at the 2.9rem the headline used to cap at,
+against a headline column of only 718px. That is why the cap is 2.2rem, why the
+logomark stacks above the headline below 56rem instead of eating 162px of the
+column, and why `gag-hero__phrase`'s `nowrap` releases below 44rem.
+
+Measure before changing any of the three. Serve the site, then in the browser
+console read the column against the phrase:
+
+```js
+const h = document.querySelector('.gag-hero h1');
+h.clientWidth;                                    // column available
+h.querySelector('.gag-hero__phrase').getBoundingClientRect().width;  // phrase needed
+```
+
+Sweep the viewport widths, not just your own — the binding case is ~1200px, where
+the logomark hits its 132px size cap while the hero is already at its 44rem max.
+Editing the headline **text** is subject to the same arithmetic: a phrase longer
+than 26 characters needs the cap lowered again, or it will overrun the column.
+
 ## Local preview
 
 ```sh
