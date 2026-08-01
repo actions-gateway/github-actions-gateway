@@ -2711,14 +2711,6 @@
 <td>Phase 2 of the page-boundary split: the Queue is read top-down to pick work; the parked rows under it are only grepped on a trigger. Needs <code>check-roadmap.sh</code> given a second path, rule 8 spanning two files, <code>#QNNN</code> links retargeted.</td>
 </tr>
 <tr>
-<td><a id="Q520"></a>Q520</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">AGC swallows an unreadable proxy CA cert as "no proxy configured"</a></td>
-<td><code>bug</code> <code>security</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>configureProxyTrust</code> treats any CA read error as no-TLS-proxy; sibling <code>buildMetricsOptions</code> errors on non-<code>IsNotExist</code>. A permission-denied CA mount silently disables proxy trust — match the sibling.</td>
-</tr>
-<tr>
 <td><a id="Q401"></a>Q401</td>
 <td><a href="../operations/node-shutdown-budgets/">File upstream k8s issue: delete-path probe results never reach <code>Ready</code></a></td>
 <td><code>docs</code></td>
