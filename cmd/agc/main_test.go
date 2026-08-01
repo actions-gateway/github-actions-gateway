@@ -2,8 +2,12 @@ package main
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/json"
 	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -134,6 +138,110 @@ func TestSlogDebugSurfacesThroughBridge(t *testing.T) {
 		logger.Debug("job message received", "messageId", 7)
 		if strings.Contains(buf.String(), "job message received") {
 			t.Fatalf("slog.Debug must not surface at info level; got %q", buf.String())
+		}
+	})
+}
+
+// TestConfigureProxyTrust covers the mount states the GMC can leave at
+// certDir/tls.crt. A cert that is present but unreadable or unparseable must
+// fail startup rather than be swallowed as "no TLS proxy configured" (Q520):
+// silently continuing strips proxy trust and surfaces much later as an
+// unrelated-looking x509 failure on the first proxied GitHub call.
+func TestConfigureProxyTrust(t *testing.T) {
+	// configureProxyTrust mutates the process-wide transport; restore it so
+	// nothing else in the package inherits a subtest's pool.
+	pinDefaultTransport := func(t *testing.T) http.RoundTripper {
+		t.Helper()
+		orig := http.DefaultTransport
+		t.Cleanup(func() { http.DefaultTransport = orig })
+		return orig
+	}
+
+	t.Run("absent cert leaves the default transport unchanged", func(t *testing.T) {
+		orig := pinDefaultTransport(t)
+		if err := configureProxyTrust(filepath.Join(t.TempDir(), "does-not-exist"), logr.Discard()); err != nil {
+			t.Fatalf("an unmounted proxy CA must be a no-op; got %v", err)
+		}
+		if http.DefaultTransport != orig {
+			t.Error("default transport must not be replaced when no proxy CA is mounted")
+		}
+	})
+
+	t.Run("unreadable cert fails startup", func(t *testing.T) {
+		orig := pinDefaultTransport(t)
+		dir := t.TempDir()
+		// A directory at the cert path reads back EISDIR: a non-IsNotExist read
+		// error reproducible as any user, unlike a chmod-based denial (which root
+		// ignores).
+		if err := os.Mkdir(filepath.Join(dir, "tls.crt"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		err := configureProxyTrust(dir, logr.Discard())
+		if err == nil {
+			t.Fatal("an unreadable proxy CA must fail startup, not pass as no-proxy-configured")
+		}
+		if !strings.Contains(err.Error(), "read proxy CA") {
+			t.Errorf("error must name the read failure; got %v", err)
+		}
+		if http.DefaultTransport != orig {
+			t.Error("default transport must not be replaced when the CA is unreadable")
+		}
+	})
+
+	t.Run("unparseable cert fails startup", func(t *testing.T) {
+		pinDefaultTransport(t)
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "tls.crt"), []byte("not a certificate\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		err := configureProxyTrust(dir, logr.Discard())
+		if err == nil {
+			t.Fatal("a proxy CA with no parseable certificate must fail startup")
+		}
+		if !strings.Contains(err.Error(), "build proxy trust pool") {
+			t.Errorf("error must name the pool failure; got %v", err)
+		}
+	})
+
+	t.Run("empty cert leaves the default transport unchanged", func(t *testing.T) {
+		orig := pinDefaultTransport(t)
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "tls.crt"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := configureProxyTrust(dir, logr.Discard()); err != nil {
+			t.Fatalf("an empty proxy CA is tolerated like the worker wrapper's; got %v", err)
+		}
+		if http.DefaultTransport != orig {
+			t.Error("default transport must not be replaced for an empty proxy CA")
+		}
+	})
+
+	t.Run("mounted CA is trusted by the default transport", func(t *testing.T) {
+		orig := pinDefaultTransport(t)
+		caPEM, serverKP, _ := genCABundle(t)
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "tls.crt"), caPEM, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := configureProxyTrust(dir, logr.Discard()); err != nil {
+			t.Fatalf("a valid proxy CA must configure trust; got %v", err)
+		}
+		tr, ok := http.DefaultTransport.(*http.Transport)
+		if !ok || http.DefaultTransport == orig {
+			t.Fatal("default transport must be replaced with a proxy-trusting clone")
+		}
+		// The pool, not just the plumbing: a leaf signed by the mounted CA must
+		// chain, which is what the AGC↔proxy handshake needs.
+		leaf, err := x509.ParseCertificate(serverKP.Certificate[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := leaf.Verify(x509.VerifyOptions{
+			Roots:     tr.TLSClientConfig.RootCAs,
+			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		}); err != nil {
+			t.Errorf("a cert signed by the mounted proxy CA must validate against the transport pool: %v", err)
 		}
 	})
 }

@@ -27,6 +27,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Tenant Namespace Stuck Terminating After Narrowing the PriorityClass Allowlist](#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
 - [AGC Exits at Startup: GATEWAY_NAME Set but the v2 RunnerSet CRD Is Missing](#agc-exits-at-startup-gateway_name-set-but-the-v2-runnerset-crd-is-missing)
+- [AGC Exits at Startup: Proxy CA Cert Present but Unreadable](#agc-exits-at-startup-proxy-ca-cert-present-but-unreadable)
 - [RunnerGroup ActiveSessions Exceeds maxListeners](#runnergroup-activesessions-exceeds-maxlisteners)
 - [RunnerGroup Stops Serving Jobs With Stale Ready=True](#runnergroup-stops-serving-jobs-with-stale-readytrue)
 - [Orphaned RunnerGroup After Removing It From the Spec](#orphaned-runnergroup-after-removing-it-from-the-spec)
@@ -1204,6 +1205,58 @@ are failing:
 helm upgrade --install actions-gateway-crds-v2 <chart> -n <gmc-namespace>
 kubectl get crd runnersets.actions-gateway.com
 ```
+
+---
+
+## AGC Exits at Startup: Proxy CA Cert Present but Unreadable
+
+**Symptoms.** The AGC never becomes Ready, and its logs end at:
+
+```
+read proxy CA /etc/actions-gateway/proxy-ca/tls.crt: permission denied
+```
+
+or, when the mounted file holds no PEM certificate:
+
+```
+build proxy trust pool from /etc/actions-gateway/proxy-ca/tls.crt: proxy CA PEM
+contained no valid certificates
+```
+
+**Cause.** The per-tenant egress proxy's CA is mounted but the AGC cannot read or
+parse it. Only an *absent* file means "no TLS egress proxy" — the direct-egress and
+local-dev case, logged as `proxy CA cert absent; leaving the default transport
+unchanged`. A mounted-but-unreadable CA is a misconfiguration: continuing without it
+would strip proxy trust and resurface much later as an unrelated-looking
+[`unknown authority` failure](#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy)
+on the first proxied GitHub call, so the AGC exits at startup instead.
+
+The GMC renders the `proxy-ca` volume mode `0444` and projects only `tls.crt`, so
+neither error is reachable from a GMC-managed Deployment on its own. A read error
+means the pod spec was mutated after the fact — a hand-edited Deployment, or a
+mutating policy engine rewriting volume modes or `securityContext`. A parse error
+means the Secret's `tls.crt` is not a PEM certificate, which only a hand-edited
+Secret produces.
+
+**Diagnostics.**
+
+```bash
+kubectl get secret -n <namespace> actions-gateway-proxy-tls -o jsonpath='{.data.tls\.crt}' \
+  | base64 -d | openssl x509 -noout -subject -dates
+```
+
+```bash
+kubectl get deploy -n <namespace> actions-gateway-controller \
+  -o jsonpath='{.spec.template.spec.volumes[?(@.name=="proxy-ca")]}'
+```
+
+**Resolution.** For the parse error, delete the `actions-gateway-proxy-tls` Secret:
+the GMC re-issues an unparseable proxy cert on its next reconcile, and the proxy
+pods must be restarted to serve the new one. For the read error, restore the mount
+as the GMC renders it — revert the manual edit, or exempt the tenant namespace from
+the mutating policy — then let the GMC re-render by bumping `ag.Spec`. Either way
+the AGC recovers on its next restart. An AGC that should egress directly must have
+no `proxy-ca` volume at all, rather than an empty or unreadable one.
 
 ---
 
