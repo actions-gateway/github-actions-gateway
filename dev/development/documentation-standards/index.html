@@ -2592,6 +2592,10 @@ substance is what readers judge.</p>
 <td>State a fact once, in its natural home, and link to it. Don't restate — copies drift. (Same rule for reuse, since GitHub has no transclusion.)</td>
 </tr>
 <tr>
+<td><strong>A link is a claim</strong></td>
+<td>Linking asserts the target covers the thing you linked <em>from</em>. Open it and confirm — nothing else will. <code>mkdocs build</code> and <code>check-doc-links.sh</code> check that a target <strong>resolves</strong>, never that it is on-topic, so a confidently wrong link stays permanently green. Riskiest when adding links in bulk: a roadmap bullet linked "single-replica by design" to <a href="../../design/appendix-e-capacity-planning/">Appendix E</a>, which never mentions replicas — <a href="../../design/02-architecture/">§2 Architecture</a> is where that design and its job-level HA argument live. Same principle as the cite-a-measurement rule for upstream behavior, applied to cross-references.</td>
+</tr>
+<tr>
 <td><strong>No links to <code>CLAUDE.md</code></strong></td>
 <td><code>CLAUDE.md</code>/<code>AGENTS.md</code> is the agent entrypoint only. Human docs never link to it; the dependency direction is one-way (<code>CLAUDE.md</code> → <code>docs/</code>). Content humans need lives in <code>docs/</code> or <code>CONTRIBUTING.md</code>.</td>
 </tr>

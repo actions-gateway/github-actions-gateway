@@ -3546,6 +3546,14 @@ the first try. It costs one edit and one run.</p>
 re-offer test is the routine case: disabling the one call the fix added turned it red on
 "the re-offer must provision the job once the conflict clears" — exactly the sentence the
 test exists to assert — and it went green again on restore.</p>
+<p><strong>A threshold assertion needs a fixture sized to the threshold.</strong> The common way to fail
+the check above is a fixture so far from the boundary that it passes either way. A test
+for "badge markup is not counted against the 45-word cap" was first written with a
+ten-word bullet: green with the stripping, green without it, and pinning nothing. Sized
+to 38 body words — 45 counted with the spans stripped, 47 without — deleting the <code>gsub</code>
+turned it red, which is what made it a test. Whenever the behaviour under test is a
+limit, a cap, a timeout, or a retry count, put the fixture <em>at</em> the edge and confirm one
+step past it fails.</p>
 <h3 id="a-measurement-that-reproduces-a-call-is-not-a-test-of-the-code-that-makes-it">A measurement that reproduces a call is not a test of the code that makes it<a class="headerlink" href="#a-measurement-that-reproduces-a-call-is-not-a-test-of-the-code-that-makes-it" title="Permanent link">&para;</a></h3>
 <p>The sibling of the rule above, and the one that survives a green <strong>positive</strong>. A
 measurement that issues an API call from the harness — <code>gh api</code>, <code>curl</code>, a scratch
