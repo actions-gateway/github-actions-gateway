@@ -2591,6 +2591,14 @@
 <td>Failed once on <code>main</code> (run 30658951388, 2026-07-31, hosted): 90s timeout at worker_scaleset_recovery_test.go:247. Passed on the next two main commits untouched — flake, not a Q528 regression. Diagnose the timed-out wait; flake cost compounds.</td>
 </tr>
 <tr>
+<td><a id="Q166"></a>Q166</td>
+<td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
+<td><code>infra</code> <code>security</code> <code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Demand fired 2026-08-01: <code>sharing.allowedNamespaces</code> is served v2beta1 API with no enforcement (#1079 sweep), so the beta contract would harden a dormant field. Next: M4 consent check, CA distribution, dual-side NetworkPolicy.</td>
+</tr>
+<tr>
 <td><a id="Q408"></a>Q408</td>
 <td><a href="../plan/q408-untrusted-pr-egress/">Untrusted-PR egress posture for Kata workers</a></td>
 <td><code>security</code> <code>infra</code></td>
@@ -2982,13 +2990,6 @@
 <td><code>infra</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> GKE regular channel reaches 1.36, OR we want a 1.36-only feature (explicit floor-raise), OR kind stops shipping 1.35 node images. Then bump KIND_NODE_IMAGE digest + refresh the "verified on k8s 1.35" operations-doc claims.</td>
-</tr>
-<tr>
-<td><a id="Q166"></a>Q166</td>
-<td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
-<td><code>infra</code> <code>security</code> <code>feature</code></td>
-<td>M</td>
-<td><strong>Demand:</strong> a concrete operator ask for cross-namespace proxy sharing (same-namespace already works). Adds allowedNamespaces consent, CA distribution, dual-side NetworkPolicy, managed-IP refresh relocation. Additive on M3a.</td>
 </tr>
 <tr>
 <td><a id="Q174"></a>Q174</td>
