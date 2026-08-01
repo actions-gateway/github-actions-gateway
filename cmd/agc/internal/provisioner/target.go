@@ -29,6 +29,24 @@ const LabelRunnerSet = "actions-gateway.com/runner-set"
 // owns the pod through to a terminal phase), so it is scale-set-only in practice.
 const AnnotationJobCompletedAt = "actions-gateway.com/job-completed-at"
 
+// AnnotationRunnerName is stamped on a scale-set worker pod with the name the listener
+// pre-registered its runner under at GitHub (generatejitconfig mints the record before
+// the pod exists). It is the pod's registration handle: the reaper reads it back to
+// deregister the record when it deletes the pod, and the listener's start-up sweep
+// treats a name stamped on a live pod as claimed and therefore not collectable (Q550).
+//
+// It has to live on the pod because nothing else outlives the listener goroutine that
+// minted the name. The reaper runs arbitrarily later and possibly in a different AGC
+// process, and the fire-and-forget scale-set tier keeps no in-process job state — the
+// same reason Q417 put the run identity and Q420 the reap deadline here.
+//
+// A pod without it (any classic-tier worker, or a scale-set worker created before this
+// annotation existed) is reaped exactly as before, with no deregistration attempted.
+//
+// Controller-set and informational: never set it by hand and never use it for security
+// enforcement.
+const AnnotationRunnerName = "actions-gateway.com/runner-name"
+
 // AnnotationSizingProfile is stamped on a worker pod, with the profile name as its
 // value, when an opt-in sizing profile actually derived that pod's cpu/memory ask
 // (Q489). A pod built from the template's static values — Static, or a history-based

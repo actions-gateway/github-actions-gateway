@@ -220,15 +220,31 @@ type workerPodCounts struct {
 // minutes is far above observed runner shutdown and still bounds the leak.
 const completedJobRunningGrace = 5 * time.Minute
 
+// reapHooks are the owner-bound side effects the shared reaper calls out to. Every
+// field is optional; a nil hook is skipped. They are grouped rather than passed
+// positionally because both reconcilers wire several and the list only grows.
+type reapHooks struct {
+	// emitStuckPending, emitOrphanedRunning and emitLifetimeExceeded record the
+	// owning-CR typed Event for a pending-deadline, an orphaned-running and a
+	// lifetime-cap reap respectively.
+	emitStuckPending     func(podName string, deadline time.Duration)
+	emitOrphanedRunning  func(podName string, grace time.Duration)
+	emitLifetimeExceeded func(podName string)
+	// deregisterRunner removes the GitHub runner record a scale-set worker registered,
+	// called with the name from provisioner.AnnotationRunnerName just before the pod is
+	// deleted (Q550). Only the scale-set tier wires it, and only a pod carrying the
+	// annotation reaches it. Best-effort: it owns its own logging and its outcome never
+	// changes whether the pod is reaped.
+	deregisterRunner func(ctx context.Context, runnerName string)
+}
+
 // reapWorkerPodsByLabel deletes worker pods (selected by labelKey == name in
 // namespace) that the owning CR no longer needs: terminal pods older than ttl,
 // Pending pods older than deadline, and Running pods still alive more than
 // completedJobRunningGrace after their job completed. It returns the time until the
 // earliest retained pod becomes due (0 = none), pod counts by phase (for status), and
-// any error. metrics may be nil; emitStuckPending, emitOrphanedRunning and
-// emitLifetimeExceeded (all may be nil) record the owning-CR typed Event on a
-// pending-deadline, an orphaned-running and a lifetime-cap reap respectively. Shared by
-// both reconcilers' reapers so the reap logic is defined once.
+// any error. metrics may be nil. Shared by both reconcilers' reapers so the reap logic
+// is defined once.
 func reapWorkerPodsByLabel(
 	ctx context.Context,
 	c client.Client,
@@ -237,9 +253,7 @@ func reapWorkerPodsByLabel(
 	ttl, deadline time.Duration,
 	log *slog.Logger,
 	metrics *runnercore.Metrics,
-	emitStuckPending func(podName string, deadline time.Duration),
-	emitOrphanedRunning func(podName string, grace time.Duration),
-	emitLifetimeExceeded func(podName string),
+	hooks reapHooks,
 ) (time.Duration, workerPodCounts, error) {
 	var pods corev1.PodList
 	if err := c.List(ctx, &pods,
@@ -322,6 +336,12 @@ func reapWorkerPodsByLabel(
 			}
 			return next, counts, fmt.Errorf("reaper: mark worker pod %s for deletion: %w", pod.Name, err)
 		}
+		// Deregister the pod's runner record before deleting the pod, so a delete that
+		// fails still leaves the registration clean — the reverse order is what leaks
+		// (Q550). A pod with no runner-name annotation (every classic worker) skips it.
+		if runnerName := pod.Annotations[provisioner.AnnotationRunnerName]; runnerName != "" && hooks.deregisterRunner != nil {
+			hooks.deregisterRunner(ctx, runnerName)
+		}
 		if err := c.Delete(ctx, pod, client.Preconditions{UID: &pod.UID}); err != nil {
 			if client.IgnoreNotFound(err) == nil {
 				continue
@@ -332,14 +352,14 @@ func reapWorkerPodsByLabel(
 		if metrics != nil {
 			metrics.WorkerPodsReaped.WithLabelValues(namespace, name, runnerSet, reason).Inc()
 		}
-		if reason == reapReasonPendingDeadline && emitStuckPending != nil {
-			emitStuckPending(pod.Name, deadline)
+		if reason == reapReasonPendingDeadline && hooks.emitStuckPending != nil {
+			hooks.emitStuckPending(pod.Name, deadline)
 		}
-		if reason == reapReasonOrphanedRunning && emitOrphanedRunning != nil {
-			emitOrphanedRunning(pod.Name, completedJobRunningGrace)
+		if reason == reapReasonOrphanedRunning && hooks.emitOrphanedRunning != nil {
+			hooks.emitOrphanedRunning(pod.Name, completedJobRunningGrace)
 		}
-		if reason == reapReasonLifetimeExceeded && emitLifetimeExceeded != nil {
-			emitLifetimeExceeded(pod.Name)
+		if reason == reapReasonLifetimeExceeded && hooks.emitLifetimeExceeded != nil {
+			hooks.emitLifetimeExceeded(pod.Name)
 		}
 	}
 	return next, counts, nil

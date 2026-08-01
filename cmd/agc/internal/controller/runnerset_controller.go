@@ -912,29 +912,59 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 		provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL),
 		provisioner.PendingPodDeadlineOrDefault(rs.Spec.PendingPodDeadline),
 		log, r.Metrics,
-		func(podName string, deadline time.Duration) {
-			r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodStuckPending", "ReapWorkerPods",
-				"worker pod %s was Pending for more than %s and has been deleted; "+
-					"check the template image and scheduling constraints", podName, deadline)
-		},
-		func(podName string, grace time.Duration) {
-			// Operator-visible: on the scale-set tier this is the "registered but
-			// never got its job" worker, which held a concurrency slot and a node
-			// for nothing until this reap (Q420).
-			r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodOrphanedRunning", "ReapWorkerPods",
-				"worker pod %s was still Running %s after its job completed and has been deleted; "+
-					"the runner never received its job, or a container in the pod outlived it", podName, grace)
-		},
-		func(podName string) {
-			// Operator-visible: name the cause and the field to raise, so a
-			// legitimately long job killed by the cap diagnoses itself (Q438).
-			r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodLifetimeExceeded", "ReapWorkerPods",
-				"worker pod %s was killed by the kubelet after exceeding the %s worker lifetime "+
-					"(spec.maxWorkerLifetime) and has been deleted; if the job was legitimately "+
-					"this long, raise spec.maxWorkerLifetime on this RunnerSet or set it to 0s "+
-					"to disable the cap", podName,
-				provisioner.MaxWorkerLifetimeOrDefault(rs.Spec.MaxWorkerLifetime))
+		reapHooks{
+			emitStuckPending: func(podName string, deadline time.Duration) {
+				r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodStuckPending", "ReapWorkerPods",
+					"worker pod %s was Pending for more than %s and has been deleted; "+
+						"check the template image and scheduling constraints", podName, deadline)
+			},
+			emitOrphanedRunning: func(podName string, grace time.Duration) {
+				// Operator-visible: on the scale-set tier this is the "registered but
+				// never got its job" worker, which held a concurrency slot and a node
+				// for nothing until this reap (Q420).
+				r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodOrphanedRunning", "ReapWorkerPods",
+					"worker pod %s was still Running %s after its job completed and has been deleted; "+
+						"the runner never received its job, or a container in the pod outlived it", podName, grace)
+			},
+			emitLifetimeExceeded: func(podName string) {
+				// Operator-visible: name the cause and the field to raise, so a
+				// legitimately long job killed by the cap diagnoses itself (Q438).
+				r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodLifetimeExceeded", "ReapWorkerPods",
+					"worker pod %s was killed by the kubelet after exceeding the %s worker lifetime "+
+						"(spec.maxWorkerLifetime) and has been deleted; if the job was legitimately "+
+						"this long, raise spec.maxWorkerLifetime on this RunnerSet or set it to 0s "+
+						"to disable the cap", podName,
+					provisioner.MaxWorkerLifetimeOrDefault(rs.Spec.MaxWorkerLifetime))
+			},
+			deregisterRunner: r.deregisterScaleSetRunner(rs, log),
 		})
+}
+
+// deregisterScaleSetRunner returns the reaper's deregistration hook for this RunnerSet:
+// it removes the GitHub runner record a reaped worker pre-registered, closing the
+// registration leak at its source (Q550). It returns nil for a set with no running
+// scale-set listener — a classic set, or one whose listener has not started — because
+// the scale-set client is the listener's, and there is no record to remove on the
+// classic tier anyway.
+//
+// Best-effort by construction: a record the ephemeral runner already removed is a
+// no-op, a record still running a job must be kept (RunnerBusyError), and any other
+// failure is logged and left to the start-up sweep. None of them may stop the reap —
+// the pod is condemned either way, and a retained pod would hold its concurrency slot.
+func (r *RunnerSetReconciler) deregisterScaleSetRunner(rs *v2alpha1.RunnerSet, log *slog.Logger) func(context.Context, string) {
+	ssClient := r.scaleSetClientFor(types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name})
+	if ssClient == nil {
+		return nil
+	}
+	return func(ctx context.Context, runnerName string) {
+		deleted, err := ssClient.DeregisterRunnerByName(ctx, runnerName)
+		switch {
+		case err != nil:
+			log.Debug("reaper: deregister worker runner record", "runner", runnerName, "error", err)
+		case deleted:
+			log.Info("reaper: deregistered worker runner record", "runner", runnerName)
+		}
+	}
 }
 
 // ReconcileCountForTest returns how many times Reconcile has run (integration tests).

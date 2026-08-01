@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -147,9 +148,16 @@ type Stub struct {
 	// Q334 deregister-on-conflict path. FailJITConfigName registers a stale runner here
 	// so the client can resolve and delete it; a successful delete clears the matching
 	// conflictJITNames entry so the re-registration under the base name then succeeds.
-	runnerIDs    map[string]int64
-	busyRunners  map[string]bool
-	nextRunnerID int64
+	// onlineRunners marks names the listing reports as status "online" (a runner has
+	// connected); every other registered name lists as "offline", which is what a
+	// generatejitconfig record looks like until its worker starts. hiddenRunners marks
+	// names the exact-name filter omits while the unfiltered listing still returns them
+	// — the shape a record that DeregisterRunnerByName cannot resolve would have (Q550).
+	runnerIDs     map[string]int64
+	busyRunners   map[string]bool
+	onlineRunners map[string]bool
+	hiddenRunners map[string]bool
+	nextRunnerID  int64
 
 	// rateLimitPolls makes every message poll answer 429 (no Retry-After) while set —
 	// the lever for the sustained-rate-limit condition path (Q325).
@@ -226,6 +234,8 @@ func New(baseURL func(*http.Request) string) *Stub {
 		conflictJITNames: make(map[string]bool),
 		runnerIDs:        make(map[string]int64),
 		busyRunners:      make(map[string]bool),
+		onlineRunners:    make(map[string]bool),
+		hiddenRunners:    make(map[string]bool),
 		nextRunnerID:     5000,
 	}
 	s.handler = s.buildMux()
@@ -329,6 +339,41 @@ func (s *Stub) SetRunnerBusy(name string) {
 	s.mu.Lock()
 	s.busyRunners[name] = true
 	s.mu.Unlock()
+}
+
+// SetRunnerOnline makes the listing report name with status "online", modelling a
+// runner that has connected. Every registered name is "offline" until then — the state
+// a generatejitconfig record sits in while its worker pod is still Pending, which is
+// why the start-up sweep cannot treat "offline" alone as sweepable (Q550).
+func (s *Stub) SetRunnerOnline(name string) {
+	s.mu.Lock()
+	s.onlineRunners[name] = true
+	s.mu.Unlock()
+}
+
+// HideRunnerFromNameFilter keeps name registered (and returned by the unfiltered
+// listing) while making the exact-name filter report no match, so
+// DeregisterRunnerByName resolves nothing and reports (false, nil). It models the
+// suspected live behaviour behind Q550's accumulation: a record the per-name reclaim
+// can never clear, leaving the sweep as the only path that collects it.
+func (s *Stub) HideRunnerFromNameFilter(name string) {
+	s.mu.Lock()
+	s.hiddenRunners[name] = true
+	s.mu.Unlock()
+}
+
+// RegisteredRunners returns the names currently registered at the stub, sorted. It is
+// the assertion surface for the registration leak: a scale set that has finished its
+// jobs and reaped its workers must leave none behind (Q550).
+func (s *Stub) RegisteredRunners() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	names := make([]string, 0, len(s.runnerIDs))
+	for n := range s.runnerIDs {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // FailJITConfigNamePrefix makes generatejitconfig always reject any runner name with
@@ -1067,36 +1112,90 @@ func (s *Stub) handleGenerateJIT(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&in)
-	if s.jitConfigConflicts(in.Name) {
-		// A stale runner already holds this name — the runner-name 409 the client maps to
-		// *RunnerNameConflictError (Q270), distinct from a session-create conflict.
+	// A record already under this name — whether a configured stale one or one an
+	// earlier mint left behind — is the runner-name 409 the client maps to
+	// *RunnerNameConflictError (Q270), distinct from a session-create conflict. The
+	// second case is Q550's cycle: a job whose provision failed collides with its own
+	// leftover on the retry, because the name derives from the job ID.
+	if s.jitConfigConflicts(in.Name) || s.runnerIDs[in.Name] != 0 {
 		http.Error(w, `{"message":"runner name already exists"}`, http.StatusConflict)
 		return
 	}
+	// Minting pre-registers the runner server-side, which is what makes the record
+	// outlive a worker that never runs its job (Q550). The record is offline until a
+	// runner connects under it, and holds the name against a re-mint.
+	if _, ok := s.runnerIDs[in.Name]; !ok {
+		s.nextRunnerID++
+		s.runnerIDs[in.Name] = s.nextRunnerID
+	}
 	blob := base64.StdEncoding.EncodeToString([]byte(`{".runner":{},".credentials":{}}`))
 	out := scaleset.JITRunnerConfig{EncodedJITConfig: blob}
-	out.Runner.ID = 77
+	out.Runner.ID = int(s.runnerIDs[in.Name])
 	out.Runner.Name = in.Name
 	_ = json.NewEncoder(w).Encode(out)
 }
 
-// handleListRunners serves the REST list-runners name filter used by
-// Client.DeregisterRunnerByName to resolve a stale record's id (Q334). It returns the
-// registered runner for an exact name match, or an empty list otherwise.
+// handleListRunners serves the REST list-runners endpoint in both the shapes the
+// client uses: the exact-name filter DeregisterRunnerByName resolves a stale record
+// with (Q334), and the unfiltered paginated listing the start-up sweep walks to find
+// records no live worker claims (Q550). A name hidden by HideRunnerFromNameFilter is
+// omitted from the filtered form only, so the two can disagree the way the live API is
+// suspected to.
 func (s *Stub) handleListRunners(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	name := r.URL.Query().Get("name")
-	s.record("list-runners name=%s", name)
+	q := r.URL.Query()
+	name := q.Get("name")
+	s.record("list-runners name=%s page=%s", name, q.Get("page"))
+
 	type restRunner struct {
-		ID   int64  `json:"id"`
-		Name string `json:"name"`
+		ID     int64  `json:"id"`
+		Name   string `json:"name"`
+		Status string `json:"status"`
+		Busy   bool   `json:"busy"`
 	}
-	var runners []restRunner
-	if id, ok := s.runnerIDs[name]; ok {
-		runners = append(runners, restRunner{ID: id, Name: name})
+	entry := func(n string) restRunner {
+		status := "offline"
+		if s.onlineRunners[n] {
+			status = "online"
+		}
+		return restRunner{ID: s.runnerIDs[n], Name: n, Status: status, Busy: s.busyRunners[n]}
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"total_count": len(runners), "runners": runners})
+
+	if name != "" {
+		var runners []restRunner
+		if _, ok := s.runnerIDs[name]; ok && !s.hiddenRunners[name] {
+			runners = append(runners, entry(name))
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"total_count": len(runners), "runners": runners})
+		return
+	}
+
+	names := make([]string, 0, len(s.runnerIDs))
+	for n := range s.runnerIDs {
+		names = append(names, n)
+	}
+	sort.Strings(names) // stable paging across requests
+
+	perPage := atoiOr(q.Get("per_page"), 100)
+	page := atoiOr(q.Get("page"), 1)
+	runners := []restRunner{}
+	if start := (page - 1) * perPage; start < len(names) {
+		end := min(start+perPage, len(names))
+		for _, n := range names[start:end] {
+			runners = append(runners, entry(n))
+		}
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"total_count": len(names), "runners": runners})
+}
+
+// atoiOr parses a positive integer query parameter, falling back to def.
+func atoiOr(v string, def int) int {
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return def
+	}
+	return n
 }
 
 // handleDeleteRunner serves the REST DELETE used by Client.DeregisterRunnerByName. A
@@ -1126,6 +1225,8 @@ func (s *Stub) handleDeleteRunner(w http.ResponseWriter, r *http.Request) {
 	}
 	delete(s.runnerIDs, name)
 	delete(s.conflictJITNames, name)
+	delete(s.onlineRunners, name)
+	delete(s.hiddenRunners, name)
 	w.WriteHeader(http.StatusNoContent)
 }
 

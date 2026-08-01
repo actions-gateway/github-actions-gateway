@@ -92,6 +92,13 @@ const minPollInterval = 100 * time.Millisecond
 // leaves it empty (the actions-runner convention).
 const defaultWorkFolder = "_work"
 
+// sweepTimeout bounds the start-up registration-record sweep (Q550). The sweep runs on
+// the reconcile path, and its listing pages over every runner registered for the owner,
+// so a large org or a slow API must not hold a reconcile open: past this the sweep gives
+// up and the next listener start retries it. Nothing depends on it completing — it is
+// the backstop for records the reap path could not deregister.
+const sweepTimeout = 30 * time.Second
+
 // defaultRateLimitConditionAfter is how long GetMessage must have been answered 429
 // before the Listener surfaces RateLimited=True on the owning RunnerSet — the same
 // ten-minute window the classic listener uses, so a transient burst does not flap
@@ -271,6 +278,15 @@ type Config struct {
 	// defaultRateLimitConditionAfter (ten minutes, classic parity). Overridable in
 	// tests to drive the condition deterministically.
 	RateLimitConditionAfter time.Duration
+	// ClaimedRunnerNames returns the runner names currently claimed by live worker
+	// pods, and is what makes the start-up registration sweep safe (Q550): a record is
+	// only deletable if no worker pod is relying on it. A worker that has not started
+	// yet has a legitimately OFFLINE record, so "offline" cannot be the sweep's only
+	// test, and the REST runner object carries no timestamp to age records by.
+	//
+	// An error aborts the sweep — an unreadable claim set is not evidence that nothing
+	// is claimed. Nil disables the sweep entirely.
+	ClaimedRunnerNames func(ctx context.Context) (map[string]struct{}, error)
 	// Log is the structured logger. Nil selects slog.Default().
 	Log *slog.Logger
 	// PollBackoff paces the transient-error retry path. Non-positive selects
@@ -415,6 +431,12 @@ func (l *Listener) Start(ctx context.Context) (<-chan struct{}, error) {
 		return nil, fmt.Errorf("scalesetlistener: open session for %q: %w", l.cfg.ScaleSetName, err)
 	}
 
+	// Collect registration records no live worker claims before polling. Runs after the
+	// session is open so a listener that cannot work at all does not delete records
+	// first, and best-effort throughout: a scale set must still acquire jobs when the
+	// sweep fails.
+	l.sweepUnclaimedRunners(ctx)
+
 	// Session open — publish the healthy baseline for the conditions this Listener
 	// owns. Unconditional (not transition-guarded) because an unauthorized episode
 	// may have been surfaced by a PREVIOUS Listener instance that failed Start and
@@ -468,6 +490,71 @@ func (l *Listener) ensureScaleSet(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	return created.ID, nil
+}
+
+// sweepUnclaimedRunners deletes this scale set's registration records that no live
+// worker pod claims — the recovery half of the registration-leak fix (Q550).
+//
+// Every generatejitconfig pre-registers a runner under a name derived from the job ID,
+// and a worker that never runs its job leaves that record behind. Deregistering on reap
+// closes the leak going forward, but nothing re-derives the name of a record whose pod
+// is already gone (an AGC that crashed between the two) or of the suffixed names the
+// conflict-retry path mints and never revisits. Those records hold the very names the
+// affected jobs need, so a scale set can wedge against its own leftovers until an
+// operator prunes them by hand — which is what happened to the 22 stale `gag-ci-e2e`
+// records in the 2026-07-31 RC window.
+//
+// Three tests keep a record: claimed by a live worker pod, busy, or online. Claimed is
+// the load-bearing one — a pod that has not started yet has an offline, unclaimed-looking
+// record that is nonetheless about to be used, and deleting it would strand exactly the
+// job this function exists to protect. So an unreadable claim set aborts the sweep
+// rather than licensing a delete.
+// It runs synchronously on Start, before the poll loop, so no assignment this listener
+// makes can race it. That ordering is worth the latency, but it is on the reconcile
+// path, so the whole sweep is bounded by sweepTimeout: a slow or paging-heavy listing
+// gives up rather than holding a reconcile open.
+func (l *Listener) sweepUnclaimedRunners(ctx context.Context) {
+	if l.cfg.ClaimedRunnerNames == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, sweepTimeout)
+	defer cancel()
+
+	claimed, err := l.cfg.ClaimedRunnerNames(ctx)
+	if err != nil {
+		l.log.Warn("scaleset: skipping stale runner-record sweep; claimed runner names unavailable",
+			"scaleSet", l.cfg.ScaleSetName, "err", err)
+		return
+	}
+
+	prefix := l.cfg.ScaleSetName + "-"
+	records, err := l.cfg.Client.ListRunnersWithPrefix(ctx, prefix)
+	if err != nil {
+		l.log.Warn("scaleset: list runner records for sweep", "scaleSet", l.cfg.ScaleSetName, "err", err)
+		return
+	}
+
+	swept := 0
+	for _, rec := range records {
+		if _, ok := claimed[rec.Name]; ok {
+			continue
+		}
+		if rec.Busy || rec.Online() {
+			continue
+		}
+		if err := l.cfg.Client.DeregisterRunnerByID(ctx, rec.ID, rec.Name); err != nil {
+			// A record that turned busy between the list and the delete is one the
+			// sweep must leave alone; anything else is logged and skipped.
+			l.log.Debug("scaleset: sweep could not delete stale runner record",
+				"scaleSet", l.cfg.ScaleSetName, "runner", rec.Name, "err", err)
+			continue
+		}
+		swept++
+	}
+	if swept > 0 {
+		l.log.Info("scaleset: swept stale runner records left by workers that never ran their job",
+			"scaleSet", l.cfg.ScaleSetName, "swept", swept, "examined", len(records))
+	}
 }
 
 // createSession opens the scale set's single message-queue session.
@@ -1000,6 +1087,13 @@ func (l *Listener) generateJITConfig(ctx context.Context, ssID int, jobID string
 			return jit, base, provisionAcked
 		}
 		// Base still unusable (re-created record, or a transient error) — fall through.
+	} else {
+		// The name is taken at generatejitconfig but the REST name filter matched
+		// nothing, so the reclaim had nothing to delete. Every retry below then mints a
+		// suffixed name this path never revisits, which is one way a set accumulates
+		// records it can never clear itself — the start-up sweep is what collects them.
+		l.log.Warn("scaleset: runner name is taken but no record resolves under it; the per-name reclaim cannot clear it",
+			"scaleSet", l.cfg.ScaleSetName, "jobID", jobID, "runner", base)
 	}
 
 	// Bounded fresh-name retry: the base name could not be reclaimed.

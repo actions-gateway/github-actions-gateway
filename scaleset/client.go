@@ -562,6 +562,127 @@ func (c *Client) DeregisterRunnerByName(ctx context.Context, name string) (bool,
 	return true, nil
 }
 
+// Runner is one registered runner record as the REST list-runners endpoint reports it.
+// Status is GitHub's "online"/"offline"; a record generatejitconfig pre-registered is
+// offline until its runner connects, so Status alone does not distinguish a stale
+// record from one whose worker pod has not started yet (Q550).
+type Runner struct {
+	ID     int64
+	Name   string
+	Status string
+	Busy   bool
+}
+
+// Online reports whether a runner has connected.
+func (r Runner) Online() bool { return r.Status == "online" }
+
+// maxRunnerListPages bounds the sweep's paging over the org's or repo's runner list.
+// The listing is every runner registered for the owner, not just this scale set's, so
+// on a large org it can be long; 20 pages of 100 covers 2,000 records, well past any
+// plausible per-owner runner count, and stops an unbounded walk if the API ever pages
+// forever.
+const maxRunnerListPages = 20
+
+// ListRunnersWithPrefix returns every registered runner whose name starts with prefix.
+// The REST API filters only by exact name, so this pages through the owner's full
+// runner listing and filters client-side — the sweep's cost is one listing per listener
+// start, not per job.
+//
+// It is the discovery half of the registration-record sweep (Q550):
+// DeregisterRunnerByName can only clear a record whose exact name is known and
+// resolvable, which leaves nothing to collect the records of jobs the AGC has forgotten
+// (a listener restart) or names it never re-derives (the suffixed conflict-retry names).
+//
+// Like DeregisterRunnerByName this authorizes with the GitHub App installation token,
+// not the admin JWT.
+func (c *Client) ListRunnersWithPrefix(ctx context.Context, prefix string) ([]Runner, error) {
+	installToken, err := c.provider.Token(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("scaleset: installation token: %w", err)
+	}
+	restPrefix, err := runnerRESTPrefix(c.configURL)
+	if err != nil {
+		return nil, err
+	}
+
+	const perPage = 100
+	var out []Runner
+	for page := 1; page <= maxRunnerListPages; page++ {
+		batch, total, err := c.listRunnersPage(ctx, installToken, restPrefix, page, perPage)
+		if err != nil {
+			return nil, err
+		}
+		for _, rn := range batch {
+			if strings.HasPrefix(rn.Name, prefix) {
+				out = append(out, rn)
+			}
+		}
+		if len(batch) < perPage || page*perPage >= total {
+			break
+		}
+	}
+	return out, nil
+}
+
+// listRunnersPage fetches one page of the owner's runner listing, returning the page's
+// records and the server's total count.
+func (c *Client) listRunnersPage(ctx context.Context, installToken, restPrefix string, page, perPage int) ([]Runner, int, error) {
+	u := fmt.Sprintf("%s%s/actions/runners?per_page=%d&page=%d", c.apiBase, restPrefix, perPage, page)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+installToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	start := time.Now()
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("scaleset: list runners: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	c.observe("ListRunners", req, resp, start, len(body))
+	if resp.StatusCode != http.StatusOK {
+		return nil, 0, fmt.Errorf("scaleset: list runners: status %d: %s", resp.StatusCode, githubapp.SanitizeBody(body, 256))
+	}
+	var decoded struct {
+		TotalCount int `json:"total_count"`
+		Runners    []struct {
+			ID     int64  `json:"id"`
+			Name   string `json:"name"`
+			Status string `json:"status"`
+			Busy   bool   `json:"busy"`
+		} `json:"runners"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		return nil, 0, fmt.Errorf("scaleset: decode list runners: %w", err)
+	}
+	runners := make([]Runner, 0, len(decoded.Runners))
+	for _, rn := range decoded.Runners {
+		runners = append(runners, Runner{ID: rn.ID, Name: rn.Name, Status: rn.Status, Busy: rn.Busy})
+	}
+	return runners, decoded.TotalCount, nil
+}
+
+// DeregisterRunnerByID deletes the runner record with the given id, for a caller that
+// already resolved it through ListRunnersWithPrefix. It exists alongside
+// DeregisterRunnerByName because the sweep must be able to delete a record the exact-name
+// filter cannot resolve — the case that leaves DeregisterRunnerByName reporting
+// (false, nil) with nothing collected (Q550). A record still running a job surfaces as
+// *RunnerBusyError, exactly as the by-name path reports it.
+func (c *Client) DeregisterRunnerByID(ctx context.Context, id int64, name string) error {
+	installToken, err := c.provider.Token(ctx)
+	if err != nil {
+		return fmt.Errorf("scaleset: installation token: %w", err)
+	}
+	prefix, err := runnerRESTPrefix(c.configURL)
+	if err != nil {
+		return err
+	}
+	return c.deleteRunner(ctx, installToken, prefix, id, name)
+}
+
 // resolveRunnerID looks up a registered runner's id by exact name via the REST
 // list-runners name filter, returning 0 when none matches.
 func (c *Client) resolveRunnerID(ctx context.Context, installToken, prefix, name string) (int64, error) {

@@ -274,10 +274,14 @@ Scale-set worker pods additionally carry:
 | Metadata | Example | Notes |
 | --- | --- | --- |
 | `actions-gateway.com/acquisition-protocol` (label) | `ScaleSet` | Marks the pod as provisioned by the scale-set tier. Present only on that tier, so `-l actions-gateway.com/acquisition-protocol=ScaleSet` selects exactly the scale-set workers |
+| `actions-gateway.com/runner-name` (annotation) | `gag-ci-e2e-8f3c…` | The name this pod's runner is registered under at GitHub. The AGC deregisters that record when it reaps the pod, and treats a name stamped here as in-use when it sweeps stale records (Q550) |
 | `actions-gateway.com/job-completed-at` (annotation) | `2026-07-26T12:00:00Z` | When GitHub reported the pod's job terminal. Gives a still-Running worker a reap deadline (Q420) |
 | `actions-gateway.com/eviction-handled-at` (annotation) | `2026-07-26T12:04:00Z` | When the AGC adjudicated this pod's eviction. Its presence is what makes automatic recovery at-most-once per evicted pod across reconciles, restarts, and replicas (Q417) |
 
-All three are controller-set: never set them by hand.
+All four are controller-set: never set them by hand. Editing or removing
+`runner-name` in particular makes the pod's runner record uncollectable, which is
+what leaves stale registrations behind — see
+[Scale-Set Job Stranded by a Stale Runner Record](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409).
 
 Worker pods on **either** tier gain one more annotation at end of life:
 `actions-gateway.com/deletion-reason`, stamped with the reap reason (e.g.

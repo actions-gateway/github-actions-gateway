@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // The ScaleSet acquisition tier (Q264 Option E, P3d). A RunnerSet with
@@ -62,8 +63,25 @@ func (s *scaleSetStatusSink) Event(eventtype, reason, action, note string) {
 // closes when the loop has fully exited so teardown can wait for it (no goroutine leak).
 type scaleSetListenerHandle struct {
 	listener *scalesetlistener.Listener
-	cancel   context.CancelFunc
-	done     <-chan struct{}
+	// client is the set's scale-set protocol client, kept so the reaper can deregister
+	// a reaped worker's runner record through it (Q550) — the reaper runs outside the
+	// listener and has no other route to GitHub.
+	client *scaleset.Client
+	cancel context.CancelFunc
+	done   <-chan struct{}
+}
+
+// scaleSetClientFor returns the scale-set client of the listener running for key, or
+// nil when none is running. The reaper runs before the listener is ensured on any given
+// reconcile, so a nil here is ordinary on the first pass for a set — the records a reap
+// could not deregister then are collected by the next listener start's sweep.
+func (r *RunnerSetReconciler) scaleSetClientFor(key types.NamespacedName) *scaleset.Client {
+	r.scaleSetListenersMu.Lock()
+	defer r.scaleSetListenersMu.Unlock()
+	if h, ok := r.scaleSetListeners[key]; ok {
+		return h.client
+	}
+	return nil
 }
 
 // reconcileScaleSetListener drives a ScaleSet-protocol RunnerSet: it ensures exactly
@@ -133,7 +151,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		return h, nil
 	}
 
-	client, err := r.buildScaleSetClient(rs, refs.gateway)
+	ssClient, err := r.buildScaleSetClient(rs, refs.gateway)
 	if err != nil {
 		return nil, fmt.Errorf("build scale-set client: %w", err)
 	}
@@ -159,13 +177,17 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 	}
 
 	l, err := scalesetlistener.New(scalesetlistener.Config{
-		Client:       client,
+		Client:       ssClient,
 		ScaleSetName: scaleSetName,
 		OwnerName:    key.Namespace + "/" + key.Name,
 		Provision: func(ctx context.Context, job scalesetlistener.Job) error {
 			return r.Provisioner.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{
 				JobID:     job.JobID,
 				JITConfig: job.JITConfig,
+				// The runner record is pre-registered before the pod exists and
+				// outlives it, so the name goes onto the pod for the reaper to
+				// deregister and the sweep to recognize as claimed (Q550).
+				RunnerName: job.RunnerName,
 				// The assignment message is the only place this tier learns which
 				// workflow run a job belongs to, and the listener does not retain it —
 				// so it goes onto the worker pod, where eviction recovery reads it back
@@ -191,7 +213,13 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		PollErrors: r.Metrics.PollErrors(key.Namespace),
 		Conditions: sink,
 		Events:     sink,
-		Log:        log,
+		// The sweep's safety check: which runner records a live worker pod is relying
+		// on, so a record whose worker has not started yet — offline, and otherwise
+		// indistinguishable from a stale one — is never collected (Q550).
+		ClaimedRunnerNames: func(ctx context.Context) (map[string]struct{}, error) {
+			return r.claimedRunnerNames(ctx, key)
+		},
+		Log: log,
 	})
 	if err != nil {
 		return nil, err
@@ -206,9 +234,37 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		cancel()
 		return nil, err
 	}
-	h := &scaleSetListenerHandle{listener: l, cancel: cancel, done: done}
+	h := &scaleSetListenerHandle{listener: l, client: ssClient, cancel: cancel, done: done}
 	r.scaleSetListeners[key] = h
 	return h, nil
+}
+
+// claimedRunnerNames returns the runner names stamped on this set's worker pods that
+// are not already gone — the records the start-up sweep must leave alone (Q550).
+//
+// A pod in ANY phase claims its record, including Pending: that is the whole point, as
+// a worker still waiting to be scheduled has an offline record that looks exactly like
+// a stale one. Only a pod already being deleted releases its claim, since the reaper is
+// deregistering it anyway.
+func (r *RunnerSetReconciler) claimedRunnerNames(ctx context.Context, key types.NamespacedName) (map[string]struct{}, error) {
+	var pods corev1.PodList
+	if err := r.List(ctx, &pods,
+		client.InNamespace(key.Namespace),
+		client.MatchingLabels{provisioner.LabelRunnerSet: key.Name},
+	); err != nil {
+		return nil, fmt.Errorf("list worker pods: %w", err)
+	}
+	claimed := make(map[string]struct{}, len(pods.Items))
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if !pod.DeletionTimestamp.IsZero() {
+			continue
+		}
+		if name := pod.Annotations[provisioner.AnnotationRunnerName]; name != "" {
+			claimed[name] = struct{}{}
+		}
+	}
+	return claimed, nil
 }
 
 // scaleSetCapacityFunc returns the CapacityFunc advertised as X-ScaleSetMaxCapacity —

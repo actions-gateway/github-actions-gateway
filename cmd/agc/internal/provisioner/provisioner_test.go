@@ -396,6 +396,43 @@ func TestProvisioner_ScaleSetWorker_StagesJITAndSetsMode(t *testing.T) {
 	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{JobID: "job-uuid-2", JITConfig: ""}))
 }
 
+// TestProvisioner_ScaleSetWorker_StampsRunnerName pins the pod as the durable record of
+// its runner registration (Q550). The listener pre-registers the runner before the pod
+// exists and then forgets the name; the reaper has to deregister that record long
+// afterwards, so the name has to survive on the pod — as the run identity (Q417) and the
+// reap deadline (Q420) already do. A job with no name stamps no annotation, keeping a
+// pre-upgrade or classic worker exactly as it was.
+func TestProvisioner_ScaleSetWorker_StampsRunnerName(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	target := &fakeTarget{
+		key:    client.ObjectKey{Namespace: "team-a", Name: "gpu"},
+		labels: map[string]string{"actions-gateway.com/runner-set": "gpu"},
+		spec:   &provisioner.ResolvedSpec{WorkerImage: "runner:test"},
+	}
+	const jit = "eyJydW5uZXIiOnt9fQ=="
+
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{
+		JobID: "job-uuid-1", JITConfig: jit, RunnerName: "gpu-job-uuid-1",
+	}))
+	pod := findPod(ctx, t, fc, "team-a")
+	require.NotNil(t, pod)
+	assert.Equal(t, "gpu-job-uuid-1", pod.Annotations[provisioner.AnnotationRunnerName],
+		"the reaper deregisters the record by the name stamped here")
+
+	// A fresh client, so findPod returns the unnamed job's pod rather than the first.
+	fc2 := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	require.NoError(t, newProvisioner(fc2).ProvisionScaleSetWorker(ctx, target,
+		provisioner.ScaleSetJob{JobID: "job-uuid-2", JITConfig: jit}))
+	unnamed := findPod(ctx, t, fc2, "team-a")
+	require.NotNil(t, unnamed)
+	assert.NotContains(t, unnamed.Annotations, provisioner.AnnotationRunnerName,
+		"a job with no runner name must stamp no annotation rather than an empty one")
+}
+
 // TestProvisioner_OmitsJITKeyWhenEmpty pins the contract that an empty
 // jitConfig string does not create a Secret entry. Stub-registrar agents
 // (used by integration tests against fakegithub) produce no JIT blob, and
