@@ -13,6 +13,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [GMC Pods Rejected: insufficient quota to match these scopes (PriorityClass)](#gmc-pods-rejected-insufficient-quota-to-match-these-scopes-priorityclass)
 - [Every RunnerGroup / RunnerSet Write Denied: no params found for policy binding](#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding)
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
+- [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts)
 - [ActionsGateway Reports RunnerGroupsDegraded](#actionsgateway-reports-runnergroupsdegraded)
 - [Runners Never Appear Online — AGC `unknown authority` Through the Egress Proxy](#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy)
 - [RunnerGroup Reports WorkersUnschedulable](#runnergroup-reports-workersunschedulable)
@@ -376,6 +377,54 @@ kubectl get actionsgateway -n <namespace> <name> \
   cross-check the `controller_runtime_reconcile_errors_total` metric and the full
   error in the GMC logs. The GMC's reconciler retries with backoff and clears
   `Degraded` on the next successful reconcile.
+
+---
+
+## `kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts
+
+**Symptoms.** `kubectl rollout restart deploy/<agc-or-proxy> -n <namespace>` prints
+`deployment.apps/... restarted`, and a following `kubectl rollout status` prints
+`successfully rolled out` within a second. But the pod is unchanged: same name, same
+`AGE`, no new ReplicaSet in `kubectl get rs -n <namespace>`, and whatever the restart
+was meant to clear (a stale in-memory listener, a cached credential) is still there.
+
+**Which Deployments.** Every Deployment the GMC provisions inside a tenant namespace:
+the AGC control plane (`actions-gateway-controller` on v1, `<gateway>-agc` on v2) and
+the egress proxy pool. The GMC's *own* Deployment (`gmc-controller-manager` in
+`gmc-system`) is not managed by a controller and restarts normally.
+
+**What happened.** `kubectl rollout restart` works by patching a
+`kubectl.kubernetes.io/restartedAt` annotation onto the Deployment's **pod template** —
+that changed template is what makes the Deployment controller roll a new ReplicaSet. On
+GMC versions without the Q552 fix, the reconciler rebuilt the whole pod template from
+the `ActionsGateway` / `EgressProxy` spec on every pass, so it reverted the annotation
+before the rollout began. `kubectl rollout status` then reported the *pre-existing*
+ReplicaSet — trivially complete — as a successful rollout.
+
+**Resolution.**
+- **Upgrade the GMC** to a release carrying the Q552 fix. Fixed versions carry an
+  operator-injected `kubectl.kubernetes.io/restartedAt` through reconcile, so
+  `kubectl rollout restart` performs a real rolling update. Nothing else on the pod
+  template is tolerated — a hand-edited image, env var, or any other annotation is
+  still reconciled back to the CR, which remains the source of truth.
+- **Workaround on an older GMC:** delete the pod and let the Deployment recreate it.
+
+  ```sh
+  kubectl delete pod -n <namespace> -l app=actions-gateway-controller
+  ```
+
+  This is a hard restart, not a rolling one: the replacement pod is only scheduled
+  after the old one terminates, so the tenant's control plane is down for the pod's
+  startup time. The AGC's 60s termination grace period still applies, so in-flight
+  session work drains as it would on a rollout.
+
+**Verify either path took effect** — check that the pod is actually new rather than
+trusting the rollout message:
+
+```sh
+kubectl get pods -n <namespace> -l app=actions-gateway-controller \
+  -o custom-columns=NAME:.metadata.name,AGE:.metadata.creationTimestamp
+```
 
 ---
 
@@ -1158,7 +1207,7 @@ kubectl get crd runnersets.actions-gateway.com
 
 **Resolution.**
 - Upgrade the AGC image to a version with the Q100 fix.
-- To clear excess listeners immediately on an affected version, restart the AGC Deployment (`kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`). Listener sessions are in-memory; the restarted AGC re-creates exactly one baseline per RunnerGroup.
+- To clear excess listeners immediately on an affected version, restart the AGC Deployment (`kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`). Listener sessions are in-memory; the restarted AGC re-creates exactly one baseline per RunnerGroup. On a GMC older than the Q552 fix the restart is a silent no-op — see [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts).
 
 ---
 
@@ -1170,7 +1219,7 @@ kubectl get crd runnersets.actions-gateway.com
 
 **Resolution.**
 - Upgrade the AGC image to a version with the Q137 fix. Fixed versions requeue the RunnerGroup on a bounded interval while the listener count is below the desired ceiling, so the reconciler re-runs its zero-listener recovery and revives the baseline within seconds; `status.activeSessions` and `Ready` then track reality again.
-- To recover immediately on an affected version, trigger a reconcile by editing the RunnerGroup (e.g. a no-op annotation change) or restart the AGC Deployment (`kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`); the restarted AGC re-creates one baseline per RunnerGroup from scratch.
+- To recover immediately on an affected version, trigger a reconcile by editing the RunnerGroup (e.g. a no-op annotation change) or restart the AGC Deployment (`kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`); the restarted AGC re-creates one baseline per RunnerGroup from scratch. On a GMC older than the Q552 fix the restart is a silent no-op — see [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts).
 - If the baseline keeps exiting non-retriably after revival, the underlying credential or runner-version problem is real — check `kubectl describe runnergroup` for `Degraded` / `Unauthorized` / `VersionTooOld` conditions and resolve per the [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs) section.
 
 ---
@@ -1908,6 +1957,10 @@ kubectl get secret -n <namespace> <name> -o jsonpath='{.data.privateKey}' | base
 kubectl rollout restart deploy/actions-gateway-controller -n <namespace>
 ```
 
+On a GMC older than the Q552 fix that manual restart is a silent no-op — prefer the
+`gitHubAppRef.name` change, or see [`kubectl rollout restart` of a Managed Deployment
+Reports Success but Nothing Restarts](#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts).
+
 See [Getting Started — Rotating GitHub App Credentials](../getting-started.md#rotating-github-app-credentials) for the full rotation procedure.
 
 ---
@@ -2028,6 +2081,8 @@ kubectl get runnergroup -n <namespace> -o jsonpath='{.items[*].status.activeSess
   kubectl delete secret -n <namespace> -l actions-gateway/runner-group=<group>
   kubectl rollout restart deploy/actions-gateway-controller -n <namespace>
   ```
+
+  On a GMC older than the Q552 fix that restart is a silent no-op — see [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts).
 
   Expect `409 Already exists` registration errors for any agent that never ran a job — its record survives server-side under an ID the AGC no longer knows. Delete the survivor from GitHub first: find its ID with `gh api '.../actions/runners?name=<group>-<index>'`, then `gh api -X DELETE .../actions/runners/<id>`. Fixed versions resolve this 409 automatically.
 

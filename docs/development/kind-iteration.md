@@ -96,7 +96,9 @@ kubectl patch deployment -n gmc-system gmc-controller-manager --type=json \
 
 ### `kubectl rollout restart` is sometimes a no-op
 
-If the deployment spec hash hasn't changed, no new pod gets created. After bumping a referenced Secret/ConfigMap, or to force a fresh pull, run:
+If the deployment spec hash hasn't changed, no new pod gets created. On a GMC older than the Q552 fix, a GMC-managed Deployment (the tenant AGC, the egress proxy pool) never changes hash on a restart at all: the reconcile reverted the `kubectl.kubernetes.io/restartedAt` annotation that carries it, so kubectl reported the old ReplicaSet as rolled out.
+
+Either way — after bumping a referenced Secret/ConfigMap, to force a fresh pull, or on a pre-fix GMC — the workaround is the same:
 
 ```bash
 kubectl delete pod -n <ns> -l <selector>

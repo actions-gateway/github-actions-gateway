@@ -33,10 +33,12 @@ import (
 // applyService helpers: the server-defaulted spec fields (strategy,
 // revisionHistoryLimit, progressDeadlineSeconds, minReadySeconds) are left as
 // the apiserver stored them. A new builder-set DeploymentSpec field must be
-// added here, or it will silently never be reconciled.
+// added here, or it will silently never be reconciled. The pod template goes
+// through assignManagedPodTemplate so a tolerated operator annotation survives
+// (Q552).
 func assignHPATargetDeploymentSpec(live *appsv1.DeploymentSpec, desired appsv1.DeploymentSpec) {
 	live.Selector = desired.Selector
-	live.Template = desired.Template
+	assignManagedPodTemplate(&live.Template, desired.Template)
 	if live.Replicas == nil || *live.Replicas == 0 {
 		live.Replicas = desired.Replicas
 	}
@@ -50,7 +52,7 @@ func assignHPATargetDeploymentSpec(live *appsv1.DeploymentSpec, desired appsv1.D
 // would fight it.
 func assignExternallyScaledDeploymentSpec(live *appsv1.DeploymentSpec, desired appsv1.DeploymentSpec) {
 	live.Selector = desired.Selector
-	live.Template = desired.Template
+	assignManagedPodTemplate(&live.Template, desired.Template)
 	if live.Replicas == nil {
 		live.Replicas = desired.Replicas
 	}

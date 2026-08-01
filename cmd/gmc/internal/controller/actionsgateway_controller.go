@@ -1015,11 +1015,13 @@ func (r *ActionsGatewayReconciler) applyNetworkPolicy(ctx context.Context, ag *g
 //
 // The whole Spec is replaced, which is only correct for a Deployment no other
 // controller writes to. Its one caller is the AGC Deployment (a fixed single
-// replica, no HPA); the HPA-targeted proxy pool uses applyProxyDeployment.
+// replica, no HPA); the HPA-targeted proxy pool uses applyProxyDeployment. The
+// tolerated pod-template annotations survive the replace — see
+// assignManagedDeploymentSpec (Q552).
 func (r *ActionsGatewayReconciler) applyDeployment(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *appsv1.Deployment) error {
 	obj := &appsv1.Deployment{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
-		obj.Spec = desired.Spec
+		assignManagedDeploymentSpec(&obj.Spec, desired.Spec)
 		return nil
 	})
 }
