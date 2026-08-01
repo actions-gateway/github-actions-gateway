@@ -5194,6 +5194,13 @@ reference verifies directly. The one-command check uses the GitHub CLI:</p>
 <a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
 </code></pre></div>
+<blockquote>
+<p><strong>Scripting this check?</strong> <code>gh attestation verify</code> prints its summary only to a
+terminal. Redirected or captured it emits nothing while still exiting 0, so a
+passing verification is indistinguishable from one that checked nothing. In a
+pipeline, add <code>--format json</code> and assert on the result — <code>.[0].verificationResult.signature.certificate.buildSignerURI</code>
+must name this repo's <code>publish.yml</code> at a <code>refs/tags/v*</code> ref.</p>
+</blockquote>
 <p><code>cosign</code> verifies the same attestation against the keyless identity, matching the
 signature/SBOM commands above (the predicate type is the SLSA provenance v1
 in-toto type):</p>
