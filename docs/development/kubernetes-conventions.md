@@ -109,6 +109,11 @@ package. Controller-set v2 labels:
   controller's Pod watch, reaper, and agent pool filter on it. Distinct from the v1
   `actions-gateway/runner-group` key so the v1 and v2 controllers never cross-wire
   during coexistence.
+- `actions-gateway.com/egress-proxy: <name>` — stamped on every `EgressProxy` child and
+  pool pod, and the **sole** key of that pool's `Deployment`/`Service`/PDB/`NetworkPolicy`
+  selectors and its hostname anti-affinity term. Distinct from v1's bare
+  `app: actions-gateway-proxy` for the same coexistence reason, and it is the *selector*
+  that matters here, not just the name — see [below](#a-selector-a-coexisting-controller-also-matches-is-a-cross-wire-q582).
 
 ### Derive a per-owner name from the owner's *kind*, not just its name (Q466)
 
@@ -138,6 +143,37 @@ across, not orphan them. `agentpool.AdoptLegacyRunnerSetSecrets` is the pattern:
 first reconcile after the rename, copy each old-named object to its new name (preserving
 the payload, so no external registration is re-issued) and delete the original, gated on
 a check that the old name is not in use by the *other* kind.
+
+### A selector a coexisting controller also matches is a cross-wire (Q582)
+
+Q466 above splits derived *names*. The same coexistence window breaks a *selector* that
+two controllers both match, and it breaks it in places that carry no name at all. The v2
+`EgressProxy` pool used to stamp v1's `app: actions-gateway-proxy` alongside its own
+identity label, purely so generic tooling could find proxy pods. Names were already
+split — the pools are `actions-gateway-proxy` and `<proxy>-proxy` — but v1 keys its PDB
+selector, its `Deployment` selector, and its hostname anti-affinity term on that one bare
+label, because v1 has a single pool per namespace and never had to distinguish it. So
+every one of those reached into the v2 pool: each pool's pods fell under both PDBs (a pod
+covered by two is one the eviction API refuses to evict), both `HorizontalPodAutoscaler`s
+wedged on `AmbiguousSelector`, and the pools repelled each other off every node.
+
+Three things to carry forward when adding a label to a v2 object:
+
+- **A shared label is a shared selector until proven otherwise.** Trace every consumer
+  before stamping one: PDBs, `Service`s, `NetworkPolicy` pod selectors *and peers*, pod
+  (anti-)affinity terms, and CNI-native policy selectors. An HPA is the trap — it has no
+  selector of its own, so it never appears in a grep for the label, yet it inherits its
+  scale target's and wedges on an overlap.
+- **`Deployment.spec.selector` is immutable**, so narrowing one is a delete-and-recreate
+  of a live workload, not a patch. Prefer the fix that lands on the *newer* side: v2's
+  pools are alpha and a migration creates them after the upgrade, whereas every install
+  has a running v1 pool. `EgressProxyReconciler.applyDeployment` carries the recreate for
+  pools that predate the narrowing, mirroring `applyRoleBinding`'s immutable-`roleRef`
+  path.
+- **Generic identity belongs in the recommended labels**, which nothing selects on.
+  `app.kubernetes.io/name=actions-gateway-proxy` is on both pools' pods and is the
+  version-agnostic way to list every proxy pod; a functional selector must key on the
+  owning object's identity label instead.
 
 ### Derive every name through `api/apinames` (Q467, Q473)
 

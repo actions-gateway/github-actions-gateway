@@ -12,6 +12,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: an EgressProxy pool's pods drop the app: actions-gateway-proxy label (its pool is recreated once)](#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once)
   - [Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)](#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did)
   - [Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")](#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion)
   - [Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)](#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before)
@@ -62,8 +63,9 @@ kubectl get actionsgateway --all-namespaces
 # 2. All AGC pods healthy
 kubectl get pods --all-namespaces -l app=actions-gateway-controller
 
-# 3. All proxy pools healthy
-kubectl get pods --all-namespaces -l app=actions-gateway-proxy
+# 3. All proxy pools healthy — the recommended label covers v1 inline pools and v2
+#    EgressProxy pools alike; `app=actions-gateway-proxy` finds only v1's.
+kubectl get pods --all-namespaces -l app.kubernetes.io/name=actions-gateway-proxy
 
 # 4. No CrashLoopBackOff pods
 kubectl get pods --all-namespaces | grep -v Running | grep -v Completed | grep -v Terminating
@@ -79,6 +81,59 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: an `EgressProxy` pool's pods drop the `app: actions-gateway-proxy` label (its pool is recreated once)
+
+**Who is affected:** every namespace that already runs a v2 `EgressProxy`. Tenants
+still wholly on v1 are unaffected — no v1 object, pod, or label changes, and no v1
+proxy pool restarts.
+
+**What was broken.** A v2 `EgressProxy` pool's pods stamped `app: actions-gateway-proxy`
+alongside their own `actions-gateway.com/egress-proxy: <proxy>` identity. That bare
+`app` label is the *sole* key of v1's `PodDisruptionBudget` selector, v1's proxy
+`Deployment` selector, and v1's required hostname anti-affinity term — v1 has one
+fixed-name pool per namespace and never had to distinguish it from a second. So for the
+whole coexistence window of a [v1→v2 migration](migration-v1-to-v2.md), each pool's pods
+were claimed by the other's:
+
+- Each pool's pods fell under **both** `PodDisruptionBudget`s. A pod covered by two PDBs
+  cannot be evicted at all, so a node drain of either pool's node never completed.
+- **Neither pool autoscaled.** A `HorizontalPodAutoscaler` has no selector of its own —
+  the controller reads its scale target's, refuses to act on pods a second HPA also
+  controls, and reports `ScalingActive=False`/`AmbiguousSelector`. With overlapping pod
+  sets, both HPAs wedged, and the v1 pool could not scale back down either.
+- The two pools **repelled each other off every node**, so coexistence cost v1+v2 worker
+  nodes rather than `max(v1, v2)`.
+
+**What changed.** A v2 pool is now selected solely by `actions-gateway.com/egress-proxy`,
+which no v1 pod carries. Its `Deployment`, `Service`, PDB, `NetworkPolicy`, and
+anti-affinity term all key on it alone, and the v2 workload `NetworkPolicy`'s proxy
+egress peer matches that label's *presence* rather than v1's `app` label — so v2 AGC and
+worker pods reach every `EgressProxy` pool in their namespace exactly as before, and no
+longer reach a coexisting v1 pool.
+
+**What to expect on upgrade.** `Deployment.spec.selector` is immutable, so an
+`EgressProxy` pool provisioned before this release is **deleted and recreated once**, on
+the first reconcile after the GMC upgrade. The replacement's pods wait out the old pods'
+termination grace period on the hostname anti-affinity before scheduling, so that pool's
+egress is briefly unavailable — treat it like the [proxy rollout](#proxy-upgrade) and
+upgrade during a quiet window if the tenant is mid-build. A tenant migrating *after* the
+upgrade never pays this: `gag-migrate` creates the `EgressProxy` fresh, so its pool is
+born with the narrowed selector.
+
+**What to do about it.** Nothing, unless you select v2 proxy pods by `app` yourself. Any
+hand-authored `NetworkPolicy`, monitoring rule, `kubectl -l`, or dashboard that reaches a
+**v2** pool's pods via `app=actions-gateway-proxy` must move to
+`actions-gateway.com/egress-proxy=<proxy>` (or its presence, for any pool):
+
+```bash
+kubectl -n <namespace> get pods -l actions-gateway.com/egress-proxy
+```
+
+v1 pools keep `app=actions-gateway-proxy`, so recipes aimed at a v1 pool are unchanged.
+The recommended `app.kubernetes.io/name=actions-gateway-proxy` label is still on both
+pools' pods and remains the version-agnostic way to find any proxy pod — as additive
+metadata only; never build a policy selector on it.
 
 ### Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)
 
