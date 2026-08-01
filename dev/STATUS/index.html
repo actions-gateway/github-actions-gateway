@@ -2911,6 +2911,14 @@
 <td>check-path-filters.sh's positional parser can't resolve YAML anchors, so the autoscaler/karpenter filters carry four shared matcher paths twice, synced by comment only (Q479). Assert the shared set matches, or teach the parser anchors.</td>
 </tr>
 <tr>
+<td><a id="Q572"></a>Q572</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml"><code>doc-links</code>/<code>dockerfile-lint</code> duplicate their path list across two triggers with no sync check</a></td>
+<td><code>infra</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q571 gates the three workflows pairing <code>on.push.paths</code> with a <code>changes</code> filter. These two instead duplicate across <code>pull_request.paths</code> and <code>push.paths</code> — same hazard, different shape, ungated. Both agree today.</td>
+</tr>
+<tr>
 <td><a id="Q534"></a>Q534</td>
 <td><a href="../development/documentation-standards/">Rule: an upstream-behavior claim cites a measurement, in docs and in code comments</a></td>
 <td><code>docs</code> <code>retro</code></td>

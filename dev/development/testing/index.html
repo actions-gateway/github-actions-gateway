@@ -2525,6 +2525,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#a-path-list-written-twice-the-trigger-and-the-filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A path list written twice: the trigger and the filter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#scripts-is-grouped-by-blast-radius" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3307,8 +3318,18 @@
 <li><strong>Module coverage.</strong> Every <code>WORKSPACE_FILTERS</code> entry matches every <code>go.work</code> module. Only a recursive glob rooted at the module or an ancestor counts: a bare <code>api</code> matches the literal path and nothing beneath it, and <code>api/config/**</code> leaves the rest of the module ungated. Failures name the module, the workflow, and the exact pattern to add, one per gap.</li>
 <li><strong>Live paths.</strong> Every pattern's literal prefix still exists on disk. A pattern left behind by a rename matches nothing, which narrows its gate as silently as a missing module does.</li>
 <li><strong>Shared-lane agreement.</strong> Two filters gating the same reusable workflow list the same <code>scripts/</code> patterns. <code>SHARED_LANE_FILTERS</code> pairs them; the failure prints a diff of the two sets. <code>e2e-test.yml</code> and <code>e2e-calico.yml</code> both call <code>e2e-reusable.yml</code> yet disagreed by roughly 60× about which scripts it runs — the Calico lane named two of the six the reusable workflow invokes directly, so a <code>free-runner-disk.sh</code> change skipped the lane that exercises it (Q571).</li>
+<li><strong>Push-trigger agreement.</strong> A workflow that scopes its post-merge leg with <code>on.push.paths</code> lists the same paths as its <code>changes</code> filter. <code>PUSH_TRIGGER_FILTERS</code> registers the pairs. See below for why this one is easy to miss.</li>
 </ol>
 <p><strong>So adding a workspace module now fails the gate instead of slipping through</strong> — but the gate only knows about <em>whole-workspace</em> coverage. Judgement is still yours for the narrow filters: when you add a module, ask what each gate actually compiles, scans, or bakes, and remember the same applies to a gate that names files individually (<code>manifest-validate.sh</code>'s <code>standalone_manifests</code> — adding a path there means adding its directory to the filter). Wired into <code>make check</code> and CI's <code>path-filters</code> job in <code>unit-test.yml</code>, which is gated on the <code>workflows</code> filter — the one filter watching all of <code>.github/workflows/</code>, so editing any <code>filters:</code> block re-runs the gate that lints it. Behaviour, including that each assertion fails when it should, is asserted by <code>scripts/ci/check-path-filters-test.sh</code> under <code>make scripts-test</code>.</p>
+<h4 id="a-path-list-written-twice-the-trigger-and-the-filter">A path list written twice: the trigger and the filter<a class="headerlink" href="#a-path-list-written-twice-the-trigger-and-the-filter" title="Permanent link">&para;</a></h4>
+<p>Three workflows — <code>e2e-calico.yml</code>, <code>plan-hygiene.yml</code>, <code>status-lint.yml</code> — express the same scoping decision <strong>twice</strong>, because the two legs are gated by different mechanisms:</p>
+<ul>
+<li><strong>The PR leg</strong> triggers on every <code>pull_request</code> with no path filter (so its <code>gate</code> job always reports its required check) and is scoped by the internal <code>changes</code> filter.</li>
+<li><strong>The post-merge leg</strong> triggers on <code>push</code> to <code>main</code> and is scoped by <code>on.push.paths</code> — a plain GitHub Actions trigger filter, not a <code>dorny/paths-filter</code> block.</li>
+</ul>
+<p>GitHub Actions does not reliably resolve YAML anchors, so the list is duplicated rather than shared. <strong>Drift between the two is invisible on a PR.</strong> Every PR classifies correctly off the filter; only the post-merge leg silently stops running, and a leg that does not run leaves nothing red to notice.</p>
+<p>Q571 shipped exactly that regression and merged green: it rewrote <code>e2e-calico.yml</code>'s filter to <code>scripts/{e2e,fetch,lib}/**</code> and left the push list naming the two now-moved files it had always enumerated. Assertion 5 is the recurrence guard — it compares the two as sorted sets and prints a diff of the difference.</p>
+<p>Two more workflows (<code>doc-links.yml</code>, <code>dockerfile-lint.yml</code>) duplicate a list across <code>pull_request.paths</code> and <code>push.paths</code> instead. That is the same hazard in a different shape and is <strong>not</strong> yet gated; both lists agree today (Q572).</p>
 <h4 id="scripts-is-grouped-by-blast-radius"><code>scripts/</code> is grouped by blast radius<a class="headerlink" href="#scripts-is-grouped-by-blast-radius" title="Permanent link">&para;</a></h4>
 <p>The other half of keeping these filters honest is where a script lives. <code>scripts/</code> has no top-level files: every script sits in a subdirectory named for the gate that consumes it — <code>e2e/</code>, <code>go/</code>, <code>docs/</code>, <code>security/</code>, <code>manifest/</code>, <code>release/</code>, <code>ci/</code>, <code>fetch/</code>, <code>agent/</code>, <code>dev/</code>, plus the pre-existing <code>dogfood/</code>, <code>lib/</code> and <code>updatecli/</code>. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md"><code>scripts/README.md</code></a> is the map.</p>
 <p>That makes every filter a prefix glob (<code>scripts/e2e/**</code>) instead of an enumeration that drifts or a catch-all that over-triggers. Before Q571 the e2e filter took <code>scripts/*</code> plus a <code>scripts/!(dogfood)/**</code> extglob, so <strong>any</strong> top-level script pulled in a ~13 min e2e run: two docs-only PRs paid for it during Q561 because they touched a MkDocs hook's unit test, and one of them was then blocked by an unrelated migration flake it had no business meeting.</p>
