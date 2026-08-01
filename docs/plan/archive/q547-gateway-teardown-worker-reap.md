@@ -147,6 +147,14 @@ the reaper uses against `pod.CreationTimestamp`. On expiry the GMC emits a
 `WorkerDrainTimeout` Warning naming the sets that never drained and proceeds
 with teardown.
 
+Its value is **90s**, chosen against the caller rather than the healthy path —
+which resolves in seconds. Every e2e teardown deletes its gateway with
+`kubectl delete --timeout=2m`, and an operator following the documented teardown
+order does something similar; a wait that reaches the caller's own budget turns
+the bounded case into a *failed* delete rather than a slow one. The timeout only
+ever fires when no AGC is running to reap, and waiting longer in that case buys
+nothing.
+
 Neither binary gains RBAC. The AGC still holds its full tenant grant while it
 reaps, because the GMC has not deleted anything yet.
 

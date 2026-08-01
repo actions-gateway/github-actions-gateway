@@ -1650,7 +1650,7 @@ kubectl get deploy -n <namespace> -l app.kubernetes.io/component=agc
 kubectl logs -n <namespace> deploy/<gateway>-agc --tail=50
 ```
 
-**Resolution.** Teardown is bounded: after **two minutes** it proceeds anyway and emits a `WorkerDrainTimeout` Warning naming what it is leaving behind. If you see that event, those pods now have no reaper and are bounded only by their `maxWorkerLifetime` deadline — delete them by hand to release the node:
+**Resolution.** Teardown is bounded: after **90 seconds** it proceeds anyway and emits a `WorkerDrainTimeout` Warning naming what it is leaving behind. If you see that event, those pods now have no reaper and are bounded only by their `maxWorkerLifetime` deadline — delete them by hand to release the node:
 
 ```sh
 kubectl delete pod -n <namespace> -l actions-gateway.com/runner-set=<set-name>

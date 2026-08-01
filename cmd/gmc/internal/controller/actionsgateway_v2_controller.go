@@ -821,7 +821,11 @@ func runnerSetImpairments(conditions []metav1.Condition) []string {
 // deletion timestamp through its cache and issue the deletes, so this is generous for
 // the healthy path; its real job is to bound the unhealthy one, where no AGC is
 // running to reap and every gateway deletion would otherwise pay the full wait.
-const workerDrainTimeout = 2 * time.Minute
+//
+// It sits deliberately under the 2m `kubectl delete --timeout` the e2e teardowns (and
+// operators, by convention) give a gateway: a wait that outlasts the caller's budget
+// turns the bounded case into a failed delete rather than a slow one.
+const workerDrainTimeout = 90 * time.Second
 
 // undrainedRunnerSets returns "<name> (N active, M pending)" for each RunnerSet bound
 // to ag that still reports worker pods, in the same list-and-match-gatewayRef shape
