@@ -35,6 +35,9 @@ on:
   # push filter keeps the expensive post-merge leg scoped to the same paths (the
   # push and changes-filter lists must be kept identical; GitHub Actions does not
   # reliably support YAML anchors, so the list is duplicated rather than shared).
+  # That duplication is now asserted — scripts/ci/check-path-filters.sh compares
+  # the two sets — because it went unnoticed for a merge when Q571 rewrote the
+  # filter's scripts/ patterns and left this list naming two moved files.
   pull_request:
   push:
     branches: [main]
@@ -43,8 +46,9 @@ on:
       - 'cmd/proxy/**'
       - 'Dockerfile'
       - 'charts/actions-gateway/templates/**'
-      - 'scripts/e2e/kind-with-registry.sh'
-      - 'scripts/e2e/bake-with-retry.sh'
+      - 'scripts/e2e/**'
+      - 'scripts/fetch/**'
+      - 'scripts/lib/**'
       - 'Makefile'
       - '.github/workflows/e2e-calico.yml'
       - '.github/workflows/e2e-reusable.yml'

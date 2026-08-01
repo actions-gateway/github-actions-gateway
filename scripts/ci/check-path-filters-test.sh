@@ -6,7 +6,7 @@
 # (docs/development/testing.md § Diagnosing failures). Fixtures rather than the
 # tracked workflows, because the tracked ones are (and must stay) correct.
 #
-# Five groups:
+# Six groups:
 #
 #   1. parse_filters reads the nested YAML string faithfully — trailing comments,
 #      comment-only lines, and the dedent that ends the block.
@@ -19,6 +19,9 @@
 #      naming what to fix.
 #   5. Two filters gating one reusable workflow are held to the same scripts/
 #      patterns, comparing only those and ignoring order (Q571).
+#   6. parse_push_paths reads `on.push.paths` out of real YAML, and a workflow's
+#      push list is held equal to its changes filter — the drift Q571 itself
+#      shipped, which no assertion then covered.
 #
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
@@ -257,7 +260,69 @@ expect_assertion lanes-name-the-missing-pattern 1 'scripts/fetch/\*\*' assert_sh
 SHARED_LANE_FILTERS=('lanes.yml:calico-short|lanes.yml:kindnet')
 expect_assertion lanes-fail-on-superset 1 'different scripts/ patterns' assert_shared_lanes_agree
 
-# --- 6. the tracked workflows pass -------------------------------------------
+# --- 6. push-trigger paths must match the changes filter ----------------------
+
+# The real shape: `pull_request:` bare (so `gate` always reports), a push leg
+# scoped by paths, and a `changes` filter classifying PRs. `on.push.paths` is
+# real YAML, not the nested string `filters:` uses, so it needs its own parser —
+# these cases pin what it must and must not pick up.
+cat >"$FIXTURE_ROOT/workflows/push.yml" <<'YAML'
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/**'
+      # A comment is not a path.
+      - 'scripts/e2e/**'
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'not a path'
+        type: string
+
+jobs:
+  changes:
+    steps:
+      - uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            same:
+              - 'scripts/e2e/**'
+              - 'cmd/**'
+            short:
+              - 'cmd/**'
+            extra:
+              - 'cmd/**'
+              - 'scripts/e2e/**'
+              - 'scripts/fetch/**'
+YAML
+
+expect_eq push-paths-parsed "cmd/** scripts/e2e/**" \
+	"$(parse_push_paths "$FIXTURE_ROOT/workflows/push.yml" | tr '\n' ' ' | sed 's/ $//')"
+# workflow_dispatch's inputs sit deeper than `paths:` and must not leak in, and
+# `branches:` is a sibling key rather than a list item.
+expect_eq push-paths-count 2 \
+	"$(parse_push_paths "$FIXTURE_ROOT/workflows/push.yml" | wc -l | tr -d ' ')"
+# A workflow with no push-paths list yields nothing rather than erroring.
+expect_eq push-paths-absent '' "$(parse_push_paths "$FIXTURE_ROOT/workflows/parse.yml")"
+
+WORKFLOW_DIR="$FIXTURE_ROOT/workflows"
+PUSH_TRIGGER_FILTERS=('push.yml:same')
+# Order need not agree — the filter lists the same two paths reversed.
+expect_assertion push-passes-when-sets-match 0 '' assert_push_paths_match_filter
+
+# The Q571 regression itself: the filter gained paths the push list did not, so
+# merging one of them skips the post-merge leg while every PR looked correct.
+PUSH_TRIGGER_FILTERS=('push.yml:extra')
+expect_assertion push-fails-on-filter-only 1 'differ from filter' assert_push_paths_match_filter
+expect_assertion push-names-the-missing-path 1 'scripts/fetch/\*\*' assert_push_paths_match_filter
+# And the mirror: a push-only path runs the post-merge leg on a change the PR
+# leg never classified as relevant.
+PUSH_TRIGGER_FILTERS=('push.yml:short')
+expect_assertion push-fails-on-push-only 1 'differ from filter' assert_push_paths_match_filter
+
+# --- 7. the tracked workflows pass -------------------------------------------
 
 # End-to-end against the real tree, in a subshell so the fixture globals above
 # cannot leak into it. This is the same verdict `make path-filters-check` gives;
