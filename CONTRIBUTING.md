@@ -203,6 +203,28 @@ Two mechanics make the follow-through safe once the base lands:
   SHAs, so `git log` cannot tell you the work is in. Check the code:
   `git show origin/main:<path> | grep <the symbol you added>`.
 
+### A conflict inside a section your change deletes
+
+Deleting or replacing a section makes conflicts in it **semantic, not textual**. Git
+offers a two-sided choice, but neither side is right: "theirs" restores the section you
+removed, and "ours" silently discards whatever the other branch put there. Both look
+clean afterwards, and only the second one is invisible.
+
+Read what the other side *added* before resolving, and give it a home in the new
+structure. When #1072 replaced the roadmap's "Available now" section with
+[features.md](docs/features.md), a concurrent groom had added a shipped capability to
+exactly that section — taking "ours" would have dropped a documented feature from the
+site with a green build and no reviewer signal. The same groom moved a bullet between
+two other sections, which had to be carried across rather than re-resolved.
+
+The tell is that the conflict sits in a region your diff removes wholesale. When you see
+that, resolve by rehoming, then diff your result against the other branch to confirm
+nothing of theirs vanished:
+
+```sh
+git diff origin/main -- <the file you restructured>
+```
+
 Queue items in `docs/STATUS.md` are identified by `Q`-prefixed IDs (e.g. `Q44`). Use the bare ID in commit messages and PR bodies — its `Q` prefix is what keeps GitHub from auto-linking to PR/issue 44 (`#44` would be linked, `Q44` is not).
 
 ## Security
