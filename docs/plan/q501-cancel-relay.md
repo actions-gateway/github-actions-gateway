@@ -1,8 +1,10 @@
 # Q501 — relaying a run cancellation to the worker pod
 
-**Status:** ⚠️ Partial. The *actuator* shipped (this plan's Phase 1); the *trigger*
-is blocked on one live-GitHub measurement (Phase 2) and on whether the defect
-exists on the non-deprecated tier at all (Phase 0).
+**Status:** ⚠️ Partial. The *actuator* shipped (Phase 1). **Phase 0 is answered:** the
+ScaleSet tier is not exposed to the unbounded form of this defect, from a live
+measurement already committed to the repo — so Q501 is a **classic-tier** item and
+candidate B's cost is not worth paying. The remaining question is Phase 2, one
+live-GitHub reading that the cancel spec is now instrumented to take.
 
 Q501 was found by [Q459's cancellation measurement](q459-drained-worker-recovery.md#the-measurement-also-found-that-a-cancel-never-reaches-the-worker-q501):
 a `sleep 600` job ran its full 600s after its run was cancelled from GitHub, which
@@ -55,17 +57,43 @@ needed at all. The 600s measurement does **not** rule it out: at the time it was
 taken the actuator was missing, so a renew-loop teardown at ~5 minutes would have
 looked exactly like no teardown at all.
 
-## Phase 0 — does this exist on the tier that ships?
+## Phase 0 — does this exist on the tier that ships? No. (answered 2026-08-01)
 
 The measurement ran against the v1 `ActionsGateway` fixture, which is the **classic**
-tier. The default since Q264 P5 is `acquisitionProtocol: ScaleSet`, where the worker
-runs the *full* runner (`run.sh --jitconfig`) and therefore holds its own broker
-session — the channel a cancellation travels on. If a ScaleSet worker aborts
-natively, Q501 is a defect confined to a tier already scheduled for removal at
-`v2.0.0`, and candidate B's cost is not worth paying.
+tier. The default since Q264 P5 is `acquisitionProtocol: ScaleSet`, and that tier has
+a channel classic does not: its listener holds a live message queue for the whole job,
+not just the acquisition.
 
-Unmeasured. Extending `E2E_GitHub_CancelledRunLeavesNoDeletionMark` to a v2 ScaleSet
-`RunnerSet` answers it in one run.
+**A cancelled run puts a terminal message on that queue, measured live.** Q468's
+retention probe cancelled a real run and recorded the result: `POST …/runs/{id}/cancel`
+accepted, and the job's `JobCompleted` with `result: canceled` on the scale set's queue
+**~0.2 s later** ([q468-jobcompleted-retention.md](archive/q468-jobcompleted-retention.md),
+2026-07-28). The observation is load-bearing enough that the spelling — `canceled`, one
+L — is what `scalesetstub` was corrected to. So the trigger this plan set out to find on
+classic already exists on ScaleSet and needed no new run to establish.
+
+The actuator downstream of it is also already built, and it is not the Phase 1 one.
+`completeJob` → `CleanupScaleSetJob` → `markJobCompleted` stamps
+`actions-gateway.com/job-completed-at` on the job's worker pod, and the reaper deletes a
+pod still `Running` `completedJobRunningGrace` (5 min) later — the Q420 arm, proven end
+to end against a real apiserver by `TestV2_RunnerSet_OrphanedRunningPodReaped`.
+
+So the ScaleSet worst case is two graces, not the job's remaining runtime: GitHub's own
+~5-minute cancellation grace before it concludes a job whose runner is still going, then
+the 5-minute reap grace, plus reconcile lag. Classic's worst case is the job running to
+completion, bounded only by `spec.maxWorkerLifetime` — 12 hours by default. **Q501 in its
+unbounded form is a classic-tier defect**, on a tier scheduled for removal at `v2.0.0`.
+
+**What stays unmeasured, and why it does not gate anything.** Q468's cancel had *no
+runner attached* — it says so explicitly, since producing a `JobCompleted` without one
+is the whole trick the arming phase turns. So the ~0.2 s is the latency for a job GitHub
+can conclude immediately, not for one with a live worker; the composed
+cancel→queue→stamp→reap figure has each component measured or proven but has never been
+observed as one number. It also remains likely that a ScaleSet worker aborts natively
+long before any of that, since it runs the full runner (`run.sh --jitconfig`) over its
+own broker session — untested, and now not worth a run of its own. Neither residual can
+move the bound above the two graces, which is the only thing Phase 0 was asked to
+decide.
 
 ## Phase 1 — the actuator (shipped)
 
@@ -88,18 +116,29 @@ The pod delete is graceful, so the Q385 SIGTERM relay reaches `Runner.Worker` an
 runner reports its own outcome rather than being SIGKILLed — the same path a drain
 takes, measured at 16s to a GitHub conclusion.
 
-## Phase 2 — the trigger (open)
+## Phase 2 — the trigger (instrumented, awaiting a run)
 
-Measure candidate A on the next live-GitHub run of the cancel spec: capture whether
-`renewjob` starts failing after GitHub concludes a cancelled job, and if so with what
-shape. Two outcomes:
+`E2E_GitHub_CancelledRunLeavesNoDeletionMark` now takes the candidate-A reading as part
+of the run it already makes. It baselines the renew loop's two failure lines before the
+cancel and reports what the window added, and it reads the corroborating half off the
+pod: a renew-loop teardown reclaims the worker through Phase 1's actuator, which stamps
+it `deletion-reason: job_abandoned` before deleting it. That stamp is a *positive*
+observation of candidate A rather than an absent log line, and the sampled sequence
+carries it. The spec labels the outcome under `Q501 candidate A outcome`.
 
-- **It fails definitively.** Nothing more to build. Q254's teardown plus Phase 1's
-  actuator bounds a cancelled job's waste to ~5–6 minutes, and Q501 closes with a
+Two outcomes, unchanged:
+
+- **`renewjob` fails definitively.** Nothing more to build. Q254's teardown plus Phase
+  1's actuator bounds a cancelled job's waste to ~5–6 minutes, and Q501 closes with a
   documented latency rather than a new mechanism.
-- **It keeps returning 200.** Candidate B is the remaining option, and its
-  rate-limit design (age threshold before a run is polled at all, one poll per run
-  rather than per job, a slow interval) becomes the work.
+- **It keeps returning 200.** Candidate B is the remaining option. Phase 0 has already
+  narrowed what it would be worth: classic only, on a tier removed at `v2.0.0`, so the
+  bar for building a per-run REST poll is "cheap enough to be obviously worth it" rather
+  than "the last option standing".
 
-Phase 0 gates whether Phase 2 is worth running: if ScaleSet workers cancel natively,
-record that and close Q501 as classic-only.
+**One thing the instrumentation had to fix to stay honest.** The spec's Q459 assertion
+demanded a terminal phase carrying *no* `deletionTimestamp`, which was the right shape
+when nothing could delete this worker. Phase 1's actuator can, so a working gateway
+would now fail the spec. The assertion is instead that no terminal phase carries a
+deletion mark **the gateway cannot account for** — the shape Q502 actually recovers, and
+the property Q459 was protecting all along.
