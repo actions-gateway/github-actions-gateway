@@ -13,7 +13,7 @@ name: nothing acts on the result.
 
 ### The Secret is always created before the pod
 
-`ProvisionScaleSetWorker` ([provisioner.go:698](../../cmd/agc/internal/provisioner/provisioner.go))
+`ProvisionScaleSetWorker` ([provisioner.go:698](../../../cmd/agc/internal/provisioner/provisioner.go))
 stages the Secret as step 1 and creates the pod as step 5. Every failure exit between
 them calls `unstage()`, which deletes the Secret only when *this* call created it and
 only on paths that leave no pod behind. So a worker pod never starts life without its
@@ -40,7 +40,7 @@ pod. Of the four states the pod can be in, three are safe and one is not:
 
 `markJobCompleted` *does* stamp `AnnotationJobCompletedAt` on a `Pending` pod: its
 early-return switch covers only `Succeeded`/`Failed`/`Unknown`. But the reaper
-([runner_shared.go:284](../../cmd/agc/internal/controller/runner_shared.go)) consults
+([runner_shared.go:284](../../../cmd/agc/internal/controller/runner_shared.go)) consults
 that stamp **only in the `PodRunning` arm**. The `PodPending` arm computes
 `due = pod.CreationTimestamp.Add(deadline)` and ignores the stamp entirely.
 
@@ -56,7 +56,7 @@ the AGC then removed the Secret from.
 
 ### How the pod and the completion end up in that order
 
-`handleMessage` ([listener.go:958](../../cmd/agc/internal/scalesetlistener/listener.go))
+`handleMessage` ([listener.go:958](../../../cmd/agc/internal/scalesetlistener/listener.go))
 processes a batch's `JobAssigned` messages **first**, then its `JobCompleted` messages.
 And `provisionAssigned` guards on `provisioned` and `abandoned` — but **not** on
 `completed`. So a batch carrying both messages for the same job provisions a worker and
