@@ -2316,6 +2316,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-two-link-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two link gates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#publication-scope" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2764,7 +2775,7 @@ the correct font on the first frame — no pop. If you add a weight that appears
 above the fold, preload it too, or it may briefly render in the fallback.</p>
 <h2 id="local-preview">Local preview<a class="headerlink" href="#local-preview" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>make<span class="w"> </span>docs-serve<span class="w">   </span><span class="c1"># live-reload preview at http://localhost:8000/</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>make<span class="w"> </span>docs-build<span class="w">   </span><span class="c1"># one-shot static build into site/</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>make<span class="w"> </span>docs-build<span class="w">   </span><span class="c1"># strict build of both scopes into site/ and site-dev/</span>
 </code></pre></div>
 <p>Both targets provision an <strong>isolated venv</strong> (<code>.venv-docs/</code>, gitignored) from the
 pinned <code>requirements-docs.txt</code> and reuse it across runs, so the docs toolchain
@@ -2774,6 +2785,55 @@ module ships separately: <code>apt-get install python3-venv</code> if <code>pyth
 fails.</p>
 <p>The toolchain is pinned <strong>exactly</strong> — MkDocs 2.0 is incompatible with Material 9.x,
 so don't float the versions in <code>requirements-docs.txt</code>.</p>
+<h2 id="the-two-link-gates">The two link gates<a class="headerlink" href="#the-two-link-gates" title="Permanent link">&para;</a></h2>
+<p><code>docs/</code> is rendered by two engines with different link semantics, so <strong>one gate
+cannot cover both</strong> (Q560):</p>
+<table>
+<thead>
+<tr>
+<th>Gate</th>
+<th>Oracle</th>
+<th>Runs in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>make doc-links</code> (<code>scripts/check-doc-links.sh</code>)</td>
+<td>github.com — GitHub's heading slugger, directory listings</td>
+<td><code>doc-links.yml</code>, <code>make check</code></td>
+</tr>
+<tr>
+<td><code>make docs-build</code> (<code>mkdocs build --strict</code>)</td>
+<td>the published site — Python-Markdown slugs, MkDocs path resolution</td>
+<td><code>pages.yml</code>'s PR <code>build</code> job</td>
+</tr>
+</tbody>
+</table>
+<p>A link can pass one and 404 on the other. Three divergences have actually shipped
+broken:</p>
+<ul>
+<li><strong>Duplicate headings.</strong> Both engines de-duplicate repeated heading slugs, with
+  different suffixes: GitHub writes <code>#rollback-1</code>, Python-Markdown writes
+  <code>#rollback_1</code>. Neither suffix is configurable, so <strong>make the headings unique</strong>
+  rather than linking a generated suffix — four <code>### Rollback</code> sections became
+  <code>### GMC rollback</code>, <code>### AGC rollback</code>, and so on. A duplicate heading is also
+  how a repo-local TOC silently lies: two entries resolve to the same anchor and
+  both gates pass.</li>
+<li><strong>Bare <code>dir/</code> targets.</strong> GitHub renders <code>[x](examples/policies/)</code> as that
+  directory's <code>README.md</code>; MkDocs has no directory to serve, leaves the link
+  alone, and it resolves under the <em>page</em> URL. Link the <code>README.md</code> explicitly —
+  MkDocs maps it to the section index, so both renderings work.</li>
+<li><strong>Angle brackets in a heading.</strong> Python-Markdown strips <code>&lt;field&gt;</code> as an HTML
+  tag before slugging; GitHub keeps the word and drops only the brackets. Spell
+  placeholders without <code>&lt;&gt;</code>.</li>
+</ul>
+<p>Only the PR gate is strict. The deploy job builds a tag's own docs, and a release
+cut before this gate existed must stay publishable.</p>
+<p><code>mkdocs.yml</code>'s <code>validation</code> block is what makes this fail at all: MkDocs reports
+these as INFO by default, invisible under a green build. <code>absolute_links</code> and the
+<code>nav</code> keys keep their defaults deliberately — a link to a page excluded from the
+built scope stays INFO, which is what <a href="#publication-scope">§ Publication scope</a>
+requires.</p>
 <h2 id="publication-scope">Publication scope<a class="headerlink" href="#publication-scope" title="Permanent link">&para;</a></h2>
 <p>Scope is <strong>per version</strong>, not per site (Q558):</p>
 <table>
@@ -2820,7 +2880,8 @@ URL, by search, and from the roadmap's backlog link. <code>not_in_nav</code> in
 <code>mkdocs.yml</code> declares this so the build doesn't report them as an oversight.</p>
 <p>PR builds validate <strong>both</strong> scopes (<code>pages.yml</code>'s <code>build</code> job runs <code>mkdocs build</code>
 twice), so a PR that breaks a plan or development page fails there rather than on
-<code>main</code>.</p>
+<code>main</code>. <code>make docs-build</code> does the same locally — see
+<a href="#the-two-link-gates">§ The two link gates</a>.</p>
 <h3 id="the-backlog-page">The backlog page<a class="headerlink" href="#the-backlog-page" title="Permanent link">&para;</a></h3>
 <p><code>docs/STATUS.md</code> renders at
 <a href="https://actions-gateway.com/dev/STATUS/"><code>/dev/STATUS/</code></a> with filter chips over

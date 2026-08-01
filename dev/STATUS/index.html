@@ -2535,12 +2535,20 @@
 <td>Report it against <a href="https://github.com/karlkfi/claude-skills">karlkfi/claude-skills</a>, where the skill lives. CLAUDE.md overrides it here so sessions stay correct, but the skill and its vendored lint drift until upstream updates.</td>
 </tr>
 <tr>
-<td><a id="Q560"></a>Q560</td>
-<td><a href="../development/website/">Site-only broken links: MkDocs and GitHub slug headings differently</a></td>
+<td><a id="Q561"></a>Q561</td>
+<td><a href="../development/website/#publication-scope">Operator pages link to docs no released version publishes</a></td>
 <td><code>docs</code> <code>infra</code></td>
 <td>🔲</td>
+<td>M</td>
+<td>Release scopes exclude <code>plan/</code> and <code>development/</code>, so 120 links across 22 operator pages 404 on every numbered version. The site link gate leaves these at INFO deliberately. Absolutize to GitHub like <code>hooks/source_links.py</code> does, or drop them.</td>
+</tr>
+<tr>
+<td><a id="Q562"></a>Q562</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/mkdocs.yml">Four published pages are in no nav section</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
 <td>S</td>
-<td><code>check-doc-links.sh</code> uses GitHub's slugger, so it passes while 11 links 404 on the site: MkDocs dedups headings <code>_N</code> not <code>-N</code>; a <code>dir/</code> link resolves under the page. Gate: mkdocs <code>validation.links</code>.</td>
+<td><code>operations/admission-policies.md</code>, <code>design/appendix-h-v2-api-decomposition.md</code>, <code>design/github-protocol-dependencies.md</code>, <code>examples/policies/README.md</code> publish but sit in no nav section — reachable only by search/URL. Add to <code>nav</code> or <code>not_in_nav</code>.</td>
 </tr>
 <tr>
 <td><a id="Q401"></a>Q401</td>

@@ -2167,10 +2167,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#helm-upgrade-fails-with-nil-pointer-evaluating-interface-" class="md-nav__link">
+  <a href="#helm-upgrade-fails-with-nil-pointer-evaluating-interface-field" class="md-nav__link">
     <span class="md-ellipsis">
       
-        helm upgrade Fails With nil pointer evaluating interface {}.&lt;field&gt;
+        helm upgrade Fails With nil pointer evaluating interface {}.FIELD
       
     </span>
   </a>
@@ -3318,10 +3318,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#helm-upgrade-fails-with-nil-pointer-evaluating-interface-" class="md-nav__link">
+  <a href="#helm-upgrade-fails-with-nil-pointer-evaluating-interface-field" class="md-nav__link">
     <span class="md-ellipsis">
       
-        helm upgrade Fails With nil pointer evaluating interface {}.&lt;field&gt;
+        helm upgrade Fails With nil pointer evaluating interface {}.FIELD
       
     </span>
   </a>
@@ -4484,7 +4484,7 @@
 - <strong>Do not</strong> work around the rejection by clearing <code>priorityClassName</code> — that removes the GMC's eviction protection (a security regression). Keep <code>system-cluster-critical</code> and let the quota permit it.
 - <strong>If you manage the quota out-of-band</strong> (e.g. a cluster-wide policy), ensure it exists in the install namespace and its <code>scopeSelector</code> matches the system-critical classes before installing.</p>
 <hr />
-<h2 id="helm-upgrade-fails-with-nil-pointer-evaluating-interface-"><code>helm upgrade</code> Fails With <code>nil pointer evaluating interface {}.&lt;field&gt;</code><a class="headerlink" href="#helm-upgrade-fails-with-nil-pointer-evaluating-interface-" title="Permanent link">&para;</a></h2>
+<h2 id="helm-upgrade-fails-with-nil-pointer-evaluating-interface-field"><code>helm upgrade</code> Fails With <code>nil pointer evaluating interface {}.FIELD</code><a class="headerlink" href="#helm-upgrade-fails-with-nil-pointer-evaluating-interface-field" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> An upgrade fails while rendering a template you did not touch, naming
 a values key you may never have set:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Error: UPGRADE FAILED: actions-gateway/templates/vpa.yaml:1:14
@@ -4960,7 +4960,7 @@ states per policy class whether GAG complies or what to allow. In short:
   control plane, <code>ghcr.io/actions/actions-runner</code> for the default worker).
 - For <code>drop-ALL</code> / no-privilege-escalation requirements: have tenants set
   <code>securityProfile: restricted</code> (which satisfies them), or apply the scoped
-  <a href="examples/policies/">exception samples</a> so <code>baseline</code> workers pass.
+  <a href="../examples/policies/">exception samples</a> so <code>baseline</code> workers pass.
 - For <code>readOnlyRootFilesystem</code>: exempt worker pods (no profile can satisfy it).
 - For "require limits" on AGC v1alpha1: migrate the tenant to a v2alpha1
   <code>ActionsGateway</code>, or exempt AGC pods.</p>
@@ -7596,7 +7596,7 @@ sync, so it is not a durable way to resize a pool. Change
 <code>spec.proxy.minReplicas</code> / <code>spec.proxy.maxReplicas</code> on the <code>ActionsGateway</code>
 (v1) or <code>spec.minReplicas</code> / <code>spec.maxReplicas</code> on the <code>EgressProxy</code> (v2) instead.</p>
 <hr />
-<p>← <a href=".">Back to Operations</a></p>
+<p>← <a href="../">Back to Operations</a></p>
 
 
 
