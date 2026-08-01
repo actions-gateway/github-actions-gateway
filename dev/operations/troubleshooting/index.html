@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.2.0 is here.</strong>
-      Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.2.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2747,6 +2747,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which Disruptions Auto-Re-Run a Job (and Which Never Do)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#evicted-worker-pods-exhausting-retry-budget" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3887,6 +3898,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which Disruptions Auto-Re-Run a Job (and Which Never Do)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#evicted-worker-pods-exhausting-retry-budget" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4340,6 +4362,7 @@
 <li><a href="#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch">AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)</a></li>
 <li><a href="#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache">DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)</a></li>
 <li><a href="#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot">Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot</a></li>
+<li><a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job (and Which Never Do)</a></li>
 <li><a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a></li>
 <li><a href="#draining-a-worker-auto-re-runs-the-jobs-it-interrupts">Draining a Worker Auto-Re-Runs the Jobs It Interrupts</a></li>
 <li><a href="#a-preempted-workers-job-is-not-re-run">A Preempted Worker's Job Is Not Re-Run</a></li>
@@ -6216,6 +6239,78 @@ Current releases derive the exemption from the cluster's own
 - If the volume is present but the wrapper logs nothing about <code>proxy CA trust installed</code>: check that <code>PROXY_CA_CERT_PATH</code> is set on the runner container and the mounted file is non-empty. An empty/missing file is tolerated as a no-op, which silently leaves the runner with no proxy trust — the wrapper log line <code>no proxy CA cert mounted; skipping trust-store install</code> distinguishes this case from a wrapper that ran the install successfully.
 - If the proxy TLS Secret is missing or the cert has expired: the GMC's cert-manager integration (<a href="../../design/02-architecture/#21-tier-1--gateway-manager-controller-gmc">§2.1</a> "Proxy Deployer") owns rotation; check the GMC's logs for issuer errors. As a fallback, deleting the Secret triggers reissuance.
 - If the issue persists after the volume and env are correct: confirm the proxy pod is presenting the cert signed by the CA in the Secret — <code>kubectl exec</code> into a curl pod in the same namespace and run <code>openssl s_client -connect actions-gateway-proxy:8080 -showcerts &lt;/dev/null</code> to inspect what the proxy actually serves.</p>
+<hr />
+<h2 id="which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job (and Which Never Do)<a class="headerlink" href="#which-disruptions-auto-re-run-a-job-and-which-never-do" title="Permanent link">&para;</a></h2>
+<!-- A marketing-toned summary of this matrix lives on docs/why-gag.md ("What
+     re-runs itself" box). When a row here changes, update that box too. -->
+<p>The consolidated boundary for the automatic re-run machinery the sections below
+troubleshoot individually. Every firing case spends one slot of the run's shared
+<code>maxEvictionRetries</code> budget (default 2, max 10) and works on <strong>both acquisition
+tiers</strong>.</p>
+<p><strong>Fires — the interrupted run is re-run via <code>rerun-failed-jobs</code>:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Disruption</th>
+<th><span class="gag-nowrap"><code>cause</code> label</span></th>
+<th>Detected by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Kubelet eviction (node pressure)</td>
+<td><code class="gag-nowrap">eviction</code></td>
+<td>pod <code>Failed</code> with <code>reason: Evicted</code></td>
+</tr>
+<tr>
+<td>Scheduler preemption (a preempting <code>priorityTiers</code> floor)</td>
+<td><code class="gag-nowrap">preemption</code></td>
+<td><code>DisruptionTarget</code> condition, reason <code>PreemptionByScheduler</code></td>
+</tr>
+<tr>
+<td>Node drain of a running worker</td>
+<td><code class="gag-nowrap">deletion</code></td>
+<td>terminal phase published while the pod carries a <code>deletionTimestamp</code></td>
+</tr>
+<tr>
+<td>Bare <code>kubectl delete pod</code> of a running worker</td>
+<td><code class="gag-nowrap">deletion</code></td>
+<td>same mark as a drain — indistinguishable, by design</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Never fires, by design:</strong></p>
+<ul>
+<li><strong>A genuine job failure.</strong> The job ran and failed on its own merits; nothing
+  was disrupted, and re-running it would mask real breakage.</li>
+<li><strong>A cancelled run.</strong> A cancel is the intended stop — it is the supported way
+  to end a job without triggering recovery (delete the worker pod instead and
+  the job <em>is</em> re-run; see
+  <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>).</li>
+<li><strong>The AGC's own reaper deletions</strong> — the lifetime cap
+  (<code>maxWorkerLifetime</code>), the stuck-<code>Running</code> reap deadline, orphan cleanup.
+  Each is stamped <code>actions-gateway.com/deletion-reason</code> before deletion and
+  excluded: the gateway just judged that job stuck, so a re-run would loop it.</li>
+<li><strong>A worker whose container never ran</strong> — e.g. a drain catching a
+  still-<code>Pending</code> pod. There is no reportable failure for <code>rerun-failed-jobs</code>
+  to act on.</li>
+</ul>
+<p><strong>Fires but can come up short</strong> — each has its own runbook below:</p>
+<ul>
+<li>The shared budget exhausts (<code>eviction_retries_exhausted_total</code>, the
+  <code>EvictionRetriesExhausted</code> event):
+  <a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a>.</li>
+<li>The run identity is missing (<code>eviction_recovery_identity_unknown_total</code>):
+  <a href="#evicted-scale-set-jobs-are-not-re-run-automatically">Evicted Scale-Set Jobs Are Not Re-Run Automatically</a>.</li>
+<li>A scale-set worker died before GitHub delivered its job — nothing to re-run:
+  <a href="#runner-lost-communication-and-no-worker-pod-was-ever-created">"Runner Lost Communication" and No Worker Pod Was Ever Created</a>.</li>
+<li>GitHub refuses past the re-run window (<code>EvictionRerunFailed</code>):
+  <a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a>.</li>
+</ul>
+<p>A quota-blocked job is deliberately absent from this table: it is <strong>never
+claimed</strong> in the first place, so it stays queued at GitHub with no re-run
+needed — see
+<a href="#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a>.</p>
 <hr />
 <h2 id="evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget<a class="headerlink" href="#evicted-worker-pods-exhausting-retry-budget" title="Permanent link">&para;</a></h2>
 <blockquote>

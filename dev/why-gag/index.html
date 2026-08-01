@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.2.0 is here.</strong>
-      Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.2.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2376,9 +2376,9 @@
 <a class="md-button" href="../design/02-architecture/">See the architecture</a></p>
 </div>
 <div class="gag-vs-hero__proof">
-<p class="gag-vs-hero__proof-cap">When a worker is evicted or blocked by a full <code>ResourceQuota</code></p>
+<p class="gag-vs-hero__proof-cap">When a worker is evicted, preempted, or blocked by a full <code>ResourceQuota</code></p>
 <div class="gag-vs-row gag-vs-row--arc"><span class="gag-vs-row__tag">ARC</span><span class="gag-vs-row__text">the runner is marked <code>Failed</code> and the job sits in GitHub's queue until someone reruns it by hand</span></div>
-<div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">the job is cancelled when its lock lapses (~10 min at worst) and re-queued automatically: no manual rerun, and it runs as soon as capacity frees up</span></div>
+<div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">the job is concluded (~10 min lock-lapse bound at worst) and re-run automatically: no manual rerun, and it runs as soon as capacity frees up</span></div>
 </div>
 </div>
 <h2 id="the-problem-arc-leaves-you-with">The problem ARC leaves you with<a class="headerlink" href="#the-problem-arc-leaves-you-with" title="Permanent link">&para;</a></h2>
@@ -2442,7 +2442,7 @@ letting tenants run their own runners.</p>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">Auto</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Handling for quota-blocked and evicted jobs</strong> — a job the quota has no room for is never taken on, so it stays queued at GitHub until there is capacity; an evicted worker's job is lock-cancelled and re-queued, no manual rerun. Both run on both acquisition tiers</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Handling for quota-blocked and disrupted jobs</strong> — a job the quota has no room for is never taken on, so it stays queued at GitHub until there is capacity; a worker lost to eviction, scheduler preemption, or a node drain has its job re-run automatically, no manual rerun. Both run on both acquisition tiers</span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">1</span>
@@ -2491,6 +2491,11 @@ footprint.</p>
 <td>Safe under a per-tenant <code>ResourceQuota</code></td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> quota-blocked jobs stall; manual cleanup + rerun</td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../design/04-operational-flows/#42-job-execution-flow-agc">won't take on a job it can't place</a><br><span class="gag-cont">live quota headroom is read <em>before</em> the job is claimed — on the default tier it bounds the capacity advertised to GitHub, on classic it declines the claim — so the job stays queued at GitHub. If headroom is lost afterwards, the pod create is retried in place while the lock is held</span></td>
+</tr>
+<tr>
+<td>Auto-re-run jobs disrupted mid-flight (eviction / preemption / drain)</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> runner marked <code>Failed</code>; the job waits in GitHub's queue for a manual rerun</td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-run automatically, with a per-run retry budget</a><br><span class="gag-cont">kubelet evictions, scheduler preemptions under a <code>priorityTiers</code> floor, node drains, and hand-deleted workers all re-run through GitHub's own re-run API — retried until GitHub accepts it — with <code>maxEvictionRetries</code> capping the budget per run</span></td>
 </tr>
 <tr>
 <td>Stop claiming jobs when the cluster can't place the worker</td>
@@ -2545,6 +2550,22 @@ footprint.</p>
 </tbody>
 </table>
 <p>Every capability above is available today.</p>
+<!-- The canonical fires/doesn't-fire matrix is
+     docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
+     When a case is added or removed there, update this box too. -->
+<div class="admonition info">
+<p class="admonition-title">Disruptions re-run themselves — failures and cancels never do</p>
+<p>The auto-re-run claim is scoped on purpose. What re-runs itself: a job whose
+worker the <em>cluster</em> took away — a kubelet eviction, a scheduler preemption
+under a <code>priorityTiers</code> floor, a node drain, even a stray
+<code>kubectl delete pod</code> — each retried until GitHub accepts it, within a
+per-run budget (<code>maxEvictionRetries</code>). What never does, by design: a job
+that ran and <strong>failed</strong> (re-running it would mask real breakage), a run you
+<strong>cancelled</strong> (a cancel is the intended stop), and workers the gateway's own
+cleanup reaped as stuck (a re-run would loop them). The full boundary, with
+the detection marks and metrics:
+<a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">which disruptions auto-re-run a job</a>.</p>
+</div>
 <div class="admonition info">
 <p class="admonition-title">Why measured right-sizing can't be bolted onto ARC</p>
 <p>The right-sizing row is structural, not a feature race. Ephemeral runner

@@ -870,6 +870,15 @@ body[data-md-color-scheme="slate"] {
   padding-left: 1.5em;
 }
 
+/* Keep a short code chip on one line inside a narrow table column (Material
+   default word-breaks code in table cells). Applied per-span via raw HTML
+   (<code class="gag-nowrap">) — attr_list does not attach to inline code —
+   and never table-wide: long code in other columns still needs to wrap. */
+.md-typeset .gag-nowrap {
+  white-space: nowrap;
+  word-break: normal;
+}
+
 /* v2 API badge — small pill on benefit cards that require the v2alpha1 API. */
 .gag-v2-badge {
   display: inline-flex;

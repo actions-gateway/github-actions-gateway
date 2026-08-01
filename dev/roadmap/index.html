@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.2.0 is here.</strong>
-      Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.2.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2365,13 +2365,17 @@ tagged chart. Check the release notes for the exact image digests to pin.</p>
 <li><strong>One resource per tenant.</strong> A single <code>ActionsGateway</code> custom resource
   provisions an isolated gateway — controller, egress proxy pool, role-based
   access control (RBAC), and network policies — inside the platform-owned quota.</li>
-<li><strong>Automatic recovery for blocked and evicted jobs.</strong> A job the namespace
+<li><strong>Automatic recovery for blocked and disrupted jobs.</strong> A job the namespace
   <code>ResourceQuota</code> has no room for is never taken on, so it stays queued at GitHub
-  until there is capacity; an evicted job is cancelled at GitHub when its lock
-  lapses (~10 min at worst) and re-queued, with a per-run retry budget. No manual
-  rerun either way. Both run on <strong>both acquisition tiers</strong>: the default scale-set
-  protocol folds live quota headroom into the capacity it advertises to GitHub,
-  and the classic tier declines the claim per delivered job.</li>
+  until there is capacity. A worker disrupted mid-job — kubelet eviction,
+  scheduler preemption under a <code>priorityTiers</code> floor, a node drain, even a bare
+  <code>kubectl delete pod</code> — has its run re-run automatically once it concludes,
+  under a shared per-run retry budget (<code>maxEvictionRetries</code>); a worker killed too
+  fast to report is bounded by its job lock lapsing (~10 min at worst). No manual
+  rerun in any of these. Both halves run on <strong>both acquisition tiers</strong>: the
+  default scale-set protocol folds live quota headroom into the capacity it
+  advertises to GitHub, and the classic tier declines the claim per delivered
+  job.</li>
 <li><strong>Capacity gate for unplaceable workers (opt-in).</strong> A runner set can set
   <code>capacityGate.mode</code> so the gateway stops taking on jobs while the cluster cannot
   place its worker shape — a drained pool, a changed taint, spot capacity gone.
@@ -2395,7 +2399,16 @@ tagged chart. Check the release notes for the exact image digests to pin.</p>
   each team its own GitHub egress IPs to allow-list, with a contained blast
   radius. <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> In the v2 API the proxy is a standalone,
   optionally shared <code>EgressProxy</code> (or omitted for direct egress), with a
-  DNS-aware (FQDN) egress-policy mode on Cilium/Calico.</li>
+  DNS-aware (FQDN) egress-policy mode on Cilium/Calico. The managed
+  HorizontalPodAutoscaler is an opt-out (<code>managedAutoscaling: false</code>) for teams
+  that bring their own autoscaler (KEDA, VPA, a custom HPA).</li>
+<li><strong>GitHub Enterprise Server (GHES) gateways.</strong> A gateway whose <code>gitHubURL</code>
+  names a GHES appliance now addresses that appliance on every GitHub surface —
+  token exchange, job acquisition, eviction re-runs — where earlier releases
+  only ever reached <code>github.com</code>. FQDN egress modes carry the appliance host
+  automatically; the CIDR default needs the appliance's ranges supplied, and a
+  <code>GitHubEgressIncomplete</code> condition (plus a fleet gauge) flags the gap instead
+  of leaving the tenant silently acquiring no jobs.</li>
 <li><strong>Observability, per tenant and fleet-wide.</strong> Prometheus metrics scoped per
   tenant and runner group, plus ready-to-apply Grafana dashboards and alerts as
   code, and a cross-tenant rollup for platform admins.</li>
@@ -2509,8 +2522,11 @@ release that carries it.</p>
 </li>
 <li><strong>Richer egress proxy.</strong> <!-- q:Q19 --> Optional allow-listing, rate-limiting, audit logging,
   and per-runner-group proxy pools.</li>
-<li><strong>Bring-your-own proxy infrastructure.</strong> <!-- q:Q174 --> Supply your own proxy autoscaler
-  (KEDA / VPA / custom HPA) or TLS certificate instead of the managed defaults.</li>
+<li><strong>Bring-your-own proxy TLS certificate.</strong> <!-- q:Q174 --> Supply the proxy's
+  certificate from your managed PKI or Vault instead of the GMC's self-signed
+  default. (The autoscaler half of "bring your own proxy infrastructure" has
+  shipped: <code>managedAutoscaling: false</code> hands the pool to KEDA / VPA / a custom
+  HPA.)</li>
 <li><strong>Cross-namespace proxy sharing.</strong> <!-- q:Q166 --> Share an egress proxy pool across namespaces
   with explicit consent (same-namespace sharing already works).</li>
 <li><strong>First-class GPU runner support.</strong> <!-- q:Q216 --> Priority tiers and the <code>NodeShare</code> sizing
