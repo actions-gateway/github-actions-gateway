@@ -478,7 +478,9 @@ rather than left to a full coverage run to notice.
 
 ## Follow-ups (not in this change)
 
-- **Worktree hygiene** ([Q491](../../STATUS.md#Q491)). 58 live worktrees × ~226 MB ≈ 13 GB,
-  all Spotlight-indexed. `git worktree prune` plus a Spotlight exclusion on
-  `.claude/worktrees` removes background I/O contention that the QoS demotion
-  cannot help with.
+- **Worktree hygiene** (Q491, retired 2026-08-01 — not repo work). 58 live
+  worktrees × ~226 MB ≈ 13 GB, all Spotlight-indexed. Pruning is off the table:
+  the stale worktrees are kept deliberately as the corpus for Claude metrics and
+  friction reports. A Spotlight exclusion on `.claude/worktrees` still removes
+  the background I/O the QoS demotion cannot reach, and leaves them intact — a
+  workstation setting, not a backlog item.
