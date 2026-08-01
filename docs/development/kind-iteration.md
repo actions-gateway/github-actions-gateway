@@ -59,6 +59,20 @@ The dogfood cluster (`gag-dogfood` / project `actions-gateway-dogfood`) is hard-
 
 If a legitimate non-prod target keeps prompting because prod-guard can't classify it, add it to `.claude/prod-guard.json` under `nonprod` rather than approving repeatedly — and never `use-context`/`config set` to dodge the prompt, since that repoints every parallel session (see above).
 
+### A state change you observe is not necessarily one you caused
+
+The same sharing that makes ambient context dangerous to *write* makes before/after readings dangerous to *interpret*. A parallel session can delete pods, bounce a controller, resize a pool, or run a lifecycle script between your two reads — so "busy at T1, empty at T2" establishes only that it changed, never that your action, or the passage of time, is what changed it.
+
+This matters most when the inference becomes a claim: a commit message, a plan doc, or a Queue row asserting a mechanism. Q577's diagnostics shipped alongside exactly that error — worker pods on the dogfood cluster went from eight to zero across two reads, which was reported as a drain converging unaided when a parallel session had in fact cleared it by hand. The design survived because its reasoning was independent, not because the premise held.
+
+Before attributing an observed change:
+
+- **Check for other actors.** `gh pr list` for in-flight sessions on the same subject, and ask the user — they are usually the other actor, and they know.
+- **Prefer a mechanism reading over a boundary reading.** Controller logs, events, and `.status` say *what happened*; two snapshots either side of a gap say only that something did.
+- **State what you measured, separately from what you infer.** "Pods absent at 13:15Z" is durable; "the drain converged" is a hypothesis about why.
+
+This is the shared-resource case of the general rule that a claim cites a measurement — here the measurement is real and the *causal step* is what goes unverified.
+
 ### Image tag caching
 
 Kind nodes use `imagePullPolicy: IfNotPresent` and will keep serving the cached layer when you re-push the same tag. **Pushing to `127.0.0.1:5000/foo:e2e-abc123` a second time does not refresh what kubelet runs.**
