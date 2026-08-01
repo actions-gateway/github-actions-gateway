@@ -48,6 +48,11 @@
 #      a correct one. An ID absent from the baseline file is a new row if the
 #      baseline's history never carried it, and a resurrection if it did.
 #      Deliberately re-opening a closed item? Set BACKLOG_ALLOW_RESURRECT="Q1 Q2".
+#  11. Every label a row wears is declared on the `**Labels:**` line, across the
+#      Progress, Queue, and Deferred tables. A retired or mistyped label is
+#      otherwise invisible: Q592 was filed with `infra` from a branch cut before
+#      that label was split into ci/dogfood/debt, and merged without a conflict
+#      because the two edits touched different rows.
 #
 # Usage:
 #   lint-backlog.sh [--staged] [path/to/STATUS.md]
@@ -379,6 +384,33 @@ function parse_id(cell,    anchor, visible, tmp) {
     return visible
 }
 
+# Strip HTML tags and Markdown link syntax so a row reads plainly in a message.
+function plain(cell,    s) {
+    s = cell
+    gsub(/<[^>]*>/, "", s)
+    gsub(/\[|\]\([^)]*\)/, "", s)
+    return trim(s)
+}
+
+# Every backticked token in a Labels cell must appear on the **Labels:** line.
+# A cell with no backticks carries no vocabulary — table headers and separators
+# land here too.
+function check_labels(who, cell,    rest, tok) {
+    rest = cell
+    while (match(rest, /`[^`]+`/)) {
+        tok = substr(rest, RSTART + 1, RLENGTH - 2)
+        if (!seen_labels_line) {
+            if (!warned_no_decl) {
+                warned_no_decl = 1
+                fail("rows carry labels but no **Labels:** line declares the vocabulary")
+            }
+        } else if (!(tok in declared)) {
+            fail(who " uses undeclared label `" tok "`; declared: " declared_list)
+        }
+        rest = substr(rest, RSTART + RLENGTH)
+    }
+}
+
 function register_id(id, section) {
     if (id in ids) fail("duplicate ID " id " (in " ids[id] " and " section ")")
     ids[id] = section
@@ -405,14 +437,38 @@ function collect_refs(id, cell,    rest, tgt) {
     fail("old format: drop the Last touched line; use git log -1 --format=%as -- " file)
 }
 
+# The declared vocabulary. Parenthetical glosses on the -gate labels carry their
+# own backticked link text, so drop link constructs before reading tokens.
+/^\*\*Labels:\*\*/ {
+    seen_labels_line = 1
+    decl = $0
+    gsub(/\[[^]]*\]\([^)]*\)/, "", decl)
+    while (match(decl, /`[^`]+`/)) {
+        tok = substr(decl, RSTART + 1, RLENGTH - 2)
+        if (!(tok in declared)) {
+            declared[tok] = 1
+            declared_list = (declared_list == "" ? tok : declared_list " " tok)
+        }
+        decl = substr(decl, RSTART + RLENGTH)
+    }
+    next
+}
+
+/^## Progress/ { section = "Progress"; next }
 /^## Queue/    { section = "Queue"; seen_queue = 1; next }
 /^## Deferred/ { section = "Deferred"; next }
 /^## /         { section = "" }
+
+# Progress rows carry no ID, and their Labels cell is one field earlier.
+section == "Progress" && /^\|/ {
+    check_labels(plain($2), $3)
+}
 
 section == "Queue" && /^\|/ {
     id = parse_id($2)
     if (id == "") next
     register_id(id, section)
+    check_labels(id, $4)
     item = $3; st = trim($5); notes = trim($7)
     if (st == "💤")
         fail(id " is 💤 in the Queue; deferred rows move to the ## Deferred table (old format)")
@@ -433,6 +489,7 @@ section == "Deferred" && /^\|/ {
     id = parse_id($2)
     if (id == "") next
     register_id(id, section)
+    check_labels(id, $4)
     item = $3; trigger = trim($6)
     if (trigger !~ /^\*\*(Demand|Event|Decision):\*\*/)
         fail(id " Deferred trigger must open with **Demand:**, **Event:**, or **Decision:**; got: " substr(trigger, 1, 40))
