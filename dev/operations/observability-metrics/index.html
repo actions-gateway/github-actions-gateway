@@ -3199,6 +3199,11 @@ overwrite them.</p>
 <td>Marks the pod as provisioned by the scale-set tier. Present only on that tier, so <code>-l actions-gateway.com/acquisition-protocol=ScaleSet</code> selects exactly the scale-set workers</td>
 </tr>
 <tr>
+<td><code>actions-gateway.com/runner-name</code> (annotation)</td>
+<td><code>gag-ci-e2e-8f3c…</code></td>
+<td>The name this pod's runner is registered under at GitHub. The AGC deregisters that record when it reaps the pod, and treats a name stamped here as in-use when it sweeps stale records (Q550)</td>
+</tr>
+<tr>
 <td><code>actions-gateway.com/job-completed-at</code> (annotation)</td>
 <td><code>2026-07-26T12:00:00Z</code></td>
 <td>When GitHub reported the pod's job terminal. Gives a still-Running worker a reap deadline (Q420)</td>
@@ -3210,7 +3215,10 @@ overwrite them.</p>
 </tr>
 </tbody>
 </table>
-<p>All three are controller-set: never set them by hand.</p>
+<p>All four are controller-set: never set them by hand. Editing or removing
+<code>runner-name</code> in particular makes the pod's runner record uncollectable, which is
+what leaves stale registrations behind — see
+<a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>.</p>
 <p>Worker pods on <strong>either</strong> tier gain one more annotation at end of life:
 <code>actions-gateway.com/deletion-reason</code>, stamped with the reap reason (e.g.
 <code>completed_ttl</code>, <code>pending_deadline</code>) immediately before the AGC's reaper deletes the
