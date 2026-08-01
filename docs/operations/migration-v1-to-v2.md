@@ -436,6 +436,12 @@ kubectl -n team-a delete actionsgateways.actions-gateway.github.com --all
 kubectl delete namespace team-a
 ```
 
+Step 2 blocks briefly while the AGC reaps the tenant's worker pods — deleting a v2
+gateway kills any job still running on it, because the AGC is those pods' only reaper
+and is torn down with the gateway. Drain first if you need in-flight jobs to finish:
+see [Worker Pods Reaped on Gateway
+Teardown](troubleshooting.md#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown).
+
 Deleting the namespace first **deadlocks**, and it is structural rather than a timing
 race: the AGC Deployments live *inside* the tenant namespace, so namespace deletion
 removes the very controllers whose finalizers must clear. The namespace then sits in

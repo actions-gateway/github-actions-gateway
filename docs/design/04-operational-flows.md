@@ -44,6 +44,13 @@ Deleting the `ActionsGateway` reclaims every resource provisioned above through 
 
 The one intentional exception is a **cluster-scoped** child: a namespaced `ActionsGateway` cannot own one (the apiserver rejects the cross-scope reference and never collects it), so `v2alpha1`'s per-gateway `ClusterRoleBinding` is un-owned and reclaimed by the finalizer alone. Any new cluster-scoped child inherits that constraint and must be deleted explicitly in `reconcileDelete`.
 
+**v2 needs a third mechanism for the tenant's worker pods** (Q547). The ordered drain above works in v1 because `RunnerGroup`s *are* the gateway's children: deleting them first cascades to their worker pods. v2 decomposed them into standalone `RunnerSet`s that only reference the gateway and are deliberately **not** deleted with it — a tenant re-applies the gateway and its sets resume — which leaves worker pods owned by a live object whose only reaper is about to be torn down. Reaping cannot ride the AGC's SIGTERM either: `reconcileDelete` deletes the AGC's `RoleBinding` and `ServiceAccount` within milliseconds of its `Deployment`, so a shutdown-time reap would find its authorization revoked and its bound token invalid. So the two controllers split it:
+
+1. The AGC watches its `ActionsGateway` already, for reference resolution. A `deletionTimestamp` on it makes the RunnerSet reconciler stop both acquisition tiers and delete every worker pod under `reason="gateway_deleted"` — while it still holds its full tenant grant, because the GMC has not deleted anything yet.
+2. Teardown's **first** act is to check `status.activeJobs`/`pendingJobs` across the bound sets and requeue while any are non-zero, before the first `del`. The counts fall as soon as the AGC issues its deletes (a pod carrying a deletion timestamp is finished by the kubelet with no controller involved), so the healthy path costs one requeue. A two-minute deadline measured from the CR's own `deletionTimestamp` — stateless, so it survives a GMC restart mid-teardown — bounds the case where no AGC is running to reap at all; past it teardown proceeds and emits a `WorkerDrainTimeout` Warning naming what it is leaving to the kubelet's `maxWorkerLifetime` deadline.
+
+The trigger is a *terminating* gateway, never a missing one: a gateway that is gone is both the resting state after teardown and the gap between a delete and a re-apply, so reaping there would destroy live workers on a recreate.
+
 ---
 
 ## 4.2. Job Execution Flow (AGC)
