@@ -4848,6 +4848,12 @@ ReplicaSet — trivially complete — as a successful rollout.</p>
   after the old one terminates, so the tenant's control plane is down for the pod's
   startup time. The AGC's 60s termination grace period still applies, so in-flight
   session work drains as it would on a rollout.</p>
+<p><strong>What a working restart still does not do.</strong> Either path replaces the control-plane
+pod and nothing else. It deletes no worker pod — see <a href="#workers-left-behind-by-an-agc-that-was-down">Workers Left Behind by an AGC
+That Was Down</a> for what actually
+reclaims those — so a restart is not a remedy for workers that will not drain. The
+reaper runs on the live AGC on deadlines measured from each pod, so a fresh one reaps
+no sooner than the one it replaced.</p>
 <p><strong>Verify either path took effect</strong> — check that the pod is actually new rather than
 trusting the rollout message:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-controller<span class="w"> </span><span class="se">\</span>
