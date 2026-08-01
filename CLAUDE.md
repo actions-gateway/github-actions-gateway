@@ -35,7 +35,7 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
    - `make check` is green (plus any heavier tier the change warranted — integration/e2e, `make test-race`, `make vulncheck`, `make trivy-scan`).
    - The diff matches the design intent, is well tested, and has no stray debug code, TODOs, or unrelated changes.
    - Every doc per step 3 is updated (design **and** operator-facing), and `docs/STATUS.md` reflects the completed work.
-   - The PR is scoped to one concern — unrelated work goes in its own PR.
+   - The PR is scoped to one concern — unrelated work goes in its own PR. **Exception: a fix for a broken `main` that blocks this PR's own gate belongs in it** — you cannot get green without it — called out in the description.
    - The description explains *what* changed and *why*, references Queue items by bare ID (`Q44`, never `#44`), and notes how it was tested.
 
    If any answer is no, finish the work first — don't open a PR to "get feedback" on something you know is incomplete. If the task is too ambiguous to judge review-readiness, say so and ask.
