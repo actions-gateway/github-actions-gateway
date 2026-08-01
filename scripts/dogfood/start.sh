@@ -20,12 +20,42 @@ source "${REPO_ROOT}/scripts/dogfood/lib/pool.sh"
 # System pool sizing for the running state (Q335/Q357). One e2-standard-2 fits
 # only one 500m tenant AGC beside the kube-system baseline, so at a fixed size
 # the tenant AGCs race for nodes and a loser stays Pending indefinitely — when
-# dogfoodss wins, the Ready wait below (which selects instance=dogfood) times
+# dogfoodss wins, the dogfood-agc rollout wait below times
 # out and the caller exits 1. The size is therefore derived from the deployed
 # ActionsGateways (lib/pool.sh) so adding a tenant grows the pool; SYSTEM_NODES
 # pins it explicitly instead. dogfood/stop.sh still takes the pool to 0 at rest.
 SYSTEM_POOL="${SYSTEM_POOL:-default-pool}"
 SYSTEM_NODES="${SYSTEM_NODES:-}"
+
+# Bounded poll for the GMC to create the AGC Deployment (120s at the defaults).
+AGC_WAIT_POLLS="${AGC_WAIT_POLLS:-40}"
+AGC_WAIT_INTERVAL="${AGC_WAIT_INTERVAL:-3}"
+
+# wait_agc_rollout NS DEPLOYMENT — block until the GMC-provisioned AGC Deployment
+# in NS has rolled out.
+#
+# Not a pod-label `kubectl wait`: that selector matches the outgoing ReplicaSet's
+# pod while a rollout is in flight, and a terminating pod never reaches Ready. It
+# consumes the entire timeout and kubectl then reports EVERY selected pod as timed
+# out — including the healthy new one it never evaluated — so a successful rollout
+# reads as a failure. rollout status tracks only the new ReplicaSet.
+#
+# The GMC creates the Deployment asynchronously after the gateway CR is applied,
+# and rollout status fast-fails "not found" before it exists, so poll for it first.
+wait_agc_rollout() {
+	local ns="$1" dep="deployment/$2" i
+	for ((i = 0; i < AGC_WAIT_POLLS; i++)); do
+		kubectl -n "${ns}" get "${dep}" >/dev/null 2>&1 && break
+		sleep "${AGC_WAIT_INTERVAL}"
+	done
+	if ! kubectl -n "${ns}" get "${dep}" >/dev/null 2>&1; then
+		echo "error: the GMC created no ${dep} in ${ns}." >&2
+		kubectl -n "${ns}" get actionsgateway -o wide >&2 2>/dev/null || true
+		kubectl -n "${ns}" get events --sort-by=.lastTimestamp >&2 2>/dev/null || true
+		return 1
+	fi
+	kubectl -n "${ns}" rollout status "${dep}" --timeout=3m
+}
 
 main() {
 	: "${PROJECT:?PROJECT must be set}"
@@ -69,9 +99,7 @@ main() {
 		-n gmc-system --timeout=5m
 
 	echo "Waiting for AGC pod..."
-	kubectl wait --for=condition=Ready pod \
-		-l app.kubernetes.io/name=actions-gateway-controller,app.kubernetes.io/instance=dogfood \
-		-n gag-dogfood --timeout=3m
+	wait_agc_rollout gag-dogfood dogfood-agc
 
 	# Set the runner label the opt-in dispatches consume. This alone does NOT
 	# route any push/PR CI — the migrated jobs read GAG_RUNNER only on a
@@ -96,4 +124,4 @@ main() {
 	echo "Watch: gh run list --workflow=unit-test.yml --repo ${REPO}"
 }
 
-main "$@"
+[[ -n "${START_LIB_ONLY:-}" ]] || main "$@"
