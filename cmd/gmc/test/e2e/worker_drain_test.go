@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -353,6 +354,21 @@ func agcEnvValue(ns, deploy, name string) string {
 	return strings.TrimSpace(out)
 }
 
+// agcPodIdentity returns the UIDs of an AGC Deployment's pods, sorted and joined —
+// the identity of the control-plane process(es) a test is running against. A change
+// between two reads means the AGC that observed an event is gone, and any in-process
+// state it held (a delayed re-run, an in-flight session) went with it.
+func agcPodIdentity(ns, deploy string) string {
+	GinkgoHelper()
+	out, err := utils.Run(exec.Command("kubectl", "get", "pods",
+		"-n", ns, "-l", "app="+deploy,
+		"-o", "jsonpath={range .items[*]}{.metadata.uid}{\"\\n\"}{end}"))
+	Expect(err).NotTo(HaveOccurred())
+	uids := strings.Fields(out)
+	sort.Strings(uids)
+	return strings.Join(uids, ",")
+}
+
 // podPhase returns a pod's current .status.phase.
 func podPhase(ns, name string) string {
 	GinkgoHelper()
@@ -414,6 +430,24 @@ func rerunCountForRun(runID string) int {
 	}
 	Expect(json.Unmarshal([]byte(out), &result)).To(Succeed(), "parse reruns response: %s", out)
 	return result.Count
+}
+
+// waitForRerun polls until a rerun-failed-jobs call has landed for runID, and
+// reports whether one did inside timeout. It returns rather than asserting, so a
+// caller can tell a re-run that is genuinely missing from one whose recovery was
+// invalidated by something the spec does not control.
+func waitForRerun(runID string, timeout, interval time.Duration) bool {
+	GinkgoHelper()
+	deadline := time.Now().Add(timeout)
+	for {
+		if rerunCountForRun(runID) >= 1 {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(interval)
+	}
 }
 
 // refusedRerunCountForRun reports how many rerun-failed-jobs calls fakegithub
