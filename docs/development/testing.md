@@ -1095,9 +1095,17 @@ Some questions are about GitHub's behaviour rather than ours, and no tier that r
 | Investigation E | `PROBE_SCALESET_TEST=true` | The scale-set wire protocol end to end — auth chain, queue/message semantics, the acquire route matrix, rate-limit headers. `PROBE_SCALESET_JOB_TEST=true` adds the live-job arm that also verifies run identity on a real `JobAssigned` (Q417). | [q264-scale-set-protocol.md](../plan/q264-scale-set-protocol.md) |
 | Investigation F | `PROBE_RETENTION_TEST=arm\|check\|cleanup` | Does GitHub redeliver an unacknowledged `JobCompleted` to a session created after a multi-hour gap with no session at all? The Q435 replay path depends on it and the contract does not cover it. **Answered 2026-07-29: yes at a 13 h gap** — re-arm it against a future GitHub rather than trusting the number indefinitely. | [q468-jobcompleted-retention.md](../plan/archive/q468-jobcompleted-retention.md) |
 
+| Investigation G | `PROBE_REPLAY_TEST=true` | Does a **cursor-acked but undeleted** message replay to a fresh session polling from cursor 0, and does `DeleteMessage` stop it? The Q583 fix rests on both, and the `DeleteMessage` wire shape is the P2-surfaced P4 unknown Q264 left open. | [q583-restart-replay.md](../plan/q583-restart-replay.md) |
+
+Investigation G is one run, three session generations, so it needs no state file
+and no multi-hour gap. It reads its `DeleteMessage` verdict off the **response
+status**, not off the client's error: `Client.DeleteMessage` reports a 404/410 as
+success (for a listener, a message already gone is a benign ack), and a backend
+that does not serve the endpoint answers 404 too.
+
 Investigation F is three phases around a state file rather than one run, because the gap it measures has to pass with **no session in existence** — so it must outlive the process, and the experiment lives on disk. Its `arm` phase leaves the message under test deliberately unacknowledged; do not "tidy up" by acknowledging it, and do not leave a session behind between phases, or the next gap measures something shorter than it claims.
 
-Both register a scale set against the repo, not the org: this repo is public and the org's `Default` runner group sets `allows_public_repositories: false`, so an org-scoped scale set never receives the job. Each has a dispatch-only fixture workflow ([`scaleset-probe.yml`](../../.github/workflows/scaleset-probe.yml), [`q468-retention-probe.yml`](../../.github/workflows/q468-retention-probe.yml)) that queues jobs on its label and never runs in normal CI. Dispatch the fixture *before* starting the probe — a job queued against a not-yet-registered label waits server-side and is assigned the moment the scale set appears.
+All three register a scale set against the repo, not the org: this repo is public and the org's `Default` runner group sets `allows_public_repositories: false`, so an org-scoped scale set never receives the job. Each has a dispatch-only fixture workflow ([`scaleset-probe.yml`](../../.github/workflows/scaleset-probe.yml), [`q468-retention-probe.yml`](../../.github/workflows/q468-retention-probe.yml), [`q583-replay-probe.yml`](../../.github/workflows/q583-replay-probe.yml)) that queues jobs on its label and never runs in normal CI. Dispatch the fixture *before* starting the probe — a job queued against a not-yet-registered label waits server-side and is assigned the moment the scale set appears.
 
 The App private key stays in the macOS keychain and reaches the probe as a **file path**, never as an env-var value or a process argument ([github-app-credentials.md](github-app-credentials.md)).
 

@@ -186,6 +186,14 @@ type Stub struct {
 	// condition paths (Q325).
 	failSessionRefresh bool
 	failSessionCreate  bool
+	// failDeleteMessage makes the message-DELETE ack answer 404 while set, modelling
+	// a backend that does not serve the endpoint at the shape the client constructs —
+	// the one outcome that decides whether delete-acking can be relied on (Q583).
+	failDeleteMessage bool
+	// deleteWithoutPruning makes the ack answer 204 while leaving the message in the
+	// log, modelling a backend that accepts the call and does not act on it — which a
+	// caller reading only the status cannot tell from a real prune (Q583).
+	deleteWithoutPruning bool
 
 	adminToken    string
 	adminTokenTTL time.Duration
@@ -445,6 +453,25 @@ func (s *Stub) FailSessionRefresh(on bool) {
 func (s *Stub) FailSessionCreate(on bool) {
 	s.mu.Lock()
 	s.failSessionCreate = on
+	s.mu.Unlock()
+}
+
+// FailDeleteMessage makes the message-DELETE ack answer 404 Not Found while on,
+// modelling a backend that does not serve the endpoint at the shape the client
+// constructs. The lever for the fallback path a DELETE-FAILED verdict selects (Q583).
+func (s *Stub) FailDeleteMessage(on bool) {
+	s.mu.Lock()
+	s.failDeleteMessage = on
+	s.mu.Unlock()
+}
+
+// AcceptDeleteWithoutPruning makes the message-DELETE ack answer 204 while leaving
+// the message in the queue log. It models the backend a status check alone cannot
+// distinguish from a working delete, and is the lever for the one verdict that would
+// rule delete-acking out as the Q583 fix (Q583).
+func (s *Stub) AcceptDeleteWithoutPruning(on bool) {
+	s.mu.Lock()
+	s.deleteWithoutPruning = on
 	s.mu.Unlock()
 }
 
@@ -1485,6 +1512,10 @@ func (s *Stub) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(r.PathValue("id"))
 	msgID, _ := strconv.ParseInt(r.PathValue("msgid"), 10, 64)
 	s.record("delete-message id=%d msg=%d", id, msgID)
+	if s.failDeleteMessage {
+		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+		return
+	}
 	ss := s.scaleSets[id]
 	if ss == nil || ss.session == nil {
 		http.Error(w, `{"message":"session not found"}`, http.StatusNotFound)
@@ -1496,7 +1527,9 @@ func (s *Stub) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, m := range ss.messages {
 		if m.id == msgID {
-			m.deleted = true
+			if !s.deleteWithoutPruning {
+				m.deleted = true
+			}
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
