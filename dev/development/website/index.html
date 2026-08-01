@@ -3122,6 +3122,9 @@ a typo should keep failing MkDocs' link check rather than become a
 plausible-looking 404. So is a <strong>directory under <code>docs/</code></strong>, which resolves to
 that directory's page rather than to the tree (<a href="#the-two-link-gates">§ The two link
 gates</a> owns that case).</p>
+<p>Both link syntaxes are rewritten — inline <code>](target)</code> and the reference-style
+<code>[label]: target</code> definition. Python-Markdown resolves the two into the same
+link, so covering only the first would leave the rarer form silently dead.</p>
 <p>This was already needed before the backlog page: <code>design/</code> and <code>operations/</code>
 shipped such links dead. Publishing the repo-internal docs made it load-bearing
 — 724 links across the tree, 34 on <code>STATUS.md</code> alone.
