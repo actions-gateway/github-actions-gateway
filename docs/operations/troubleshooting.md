@@ -1477,7 +1477,7 @@ A record whose worker pod still exists is never swept, in any phase — a `Pendi
 
 > **Before `v1.3.0`, only mechanism 2 existed**, and it clears a record only if the REST name filter resolves it. Records it could not resolve, and every suffixed retry name, accumulated unbounded — 22 stale records under one scale set wedged the `v1.3.0-rc.2` validation window this way. If you see `scaleset: runner name is taken but no record resolves under it` in the AGC logs, mechanism 2 is failing and the sweep is what will collect the leftovers. On such a version, use the manual cleanup below.
 
-**If the conflict does not clear.** A name no attempt can register — a live runner holding it, or a record the AGC's credentials cannot delete — leaves that one job unprovisionable. It is not dropped: the listener holds it and re-offers it on a backoff (30s, doubling to 5 minutes) until it provisions or GitHub reports the job complete, so the run still starts whenever the conflict clears. While a job is held, the `RunnerSet` reports the advisory condition `JobProvisionStalled=True/RunnerNameConflict` naming the job ids, the `actions_gateway_scaleset_jobs_deferred` gauge is `> 0`, and a `JobProvisionStalled` Warning Event is recorded once per episode. Other jobs in the set are unaffected.
+**If the conflict does not clear.** A name no attempt can register — a live runner holding it, or a record the AGC's credentials cannot delete — leaves that one job unprovisionable. It is not dropped: the listener holds it and re-offers it on a backoff (30s, doubling to 5 minutes) until it provisions or GitHub reports the job complete, so the run still starts whenever the conflict clears. While a job is held, the `RunnerSet` reports the advisory condition `JobProvisionStalled=True/RunnerNameConflict` naming the job ids, the `actions_gateway_scaleset_jobs_deferred{reason="name_conflict"}` gauge is `> 0`, and a `JobProvisionStalled` Warning Event is recorded once per episode. Other jobs in the set are unaffected.
 
 ```sh
 kubectl get runnerset <name> -n <namespace> \
@@ -1498,6 +1498,23 @@ gh api -X DELETE /repos/<owner>/<repo>/actions/runners/<id>
 ```
 
 Only delete records that are `offline` and not `busy`; an `online` record is a live listener or a running worker.
+
+---
+
+## Scale-Set Jobs Waiting at the Worker Ceiling (WorkerCeilingReached)
+
+**Symptom.** A ScaleSet `RunnerSet` reports `JobProvisionStalled=True/WorkerCeilingReached` and `actions_gateway_scaleset_jobs_deferred{reason="ceiling"}` is `> 0`. Jobs are queued at GitHub with no worker running them, while the set's existing workers keep running normally.
+
+**This is normal backpressure, not a fault.** The set is running as many workers as its spec allows — `spec.maxWorkers`, or the last `spec.priorityTiers` threshold. GitHub keeps assigning jobs up to the capacity the listener advertises, and each one that arrives with no slot free is held and re-offered every 5 seconds until a running worker finishes. Nothing is dropped, and the held jobs start in turn as capacity frees.
+
+```sh
+kubectl get runnerset <name> -n <namespace> \
+  -o jsonpath='{.status.conditions[?(@.type=="JobProvisionStalled")].message}'
+```
+
+**When to act.** Only when the wait itself is the problem. Either raise the ceiling (`spec.maxWorkers` or the top `priorityTiers` threshold) if the cluster has room, or treat it as the signal that the tenant needs more capacity. Check first that the ceiling is the real constraint and not a downstream one — `WorkerQuotaExceeded` (namespace `ResourceQuota`) and `WorkersUnschedulable` (nothing can place the pod) are separate conditions with their own sections.
+
+**What it should NOT look like.** A steady stream of `generate-jitconfig` and runner-deregister calls against GitHub while the set sits at its ceiling. Before `v1.3.0`, a ceiling-blocked job was read as a transient failure: the queue message was redelivered immediately, so the listener retried it several times a second and minted (then deregistered) a runner registration on every pass — 704 deregister calls for a single job during one 14-minute window. If you see that on an older version, the fix is to upgrade; the ceiling wait itself was never the bug.
 
 ---
 
@@ -1561,7 +1578,8 @@ few seconds; the metric is the real-time signal.
 | `WorkerPodCreateFailed` | Warning | The API server refused to create a worker pod (invalid name, admission webhook, pod-security policy). The note carries the API server's own message. No pod exists, so GitHub reports only that the runner lost communication. | ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created) |
 | `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, which share one per-run budget. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) |
 | `EvictionRerunFailed` | Warning | A disrupted run's automatic re-run was never accepted by GitHub — refused past the 15-minute re-run window, or a terminal API error (Q503). The budget slot is spent; the named run needs a manual re-run. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |
-| `JobProvisionStalled` | Warning | A scale-set job cannot register its runner name (`generate-jitconfig` 409 that no retry cleared), so no worker can be created for it. The job is held and re-offered on a backoff; the note names the job ids. Also sets the advisory `JobProvisionStalled` condition. Once per episode. | [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
+| `JobProvisionStalled` | Warning | A scale-set job cannot register its runner name (`generate-jitconfig` 409 that no retry cleared), so no worker can be created for it. The job is held and re-offered on a backoff. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
+| `WorkerCeilingReached` | Normal | Scale-set jobs are waiting because the set is already running as many workers as its spec allows; they are re-offered until capacity frees. Expected backpressure, hence Normal. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Jobs Waiting at the Worker Ceiling](#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |
 
 **Diagnostics.**
 

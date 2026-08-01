@@ -180,8 +180,19 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		Client:       ssClient,
 		ScaleSetName: scaleSetName,
 		OwnerName:    key.Namespace + "/" + key.Name,
+		// Asked before each assigned job's JIT config is minted, so a job the ceiling
+		// will reject registers no runner at GitHub (Q576). The ceiling verdict is
+		// translated into the listener's own vocabulary; every other error travels
+		// as-is, and the listener treats it as "provision anyway".
+		CheckCapacity: func(ctx context.Context) error {
+			err := r.Provisioner.CheckScaleSetCapacity(ctx, target)
+			if provisioner.IsCeilingReached(err) {
+				return fmt.Errorf("%w: %w", scalesetlistener.ErrCapacityUnavailable, err)
+			}
+			return err
+		},
 		Provision: func(ctx context.Context, job scalesetlistener.Job) error {
-			return r.Provisioner.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{
+			err := r.Provisioner.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{
 				JobID:     job.JobID,
 				JITConfig: job.JITConfig,
 				// The runner record is pre-registered before the pod exists and
@@ -197,6 +208,13 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 				RunID:      job.RunID,
 				JobName:    job.JobName,
 			})
+			// The authoritative ceiling check, losing the race the pre-check above
+			// could not close: same translation, so the job is re-offered rather than
+			// redelivered.
+			if provisioner.IsCeilingReached(err) {
+				return fmt.Errorf("%w: %w", scalesetlistener.ErrCapacityUnavailable, err)
+			}
+			return err
 		},
 		Cleanup: func(ctx context.Context, jobID string) error {
 			return r.Provisioner.CleanupScaleSetJob(ctx, target, jobID)

@@ -39,10 +39,14 @@ type Metrics struct {
 	// rung publishes a value each poll — zero when it did not bind — so a series never
 	// goes stale at its last non-zero reading.
 	CapacityWithheld *prometheus.GaugeVec
-	// JobsDeferred is how many assigned jobs the listener is holding for a re-offer
-	// because their runner name will not register (Q551) — the alertable mirror of the
+	// JobsDeferred is how many assigned jobs the listener is holding for a re-offer,
+	// labelled by the DeferReason* it is held under — the alertable mirror of the
 	// RunnerSet's JobProvisionStalled condition. Each one is a workflow run queued at
-	// GitHub with nothing running it.
+	// GitHub with nothing running it, but the two reasons want different alerts: a
+	// runner name that will not register needs an operator (Q551), while a full worker
+	// ceiling is the set doing what its spec says and clears as workers finish (Q576).
+	// Every reason is published on every update, zero included, so a series never
+	// freezes at its last non-zero reading.
 	JobsDeferred *prometheus.GaugeVec
 }
 
@@ -92,8 +96,8 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 
 		JobsDeferred: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "actions_gateway_scaleset_jobs_deferred",
-			Help: "Assigned jobs held for a later re-offer because their runner name will not register; each is a queued workflow run with no worker (sets the JobProvisionStalled condition).",
-		}, []string{"namespace", "runner_set"}),
+			Help: "Assigned jobs held for a later re-offer, by reason (name_conflict: the runner name will not register; ceiling: the set is at its worker ceiling); each is a queued workflow run with no worker (sets the JobProvisionStalled condition).",
+		}, []string{"namespace", "runner_set", "reason"}),
 	}
 	reg.MustRegister(
 		m.JobsAssignedTotal,
@@ -142,7 +146,7 @@ func (m *Metrics) DeleteRunnerSet(namespace, runnerSet string) {
 	labels := prometheus.Labels{"namespace": namespace, "runner_set": runnerSet}
 	m.AdvertisedCapacity.Delete(labels)
 	m.CapacityWithheld.DeletePartialMatch(labels)
-	m.JobsDeferred.Delete(labels)
+	m.JobsDeferred.DeletePartialMatch(labels)
 }
 
 // RecorderFor returns a MetricsRecorder that records into m's vectors under the given
@@ -179,6 +183,8 @@ func (r *recorder) IncJobCompleted(result string) {
 	r.m.JobsCompletedTotal.WithLabelValues(r.namespace, r.runnerSet, result).Inc()
 }
 
-func (r *recorder) SetDeferredJobs(n int) {
-	r.m.JobsDeferred.WithLabelValues(r.namespace, r.runnerSet).Set(float64(n))
+func (r *recorder) SetDeferredJobs(byReason map[string]int) {
+	for reason, n := range byReason {
+		r.m.JobsDeferred.WithLabelValues(r.namespace, r.runnerSet, reason).Set(float64(n))
+	}
 }

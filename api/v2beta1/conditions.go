@@ -106,6 +106,7 @@ const (
 	ReasonApplianceRangesRequired = apiconditions.ReasonApplianceRangesRequired
 	ReasonGitHubEgressAllowed     = apiconditions.ReasonGitHubEgressAllowed
 	ReasonRunnerNameConflict      = apiconditions.ReasonRunnerNameConflict
+	ReasonWorkerCeilingReached    = apiconditions.ReasonWorkerCeilingReached
 	ReasonJobsProvisioning        = apiconditions.ReasonJobsProvisioning
 )
 

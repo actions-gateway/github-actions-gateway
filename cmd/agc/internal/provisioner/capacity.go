@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -88,6 +89,56 @@ func (p *Provisioner) activePodCount(ctx context.Context, namespace string, sele
 		}
 	}
 	return count, nil
+}
+
+// CeilingReachedError reports that an owner is already running as many worker pods as
+// its spec allows, so another one is held until one of them finishes.
+//
+// It is a distinct type rather than a plain error because the scale-set listener has to
+// tell it apart from a genuinely transient provisioning failure: a transient failure is
+// retried by redelivering the queue message, while a full ceiling will still be full on
+// the next redelivery and belongs on the re-offer backoff instead (Q576).
+type CeilingReachedError struct {
+	// ActivePods is the Running+Pending worker count that met the ceiling.
+	ActivePods int32
+}
+
+func (e *CeilingReachedError) Error() string {
+	return fmt.Sprintf("provisioner: worker concurrency ceiling reached (%d active pods)", e.ActivePods)
+}
+
+// IsCeilingReached reports whether err is (or wraps) a *CeilingReachedError.
+func IsCeilingReached(err error) bool {
+	var ce *CeilingReachedError
+	return errors.As(err, &ce)
+}
+
+// CheckScaleSetCapacity reports whether target can run another worker pod right now,
+// returning a *CeilingReachedError when it cannot and nil when it can.
+//
+// It exists so the scale-set listener can ask before it mints a JIT config, because
+// minting one REGISTERS a runner at GitHub: a ceiling-blocked attempt that mints first
+// leaves behind a registration the next attempt has to deregister, which is how a
+// saturated set on the rc.3 dogfood gate issued 704 deregister calls for one job (Q576).
+// The authoritative check is still the one ProvisionScaleSetWorker makes with the pod
+// about to be created; this one only keeps the doomed attempts from costing a
+// registration. An error other than *CeilingReachedError means the check itself could
+// not be made, and the caller is expected to provision anyway and let the authoritative
+// check decide.
+func (p *Provisioner) CheckScaleSetCapacity(ctx context.Context, target Target) error {
+	key := target.Key()
+	spec, err := target.Resolve(ctx)
+	if err != nil {
+		return fmt.Errorf("provisioner: resolve provisioning spec: %w", err)
+	}
+	count, err := p.activePodCount(ctx, key.Namespace, target.PodOwnerLabels())
+	if err != nil {
+		return fmt.Errorf("provisioner: count active pods: %w", err)
+	}
+	if _, held := ceilingCheck(spec, count); held {
+		return &CeilingReachedError{ActivePods: count}
+	}
+	return nil
 }
 
 // ceilingCheck returns the PriorityClassName to assign (may be "") and whether
