@@ -158,11 +158,14 @@ preference order:
 plugin the operator installs per that repo's README. After a `gh pr create` or a
 PR-branch `git push`, its `PostToolUse` hook nudges the session to launch a tiny
 `bash` watcher as a **background task** (`run_in_background`) — the exact command
-the nudge names, which is a three-token `bash <absolute path> <PR>`:
+the nudge names, which is always three tokens:
 
 ```
-bash "/path/to/plugins/cache/pr-sentinel/pr-sentinel/<version>/scripts/pr-sentinel-watch.sh" <PR>
+bash "<the absolute path the nudge printed>" <PR>
 ```
+
+There is no path to copy from this page on purpose: the nudge prints the real
+one, resolved for the installed plugin version, every time it fires.
 
 **Copy the path out of the nudge verbatim.** Do not substitute
 `"${CLAUDE_PLUGIN_ROOT}/scripts/pr-sentinel-watch.sh"`, a `$(…)` lookup, or any
