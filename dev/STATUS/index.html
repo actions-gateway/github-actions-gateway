@@ -2911,20 +2911,12 @@
 <td>testing.md claims the vet-tags coverage assertion catches a tag missing from lint; it only checks go-vet-tags.sh's own list — <code>autoscaler</code> was absent from <code>.golangci.yml</code> from Q474 until Q479. Assert the two lists match under <code>make scripts-test</code>.</td>
 </tr>
 <tr>
-<td><a id="Q533"></a>Q533</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/autoscaler-drift.yml">Drift-workflow filters duplicate shared paths with no sync check</a></td>
+<td><a id="Q574"></a>Q574</td>
+<td><a href="../development/testing/#a-path-list-written-twice-the-trigger-and-the-filter">One gate for every path list the workflows write twice</a></td>
 <td><code>infra</code> <code>retro</code></td>
 <td>🔲</td>
-<td>S</td>
-<td>check-path-filters.sh's positional parser can't resolve YAML anchors, so the autoscaler/karpenter filters carry four shared matcher paths twice, synced by comment only (Q479). Assert the shared set matches, or teach the parser anchors.</td>
-</tr>
-<tr>
-<td><a id="Q572"></a>Q572</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml"><code>doc-links</code>/<code>dockerfile-lint</code> duplicate their path list across two triggers with no sync check</a></td>
-<td><code>infra</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q571 gates the three workflows pairing <code>on.push.paths</code> with a <code>changes</code> filter. These two instead duplicate across <code>pull_request.paths</code> and <code>push.paths</code> — same hazard, different shape, ungated. Both agree today.</td>
+<td>M</td>
+<td>Three shapes, three bespoke checks: shared paths across two <code>filters:</code> (Q533), <code>on.push.paths</code> vs its filter (gated), <code>pull_request.paths</code> vs <code>push.paths</code> (ungated). One registry replaces all three.</td>
 </tr>
 <tr>
 <td><a id="Q534"></a>Q534</td>
