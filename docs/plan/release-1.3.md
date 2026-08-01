@@ -96,15 +96,24 @@ The prose below carries the *why* of each; this table is the state.
 | Q486 | The two managed-autoscaler opt-ins keep their different shapes ([§ E](#e-api-review-satisfied)) | `1.3-gate` | ✅ no API change, deliberately (2026-07-28) |
 | Q550 | Scale-set runner registrations leak at GitHub | `1.3-gate` | ✅ shipped 2026-07-31 |
 | Q551 | A job the listener cannot provision is skipped permanently | `1.3-gate` | ✅ shipped 2026-07-31 |
+| Q576 | Ceiling-blocked provisioning retries hot, one deregister per attempt | `1.3-gate` | ✅ shipped 2026-08-01 |
+| Q552 | GMC reverts a `kubectl rollout restart` of a managed AGC | `1.3-gate` | ✅ shipped 2026-08-01 |
+| Q553 | AGC re-provisions jobs GitHub no longer has, livelocking a drain | `1.3-gate` | ✅ shipped 2026-08-01 |
+| Q582 | v1/v2 proxy pools collide throughout migration coexistence | `1.3-gate` | ✅ shipped 2026-08-01 |
+| [Q575](../STATUS.md#Q575) | A worker whose `job-payload` secret is absent stalls | `1.3-gate` | 🔲 in flight (#1119) |
+| [Q577](../STATUS.md#Q577) | `stop.sh` leaves the pool up when its drain cannot converge | `1.3-gate` | 🚫 blocked by Q575 — re-verify when it lands |
+| [Q583](../STATUS.md#Q583) | An AGC restart replays the queue and re-provisions jobs long gone | rides | ⤴ measure at the rc.4 gate first — see below |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
 | — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | 🔲 rc.3: gate aborted at leg 1, no verdict |
 
-**Cut condition: zero open `1.3-gate` rows** (`grep '1.3-gate' docs/STATUS.md` —
-currently none) **plus the release-candidate dogfood validation**, the ledger's
-last row. It has no Q-ID because it cannot be a Queue item — it only runs against
-a published RC — but it carries a row so its state is visible rather than buried
-in prose.
+**Cut condition: zero open gating rows in this ledger** **plus the
+release-candidate dogfood validation**, the ledger's last row. It has no Q-ID
+because it cannot be a Queue item — it only runs against a published RC — but it
+carries a row so its state is visible rather than buried in prose. Read the
+ledger, not `grep '1.3-gate' docs/STATUS.md`, as authoritative: the rc.3-derived
+gates were filed as ordinary `bug` rows and pulled into scope by the decision
+recorded below, so the label grep under-reports them.
 
 **No RC has produced a verdict yet.** rc.1 aborted when the gate's then-repo-wide
 e2e routing caught concurrent CI; rc.2 reached the live API and returned Q550 and
@@ -112,6 +121,35 @@ Q551 instead of a result; rc.3 aborted at `start.sh`'s AGC wait, which raced eve
 rollout and reported a healthy AGC as timed out (fixed in #1090). Each was
 diagnosed on its own, which is how three consecutive misses went unremarked — the
 row exists so the fourth does not.
+
+### What rc.4 carries, and the two scope calls behind it
+
+rc.3's validation window produced five defects (Q575–Q578, Q580) plus a revive
+trigger on Q553. Q576, Q578, and Q580 have shipped; Q575 is in flight and Q577 is
+blocked behind it. **Q576, Q552, and Q553 gate rather than ride** for the same
+reason Q550 and Q551 did: each is an availability bug an ordinary tenant reaches,
+not a dogfood-harness artifact. Q576 in particular spun a saturated scale set at
+~0.8 provisioning attempts/s for 14 minutes, issuing 704 GitHub deregister calls
+for a single job.
+
+**Q582 was pulled into scope by an explicit maintainer decision (2026-08-01),
+though it was not an rc.3 finding.** It surfaced while diagnosing the Q570 e2e
+flake: the v1 and v2 proxy pools both stamp `app: actions-gateway-proxy`, so
+during coexistence each pool's pods match the other's PDB and both HPAs wedge on
+`AmbiguousSelector` — neither autoscales. The reasoning for gating on it: 1.3 *is*
+the `v2.0.0` deprecation notice, so shipping it with a documented v1→v2 migration
+path that silently disables autoscaling on both pools undercuts the release's own
+message.
+
+**Q583 rides, pending a measurement the gate itself supplies.** Q553's give-up
+guard is process-local, so a restarted AGC may poll from cursor 0 and re-provision
+jobs long gone — but the row's premise (that the queue still retains those
+messages, and the `DeleteMessage` wire shape) is unproven, and it cannot be
+confirmed below a live run. Building against an unmeasured mechanism is how a
+session repairs a working path, so the call is to **measure it during the rc.4
+gate, which restarts AGCs anyway**, and let a confirmed result gate rc.5 if it is
+real. Capture the queue's retention behaviour across an AGC restart while the gate
+is running — it is the cheapest window there is.
 
 ## What 1.3 means
 
