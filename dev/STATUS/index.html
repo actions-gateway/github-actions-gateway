@@ -2703,6 +2703,14 @@
 <td>MkDocs reports an unlisted page at INFO, invisible under a green build — that is how Q562's three operator pages hid. <code>not_in_nav</code> declares every deliberate omission, so the list should be empty; fail <code>docs-preview.sh build</code> when it is not.</td>
 </tr>
 <tr>
+<td><a id="Q590"></a>Q590</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go"><code>E2E_SKIP_TEARDOWN=true</code> leaves state that fails the next suite run</a></td>
+<td><code>tests</code> <code>infra</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Teardown normally removes the <code>--allow-agc-extra-env</code> <code>kubectl patch</code>; skipping it leaves the field owned by <code>kubectl-patch</code>, so the next run's <code>helm upgrade</code> dies on a <code>.args</code> conflict. Adopt the field, or re-patch idempotently.</td>
+</tr>
+<tr>
 <td><a id="Q569"></a>Q569</td>
 <td><a href="../plan/docs-page-boundaries/#phase-2-splitting-the-parked-register-q569">Split Deferred + Flake watch off <code>STATUS.md</code></a></td>
 <td><code>docs</code> <code>infra</code></td>
