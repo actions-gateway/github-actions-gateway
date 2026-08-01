@@ -542,6 +542,31 @@ all keep an ordered log (`Calls()` on the scale-set stub, `/control/reruns` and
 `/control/scaleset/state` on fakegithub) precisely so a spec can assert on what the
 server saw instead of inferring it from the client's logs.
 
+### Verify a causation claim by deleting the mechanism
+
+The two rules above are read-and-reason checks — ask what else could produce this green.
+This one is mechanical, and it is the only way to *settle* the question: **delete the
+mechanism, re-run the test, and require it to go red for the reason you expect.** Restore
+it, confirm green. A test that stays green without the code it claims to exercise is
+measuring something else, and no amount of reading the test will tell you that.
+
+Reach for it whenever a test's subject is "this code caused that outcome" — a new
+regression test, a fix whose test you wrote alongside it, a spec whose green arrived on
+the first try. It costs one edit and one run.
+
+- **Delete the mechanism, not the assertion.** Comment out the call, drop the retry loop,
+  return early from the reconcile branch. Removing the *assertion* proves nothing.
+- **Read the failure, not just the colour.** Red for the wrong reason (a compile error, a
+  fixture that no longer builds, an unrelated timeout) is not evidence. The test must fail
+  on the assertion that names the behaviour.
+- **Round-trip it.** Restore the mechanism and confirm green in the same sitting, so the
+  check cannot end with a half-reverted tree.
+
+Q506 needed two rounds of this before a spec's green meant what it claimed. Q551's
+re-offer test is the routine case: disabling the one call the fix added turned it red on
+"the re-offer must provision the job once the conflict clears" — exactly the sentence the
+test exists to assert — and it went green again on restore.
+
 ### A measurement that reproduces a call is not a test of the code that makes it
 
 The sibling of the rule above, and the one that survives a green **positive**. A
