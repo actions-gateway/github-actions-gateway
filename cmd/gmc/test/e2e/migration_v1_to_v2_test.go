@@ -67,7 +67,12 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
 
 		By("applying the v1 DinD tenant")
-		utils.DinDTenant(tenantNS, agName, secretName, workerImage).ApplyWithWebhookRetry()
+		// One proxy replica, unautoscalable: the migrated pool coexists with this one
+		// and the two repel each other by hostname anti-affinity, so a v1 pool free to
+		// autoscale leaves the migrated pool nowhere to schedule (Q570).
+		utils.DinDTenant(tenantNS, agName, secretName, workerImage).
+			WithProxyReplicas(1, 1).
+			ApplyWithWebhookRetry()
 
 		By("waiting for the v1 AGC control plane to be ready")
 		// Migrating a tenant that never came up would prove nothing: the point is that
@@ -203,7 +208,8 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 			"the v1 namespace marker must survive so v1 admission keeps passing")
 	})
 
-	It("E2E_Migration_MigratedTenantReconcilesIntoAWorkingControlPlane", func() {
+	// multi-node: alone among the three, this spec needs a second worker for the pool.
+	It("E2E_Migration_MigratedTenantReconcilesIntoAWorkingControlPlane", Label("multi-node"), func() {
 		By("waiting for the migrated gateway's own AGC Deployment to become ready")
 		// The decisive assertion: the GMC did not merely admit the manifests, it
 		// reconciled them into a running per-gateway control plane. A migration that

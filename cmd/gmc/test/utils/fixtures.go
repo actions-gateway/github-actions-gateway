@@ -191,6 +191,17 @@ func (f TenantFixture) WithWorkerCeiling(maxWorkers int32) TenantFixture {
 	return f
 }
 
+// WithProxyReplicas pins the inline proxy pool's replica range. Proxy pods carry
+// required podAntiAffinity on kubernetes.io/hostname, so a replica costs a whole
+// worker node; passing min == max stops the pool's HPA from claiming a second node
+// on a startup CPU burst, which on the 2-worker e2e cluster is capacity another
+// pool may need.
+func (f TenantFixture) WithProxyReplicas(minReplicas, maxReplicas int32) TenantFixture {
+	f.ProxyMinReplicas = minReplicas
+	f.ProxyMaxReplicas = maxReplicas
+	return f
+}
+
 // WithPriorityTier puts every worker pod in one PriorityClass tier, and gives the
 // runner container the resource footprint the spec needs the scheduler to see. The two
 // travel together because either alone cannot produce a preemption: the class decides
