@@ -186,10 +186,12 @@ type Stub struct {
 	// condition paths (Q325).
 	failSessionRefresh bool
 	failSessionCreate  bool
-	// failDeleteMessage makes the message-DELETE ack answer 404 while set, modelling
-	// a backend that does not serve the endpoint at the shape the client constructs —
-	// the one outcome that decides whether delete-acking can be relied on (Q583).
-	failDeleteMessage bool
+	// failDeleteMessageStatus, when non-zero, is the status the message-DELETE ack
+	// answers instead of acting. The status matters rather than just the failure: the
+	// client reports a 404/410 as a benign ack, so 404 models a backend that does not
+	// serve the endpoint (invisible to a caller reading only the error) while a 5xx
+	// models one that is momentarily unable to (Q583).
+	failDeleteMessageStatus int
 	// deleteWithoutPruning makes the ack answer 204 while leaving the message in the
 	// log, modelling a backend that accepts the call and does not act on it — which a
 	// caller reading only the status cannot tell from a real prune (Q583).
@@ -456,12 +458,14 @@ func (s *Stub) FailSessionCreate(on bool) {
 	s.mu.Unlock()
 }
 
-// FailDeleteMessage makes the message-DELETE ack answer 404 Not Found while on,
-// modelling a backend that does not serve the endpoint at the shape the client
-// constructs. The lever for the fallback path a DELETE-FAILED verdict selects (Q583).
-func (s *Stub) FailDeleteMessage(on bool) {
+// FailDeleteMessage makes the message-DELETE ack answer status instead of acting;
+// zero restores it. Pass 404 for a backend that does not serve the endpoint — which
+// Client.DeleteMessage reports to its caller as a successful ack, so only a probe
+// reading the raw status can see it — or a 5xx for one that is momentarily unable to,
+// which the caller does see and must retry (Q583).
+func (s *Stub) FailDeleteMessage(status int) {
 	s.mu.Lock()
-	s.failDeleteMessage = on
+	s.failDeleteMessageStatus = status
 	s.mu.Unlock()
 }
 
@@ -1512,8 +1516,8 @@ func (s *Stub) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.Atoi(r.PathValue("id"))
 	msgID, _ := strconv.ParseInt(r.PathValue("msgid"), 10, 64)
 	s.record("delete-message id=%d msg=%d", id, msgID)
-	if s.failDeleteMessage {
-		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+	if s.failDeleteMessageStatus != 0 {
+		http.Error(w, `{"message":"delete refused"}`, s.failDeleteMessageStatus)
 		return
 	}
 	ss := s.scaleSets[id]

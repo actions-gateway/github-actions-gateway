@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -260,7 +261,7 @@ func TestReplay_DeleteFailureSkipsThePruneMeasurement(t *testing.T) {
 	srv.PrequeueJobs(1)
 	var log strings.Builder
 	p := newReplayProbeForTest(t, srv, replayConfig{}, &log)
-	srv.FailDeleteMessage(true)
+	srv.FailDeleteMessage(http.StatusNotFound)
 
 	if err := p.run(context.Background()); err != nil {
 		t.Fatalf("run: %v\n%s", err, log.String())

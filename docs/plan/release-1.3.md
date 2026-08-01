@@ -102,7 +102,7 @@ The prose below carries the *why* of each; this table is the state.
 | Q582 | v1/v2 proxy pools collide throughout migration coexistence | `1.3-gate` | ✅ shipped 2026-08-01 |
 | Q575 | A worker whose `job-payload` secret is absent stalls | `1.3-gate` | ✅ shipped 2026-08-01 |
 | [Q577](../STATUS.md#Q577) | `stop.sh` leaves the pool up when its drain cannot converge | `1.3-gate` | 🔲 unblocked — re-measure at the gate, it may no longer be real |
-| [Q583](../STATUS.md#Q583) | An AGC restart replays the queue and re-provisions jobs long gone | rides | ⤴ premise confirmed without the gate — see below |
+| Q583 | An AGC restart replays the queue and re-provisions jobs long gone | rides | ✅ shipped 2026-08-01 (measured, then fixed — see below) |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
 | — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | 🔲 rc.3: gate aborted at leg 1, no verdict |

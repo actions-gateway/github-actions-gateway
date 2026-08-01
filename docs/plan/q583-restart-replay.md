@@ -1,10 +1,11 @@
 # Q583 — An AGC restart replays the queue and provisions workers for jobs long gone
 
-**Status:** measured 2026-08-01 — the replay is real, `DeleteMessage` works, and
-deleting prunes the queue. Delete-acking is the fix; implementation is what
-remains. The rc.4 dogfood gate was never needed.
+**Status:** done 2026-08-01. Measured, then fixed: the replay is real,
+`DeleteMessage` works, deleting prunes the queue, and the listener now issues the
+delete half of its ack once every job in a message has concluded. The rc.4
+dogfood gate was never needed. Residual: [Q597](../STATUS.md#Q597).
 
-[Q583](../STATUS.md#Q583) was filed with an instruction to measure at the rc.4
+Q583 was filed with an instruction to measure at the rc.4
 gate before building, because the row's mechanism was asserted rather than
 observed. That instruction is discharged here: the measurement was already in
 the repo, twice, and the residual unknown is about the **fix**, not the defect.
@@ -204,6 +205,36 @@ What this does **not** establish, the same caveats Q468 records: one tenant, one
 region, one point in time, on backend behaviour GitHub does not document. The
 claim is "observed, 2026-08-01", not "GitHub guarantees". And nothing here bounds
 retention — Q468's ≥13 h remains the only number, still a lower bound.
+
+### What shipped
+
+Acking is now cursor advance **plus** a delete, and the delete waits. A handled
+message is registered against the jobs it names that have not concluded; a job
+concludes by completing with its Secret reclaimed, or by being abandoned (Q553);
+and a message whose set empties is deleted on the next poll cycle. A failed
+delete keeps its entry and is retried on the following cycle, because the cursor
+has already moved past the message and nothing else would bring it back.
+
+The wait is the whole safety argument, and each of its three cases has a test
+that fails without it: a job provisioned but still running, a Q551 deferred job
+the previous process never provisioned, and a completion whose Secret reclaim
+failed all hold their message in the queue, so a restart still re-reads them.
+
+One trap worth recording, because it cost a wrong-green test before it was
+caught. `Client.DeleteMessage` reports a 404 as success, so a stub answering 404
+made the listener believe it had deleted a message it had not, and the retry test
+passed while testing nothing. Treating a 404 as an ack is nonetheless right *here*
+— Investigation G proved the endpoint is served, so a 404 means the message is
+genuinely gone — but it means a failure that must be retried has to be a 5xx. The
+stub's lever now takes the status rather than a bool, which forces each test to
+say which backend it is modelling.
+
+Left open deliberately: `provisioned`, `completed`, and `abandoned` are still
+never pruned, so they grow with the jobs a listener handles over its lifetime.
+Pruning them is now *possible* — an entry is dead once its message is deleted —
+but it is a separate change with its own way of going wrong (drop an entry too
+early and a replay double-provisions), so it is filed as
+[Q597](../STATUS.md#Q597) rather than bundled here.
 
 ### Decision: delete-ack
 

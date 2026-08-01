@@ -28,12 +28,25 @@ type recordingProvisioner struct {
 func (p *recordingProvisioner) provision(_ context.Context, job scalesetlistener.Job) error {
 	p.mu.Lock()
 	p.provisioned = append(p.provisioned, job)
+	// Read under the lock: a listener started against a queue that already holds a
+	// message provisions before setScaleSetID returns, so these race the setter
+	// otherwise.
+	ssID, complete := p.scaleSetID, !p.completeErr
 	p.mu.Unlock()
-	if !p.completeErr {
+	if complete {
 		// Simulate the worker pod: pull the job and report it completed.
-		p.srv.CompleteAssignedJob(p.scaleSetID, job.JobID, "succeeded")
+		p.srv.CompleteAssignedJob(ssID, job.JobID, "succeeded")
 	}
 	return nil
+}
+
+// setScaleSetID wires in the id the listener created on Start. It cannot be set at
+// construction — the listener registers the scale set itself — so it is written after
+// the run goroutine is already live, and therefore under the lock.
+func (p *recordingProvisioner) setScaleSetID(id int) {
+	p.mu.Lock()
+	p.scaleSetID = id
+	p.mu.Unlock()
 }
 
 func (p *recordingProvisioner) jobIDs() []string {
@@ -269,7 +282,7 @@ func startListenerFunc(t *testing.T, srv *scalesettest.Server, capacity scaleset
 func startListener(t *testing.T, srv *scalesettest.Server, capacity scalesetlistener.CapacityFunc, prov *recordingProvisioner, m scalesetlistener.MetricsRecorder, opts ...func(*scalesetlistener.Config)) (*scalesetlistener.Listener, int) {
 	t.Helper()
 	l, ssID := startListenerFunc(t, srv, capacity, prov.provision, m, opts...)
-	prov.scaleSetID = ssID
+	prov.setScaleSetID(ssID)
 	return l, ssID
 }
 
