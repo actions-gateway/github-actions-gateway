@@ -916,6 +916,16 @@ this drain counts worker pods and a restart deletes none of them; the reaper
 that clears a stuck pod already runs on the live AGC, on deadlines measured from
 the pod, so a fresh one reaps no sooner. Delete the pods instead.
 
+Since `v1.3.0` a listener holding assignments GitHub has dropped gives them up on
+its own, roughly two to three minutes after the last one goes (Q553) — so a drain
+that used to livelock behind re-provisioned phantom workers now converges without
+a hand-deleted gateway. Two caveats: the give-up needs GitHub to be holding
+**zero** assignments for the set, so a tenant still running real work keeps its
+dangling ones until it idles; and it is per-process, so bouncing the AGC mid-drain
+restarts the clock. Watch it land on
+`actions_gateway_scaleset_jobs_abandoned_total` and the AGC's `giving up on
+assigned jobs` log line.
+
 `SKIP_DRAIN=1` is the deliberate override — reach for it when the AGC is already
 down, since an AGC that cannot reap will never let the drain finish.
 
