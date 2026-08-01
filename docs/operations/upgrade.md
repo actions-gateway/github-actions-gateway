@@ -32,6 +32,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [AGC Deployment renamed from actions-gateway-agc to actions-gateway-controller](#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller)
   - [GMC manager NetworkPolicy is now enabled by default](#gmc-manager-networkpolicy-is-now-enabled-by-default)
 - [GMC Upgrade](#gmc-upgrade)
+  - [A GMC restart costs tenants nothing; a GMC upgrade rolls every one of them](#a-gmc-restart-costs-tenants-nothing-a-gmc-upgrade-rolls-every-one-of-them)
   - [GMC install and upgrade via Helm (recommended)](#gmc-install-and-upgrade-via-helm-recommended)
   - [GMC post-upgrade validation](#gmc-post-upgrade-validation)
   - [GMC rollback](#gmc-rollback)
@@ -835,6 +836,25 @@ The active replica releases its leader lease on graceful shutdown (`--leader-ele
 
 The invariant `lease-duration > renew-deadline > retry-period × 1.2` is validated at startup; a misordered set makes the GMC exit immediately with a message naming the offending flags.
 
+### A GMC restart costs tenants nothing; a GMC upgrade rolls every one of them
+
+The GMC renders each tenant's AGC `Deployment` from its own configuration, so what a GMC replacement costs tenants turns entirely on whether that configuration changed.
+
+**Restart, failover, eviction, node drain — no tenant impact.** A replacement leader re-derives every AGC pod template identically and writes nothing, so no new `pod-template-hash` and no new `ReplicaSet` appear and no AGC pod is replaced. This holds for any restart of an unchanged GMC.
+
+**Upgrade — every tenant's AGC rolls, all at once.** These GMC-side values are part of the AGC pod template, and a release normally changes at least the first two:
+
+| Value in the AGC pod template | Where the GMC gets it |
+|---|---|
+| AGC container image | `AGC_IMAGE` on the GMC pod (chart value `agc.image`) |
+| `GITHUB_RUNNER_VERSION` | compiled into the GMC binary |
+| `WRAPPER_IMAGE`, `WRAPPER_DELIVERY` | GMC pod environment |
+| `AGC_EXTRA_*` (testing only) | GMC pod environment, behind `--allow-agc-extra-env` |
+
+Every tenant whose template changes rolls, so a GMC upgrade fans out into one [AGC drain window](#agc-upgrade) per tenant, concurrently and unstaged — dropped long polls and abandoned RenewJob loops across the whole fleet rather than in one namespace. Schedule a GMC upgrade in the low-traffic window you would give an AGC upgrade, and validate with the [AGC post-upgrade checks](#agc-upgrade) as well as the GMC ones.
+
+**Do not hand-edit a GMC-managed AGC `Deployment`.** The reconciler watches the Deployments it owns and replaces the whole spec from its own render, so a `kubectl set image` — or any other direct edit — is reverted within seconds. `kubectl rollout restart` is the one exception, and its history is a trap of its own: see [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](troubleshooting.md#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts).
+
 ### GMC install and upgrade via Helm (recommended)
 
 The shipped install artifact is the **`actions-gateway` Helm chart**, published and cosign-signed to the GHCR OCI registry (`oci://ghcr.io/actions-gateway/charts/actions-gateway`); the [`charts/actions-gateway/`](../../charts/actions-gateway/README.md) source path is the dev/CI copy of the same chart. The chart is the **sole** install/upgrade vehicle — there is no kustomize path. For dev/CI iteration `make deploy` wraps `helm install` of the local chart with floating image tags.
@@ -1122,14 +1142,14 @@ The AGC runs `replicas: 1`. **Every AGC upgrade incurs a brief drain window** �
 
 ### Per-Tenant Upgrade Procedure
 
-Upgrade each tenant's AGC one at a time. If tenants are independent, you may parallelize across namespaces.
+The image change itself is fleet-wide (Step 2), so the per-tenant work is the drain that precedes it and the validation that follows: run Step 1 for each tenant you want drained cleanly, then Steps 3–5 per namespace.
 
 **Step 1: Drain the AGC before upgrading (optional, reduces blackout window)**
 
 The AGC's SIGTERM handler calls `DELETE /sessions` for all open sessions before exiting, causing GitHub to immediately re-queue unacquired jobs rather than waiting for session TTL. The shutdown **blocks until every listener goroutine has issued its session DELETE** — the process does not exit while sessions are still open. To rely on this:
 
 - Ensure `terminationGracePeriodSeconds` on the AGC Deployment is ≥ 30 seconds (the GMC stamps the AGC Deployment with 60s by default). The session drain is bounded at 10 seconds and runs concurrently across RunnerGroups, so it does not scale with listener count.
-- Do not use `kubectl delete pod` directly — it sends SIGKILL without a grace period. Use `kubectl rollout restart` or `kubectl set image` instead.
+- Do not use `kubectl delete pod` directly — it sends SIGKILL without a grace period. Use `kubectl rollout restart`, which the reconciler honours on a managed Deployment.
 
 If a session cannot be deleted (the broker is unreachable during the drain), the AGC retries within its budget and then logs a Warn naming the session before exiting:
 
@@ -1141,13 +1161,9 @@ That session's runner stays online on GitHub until the server-side session TTL e
 
 **Step 2: Update the AGC image**
 
-The GMC manages the AGC Deployment. To update the AGC image, update the GMC's configuration (Helm values or Kustomize overlay) with the new AGC image tag and re-deploy the GMC, which will then roll each tenant's AGC Deployment. Alternatively, patch per-namespace:
+The GMC manages the AGC Deployment, so the AGC image is a GMC-level setting, not a per-namespace one: update the GMC's Helm values with the new AGC image and upgrade the GMC, which then rolls **every** tenant's AGC Deployment at once — see [A GMC restart costs tenants nothing; a GMC upgrade rolls every one of them](#a-gmc-restart-costs-tenants-nothing-a-gmc-upgrade-rolls-every-one-of-them) before you schedule it.
 
-```sh
-kubectl set image deploy/actions-gateway-controller \
-  agc=<registry>/agc:<new-tag> \
-  -n <namespace>
-```
+There is no per-namespace alternative. `kubectl set image deploy/actions-gateway-controller -n <namespace>` appears to work and is reverted on the next reconcile, because the reconciler replaces the managed Deployment's whole spec from its own render.
 
 **Step 3: Watch the rollout**
 
@@ -1171,8 +1187,13 @@ After the rollout, verify that jobs active during the restart have either comple
 
 ### AGC rollback
 
+Roll the AGC image back where the GMC reads it, not on the Deployment — `kubectl rollout undo` on a managed AGC Deployment is reverted on the next reconcile, same as `kubectl set image`:
+
 ```sh
-kubectl rollout undo deploy/actions-gateway-controller -n <namespace>
+# Re-run the GMC upgrade pinning the previous AGC digest, then watch the AGCs converge
+helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version <chart-version> --namespace gmc-system --reset-then-reuse-values \
+  --set agc.image.digest=sha256:<previous-agc>
 kubectl rollout status deploy/actions-gateway-controller -n <namespace>
 ```
 

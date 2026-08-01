@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"slices"
 	"testing"
 	"time"
 
@@ -318,6 +319,17 @@ func TestResolveImages(t *testing.T) {
 		}
 		if got["WRAPPER_IMAGE"] != env["WRAPPER_IMAGE"] || got["WRAPPER_DELIVERY"] != "imagevolume" {
 			t.Errorf("WRAPPER_IMAGE/WRAPPER_DELIVERY not forwarded: %v", got)
+		}
+		// Order is load-bearing: the slice lands in the AGC pod template (Q587).
+		// environ() hands FOO over before BAZ; the sort must undo that, leaving
+		// WRAPPER_* after the AGC_EXTRA_* block.
+		var names []string
+		for _, e := range img.agcExtraEnv {
+			names = append(names, e.Name)
+		}
+		want := []string{"BAZ", "FOO", "WRAPPER_IMAGE", "WRAPPER_DELIVERY"}
+		if !slices.Equal(names, want) {
+			t.Errorf("AGC_EXTRA_* forwarding order is %v, want %v", names, want)
 		}
 	})
 
