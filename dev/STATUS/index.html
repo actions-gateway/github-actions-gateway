@@ -2719,6 +2719,14 @@
 <td>The <code>modules</code> filter watches <code>**/go.mod</code>/<code>go.sum</code>/<code>go.work</code> only, so a new import that untidies them never triggers the gate. #1034 merged untidy that way; the next PR to touch a go.mod paid for it. Add <code>**/*.go</code>, or gate on the tidy run itself.</td>
 </tr>
 <tr>
+<td><a id="Q579"></a>Q579</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml">Nothing lints <code>.github/workflows/**</code>, and three docs claim <code>actionlint</code> does</a></td>
+<td><code>infra</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Three docs credit <code>actionlint</code>: <code>release.md:540</code> with keeping SHA-pinned <code>uses:</code> clean, <code>Makefile:446</code> and <code>testing.md:183</code> with inline <code>run:</code> blocks. No workflow runs it — the <code>lint</code> job is golangci-lint, so a workflow-only PR ships unlinted.</td>
+</tr>
+<tr>
 <td><a id="Q563"></a>Q563</td>
 <td><a href="../development/website/#what-belongs-in-nav">Nothing gates a published page that lands in no nav section</a></td>
 <td><code>docs</code> <code>infra</code> <code>retro</code></td>
