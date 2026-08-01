@@ -1755,6 +1755,12 @@ gh attestation verify oci://ghcr.io/actions-gateway/gmc:<tag-or-digest> \
   --signer-workflow actions-gateway/github-actions-gateway/.github/workflows/publish.yml
 ```
 
+> **Scripting this check?** `gh attestation verify` prints its summary only to a
+> terminal. Redirected or captured it emits nothing while still exiting 0, so a
+> passing verification is indistinguishable from one that checked nothing. In a
+> pipeline, add `--format json` and assert on the result — `.[0].verificationResult.signature.certificate.buildSignerURI`
+> must name this repo's `publish.yml` at a `refs/tags/v*` ref.
+
 `cosign` verifies the same attestation against the keyless identity, matching the
 signature/SBOM commands above (the predicate type is the SLSA provenance v1
 in-toto type):

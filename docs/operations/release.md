@@ -468,6 +468,24 @@ gh attestation verify oci://ghcr.io/actions-gateway/gmc:vX.Y.Z \
   --signer-workflow actions-gateway/github-actions-gateway/.github/workflows/publish.yml
 ```
 
+> **Exit 0 alone does not prove this ran.** `gh attestation verify` writes its
+> summary only to a terminal — redirected to a file or captured in a variable it
+> prints **nothing**, so a real verification and a silent no-op look identical.
+> When you are not reading the output live, ask for something assertable and
+> check it:
+>
+> ```bash
+> gh attestation verify oci://ghcr.io/actions-gateway/gmc:vX.Y.Z \
+>   --repo actions-gateway/github-actions-gateway \
+>   --signer-workflow actions-gateway/github-actions-gateway/.github/workflows/publish.yml \
+>   --format json \
+>   | jq -r '.[0].verificationResult.signature.certificate
+>            | "\(.buildSignerURI)\n\(.sourceRepositoryDigest)"'
+> ```
+>
+> The workflow URI must end `publish.yml@refs/tags/vX.Y.Z` for *this* tag, and
+> the digest must be the commit you tagged. That is the check — not the status.
+
 The equivalent cosign command and the predicate-inspection one-liner are in
 [security-operations.md § Verify build provenance](security-operations.md#verify-build-provenance).
 A provenance verification failure is the same **stop-ship** signal as a
