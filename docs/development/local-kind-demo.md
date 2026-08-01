@@ -172,5 +172,5 @@ make e2e-clean      # deletes the kind cluster and the local registry
 The animated recording embedded on the [demo page](../demo.md) is a hand-authored
 [asciinema](https://asciinema.org/) cast (v2) assembled from the real command
 outputs of a run of these steps, then rendered to a self-contained animated SVG.
-The cast and its generator live in [`docs/assets/`](../assets/) — see
+The cast and its generator live in [`docs/assets/`](../assets/README.md) — see
 [docs/assets/README.md](../assets/README.md) for how to regenerate them.

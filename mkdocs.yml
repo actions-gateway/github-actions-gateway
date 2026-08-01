@@ -118,6 +118,22 @@ hooks:
   - hooks/release_version.py
   - hooks/source_links.py
 
+# Site-side link gate (Q560). scripts/check-doc-links.sh resolves links the way
+# github.com does; MkDocs resolves them differently, so a link can pass that gate
+# and 404 here — heading-slug dedup suffixes (`_1` here, `-1` on GitHub), a bare
+# `dir/` target that GitHub renders as the directory's README, an `<angled>`
+# placeholder that Python-Markdown strips as a tag. These ship as INFO by
+# default, invisible under a green build; raised to warnings they
+# fail `mkdocs build --strict` in pages.yml. `absolute_links` and the `nav` keys
+# keep their defaults — a link to a page excluded from the built scope stays INFO,
+# which is what the per-version publication scope requires. See
+# docs/development/website.md § The two link gates.
+validation:
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
+
 plugins:
   - search
 

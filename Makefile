@@ -366,8 +366,10 @@ compat-report: ## Regenerate docs/development/broker-compatibility.md from the b
 docs-serve: ## Live-reload the docs/marketing site at http://localhost:8000 (isolated venv)
 	scripts/docs-preview.sh serve
 
+# Builds both publication scopes under --strict, so mkdocs' link/anchor
+# validation (Q560) gives the same verdict here as pages.yml's PR gate.
 .PHONY: docs-build
-docs-build: ## Build the static docs/marketing site into site/ (isolated venv)
+docs-build: ## Build + strict-validate both docs site scopes (site/, site-dev/)
 	scripts/docs-preview.sh build
 
 # The heavy phases (test: one workspace-wide `go test`; lint: a per-module

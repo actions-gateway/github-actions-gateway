@@ -163,9 +163,12 @@ the code moves. Keep them current:
 - **STATUS.md gets its own commit.** It is high-contention; isolating its changes keeps
   rebases trivial. Queue Notes have a hard 250-char cap (lint-enforced). Details:
   [maintaining-backlog.md](maintaining-backlog.md).
-- **Links and anchors are checked.** `make doc-links` (in `make check`) fails on broken
-  cross-file links and heading anchors across the docs, slug-aware. External URLs are out
-  of scope — eyeball those.
+- **Links and anchors are checked, twice.** `make doc-links` (in `make check`) fails on
+  broken cross-file links and heading anchors as **github.com** resolves them;
+  `make docs-build` re-checks them as the **published site** does. The two sluggers
+  disagree, so a link needs both verdicts — write headings and links that survive each
+  per [website.md § The two link gates](website.md#the-two-link-gates). External URLs are
+  out of scope for both — eyeball those.
 
 ## Measuring doc quality
 
@@ -177,7 +180,8 @@ exists today, and what's proposed:
 | `make plan-index-check` — every plan doc is indexed/archived | 2 | Wired (`make check`). |
 | STATUS.md lint — Queue shape, 250-char Note cap | 1 | Wired (`make check`). |
 | Per-change doc updates via the [doc-update-matrix](doc-update-matrix.md) | 1 | Convention, enforced in review (PR self-check). |
-| `make doc-links` — broken cross-file links + heading anchors (slug-aware, Q52) | 1, 2 | Wired (`make check`). The automated guard against link rot. |
+| `make doc-links` — broken cross-file links + heading anchors, GitHub slugs (Q52) | 1, 2 | Wired (`make check`). The automated guard against link rot. |
+| `make docs-build` — the same links as the published site resolves them (Q560) | 1, 2 | Wired (`pages.yml` PR gate). Catches the site-only 404s `doc-links` cannot see. |
 | Periodic docs-vs-code drift audit | 1 | **Proposed** — a recurring backstop for what the per-change rule misses. |
 | Reader questions (issues, support threads) logged as coverage gaps | 3 | **Proposed** — turns real confusion into Queue items. |
 

@@ -4,7 +4,7 @@
 #
 # Usage:
 #   scripts/docs-preview.sh serve   # live-reload preview at http://localhost:8000
-#   scripts/docs-preview.sh build   # one-shot static build into site/
+#   scripts/docs-preview.sh build   # strict build of both scopes: site/, site-dev/
 #
 # The venv lives in .venv-docs/ (gitignored) and is reused across runs; it is
 # (re)provisioned only when requirements-docs.txt changes, so the toolchain
@@ -65,11 +65,20 @@ main() {
   ensure_venv
 
   # `serve` honors $PORT (default 8000) so parallel previews don't collide and
-  # tooling can inject an auto-assigned port; `build` takes no address.
+  # tooling can inject an auto-assigned port; `build` takes no address. serve
+  # stays non-strict: aborting the live-reload loop on a half-written link would
+  # make editing unusable.
   if [[ "${cmd}" == "serve" ]]; then
     exec "${venv_dir}/bin/mkdocs" serve --dev-addr "127.0.0.1:${PORT:-8000}"
   fi
-  exec "${venv_dir}/bin/mkdocs" build
+
+  # --strict fails on the link/anchor warnings mkdocs.yml's `validation` block
+  # raises (Q560). Both publication scopes are built, matching pages.yml's PR
+  # gate: the release scope excludes docs/plan/ and docs/development/, so a
+  # break in those pages only ever surfaces in the dev scope.
+  "${venv_dir}/bin/mkdocs" build --strict
+  MKDOCS_EXCLUDE_DOCS=/README.md \
+    "${venv_dir}/bin/mkdocs" build --strict --site-dir site-dev
 }
 
 main "$@"
