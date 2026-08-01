@@ -80,7 +80,7 @@ NARROW_FILTERS=(
 	'unit-test.yml:status'            # docs/STATUS.md and its linter
 	'unit-test.yml:scripts'           # the scripts/ + hooks/ trees shellcheck and scripts-test gate
 	'unit-test.yml:vendor'            # only what determines committed vendor/ contents
-	'unit-test.yml:modules'           # only what determines the tidy-canonical go.mod/go.sum shape
+	'unit-test.yml:modules'           # the module files, the import graph (Q545), and the tidy scripts
 	'unit-test.yml:workflows'         # the workflow filters this gate itself lints
 	'unit-test.yml:claude_usage'      # the claude-usage/ Python module and its stdlib-only suite
 	'security-scan.yml:chart'         # the Helm chart the Polaris posture scan renders

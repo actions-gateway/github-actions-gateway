@@ -129,14 +129,22 @@ jobs:
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
             # Tidiness gate scope (Q94): anything that determines the tidy-canonical
-            # shape of the workspace module files. Narrower than `vendor` — a
-            # vendor/ source edit can't change what `go mod tidy` produces, so the
-            # vendored trees are deliberately excluded here.
+            # shape of the workspace module files — the module files, the import
+            # graph, and the tidy flow itself.
             modules:
               - '**/go.mod'
               - '**/go.sum'
               - 'go.work'
               - 'go.work.sum'
+              # The import graph is an input too (Q545). Promoting a dependency from
+              # indirect to direct — or dropping its last import — untidies a go.mod
+              # with no module file in the diff, so a .go-only PR skipped this gate
+              # entirely. #890 merged untidy that way; tidy-check then failed on main
+              # and every branch cut from it until #907 re-tidied six days later. A
+              # glob rather than a per-module list so a new module can't be missed;
+              # that it also matches the vendored trees is harmless, since a vendor
+              # sync never lands without the go.mod change that drove it.
+              - '**/*.go'
               - 'scripts/go/go-tidy-check.sh'
               - 'scripts/go/go-work-tidy.sh'
               - 'Makefile'
