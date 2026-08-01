@@ -30,10 +30,14 @@ Two decisions the implementation changed from the plan above:
   diffing the sets is immune to that, and it distinguishes a row *parked* in
   Deferred from one delivered, which a subject verb cannot. The removing commit's
   subject then labels the row, which is more useful than the verb would have been.
-- **A `!` commit does not auto-promote the suggested bump to major.** Most
-  breaking markers here land on a pre-GA CRD version, where the API version
-  carries the break and the product's major does not move. The report prints the
-  breaking subjects and asks for judgement instead.
+- **A `!` commit does not auto-promote the suggested bump to major.** The
+  operative question is not which API version the change landed on but whether
+  the last stable tag ever *published* the surface it changed: all three
+  `!`-marked commits between `v1.2.0` and 2026-07-31 renamed or reshaped fields
+  absent from every API tree at `v1.2.0`, so none of them broke a contract. The
+  report prints the breaking subjects and asks for that judgement, and
+  [api-review.md](../../development/api-review.md#ask-it-in-this-order-at-pr-review)
+  moves the question to PR review, where the answer is still an edit.
 
 ## The gap
 

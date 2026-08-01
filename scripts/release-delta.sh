@@ -190,12 +190,11 @@ fixes="$(count_of fix)"
 perfs="$(count_of perf)"
 breaking_count="$(printf '%s' "$breaking" | grep -c '' || true)"
 
-# The bump is read from feat/fix/perf only. A `!` commit does NOT auto-promote
-# to major here: most of this repo's breaking markers land on a pre-GA CRD
-# version, where the API's own version carries the break and the product's major
-# does not move (v2.0.0 is reserved for the v1alpha1/v2alpha1/classic removal).
-# Telling those apart is judgement, so the subjects are printed and the caller
-# makes the call.
+# The bump is read from feat/fix/perf only. A `!` commit does NOT auto-promote to
+# major: most breaking markers here land on surface FROM never published, where
+# the change broke nothing and cost an edit. Only a commit against already-
+# published surface moves the major, and telling those apart needs the field-level
+# question in api-review.md, so the subjects are printed and the caller decides.
 if ((feats > 0)); then
 	bump="minor"
 elif ((fixes > 0 || perfs > 0)); then
@@ -236,7 +235,8 @@ none) echo "Semver signal: no feat/fix/perf commits — nothing user-visible has
 *) echo "Semver signal: $bump${suggested:+ (${suggested})} — $feats feat, $fixes fix, $perfs perf." ;;
 esac
 if ((breaking_count > 0)); then
-	echo "  $breaking_count breaking-marked commit(s) above — a break confined to a pre-GA CRD"
-	echo "  version is carried by that version, not by the product's major. Read them."
+	echo "  $breaking_count breaking-marked commit(s) above. Of each, ask whether $from ever"
+	echo "  published the surface it changed — a field added since then broke nothing."
+	echo "  scripts/api-surface-since.sh $from lists exactly which those are."
 fi
 echo "Whether that is enough to cut: docs/operations/release.md § When to cut."
