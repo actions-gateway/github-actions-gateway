@@ -48,6 +48,14 @@ type Metrics struct {
 	// Every reason is published on every update, zero included, so a series never
 	// freezes at its last non-zero reading.
 	JobsDeferred *prometheus.GaugeVec
+	// JobsAbandonedTotal counts assignments the listener gave up on because the scale
+	// set stopped counting them as assigned — GitHub no longer holds the job, and no
+	// JobCompleted was ever delivered for it (Q553). It is the counterpart of
+	// JobsDeferred: the gauge is work still waiting, this is work that will never run.
+	// A non-zero rate means workflow runs are being dropped, so it is alertable on its
+	// own, and it is what distinguishes a deferred set that cleared because the jobs ran
+	// from one that cleared because they evaporated.
+	JobsAbandonedTotal *prometheus.CounterVec
 }
 
 // NewMetrics creates the scale-set tier's metrics and registers them with reg, which
@@ -98,6 +106,11 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "actions_gateway_scaleset_jobs_deferred",
 			Help: "Assigned jobs held for a later re-offer, by reason (name_conflict: the runner name will not register; ceiling: the set is at its worker ceiling); each is a queued workflow run with no worker (sets the JobProvisionStalled condition).",
 		}, []string{"namespace", "runner_set", "reason"}),
+
+		JobsAbandonedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_scaleset_jobs_abandoned_total",
+			Help: "Total assigned jobs the listener gave up on because the scale set no longer counts them as assigned (GitHub dropped the assignment without reporting the job complete); each is a workflow run that will never run.",
+		}, []string{"namespace", "runner_set"}),
 	}
 	reg.MustRegister(
 		m.JobsAssignedTotal,
@@ -107,6 +120,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		m.AdvertisedCapacity,
 		m.CapacityWithheld,
 		m.JobsDeferred,
+		m.JobsAbandonedTotal,
 	)
 	return m
 }
@@ -187,4 +201,8 @@ func (r *recorder) SetDeferredJobs(byReason map[string]int) {
 	for reason, n := range byReason {
 		r.m.JobsDeferred.WithLabelValues(r.namespace, r.runnerSet, reason).Set(float64(n))
 	}
+}
+
+func (r *recorder) IncJobsAbandoned(n int) {
+	r.m.JobsAbandonedTotal.WithLabelValues(r.namespace, r.runnerSet).Add(float64(n))
 }

@@ -1533,7 +1533,7 @@ A record whose worker pod still exists is never swept, in any phase — a `Pendi
 
 > **Before `v1.3.0`, only mechanism 2 existed**, and it clears a record only if the REST name filter resolves it. Records it could not resolve, and every suffixed retry name, accumulated unbounded — 22 stale records under one scale set wedged the `v1.3.0-rc.2` validation window this way. If you see `scaleset: runner name is taken but no record resolves under it` in the AGC logs, mechanism 2 is failing and the sweep is what will collect the leftovers. On such a version, use the manual cleanup below.
 
-**If the conflict does not clear.** A name no attempt can register — a live runner holding it, or a record the AGC's credentials cannot delete — leaves that one job unprovisionable. It is not dropped: the listener holds it and re-offers it on a backoff (30s, doubling to 5 minutes) until it provisions or GitHub reports the job complete, so the run still starts whenever the conflict clears. While a job is held, the `RunnerSet` reports the advisory condition `JobProvisionStalled=True/RunnerNameConflict` naming the job ids, the `actions_gateway_scaleset_jobs_deferred{reason="name_conflict"}` gauge is `> 0`, and a `JobProvisionStalled` Warning Event is recorded once per episode. Other jobs in the set are unaffected.
+**If the conflict does not clear.** A name no attempt can register — a live runner holding it, or a record the AGC's credentials cannot delete — leaves that one job unprovisionable. It is not dropped: the listener holds it and re-offers it on a backoff (30s, doubling to 5 minutes) until it provisions, so the run still starts whenever the conflict clears. The hold ends without running the job only if GitHub reports the job complete, or if the scale set stops counting the assignment at all — see [Scale-Set Assignments Abandoned](#scale-set-assignments-abandoned-assignmentabandoned). While a job is held, the `RunnerSet` reports the advisory condition `JobProvisionStalled=True/RunnerNameConflict` naming the job ids, the `actions_gateway_scaleset_jobs_deferred{reason="name_conflict"}` gauge is `> 0`, and a `JobProvisionStalled` Warning Event is recorded once per episode. Other jobs in the set are unaffected.
 
 ```sh
 kubectl get runnerset <name> -n <namespace> \
@@ -1571,6 +1571,28 @@ kubectl get runnerset <name> -n <namespace> \
 **When to act.** Only when the wait itself is the problem. Either raise the ceiling (`spec.maxWorkers` or the top `priorityTiers` threshold) if the cluster has room, or treat it as the signal that the tenant needs more capacity. Check first that the ceiling is the real constraint and not a downstream one — `WorkerQuotaExceeded` (namespace `ResourceQuota`) and `WorkersUnschedulable` (nothing can place the pod) are separate conditions with their own sections.
 
 **What it should NOT look like.** A steady stream of `generate-jitconfig` and runner-deregister calls against GitHub while the set sits at its ceiling. Before `v1.3.0`, a ceiling-blocked job was read as a transient failure: the queue message was redelivered immediately, so the listener retried it several times a second and minted (then deregistered) a runner registration on every pass — 704 deregister calls for a single job during one 14-minute window. If you see that on an older version, the fix is to upgrade; the ceiling wait itself was never the bug.
+
+---
+
+## Scale-Set Assignments Abandoned (AssignmentAbandoned)
+
+**Symptom.** A ScaleSet `RunnerSet` records an `AssignmentAbandoned` Warning Event, `actions_gateway_scaleset_jobs_abandoned_total` steps up, and `JobProvisionStalled` clears at the same moment. The AGC logs `scaleset: giving up on assigned jobs the scale set no longer holds` naming the job ids.
+
+**What happened.** The listener was holding one or more assignments it could not provision — a runner name that would not register, or a full worker ceiling — and the scale set's server-authoritative statistics then reported **no assigned jobs at all**, twice in a row. A held job is by definition assigned-and-not-complete, so GitHub counts it; a count of zero means GitHub is no longer holding any of them. Rather than keep re-offering assignments that no longer exist, the listener gives them up.
+
+**Each abandoned job is a workflow run that will not run.** GitHub had already stopped waiting for it, so this reports the loss rather than causing it — but the run is not going to start on its own. Re-run it from the Actions UI or `gh run rerun <run-id>`.
+
+**When this is expected.** A burst around a mass cancellation, a deleted run, or a `stop.sh` drain — GitHub drops the assignments and, for a job it never started, does not always send a terminal `JobCompleted`. Before `v1.3.0`, nothing ended those holds: the listener re-offered them forever and provisioned a worker for every re-offer that got through, which is what stopped a drain converging (`stop.sh` waits on in-flight worker pods, and the listener kept making them). Fifteen such assignments wedged the `ci` tenant on the `v1.3.0-rc.3` gate and cleared only by hand.
+
+**When to investigate.** A sustained rate with no cancellations to explain it. That points at assignments being lost upstream rather than completed — check for a mismatch between `…_jobs_assigned_total` and `…_jobs_completed_total` over the same window, and check the run service for jobs being concluded without a queue message.
+
+```sh
+# Which jobs were given up on, and when
+kubectl logs -n <namespace> deploy/<gateway>-agc \
+  | grep 'giving up on assigned jobs'
+```
+
+**Convergence takes a couple of minutes.** The check reads the statistics at most once a minute and needs two consecutive zero readings, so expect a stalled set to clear roughly two to three minutes after GitHub drops the last assignment — well inside `stop.sh`'s default `DRAIN_TIMEOUT`. The wait is deliberate: a count is server state a fresh assignment may briefly lead, and a single reading could give up on a job GitHub was still waiting to have run.
 
 ---
 
@@ -1636,6 +1658,7 @@ few seconds; the metric is the real-time signal.
 | `EvictionRerunFailed` | Warning | A disrupted run's automatic re-run was never accepted by GitHub — refused past the 15-minute re-run window, or a terminal API error (Q503). The budget slot is spent; the named run needs a manual re-run. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |
 | `JobProvisionStalled` | Warning | A scale-set job cannot register its runner name (`generate-jitconfig` 409 that no retry cleared), so no worker can be created for it. The job is held and re-offered on a backoff. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
 | `WorkerCeilingReached` | Normal | Scale-set jobs are waiting because the set is already running as many workers as its spec allows; they are re-offered until capacity frees. Expected backpressure, hence Normal. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Jobs Waiting at the Worker Ceiling](#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |
+| `AssignmentAbandoned` | Warning | The listener gave up on assigned jobs it was holding, because the scale set reported no assigned jobs at all on two consecutive readings — GitHub is no longer holding them, and never reported them complete. Each is a workflow run that will not run. Clears `JobProvisionStalled` and steps `…_jobs_abandoned_total`. | [Scale-Set Assignments Abandoned](#scale-set-assignments-abandoned-assignmentabandoned) |
 
 **Diagnostics.**
 

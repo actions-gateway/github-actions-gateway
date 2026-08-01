@@ -56,8 +56,14 @@ const (
 	jobAvailable                 // offered as JobAvailable (GHES acquire flow)
 	jobAssigned                  // assigned to the scale set (auto-assign or post-acquire)
 	jobRunning                   // a runner reported JobStarted
-	jobCompleted                 // terminal
+	jobCompleted                 // terminal, with a JobCompleted delivered
+	jobDropped                   // terminal, with nothing delivered (see DropAssignedJob)
 )
+
+// terminal reports whether a job has ended, however it ended. The two terminal states
+// differ only in what the client was told, which is exactly the distinction a test of
+// the client's dangling-assignment handling needs.
+func (s jobState) terminal() bool { return s == jobCompleted || s == jobDropped }
 
 // job is one unit of work queued on a scale set.
 type job struct {
@@ -619,8 +625,34 @@ func (s *Stub) CompleteAssignedJob(scaleSetID int, jobID, result string) bool {
 		return false
 	}
 	for _, j := range ss.jobs {
-		if j.jobID == jobID && j.state != jobCompleted {
+		if j.jobID == jobID && !j.state.terminal() {
 			s.completeJobLocked(ss, j, result)
+			s.notifyLocked()
+			return true
+		}
+	}
+	return false
+}
+
+// DropAssignedJob ends an assignment WITHOUT delivering a JobCompleted — the way the
+// backend loses a job a client is still holding. The statistics stop counting it and
+// nothing else is said, so a client that waits for a completion waits forever (Q553).
+//
+// This is not a hypothetical shape the fake invented: a scale set whose statistics
+// report zero assigned jobs while the AGC still held fifteen is what the v1.3.0-rc.3
+// dogfood gate recorded. Returns false if no non-terminal job with that id exists.
+func (s *Stub) DropAssignedJob(scaleSetID int, jobID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ss := s.scaleSets[scaleSetID]
+	if ss == nil {
+		return false
+	}
+	for _, j := range ss.jobs {
+		if j.jobID == jobID && !j.state.terminal() {
+			j.state = jobDropped
+			// No message, but the parked poll must still wake: the statistics it
+			// serves have changed.
 			s.notifyLocked()
 			return true
 		}
@@ -873,7 +905,7 @@ func (s *Stub) handleCancelRun(w http.ResponseWriter, r *http.Request) {
 	cancelled := 0
 	for _, ss := range s.scaleSets {
 		for _, j := range ss.jobs {
-			if j.runID == runID && j.state != jobCompleted {
+			if j.runID == runID && !j.state.terminal() {
 				s.completeJobLocked(ss, j, "canceled")
 				cancelled++
 			}
@@ -1565,7 +1597,7 @@ func (ss *scaleSet) stats() *scaleset.RunnerScaleSetStatistic {
 		case jobRunning:
 			assigned++
 			running++
-		case jobCompleted:
+		case jobCompleted, jobDropped:
 		}
 	}
 	return &scaleset.RunnerScaleSetStatistic{
