@@ -2762,11 +2762,11 @@
 </tr>
 <tr>
 <td><a id="Q543"></a>Q543</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md">Re-check <code>origin/main</code> freshness before opening a PR</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md">Re-check <code>origin/main</code> freshness before opening or merging a PR</a></td>
 <td><code>docs</code> <code>infra</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>The freshness check is mandated at session start only. Q506 ran long and main moved 7 commits; caught by chance, costing a late rebase.</td>
+<td>Mandated at session start only; Q506 cost a late rebase. Concurrent PRs also merge individually-green and jointly-red — Q560 raised link validation while Q558 added a link tripping it, reddening main.</td>
 </tr>
 <tr>
 <td><a id="Q532"></a>Q532</td>
