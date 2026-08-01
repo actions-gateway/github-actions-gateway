@@ -8,7 +8,7 @@ Use the `model-advisor` skill to assess the right model and thinking level at se
 
 ## Development philosophy
 
-Build the right thing AND build it well. Before writing any code, state the goal in one sentence and the approach in two or three. If the goal is unclear, ask one focused question rather than guessing. **Verify any technical claim before putting it in that question** — the user decides on it and cannot check it (Q561 offered an option describing `predicate-quantifier: every` with inverted semantics; the approved approach survived only by luck).
+Build the right thing AND build it well. Before writing any code, state the goal in one sentence and the approach in two or three. If the goal is unclear, ask one focused question rather than guessing. **Verify any technical claim before putting it to the user — a recommended approach is itself a claim** — they decide on it and cannot check it (Q561 offered an option describing `predicate-quantifier: every` with inverted semantics; the approved approach survived only by luck. Q1085 recommended a CSS fix whose facts were all true but which the unmeasured layout could not accommodate at any viewport width — approved, built, then reworked).
 
 Make the smallest change that achieves the goal. If you notice problems outside the current task's scope, flag them rather than fixing them:
 - New near-term or long-term work → add to the Queue in `docs/STATUS.md` in priority order.
