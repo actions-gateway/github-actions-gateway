@@ -2637,11 +2637,25 @@ The prose below carries the <em>why</em> of each; this table is the state.</p>
 <td>rides</td>
 <td>⤴ punted to <code>v2.0.0</code> — <a href="#explicitly-out-of-scope">Explicitly out of scope</a></td>
 </tr>
+<tr>
+<td>—</td>
+<td>RC validated on dogfood (<a href="#a-headline-feature-complete-satisfied">§ A</a>)</td>
+<td>gates</td>
+<td>🔲 rc.3: gate aborted at leg 1, no verdict</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Cut condition: zero open <code>1.3-gate</code> rows</strong> (<code>grep '1.3-gate' docs/STATUS.md</code> —
-currently none) <strong>plus the release-candidate dogfood validation</strong>, which is
-deliberately not a Queue row because it can only run against a published RC.</p>
+currently none) <strong>plus the release-candidate dogfood validation</strong>, the ledger's
+last row. It has no Q-ID because it cannot be a Queue item — it only runs against
+a published RC — but it carries a row so its state is visible rather than buried
+in prose.</p>
+<p><strong>No RC has produced a verdict yet.</strong> rc.1 aborted when the gate's then-repo-wide
+e2e routing caught concurrent CI; rc.2 reached the live API and returned Q550 and
+Q551 instead of a result; rc.3 aborted at <code>start.sh</code>'s AGC wait, which raced every
+rollout and reported a healthy AGC as timed out (fixed in #1090). Each was
+diagnosed on its own, which is how three consecutive misses went unremarked — the
+row exists so the fourth does not.</p>
 <h2 id="what-13-means">What 1.3 means<a class="headerlink" href="#what-13-means" title="Permanent link">&para;</a></h2>
 <p>Two things, one of which only a release can deliver.</p>
 <p><strong>The headline is worker right-sizing.</strong> Per-<code>RunnerSet</code> usage observability,
