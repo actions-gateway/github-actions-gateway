@@ -65,6 +65,11 @@ Delivering a **distinct, stable, per-tenant** source IP at GitHub — the proper
 
 The GMC creates three `NetworkPolicy` objects per tenant in the tenant namespace. The split (over a single combined policy) closes M-12 — worker pods inherit egress to the proxy and DNS only, not the Kubernetes API server. Only the AGC Deployment has API-server egress.
 
+The policies below are the v1 (`actions-gateway.github.com`) shape, whose names and selectors are fixed because v1 permits one gateway and one proxy pool per namespace. **v2 emits the same three policies with the same posture**, per-object rather than per-namespace: the workload and AGC policies are named for the gateway, the proxy policy for the `EgressProxy`, and every selector keys on the owning object's identity label (`actions-gateway.com/gateway` / `actions-gateway.com/egress-proxy`) instead of `app`. Two consequences follow from that, both load-bearing during a [v1→v2 migration](../operations/migration-v1-to-v2.md)'s coexistence window, when a namespace holds both:
+
+- A v2 pool's pods do **not** carry `app: actions-gateway-proxy`, so v1's policy, `PodDisruptionBudget`, `HorizontalPodAutoscaler`, and hostname anti-affinity — all keyed on that one bare label — govern only v1's pool (Q582).
+- The v2 workload policy's proxy egress peer selects on the *presence* of `actions-gateway.com/egress-proxy`, not one pool's name: a gateway's `RunnerSet`s may each name their own `proxyRef`, so its workload pods must reach every pool in the namespace. They cannot reach a coexisting v1 pool, which is a tightening over v1's `app`-keyed peer.
+
 ### Policy 1: `actions-gateway-workload` — AGC and worker pods → proxy + DNS
 
 Selects all "workload" pods (AGC and worker) by the `actions-gateway/component: workload` label. Allows egress to the proxy pods (port 8080) and DNS only. Denies all ingress.

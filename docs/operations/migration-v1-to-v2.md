@@ -350,6 +350,39 @@ with it. Nothing re-registers, and no Secret is left behind — but if you have 
 dashboards that match `agentpool-<set>-` for a `RunnerSet`, update them to
 `agentpool-rs-<set>-`.
 
+### The two proxy pools stay isolated
+
+The namespace also runs two egress proxy pools during coexistence — v1's inline
+`actions-gateway-proxy` and the extracted `EgressProxy`'s `<proxy>-proxy` — and they are
+independent: separate `Deployment`s, `Service`s, `HorizontalPodAutoscaler`s,
+`PodDisruptionBudget`s, and `NetworkPolicy`s, each governing only its own pods. Each
+pool's replicas spread across nodes among *themselves*, so two coexisting pools need
+`max(v1, v2)` worker nodes, not v1+v2.
+
+What keeps them apart is the label each pool's selectors key on. Select them separately:
+
+| | v1 inline pool | v2 `EgressProxy` pool |
+|---|---|---|
+| Workload name | `actions-gateway-proxy` | `<proxy>-proxy` |
+| Selector label | `app=actions-gateway-proxy` | `actions-gateway.com/egress-proxy=<proxy>` |
+| Reached by | v1 AGC and worker pods | that gateway's AGC and worker pods |
+
+```bash
+kubectl -n team-a get pods -l app=actions-gateway-proxy                  # v1 pool only
+kubectl -n team-a get pods -l actions-gateway.com/egress-proxy           # every v2 pool
+```
+
+Both pools' pods also carry the recommended `app.kubernetes.io/name=actions-gateway-proxy`
+label, which is the version-agnostic way to list every proxy pod in the namespace. It is
+metadata for humans and tooling — do not build a `NetworkPolicy` or PDB selector on it.
+
+Before `v1.3.0` the v2 pool also stamped `app: actions-gateway-proxy`, which put each
+pool's pods under the other's `PodDisruptionBudget`, wedged **both** pools'
+autoscaling on `AmbiguousSelector`, and made the two pools repel each other off every
+node. If a namespace you migrated on an earlier release shows either symptom, upgrading
+the GMC clears it — and recreates that `EgressProxy`'s pool once in the process. See
+[the upgrade note](upgrade.md#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once).
+
 **Rollback is "stay on v1."** Nothing about the migration removes v1 capability, so if
 the v2 path misbehaves you simply keep using the v1 gateway and delete the v2 objects:
 

@@ -1727,6 +1727,22 @@ kubectl describe actionsgateway -n <namespace> <name>
 
 Resolve by **either** raising the platform-owned quota (`kubectl edit resourcequota -n <namespace> <quota-name>`) to admit the configured `maxReplicas`, **or** lowering `spec.proxy.maxReplicas` to fit. Editing the quota's `.spec.hard` re-triggers reconciliation immediately; the conditions clear on the next reconcile.
 
+**Third likely cause (mid-migration, GMC before `v1.3.0`): two proxy pools share a selector.** In a namespace running both a v1 inline pool and a v2 `EgressProxy` pool, **neither** pool scales and both HPAs report:
+
+```text
+ScalingActive   False   AmbiguousSelector   pods by selector app=actions-gateway-proxy are controlled by multiple HPAs
+```
+
+An HPA has no selector of its own — it resolves its scale target's — and refuses to act on pods a second HPA also controls. The v2 pool used to stamp `app: actions-gateway-proxy`, the label v1's `Deployment` selector keys on, so each HPA saw the other's pods. The same overlap put each pool's pods under both `PodDisruptionBudget`s (making them unevictable, so node drains hung) and made the two pools repel each other off every node.
+
+```sh
+# Both pools' pods answer to the v1 label on an affected install; only v1's should.
+kubectl get pods -n <namespace> -l app=actions-gateway-proxy \
+  -o custom-columns='NAME:.metadata.name,PROXY:.metadata.labels.actions-gateway\.com/egress-proxy'
+```
+
+**Resolution: upgrade the GMC.** A v2 pool no longer carries the v1 label, so both HPAs recover on their own. The upgrade recreates that `EgressProxy`'s pool once — see [the upgrade note](upgrade.md#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once). There is no in-place workaround: `Deployment.spec.selector` is immutable, so the overlap cannot be edited away.
+
 **v2 (`EgressProxy`) note — bring-your-own autoscaler.** If the pool's `EgressProxy` sets `spec.managedAutoscaling: false`, there is **no managed HPA by design** — `kubectl get hpa` finding nothing named `<name>-proxy` is not a fault. Scaling is owned by whatever you attached to the `<name>-proxy` Deployment (KEDA, VPA, a custom HPA), so debug that scaler instead; `spec.maxReplicas` and `spec.targetCPUUtilizationPercentage` are inert. The quota conditions still work, but `ProxyQuotaPressure` measures headroom to the Deployment's *current desired replicas* (what your scaler asked for) rather than `maxReplicas`, and both conditions surface on the `EgressProxy`. An external scale-to-zero is preserved and reported `Ready` (`0/0 proxy pods ready`) — while at zero, the tenant has no egress path, so make sure your scaler's floor matches your availability expectations.
 
 ---

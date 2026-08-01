@@ -37,8 +37,9 @@ func TestEgressProxyLabelsAndSelector(t *testing.T) {
 	assert.Equal(t, "shared", labels[egressProxyComponentLabel])
 
 	sel := egressProxyPodSelector(ep)
-	assert.Equal(t, proxyAppName, sel["app"])
-	assert.Equal(t, "shared", sel[egressProxyComponentLabel], "selector must carry the per-EgressProxy identity")
+	assert.Equal(t, map[string]string{egressProxyComponentLabel: "shared"}, sel,
+		"the per-EgressProxy identity is the whole selector; v1's bare app label would drag the pool "+
+			"into v1's PDB, HPA, and anti-affinity during coexistence (Q582)")
 }
 
 func TestEgressProxyScalarDefaultsAndOverrides(t *testing.T) {
