@@ -45,6 +45,33 @@ Admission **rejections** (reserved-namespace, cross-namespace `gitHubAppRef`, pr
 
 **API server warnings** (e.g. the [`v2alpha1` deprecation warning](upgrade.md#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns)) are logged at info, **deduplicated to one line per unique message per process** in both controllers. The apiserver attaches such a warning to every read and write of a deprecated API version, so without dedup a set reconciling under churn would drown the log in repeats; expect the first occurrence only, not one per API call.
 
+### What never appears in logs
+
+Ship AGC and proxy logs to a shared aggregator without a scrubbing pipeline in
+front: **credential material is redacted before a log line is emitted**, not by
+the log stack afterward.
+
+Every GitHub response body — broker and runner-scale-set protocol alike — passes
+through a single redaction path before it can reach a log line or an error
+message. It replaces:
+
+- JSON credential fields (`access_token`, `refresh_token`, `token`,
+  `encoded_jit_config`, `client_secret`, `private_key`, `password`, `secret`);
+- GitHub token literals by prefix (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`,
+  `github_pat_`), JSON Web Tokens, and long base64 blobs anywhere in the body.
+
+Redaction runs **before truncation**, so a shortened body cannot cut a secret
+loose from the field name that would have matched it, and it is **not
+level-dependent** — `spec.logLevel: debug` surfaces more lifecycle lines, never
+unsanitized bodies.
+
+The redaction complements how credentials are handled upstream of logging:
+GitHub App keys and JIT configs are mounted as files, never environment
+variables (env leaks into `kubectl describe`, process listings, and child
+processes), and both controllers bypass their informer caches for Secret bodies
+so key material is not cache-resident. See
+[security §5 — credential handling](../design/05-security.md).
+
 ---
 
 ## Distributed Tracing (AGC)
