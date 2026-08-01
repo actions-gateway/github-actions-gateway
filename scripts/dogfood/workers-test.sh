@@ -75,14 +75,14 @@ count_of() { wc -l <"${STUB_DIR}/$1" | tr -d ' '; }
 
 script_readings EMPTY
 
-# --- count_inflight_workers ------------------------------------------------
+# --- list_inflight_workers / count_inflight_workers -------------------------
 
-script_readings 'gag-dogfood runner-a 1/1 Running 0 3m'
+script_readings 'gag-dogfood runner-a'
 check "counts a Running worker" 1 "$(count_inflight_workers)"
 
 # Pending counts too: the job is already acquired, so scaling down on it strands
 # exactly as much as scaling down on a Running one.
-script_readings 'gag-dogfood runner-a 1/1 Running 0 3m|gag-dogfood runner-b 0/1 Pending 0 1m'
+script_readings 'gag-dogfood runner-a|gag-dogfood runner-b'
 check "counts a Pending worker as in flight" 2 "$(count_inflight_workers)"
 
 script_readings EMPTY
@@ -92,6 +92,19 @@ check "empty result counts 0" 0 "$(count_inflight_workers)"
 # caller turns "0" into a billable scale-down.
 script_readings FAIL
 check "unreachable cluster reads 'unknown', not 0" "unknown" "$(count_inflight_workers)"
+
+# The identity form the drain-progress comparison is built on. Namespace and pod
+# are joined, so two tenants running a same-named pod stay distinct.
+script_readings 'gag-dogfood runner-a|gag-dogfood-e2e runner-a'
+check "lists pods as namespace/name" \
+	"gag-dogfood/runner-a gag-dogfood-e2e/runner-a" \
+	"$(list_inflight_workers | tr '\n' ' ' | sed 's/ $//')"
+
+# An unreadable cluster must be distinguishable from an empty one here too —
+# count_inflight_workers turns this exit status into "unknown".
+script_readings FAIL
+list_inflight_workers >/dev/null 2>&1 && rc=0 || rc=1
+check "an unreadable cluster exits 1 rather than listing nothing" 1 "${rc}"
 
 # --- the selector is the one the AGC actually stamps ------------------------
 
@@ -113,14 +126,14 @@ check "  ...after the full settle window" "${WORKER_DRAIN_SETTLE_READINGS}" "$(c
 
 # Busy, then busy, then empty: the loop must keep polling through the busy
 # readings and only return once the settle window is clean.
-script_readings 'gag-dogfood runner-a 1/1 Running 0 3m' 'gag-dogfood runner-a 1/1 Running 0 4m' EMPTY
+script_readings 'gag-dogfood runner-a' 'gag-dogfood runner-a' EMPTY
 wait_for_worker_drain 60 5 >/dev/null && rc=0 || rc=1
 check "waits out in-flight workers, then drains" 0 "${rc}"
 check "  ...polling once per reading" 4 "$(count_of calls)"
 check "  ...sleeping between readings" 3 "$(count_of sleeps)"
 
 # A cluster that never drains must time out rather than fall through.
-script_readings 'gag-dogfood runner-a 1/1 Running 0 3m'
+script_readings 'gag-dogfood runner-a'
 wait_for_worker_drain 20 5 >/dev/null && rc=0 || rc=1
 check "a cluster that never drains times out" 1 "${rc}"
 check "  ...after timeout/interval + 1 polls" 5 "$(count_of calls)"
@@ -143,6 +156,89 @@ script_readings EMPTY
 wait_for_worker_drain 0 15 >/dev/null && rc=0 || rc=1
 check "a sub-settle timeout still completes the settle" 0 "${rc}"
 check "  ...taking the settle count of readings" "${WORKER_DRAIN_SETTLE_READINGS}" "$(count_of calls)"
+
+# --- drain_progress_summary -------------------------------------------------
+#
+# The fact a timed-out operator cannot get from a pod count. A tenant at its
+# concurrency ceiling admits a pod for every one it reaps, so a drain working
+# through a backlog and a wedged one both hold the count flat; only pod turnover
+# separates them, and the two cases take opposite remedies (wait longer vs
+# intervene).
+
+# Same two pods first and last: nothing completed, so waiting longer is futile.
+script_readings 'gag-dogfood runner-a|gag-dogfood runner-b'
+wait_for_worker_drain 20 5 >/dev/null && rc=0 || rc=1
+check "a wedged drain times out" 1 "${rc}"
+summary="$(drain_progress_summary)"
+case "${summary}" in
+	*"NOT converging"*) echo "ok   no turnover reads as NOT converging" ;;
+	*)
+		echo "FAIL no turnover must read as NOT converging: ${summary}" >&2
+		fails=$((fails + 1))
+		;;
+esac
+
+# The count is flat at two throughout, but the pods are not the same two — a
+# ceiling-saturated tenant that is genuinely working through its backlog. This
+# is the case that a count-based check gets exactly backwards.
+script_readings 'gag-dogfood runner-a|gag-dogfood runner-b' \
+	'gag-dogfood runner-b|gag-dogfood runner-c' \
+	'gag-dogfood runner-c|gag-dogfood runner-d'
+wait_for_worker_drain 20 5 >/dev/null && rc=0 || rc=1
+check "a converging-but-slow drain still times out" 1 "${rc}"
+summary="$(drain_progress_summary)"
+case "${summary}" in
+	*"is converging"*) echo "ok   turnover under a flat count reads as converging" ;;
+	*)
+		echo "FAIL turnover under a flat count must read as converging: ${summary}" >&2
+		fails=$((fails + 1))
+		;;
+esac
+
+# A cluster unreadable for the whole wait leaves no sets to compare. It must say
+# so rather than infer either verdict from an empty comparison.
+script_readings FAIL
+wait_for_worker_drain 20 5 >/dev/null 2>&1 && rc=0 || rc=1
+check "an unreadable cluster times out" 1 "${rc}"
+summary="$(drain_progress_summary)"
+case "${summary}" in
+	*"occupancy is unknown"*) echo "ok   an unreadable cluster claims neither verdict" ;;
+	*)
+		echo "FAIL an unreadable cluster must claim neither verdict: ${summary}" >&2
+		fails=$((fails + 1))
+		;;
+esac
+
+# --- explain_inflight_workers -----------------------------------------------
+#
+# The columns say a pod is stuck; only its events say why. A worker pinned on a
+# missing job-payload secret shows a bare ContainerCreating everywhere else, so
+# without this the operator cannot tell it from a slow image pull.
+
+script_readings 'gag-dogfood runner-a' \
+	'FailedMount: MountVolume.SetUp failed for volume "job-payload" : secret "job-ss-x" not found'
+explanation="$(explain_inflight_workers)"
+case "${explanation}" in
+	*"gag-dogfood/runner-a"*"FailedMount"*"job-ss-x"*)
+		echo "ok   names the pod and the warning event that pins it" ;;
+	*)
+		echo "FAIL must name the pod and its warning event: ${explanation}" >&2
+		fails=$((fails + 1))
+		;;
+esac
+
+# Events are best-effort: a pod whose events cannot be read still gets a line,
+# because dropping it would hide an in-flight pod from the diagnostic entirely.
+script_readings 'gag-dogfood runner-a' FAIL
+explanation="$(explain_inflight_workers 2>/dev/null)"
+case "${explanation}" in
+	*"gag-dogfood/runner-a"*"no warning events"*)
+		echo "ok   a pod with unreadable events is still listed" ;;
+	*)
+		echo "FAIL a pod with unreadable events must still be listed: ${explanation}" >&2
+		fails=$((fails + 1))
+		;;
+esac
 
 # --- count_queued_scale_set_jobs / wait_for_scale_set_idle ------------------
 #
@@ -218,16 +314,19 @@ kubectl() { printf '%s\n' "$*" >"${ARGS_FILE}"; }
 # drains. Asserted on the real invocation, not re-derived here.
 count_inflight_workers >/dev/null
 check "queries in-flight workers by label, excluding terminal phases" \
-	"get pods --all-namespaces --selector=${WORKER_POD_SELECTOR} --field-selector=status.phase!=Succeeded,status.phase!=Failed --no-headers" \
+	"get pods --all-namespaces --selector=${WORKER_POD_SELECTOR} --field-selector=status.phase!=Succeeded,status.phase!=Failed -o custom-columns=NS:.metadata.namespace,POD:.metadata.name --no-headers" \
 	"$(cat "${ARGS_FILE}")"
 
 # e2e-stop.sh scopes its pre-delete drain to the e2e tenant namespace so the CI
 # tenant's ordinary traffic never holds that teardown up; the scope must reach
-# the actual invocation.
+# the actual invocation. stop.sh must NOT do this: it takes the system pool to
+# 0, which evicts every tenant's AGC, so a scope narrower than the cluster would
+# scale down under another tenant's live workers and strand their nodes — the
+# 82-spot-node-hour incident.
 WORKER_POD_NAMESPACE="gag-dogfood-e2e"
 count_inflight_workers >/dev/null
 check "scopes to a namespace when WORKER_POD_NAMESPACE is set" \
-	"get pods --namespace=gag-dogfood-e2e --selector=${WORKER_POD_SELECTOR} --field-selector=status.phase!=Succeeded,status.phase!=Failed --no-headers" \
+	"get pods --namespace=gag-dogfood-e2e --selector=${WORKER_POD_SELECTOR} --field-selector=status.phase!=Succeeded,status.phase!=Failed -o custom-columns=NS:.metadata.namespace,POD:.metadata.name --no-headers" \
 	"$(cat "${ARGS_FILE}")"
 WORKER_POD_NAMESPACE=""
 
@@ -240,6 +339,16 @@ if [[ "${check_args}" == *"POD:.metadata.name"* && "${check_args}" == *"NS:.meta
 	echo "ok   the drain diagnostic asks for the pod name and namespace as columns"
 else
 	echo "FAIL the drain diagnostic must ask for the pod name and namespace as columns: ${check_args}" >&2
+	fails=$((fails + 1))
+fi
+
+# Phase alone reads "Pending" for a pod waiting on a node, one no node can take,
+# and one whose container will not start. These two columns separate them.
+if [[ "${check_args}" == *'SCHED:.status.conditions[?(@.type=="PodScheduled")].reason'* &&
+	"${check_args}" == *"WAIT:.status.containerStatuses[*].state.waiting.reason"* ]]; then
+	echo "ok   ...and the scheduling and container-waiting reasons"
+else
+	echo "FAIL the drain diagnostic must ask for the stall reasons: ${check_args}" >&2
 	fails=$((fails + 1))
 fi
 

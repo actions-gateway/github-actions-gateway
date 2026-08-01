@@ -83,27 +83,52 @@ WORKER_DRAIN_INTERVAL_DEFAULT=15
 # stranding nodes.
 WORKER_DRAIN_SETTLE_READINGS=2
 
-# count_inflight_workers — print how many worker pods are in a non-terminal
-# phase cluster-wide, or "unknown" when the cluster cannot be read.
+# WORKER_DRAIN_INITIAL_PODS / WORKER_DRAIN_FINAL_PODS — the `namespace/name` set
+# in flight at the drain's first and last successful readings. wait_for_worker_drain
+# sets both; drain_progress_summary turns them into the one fact a timed-out
+# operator needs, which pod counts cannot supply (see list_inflight_workers).
+WORKER_DRAIN_INITIAL_PODS=""
+WORKER_DRAIN_FINAL_PODS=""
+
+# list_inflight_workers — print one `namespace/name` line per worker pod in a
+# non-terminal phase. Exits 1 when the cluster cannot be read, so a caller can
+# tell an empty cluster from an unreadable one.
 #
 # Non-terminal, not just Running: a Pending worker pod means a job was already
 # acquired and will start the moment its node is up, so scaling down on it
 # strands exactly as much as scaling down on a Running one.
+#
+# Identities, not just a count, because the count alone cannot tell a slow drain
+# from a wedged one: a tenant sitting at its concurrency ceiling admits a new pod
+# for every one it reaps, holding the count flat while work still completes.
+# Columns are named explicitly rather than parsed out of the default `get pods`
+# output, whose leading namespace column is present under --all-namespaces and
+# absent under --namespace.
+list_inflight_workers() {
+	local out
+	out="$(worker_kubectl get pods "$(worker_pod_scope)" \
+		--selector="${WORKER_POD_SELECTOR}" \
+		--field-selector='status.phase!=Succeeded,status.phase!=Failed' \
+		-o custom-columns='NS:.metadata.namespace,POD:.metadata.name' \
+		--no-headers 2>/dev/null)" || return 1
+	# NF skips the blank line an empty result leaves.
+	printf '%s\n' "${out}" | awk 'NF {print $1 "/" $2}'
+}
+
+# count_inflight_workers — print how many worker pods are in a non-terminal
+# phase, or "unknown" when the cluster cannot be read.
 #
 # A read failure is reported as "unknown" and never as 0. Callers gate a
 # billable scale-down on this, and an unreachable cluster must not read as an
 # idle one.
 count_inflight_workers() {
 	local out
-	out="$(worker_kubectl get pods "$(worker_pod_scope)" \
-		--selector="${WORKER_POD_SELECTOR}" \
-		--field-selector='status.phase!=Succeeded,status.phase!=Failed' \
-		--no-headers 2>/dev/null)" || {
+	out="$(list_inflight_workers)" || {
 		echo "unknown"
 		return
 	}
 	# awk, not `grep -c`, because grep exits 1 on no match and would abort the
-	# caller under `set -e`. NF skips the blank line an empty result leaves.
+	# caller under `set -e`.
 	printf '%s\n' "${out}" | awk 'NF {c++} END {print c+0}'
 }
 
@@ -126,9 +151,20 @@ wait_for_worker_drain() {
 		attempts="${WORKER_DRAIN_SETTLE_READINGS}"
 	fi
 
-	local i empty_streak=0 inflight
+	local i empty_streak=0 seeded=0 pods inflight
+	WORKER_DRAIN_INITIAL_PODS=""
+	WORKER_DRAIN_FINAL_PODS=""
 	for ((i = 1; i <= attempts; i++)); do
-		inflight="$(count_inflight_workers)"
+		if pods="$(list_inflight_workers)"; then
+			inflight="$(printf '%s\n' "${pods}" | awk 'NF {c++} END {print c+0}')"
+			WORKER_DRAIN_FINAL_PODS="${pods}"
+			if ((seeded == 0)); then
+				WORKER_DRAIN_INITIAL_PODS="${pods}"
+				seeded=1
+			fi
+		else
+			inflight="unknown"
+		fi
 		if [[ "${inflight}" == "unknown" ]]; then
 			echo "  cannot read worker pods — an unreachable cluster is not an idle one" >&2
 			empty_streak=0
@@ -149,17 +185,73 @@ wait_for_worker_drain() {
 	return 1
 }
 
-# describe_inflight_workers — print one `namespace/name  phase  node` line per
-# in-flight worker pod: the diagnostic an operator needs when a drain times out,
-# naming both the pod to chase and the node it is pinning. Best-effort — prints
-# nothing when the cluster cannot be read, since the caller has already reported
-# that.
+# describe_inflight_workers — print one table row per in-flight worker pod: the
+# diagnostic an operator needs when a drain times out, naming the pod to chase
+# and the node it is pinning. Best-effort — prints nothing when the cluster
+# cannot be read, since the caller has already reported that.
+#
+# SCHED and WAIT carry the two ways a worker pod stalls without ever leaving
+# Pending: SCHED=Unschedulable when no node can take it, and a WAIT reason when
+# it is on a node but its container will not start. Phase alone reads "Pending"
+# for both, and for a pod that is merely waiting on a node coming up.
 describe_inflight_workers() {
 	worker_kubectl get pods "$(worker_pod_scope)" \
 		--selector="${WORKER_POD_SELECTOR}" \
 		--field-selector='status.phase!=Succeeded,status.phase!=Failed' \
-		-o custom-columns='NS:.metadata.namespace,POD:.metadata.name,PHASE:.status.phase,NODE:.spec.nodeName' \
+		-o custom-columns='NS:.metadata.namespace,POD:.metadata.name,PHASE:.status.phase,SCHED:.status.conditions[?(@.type=="PodScheduled")].reason,WAIT:.status.containerStatuses[*].state.waiting.reason,NODE:.spec.nodeName' \
 		2>/dev/null || true
+}
+
+# explain_inflight_workers — print the latest warning event for each in-flight
+# worker pod, one `namespace/name  REASON: message` line apiece.
+#
+# The columns above say a pod is stuck; only its events say why, and the two
+# stalls seen on the dogfood cluster are indistinguishable without them:
+# FailedScheduling names the resource the pod cannot get, and FailedMount names
+# the `job-payload` secret that does not exist — which reads as a bare
+# ContainerCreating in every other view. Runs once, on the timeout path, so a
+# lookup per pod is cheap. Best-effort throughout: a pod whose events cannot be
+# read still gets a line.
+explain_inflight_workers() {
+	local ref ns pod why
+	while IFS= read -r ref; do
+		[[ -n "${ref}" ]] || continue
+		ns="${ref%%/*}"
+		pod="${ref#*/}"
+		why="$(worker_kubectl get events --namespace="${ns}" \
+			--field-selector="involvedObject.name=${pod},type=Warning" \
+			-o 'jsonpath={range .items[*]}{.reason}{": "}{.message}{"\n"}{end}' \
+			2>/dev/null | awk 'NF' | tail -n 1)"
+		printf '  %s  %s\n' "${ref}" "${why:-no warning events}"
+	done < <(list_inflight_workers)
+}
+
+# drain_progress_summary — say whether a timed-out drain was converging, from
+# the pod sets wait_for_worker_drain recorded. Call only after it returns 1.
+#
+# Turnover is the signal, not the count: a tenant at its concurrency ceiling
+# admits a pod for every one it reaps, so a drain that is working its way
+# through a backlog and one that is wedged both hold the count flat. Pods
+# present at both the first and last reading are the ones that never moved.
+drain_progress_summary() {
+	local final held
+	final="$(printf '%s\n' "${WORKER_DRAIN_FINAL_PODS}" | awk 'NF {c++} END {print c+0}')"
+	held="$(comm -12 \
+		<(printf '%s\n' "${WORKER_DRAIN_INITIAL_PODS}" | awk 'NF' | sort) \
+		<(printf '%s\n' "${WORKER_DRAIN_FINAL_PODS}" | awk 'NF' | sort) |
+		awk 'NF {c++} END {print c+0}')"
+
+	if ((final == 0)); then
+		echo "The cluster could not be read for the whole wait — occupancy is unknown."
+	elif ((held == final)); then
+		echo "None of the ${final} in-flight pod(s) turned over during the wait: every pod in"
+		echo "flight now was in flight when the drain started. The drain is NOT converging,"
+		echo "and waiting longer will not clear it."
+	else
+		echo "${held} of the ${final} in-flight pod(s) have been in flight since the drain started;"
+		echo "the rest turned over, so work is completing. The drain is converging — it needs"
+		echo "a longer budget (DRAIN_TIMEOUT), not intervention."
+	fi
 }
 
 # count_queued_scale_set_jobs LABEL — print how many queued GitHub Actions jobs
