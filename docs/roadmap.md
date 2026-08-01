@@ -70,6 +70,11 @@ separately.
   co-tenant's. Give an opted-in group its own Deployment, Service, and
   autoscaler. Largest of the four; needs a plan doc before code.
 
+- **[Cross-namespace proxy sharing](plan/v2-api.md)** <!-- q:Q166 --> Share an
+  [egress proxy pool](design/network-architecture.md) across namespaces with
+  explicit consent: `sharing.allowedNamespaces` is served API today but not
+  yet enforced, so the consent check lands before the beta contract hardens.
+
 ## Exploring / longer-term
 
 Directions we expect to pursue as demand and validated evidence accumulate. These
@@ -95,9 +100,6 @@ release that carries it.
   GMC's self-signed default. (The autoscaler half has shipped:
   `managedAutoscaling: false` hands the pool to KEDA, VPA, or a custom
   HorizontalPodAutoscaler.)
-- **[Cross-namespace proxy sharing](plan/v2-api.md)** <!-- q:Q166 --> Share an
-  [egress proxy pool](design/network-architecture.md) across namespaces with
-  explicit consent (same-namespace sharing already works).
 - **[First-class GPU runner support](design/appendix-e-capacity-planning.md)** <!-- q:Q216 -->
   Priority tiers and the
   [`NodeShare` sizing profile](operations/worker-rightsizing.md) already carry the
