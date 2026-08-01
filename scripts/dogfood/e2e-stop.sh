@@ -104,6 +104,9 @@ main() {
 		if ! wait_for_worker_drain "${E2E_DRAIN_TIMEOUT}"; then
 			echo "ERROR: e2e worker pods were still in flight after ${E2E_DRAIN_TIMEOUT}s:" >&2
 			describe_inflight_workers >&2
+			echo "Why they are still in flight:" >&2
+			explain_inflight_workers >&2
+			drain_progress_summary >&2
 			echo "NOT deleting the AGC — it is the only thing that reaps these pods; an" >&2
 			echo "orphan's do-not-disrupt annotations pin its billable node indefinitely." >&2
 			echo "Wait or bounce the AGC, then re-run; or re-run with SKIP_E2E_DRAIN=1." >&2

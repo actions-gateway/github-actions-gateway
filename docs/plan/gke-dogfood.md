@@ -874,14 +874,47 @@ Knobs, all optional:
 | `DRAIN_INTERVAL` | `15` | Seconds between drain polls. |
 | `SKIP_DRAIN` | unset | `1` scales down without waiting. Strands anything in flight. |
 
+The drain is **cluster-wide on purpose.** The resize evicts *every* tenant's
+AGC, so it has to see every tenant's workers; scoping it to one namespace would
+scale down under another tenant's live jobs and re-open the incident above.
+(`e2e-stop.sh` does scope its drain, because it deletes one gateway and touches
+no other tenant.)
+
 A drain that does not finish inside `DRAIN_TIMEOUT` **fails the stop and leaves
 the pool up** — two `e2-standard-2` nodes cost far less than stranded worker
-nodes, and keeping the AGC alive is what lets it finish reaping. The error names
-the pods still in flight and the three ways out: wait and re-run, bounce a
-wedged AGC (`scripts/dogfood/ops.sh agc-bounce ci`) and re-run, or delete
-genuine orphans by hand. `SKIP_DRAIN=1` is the deliberate override — reach for
-it when the AGC is already down, since an AGC that cannot reap will never let
-the drain finish.
+nodes, and keeping the AGC alive is what lets it finish reaping.
+
+#### Reading a timed-out drain
+
+The error answers two questions, because they take opposite remedies.
+
+**Why is each pod still in flight?** Every in-flight pod is listed with its
+scheduling and container-waiting reasons, then with its latest warning event.
+`Pending` alone does not distinguish a pod waiting on a node coming up from one
+that will never start; the event does — `FailedScheduling` names the resource
+the pod cannot get, and `FailedMount` names the `job-payload` secret that does
+not exist. Without it a pod pinned on a missing secret reads as a bare
+`ContainerCreating`.
+
+**Was the drain moving at all?** The stop compares the pods in flight at the
+first and last polls. Pod *turnover* is the signal, not the count: a tenant at
+its `maxWorkers` ceiling admits a pod for every one it reaps, so a drain working
+through a backlog and a livelocked one both hold the count flat.
+
+| Verdict | Meaning | Do |
+|---|---|---|
+| *converging* | Some pods turned over — work is completing | Re-run, or re-run with a larger `DRAIN_TIMEOUT` |
+| *NOT converging* | The same pods held the whole wait | Delete those pods by hand, then re-run — waiting longer will not clear it |
+
+A pod stuck on `FailedMount` or `FailedScheduling` holds one of its tenant's
+concurrency slots until it is deleted, which is what stops the rest of the queue
+from draining. Bouncing the AGC (`scripts/dogfood/ops.sh agc-bounce <tenant>`)
+does **not** clear stuck pods, and a fresh listener re-acquires the same
+assignments — it is worth trying only when the pods are gone but the listener
+still holds work.
+
+`SKIP_DRAIN=1` is the deliberate override — reach for it when the AGC is already
+down, since an AGC that cannot reap will never let the drain finish.
 
 ### Route all CI to GAG (milestone end-state)
 

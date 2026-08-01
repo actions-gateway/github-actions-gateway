@@ -15,6 +15,16 @@
 # because leaving the (small, fixed-size) system pool up costs far less than
 # stranding worker nodes, and it keeps the AGC alive to finish reaping.
 #
+# The drain is cluster-wide on purpose: the resize below evicts every tenant's
+# AGC, so scoping it to one namespace (WORKER_POD_NAMESPACE) would scale down
+# under another tenant's live workers — the incident above. e2e-stop.sh scopes
+# its drain because it deletes one gateway and touches no other tenant.
+#
+# On timeout it reports why each pod is stuck and whether the drain was moving
+# at all, because those take opposite remedies: a converging drain just needs a
+# larger DRAIN_TIMEOUT, while a stalled one needs the stuck pods deleted and
+# will never clear on its own.
+#
 # Required env vars (export before running):
 #   PROJECT   GCP project ID (e.g. actions-gateway-dogfood)
 #   CLUSTER   GKE cluster name (e.g. gag-dogfood)
@@ -64,15 +74,26 @@ drain_workers() {
 	echo "ERROR: worker pods were still in flight after ${DRAIN_TIMEOUT}s:" >&2
 	describe_inflight_workers >&2
 	echo >&2
+	echo "Why they are still in flight:" >&2
+	explain_inflight_workers >&2
+	echo >&2
+	drain_progress_summary >&2
+	echo >&2
 	echo "NOT scaling the system pool down. Doing so would evict the tenant AGCs," >&2
 	echo "and an AGC is the only thing that reaps these pods — they would keep" >&2
 	echo "their (billable) worker nodes up indefinitely." >&2
 	echo >&2
-	echo "Next steps:" >&2
-	echo "  - Jobs genuinely still running: wait, then re-run this script." >&2
-	echo "  - Jobs finished but the pods remain: their AGC is wedged. Bounce it" >&2
-	echo "    (scripts/dogfood/ops.sh agc-bounce ci) and re-run this script." >&2
-	echo "  - Pods are orphans with no live job: delete them by hand, then re-run." >&2
+	echo "Next steps — pick from the reasons above:" >&2
+	echo "  - Converging: re-run this script, or re-run it with a larger" >&2
+	echo "    DRAIN_TIMEOUT (currently ${DRAIN_TIMEOUT}s). Nothing else is needed." >&2
+	echo "  - Not converging: delete the pods listed above by hand, then re-run." >&2
+	echo "    A pod stuck on FailedMount or FailedScheduling never starts, and it" >&2
+	echo "    holds one of its tenant's concurrency slots until it is deleted —" >&2
+	echo "    which is what stops the rest of the queue from draining." >&2
+	echo "  - Bouncing the AGC (scripts/dogfood/ops.sh agc-bounce <tenant>) is" >&2
+	echo "    worth trying only if the pods are gone but the listener still holds" >&2
+	echo "    assignments; a bounce does not clear stuck pods, and a fresh listener" >&2
+	echo "    re-acquires the same assignments." >&2
 	echo "  - You accept stranding them: re-run with SKIP_DRAIN=1." >&2
 	exit 1
 }
