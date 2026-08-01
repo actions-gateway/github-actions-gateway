@@ -62,20 +62,19 @@ When you need to *read* a dependency's source, read the committed `vendor/` (or 
 
 ## First-party Go tooling stays outside the workspace
 
-Repo tooling written in Go — gate implementations, linters, report generators — goes in a module that is deliberately **not** listed in `go.work`. No such module exists yet; `devtools/` is the reserved name, and this section is the standing rule for whoever adds the first one.
+Repo tooling written in Go — gate implementations, linters, report generators — goes in `devtools/`, a module deliberately **not** listed in `go.work`.
 
 | Directory | Holds | In `go.work`? |
 |---|---|---|
 | `tools/` | pinned **third-party** build tools (`tools.go` blank imports, built by `make tools` into `.build/`) | no |
-| `devtools/` *(planned)* | **first-party** Go programs backing `make` targets | no |
+| `devtools/` | **first-party** Go programs backing `make` targets | no |
 
-Packages inside `devtools/` are grouped by the gate that runs them, mirroring `scripts/`: `devtools/ci/pathfilters/` would be the Go implementation of a `ci/` gate the same way [`scripts/ci/check-path-filters.sh`](../../scripts/ci/check-path-filters.sh) is the shell one. That keeps "which gate runs this?" answerable from the path, which is what the CI path filters need — they are plain prefix globs.
+Packages inside `devtools/` are grouped by the gate that runs them, mirroring `scripts/`: `devtools/ci/pathfilters/` is the Go half of a `ci/` gate whose entry point stays [`scripts/ci/check-path-filters.sh`](../../scripts/ci/check-path-filters.sh). That keeps "which gate runs this?" answerable from the path, which is what the CI path filters need — they are plain prefix globs.
 
-Run these with `go run`; a gate needs no separate compile step. `go run` caches its build, so a small program importing `gopkg.in/yaml.v3` costs ~0.2s warm against ~1.6s on a completely cold build cache. Invoke it from its own directory, like the `tools/` module:
+A gate needs no separate compile step in its Makefile target: `go build`/`go run` cache, so the first invocation pays the compile and later ones do not. Which of the two to use depends on how often the gate calls the program:
 
-```bash
-(cd devtools && go run ./ci/pathfilters)
-```
+- **Called once** — `go run` from the module directory, like `tools/`: `(cd devtools && go run ./ci/pathfilters …)`. Warm that costs ~42ms.
+- **Called in a loop** — build once into the gitignored `.build/` and exec the binary, which costs ~17ms a call against ~42ms for a `go run` that re-links every time. `check-path-filters.sh` does this in `ensure_pathfilters`; it invokes the extractor dozens of times per run.
 
 ### Why it stays out of the workspace, and out of `scripts/`
 
@@ -85,12 +84,16 @@ It cannot live under `scripts/` either. A Go module brings a `vendor/` tree, and
 
 ### Wiring a new first-party module
 
-Outside `go.work` the Go gates do not see the module: `go-test.sh`, `go-lint.sh`, `coverage.sh` and `go-vulncheck.sh` all iterate `workspace_modules()` (`go work edit -json`). Wire it up explicitly or the code is never linted, tested, or scanned:
+Outside `go.work` the Go gates do not see the module: `go-test.sh`, `go-lint.sh`, `coverage.sh` and `go-vulncheck.sh` all iterate `workspace_modules()` (`go work edit -json`). Add it to `firstparty_nonworkspace_modules()` in [`scripts/lib/common.sh`](../../scripts/lib/common.sh) — that list is what the gates loop with `GOWORK=off` — and then:
 
-1. Vendor it in [`scripts/go/vendor-sync.sh`](../../scripts/go/vendor-sync.sh), beside the existing `tools/` line: `(cd devtools && GOWORK=off go mod vendor)`.
-2. Extend those four gate scripts to cover it. [`scripts/lib/common.sh`](../../scripts/lib/common.sh) is the home for a `first_party_modules()` helper returning the workspace modules plus `devtools`.
-3. Classify `devtools/**` in a **narrow** CI path filter — the lint/scripts jobs, never e2e — so `check-path-filters.sh` assertion 1 passes.
+1. Vendor it in [`scripts/go/vendor-sync.sh`](../../scripts/go/vendor-sync.sh), beside the existing `tools/` line: `(cd devtools && GOWORK=off go mod vendor)`, and add the same tree to [`scripts/go/vendor-check.sh`](../../scripts/go/vendor-check.sh) so the integrity gate actually diffs it.
+2. Add `<module>/vendor/**` to the `vendor` path filter, so that gate re-runs when the tree changes.
+3. Classify `<module>/**` in a **narrow** CI path filter — the lint/scripts jobs, never e2e — so `check-path-filters.sh` assertion 1 passes.
 4. Add a pointer from [`scripts/README.md`](../../scripts/README.md) so the gate map stays in one place.
+
+Each gate needs its own `GOWORK=off` pass rather than a widened module list: they run a single workspace-wide invocation (`go test` over every module pattern, `gofmt -l` over every module dir), and that invocation resolves against `go.work`, which by construction does not list this module.
+
+**`coverage.sh` is a partial exception.** Its ratchet builds one profile from the workspace build list and filters it per module, so a non-workspace module carries no baseline row and no floor — widening that means merging a second profile, which has not been worth it for a module of this size. It does still *run* those tests, unmeasured, because `make check` calls `cover-check` in place of `make test`: without that pass the fast gate would never execute them, and they would only run under `make test`/`make test-race`.
 
 `scripts/go/check-go-version.sh` needs no change: it already asserts a single `go` directive across every `go.mod`, so a new module inherits the check.
 

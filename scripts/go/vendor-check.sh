@@ -4,7 +4,7 @@
 #
 # `go build -mod=vendor` only checks vendor/modules.txt consistency — it never
 # verifies that the vendored *source* matches the hashes in go.sum. So a
-# malicious or accidental edit under vendor/ (or tools/vendor/) compiles into
+# malicious or accidental edit under vendor/ (or tools/vendor/, devtools/vendor/) compiles into
 # the signed release images undetected. This gate closes that gap (Q126): it
 # re-runs the workspace-vendor flow — which re-fetches every module verified
 # against go.sum — and fails on any diff against the committed trees. Sibling of
@@ -32,15 +32,17 @@ echo "re-vendoring workspace (go work vendor)..."
 go work vendor
 echo "re-vendoring tools module (cd tools && go mod vendor)..."
 (cd tools && GOWORK=off go mod vendor)
+echo "re-vendoring devtools module (cd devtools && go mod vendor)..."
+(cd devtools && GOWORK=off go mod vendor)
 
 # Any drift means the committed tree does not match what go.mod+go.sum produce.
-if ! git diff --exit-code -- vendor/ tools/vendor/; then
+if ! git diff --exit-code -- vendor/ tools/vendor/ devtools/vendor/; then
 	echo "" >&2
-	echo "ERROR: vendor/ or tools/vendor/ is out of sync with go.sum (drift shown above)." >&2
+	echo "ERROR: vendor/, tools/vendor/ or devtools/vendor/ is out of sync with go.sum (drift shown above)." >&2
 	echo "A committed vendor tree that doesn't match its go.sum hashes is a supply-chain risk." >&2
-	echo "Re-sync and commit: 'go work vendor && (cd tools && GOWORK=off go mod vendor)'" >&2
+	echo "Re-sync and commit: 'make vendor-sync'" >&2
 	echo "(see docs/development/go-workspaces.md § Changing dependencies)." >&2
 	exit 1
 fi
 
-echo "vendor/ and tools/vendor/ are consistent with go.sum."
+echo "vendor/, tools/vendor/ and devtools/vendor/ are consistent with go.sum."

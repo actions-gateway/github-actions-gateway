@@ -114,100 +114,45 @@ PUSH_TRIGGER_FILTERS=(
 	'status-lint.yml:status'
 )
 
-# parse_filters WORKFLOW_PATH — print one "<filter>\t<pattern>" row per pattern in
-# the file's `filters: |` block. The block is a YAML string nested inside YAML, so
-# it is read positionally: everything indented deeper than the `filters:` key,
-# until a line dedents back to it. Inside, a `name:` line opens a filter and a
-# `- pattern` line adds to it. Quote handling is index/substr rather than regex so
-# it works on both gawk and the BSD awk macOS ships.
-parse_filters() {
-	awk '
-	function value(s,   quote, first, closing) {
-		sub(/^-[[:space:]]*/, "", s)
-		quote = sprintf("%c", 39)
-		first = substr(s, 1, 1)
-		if (first == quote || first == "\"") {
-			s = substr(s, 2)
-			closing = index(s, first)
-			if (closing > 0) s = substr(s, 1, closing - 1)
-			return s
-		}
-		# Unquoted: a trailing comment and surrounding space are not part of the pattern.
-		sub(/[[:space:]]*#.*$/, "", s)
-		sub(/[[:space:]]+$/, "", s)
-		return s
-	}
-	!inblock {
-		if ($0 ~ /^[[:space:]]*filters:[[:space:]]*\|[[:space:]]*$/) {
-			match($0, /^[[:space:]]*/)
-			base = RLENGTH
-			inblock = 1
-			filter = ""
-		}
-		next
-	}
-	{
-		if ($0 ~ /^[[:space:]]*$/) next
-		match($0, /^[[:space:]]*/)
-		indent = RLENGTH
-		if (indent <= base) { inblock = 0; next }
-		line = substr($0, indent + 1)
-		if (line ~ /^#/) next
-		if (line ~ /^-([[:space:]]|$)/) {
-			if (filter != "") print filter "\t" value(line)
-			next
-		}
-		if (line ~ /:[[:space:]]*$/) {
-			sub(/:[[:space:]]*$/, "", line)
-			filter = line
-		}
-	}
-	' "$1"
+# The `filters:` value is a YAML string whose contents are themselves YAML, and
+# `on.push.paths` is an ordinary list. Both are read by devtools/ci/pathfilters
+# rather than by indentation. The awk this replaced matched `filters: |` and
+# nothing else, so a valid reformat (`|-`, flow style, an anchor) made the gate
+# report coverage errors naming patterns that were already present — and it
+# silently dropped the flow-style `on.push.paths` that q468-retention-probe.yml
+# and scaleset-probe.yml declare today. Rationale and the module layout:
+# docs/development/go-workspaces.md.
+PATHFILTERS_BIN="$REPO_ROOT/.build/pathfilters"
+
+PATHFILTERS_BUILT=0
+
+# ensure_pathfilters compiles the extractor, at most once per shell. The parsers
+# below run dozens of times, and an exec of the built binary costs ~17ms against
+# ~42ms for a `go run` that re-links on every call. Both main() and the parsers
+# call this: check-path-filters-test.sh sources this file to drive the helpers
+# against fixtures and never reaches main().
+#
+# devtools/ is outside the Go workspace, hence GOWORK=off — see
+# docs/development/go-workspaces.md.
+ensure_pathfilters() {
+	((PATHFILTERS_BUILT)) && return 0
+	require_cmd go "https://go.dev/dl/"
+	mkdir -p "$REPO_ROOT/.build"
+	(cd "$REPO_ROOT/devtools" && GOWORK=off go build -o "$PATHFILTERS_BIN" ./ci/pathfilters)
+	PATHFILTERS_BUILT=1
 }
 
-# parse_push_paths WORKFLOW_PATH — print the `on.push.paths` entries, one per
-# line. Read positionally like parse_filters, but over real YAML rather than a
-# nested string: find `push:` under the top-level `on:` mapping, then its `paths:`
-# key, then collect list items until something dedents back to `paths:` or above.
-# A workflow with no push-paths list prints nothing.
+# parse_filters WORKFLOW_PATH — one "<filter>\t<pattern>" row per pattern.
+parse_filters() {
+	ensure_pathfilters
+	"$PATHFILTERS_BIN" filters "$1"
+}
+
+# parse_push_paths WORKFLOW_PATH — the `on.push.paths` entries, one per line.
+# Empty when the workflow declares no push-paths list.
 parse_push_paths() {
-	awk '
-	function value(s,   quote, first, closing) {
-		sub(/^-[[:space:]]*/, "", s)
-		quote = sprintf("%c", 39)
-		first = substr(s, 1, 1)
-		if (first == quote || first == "\"") {
-			s = substr(s, 2)
-			closing = index(s, first)
-			if (closing > 0) s = substr(s, 1, closing - 1)
-			return s
-		}
-		sub(/[[:space:]]*#.*$/, "", s)
-		sub(/[[:space:]]+$/, "", s)
-		return s
-	}
-	/^on:[[:space:]]*$/ { inon = 1; next }
-	!inon { next }
-	# A key at column 0 ends the `on:` mapping.
-	/^[^[:space:]#]/ { inon = 0; inpush = 0; inpaths = 0; next }
-	{
-		if ($0 ~ /^[[:space:]]*$/) next
-		match($0, /^[[:space:]]*/)
-		indent = RLENGTH
-		line = substr($0, indent + 1)
-		if (line ~ /^#/) next
-		if (inpaths) {
-			if (indent > pathsindent && line ~ /^-([[:space:]]|$)/) { print value(line); next }
-			inpaths = 0
-		}
-		if (inpush && indent <= pushindent) inpush = 0
-		if (!inpush) {
-			if (line ~ /^push:[[:space:]]*$/) { inpush = 1; pushindent = indent }
-			next
-		}
-		if (line ~ /^paths:[[:space:]]*$/) { inpaths = 1; pathsindent = indent }
-	}
-	' "$1"
+	ensure_pathfilters
+	"$PATHFILTERS_BIN" push-paths "$1"
 }
 
 # pattern_covers_dir PATTERN DIR — true when PATTERN matches every file under DIR.
@@ -375,6 +320,8 @@ $(diff <(printf '%s\n' "$push_paths") <(printf '%s\n' "$filter_paths") | sed 's/
 }
 
 main() {
+	ensure_pathfilters
+
 	local modules=() found=() workflow filter module_dir
 	while IFS= read -r module_dir; do
 		# go.work reports './api'; the filters are repo-relative without the './'.

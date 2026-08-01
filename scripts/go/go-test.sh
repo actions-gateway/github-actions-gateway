@@ -77,3 +77,15 @@ done
 echo "==> go test ${race_flag:+$race_flag }${patterns[*]}"
 # shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
 $THROTTLE_PREFIX go test -trimpath $race_flag -timeout "$timeout" $p_flag $verbose_flag "${patterns[@]}"
+
+# The single invocation above resolves against go.work, which cannot reach a
+# module the workspace does not list, so those run separately with GOWORK=off.
+for dir in $(firstparty_nonworkspace_modules); do
+	echo "==> go test ${race_flag:+$race_flag }./$dir/... (GOWORK=off)"
+	(
+		cd "$dir"
+		export GOWORK=off
+		# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
+		$THROTTLE_PREFIX go test -trimpath $race_flag -timeout "$timeout" $p_flag $verbose_flag ./...
+	)
+done

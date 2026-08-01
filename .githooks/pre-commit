@@ -14,7 +14,9 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 
 # 1. gofmt — reject staged Go files that aren't gofmt-simplified. Checks the
 #    working-tree copy of each staged file, matching how CI's gofmt gate runs.
-staged_go="$(git diff --cached --name-only --diff-filter=ACM -- '*.go')"
+#    Vendored trees are excluded: they are third-party source committed as
+#    upstream published it, and `go mod vendor` is their only writer.
+staged_go="$(git diff --cached --name-only --diff-filter=ACM -- '*.go' ':!:vendor/**' ':!:**/vendor/**')"
 if [[ -n "$staged_go" ]]; then
     existing=()
     while IFS= read -r f; do

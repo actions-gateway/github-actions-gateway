@@ -98,6 +98,30 @@ workspace_modules() {
 	go work edit -json | jq -r '.Use[].DiskPath'
 }
 
+# firstparty_nonworkspace_modules — print the disk path of every first-party Go
+# module deliberately kept OUT of go.work (docs/development/go-workspaces.md
+# § First-party Go tooling stays outside the workspace). A workspace module
+# would drag every change to it through an image bake and an e2e cluster,
+# because check-path-filters.sh requires the workspace-covering filters to match
+# every go.work module.
+#
+# The cost of that choice is this list: the Go gates run one workspace-wide
+# invocation, which cannot reach a module go.work does not list, so go-test.sh,
+# go-lint.sh and go-vulncheck.sh loop these separately with GOWORK=off. Omit a
+# module here and nothing tests, lints, or scans it.
+#
+# coverage.sh is a partial exception: its ratchet derives one profile from the
+# workspace build list and filters it per module, so these modules carry no
+# baseline row and no floor. It does still run their tests, unmeasured — `make
+# check` calls cover-check in place of `make test`, so skipping them there would
+# leave the fast gate never executing them at all.
+#
+# `tools/` is excluded on purpose — it pins third-party build tools via blank
+# imports and holds no first-party code.
+firstparty_nonworkspace_modules() {
+	printf '%s\n' devtools
+}
+
 # init_throttle — populate THROTTLE_JOBS / THROTTLE_PREFIX from
 # scripts/agent/local-throttle.sh: a parallelism cap (physical cores − 2) and a
 # low-priority QoS command prefix on an interactive GUI dev shell, both empty

@@ -24,6 +24,8 @@ All scripts follow the [repo bash conventions](../docs/development/bash-style.md
 
 The root `Makefile` keeps recipes as thin target→script wiring so the logic is shellcheck-covered; parameters are env-overridable and documented in each script's header.
 
+A gate whose logic outgrows shell moves its core to Go in [`devtools/`](../devtools/), the first-party tooling module, keeping the script here as the entry point so the gate map stays in one place. Packages there mirror these directories — `devtools/ci/pathfilters/` backs [`ci/check-path-filters.sh`](ci/check-path-filters.sh). The module is deliberately outside `go.work`; the reasoning and the wiring a new one needs are in [go-workspaces.md](../docs/development/go-workspaces.md#first-party-go-tooling-stays-outside-the-workspace).
+
 ## `ci/` — repo-hygiene gates
 
 | Script | Purpose |
