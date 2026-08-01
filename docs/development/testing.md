@@ -570,6 +570,19 @@ all keep an ordered log (`Calls()` on the scale-set stub, `/control/reruns` and
 `/control/scaleset/state` on fakegithub) precisely so a spec can assert on what the
 server saw instead of inferring it from the client's logs.
 
+### A bulk mechanical change proves itself by reconciliation, not by an empty leftover query
+
+A repo-wide rename or rewrite — moving a directory, renaming a symbol, re-pointing every reference to a path — is finished when *every* site changed. The natural check is to grep for the old form and see nothing. **That check cannot distinguish "no sites remain" from "my query never matched the sites."** Both print nothing, and a rewrite and its verification query are usually written minutes apart from the same wrong mental model, so they fail together.
+
+Q571 moved 99 scripts and rewrote their references. The rewrite's regex carried a lookbehind that excluded a preceding `/`, so every `"$REPO_ROOT/scripts/foo.sh"` was silently skipped — 62 files. The leftover grep returned empty and read as done; the misses surfaced by accident while reading an unrelated file.
+
+Two checks, both cheap, and the first is the one that actually catches this:
+
+- **A positive control.** Before trusting the sweep, name one site you *know* must change and assert it did. One `grep` for a known-affected line is enough. A query that cannot match its own known case is broken, and this is the only check that says so.
+- **Reconcile counts.** Count occurrences of the old form before, count the new form after, and require them to agree. `762 rewritten` means nothing on its own; `762 rewritten, 762 found beforehand` is the claim worth making. A shortfall names how many sites the sweep missed even when you cannot yet say which.
+
+Then run the leftover query — as a third check, not the only one. The same applies to the tool doing the work: prefer a script that *reports what it changed* per file over one that edits silently, so the count is available without a second pass.
+
 ### Verify a causation claim by deleting the mechanism
 
 The two rules above are read-and-reason checks — ask what else could produce this green.
