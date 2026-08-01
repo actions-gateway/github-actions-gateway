@@ -2972,6 +2972,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Cancelling a Run Does Not Stop Its Worker Pod">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-two-tiers-differ" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the two tiers differ
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4205,6 +4222,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Cancelling a Run Does Not Stop Its Worker Pod">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-two-tiers-differ" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the two tiers differ
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -6966,7 +7000,9 @@ preempted run.</p>
 <hr />
 <h2 id="cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod<a class="headerlink" href="#cancelling-a-run-does-not-stop-its-worker-pod" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Applies to both acquisition tiers.</strong> Cancelling a job reclaims nothing.</p>
+<p><strong>Applies to the Classic acquisition tier.</strong> On <strong>ScaleSet</strong> (the default) a cancel
+does not stop the worker promptly either, but it <em>is</em> reclaimed — see
+<a href="#how-the-two-tiers-differ">How the two tiers differ</a> below.</p>
 </blockquote>
 <p><strong>Symptoms.</strong> You cancel a workflow run in the GitHub UI (or with <code>gh run cancel</code>).
 GitHub shows the job <code>cancelled</code> a few minutes later, but the worker pod stays
@@ -6985,6 +7021,24 @@ the worker pod ran the full 600s before reaching a terminal phase.</p>
 <p>This is also why the SIGTERM relay does not help here. The relay fires when the <em>pod</em>
 is terminated — an eviction, a drain, a delete — and on this path nothing terminates
 the pod.</p>
+<h3 id="how-the-two-tiers-differ">How the two tiers differ<a class="headerlink" href="#how-the-two-tiers-differ" title="Permanent link">&para;</a></h3>
+<p>The Classic tier has no channel from GitHub to the AGC once the job is acquired, so
+nothing downstream of the cancel reaches the gateway at all and the pod is bounded only
+by <code>maxWorkerLifetime</code> (12 hours by default).</p>
+<p>The <strong>ScaleSet</strong> tier keeps a message queue open for the whole job, and a cancelled run
+puts a terminal <code>JobCompleted</code> on it. That completion stamps
+<code>actions-gateway.com/job-completed-at</code> on the worker, and the reaper deletes a pod still
+<code>Running</code> five minutes later
+(<a href="#worker-pod-reaped-while-running-workerpodorphanedrunning">WorkerPodOrphanedRunning</a>).
+So the worst case there is GitHub's cancellation grace plus the reap grace — roughly ten
+minutes — rather than the job's whole remaining runtime. Expect
+<code>actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}</code> to move when this
+happens.</p>
+<p>Two caveats on that figure. The <code>JobCompleted</code>-on-cancel was measured against real
+GitHub for a job with <strong>no runner attached</strong> (the queue message appeared ~0.2 s after
+the cancel); the stamp-and-reap half is proven against a real apiserver. The composed
+chain has not been observed end to end for a job with a live worker, so treat ten
+minutes as the shape of the bound rather than a measured latency.</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-103-1" name="__codelineno-103-1" href="#__codelineno-103-1"></a><span class="c1"># Worker pods still Running for a run you already cancelled. Compare against the</span>
 <a id="__codelineno-103-2" name="__codelineno-103-2" href="#__codelineno-103-2"></a><span class="c1"># run&#39;s state in GitHub: gh run view &lt;run-id&gt; --json status,conclusion</span>
@@ -6999,11 +7053,18 @@ the pod.</p>
 <p><strong>Resolution.</strong>
 - <strong>To reclaim the capacity now, delete the worker pod.</strong> <code>kubectl delete pod -n
   &lt;namespace&gt; &lt;worker-pod&gt;</code> terminates it gracefully: the wrapper relays SIGTERM and
-  the runner stops. The run is already cancelled, so nothing is lost.
+  the runner stops. The run is already cancelled, so nothing is lost.</p>
+<blockquote>
+<p>A hand-deleted worker is the shape graceful-deletion recovery acts on (an external
+delete ordered before the container's exit), so the AGC asks GitHub to re-run the
+run's failed jobs. Whether GitHub honours that for a run concluded <code>cancelled</code> is
+unmeasured — see <a href="../../STATUS/#Q595">Q595</a>. If you are cancelling to <em>stop</em> the work
+rather than to free a slot, prefer waiting the pod out.
 - <strong>Bound the worst case with <code>maxWorkerLifetime</code></strong> on the runner group, which caps how
   long any worker — cancelled or not — can hold its slot.
 - Do <strong>not</strong> expect a lower <code>completedPodTTL</code> or <code>pendingPodDeadline</code> to help: both act
   on pods that have already stopped or never started, and this pod is running.</p>
+</blockquote>
 <hr />
 <h2 id="evicted-scale-set-jobs-are-not-re-run-automatically">Evicted Scale-Set Jobs Are Not Re-Run Automatically<a class="headerlink" href="#evicted-scale-set-jobs-are-not-re-run-automatically" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> A <code>RunnerSet</code> on the scale-set acquisition tier
