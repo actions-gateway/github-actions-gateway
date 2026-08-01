@@ -135,6 +135,8 @@ jobs:
               - '!scripts/check-doc-links.sh'
               - '!scripts/source-links-hook-test.sh'
               - '!scripts/release-version-hook-test.sh'
+              - '!scripts/check-roadmap.sh'
+              - '!scripts/check-roadmap-test.sh'
       - name: warn when change detection failed
         if: steps.filter.outcome == 'failure' || steps.nondocs.outcome == 'failure'
         run: echo "::warning::paths-filter could not classify the diff; assuming every filter matched so the gated jobs run"
