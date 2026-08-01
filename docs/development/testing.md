@@ -427,6 +427,16 @@ A root-cause claim needs evidence measured from *this* failure, not a resemblanc
 - **Symptom-matching a prior issue.** When a failure looks like a known issue — a flake row on the [backlog](../STATUS.md), a previously fixed bug, a memory of "this is always X" — that match is a **hypothesis, not a diagnosis**. The same surface symptom (a scheduling timeout, an egress blip, a wedged run) can have a different cause each time. Before acting on the remembered cause — and above all before spending a billable re-run, a fix PR, or a state-changing command on it — take a direct measurement from the failing system: read the actual events, describe the actual pod, pull the actual log line. If the environment tears down evidence on failure, capturing diagnostics *before* teardown is part of the fix, not optional (filed from the v1.2.0 release retro, where gate failures had to be re-run just to observe them).
 - **Trusting source inspection.** Reading code — or a plan doc's ✅ investigation findings, which usually derive from source-reading — tells you what *should* happen, not what does. Treat such findings as unverified until confirmed end-to-end: actually exec the thing. Source-reading alone has produced wrong conclusions before (PR #59).
 
+### The status you report is a claim too
+
+The rules above govern *why* something failed. The same discipline applies to the plainer statements that carry a decision — "the gate is green", "the pods are stuck", "the drain is converging". Each is a claim about state, and each has a cheap way of being wrong:
+
+- **An exit code read through a pipe is the pipe's.** `make check | tail -40` reports `tail`'s status, so a failing gate reads as `0`. Redirect to a file and read `$?` from the command itself — then reconcile it against the output, because a gate that exits 0 while its own log carries a `FAIL` line is the other half of the same trap.
+- **A tool that exits 0 having printed nothing may have checked nothing.** `gh attestation verify` writes its summary only to a TTY; captured or redirected it is silent, and silence is indistinguishable from a no-op. When a verification's whole value is that it ran, make it emit something assertable (`--format json`, then read the predicate) rather than trusting the status alone.
+- **A state observed once is not a steady state.** Pods wedged now may clear in ten minutes; a set that looks static may be churning underneath a stable count. Before calling a condition permanent, take a second reading far enough apart to tell the difference, and compare *identities* rather than counts.
+
+The failure mode these share is reporting a conclusion from a signal that does not carry it. The fix is the same each time: name the signal the claim actually depends on, and read that one.
+
 ### Check for a committed capture before booking a live measurement
 
 "Measure it" does not always mean "run it". Before scheduling a Tier C run, a dogfood
