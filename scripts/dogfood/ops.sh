@@ -94,6 +94,11 @@ op_kata_install() {
 
 # op_agc_bounce [ci|e2e] — roll-restart an AGC Deployment and wait for it to
 # come back. Use after a GMC/AGC config change or when an AGC is wedged.
+#
+# Restarts the control plane only: it deletes no worker pod, so it never clears
+# a stalled stop.sh drain (which counts worker pods). Needs a GMC carrying the
+# Q552 fix — older ones revert the restart annotation and the rollout reports
+# success while nothing rolls.
 op_agc_bounce() {
 	local which="${1:-ci}" ns dep
 	case "$which" in

@@ -908,10 +908,13 @@ through a backlog and a livelocked one both hold the count flat.
 
 A pod stuck on `FailedMount` or `FailedScheduling` holds one of its tenant's
 concurrency slots until it is deleted, which is what stops the rest of the queue
-from draining. Bouncing the AGC (`scripts/dogfood/ops.sh agc-bounce <tenant>`)
-does **not** clear stuck pods, and a fresh listener re-acquires the same
-assignments — it is worth trying only when the pods are gone but the listener
-still holds work.
+from draining.
+
+Bouncing the AGC (`scripts/dogfood/ops.sh agc-bounce [ci|e2e]`) is **not** a
+remedy here. It is a real rolling restart on a GMC carrying the Q552 fix, but
+this drain counts worker pods and a restart deletes none of them; the reaper
+that clears a stuck pod already runs on the live AGC, on deadlines measured from
+the pod, so a fresh one reaps no sooner. Delete the pods instead.
 
 `SKIP_DRAIN=1` is the deliberate override — reach for it when the AGC is already
 down, since an AGC that cannot reap will never let the drain finish.
