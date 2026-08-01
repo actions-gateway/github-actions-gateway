@@ -27,36 +27,48 @@ describing your setup. Every open item, in priority order, is in the
 Work that is scoped and actively being built — adoption-enabling polish and the
 last gaps an outside operator hits.
 
-- **CI for untrusted pull requests on Kata workers.** <!-- q:Q408 --> [Kata
-  workers](operations/kata-dind-workloads.md) are validated for *trusted* CI
-  only: the micro-VM bounds the guest kernel, the runner's egress stays
+- **[CI for untrusted pull requests on Kata workers](plan/q408-untrusted-pr-egress.md)** <!-- q:Q408 -->
+  [Kata workers](operations/kata-dind-workloads.md) are validated for *trusted*
+  CI only: the micro-VM bounds the guest kernel, the runner's egress stays
   permissive. Untrusted PRs need an in-cluster pull-through registry mirror plus
   egress scoped to it, GitHub, and DNS. Scheduled on an operator's ask;
-  measurement first — [phased plan](plan/q408-untrusted-pr-egress.md).
+  measurement first.
 
-- **A curated runner template library.** <!-- q:Q554 --> Every tenant writes its
-  own worker pod template today, including the fiddly parts: the
-  Docker-in-Docker sidecar, the Kata `runtimeClassName`, the volume and
-  security-context wiring. The templates our own end-to-end CI exercises become a
-  [shipped kustomize base](plan/runner-template-library.md) you patch. No new API
-  surface.
+- **[A curated runner template library](plan/runner-template-library.md)** <!-- q:Q554 -->
+  Every tenant writes its own worker pod template today, including the fiddly
+  parts: the Docker-in-Docker sidecar, the Kata `runtimeClassName`, the volume
+  and security-context wiring. The templates our own end-to-end CI exercises
+  become a shipped kustomize base you patch. No new API surface.
 
-- **Opt-in auto-retry for flaky jobs.** <!-- q:Q555 --> A job the cluster
-  disrupts already
+- **[Opt-in auto-retry for flaky jobs](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q555 -->
+  A job the cluster disrupts already
   [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do);
-  one that failed flakily does not. Same machinery, opted in per runner set with
-  its own budget so a broken test cannot loop. Detection comes first —
-  [G.17](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)
-  has the prior art and costs.
+  a flaky failure does not. Same machinery, opted in per runner set with its own
+  budget so a broken test cannot loop. Detection comes first.
 
-- **Richer egress proxy.** <!-- q:Q564,Q565,Q566,Q567 --> Four opt-in additions
-  to the [per-tenant proxy](design/network-architecture.md):
-  [audit logging](design/appendix-g-future-enhancements.md#g3-proxy-side-audit-logging),
-  [per-tenant rate limiting](design/appendix-g-future-enhancements.md#g2-proxy-enforced-per-tenant-rate-limiting),
-  [TLS on the in-cluster hop](design/appendix-g-future-enhancements.md#g4-tls-between-agcworkers-and-the-proxy),
-  and [dedicated pools per runner group](design/appendix-g-future-enhancements.md#g5-per-runnergroup-dedicated-proxy-pool).
-  Destination allow-listing is absent deliberately: it
-  [already ships](features.md#security-posture).
+The next four are all opt-in additions to the
+[per-tenant proxy](design/network-architecture.md), tracked and shipping
+separately.
+
+- **[Proxy-side audit logging](design/appendix-g-future-enhancements.md#g3-proxy-side-audit-logging)** <!-- q:Q564 -->
+  A structured line per accepted CONNECT — tenant, host and port, bytes each way,
+  duration. The proxy emits counters only today, so per-tenant egress is
+  reconstructable just from cluster flow logs. Off by default.
+
+- **[Per-tenant proxy rate limiting](design/appendix-g-future-enhancements.md#g2-proxy-enforced-per-tenant-rate-limiting)** <!-- q:Q565 -->
+  A token bucket at the proxy, so one looping tenant is slowed before it reaches
+  GitHub's ceiling; today the only feedback is a 429 and AGC backoff. Per-pod
+  state — global limits would need a shared backend.
+
+- **[TLS on the in-cluster proxy hop](design/appendix-g-future-enhancements.md#g4-tls-between-agcworkers-and-the-proxy)** <!-- q:Q566 -->
+  The CONNECT target is cleartext between the AGC or workers and the proxy,
+  readable by an eBPF tap, though the tunnelled payload stays TLS to GitHub.
+  Mount a cert-manager certificate and move to an `https://` proxy URL.
+
+- **[A dedicated proxy pool per runner group](design/appendix-g-future-enhancements.md#g5-per-runnergroup-dedicated-proxy-pool)** <!-- q:Q567 -->
+  One pool per gateway today, so a bandwidth-heavy group can saturate a
+  co-tenant's. Give an opted-in group its own Deployment, Service, and
+  autoscaler. Largest of the four; needs a plan doc before code.
 
 ## Exploring / longer-term
 
@@ -66,45 +78,48 @@ limit, or a gating release before it becomes scheduled work. The first entry is
 the exception that proves the rule: it is a firm commitment, waiting only on the
 release that carries it.
 
-- **Retiring `v1alpha1`, `v2alpha1`, and the classic acquisition protocol.** <!-- q:Q273 -->
+- **[Retiring `v1alpha1`, `v2alpha1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273 -->
   Committed, but not yet started. `v1.3.0` is the one-release-ahead announcement;
   **`v2.0.0`** is the named release that removes all three together, since
   `v2beta1` is already ScaleSet-only. Gated on the `v2` GA API being validated,
-  not on a date. Detail: the
-  [deprecation and removal notice](operations/v1alpha1-deprecation.md).
+  not on a date.
 
-- **Controller horizontal scaling / high availability.** <!-- q:Q169 --> The per-tenant
-  controller is [single-replica by design](design/appendix-e-capacity-planning.md)
-  today; distributed session state would enable multi-replica HA if a single
-  controller becomes a measured bottleneck.
-- **Bring-your-own proxy TLS certificate.** <!-- q:Q174 --> Supply the
-  [proxy's certificate](design/network-architecture.md) from your managed PKI or
-  Vault instead of the GMC's self-signed default. (The autoscaler half has
-  shipped: `managedAutoscaling: false` hands the pool to KEDA, VPA, or a custom
+- **Controller horizontal scaling / high availability.** <!-- q:Q169 --> The
+  per-tenant controller runs
+  [one replica by design](design/02-architecture.md) — the session registry is
+  in-memory, and HA comes from GitHub redelivering an unacquired job.
+  Distributed session state would enable multi-replica HA if a single controller
+  becomes a measured bottleneck.
+- **[Bring-your-own proxy TLS certificate](plan/v2-api.md#deferred-out-of-the-critical-path)** <!-- q:Q174 -->
+  Supply the proxy's certificate from your managed PKI or Vault instead of the
+  GMC's self-signed default. (The autoscaler half has shipped:
+  `managedAutoscaling: false` hands the pool to KEDA, VPA, or a custom
   HorizontalPodAutoscaler.)
-- **Cross-namespace proxy sharing.** <!-- q:Q166 --> Share an
+- **[Cross-namespace proxy sharing](plan/v2-api.md)** <!-- q:Q166 --> Share an
   [egress proxy pool](design/network-architecture.md) across namespaces with
   explicit consent (same-namespace sharing already works).
-- **First-class GPU runner support.** <!-- q:Q216 --> Priority tiers and the
+- **[First-class GPU runner support](design/appendix-e-capacity-planning.md)** <!-- q:Q216 -->
+  Priority tiers and the
   [`NodeShare` sizing profile](operations/worker-rightsizing.md) already carry the
   GPU cases, but GPU Operator / Node Feature Discovery awareness, and
   `nodeSelector` / toleration / `RuntimeClass` conventions that make a GPU runner
   set feel native, wait on a concrete GPU workload to design against.
-- **A worker cache backend.** <!-- q:Q215 --> Workers are storage-less by design, so
+- **[A worker cache backend](plan/ecosystem-integration-landscape.md#j-registry-build-cache--images-runner-workload-plane)** <!-- q:Q215 -->
+  Workers are storage-less by design, so
   `actions/cache` and Docker layer caching have no home. Adding an optional
   PVC or object-store cache needs a
   [security review](design/05-security.md) of cross-job cache isolation first: a
   shared cache between tenants' jobs is an obvious exfiltration path.
-- **A warm worker pool.** <!-- q:Q268 --> An opt-in pool of
-  [idle pods per runner set](design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers),
-  for teams that still hit pod-schedule latency after image pre-pull and caching.
-- **gVisor validation.** <!-- q:Q15 --> The `runtimeClassName` path is
+- **[A warm worker pool](design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers)** <!-- q:Q268 -->
+  An opt-in pool of idle pods per runner set, for teams that still hit
+  pod-schedule latency after image pre-pull and caching.
+- **[gVisor validation](plan/milestone-5.md)** <!-- q:Q15 --> The `runtimeClassName` path is
   [validated end-to-end with Kata](operations/kata-dind-workloads.md); gVisor is
   documented but unproven on a real cluster. It waits on an operator who wants
   lightweight syscall filtering for compute-only, non-Docker-in-Docker jobs, since
   Kata already covers the DinD case.
-- **SPIFFE / SPIRE workload identity.** <!-- q:Q214 --> A keyless, SPIRE-backed signer
-  slots behind the
+- **[SPIFFE / SPIRE workload identity](plan/v2beta1.md#workload-identity-a-different-config-vault-first)** <!-- q:Q214 -->
+  A keyless, SPIRE-backed signer slots behind the
   [existing signer interface](design/05-security.md#57-workload-identity-the-no-pem-delegation-model)
   alongside the deferred cloud-KMS providers, for operators who want no GitHub App
   private key anywhere.

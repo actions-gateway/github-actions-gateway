@@ -129,6 +129,8 @@ bullets() {
             sub(/^- +/, "", label)
             sub(/\*\*/, "", label)
             sub(/\*\*.*$/, "", label)
+            # A title is often itself a link; report the text, not the markup.
+            gsub(/\[|\]\([^)]*\)/, "", label)
         }
         # Same accounting as the features pass: the q-annotation and any badge
         # span are markup, and a link costs its text but not its target.
