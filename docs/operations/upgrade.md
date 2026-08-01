@@ -14,6 +14,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Migration Notes](#migration-notes)
   - [Non-breaking: an EgressProxy pool's pods drop the app: actions-gateway-proxy label (its pool is recreated once)](#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once)
   - [Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)](#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did)
+  - [Non-breaking: a GHES appliance behind a private CA can now be trusted (`spec.githubCABundleRef`)](#non-breaking-a-ghes-appliance-behind-a-private-ca-can-now-be-trusted-specgithubcabundleref)
   - [Non-breaking: drained and hand-deleted workers are now re-run automatically (cause="deletion")](#non-breaking-drained-and-hand-deleted-workers-are-now-re-run-automatically-causedeletion)
   - [Non-breaking: an evicted job's auto-re-run now lands (GitHub refused it before)](#non-breaking-an-evicted-jobs-auto-re-run-now-lands-github-refused-it-before)
   - [Non-breaking: classic-tier eviction auto-retry now fires (it never did against real GitHub)](#non-breaking-classic-tier-eviction-auto-retry-now-fires-it-never-did-against-real-github)
@@ -189,6 +190,51 @@ kubectl get egressproxy -A -o jsonpath='{range .items[?(@.status.conditions[?(@.
 on an older image other than the testing-only `--allow-agc-extra-env` flag, which
 [security-operations.md](security-operations.md#github-api-base-url-must-be-https) tells
 you not to use in production.
+
+### Non-breaking: a GHES appliance behind a private CA can now be trusted (`spec.githubCABundleRef`)
+
+**Who is affected:** tenants whose GitHub Enterprise Server appliance is fronted by a
+private or internal certificate authority. Nobody else: the new field is optional, and a
+gateway that does not set it produces a byte-identical AGC `Deployment`. No pod restarts
+on this upgrade.
+
+**What was broken.** The AGC and its worker pods trust the OS system roots plus the
+per-tenant egress proxy's own CA, and nothing — no CRD field, Helm value, or GMC
+flag — could extend that. An appliance whose certificate chains to an internal CA
+therefore failed the TLS handshake on every call: token exchange and runner registration
+from the AGC, and `actions/checkout`, log upload, and artifact upload from the worker
+pod. Routing through an `EgressProxy` did not help, because the proxy tunnels with
+`CONNECT` and the TLS session is end to end. This was the last gap named by the audit
+behind the change above.
+
+**What changed.** `ActionsGateway.spec.githubCABundleRef` (v2 only) names a `ConfigMap`
+in the gateway's namespace carrying a PEM bundle under `ca.crt`. The GMC mounts it on
+the AGC `Deployment` and the AGC projects the same `ConfigMap` into every worker pod, so
+the control plane and the runners trust the same appliance. The bundle is **additive** —
+the system roots stay trusted — so a gateway that also reaches public hosts is
+unaffected.
+
+```bash
+kubectl -n team-a create configmap ghes-ca --from-file=ca.crt=/path/to/corp-root-ca.pem
+kubectl -n team-a patch actionsgateway my-gateway --type=merge \
+  -p '{"spec":{"githubCABundleRef":{"name":"ghes-ca"}}}'
+```
+
+Setting the field re-renders the AGC `Deployment`, so **that tenant's AGC pod restarts**.
+In-flight jobs are unaffected — worker pods are separate.
+
+**A ref that does not resolve fails closed.** A `ConfigMap` that is missing, or whose
+`ca.crt` holds no PEM certificate, leaves the gateway `Ready=False` /`Degraded=True` with
+reason `CABundleNotFound` or `CABundleInvalid` and provisions no AGC — rather than a
+`Deployment` whose pod would sit at `ContainerCreating` with no explanation. The gateway
+recovers on its own once the `ConfigMap` is applied. Runbook:
+[troubleshooting.md § a GHES appliance's certificate is not trusted](troubleshooting.md#a-ghes-appliances-certificate-is-not-trusted).
+
+**Egress remains a separate obligation.** Trusting the CA does not put the appliance's
+address space in the NetworkPolicy; see the CIDR-mode note above.
+
+**Rolling back** restores the defect for these tenants. `v1alpha1` has no equivalent
+field and never will — it is frozen and removed at `v2.0.0`.
 
 ### Non-breaking: drained and hand-deleted workers are now re-run automatically (`cause="deletion"`)
 
