@@ -2943,14 +2943,6 @@
 <td>Three shapes, three bespoke checks: shared paths across two <code>filters:</code> (Q533), <code>on.push.paths</code> vs its filter (gated), <code>pull_request.paths</code> vs <code>push.paths</code> (ungated). One registry replaces all three.</td>
 </tr>
 <tr>
-<td><a id="Q584"></a>Q584</td>
-<td><a href="../development/go-workspaces/#first-party-go-tooling-stays-outside-the-workspace">Replace <code>check-path-filters.sh</code>'s hand-rolled YAML parsing with a real parser</a></td>
-<td><code>infra</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Measured 2026-08-01: the awk parsers accept only <code>filters: \|</code> exactly, so a valid reformat (<code>\|-</code>) emits 12 errors naming patterns already present. False red, not the false green first claimed — assertion 2 is registry-driven and fails closed.</td>
-</tr>
-<tr>
 <td><a id="Q534"></a>Q534</td>
 <td><a href="../development/documentation-standards/">Rule: an upstream-behavior claim cites a measurement, in docs and in code comments</a></td>
 <td><code>docs</code> <code>retro</code></td>
