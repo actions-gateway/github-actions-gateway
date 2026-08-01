@@ -37,6 +37,40 @@ Two facts follow:
    cache works fine — a second run in the same worktree replays it. The problem
    is that a *new* worktree never inherits it.
 
+### Re-baseline on the M5 Max (2026-08-01)
+
+The `~21 min` above is this document's most-cited number and it belongs to the
+Intel machine. On the replacement dev machine — Apple M5 Max, **18 physical
+cores, 128 GB** — one `make check` against an empty private `GOCACHE`, as the
+sole slot holder (no `heavy-build slot` waits in the log), exit 0 with every
+coverage floor green:
+
+| | Intel i7, 4 cores / 32 GB | M5 Max, 18 cores / 128 GB |
+|---|---|---|
+| Cold `make check`, end to end | ~21 min | **102 s** |
+| Build cache produced | — | 2.7 GB |
+
+The gap is an order of magnitude, so **any wall-clock argument in this repo has
+to name its machine.** `vendor/` was already on disk for the M5 Max run, making
+it a cold *build* cache rather than a cold worktree.
+
+Memory, sampled every 2 s across the same run:
+
+| | measured |
+|---|---|
+| Peak go-toolchain + linter RSS | **4.08 GB** across 10 procs, during `cover-check` |
+| Largest single process | 0.70 GB (`link`) |
+| System-wide used | 46.0 GB → 47.4 GB (**+1.36 GB**) |
+| Peak swap used | 7.44 MB — unchanged from idle |
+
+The peak-RSS figure is what sizes `local-throttle.sh workers`: it is charged once
+per heavy-build *slot* rather than per dispatch worker, because the slot
+semaphore bounds concurrent gates however many workers exist. With a worker
+session measured at 0.43 GB mean / 0.60 GB peak resident, RAM does not bind
+dispatch concurrency on this class of machine at any number worth running —
+128 GB leaves room for ~138 sessions past a desktop reserve and two gate holders.
+See [parallel-dispatch.md § Concurrency and contention](../../development/parallel-dispatch.md#concurrency-and-contention).
+
 ## Finding: `-trimpath` makes the test-result cache path-independent
 
 [testing.md § Build and lint caches across worktrees](../../development/testing.md#build-and-lint-caches-across-worktrees)

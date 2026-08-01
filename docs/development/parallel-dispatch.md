@@ -34,7 +34,8 @@ run-specific knobs. A ready-to-paste template:
 > **`/goal`** Act as the **dispatcher** for a parallel-dispatch run, following
 > `docs/development/parallel-dispatch.md`. Clear **[BATCH — e.g. "the remaining
 > `1.0-gate` Queue items in `docs/STATUS.md`"]**: one worker session (task chip)
-> and one PR per task, **max [3] concurrent**. Each worker must be a **full,
+> and one PR per task, **max [N] concurrent** (from
+> `scripts/agent/local-throttle.sh workers`). Each worker must be a **full,
 > independent Claude Code session (a task chip), never a sub-agent**. Give every
 > worker the self-healing contract from task one (launch the **pr-sentinel**
 > background watcher on PR open — one watcher that wakes on CI failures **and**
@@ -57,7 +58,8 @@ The knobs to set each run (everything else comes from this playbook):
 
 - **Batch / scope** — which items (a label filter, a Queue range, an explicit
   list).
-- **Concurrency cap** — 3 is a good default.
+- **Concurrency cap** — `scripts/agent/local-throttle.sh workers` sizes it for
+  the machine you are on (see [Concurrency and contention](#concurrency-and-contention)).
 - **Exclusions** — anything needing real secrets or a live cluster; state it up
   front rather than making the dispatcher discover it mid-run.
 - **Merge gating** — default is dispatcher-gated after a scope review; say so if
@@ -374,8 +376,24 @@ This is the key design decision; get it right up front.
 
 ## Concurrency and contention
 
-- **Cap concurrency** (3 is a sane default) so a small machine and the reviewer
-  are not overwhelmed.
+- **Take the concurrency cap from the machine**, not from a constant:
+
+  ```bash
+  scripts/agent/local-throttle.sh workers
+  ```
+
+  It returns the smaller of what RAM and physical cores allow, under a ceiling of
+  12. A worker costs one Claude Code session (measured 0.43 GB mean / 0.60 GB
+  peak resident) plus a share of the gate — and the gate share is already bounded
+  by the [2-slot semaphore](testing.md#resource-auto-throttle-on-gui-dev-machines)
+  however many workers exist, so each extra worker costs the session alone. On a
+  128 GB machine that leaves room for ~138 sessions, which is why the ceiling,
+  not the hardware, is what answers there.
+
+  **Above the ceiling the constraints are not local** — dispatcher review
+  throughput and GitHub Actions concurrency — so going higher is a judgement call
+  you make and set with `GAG_DISPATCH_WORKERS`, not something the machine can
+  measure for you. The hardware terms still bind downward: a 16 GB laptop gets 1.
 - **Group tasks by the files they touch into "streams" and sequence within a
   stream.** Two PRs editing the same CI workflow or `Makefile` will conflict; run
   them one after another, and run *different* streams in parallel. Self-healing
@@ -392,9 +410,16 @@ This is the key design decision; get it right up front.
 batch most of it is *waiting*. Its three heavy phases (`build-tags-check`,
 `lint`, `cover-check`) each take one of **2** machine-wide slots
 ([resource auto-throttle](testing.md#resource-auto-throttle-on-gui-dev-machines)),
-so whenever a 6-worker batch is in those phases, four of the six are queued. A
-cold gate is dominated by `cover-check` — ~19 of ~21 min on the machine the
-baseline was taken on ([measurements](../plan/archive/local-gate-throughput.md)).
+so whenever a 6-worker batch is in those phases, four of the six are queued.
+
+**How much that costs is a property of the machine, and the two we have measured
+differ by an order of magnitude.** A cold gate is dominated by `cover-check`:
+~19 of ~21 min on the small dev machine the original baseline was taken on, but
+**102 s end-to-end** on the M5 Max replacement (18 physical cores, 128 GB) with a
+fully cold build cache and no slot contention
+([measurements](../plan/archive/local-gate-throughput.md)). Take your own number
+before reasoning about the wall clock; the rule below is right either way, but on
+a wide machine its payoff is seconds rather than the better part of an hour.
 
 **Every worker should launch the gate as a background task and keep working:**
 
@@ -412,7 +437,9 @@ The confirming run is cheap, for a specific reason: the gates that validate what
 step 2 wrote — `lint-backlog`, `doc-links`, `plan-index-check`,
 `no-plan-refs-check`, `shellcheck` — are the *fast* gates, which take **no**
 heavy-build slot and run concurrently. Only the three heavy phases re-queue, and
-they are cache-warm from step 1 — a warm gate is ~2 min against a cold one's tens.
+they are cache-warm from step 1 — on the small machine that is ~2 min against a
+cold one's tens, and on a wide one both are short enough that the confirming run
+is unconditionally worth it.
 
 **The one rule: step 1's verdict covers the tree it saw.** If step 2 turns up a
 code change, that verdict is void and the confirming run is cold again for the
@@ -557,7 +584,8 @@ production credentials) — exclude them explicitly and hand them to a human.
 - [ ] Batch chosen; each item is independent and one-PR-sized.
 - [ ] Tasks grouped into streams by shared files; foundational items ordered
       first.
-- [ ] Concurrency cap chosen.
+- [ ] Concurrency cap taken from `scripts/agent/local-throttle.sh workers`, or a
+      deliberate `GAG_DISPATCH_WORKERS` override.
 - [ ] Model chosen per task (mechanical → faster/cheaper; judgment-heavy →
       strongest), set in each spawn prompt.
 - [ ] Workers spawned as full Claude Code sessions (task chips), **never**
