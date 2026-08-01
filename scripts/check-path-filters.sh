@@ -73,6 +73,7 @@ NARROW_FILTERS=(
 	'unit-test.yml:workflows'         # the workflow filters this gate itself lints
 	'unit-test.yml:claude_usage'      # the claude-usage/ Python module and its stdlib-only suite
 	'security-scan.yml:chart'         # the Helm chart the Polaris posture scan renders
+	'e2e-test.yml:nondocs'            # subtracts docs-site material from the e2e filter, never widens it
 	'e2e-calico.yml:calico'           # NetworkPolicy/proxy code only; other PRs stay on the kindnet leg
 	'manifest-validate.yml:manifests' # generated YAML, not the Go types behind it
 	'license-notices.yml:notices'     # vendor/ and the notices generator
