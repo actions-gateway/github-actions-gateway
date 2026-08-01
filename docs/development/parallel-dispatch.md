@@ -158,11 +158,19 @@ preference order:
 plugin the operator installs per that repo's README. After a `gh pr create` or a
 PR-branch `git push`, its `PostToolUse` hook nudges the session to launch a tiny
 `bash` watcher as a **background task** (`run_in_background`) — the exact command
-the nudge names:
+the nudge names, which is a three-token `bash <absolute path> <PR>`:
 
 ```
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/pr-sentinel-watch.sh" <PR>
+bash "/path/to/plugins/cache/pr-sentinel/pr-sentinel/<version>/scripts/pr-sentinel-watch.sh" <PR>
 ```
+
+**Copy the path out of the nudge verbatim; do not substitute
+`"${CLAUDE_PLUGIN_ROOT}/scripts/pr-sentinel-watch.sh"` for it.** That variable is
+not set in the shell the Bash tool runs (measured 2026-08-01 — the other
+`CLAUDE_*` variables are present, this one is not), so the literal form expands
+to `/scripts/pr-sentinel-watch.sh` and exits 127. The nudge already resolves the
+plugin root, so quoting it back costs a wasted turn and, on an unattended worker,
+risks leaving the PR unwatched.
 
 **Launch it bare — never with an inline `VAR=…` prefix.** pr-sentinel
 auto-approves its own watcher launch only for that exact three-token shape; an
