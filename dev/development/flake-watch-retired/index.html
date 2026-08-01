@@ -2292,6 +2292,7 @@
 <h1 id="retired-flakes">Retired flakes<a class="headerlink" href="#retired-flakes" title="Permanent link">&para;</a></h1>
 <p>Cold storage for flake-watch rows that have graduated out of the live <a href="../../STATUS/#flake-watch">Flake watch</a> table. A row lands here when its recurrence-memory has decayed to ~zero — see the retirement bar in <a href="../maintaining-backlog/#retiring-a-flake-watch-row">maintaining-backlog.md</a> (<strong>soaked</strong> — the spec's blast-radius run threshold of green <code>main</code> runs since the fix, <strong>or</strong> the test/code path is <strong>obsolete</strong>).</p>
 <p>This ledger exists so retirement is not deletion: it keeps the "a fix was already attempted here" memory <code>grep</code>-able at zero live-table cost. If a retired flake ever recurs, it re-enters the Queue as a fresh find (flakes-first); this row is the pointer back to the original diagnosis, so re-add it to the escalation history rather than starting cold.</p>
+<p>Run counts below are green <code>main</code> runs of the covering workflow since the fix merged, measured with the <code>gh run list</code> recipe in <a href="../maintaining-backlog/#retiring-a-flake-watch-row">maintaining-backlog.md</a>. Each is anchored on a date at or after the fix, so every count is a conservative undercount.</p>
 <p>Newest retirement first.</p>
 <table>
 <thead>
@@ -2305,11 +2306,130 @@
 </thead>
 <tbody>
 <tr>
-<td><em>(none yet)</em></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
+<td>Q350</td>
+<td>scalesetlistener metrics assertions race the provisioner stub</td>
+<td>#948</td>
+<td>2026-08-01</td>
+<td>Soaked: ≥136 green <code>unit-test</code> runs since 2026-07-28 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q460</td>
+<td><code>trivy</code> shards flake on the Docker Hub buildkit pull</td>
+<td>#906</td>
+<td>2026-08-01</td>
+<td>Soaked: 107 green <code>security-scan</code> runs since 2026-07-27 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q461</td>
+<td><code>gag-migrate --apply</code> aborts the fan-out on an unreachable webhook</td>
+<td>#904</td>
+<td>2026-08-01</td>
+<td>Soaked: 94 green <code>e2e-test</code> runs since 2026-07-27 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q455</td>
+<td>Stack through <code>reconcileDelete</code> under host contention</td>
+<td>#890</td>
+<td>2026-08-01</td>
+<td>Soaked: 136 green <code>unit-test</code> runs since 2026-07-27 (bar ≥25, infra — log noise, not an assertion).</td>
+</tr>
+<tr>
+<td>Q391</td>
+<td>e2e: GMC webhook unreachable in a <code>BeforeAll</code> apply</td>
+<td>#889</td>
+<td>2026-08-01</td>
+<td>Soaked: 94 green <code>e2e-test</code> runs since 2026-07-27 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q451</td>
+<td><code>TestV2_RunnerSet_SizingRecommendationAndDrift</code> 409 on the reconcile poke</td>
+<td>#876</td>
+<td>2026-08-01</td>
+<td>Soaked: 107 green <code>integration-test</code> runs since 2026-07-27 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q445</td>
+<td><code>TestRunScaleSet_ForwardsSIGTERMToRunSh</code> kills the test binary</td>
+<td>#872</td>
+<td>2026-08-01</td>
+<td>Soaked: ≥136 green <code>unit-test</code> runs since 2026-07-27 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q431</td>
+<td>PodTemplateEdit integration test races the reconciler</td>
+<td>#838</td>
+<td>2026-08-01</td>
+<td>Soaked: ≥107 green <code>integration-test</code> runs since 2026-07-27 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q436</td>
+<td>A failed <code>DeleteSession</code> strands the job queued on that session</td>
+<td>#837</td>
+<td>2026-08-01</td>
+<td>Soaked: ≥136 green <code>unit-test</code> runs since 2026-07-27 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q433</td>
+<td>CI pinned-binary downloads never retry a 403</td>
+<td>#834</td>
+<td>2026-08-01</td>
+<td>Soaked: ≥136 green <code>unit-test</code> runs since 2026-07-27 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q378</td>
+<td><code>TestReconcile_ReaperDefaults</code> baseline-recheck race</td>
+<td>#738</td>
+<td>2026-08-01</td>
+<td>Soaked: 241 green <code>unit-test</code> runs since 2026-07-21 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q299</td>
+<td>manager-metrics curl pod flake (kindnet)</td>
+<td>#608</td>
+<td>2026-08-01</td>
+<td>Soaked: 229 green <code>e2e-test</code> runs since 2026-07-13 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q292</td>
+<td>e2e hosted-runner disk exhaustion during bring-up</td>
+<td>#597</td>
+<td>2026-08-01</td>
+<td>Soaked: 234 green <code>e2e-test</code> runs since 2026-07-12 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q291</td>
+<td>e2e-calico egress-to-GitHub reachability flake</td>
+<td>#593</td>
+<td>2026-08-01</td>
+<td>Soaked: 144 green <code>e2e-calico</code> runs since 2026-07-11 (bar ≥25, infra). Recurred twice pre-fix, never since.</td>
+</tr>
+<tr>
+<td>Q256</td>
+<td>e2e-calico infra bring-up (registry + Calico node)</td>
+<td>#590</td>
+<td>2026-08-01</td>
+<td>Soaked: 144 green <code>e2e-calico</code> runs since 2026-07-11 (bar ≥25, infra).</td>
+</tr>
+<tr>
+<td>Q285</td>
+<td><code>TestListener_AssignedCountReconciliation</code></td>
+<td>#580</td>
+<td>2026-08-01</td>
+<td>Soaked: ≥300 green <code>unit-test</code> runs since 2026-07-08 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q221</td>
+<td>metrics-NP AllowsLabeledNamespace (calico)</td>
+<td>#412</td>
+<td>2026-08-01</td>
+<td>Soaked: 182 green <code>e2e-calico</code> runs since 2026-06-27 (bar ≥50, correctness-guarding).</td>
+</tr>
+<tr>
+<td>Q179</td>
+<td>two kindnet v1 e2e timing races</td>
+<td>#370</td>
+<td>2026-08-01</td>
+<td>Soaked: 369 green <code>e2e-test</code> runs since 2026-06-23 (bar ≥50, correctness-guarding).</td>
 </tr>
 </tbody>
 </table>

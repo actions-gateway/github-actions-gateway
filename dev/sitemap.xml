@@ -433,19 +433,11 @@
          <lastmod>2026-08-01</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/plan/q291-e2e-calico-egress-github-flake/</loc>
-         <lastmod>2026-08-01</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/plan/q300-gmc-kindnet-e2e-flake/</loc>
          <lastmod>2026-08-01</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q408-untrusted-pr-egress/</loc>
-         <lastmod>2026-08-01</lastmod>
-    </url>
-    <url>
-         <loc>https://actions-gateway.com/dev/plan/q436-session-recycle-strands-job/</loc>
          <lastmod>2026-08-01</lastmod>
     </url>
     <url>
@@ -709,6 +701,10 @@
          <lastmod>2026-08-01</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/plan/archive/q291-e2e-calico-egress-github-flake/</loc>
+         <lastmod>2026-08-01</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q311-scaleset-monitoring-surface/</loc>
          <lastmod>2026-08-01</lastmod>
     </url>
@@ -730,6 +726,10 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q435-restart-orphan-reclaim/</loc>
+         <lastmod>2026-08-01</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/plan/archive/q436-session-recycle-strands-job/</loc>
          <lastmod>2026-08-01</lastmod>
     </url>
     <url>

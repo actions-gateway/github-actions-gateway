@@ -2520,16 +2520,6 @@ run commands live in
 <td>✅ Done — all 8 code modules ≥75% (probe/gmc reached via a <code>runProbe</code>/fake-client refactor + tests)</td>
 </tr>
 <tr>
-<td><a href="q291-e2e-calico-egress-github-flake/">q291-e2e-calico-egress-github-flake.md</a></td>
-<td>Three real-GitHub egress specs (2 proxy-connect + direct-egress) red the <code>e2e-calico</code> leg together when the Felix ipBlock-programming / GitHub-dial window outlasts the curl retry budget under CI load; widen the bounded retry budget without weakening assertions</td>
-<td>❌ Open — mitigation shipped (retry budget 60/90s→150s, ceiling→4m); keep open until <code>e2e-calico</code> soaks clean on <code>main</code> (<a href="../STATUS/#Q291">Q291</a>)</td>
-</tr>
-<tr>
-<td><a href="q436-session-recycle-strands-job/">q436-session-recycle-strands-job.md</a></td>
-<td>A single-use session recycle whose <code>DeleteSession</code> times out leaks the session rather than closing it, stranding the job queued on it — surfaces as the slow <code>E2E_AGC_MultipleJobsQueued</code> e2e failure</td>
-<td>❌ Open — answered: strand is fakegithub-only (the real broker redelivers pool-wide); fix shipped (jobs age into the owner pool; leaked sessions now counted). Keep open until <code>MultipleJobsQueued</code> soaks clean on <code>main</code> (<a href="../STATUS/#Q436">Q436</a>)</td>
-</tr>
-<tr>
 <td><a href="eviction-oversubscription-validation/">eviction-oversubscription-validation.md</a></td>
 <td>Five experiments that turn the eviction-recovery and oversubscription claims into measurements: unconfounded eviction latency, the node-drain path, the oversubscription/preemption demo, the quota gate under contention, and the tiers-off/tiers-on utilization delta</td>
 <td>⚠️ Open — filed 2026-07-26 from the <a href="https://github.com/actions-gateway/github-actions-gateway/issues/819">#819</a> review. Experiment 4 ran in full — envtest half 2026-07-26 (both acquisition tiers), live-GitHub half 2026-07-31: GitHub redelivered the declined job and a sibling gateway ran it green on attempt 1, and redelivery turned out to be a ~7/s loop; experiment 2 (the node drain) ran 2026-07-27 — neither tier re-runs a drained worker, residual tracked as <a href="q459-drained-worker-recovery/">Q459</a>; experiment 3 (preemption) ran 2026-07-29 — a <code>PriorityClass</code> preemption is a graceful delete, not a kubelet eviction, so it reached no recovery either; its residual Q497 shipped the same day (<a href="archive/q497-preemption-recovery/">plan</a>). The rest are open (<a href="../STATUS/#Q396">Q396</a>, <a href="../STATUS/#Q424">Q424</a> deferred)</td>
@@ -2640,7 +2630,7 @@ markers per item.</p>
 <tr>
 <td><a href="docs/">docs.md</a></td>
 <td>Documentation roadmap across phases</td>
-<td>✅ Done — all Phase 1/2/3 items shipped except alerting.md, deferred as <a href="../STATUS/#Q18">Q18</a></td>
+<td>⚠️ Open — all Phase 1/2/3 items shipped except the Grafana dashboards half of 3.2; the alert rules, SLO recording rules and runbook links landed as <code>observability-alerting.md</code>, leaving dashboards as <a href="../STATUS/#Q568">Q568</a></td>
 </tr>
 <tr>
 <td><a href="docs-six-layer-audit/">docs-six-layer-audit.md</a></td>
@@ -2720,6 +2710,16 @@ markers per item.</p>
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a href="archive/q291-e2e-calico-egress-github-flake/">archive/q291-e2e-calico-egress-github-flake.md</a></td>
+<td>Three real-GitHub egress specs (2 proxy-connect + direct-egress) red the <code>e2e-calico</code> leg together when the Felix ipBlock-programming / GitHub-dial window outlasts the curl retry budget under CI load; widen the bounded retry budget without weakening assertions</td>
+<td>2026-08-01 — Q291. Closed by the soak the row was waiting on: 144 green <code>e2e-calico</code> runs on <code>main</code> since the mitigation merged (#593, 2026-07-11), against a ≥25-run infra bar, with no recurrence — the two pre-fix recurrences (07-04, 07-11) were the last. Retired from Flake watch to the <a href="../development/flake-watch-retired/">retired-flake ledger</a>, which keeps the "a fix was already attempted here" memory greppable should it ever return</td>
+</tr>
+<tr>
+<td><a href="archive/q436-session-recycle-strands-job/">archive/q436-session-recycle-strands-job.md</a></td>
+<td>A single-use session recycle whose <code>DeleteSession</code> times out leaks the session rather than closing it, stranding the job queued on it — surfaces as the slow <code>E2E_AGC_MultipleJobsQueued</code> e2e failure</td>
+<td>2026-08-01 — Q436. Closed by the soak the row was waiting on: ≥136 green <code>unit-test</code> runs on <code>main</code> since the fix merged (#837, 2026-07-26), against the ≥50-run bar this spec earns as a correctness-guarding test. The investigation's durable finding stands — the strand was fakegithub-only, the real broker redelivers pool-wide — and the fix ages undelivered jobs into the owner pool while counting leaked sessions. Retired to the <a href="../development/flake-watch-retired/">retired-flake ledger</a></td>
+</tr>
 <tr>
 <td><a href="archive/release-decision-support/">archive/release-decision-support.md</a></td>
 <td>Make release timing answerable from recorded data rather than from narrative: a delta report off the last stable tag, standing "when to cut" triggers, and a scope-ledger convention for release plan docs — planned vs delivered at a glance, punt = delabel, delay = keep the gate</td>
