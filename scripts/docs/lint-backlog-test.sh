@@ -52,9 +52,9 @@ fixture() {
 	printf '%s\n' "$file"
 }
 
-# qrow ID ITEM ST NOTES — build a Queue row. The Labels cell is opaque to the
-# linter, so it is left unadorned (backticks here would read as a command
-# substitution to shellcheck).
+# qrow ID ITEM ST NOTES — build a Queue row. Its Labels cell is left unadorned:
+# only backticked tokens are vocabulary (rule 11), so a bare word carries none
+# and keeps these fixtures focused on the rule under test.
 qrow() {
 	printf '| <a id="%s"></a>%s | %s | %s | %s | S | %s |' "$1" "$1" "$2" "${5:-infra}" "$3" "$4"
 }
@@ -391,6 +391,74 @@ if [[ "$rc" == 0 ]]; then printf 'ok   rule 8: branch behind main       -> pass\
 	printf 'FAIL rule 8: a branch predating a flake row was flagged for deleting it (rc=%s)\n' "$rc" >&2; fails=$((fails + 1)); fi
 
 # --- The real file must pass every rule ---------------------------------------
+
+# --- Rule 11: the declared label vocabulary ---------------------------------
+#
+# Q592 was filed wearing `infra` from a branch cut before that label was split
+# into ci/dogfood/debt, and merged clean — the two edits touched different rows,
+# so nothing conflicted and nothing checked. The Progress table is covered too:
+# its Labels cell sits one field earlier, so a check written for the Queue shape
+# alone reads the wrong column and silently passes.
+
+# labelled_fixture DECL QUEUE_LABELS PROGRESS_LABELS — write a STATUS.md
+# carrying all three tables. Echoes the file path.
+labelled_fixture() {
+	local decl="$1" queue_labels="$2" progress_labels="$3" file="$WORKDIR/labels.md"
+	{
+		printf '# Project Status\n\n'
+		printf '%s\n\n' "$decl"
+		printf '## Progress\n\n'
+		printf '| Item | Labels | Status |\n'
+		printf '|---|---|---|\n'
+		printf '| [A plan](plan/a.md) | %s | ✅ |\n\n' "$progress_labels"
+		printf '## Queue\n\n'
+		printf '| ID | Item | Labels | St | Sz | Notes |\n'
+		printf '|---|---|---|---|---|---|\n'
+		printf '| <a id="Q1"></a>Q1 | %s | %s | 🔲 | S | short |\n\n' "$PLAIN_ITEM" "$queue_labels"
+		printf '## Deferred\n'
+	} >"$file"
+	printf '%s\n' "$file"
+}
+
+# expect_file NAME WANT_RC FILE — assert the linter's exit code on a prebuilt file.
+expect_file() {
+	local name="$1" want_rc="$2" file="$3" rc=0
+	"$LINT" "$file" >/dev/null 2>&1 || rc=$?
+	if [[ "$rc" == "$want_rc" ]]; then
+		printf 'ok   %s\n' "$name"
+	else
+		printf 'FAIL %s: want rc=%s got rc=%s\n' "$name" "$want_rc" "$rc" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+# lbl WORD... — render bare words as a backticked Labels cell. Escaped backticks
+# inside double quotes keep the label syntax as data, so shellcheck does not read
+# it as command substitution.
+lbl() {
+	local out='' word
+	for word in "$@"; do out="$out\`$word\` "; done
+	printf '%s' "${out% }"
+}
+
+DECL="**Labels:** $(lbl tests docs ci)"
+
+expect_file 'labels: all declared            -> clean' 0 \
+	"$(labelled_fixture "$DECL" "$(lbl tests docs)" "$(lbl ci)")"
+expect_file 'labels: undeclared in Queue     -> fail' 1 \
+	"$(labelled_fixture "$DECL" "$(lbl tests infra)" "$(lbl ci)")"
+expect_file 'labels: undeclared in Progress  -> fail' 1 \
+	"$(labelled_fixture "$DECL" "$(lbl tests)" "$(lbl infra)")"
+expect_file 'labels: labels but no DECL line -> fail' 1 \
+	"$(labelled_fixture 'Conventions go here.' "$(lbl tests)" "$(lbl ci)")"
+
+# A -gate label's parenthetical gloss carries its own backticked link text. That
+# text names a release, not a label, so it must not enter the vocabulary.
+GATE_DECL="**Labels:** $(lbl tests 2.0-gate) (blocks the [$(lbl v2.0.0)](plan/v2-ga.md) tag)"
+expect_file 'labels: gate label declared     -> clean' 0 \
+	"$(labelled_fixture "$GATE_DECL" "$(lbl 2.0-gate)" "$(lbl tests)")"
+expect_file 'labels: gloss link text as label-> fail' 1 \
+	"$(labelled_fixture "$GATE_DECL" "$(lbl v2.0.0)" "$(lbl tests)")"
 
 rc=0
 "$LINT" "$REPO_ROOT/docs/STATUS.md" >/dev/null 2>&1 || rc=$?

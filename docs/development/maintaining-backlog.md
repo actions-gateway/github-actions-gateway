@@ -207,6 +207,8 @@ Deliberately **not** added: an `e2e` label. `tests` already covers those rows an
 
 Apply the same bar to any new label: if you can't name the question it answers, or it would land on more than a third of rows, it belongs in the item title instead.
 
+`lint-backlog.sh` rule 11 holds the vocabulary closed: every label on a Progress, Queue, or Deferred row must appear on the `**Labels:**` line, so adding one is a deliberate edit to that line rather than a typo that sticks. This is what a retirement needs — Q592 was filed wearing `infra` from a branch cut before the split and merged without a conflict, because the two edits touched different rows.
+
 ## Don't pre-assign release versions to backlog items
 
 Do **not** tag Queue rows with speculative future release versions (`1.1`, `2.0`). Introduce a release label only once that release is *concretely scoped* — a plan doc defining its Definition of Done exists — at which point the label answers a real yes/no question ("does this block that tag?"). Post-release estimates are guesses that move (churn without signal), position already encodes priority, and an undefined version anchors nothing. The right pattern is the one `1.0-gate` followed: scope the release in a plan doc first, then add the label.
