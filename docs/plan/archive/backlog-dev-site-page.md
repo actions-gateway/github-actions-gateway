@@ -60,6 +60,13 @@ conditional instead.
 Bonus: `extra.version.default: stable` means Material already banners `dev`
 as "a different version" — visitors get the not-canonical framing for free.
 
+**This bonus was wrong, and was measured wrong on the deployed site afterwards.**
+Material renders that banner only when a theme override fills its `outdated`
+block; the stock block is empty, and this repo defined no override, so no version
+carried the framing — `dev` included. Nothing came for free. The banner (and with
+it the only site-chrome route to this page) was added later; see
+[website.md § The version banner](../../development/website.md#the-version-banner).
+
 ### The whole repo-internal set publishes on dev, not STATUS.md alone
 
 `STATUS.md` links densely into `docs/plan/` and `docs/development/`, which

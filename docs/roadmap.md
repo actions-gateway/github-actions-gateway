@@ -14,7 +14,8 @@ about capability and adoption, not revenue.
 This page is a direction-of-travel snapshot, not a dated commitment. Priorities
 move with what adopters actually hit first, so the surest way to influence what
 comes next is to [open an issue](https://github.com/actions-gateway/github-actions-gateway/issues)
-describing your setup.
+describing your setup. Every open item, in priority order, is in the
+[working backlog](https://actions-gateway.com/dev/STATUS/).
 
 ## Available now (1.0)
 

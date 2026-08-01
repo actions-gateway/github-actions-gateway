@@ -114,9 +114,13 @@ extra:
 # A relative link that escapes docs/ resolves to a source file on github.com and
 # to a 404 on the site. source_links.py absolutizes those against repo_url so one
 # markdown link works in both (Q558). See website.md § Links into the source tree.
+#
+# backlog_link.py derives whether this build carries docs/STATUS.md, so the
+# version banner links the backlog only where the page exists (Q558).
 hooks:
   - hooks/release_version.py
   - hooks/source_links.py
+  - hooks/backlog_link.py
 
 plugins:
   - search
