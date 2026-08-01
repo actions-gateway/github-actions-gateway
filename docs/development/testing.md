@@ -1159,6 +1159,15 @@ gh run list --branch <branch> --limit 30            # cross-check which workflow
 
 Read the output as a **checklist against the expected set above**, not as a pass/fail summary. A PR with zero rows, or with only the lightweight docs workflows listed, has not been tested — it just has nothing to fail.
 
+**A skipped job does not mean its steps did not run — resolve the step's owning job, not its file.** `gh pr checks` reports *job* names, and a `make` target's home is a job, not a workflow file: grepping `unit-test.yml` for `scripts-test` finds it, but that step lives in the same file's **`shellcheck`** job, so a skipped `unit-test` says nothing about whether the scripts tests ran. Reading the workflow source to answer "did my test run?" gives the wrong answer in exactly the case you are checking. Resolve it from the run:
+
+```bash
+gh run view <run-id> --json jobs --jq '.jobs[] | [.name, .conclusion] | @tsv'   # which jobs, which verdict
+gh run view <run-id> --log --job <job-id> | grep '<an assertion you expect>'    # did it actually execute
+```
+
+The grepped log line is the proof the assertion ran; the job's conclusion only proves nothing in it failed — and a job that ran nothing also fails nothing.
+
 **Absence of checks is not green (Q383).** There are two distinct ways a PR ends up under-tested, and they need different fixes:
 
 - **Gates skipped by the diff classifier** — the workflow ran, its `changes` job classified the diff as irrelevant, and the real jobs were skipped. `gh pr checks` shows the `gate` contexts as green. Confirm against the expected-gate list above; if a gate that should cover the change is missing, the classifier's path filters are wrong.
