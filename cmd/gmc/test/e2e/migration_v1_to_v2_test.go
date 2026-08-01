@@ -92,9 +92,32 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 	})
 
 	AfterAll(func() {
+		// Delete the tenant CRs in dependency order, WAITING on each, before the
+		// namespace: every agentpool-cleanup finalizer is cleared by an AGC that lives
+		// in THIS namespace, so a bare namespace delete races those AGC pods' own
+		// termination and a lost race wedges the namespace in Terminating (Q585).
+		// Migration leaves a v1 and a v2 tenant side by side, so both drain here.
+		//
+		// The v2 pools go first and by --all: the RunnerSet inherits a content-hashed
+		// name, and v2's gateway teardown deliberately does NOT delete RunnerSets (they
+		// reference the gateway but are not owned by it), so nothing else would drain
+		// them while the migrated AGC is still up to do it.
+		_, _ = utils.Run(exec.Command("kubectl", "delete", "runnerset", "--all",
+			"-n", tenantNS, "--ignore-not-found", "--timeout=2m"))
+		// Then the v2 gateway, so the GMC tears the migrated AGC control plane down
+		// while it can still reconcile. The EgressProxy carries no finalizer (§H.8) and
+		// is reclaimed by the namespace cascade.
+		_, _ = utils.Run(exec.Command("kubectl", "delete", "actionsgateways.actions-gateway.com", agName,
+			"-n", tenantNS, "--ignore-not-found", "--timeout=2m"))
+		// Then the v1 gateway, which coexisted with v2 through the migration. Its own
+		// teardown deletes the v1 RunnerGroups and waits them out before removing the
+		// v1 AGC, so the v1 pools need no separate delete.
+		utils.DeleteActionsGatewayCR(tenantNS, agName)
+
 		// Cluster-scoped objects are NOT garbage-collected by deleting the namespace —
 		// the whole reason the tool stamps a provenance label. Reclaim them by that
-		// label, exactly as the runbook tells an operator to.
+		// label, exactly as the runbook tells an operator to. Last, once nothing in the
+		// namespace can still reference them.
 		_, _ = utils.Run(exec.Command("kubectl", "delete", "clusterrunnertemplate",
 			"-l", clusterTemplateSelector, "--ignore-not-found"))
 		_, _ = utils.Run(exec.Command("kubectl", "delete", "clusterrolebinding",
