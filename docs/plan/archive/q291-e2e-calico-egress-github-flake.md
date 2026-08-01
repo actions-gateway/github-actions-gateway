@@ -8,9 +8,9 @@ Three `cmd/gmc/test/e2e` specs — all of which reach **real** api.github.com /
 github.com — red the whole `e2e-calico` leg together, in an identical set, while
 the cluster and Calico bring-up come up clean (49 Passed | 3 Failed | 6 Skipped):
 
-- `E2E_V2_MultiGateway_ProxyConnectWorks` ([v2_multigateway_test.go](../../cmd/gmc/test/e2e/v2_multigateway_test.go)) — `curl: (56) CONNECT tunnel failed, response 502`, `HTTP_CODE=000`.
-- `E2E_GMC_TenantProvisioning_ProxyConnectWorks` ([provisioning_test.go](../../cmd/gmc/test/e2e/provisioning_test.go)) — same 502.
-- `E2E_V2_DirectEgress_ReachesGitHub` ([direct_egress_test.go](../../cmd/gmc/test/e2e/direct_egress_test.go)) — `curl: (28) Connection timed out after 30002 milliseconds` ×3.
+- `E2E_V2_MultiGateway_ProxyConnectWorks` ([v2_multigateway_test.go](../../../cmd/gmc/test/e2e/v2_multigateway_test.go)) — `curl: (56) CONNECT tunnel failed, response 502`, `HTTP_CODE=000`.
+- `E2E_GMC_TenantProvisioning_ProxyConnectWorks` ([provisioning_test.go](../../../cmd/gmc/test/e2e/provisioning_test.go)) — same 502.
+- `E2E_V2_DirectEgress_ReachesGitHub` ([direct_egress_test.go](../../../cmd/gmc/test/e2e/direct_egress_test.go)) — `curl: (28) Connection timed out after 30002 milliseconds` ×3.
 
 ## Recurrence
 
@@ -34,7 +34,7 @@ All three failures are the **same leg**: the workload's *outbound* hop to
 GitHub, not proxy readiness.
 
 - The proxy's `/readyz` closes as soon as the **CONNECT listener binds**
-  ([cmd/proxy/proxy.go](../../cmd/proxy/proxy.go)); it does **not** gate on
+  ([cmd/proxy/proxy.go](../../../cmd/proxy/proxy.go)); it does **not** gate on
   egress-to-GitHub working. So a `WaitForDeploymentReady` gate would not help —
   the proxy was already serving.
 - The proxy emits **502 only when its own `net.DialTimeout` to

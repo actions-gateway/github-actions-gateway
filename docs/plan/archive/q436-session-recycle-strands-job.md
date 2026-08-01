@@ -28,7 +28,7 @@ Every line is the AGC's own log for `session-14`, from the failing run:
 
 The spec enqueues onto a session it has just observed as live, and the AGC
 recycles that same session nine seconds later. That much is expected and the
-spec is written to tolerate it — [`job_lifecycle_test.go`](../../cmd/gmc/test/e2e/job_lifecycle_test.go)
+spec is written to tolerate it — [`job_lifecycle_test.go`](../../../cmd/gmc/test/e2e/job_lifecycle_test.go)
 says so inline: *"a recycled single-use session redelivers pool-wide, so the
 worker pod for this job can lag behind the enqueue by a full re-register +
 acquire cycle"*.
@@ -71,7 +71,7 @@ move it back to the deliverable pool: `DELETE /session` and the single-use
 consumption hook, both of which call `requeueLocked`. The real broker has no
 such state — a job stays in the pool until some session polls for it, and a
 delivery that is not acquired within ~2 min is redelivered pool-wide
-([02-architecture §2.2](../design/02-architecture.md), live-confirmed in the
+([02-architecture §2.2](../../design/02-architecture.md), live-confirmed in the
 Q260 dogfood, where GitHub redelivered one job repeatedly over ~12 min).
 `DeleteSession` *accelerates* that redelivery; it is not what makes the work
 reachable. So in production a failed `DeleteSession` costs a session record and
@@ -106,9 +106,9 @@ rely on — is unaffected.
 
 | Change | Where |
 |---|---|
-| Undelivered per-session jobs age into the owner pool after `defaultSessionQueueGrace` (30 s) | [`test/fakegithub/main.go`](../../test/fakegithub/main.go) (`sweepStaleQueuesLocked`) |
-| Regression test: stranded job reaches a sibling session; a polling session is not diverted; the sweep is owner-scoped | [`test/fakegithub/main_test.go`](../../test/fakegithub/main_test.go) |
-| `actions_gateway_broker_session_leaks_total{namespace, runner_group}` | [`cmd/agc/internal/runnercore/metrics.go`](../../cmd/agc/internal/runnercore/metrics.go), incremented in `deleteSessionDetached` |
+| Undelivered per-session jobs age into the owner pool after `defaultSessionQueueGrace` (30 s) | [`test/fakegithub/main.go`](../../../test/fakegithub/main.go) (`sweepStaleQueuesLocked`) |
+| Regression test: stranded job reaches a sibling session; a polling session is not diverted; the sweep is owner-scoped | [`test/fakegithub/main_test.go`](../../../test/fakegithub/main_test.go) |
+| `actions_gateway_broker_session_leaks_total{namespace, runner_group}` | [`cmd/agc/internal/runnercore/metrics.go`](../../../cmd/agc/internal/runnercore/metrics.go), incremented in `deleteSessionDetached` |
 | Docs: metric in the design + operator metric references; fakegithub fidelity note | `docs/design/02-architecture.md`, `docs/design/07-test-plan.md`, `docs/operations/observability-metrics.md` |
 
 Not addressed: **why** three 3 s DELETE attempts all timed out. The AGC's broker
