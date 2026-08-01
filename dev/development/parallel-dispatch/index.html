@@ -2655,7 +2655,8 @@ run-specific knobs. A ready-to-paste template:</p>
 <p><strong><code>/goal</code></strong> Act as the <strong>dispatcher</strong> for a parallel-dispatch run, following
 <code>docs/development/parallel-dispatch.md</code>. Clear <strong>[BATCH — e.g. "the remaining
 <code>1.0-gate</code> Queue items in <code>docs/STATUS.md</code>"]</strong>: one worker session (task chip)
-and one PR per task, <strong>max [3] concurrent</strong>. Each worker must be a <strong>full,
+and one PR per task, <strong>max [N] concurrent</strong> (from
+<code>scripts/agent/local-throttle.sh workers</code>). Each worker must be a <strong>full,
 independent Claude Code session (a task chip), never a sub-agent</strong>. Give every
 worker the self-healing contract from task one (launch the <strong>pr-sentinel</strong>
 background watcher on PR open — one watcher that wakes on CI failures <strong>and</strong>
@@ -2678,7 +2679,8 @@ Document decisions in <code>tmp/</code>. I can stop or amend the rules anytime.<
 <ul>
 <li><strong>Batch / scope</strong> — which items (a label filter, a Queue range, an explicit
   list).</li>
-<li><strong>Concurrency cap</strong> — 3 is a good default.</li>
+<li><strong>Concurrency cap</strong> — <code>scripts/agent/local-throttle.sh workers</code> sizes it for
+  the machine you are on (see <a href="#concurrency-and-contention">Concurrency and contention</a>).</li>
 <li><strong>Exclusions</strong> — anything needing real secrets or a live cluster; state it up
   front rather than making the dispatcher discover it mid-run.</li>
 <li><strong>Merge gating</strong> — default is dispatcher-gated after a scope review; say so if
@@ -2965,26 +2967,44 @@ auditable and resumable.</p>
 </ul>
 <h2 id="concurrency-and-contention">Concurrency and contention<a class="headerlink" href="#concurrency-and-contention" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Cap concurrency</strong> (3 is a sane default) so a small machine and the reviewer
-  are not overwhelmed.</li>
-<li><strong>Group tasks by the files they touch into "streams" and sequence within a
+<li><strong>Take the concurrency cap from the machine</strong>, not from a constant:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/agent/local-throttle.sh<span class="w"> </span>workers
+</code></pre></div>
+<p>It returns the smaller of what RAM and physical cores allow, under a ceiling of
+  12. A worker costs one Claude Code session (measured 0.43 GB mean / 0.60 GB
+  peak resident) plus a share of the gate — and the gate share is already bounded
+  by the <a href="../testing/#resource-auto-throttle-on-gui-dev-machines">2-slot semaphore</a>
+  however many workers exist, so each extra worker costs the session alone. On a
+  128 GB machine that leaves room for ~138 sessions, which is why the ceiling,
+  not the hardware, is what answers there.</p>
+<p><strong>Above the ceiling the constraints are not local</strong> — dispatcher review
+  throughput and GitHub Actions concurrency — so going higher is a judgement call
+  you make and set with <code>GAG_DISPATCH_WORKERS</code>, not something the machine can
+  measure for you. The hardware terms still bind downward: a 16 GB laptop gets 1.
+- <strong>Group tasks by the files they touch into "streams" and sequence within a
   stream.</strong> Two PRs editing the same CI workflow or <code>Makefile</code> will conflict; run
   them one after another, and run <em>different</em> streams in parallel. Self-healing
-  covers accidental overlaps, but sequencing avoids needless rebase churn.</li>
-<li><strong>Land foundational/shared-file changes first, then fan out dependents.</strong> If
+  covers accidental overlaps, but sequencing avoids needless rebase churn.
+- <strong>Land foundational/shared-file changes first, then fan out dependents.</strong> If
   one task introduces a fix that others will inherit (e.g. a shared <code>Makefile</code>
   setting), merge it before the dependents run so they do not rediscover the same
   problem in parallel. Warn workers about known shared-file pitfalls in their
-  prompts.</li>
-</ul>
+  prompts.</p>
 <h3 id="run-the-local-gate-in-the-background-not-on-the-critical-path">Run the local gate in the background, not on the critical path<a class="headerlink" href="#run-the-local-gate-in-the-background-not-on-the-critical-path" title="Permanent link">&para;</a></h3>
 <p><code>make check</code> is the biggest single block of a worker's wall clock, and under a
 batch most of it is <em>waiting</em>. Its three heavy phases (<code>build-tags-check</code>,
 <code>lint</code>, <code>cover-check</code>) each take one of <strong>2</strong> machine-wide slots
 (<a href="../testing/#resource-auto-throttle-on-gui-dev-machines">resource auto-throttle</a>),
-so whenever a 6-worker batch is in those phases, four of the six are queued. A
-cold gate is dominated by <code>cover-check</code> — ~19 of ~21 min on the machine the
-baseline was taken on (<a href="../../plan/archive/local-gate-throughput/">measurements</a>).</p>
+so whenever a 6-worker batch is in those phases, four of the six are queued.</p>
+<p><strong>How much that costs is a property of the machine, and the two we have measured
+differ by an order of magnitude.</strong> A cold gate is dominated by <code>cover-check</code>:
+~19 of ~21 min on the small dev machine the original baseline was taken on, but
+<strong>102 s end-to-end</strong> on the M5 Max replacement (18 physical cores, 128 GB) with a
+fully cold build cache and no slot contention
+(<a href="../../plan/archive/local-gate-throughput/">measurements</a>). Take your own number
+before reasoning about the wall clock; the rule below is right either way, but on
+a wide machine its payoff is seconds rather than the better part of an hour.</p>
 <p><strong>Every worker should launch the gate as a background task and keep working:</strong></p>
 <ol>
 <li>Finish the <strong>code</strong>, then start <code>make check</code> as a <em>background</em> task — not a
@@ -3001,7 +3021,9 @@ baseline was taken on (<a href="../../plan/archive/local-gate-throughput/">measu
 step 2 wrote — <code>lint-backlog</code>, <code>doc-links</code>, <code>plan-index-check</code>,
 <code>no-plan-refs-check</code>, <code>shellcheck</code> — are the <em>fast</em> gates, which take <strong>no</strong>
 heavy-build slot and run concurrently. Only the three heavy phases re-queue, and
-they are cache-warm from step 1 — a warm gate is ~2 min against a cold one's tens.</p>
+they are cache-warm from step 1 — on the small machine that is ~2 min against a
+cold one's tens, and on a wide one both are short enough that the confirming run
+is unconditionally worth it.</p>
 <p><strong>The one rule: step 1's verdict covers the tree it saw.</strong> If step 2 turns up a
 code change, that verdict is void and the confirming run is cold again for the
 affected packages — which is just a normal gate run, minus the head start. A
@@ -3133,7 +3155,8 @@ production credentials) — exclude them explicitly and hand them to a human.</p
 <li>[ ] Batch chosen; each item is independent and one-PR-sized.</li>
 <li>[ ] Tasks grouped into streams by shared files; foundational items ordered
       first.</li>
-<li>[ ] Concurrency cap chosen.</li>
+<li>[ ] Concurrency cap taken from <code>scripts/agent/local-throttle.sh workers</code>, or a
+      deliberate <code>GAG_DISPATCH_WORKERS</code> override.</li>
 <li>[ ] Model chosen per task (mechanical → faster/cheaper; judgment-heavy →
       strongest), set in each spawn prompt.</li>
 <li>[ ] Workers spawned as full Claude Code sessions (task chips), <strong>never</strong>

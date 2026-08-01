@@ -2332,6 +2332,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Baseline measurement (2026-07-26)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#re-baseline-on-the-m5-max-2026-08-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Re-baseline on the M5 Max (2026-08-01)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2674,6 +2691,70 @@ uses ~2 of 8 hardware threads at <code>utility</code> QoS while holding the excl
    cache works fine — a second run in the same worktree replays it. The problem
    is that a <em>new</em> worktree never inherits it.</li>
 </ol>
+<h3 id="re-baseline-on-the-m5-max-2026-08-01">Re-baseline on the M5 Max (2026-08-01)<a class="headerlink" href="#re-baseline-on-the-m5-max-2026-08-01" title="Permanent link">&para;</a></h3>
+<p>The <code>~21 min</code> above is this document's most-cited number and it belongs to the
+Intel machine. On the replacement dev machine — Apple M5 Max, <strong>18 physical
+cores, 128 GB</strong> — one <code>make check</code> against an empty private <code>GOCACHE</code>, as the
+sole slot holder (no <code>heavy-build slot</code> waits in the log), exit 0 with every
+coverage floor green:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Intel i7, 4 cores / 32 GB</th>
+<th>M5 Max, 18 cores / 128 GB</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cold <code>make check</code>, end to end</td>
+<td>~21 min</td>
+<td><strong>102 s</strong></td>
+</tr>
+<tr>
+<td>Build cache produced</td>
+<td>—</td>
+<td>2.7 GB</td>
+</tr>
+</tbody>
+</table>
+<p>The gap is an order of magnitude, so <strong>any wall-clock argument in this repo has
+to name its machine.</strong> <code>vendor/</code> was already on disk for the M5 Max run, making
+it a cold <em>build</em> cache rather than a cold worktree.</p>
+<p>Memory, sampled every 2 s across the same run:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>measured</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Peak go-toolchain + linter RSS</td>
+<td><strong>4.08 GB</strong> across 10 procs, during <code>cover-check</code></td>
+</tr>
+<tr>
+<td>Largest single process</td>
+<td>0.70 GB (<code>link</code>)</td>
+</tr>
+<tr>
+<td>System-wide used</td>
+<td>46.0 GB → 47.4 GB (<strong>+1.36 GB</strong>)</td>
+</tr>
+<tr>
+<td>Peak swap used</td>
+<td>7.44 MB — unchanged from idle</td>
+</tr>
+</tbody>
+</table>
+<p>The peak-RSS figure is what sizes <code>local-throttle.sh workers</code>: it is charged once
+per heavy-build <em>slot</em> rather than per dispatch worker, because the slot
+semaphore bounds concurrent gates however many workers exist. With a worker
+session measured at 0.43 GB mean / 0.60 GB peak resident, RAM does not bind
+dispatch concurrency on this class of machine at any number worth running —
+128 GB leaves room for ~138 sessions past a desktop reserve and two gate holders.
+See <a href="../../../development/parallel-dispatch/#concurrency-and-contention">parallel-dispatch.md § Concurrency and contention</a>.</p>
 <h2 id="finding--trimpath-makes-the-test-result-cache-path-independent">Finding: <code>-trimpath</code> makes the test-result cache path-independent<a class="headerlink" href="#finding--trimpath-makes-the-test-result-cache-path-independent" title="Permanent link">&para;</a></h2>
 <p><a href="../../../development/testing/#build-and-lint-caches-across-worktrees">testing.md § Build and lint caches across worktrees</a>
 (Q343) recorded that the <code>go test</code> result cache is path-keyed and concluded
