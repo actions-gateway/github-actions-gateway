@@ -138,6 +138,16 @@
     
       <div data-md-color-scheme="default" data-md-component="outdated" hidden>
         
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
+    <a href="../../../STATUS/">See the working backlog.</a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
       </div>
     
     
@@ -2374,6 +2384,12 @@ the internal docs on every release. <code>pages.yml</code> <code>export</code>s 
 conditional instead.</p>
 <p>Bonus: <code>extra.version.default: stable</code> means Material already banners <code>dev</code>
 as "a different version" — visitors get the not-canonical framing for free.</p>
+<p><strong>This bonus was wrong, and was measured wrong on the deployed site afterwards.</strong>
+Material renders that banner only when a theme override fills its <code>outdated</code>
+block; the stock block is empty, and this repo defined no override, so no version
+carried the framing — <code>dev</code> included. Nothing came for free. The banner (and with
+it the only site-chrome route to this page) was added later; see
+<a href="../../../development/website/#the-version-banner">website.md § The version banner</a>.</p>
 <h3 id="the-whole-repo-internal-set-publishes-on-dev-not-statusmd-alone">The whole repo-internal set publishes on dev, not STATUS.md alone<a class="headerlink" href="#the-whole-repo-internal-set-publishes-on-dev-not-statusmd-alone" title="Permanent link">&para;</a></h3>
 <p><code>STATUS.md</code> links densely into <code>docs/plan/</code> and <code>docs/development/</code>, which
 share the exclusion. The build is not <code>--strict</code> (pages.yml runs plain

@@ -138,6 +138,16 @@
     
       <div data-md-color-scheme="default" data-md-component="outdated" hidden>
         
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
+    <a href="../../STATUS/">See the working backlog.</a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
       </div>
     
     
@@ -2328,6 +2338,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#the-version-banner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The version banner
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2807,12 +2828,61 @@ its tables — see <a href="#progressive-enhancement-docsjavascriptsextrajs">§ 
 The markdown file stays the single source of truth: the lint gate, the
 isolated-commit merge discipline, the <code>&lt;a id="QN"&gt;</code> anchors, and the
 <a href="../maintaining-backlog/">backlog workflow</a> all operate on the table, and the site
-is a read-only view of it. <code>roadmap.md</code> links to it from
-<a href="../../roadmap/#how-priorities-are-set">§ How priorities are set</a>, version-pinned
-so the link is honest from <code>stable</code>, where the page does not exist.</p>
+is a read-only view of it.</p>
+<p><strong>How a reader reaches it.</strong> The page is deliberately absent from the <code>nav</code> (see
+<a href="#publication-scope">§ Publication scope</a>), so three routes carry the traffic:</p>
+<table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Reaches it from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The <strong>version banner</strong> (below)</td>
+<td>any page of a non-default version — the only site-chrome entry point</td>
+</tr>
+<tr>
+<td><a href="../../roadmap/"><code>roadmap.md</code></a></td>
+<td>the intro paragraph and § How priorities are set, on <strong>every</strong> version (the URL is version-pinned, so it stays honest from <code>stable</code>, where the page does not exist)</td>
+</tr>
+<tr>
+<td><a href="../README.md"><code>docs/README.md</code></a></td>
+<td>github.com, where contributors start</td>
+</tr>
+</tbody>
+</table>
+<p>Site search finds it too, but only <em>within</em> the <code>dev</code> version — Material's search
+index is per-version, so a search run from <code>stable</code> will never surface it.</p>
 <p><strong>Accepted wart:</strong> mike's version switcher keeps the current path, so switching
 from the backlog page to <code>stable</code> lands on a 404. That is inherent to any
 per-version page.</p>
+<h3 id="the-version-banner">The version banner<a class="headerlink" href="#the-version-banner" title="Permanent link">&para;</a></h3>
+<p>The yellow bar reading <em>"You're not viewing the latest release"</em> is the
+<code>outdated</code> block in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/overrides/main.html"><code>overrides/main.html</code></a>. Material
+renders that bar <strong>only when a theme override fills the block</strong> — the stock one
+is empty — so before this existed no version carried the not-canonical framing at
+all, <code>dev</code> included, despite <code>extra.version.default: stable</code> being set. Do not
+assume the version selector implies a banner; it does not.</p>
+<p><code>stable</code> is the default, so every other version shows it: the unreleased <code>dev</code>
+docs and any older release. The backlog link inside it is gated on
+<code>config.extra.backlog_page</code>, which
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/backlog_link.py"><code>hooks/backlog_link.py</code></a> derives from the build's
+own file set rather than from a second flag that could drift out of step with
+<code>exclude_docs</code> — the link renders exactly where the page exists. An older release
+therefore gets the warning without a link that would 404.</p>
+<p>Two traps if you edit that block:</p>
+<ul>
+<li><strong><code>exclude_docs</code> does not remove a file.</strong> MkDocs keeps it and marks it
+  <code>InclusionLevel.EXCLUDED</code>, so presence in <code>files</code> proves nothing — the hook has
+  to read <code>file.inclusion.is_included()</code>. Testing only the former puts the link
+  on every release.</li>
+<li><strong><code>404.html</code> renders this block with no <code>page</code> in context.</strong> Anything reading
+  <code>page.url</code> there fails the whole build (and hand-building <code>{{ base_url }}/…</code>
+  yields a protocol-relative <code>//STATUS/</code>). Hence the absolute <code>site_url</code> for the
+  release link and the <code>| url</code> filter for the per-page one.</li>
+</ul>
 <h2 id="links-into-the-source-tree">Links into the source tree<a class="headerlink" href="#links-into-the-source-tree" title="Permanent link">&para;</a></h2>
 <p><code>docs/</code> doubles as in-repo documentation browsed on github.com, where a relative
 link like <code>../cmd/agc/main.go</code> resolves to the source file. MkDocs has no such
