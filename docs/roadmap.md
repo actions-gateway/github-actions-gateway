@@ -28,13 +28,17 @@ tagged chart. Check the release notes for the exact image digests to pin.
 - **One resource per tenant.** A single `ActionsGateway` custom resource
   provisions an isolated gateway — controller, egress proxy pool, role-based
   access control (RBAC), and network policies — inside the platform-owned quota.
-- **Automatic recovery for blocked and evicted jobs.** A job the namespace
+- **Automatic recovery for blocked and disrupted jobs.** A job the namespace
   `ResourceQuota` has no room for is never taken on, so it stays queued at GitHub
-  until there is capacity; an evicted job is cancelled at GitHub when its lock
-  lapses (~10 min at worst) and re-queued, with a per-run retry budget. No manual
-  rerun either way. Both run on **both acquisition tiers**: the default scale-set
-  protocol folds live quota headroom into the capacity it advertises to GitHub,
-  and the classic tier declines the claim per delivered job.
+  until there is capacity. A worker disrupted mid-job — kubelet eviction,
+  scheduler preemption under a `priorityTiers` floor, a node drain, even a bare
+  `kubectl delete pod` — has its run re-run automatically once it concludes,
+  under a shared per-run retry budget (`maxEvictionRetries`); a worker killed too
+  fast to report is bounded by its job lock lapsing (~10 min at worst). No manual
+  rerun in any of these. Both halves run on **both acquisition tiers**: the
+  default scale-set protocol folds live quota headroom into the capacity it
+  advertises to GitHub, and the classic tier declines the claim per delivered
+  job.
 - **Capacity gate for unplaceable workers (opt-in).** A runner set can set
   `capacityGate.mode` so the gateway stops taking on jobs while the cluster cannot
   place its worker shape — a drained pool, a changed taint, spot capacity gone.
@@ -58,7 +62,16 @@ tagged chart. Check the release notes for the exact image digests to pin.
   each team its own GitHub egress IPs to allow-list, with a contained blast
   radius. <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> In the v2 API the proxy is a standalone,
   optionally shared `EgressProxy` (or omitted for direct egress), with a
-  DNS-aware (FQDN) egress-policy mode on Cilium/Calico.
+  DNS-aware (FQDN) egress-policy mode on Cilium/Calico. The managed
+  HorizontalPodAutoscaler is an opt-out (`managedAutoscaling: false`) for teams
+  that bring their own autoscaler (KEDA, VPA, a custom HPA).
+- **GitHub Enterprise Server (GHES) gateways.** A gateway whose `gitHubURL`
+  names a GHES appliance now addresses that appliance on every GitHub surface —
+  token exchange, job acquisition, eviction re-runs — where earlier releases
+  only ever reached `github.com`. FQDN egress modes carry the appliance host
+  automatically; the CIDR default needs the appliance's ranges supplied, and a
+  `GitHubEgressIncomplete` condition (plus a fleet gauge) flags the gap instead
+  of leaving the tenant silently acquiring no jobs.
 - **Observability, per tenant and fleet-wide.** Prometheus metrics scoped per
   tenant and runner group, plus ready-to-apply Grafana dashboards and alerts as
   code, and a cross-tenant rollup for platform admins.
@@ -173,8 +186,11 @@ release that carries it.
   enable multi-replica HA if a single controller becomes a measured bottleneck.
 - **Richer egress proxy.** <!-- q:Q19 --> Optional allow-listing, rate-limiting, audit logging,
   and per-runner-group proxy pools.
-- **Bring-your-own proxy infrastructure.** <!-- q:Q174 --> Supply your own proxy autoscaler
-  (KEDA / VPA / custom HPA) or TLS certificate instead of the managed defaults.
+- **Bring-your-own proxy TLS certificate.** <!-- q:Q174 --> Supply the proxy's
+  certificate from your managed PKI or Vault instead of the GMC's self-signed
+  default. (The autoscaler half of "bring your own proxy infrastructure" has
+  shipped: `managedAutoscaling: false` hands the pool to KEDA / VPA / a custom
+  HPA.)
 - **Cross-namespace proxy sharing.** <!-- q:Q166 --> Share an egress proxy pool across namespaces
   with explicit consent (same-namespace sharing already works).
 - **First-class GPU runner support.** <!-- q:Q216 --> Priority tiers and the `NodeShare` sizing

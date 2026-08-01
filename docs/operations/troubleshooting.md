@@ -54,6 +54,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)](#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch)
 - [DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)](#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)
 - [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
+- [Which Disruptions Auto-Re-Run a Job (and Which Never Do)](#which-disruptions-auto-re-run-a-job-and-which-never-do)
 - [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
 - [Draining a Worker Auto-Re-Runs the Jobs It Interrupts](#draining-a-worker-auto-re-runs-the-jobs-it-interrupts)
 - [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run)
@@ -2316,6 +2317,60 @@ kubectl get secret -n <namespace> actions-gateway-proxy-tls \
 - If the volume is present but the wrapper logs nothing about `proxy CA trust installed`: check that `PROXY_CA_CERT_PATH` is set on the runner container and the mounted file is non-empty. An empty/missing file is tolerated as a no-op, which silently leaves the runner with no proxy trust — the wrapper log line `no proxy CA cert mounted; skipping trust-store install` distinguishes this case from a wrapper that ran the install successfully.
 - If the proxy TLS Secret is missing or the cert has expired: the GMC's cert-manager integration ([§2.1](../design/02-architecture.md#21-tier-1--gateway-manager-controller-gmc) "Proxy Deployer") owns rotation; check the GMC's logs for issuer errors. As a fallback, deleting the Secret triggers reissuance.
 - If the issue persists after the volume and env are correct: confirm the proxy pod is presenting the cert signed by the CA in the Secret — `kubectl exec` into a curl pod in the same namespace and run `openssl s_client -connect actions-gateway-proxy:8080 -showcerts </dev/null` to inspect what the proxy actually serves.
+
+---
+
+## Which Disruptions Auto-Re-Run a Job (and Which Never Do)
+
+<!-- A marketing-toned summary of this matrix lives on docs/why-gag.md ("What
+     re-runs itself" box). When a row here changes, update that box too. -->
+
+The consolidated boundary for the automatic re-run machinery the sections below
+troubleshoot individually. Every firing case spends one slot of the run's shared
+`maxEvictionRetries` budget (default 2, max 10) and works on **both acquisition
+tiers**.
+
+**Fires — the interrupted run is re-run via `rerun-failed-jobs`:**
+
+| Disruption | <span class="gag-nowrap">`cause` label</span> | Detected by |
+|---|---|---|
+| Kubelet eviction (node pressure) | <code class="gag-nowrap">eviction</code> | pod `Failed` with `reason: Evicted` |
+| Scheduler preemption (a preempting `priorityTiers` floor) | <code class="gag-nowrap">preemption</code> | `DisruptionTarget` condition, reason `PreemptionByScheduler` |
+| Node drain of a running worker | <code class="gag-nowrap">deletion</code> | terminal phase published while the pod carries a `deletionTimestamp` |
+| Bare `kubectl delete pod` of a running worker | <code class="gag-nowrap">deletion</code> | same mark as a drain — indistinguishable, by design |
+
+**Never fires, by design:**
+
+- **A genuine job failure.** The job ran and failed on its own merits; nothing
+  was disrupted, and re-running it would mask real breakage.
+- **A cancelled run.** A cancel is the intended stop — it is the supported way
+  to end a job without triggering recovery (delete the worker pod instead and
+  the job *is* re-run; see
+  [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod)).
+- **The AGC's own reaper deletions** — the lifetime cap
+  (`maxWorkerLifetime`), the stuck-`Running` reap deadline, orphan cleanup.
+  Each is stamped `actions-gateway.com/deletion-reason` before deletion and
+  excluded: the gateway just judged that job stuck, so a re-run would loop it.
+- **A worker whose container never ran** — e.g. a drain catching a
+  still-`Pending` pod. There is no reportable failure for `rerun-failed-jobs`
+  to act on.
+
+**Fires but can come up short** — each has its own runbook below:
+
+- The shared budget exhausts (`eviction_retries_exhausted_total`, the
+  `EvictionRetriesExhausted` event):
+  [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget).
+- The run identity is missing (`eviction_recovery_identity_unknown_total`):
+  [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically).
+- A scale-set worker died before GitHub delivered its job — nothing to re-run:
+  ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created).
+- GitHub refuses past the re-run window (`EvictionRerunFailed`):
+  [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget).
+
+A quota-blocked job is deliberately absent from this table: it is **never
+claimed** in the first place, so it stays queued at GitHub with no re-run
+needed — see
+[Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion).
 
 ---
 

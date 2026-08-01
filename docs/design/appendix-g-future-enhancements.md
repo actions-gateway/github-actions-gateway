@@ -891,4 +891,80 @@ stops being the common one.
 
 ---
 
+## G.17. Opt-In Auto-Retry for Flaky Jobs (beyond disruptions)
+
+**Current behavior.** The auto-re-run machinery fires only for infrastructure
+disruptions — eviction, preemption, drain, hand-delete — and a genuine job
+failure is deliberately never re-run
+([the boundary](../operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)),
+because re-running a legitimate failure masks real breakage. That leaves the
+most common CI annoyance untouched: a *flaky* test fails the run for reasons
+unrelated to the change, and a human clicks re-run.
+
+**The gap this closes.** GitHub Actions has no native job-level auto-retry —
+the ask sits in open community discussions
+([#72195](https://github.com/orgs/community/discussions/72195),
+[#27121](https://github.com/orgs/community/discussions/27121)) and the
+workarounds are marketplace step wrappers that require editing every workflow.
+GAG can retry at the platform layer with the `rerun-failed-jobs` machinery it
+already runs for disruptions (Q503's paced retry loop, the per-run budget, the
+`cause`-labelled counters), keeping the "nothing in your workflows changes"
+property no in-workflow retry action can offer. ARC has neither the re-run
+machinery nor the metrics plumbing, so this extends an existing moat.
+
+**Prior art.** Every major CI system has a variant; none operates at the
+runner-platform layer for GitHub Actions:
+
+| System | Mechanism | The idea worth farming |
+|---|---|---|
+| [GitLab `retry:`](https://docs.gitlab.com/ci/yaml/#retry) | per-job max 2, scoped by failure class (`runner_system_failure`, `stuck_or_timeout_failure`, …) | retry scoped to a *failure taxonomy*, not blanket |
+| [Buildkite automatic retries](https://buildkite.com/docs/pipelines/configure/retry) | exit status / signal / signal-reason matchers with per-rule limits | spot-instance signals as first-class retry causes |
+| [Buildkite Test Engine](https://buildkite.com/docs/test-engine/flaky-test-management) | flags a flake when the same test on the same SHA yields different results; quarantine (mute/skip) via workflows | detection from retry outcomes; quarantine as the *end state*, retry as the evidence collector |
+| [CircleCI automatic reruns](https://circleci.com/docs/guides/orchestrate/automatic-reruns/) | `max-auto-reruns` 1–5, re-runs failed jobs only | bounded workflow-level auto-rerun of just the failed subset — the closest shape to what GAG would do |
+| [Azure Pipelines](https://learn.microsoft.com/en-us/azure/devops/pipelines/test/flaky-test-management) | `retryCountOnTaskFailure`; VSTest reruns failed tests, marks pass-on-rerun as flaky, can suppress their effect on the build verdict | rerun-then-pass **is** the flake detector; "don't fail the build on a known flake" as a separate switch |
+| [Datadog Auto Test Retries](https://docs.datadoghq.com/tests/flaky_tests/auto_test_retries/) | tracer-level retry up to 5, optional *only-known-flakes* mode, org-wide flake states + remediation flows | retry only what history says is flaky — needs a detection corpus first |
+| Bazel / Argo / Tekton | `--flaky_test_attempts`, `retryStrategy` | declarative retry budgets at the orchestrator layer |
+
+**Sketch — detection before actuation, two phases.**
+
+1. **Flaky-job detection (no behavior change).** GAG already sees every job
+   outcome per `RunnerSet`. Record re-run-then-pass transitions per job name
+   (the Azure/Buildkite detector) and surface them: a per-set flaky-jobs
+   metric, K8s events, and an advisory condition. This is pure observability,
+   zero masking risk, and no CI product offers it per *tenant* on shared
+   runners. It also builds the history an only-known-flakes mode needs.
+2. **Opt-in retry (`spec.flakyRetry` on the `RunnerSet`).** Bounded per-run
+   budget separate from `maxEvictionRetries`, its own `cause` value on the
+   existing counters, driven by the same paced `rerun-failed-jobs` loop.
+   Candidate scoping knobs, cheapest first: max retries per run, per-window
+   cap per set (a stampede guard, like the Q512 latch), and later a
+   known-flakes-only mode fed by phase 1.
+
+**Cost, including the parts that are easy to miss.**
+
+1. **Granularity is the run, not the job.** `rerun-failed-jobs` re-runs *all*
+   failed jobs of a concluded run. Test-level retry (Datadog/VSTest style)
+   is out of reach without entering the test framework — explicitly out of
+   scope; this is job-level.
+2. **It argues with our own marketing.** The re-run boundary is documented as
+   "a genuine failure is never re-run, re-running would mask real breakage"
+   — the [why-gag box](../why-gag.md) says exactly this. The feature must be
+   off by default, per-set opt-in, loudly metered, and framed as "retry *and*
+   surface" — detection metrics keep the flake visible while retry buys
+   throughput. Never silent.
+3. **Cost attribution.** A retried job spends the tenant's own quota and
+   compute; per-set counters must make the spend visible (the
+   [cost-attribution doc](../operations/cost-attribution.md) would gain a
+   flake-spend line).
+4. **Failure classification is thin at the platform layer.** GAG sees job
+   conclusions and step outcomes via the jobs API, not exit codes; a
+   GitLab-style failure taxonomy would need log/annotation heuristics.
+   Phase 2 ships without matchers first — budget + scope knobs only.
+
+**Trigger.** Q555 tracks the design decision. Promote when a design session
+commits the CRD shape, or an operator asks for it (the demand signal that
+reorders everything else on the roadmap).
+
+---
+
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)
