@@ -2567,14 +2567,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q587"></a>Q587</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go">A GMC restart may re-render an AGC Deployment and roll a tenant's control plane</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Run 30658951388: <code>ssrec-agc</code>'s pod template changed 2m40s after Ready, ~12s after the GMC container restarted; nothing in the tenant changed. If real, a GMC upgrade rolls every tenant's AGC.</td>
-</tr>
-<tr>
 <td><a id="Q577"></a>Q577</td>
 <td><a href="../plan/gke-dogfood/#reading-a-timed-out-drain"><code>stop.sh</code> leaves the pool up when its drain cannot converge</a></td>
 <td><code>dogfood</code> <code>bug</code></td>
@@ -2701,6 +2693,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Teardown normally removes the <code>--allow-agc-extra-env</code> <code>kubectl patch</code>; skipping it leaves the field owned by <code>kubectl-patch</code>, so the next run's <code>helm upgrade</code> dies on a <code>.args</code> conflict. Adopt the field, or re-patch idempotently.</td>
+</tr>
+<tr>
+<td><a id="Q593"></a>Q593</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/diagnostics.go">A superseded ReplicaSet's pod template never reaches the e2e diagnostics dump</a></td>
+<td><code>tests</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>describe pods</code>/<code>get all</code> name the ReplicaSets but never their templates, so a mid-run AGC roll leaves no record of what changed — Q549 and Q587 both stalled there. Dump each RS's <code>.spec.template</code>.</td>
 </tr>
 <tr>
 <td><a id="Q569"></a>Q569</td>
