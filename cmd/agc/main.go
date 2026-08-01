@@ -624,11 +624,11 @@ func configureTrustPool(proxyDir, githubDir string, log logr.Logger) error {
 	case err != nil && !os.IsNotExist(err):
 		return fmt.Errorf("read proxy CA %s: %w", proxyCACert, err)
 	case err != nil:
-		log.Info("proxy CA cert absent; no TLS egress proxy trust added", "path", proxyCACert)
+		log.Info("proxy CA cert absent; leaving the default transport unchanged (no TLS egress proxy)", "path", proxyCACert)
 	case len(bytes.TrimSpace(proxyPEM)) == 0:
 		// Empty file: tolerated, matching the worker entrypoint wrapper. Logged so
 		// the mounted-but-empty case is distinguishable from the unmounted one.
-		log.Info("proxy CA cert is empty; no TLS egress proxy trust added", "path", proxyCACert)
+		log.Info("proxy CA cert is empty; leaving the default transport unchanged", "path", proxyCACert)
 		proxyPEM = nil
 	}
 

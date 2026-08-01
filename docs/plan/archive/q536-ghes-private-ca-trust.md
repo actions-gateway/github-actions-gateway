@@ -157,11 +157,14 @@ proxy-specific, and the file moves with it (`proxytrust.go` → `trustpool.go`).
 The worker wrapper's `installProxyCATrust` generalises the same way, to
 `installCATrust(runnerHome, caPaths...)` writing `ca-bundle.crt`.
 
-The AGC treats an unreadable GitHub CA file as fatal, unlike the proxy CA path,
-because `GITHUB_CA_CONFIGMAP_NAME` being set *is* the operator's explicit
-opt-in — there is no "not configured" reading of a failed read. That the proxy
-path swallows the same error is [Q520](../../STATUS.md#Q520), deliberately left
-alone here.
+The two sources differ in what an absent file means, and the difference is the
+opt-in. The proxy CA is optional at runtime, so absent (and empty) is a logged
+no-op and only a genuine read failure is fatal — Q520's rule, which landed on
+`main` mid-build and which the merged `configureTrustPool` keeps verbatim. The
+GitHub CA bundle is read only when `GITHUB_CA_CONFIGMAP_NAME` is set, which *is*
+the gateway's explicit opt-in, so absent, unreadable, and empty are all fatal:
+there is no "not configured" reading of any of them, and running untrusting is
+the failure the whole change exists to remove.
 
 ## Acceptance
 

@@ -1288,9 +1288,13 @@ read proxy CA /etc/actions-gateway/proxy-ca/tls.crt: permission denied
 or, when the mounted file holds no PEM certificate:
 
 ```
-build proxy trust pool from /etc/actions-gateway/proxy-ca/tls.crt: proxy CA PEM
-contained no valid certificates
+build trust pool from /etc/actions-gateway/proxy-ca/tls.crt,
+/etc/actions-gateway/github-ca/ca.crt: CA PEM contained no valid certificates
 ```
+
+The message names both mounted CA paths because one pool holds both (the proxy CA
+and, on GHES, the [appliance's CA](#a-ghes-appliances-certificate-is-not-trusted));
+the unparseable one is whichever is mounted.
 
 **Cause.** The per-tenant egress proxy's CA is mounted but the AGC cannot read or
 parse it. Only an *absent* file means "no TLS egress proxy" — the direct-egress and
