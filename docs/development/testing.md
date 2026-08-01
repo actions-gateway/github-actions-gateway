@@ -54,6 +54,13 @@ For the one-command gate before requesting review, run `make check` from the rep
 
 **A background run's verdict covers only the tree it saw.** `make check` is routinely launched as a *background* task so the doc updates, the `docs/STATUS.md` row, and the PR body can be written while it runs — that is the recommended shape ([parallel-dispatch.md § Run the local gate in the background](parallel-dispatch.md#run-the-local-gate-in-the-background-not-on-the-critical-path)), but it means a green report can describe a tree that no longer exists. Every edit made while the gate is running is unverified, and that includes the parallel work itself: `docs/STATUS.md`, `docs/**`, and the plan docs are gated by `lint-backlog`, `doc-links`, `roadmap-check`, and `plan-index-check`. **Re-run `make check` over the final tree before concluding.** The confirming run is cheap — the gates covering that work are the fast ones, which take no heavy-build slot, and the heavy phases are cache-warm. A **code** edit voids the verdict outright rather than merely narrowing it, and "code" means anything the gate compiles or lints: `scripts/*.sh` and the `Makefile` count, not only Go.
 
+**The exit code you read has to belong to the gate.** A verdict is only as good as the command that reported it, and the usual way that breaks is wrapping the gate in something that has an exit status of its own. Two shapes, both seen in one session:
+
+- `make test-race > run.log 2>&1; grep -c "DATA RACE" run.log` — `grep` exits **1 when it matches nothing**, which here is the *passing* outcome. The chain reports failure precisely when the gate was clean. Keep the gate's own status (`make …; echo "EXIT=$?"`) and make the log search a separate statement, or invert to `grep -q … && echo FOUND || echo none`.
+- `git add a.go b.go c.md 2>/dev/null` — `git add` fails **atomically** if any pathspec matches nothing (a file since renamed or `git mv`d), so one stale path stages *nothing*, and `2>/dev/null` throws away the one message that said so. The commit then goes out missing everything you thought you staged. Never redirect stderr away from a state-changing command, and read `git status` right before committing — that is the backstop that catches it.
+
+The general form: when a command's output is filtered, tested, or counted, the *filter's* status replaces the command's. Read both, or read neither and check the artifact.
+
 **Run order.** The cheap gates (everything except `lint` and `cover-check`) take no heavy-build slot and are independent, so `make check` runs them concurrently through [`scripts/run-parallel.sh`](../../scripts/run-parallel.sh) and reports them first — a `docs/STATUS.md` format slip surfaces in seconds instead of waiting out the unit suite. Every line is prefixed with its gate's label, so a failure stays attributable. (`make -j` is not used: macOS ships GNU make 3.81, which has no `-O` output sync, so two failing gates would interleave unreadably.) The heavy phases then run in sequence, each taking a slot of its own.
 
 Test output is non-verbose by default: `go test` prints one `ok <pkg>` line per passing package and the full output of any package that fails (compress success, expand failure). When debugging a **slow or hanging** test, add `V=1` (`make check V=1` or `make test V=1`) to stream output live — without `-v`, `go test` buffers each package's output until the package completes, so a hung test shows nothing (not even its `t.Log` lines) until it finishes or hits `-timeout`.
@@ -636,6 +643,29 @@ So when you find yourself adding a field to a stub so a test will pass:
   whole suite above it load-bearing; one shaped to match the parser makes it a mirror.
 - **If the fake genuinely has to differ, say why in the fake**, so the next person meets a
   documented divergence rather than an assumption.
+
+**The omission case is worse than the wrong-shape case, because no test fails to announce
+it.** Above, a stub sends the wrong field and something goes red first. When a stub does
+not model a piece of state *at all*, every tier is green over a whole bug class and nothing
+ever points at the gap. Q550: the scale-set stub's `generatejitconfig` returned a JIT
+config without recording that it had registered a runner — which is the one durable effect
+that call has at GitHub. So a leaked registration was not merely untested, it was
+**unrepresentable**: no unit, integration, or e2e assertion could have named the state the
+bug was about, and the suite stayed green through a defect that wedged a release gate.
+
+The tell is in the bug report. When a defect filed from production describes state your
+suite cannot express — "22 stale runner records", a row in a table no fake has, a resource
+that outlives the object that made it — the fake is the first thing to fix, before the code:
+
+- **Teach the double the real effect, then watch the new test fail.** A regression test
+  written against a fake that cannot hold the state is a test that can never fail, which is
+  worse than no test because it reads as coverage.
+- **Model the effect, not just the response.** `generatejitconfig` returning a blob is the
+  response; creating a record that holds a name until something deletes it is the effect,
+  and the effect is where this class of bug lives.
+- **Expect the faithful fake to reshape the diagnosis.** Q550's Queue row named a mechanism
+  that turned out to be already fixed; only a stub that registered on mint could show which
+  of the two candidate mechanisms actually accumulated records.
 
 ### Synchronize on the signal you assert on
 
