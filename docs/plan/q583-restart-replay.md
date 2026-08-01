@@ -1,7 +1,8 @@
 # Q583 — An AGC restart replays the queue and provisions workers for jobs long gone
 
-**Status:** premise confirmed from evidence already in the repo; the fix is
-gated on one live measurement (Investigation G), not on the rc.4 dogfood gate.
+**Status:** measured 2026-08-01 — the replay is real, `DeleteMessage` works, and
+deleting prunes the queue. Delete-acking is the fix; implementation is what
+remains. The rc.4 dogfood gate was never needed.
 
 [Q583](../STATUS.md#Q583) was filed with an instruction to measure at the rc.4
 gate before building, because the row's mechanism was asserted rather than
@@ -138,7 +139,7 @@ turning Q583 from a loud defect into a silent one. Whatever ships has to treat a
 
 Both candidate approaches were weighed against the code before the probe was
 written; the probe decides between them rather than confirming a choice already
-made.
+made. It has since reported — see [Decision: delete-ack](#decision-delete-ack).
 
 **Delete-ack** — issue `DeleteMessage` once every job in a message is concluded.
 This is the root-cause fix: it prunes the queue, so a replay carries only
@@ -166,4 +167,48 @@ status subresource. Held as the fallback for a `DELETE-FAILED` verdict.
 
 ## Findings
 
-_Nothing recorded yet — Investigation G has not been run._
+### The answer: REPLAYED, DELETE-OK, PRUNED (2026-08-01)
+
+One run against `actions-gateway/github-actions-gateway`, scale set
+`gag-q583-replay` (id 18), job `ee751b22-…`, run `30721627864`. No warnings, no
+errors, scale set torn down at the end.
+
+| Step | Observed |
+|---|---|
+| Stage | `JobAssigned` = message `100000001`, delivered ~0.8 s after the gen-1 session opened. Cursor advanced past it, **not** deleted. Run cancelled; `JobCompleted` = `100000002` (`result: canceled`) arrived ~0.8 s later, cursor advanced past it, again not deleted. gen-1 session deleted. |
+| Measurement 1 | The gen-2 session — a different owner name, polling from cursor 0 — received **both** `100000001` and `100000002`, carrying the same job id, run id, and `jobWorkflowRef` as staged. **REPLAYED.** |
+| Measurement 2 | `DELETE https://broker.actions.githubusercontent.com/scalesets/message/{id}` → **204 No Content** for both messages, ~100 ms each. **DELETE-OK.** |
+| Measurement 3 | The gen-3 session polled from cursor 0 for the full 45 s window and received **nothing at all**. **PRUNED.** |
+
+**Q583 is real, and the mechanism is the one the row asserted.** A message a
+previous session acked by cursor is redelivered to a session that never saw it:
+the cursor is session-scoped, the queue log is not. A restarted AGC — whose
+`provisioned`, `completed`, and `abandoned` guards are all empty — reads that
+`JobAssigned` for a job cancelled minutes earlier and has nothing left that would
+stop it provisioning a worker.
+
+**The `DeleteMessage` wire shape is confirmed, closing Q264's P4 unknown.** The
+source-derived construction is right, and the observed path is worth writing down
+because it is not what the client's own doc comment implies: the queue URL's path
+is `/scalesets/message` on `broker.actions.githubusercontent.com`, so the delete
+target is `/scalesets/message/{messageId}` — not per-scale-set in its path. The
+client already builds it correctly by appending to `MessageQueueURL`.
+
+**Delete-acking is a fix, not just a theory.** Measurement 3 is the one that
+matters: the same poll that returned two messages 45 seconds earlier returned an
+empty log after the deletes. The contrast is what carries it — gen 2 got its
+first message ~350 ms after opening, so gen 3's empty 45 s window is not a
+too-short budget.
+
+What this does **not** establish, the same caveats Q468 records: one tenant, one
+region, one point in time, on backend behaviour GitHub does not document. The
+claim is "observed, 2026-08-01", not "GitHub guarantees". And nothing here bounds
+retention — Q468's ≥13 h remains the only number, still a lower bound.
+
+### Decision: delete-ack
+
+`DELETE-OK` plus `PRUNED` selects delete-acking over persisting the cursor. The
+fallback is not needed. The two costs named above stand and are what the
+implementation has to handle: a message is deleted only once **every job in it is
+concluded**, so Q551's deferred jobs keep the replay that recovers them, and the
+Q373/Q575 Secret reclaim keeps its backstop for anything still in flight.
