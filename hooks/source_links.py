@@ -1,4 +1,4 @@
-"""MkDocs hook that points out-of-docs relative links at the GitHub repository.
+"""MkDocs hook that points links this build cannot serve at the GitHub repository.
 
 The `docs/` tree doubles as in-repo documentation browsed on github.com, where a
 relative link like `../cmd/agc/main.go` resolves to the source file. MkDocs has
@@ -7,12 +7,19 @@ no such file to serve, so it leaves the link untouched and the published page
 load-bearing — `STATUS.md` alone carries 34 source links — but the same links
 already shipped dead from `design/` and `operations/`.
 
-This hook rewrites every relative target that escapes `docs_dir` into an
+This hook rewrites every relative target the build does not publish into an
 absolute URL under `repo_url`, so one markdown link works in both places:
 
     ../cmd/agc/main.go     ->  {repo_url}/blob/{ref}/cmd/agc/main.go
     ../cmd/agc/main.go:91  ->  {repo_url}/blob/{ref}/cmd/agc/main.go#L91
     ../cmd/gmc/internal/   ->  {repo_url}/tree/{ref}/cmd/gmc/internal
+
+Two kinds of target qualify. Anything escaping `docs_dir` is never a page. So is
+a page this build's own scope drops: publication is per version (Q558), so a
+`design/` page linking `../plan/milestone-4.md` resolves on `dev` and 404s on
+every release (Q561). MkDocs reports the latter below warning level whatever
+`validation` says, so no gate can catch it — hence deciding it here, per build,
+from the file set.
 
 `{ref}` is `$GAG_DOCS_SOURCE_REF`, defaulting to `main`; `.github/workflows/
 pages.yml` sets it to the tag when deploying a release, so each version links to
@@ -61,11 +68,28 @@ def on_config(config):
         base=config["repo_url"].rstrip("/"),
         ref=os.environ.get("GAG_DOCS_SOURCE_REF", "").strip() or _DEFAULT_REF,
     )
+    # `published` is deliberately not seeded here: on_files always runs before a
+    # page renders, and an empty default would quietly absolutize every in-docs
+    # link instead of raising.
     return config
 
 
-def rewrite(markdown, page_dir, repo_root, docs_prefix, base, ref):
-    """Return markdown with every out-of-docs relative target absolutized."""
+def on_files(files, config):
+    """Record which `docs/` paths this build actually serves.
+
+    Two ways a file under `docs/` ends up with no page. `exclude_docs` keeps it
+    in `files` marked `InclusionLevel.EXCLUDED`, so membership proves nothing —
+    the inclusion level is what has to be read. `README.md` is dropped outright
+    where an `index.md` shares the directory, so it is absent instead.
+    """
+    config["extra"]["source_links"]["published"] = frozenset(
+        file.src_uri for file in files if file.inclusion.is_included()
+    )
+    return files
+
+
+def rewrite(markdown, page_dir, repo_root, docs_prefix, base, ref, published):
+    """Return markdown with every unserved relative target absolutized."""
 
     def replace(match):
         target = match.group(1)
@@ -79,12 +103,17 @@ def rewrite(markdown, page_dir, repo_root, docs_prefix, base, ref):
             path = path[: line.start()]
             fragment = fragment or f"L{line.group(1)}"
         resolved = posixpath.normpath(posixpath.join(docs_prefix, page_dir, path))
-        # Still under docs/ (MkDocs resolves it), or outside the repo entirely.
-        if resolved == docs_prefix or resolved.startswith((docs_prefix + "/", "..")):
+        if resolved.startswith(".."):  # outside the repo entirely — no URL to build
             return target
         on_disk = os.path.join(repo_root, resolved.replace("/", os.sep))
         if not os.path.exists(on_disk):
             return target
+        # Under docs/, MkDocs serves the target unless this build's scope drops
+        # it. Directories are left to the link gates either way: a bare `dir/`
+        # resolves to that directory's page, which the tree cannot answer for.
+        if resolved == docs_prefix or resolved.startswith(docs_prefix + "/"):
+            if os.path.isdir(on_disk) or resolved[len(docs_prefix) + 1 :] in published:
+                return target
         kind = "tree" if os.path.isdir(on_disk) else "blob"
         url = f"{base}/{kind}/{ref}/{resolved}"
         return f"{url}#{fragment}" if fragment else url

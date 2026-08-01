@@ -30,25 +30,36 @@ trap 'rm -rf "$WORKDIR"' EXIT
 # A throwaway tree shaped like the repo: a docs/ dir plus the source paths the
 # cases link at. Existence is what decides a rewrite, so the fixture is the
 # fixture — nothing about the real checkout leaks in.
-mkdir -p "$WORKDIR/docs/plan" "$WORKDIR/cmd/agc" "$WORKDIR/cmd/gmc/internal" "$WORKDIR/.github/workflows"
+mkdir -p "$WORKDIR/docs/plan" "$WORKDIR/docs/development" "$WORKDIR/docs/operations" \
+	"$WORKDIR/cmd/agc" "$WORKDIR/cmd/gmc/internal" "$WORKDIR/.github/workflows"
 touch "$WORKDIR/cmd/agc/main.go" "$WORKDIR/Makefile" "$WORKDIR/.github/workflows/ci.yml"
-touch "$WORKDIR/docs/plan/sibling.md"
+touch "$WORKDIR/docs/index.md" "$WORKDIR/docs/README.md" "$WORKDIR/docs/STATUS.md"
+touch "$WORKDIR/docs/plan/sibling.md" "$WORKDIR/docs/development/testing.md"
+touch "$WORKDIR/docs/operations/install.md"
 
 fails=0
 
+# PUBLISHED is the src_uri set the build under test serves — what MkDocs hands
+# the hook from `on_files`. The default is the `dev` scope: every fixture page
+# except docs/README.md, which MkDocs drops on every version as an index.md
+# conflict. Release-scope cases narrow it to the operator docs.
+PUBLISHED='index.md STATUS.md plan/sibling.md development/testing.md operations/install.md'
+readonly RELEASE_SCOPE='index.md operations/install.md'
+
 # rewrite PAGE_DIR MARKDOWN [REF] — run the hook's pure rewrite over MARKDOWN as
-# if it were the page docs/PAGE_DIR/page.md.
+# if it were the page docs/PAGE_DIR/page.md, against the current $PUBLISHED.
 rewrite() {
 	local page_dir="$1" markdown="$2" ref="${3:-main}"
-	python3 - "$HOOK" "$WORKDIR" "$page_dir" "$markdown" "$BASE" "$ref" <<-'PY'
+	python3 - "$HOOK" "$WORKDIR" "$page_dir" "$markdown" "$BASE" "$ref" "$PUBLISHED" <<-'PY'
 		import importlib.util, sys
 
-		hook, repo_root, page_dir, markdown, base, ref = sys.argv[1:7]
+		hook, repo_root, page_dir, markdown, base, ref, published = sys.argv[1:8]
 		spec = importlib.util.spec_from_file_location("source_links", hook)
 		mod = importlib.util.module_from_spec(spec)
 		spec.loader.exec_module(mod)
 		sys.stdout.write(mod.rewrite(markdown, page_dir, repo_root=repo_root,
-		                             docs_prefix="docs", base=base, ref=ref))
+		                             docs_prefix="docs", base=base, ref=ref,
+		                             published=frozenset(published.split())))
 	PY
 }
 
@@ -89,6 +100,14 @@ expect 'sibling doc stays relative' \
 	'[s](sibling.md)' plan '[s](sibling.md)'
 expect 'doc outside this dir but inside docs/ stays relative' \
 	'[i](../index.md)' plan '[i](../index.md)'
+# A directory under docs/ resolves to that directory's page, which the working
+# tree cannot answer for — the two link gates own it (website.md § two gates).
+expect 'directory under docs/ stays relative' \
+	'[o](../operations/)' plan '[o](../operations/)'
+# docs/README.md never reaches `files` — MkDocs drops it against index.md — so
+# it is unserved on every version, dev included.
+expect 'docs/README.md absolutized even in the dev scope' \
+	"[r]($BASE/blob/main/docs/README.md)" development '[r](../README.md)'
 expect 'absolute URL untouched' \
 	'[u](https://example.com/x.go)' plan '[u](https://example.com/x.go)'
 expect 'mailto untouched' \
@@ -105,6 +124,33 @@ expect 'nonexistent path with a line suffix untouched' \
 # normpath escapes the repo entirely — there is no URL to build.
 expect 'target above the repo root untouched' \
 	'[o](../../../elsewhere.md)' plan '[o](../../../elsewhere.md)'
+# --- scope-dependent: the same link, both publication scopes (Q561) ----------
+#
+# Publication is per version: `plan/`, `development/` and `STATUS.md` are pages
+# on `dev` and absent from every release, so an operator page citing one must
+# resolve in-site there and fall back to github.com here.
+
+expect 'repo-internal doc stays relative where the build publishes it' \
+	'[p](../plan/sibling.md)' operations '[p](../plan/sibling.md)'
+
+PUBLISHED="$RELEASE_SCOPE"
+
+expect 'plan doc -> blob URL in the release scope' \
+	"[p]($BASE/blob/main/docs/plan/sibling.md)" operations '[p](../plan/sibling.md)'
+expect 'development doc -> blob URL in the release scope' \
+	"[t]($BASE/blob/main/docs/development/testing.md)" operations '[t](../development/testing.md)'
+expect 'backlog anchor survives the rewrite' \
+	"[q]($BASE/blob/main/docs/STATUS.md#Q561)" operations '[q](../STATUS.md#Q561)'
+expect 'a release pins its own tag' \
+	"[p]($BASE/blob/v1.2.0/docs/plan/sibling.md)" operations '[p](../plan/sibling.md)' v1.2.0
+# Still the typo rule: an unserved path with nothing behind it stays broken.
+expect 'nonexistent plan doc untouched' \
+	'[x](../plan/gone.md)' operations '[x](../plan/gone.md)'
+expect 'a published operator page stays relative' \
+	'[i](install.md)' operations '[i](install.md)'
+
+PUBLISHED='index.md STATUS.md plan/sibling.md development/testing.md operations/install.md'
+
 # --- the scheme test itself --------------------------------------------------
 #
 # `path/to/file.go:91` is a relative target, not a URL in the `path/to/file.go`
