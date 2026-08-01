@@ -1,0 +1,3121 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/dogfood-runner-rightsizing/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>GAG Dogfood CI Runner Right-Sizing - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/devassets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/devassets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/devassets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/dev",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/dev"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/dev",
+    "logo": "https://actions-gateway.com/devassets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#gag-dogfood-ci-runner-right-sizing" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.2.0 is here.</strong>
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.2.0">Read the release notes.</a>
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              GAG Dogfood CI Runner Right-Sizing
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_15" id="__nav_7_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope-note--this-is-costcorrectness-not-speed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope note — this is cost/correctness, not speed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decision--do-we-need-multiple-runner-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design decision — do we need multiple runner types?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#baseline-job-profile-github-hosted-2026-06-30" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Baseline job profile (GitHub-hosted, 2026-06-30)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-model-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource-model principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e2e-track--validate-then-size-kata-deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        e2e track — validate, then size (Kata deferred)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="e2e track — validate, then size (Kata deferred)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#validation-findings-2026-06-30" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation findings (2026-06-30)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#egress-interim-workaround--deferred-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Egress: interim workaround + deferred hardening
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-results--general-workers-2026-06-30-first-pass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 results — general workers (2026-06-30, first pass)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Node-pool disk class: the real maxWorkers ceiling (Q248, 2026-07-05)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2--derived-requestslimits-2026-07-06-general-workers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — derived requests/limits (2026-07-06, general workers)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 2 — derived requests/limits (2026-07-06, general workers)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#node-allocatable-validation-maxworkers-vs-the-worker-pool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Node-allocatable validation (maxWorkers vs the worker pool)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agc-control-plane-pod--no-change-defaults-are-right-sized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AGC control-plane pod — no change (defaults are right-sized)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        e2e worker sizing — measured, then derived (DinD, 2026-07-07)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="e2e worker sizing — measured, then derived (DinD, 2026-07-07)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#node-allocatable-validation-maxworkers-vs-the-e2e-pool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Node-allocatable validation (maxWorkers vs the e2e pool)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#small-tier--measured-then-declined-2026-07-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Small tier — measured, then declined (2026-07-07)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-5--persisted-2026-07-06" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5 — persisted (2026-07-06)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="gag-dogfood-ci-runner-right-sizing">GAG Dogfood CI Runner Right-Sizing<a class="headerlink" href="#gag-dogfood-ci-runner-right-sizing" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Status: ✅ COMPLETE (2026-07-07).</strong> Node-pool disk class RESOLVED (2026-07-05);
+general-worker pod <code>requests</code>/<code>limits</code> RIGHT-SIZED (2026-07-06); <strong>e2e-worker
+(DinD) pod <code>requests</code>/<code>limits</code> RIGHT-SIZED from a measured clean-green Calico run
+(2026-07-07)</strong>; the optional "small" tier <strong>measured and formally declined</strong> (the
+packing waste is not material). Tracked as <a href="../../STATUS/#Q248">Q248</a>.
+Every worker pod's original <code>requests</code>/<code>limits</code> were an unmeasured guess; they are
+now replaced with values derived from measured peak — general workers see
+<a href="#phase-2--derived-requestslimits-2026-07-06-general-workers">§ Phase 2 — general</a>,
+e2e workers see <a href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07">§ e2e worker sizing</a>,
+the small tier see <a href="#small-tier--measured-then-declined-2026-07-07">§ Small tier</a>.
+<strong>The dominant general-pool capacity ceiling turned out to be the node-pool <em>disk
+class</em>, not the pod requests</strong> — see <a href="#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05">§ Node-pool disk class</a> below (resolved 2026-07-05: <code>pd-balanced</code>→<code>pd-standard</code>, no quota bump).</p>
+</blockquote>
+<h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
+<p>Right-size the GAG dogfood worker pods (CPU/memory <code>requests</code> and <code>limits</code>) and
+the worker node pool from <strong>measured peak</strong> usage, so CI jobs run on GAG without
+OOM or CPU throttling at the fewest spot-node-hours.</p>
+<h2 id="scope-note--this-is-costcorrectness-not-speed">Scope note — this is cost/correctness, not speed<a class="headerlink" href="#scope-note--this-is-costcorrectness-not-speed" title="Permanent link">&para;</a></h2>
+<p>Establish up front what this is <em>not</em>: it is <strong>not</strong> a play to make CI faster than
+GitHub-hosted. The 2026-06-30 baseline measurement (last ~25 runs each of
+unit/integration/e2e) showed:</p>
+<ul>
+<li><strong>GitHub-hosted has no queue to eliminate</strong> — median job pickup was <strong>2s</strong>
+  (p90 3s; 0% of 150 jobs queued over 2 min). The repo's fan-out sits far under
+  GitHub's concurrency cap, so GAG's main potential advantage (absorbing a queue)
+  does not apply here.</li>
+<li><strong>The global long pole is <code>e2e</code> (~9 min)</strong>, which is <code>kind</code>-cluster-spin-up
+  bound (not CPU-bound), runs on its own nested-virt pool, and is kept on
+  GitHub-hosted. So routing unit/integration jobs to GAG cannot reduce total PR
+  wall-clock — the binding constraint isn't on GAG and isn't node-size-sensitive.</li>
+</ul>
+<p>Right-sizing therefore serves the <strong>isolation + dogfooding</strong> use case: running
+those jobs <em>correctly and cheaply</em> on GAG when GAG is used to dogfood itself, not
+to beat GitHub on throughput.</p>
+<h2 id="design-decision--do-we-need-multiple-runner-types">Design decision — do we need multiple runner types?<a class="headerlink" href="#design-decision--do-we-need-multiple-runner-types" title="Permanent link">&para;</a></h2>
+<p>Separate two ideas that get conflated: <strong>node pools</strong> (VMs) and <strong>runner pod
+tiers</strong> (per-job resource requests). Kubernetes <code>requests</code> + bin-packing already
+let different-sized pods share one node size, so size variance alone is <em>not</em> a
+reason to multiply node pools.</p>
+<table>
+<thead>
+<tr>
+<th>Driver</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>e2e</code> needs nested virtualization (Kata/DinD: N-series + <code>/dev/kvm</code>)</td>
+<td><strong>Distinct node pool — mandatory, hardware-driven.</strong> Already exists (<code>dogfood/e2e-setup.sh</code>).</td>
+</tr>
+<tr>
+<td>All other jobs (lint, unit-test, coverage, integration, trivial)</td>
+<td><strong>One general worker node size</strong> bin-packs them all — a 10s <code>shellcheck</code> pod and a 4-vCPU <code>-race</code> pod schedule onto the same node. Do <strong>not</strong> create node pools per job size.</td>
+</tr>
+<tr>
+<td>Trivial jobs (<code>shellcheck</code>/<code>vendor-check</code>/<code>tidy-check</code>, 10–20s) holding large slots</td>
+<td><strong>Optional 2nd "small" pod tier</strong> — only if Phase 1 shows the packing waste is material.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Conclusion: two runner types to start — general + e2e — split by the
+nested-virt requirement, not by size.</strong> Add a "small" tier only if the
+measurement earns it. Resist per-workflow runner proliferation: every extra
+runner label couples the workflow files to the runner taxonomy and is a
+maintenance tax. Let <code>requests</code> and the autoscaler absorb size variance on a
+single general pool.</p>
+<h2 id="baseline-job-profile-github-hosted-2026-06-30">Baseline job profile (GitHub-hosted, 2026-06-30)<a class="headerlink" href="#baseline-job-profile-github-hosted-2026-06-30" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Job</th>
+<th>Median run</th>
+<th>Class</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>shellcheck</code></td>
+<td>10s</td>
+<td>trivial (I/O-bound)</td>
+</tr>
+<tr>
+<td><code>tidy-check</code></td>
+<td>16s</td>
+<td>trivial</td>
+</tr>
+<tr>
+<td><code>vendor-check</code></td>
+<td>20s</td>
+<td>trivial</td>
+</tr>
+<tr>
+<td><code>coverage</code></td>
+<td>112s</td>
+<td>heavy CPU</td>
+</tr>
+<tr>
+<td><code>unit-test</code> (<code>-race</code>)</td>
+<td>174s</td>
+<td>heavy CPU + memory (race detector)</td>
+</tr>
+<tr>
+<td><code>lint</code> (golangci-lint)</td>
+<td>232s</td>
+<td>heavy CPU (longest unit-test job)</td>
+</tr>
+<tr>
+<td><code>integration-test</code></td>
+<td>294s</td>
+<td>envtest (real apiserver + etcd)</td>
+</tr>
+<tr>
+<td><code>e2e</code></td>
+<td>530s</td>
+<td>nested-virt (<code>kind</code> in DinD) — separate pool</td>
+</tr>
+</tbody>
+</table>
+<p>These are <em>durations</em>, not resource usage. Phase 1 measures the actual peak CPU
+and memory each consumes, which is what <code>requests</code>/<code>limits</code> must be set from.</p>
+<h2 id="resource-model-principles">Resource-model principles<a class="headerlink" href="#resource-model-principles" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><code>requests</code> drive scheduling/packing; <code>limits</code> drive throttling (CPU) and
+  OOM-kill (memory).</strong></li>
+<li><strong>Memory is non-compressible</strong> → set <code>limit ≥ measured peak × ~1.3</code>; exceeding
+  the memory limit kills the job. Start the headroom factor at 1.3 and widen if
+  any run OOMs.</li>
+<li><strong>CPU is compressible</strong> → a CPU <code>limit</code> <em>throttles</em> bursty jobs (slows them for
+  no packing benefit). Prefer <strong>CPU <code>requests</code> only, no CPU limit</strong> for CI workers:
+  requests still drive packing, while jobs burst to fill otherwise-idle node
+  capacity. Keep memory limits for OOM / noisy-neighbor safety. (The current
+  template sets a 4-vCPU CPU limit — likely worth removing.)</li>
+<li><strong>Measure peak, not average</strong> — <code>-race</code> and envtest spike well above their
+  steady state.</li>
+</ul>
+<h2 id="plan">Plan<a class="headerlink" href="#plan" title="Permanent link">&para;</a></h2>
+<p><strong>Phase 1 — Measure (needs the live cluster).</strong> Dispatch each job class to GAG
+and sample the runner container's usage during the run:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># while a job pod is Running, poll every ~3s and keep the peak</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>gag-dogfood<span class="w"> </span>--containers<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--no-headers
+</code></pre></div>
+<p>Record peak CPU + peak memory + duration per job. Watch <code>kubectl get events
+-n gag-dogfood</code> for <code>OOMKilled</code>, and watch for CPU usage pinned at the limit
+(throttling). Sample the <strong>runner</strong> container, not the injected wrapper sidecar.
+Output: a measurement table appended to this plan.</p>
+<p><strong>Phase 2 — Derive <code>requests</code>/<code>limits</code></strong> per the principles above (memory limit =
+peak × 1.3, CPU requests = ~p90, no CPU limit). Decide tiering from the observed
+spread: a "small" tier is justified only if trivial jobs land at, say, ≤1 vCPU /
+≤1 GiB while heavy jobs need ~4 vCPU / 8–10 GiB.</p>
+<p><strong>Phase 3 — Size the general worker node</strong> as a clean multiple of the dominant
+(heavy) pod so stranded capacity is minimal — e.g. a <code>*-standard-8</code> spot node
+holds 2× a 4-vCPU pod. <code>c3</code>/<code>n2</code> for faster cores on the CPU-bound jobs, <code>e2</code> for
+the cost floor. Keep <code>e2e</code> on its <code>n2-standard-4</code> nested-virt pool, sized for
+<code>kind</code>-in-DinD memory (measured separately).</p>
+<p><strong>Phase 4 — Validate.</strong> Run the full suite on GAG; confirm zero OOM and no
+throttle-induced slowdown; compare job durations and total spot-node-hours to the
+baseline; adjust.</p>
+<p><strong>Phase 5 — Persist.</strong> Bake the final <code>requests</code>/<code>limits</code> into the
+<code>RunnerTemplate</code>(s) and the node sizes into
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a> + the
+<a href="../gke-dogfood/">runbook</a>; record the measurement table here, then archive this
+plan.</p>
+<h2 id="e2e-track--validate-then-size-kata-deferred">e2e track — validate, then size (Kata deferred)<a class="headerlink" href="#e2e-track--validate-then-size-kata-deferred" title="Permanent link">&para;</a></h2>
+<p>e2e is the heaviest, most mis-sizing-sensitive job (<code>kind</code>-in-DinD OOMs mid
+cluster-bringup if under-sized) and the priciest pool, so it gets its own track.
+The chosen sequence is <strong>functional validation first, security hardening later</strong>:</p>
+<ol>
+<li><strong>✅ Validate e2e works on GAG via privileged DinD — no Kata.</strong> Privileged DinD
+   needs no nested virtualization (dockerd uses the host kernel directly), so it
+   runs on a normal spot pool with no N2 / no Kata DaemonSet. The empirical risk
+   is <code>kind</code>-in-DinD on GKE COS <strong>cgroup v2</strong> — validate by running it, not by
+   inspection. This is a <strong>deliberate, platform-gated, dogfood-only</strong> use of the
+   <code>privileged</code> profile (v2 gates it by the platform-set namespace label
+   <code>actions-gateway.com/security-profile=privileged</code> + PSA <code>enforce=privileged</code>;
+   tenants cannot self-elevate). It is <strong>never</strong> a shipped default. <em>Confirmed
+   working — a full Calico e2e ran clean-green on GAG (2026-07-07), pod
+   <code>Completed</code>, no OOM.</em></li>
+<li><strong>✅ Right-size</strong> the DinD/<code>kind</code> pod from measured peak usage — done 2026-07-07,
+   see <a href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07">§ e2e worker sizing</a>.
+   (The e2e <em>node</em> was found memory-over-provisioned but kept for <code>kind</code>-OOM headroom;
+   see the node-allocatable check there.)</li>
+<li><strong>Re-introduce Kata</strong> (<code>baseline</code> profile, KVM micro-VM) for isolation once the
+   functional path and sizing are settled — the secure end-state. Tracked as the
+   follow-up; the privileged path is the validation scaffold, not the destination.</li>
+</ol>
+<p>Setup for step 1 (no nested virt): a dedicated <code>e2-standard-8</code> spot e2e pool
+(taint <code>dedicated=e2e</code>, autoscale 0→2); a <code>gag-dogfood-e2e</code> namespace labelled
+<code>security-profile=privileged</code>; a v2 <code>ActionsGateway</code> + a cluster-scoped
+<code>ClusterRunnerTemplate</code> (runner + a <code>privileged: true</code> <code>docker:dind</code> sidecar,
+<code>DOCKER_HOST=tcp://localhost:2375</code>) + <code>RunnerSet</code> (<code>gag-ci-e2e</code>); and
+<code>e2e-reusable.yml</code> wired to <code>GAG_E2E_RUNNER</code>.</p>
+<h3 id="validation-findings-2026-06-30">Validation findings (2026-06-30)<a class="headerlink" href="#validation-findings-2026-06-30" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Privileged DinD works on GKE COS cgroup v2.</strong> The DinD daemon came up clean
+  (<code>storage-driver=overlay2</code>, daemon initialized, listening on <code>:2375</code>) — the main
+  unknown is cleared. GAG <em>can</em> host DinD e2e without Kata.</li>
+<li><strong>v2 routes privileged through a platform-owned <code>ClusterRunnerTemplate</code>, gated
+  four ways.</strong> A namespaced (tenant) <code>RunnerTemplate</code> rejects privileged
+  containers; the shape must be a cluster-scoped <code>ClusterRunnerTemplate</code>. The
+  namespace needs <code>tenant=managed</code>, <code>security-profile=privileged</code>, the
+  <code>allow-profile-downgrade=allowed</code> annotation, <strong>and</strong> the platform
+  <code>privileged-profile=allowed</code> label — none tenant-settable (secure-by-default
+  working as intended).</li>
+<li><strong>e2e needs broad non-GitHub egress.</strong> The job pulls from <code>get.helm.sh</code>
+  (<code>setup-helm</code>), Docker Hub (curl/vault/buildkit), <code>quay.io</code> (Calico), and
+  <code>registry.k8s.io</code> (metrics-server) — all blocked by GAG's default-deny +
+  GitHub-only workload <code>NetworkPolicy</code>, and <strong>v2 has no managed-NP opt-out</strong>.</li>
+</ul>
+<h3 id="egress-interim-workaround--deferred-hardening">Egress: interim workaround + deferred hardening<a class="headerlink" href="#egress-interim-workaround--deferred-hardening" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Interim (accepted):</strong> an <strong>additive allow-all-egress <code>NetworkPolicy</code></strong> on the
+  <code>gag-dogfood-e2e</code> workload pods (unions with GAG's managed default-deny to open
+  egress). This is a <strong>deliberate, documented property of the DinD variant</strong>
+  (trusted CI only) — <strong>never</strong> for untrusted PRs (that's the Kata variant's job).</li>
+<li><strong>Collecting the allowlist:</strong> the e2e job's external destinations are gathered
+  (from the job + <code>dockerd</code> logs; the deps are also pinned in <code>e2e-reusable.yml</code>)
+  to seed a future precise allowlist.</li>
+<li><strong>Durable hardening (deferred, backlog):</strong> the destinations are CDN-fronted
+  (Docker Hub→Cloudflare, helm→Azure, quay→Fastly), so an IP allowlist rots and a
+  precise <strong>FQDN</strong> allowlist isn't <em>enforced</em> on the dogfood cluster today — its
+  managed Cilium has no <code>CiliumNetworkPolicy</code>, and while GKE's alpha
+  <code>FQDNNetworkPolicy</code> is now emitted by GAG's <code>gke</code> backend, dogfood doesn't
+  enable the opt-in <code>--enable-fqdn-network-policy</code> it needs (<a href="../q245-fqdn-intent-backend-split/">Q245</a>). The durable answer is
+  an <strong>in-cluster pull-through mirror</strong> (collapses e2e egress to one in-cluster
+  destination — air-gappable, no CDN rot), pairing with the Kata variant for
+  untrusted jobs.</li>
+</ul>
+<h2 id="phase-1-results--general-workers-2026-06-30-first-pass">Phase 1 results — general workers (2026-06-30, first pass)<a class="headerlink" href="#phase-1-results--general-workers-2026-06-30-first-pass" title="Permanent link">&para;</a></h2>
+<p>Re-dispatched <code>unit-test</code> + organic PR traffic on GAG; <code>kubectl top</code> sampled every
+5s, peak tracked per pod. Two heavy-job pods captured (lifetime ~145–165s):</p>
+<table>
+<thead>
+<tr>
+<th>Pod (heavy job class)</th>
+<th>Peak CPU</th>
+<th>Peak memory</th>
+<th>Lifetime</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>…6bbf7ca</code></td>
+<td>3794m</td>
+<td>1467Mi</td>
+<td>~165s</td>
+</tr>
+<tr>
+<td><code>…6d8f81d</code></td>
+<td>3802m</td>
+<td>2134Mi</td>
+<td>~145s</td>
+</tr>
+</tbody>
+</table>
+<p>Envelope: <strong>max 3802m CPU, 2134Mi memory</strong> across all runner pods.</p>
+<p>Findings:
+- <strong>CPU-bound and throttled.</strong> Peak ~3.8 vCPU sits right against the 4-vCPU
+  <em>limit</em> → the heavy jobs hit the limit and throttle. Confirms they want ≥4
+  cores; switching to <strong>requests-only (no CPU limit)</strong> should let them burst and
+  finish faster.
+- <strong>Memory is ~4× over-provisioned.</strong> Peak ~2.1 GiB against an 8 GiB limit. Drop
+  the memory limit to ~3 GiB (peak × ~1.4) and request ~2 GiB → much better
+  bin-packing.</p>
+<p>Caveats (first pass): only 2 pods captured; <code>lint</code> (the longest job) and the full
+<code>-race</code> memory peak may not be among them, and <code>-race</code> can spike memory higher —
+confirm with a targeted run before finalizing. Attribution is by lifetime only.</p>
+<h2 id="node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05">Node-pool disk class: the real <code>maxWorkers</code> ceiling (Q248, 2026-07-05)<a class="headerlink" href="#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05" title="Permanent link">&para;</a></h2>
+<p>Phase 1 assumed the worker <strong>pod</strong> requests were the binding constraint. Live
+capacity work (re-routes #4–#6) surfaced a bigger, unrelated ceiling: the worker
+<strong>node</strong> boot <strong>disk class</strong>.</p>
+<p><strong>Root cause.</strong> Each worker node (<code>workers</code>/<code>workers-od</code>, <code>e2-standard-4</code>) had a
+100 GB <strong><code>pd-balanced</code></strong> boot disk. <code>pd-balanced</code> is SSD-class and counts against
+the regional <strong><code>SSD_TOTAL_GB</code> = 500 GB</strong> quota. With the system pool (2×50 GB) and
+base usage also on SSD, ~4 worker nodes exhausted the 500 GB → <code>maxWorkers ≈ 4</code>.
+This read as a quota shortage but is <strong>self-inflicted</strong>: the CI workload is tiny
+(peak ~3.8 GiB mem, 34 % node CPU), so SSD-class disks for worker nodes buy
+nothing.</p>
+<p><strong>Fix (no quota bump).</strong> Recreate the worker pool with <strong><code>--disk-type=pd-standard</code></strong>
+(HDD). <code>pd-standard</code> counts against <strong><code>DISKS_TOTAL_GB</code> = 4096 GB</strong>, <em>not</em> the SSD
+quota, so worker capacity becomes <strong>CPU/mem-bound</strong> (<code>CPUS</code> = 200 quota), not
+SSD-bound. Disk size stays 100 GB for container-image pull scratch (pd-standard is
+a <em>quota class</em> change, not a size cut, so no scratch-space risk). The CI job
+classes (Go build/test/lint/envtest) are CPU/mem-bound, not scratch-IOPS-bound, so
+HDD is appropriate; a job class that genuinely needed SSD scratch IOPS would keep
+<code>pd-balanced</code> and pay the SSD quota.</p>
+<p><strong>Live proof (2026-07-05).</strong> Recreated <code>workers-od</code> as <code>pd-standard</code> ×4
+(<code>e2-standard-4</code>). With 4 worker nodes + 2 system nodes up: <code>DISKS_TOTAL_GB</code> usage
+= <strong>400</strong> (= the 4×100 GB worker disks, now HDD), <code>SSD_TOTAL_GB</code> = 220/500 (system
+only — workers no longer counted), <code>CPUS</code> = 24/200. Under the old <code>pd-balanced</code>
+config those same 4 workers would have pushed SSD to ~620 &gt; 500 → blocked. The
+SSD ceiling is gone; <code>maxWorkers</code> is now limited by CPU/mem (≈ 48 <code>e2-standard-4</code>
+nodes' worth of headroom), not disk quota.</p>
+<p><strong>Persisted.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a>
+<code>create_worker_pool</code> and the mirrored recipe in <a href="../gke-dogfood/"><code>gke-dogfood.md</code></a>
+now provision the <code>workers</code> pool with <code>--disk-type=pd-standard</code> and <code>max-nodes=8</code>.
+<code>RunnerSet.maxWorkers</code> raised 4→8 (still far under the CPU-bound ceiling; the
+dogfood matrix is ~7 concurrent jobs). Remaining Q248 work: the pod
+<code>requests</code>/<code>limits</code> refinement (drop the CPU limit, memory limit → peak×1.3) is
+still open — orthogonal to the disk-class fix.</p>
+<h2 id="phase-2--derived-requestslimits-2026-07-06-general-workers">Phase 2 — derived <code>requests</code>/<code>limits</code> (2026-07-06, general workers)<a class="headerlink" href="#phase-2--derived-requestslimits-2026-07-06-general-workers" title="Permanent link">&para;</a></h2>
+<p>Applying the <a href="#resource-model-principles">resource-model principles</a> to the
+<a href="#phase-1-results--general-workers-2026-06-30-first-pass">Phase 1 envelope</a>
+(peak <strong>3802m CPU, 2134Mi memory</strong> across all runner pods):</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Old (guess)</th>
+<th>New (measured)</th>
+<th>Derivation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU <code>request</code></td>
+<td><code>2</code></td>
+<td><code>2</code></td>
+<td>Kept. On an <code>e2-standard-4</code> worker this packs one heavy pod per node (see allocatable check below), which the ~3.8 vCPU peak wants.</td>
+</tr>
+<tr>
+<td>CPU <code>limit</code></td>
+<td><code>4</code></td>
+<td><strong>removed</strong></td>
+<td>CPU is compressible — a limit only <em>throttles</em> bursty Go build/test/lint jobs (Phase 1 saw peak pinned against the old 4-vCPU limit). Requests-only lets a heavy pod burst to the whole node.</td>
+</tr>
+<tr>
+<td>memory <code>request</code></td>
+<td><code>4Gi</code></td>
+<td><strong><code>2Gi</code></strong></td>
+<td>≈ measured peak (2134Mi). The old 4Gi was ~2× over-provisioned.</td>
+</tr>
+<tr>
+<td>memory <code>limit</code></td>
+<td><code>8Gi</code></td>
+<td><strong><code>3Gi</code></strong></td>
+<td>peak × ~1.4 (2134Mi × 1.4 ≈ 3Gi) for OOM headroom on the non-compressible resource. The old 8Gi was ~4× over-provisioned.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why keep CPU <code>request</code> at <code>2</code> rather than lower it.</strong> A burst-tuning experiment
+(gke-dogfood.md re-route) tried <code>request=1</code> to pack ~3 pods per node; it packed
+cleanly, but the serialization it was chasing turned out to be an AGC
+agent-pool-recycling bug (Q259, since resolved), <strong>not</strong> node capacity. At <code>request=1</code> with no CPU limit, three co-scheduled heavy jobs (each
+peaking ~3.8 vCPU) would contend for one node's ~3.4 allocatable vCPU → ~1.1 vCPU
+each → ~3× throttle-induced slowdown, exactly what Phase 4 says to avoid. The
+measured peak says a heavy job wants ~a whole <code>e2-standard-4</code>; <code>request=2</code> reflects
+that (one heavy pod per node) while staying schedulable. Trivial jobs
+(<code>shellcheck</code>/<code>tidy</code>/<code>vendor</code>, 10–20s, near-zero CPU) over-request under this single
+tier — see the deferred "small" tier in <a href="#open-questions">Open questions</a>; the
+packing waste (a few short-lived spot-node-slots) is not yet material enough to
+justify a second runner label.</p>
+<h3 id="node-allocatable-validation-maxworkers-vs-the-worker-pool">Node-allocatable validation (<code>maxWorkers</code> vs the worker pool)<a class="headerlink" href="#node-allocatable-validation-maxworkers-vs-the-worker-pool" title="Permanent link">&para;</a></h3>
+<p>Worker node = <code>e2-standard-4</code> (4 vCPU / 16 GiB), <code>--disk-type=pd-standard</code>,
+autoscale 0→8. GKE's <a href="https://cloud.google.com/kubernetes-engine/docs/concepts/plan-node-sizes#memory_cpu_reservations">reserved-resource formula</a>
+gives node allocatable ≈ <strong>3920m CPU</strong> (reserve 6%/1%/0.5% tiers = 80m) and
+<strong>≈13.3 GiB memory</strong> (reserve 25%/20%/10% tiers + 100Mi eviction). GKE system
+DaemonSets that tolerate the <code>dedicated=workers</code> taint (kube-proxy, DPv2 <code>anetd</code>,
+metadata, logging) consume a further ~0.4–0.6 vCPU / ~0.4–0.6 GiB, leaving
+<strong>~3.3–3.5 vCPU and ~12.7 GiB available for worker pods per node</strong>.</p>
+<ul>
+<li><strong>CPU is binding.</strong> <code>request=2</code> → <code>2 + 2 = 4 &gt; ~3.4</code>, so <strong>exactly one worker pod
+  schedules per node</strong>. <code>maxWorkers=8</code> therefore fans out to <strong>≤ 8 worker nodes</strong>,
+  matching the pool's <code>max-nodes=8</code>. Consistent; no over- or under-commit.</li>
+<li><strong>Memory is slack, not binding.</strong> At <code>request=2Gi</code> a node could hold ~6 pods by
+  memory, but CPU caps it at 1 — so the 2Gi request / 3Gi limit never gates
+  scheduling and leaves ample OOM headroom.</li>
+</ul>
+<p>The sizing is therefore <strong>CPU-bound at one heavy pod per node</strong>, and <code>maxWorkers=8</code>
+is validated against <code>max-nodes=8</code>. (This is orthogonal to — and downstream of —
+the disk-class fix that lifted the node ceiling off the SSD quota.)</p>
+<h3 id="agc-control-plane-pod--no-change-defaults-are-right-sized">AGC control-plane pod — no change (defaults are right-sized)<a class="headerlink" href="#agc-control-plane-pod--no-change-defaults-are-right-sized" title="Permanent link">&para;</a></h3>
+<p>The per-tenant AGC pod uses the platform default footprint
+(<code>defaultAGCResources</code>: requests <code>500m</code>/<code>2Gi</code>, limits <code>2</code>/<code>4Gi</code>; overridable via
+<code>spec.agcResources</code>). The dogfood <code>ActionsGateway</code> sets <strong>no</strong> <code>agcResources</code>
+override, so it inherits those defaults, and it schedules on the <code>default-pool</code>
+(<code>e2-standard-2</code>, alongside the single-replica GMC and Athens — the taint keeps it
+off the worker pool). Across the extensive live dogfood runs (Q224/Q259/Q260/Q267
+re-routes, up to <code>maxListeners=16</code> / <code>maxWorkers=8</code>) the AGC has never OOMed or
+CPU-starved at these defaults, and its ~2Gi request fits comfortably beside the GMC
+(<code>10m</code>/<code>64Mi</code>) and Athens on the ~5.9 GiB-allocatable system node. <strong>Decision: keep
+the AGC at platform defaults for dogfood</strong> — a smaller override is unwarranted
+(2Gi is already modest for a session-multiplexing control plane) and any change
+should follow an AGC-specific <code>kubectl top</code> measurement, not a guess.</p>
+<h2 id="e2e-worker-sizing--measured-then-derived-dind-2026-07-07">e2e worker sizing — measured, then derived (DinD, 2026-07-07)<a class="headerlink" href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07" title="Permanent link">&para;</a></h2>
+<p>The e2e worker is the DinD variant (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/dogfood-e2e/overlays/dind"><code>deploy/dogfood-e2e/overlays/dind</code></a>):
+a <code>runner</code> container + a native-sidecar <code>docker:dind</code> initContainer, on the
+<code>e2-standard-8</code> spot e2e pool (no nested virt). This is the plan's step-2 sizing
+target — the Kata end-state (step 3, <a href="../archive/kata-on-gke/">Q286</a>) is deferred and, per
+the finding below, needs a <em>bigger</em> nested-virt node than the current
+<code>n2-standard-4</code>, so its sizing is tracked separately.</p>
+<p><strong>Measurement (Phase 1).</strong> Routed a full <strong>Calico</strong> e2e run (the heaviest lane —
+most container images, so the conservative peak) to GAG and sampled
+<code>kubectl top pod --containers</code> every 3s over the ~18-min run. The pod reached
+<code>Completed</code> (clean; no <a href="../archive/gke-dogfood-turnup-findings/">Q247</a> orphan this run) with <strong>zero OOM
+events</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Container</th>
+<th>Peak CPU</th>
+<th>Peak memory</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>runner</code></td>
+<td><strong>4940m</strong></td>
+<td>1034Mi</td>
+<td>drives the e2e specs + <code>kubectl</code>/<code>helm</code>/<code>kind</code> CLI — the <strong>CPU-heavy</strong> half</td>
+</tr>
+<tr>
+<td><code>dind</code></td>
+<td>1308m</td>
+<td><strong>2343Mi</strong></td>
+<td>the <code>kind</code>+Calico cluster (node containers + CNI images/pods) lives inside dockerd — the <strong>memory-heavy</strong> half</td>
+</tr>
+</tbody>
+</table>
+<p>Envelope per worker pod: <strong>~6.25 vCPU / ~3.3 GiB combined peak.</strong> The split is the
+key insight — CPU concentrates in the runner (test execution), memory in the dind
+sidecar (the nested cluster). <em>Caveat: 3s sampling, and dind memory varies run-to-run
+(a second clean-green run at the derived sizing peaked dind at only 859Mi but the
+runner higher at 5638m) — hence the memory limits below carry ≥1.7× headroom over the
+worst observed peak, with the "widen on OOM" rule as the escape hatch.</em></p>
+<p><strong>Applied + re-validated (2026-07-07).</strong> The derived values below were applied to the
+live <code>ClusterRunnerTemplate</code> and a second full Calico run went clean-green (pod
+<code>Completed</code>, <strong>no OOM/eviction</strong>, ~15 min): the pod scheduled with the higher
+combined <code>request</code> (4 vCPU) on a single <code>e2-standard-8</code> node — one pod per node, as
+designed — the runner burst to 5638m (well past its <code>request=3</code>, no CPU limit), and
+both memory limits (runner 3Gi, dind 4Gi) cleared the observed peaks with headroom.
+<em>Concurrent 2-worker scheduling is guaranteed by construction — the 4-vCPU combined
+request admits exactly one pod per ~7-vCPU node — rather than exercised with two
+simultaneous e2e jobs (not run, to bound spot cost).</em></p>
+<p><strong>Derivation (Phase 2)</strong> — same <a href="#resource-model-principles">principles</a> as the
+general worker (CPU requests-only, memory <code>limit ≈ peak × ~1.4</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Container · field</th>
+<th>Old (guess)</th>
+<th>New (measured)</th>
+<th>Derivation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>runner</code> CPU <code>request</code></td>
+<td><code>2</code></td>
+<td><strong><code>3</code></strong></td>
+<td>↑ from an under-reserved 2. <code>runner(3)+dind(1)=4</code> vCPU of requests is the <em>packing</em> lever — see node check below.</td>
+</tr>
+<tr>
+<td><code>runner</code> CPU <code>limit</code></td>
+<td><code>6</code></td>
+<td><strong>removed</strong></td>
+<td>Compressible → requests-only; bursts to its ~5-vCPU peak.</td>
+</tr>
+<tr>
+<td><code>runner</code> memory <code>request</code></td>
+<td><code>4Gi</code></td>
+<td><strong><code>1Gi</code></strong></td>
+<td>≈ peak (1034Mi); the old 4Gi was ~4× over.</td>
+</tr>
+<tr>
+<td><code>runner</code> memory <code>limit</code></td>
+<td><code>12Gi</code></td>
+<td><strong><code>3Gi</code></strong></td>
+<td>Headroom for occasional Go-build spikes (matches the general worker); old 12Gi was ~12× over.</td>
+</tr>
+<tr>
+<td><code>dind</code> CPU <code>request</code></td>
+<td><code>1</code></td>
+<td><code>1</code></td>
+<td>Kept (peak 1308m).</td>
+</tr>
+<tr>
+<td><code>dind</code> CPU <code>limit</code></td>
+<td><code>4</code></td>
+<td><strong>removed</strong></td>
+<td>Compressible → requests-only (throttling dind would slow the whole in-DinD cluster).</td>
+</tr>
+<tr>
+<td><code>dind</code> memory <code>request</code></td>
+<td><code>2Gi</code></td>
+<td><strong><code>3Gi</code></strong></td>
+<td>↑ — the old 2Gi was <em>under</em> the 2343Mi peak (risked eviction under node pressure).</td>
+</tr>
+<tr>
+<td><code>dind</code> memory <code>limit</code></td>
+<td><code>8Gi</code></td>
+<td><strong><code>4Gi</code></strong></td>
+<td>peak × ~1.7 for the OOM-sensitive <code>kind</code> bringup; old 8Gi was ~3.4× over.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="node-allocatable-validation-maxworkers-vs-the-e2e-pool">Node-allocatable validation (<code>maxWorkers</code> vs the e2e pool)<a class="headerlink" href="#node-allocatable-validation-maxworkers-vs-the-e2e-pool" title="Permanent link">&para;</a></h3>
+<p>e2e node = <code>e2-standard-8</code> (8 vCPU / 32 GiB) spot, taint <code>dedicated=e2e</code>, autoscale
+0→2. GKE reserves ~90m CPU + ~3.6 GiB → <strong>≈7.4 vCPU / ≈28 GiB allocatable</strong>; system
+DaemonSets that tolerate the taint take a further ~0.4–0.6 vCPU.</p>
+<ul>
+<li><strong>CPU is the binding/packing resource.</strong> Combined <code>request</code> = <code>3 + 1 = 4</code> vCPU.
+  A second pod (another 4) would need <code>8 &gt; ~7</code>, so <strong>exactly one worker pod schedules
+  per node</strong>. <code>maxWorkers=2</code> therefore fans out to <strong>≤2 e2e nodes</strong>, matching the
+  pool's <code>max-nodes=2</code>. This is deliberate: the ~6.25-vCPU combined <em>peak</em> means two
+  co-scheduled pods would contend for one node's ~7 vCPU and CPU-throttle each other —
+  bad when e2e's kindnet and Calico legs run concurrently (both trigger on push to
+  main). One-pod-per-node prevents that; the removed CPU limits let the lone pod burst
+  to the whole node.</li>
+<li><strong>Memory is hugely slack.</strong> Combined <code>request</code> = <code>1 + 3 = 4Gi</code>, peak ~3.3 GiB, vs
+  ~28 GiB allocatable — memory never gates scheduling and leaves ample OOM headroom.
+  The <code>e2-standard-8</code> is consequently ~8× over-provisioned <em>on memory</em> for this
+  workload; an <code>e2-highcpu-8</code> (8 vCPU / 8 GiB) would right-size it and cut spot cost,
+  since the workload is CPU-bound. <strong>Deferred, not taken:</strong> the surplus memory is
+  cheap insurance for the OOM-sensitive <code>kind</code> bringup (esp. on a heavier future
+  suite), and the node-type swap warrants its own validation run. Recorded as a cost
+  lever if memory stays low across more runs.</li>
+</ul>
+<p><strong>Kata-track finding (informs <a href="../archive/kata-on-gke/">Q286</a>).</strong> The runner's ~5-vCPU
+peak <em>exceeds a whole <code>n2-standard-4</code></em> (4 vCPU) — the node the current Kata
+<code>e2e-setup.sh</code> provisions. So the Kata end-state needs a bigger nested-virt node
+(e.g. <code>n2-standard-8</code>) to avoid CPU-starving e2e; the DinD pod <code>requests</code> above do
+<strong>not</strong> port 1:1 to the smaller Kata node. Left for the Kata stand-up, not changed
+here.</p>
+<h2 id="small-tier--measured-then-declined-2026-07-07">Small tier — measured, then declined (2026-07-07)<a class="headerlink" href="#small-tier--measured-then-declined-2026-07-07" title="Permanent link">&para;</a></h2>
+<p>Routed the general CI matrix (<code>target_gag=true</code>) to the general pool and sampled the
+trivial jobs' real peak. The measured spread against the heavy jobs:</p>
+<table>
+<thead>
+<tr>
+<th>Job class</th>
+<th>Duration</th>
+<th>Peak CPU</th>
+<th>Peak memory</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>trivial (<code>shellcheck</code>/<code>tidy-check</code>/<code>vendor-check</code>)</td>
+<td>21–58s</td>
+<td>≤ <strong>945m</strong></td>
+<td>≤ <strong>707Mi</strong></td>
+</tr>
+<tr>
+<td>heavy (<code>unit-test -race</code>, <code>coverage</code>, <code>lint</code>)</td>
+<td>274–414s</td>
+<td>2343–<strong>3643m</strong></td>
+<td>1891–<strong>2502Mi</strong></td>
+</tr>
+</tbody>
+</table>
+<p>(The heavy peak also <strong>cross-validates</strong> the general-worker sizing: 3643m / 2502Mi
+sits right at the <a href="#phase-1-results--general-workers-2026-06-30-first-pass">Phase 1 envelope</a>
+of 3802m / 2134Mi, and 2502Mi stays under the committed 3Gi memory limit — no OOM.)</p>
+<p><strong>Decision: no small tier — keep the single general tier.</strong> The
+<a href="#plan">criterion</a> (trivial ≤1 vCPU/≤1 GiB <em>and</em> the packing waste is material) is
+half-met: trivial jobs are indeed ≤1 vCPU/≤1 GiB, but the waste is <strong>not</strong> material.
+A trivial job over-requesting ~1.1 vCPU for 20–58s on a spot node costs a fraction of
+a node-minute a few times per PR; a second runner tier costs a <strong>permanent</strong> coupling
+of the workflow files to the runner taxonomy (the maintenance tax this plan's
+<a href="#design-decision--do-we-need-multiple-runner-types">design decision</a> warns against).
+The measured data confirms the standing deferral rather than overturning it —
+this open question is now <strong>closed with numbers</strong>, not just reasoning.</p>
+<h2 id="phase-5--persisted-2026-07-06">Phase 5 — persisted (2026-07-06)<a class="headerlink" href="#phase-5--persisted-2026-07-06" title="Permanent link">&para;</a></h2>
+<p>The right-sized general-worker <code>requests</code>/<code>limits</code> are baked into the dogfood
+<code>RunnerTemplate</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a>
+(<code>apply_cr</code>) and mirrored in the <a href="../gke-dogfood/"><code>gke-dogfood.md</code></a> runbook. The
+node sizes and <code>maxWorkers=8</code> were already persisted with the disk-class fix. The
+tenant-onboarding quota formula is unchanged and remains correct — it sums only
+declared container <code>limits</code>, so dropping the worker CPU limit simply drops that
+term (documented there as "a term with no value drops out").</p>
+<p>The right-sized <strong>e2e-worker</strong> <code>requests</code>/<code>limits</code> are baked into the DinD overlay's
+<code>ClusterRunnerTemplate</code> in
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/dind/resources.yaml"><code>deploy/dogfood-e2e/overlays/dind/resources.yaml</code></a>
+and its rationale mirrored in the deploy
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/README.md"><code>README</code></a>. Applied live and re-validated by a
+second clean-green Calico run. <strong>All Q248 work is complete</strong>: node disk class,
+general-worker sizing, e2e-worker sizing, and the (declined) small tier. The only
+residual is the deferred Kata end-state, tracked separately under
+<a href="../archive/kata-on-gke/">Q286</a>.</p>
+<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ul>
+<li>~~CPU <code>limit</code> vs requests-only~~ — <strong>RESOLVED (general workers):</strong> requests-only,
+  no CPU limit. No noisy-neighbor risk because <code>request=2</code> packs one heavy pod per
+  <code>e2-standard-4</code>, so a bursting pod has the node to itself.</li>
+<li>Memory headroom factor — set to ~1.4× (peak 2134Mi → 3Gi limit); widen on any OOM.</li>
+<li>~~A 2nd "small" pod tier~~ — <strong>RESOLVED (declined, 2026-07-07):</strong> trivial jobs
+  measured at ≤945m/≤707Mi, but the packing waste isn't material vs the permanent
+  workflow-coupling cost of a second runner label. See
+  <a href="#small-tier--measured-then-declined-2026-07-07">§ Small tier</a>.</li>
+<li>~~<code>e2e</code> pod sizing~~ — <strong>RESOLVED (2026-07-07):</strong> the DinD path is validated and
+  the pod is right-sized from a measured clean-green run. See
+  <a href="#e2e-worker-sizing--measured-then-derived-dind-2026-07-07">§ e2e worker sizing</a>.
+  Kata (step 3) remains the deferred secure end-state (<a href="../archive/kata-on-gke/">Q286</a>).</li>
+<li>Spot preemption — a preempted job re-provisions on a fresh pod; confirm the AGC
+  re-provisions cleanly (interacts with the <a href="../archive/gke-dogfood-turnup-findings/">Q247</a> session-
+  recovery investigation).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

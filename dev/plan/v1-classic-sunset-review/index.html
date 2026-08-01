@@ -1,0 +1,3033 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/v1-classic-sunset-review/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>v1 / classic sunset — strategic architecture review (decision memo) - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/devassets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/devassets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/devassets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/dev",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/dev"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/dev",
+    "logo": "https://actions-gateway.com/devassets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#v1--classic-sunset--strategic-architecture-review-decision-memo" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.2.0 is here.</strong>
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.2.0">Read the release notes.</a>
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              v1 / classic sunset — strategic architecture review (decision memo)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_15" id="__nav_7_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#0-tldr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0. TL;DR
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-untangle-the-axes-first-the-thing-the-question-conflates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Untangle the axes first (the thing the question conflates)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-does-classic-actually-work-per-workload-verdict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Does classic actually work? (per-workload verdict)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-does-it-scale-does-it-perform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Does it scale? Does it perform?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Does it scale? Does it perform?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-scaling--the-rate-limit-budget-is-the-ceiling-that-grows-with-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Scaling — the rate-limit budget is the ceiling that grows with concurrency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-performance--density--the-story-cuts-both-ways-and-a-common-misread" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Performance / density — the story cuts both ways, and a common misread
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-is-it-kneecapped-by-the-protocol-the-crux--structural-ceiling-vs-remaining-bugs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Is it kneecapped by the protocol? (the crux — structural ceiling vs remaining bugs)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-was-scale-set-what-we-should-have-built-from-the-start-hindsight-fairly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Was scale-set "what we should have built from the start"? (hindsight, fairly)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-the-sunset-decision--separated-by-axis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. The sunset decision — separated by axis
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. The sunset decision — separated by axis">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-what-the-existing-plan-already-commits-to" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 What the existing plan already commits to
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-the-recommendation--v2-is-the-product-retire-v1-on-a-stability-schedule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 The recommendation — v2 is the product; retire v1 on a stability schedule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-adoption-reality--the-fact-that-most-changes-the-risk-math" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Adoption reality — the fact that most changes the risk math
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-gating-evidence-what-must-be-true-before-each-acceleration-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 Gating evidence (what must be true before each acceleration step)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-security--positioning-flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Security &amp; positioning flags
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-follow-up-items" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Follow-up items
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-answering-the-maintainers-questions-directly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Answering the maintainer's questions directly
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="v1--classic-sunset--strategic-architecture-review-decision-memo">v1 / classic sunset — strategic architecture review (decision memo)<a class="headerlink" href="#v1--classic-sunset--strategic-architecture-review-decision-memo" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> ⓘ informational — strategy/review, read-only analysis. No code
+changed. Feeds the Q264 P5 cutover and the v1alpha1 removal-timeline decisions.
+Complete as a review: both follow-ups it filed are parked in Deferred, waiting on
+<a href="../v2-ga/">v2-ga.md</a> Phase 3 (<a href="../../STATUS/#Q273">Q273</a>, the v1 removal) and on
+upstream scale-set GA (<a href="../../STATUS/#Q272">Q272</a>).
+<strong>Date:</strong> 2026-07-05. <strong>Author view:</strong> adversarial review of the hypothesis that
+v1 may be fundamentally limited by its protocol constraints — and that if so, we
+should sunset it faster and focus on v2/scale-set. The review deliberately tests
+that hypothesis rather than assuming it.</p>
+<blockquote>
+<p><strong>Update (2026-07-05) — P4 is in, and green on the acceptance gate.</strong>
+<a href="../q264-scale-set-protocol/">Q264</a> <strong>P4</strong> (live dogfood,
+<a href="https://github.com/actions-gateway/github-actions-gateway/pull/541">PR #541</a>)
+confirmed the scale-set path <strong>eliminates the <a href="../archive/gke-dogfood-turnup-findings/">Q224</a> fan-out
+distinct-delivery starvation by construction</strong>: the single-acquirer listener
+assigned, ran, and terminally concluded <strong>all 7</strong> distinct jobs (<strong>7/7</strong>, 0 dedup /
+collision) where classic managed <strong>2/7</strong> across eight re-routes. This is the single
+most important piece of evidence for the "accelerate" case (§6.4). <strong>Caveat — not a
+clean all-green sweep yet:</strong> the residual non-green is <em>orthogonal to acquisition</em>
+(a self-referential <code>WORKER_MODE=scaleset</code> test leak — GAG dogfooding its own CI on
+its own scale-set worker — plus CPU-starved envtest), and gates the <strong>P5 cutover</strong>,
+not the acceptance verdict. Q224/Q264 stay open until the clean-green re-run.</p>
+</blockquote>
+<hr />
+<h2 id="0-tldr">0. TL;DR<a class="headerlink" href="#0-tldr" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>"v1 is fundamentally limited" is too strong as a blanket statement, and — as
+  usually framed — conflates two orthogonal things.</strong>
+  The honest verdict: the <strong>classic acquisition protocol</strong> is structurally capped
+  at <em>reliable high-burst concurrency</em> — a real, GitHub-server-side, AGC-unfixable
+  ceiling — but works correctly for <strong>individual and low/moderate-concurrency
+  workloads</strong>, which is a large real segment. The <strong>v1alpha1 API</strong> is a separate
+  question with a separate (mostly unrelated) answer.</li>
+<li><strong>Two axes, one documented binding — still two separately-gated decisions.</strong> The
+  roadmap already binds the <em>endpoints</em>: <code>v1alpha1</code> is Classic-only and <code>v2beta1</code>
+  is ScaleSet-only, with <code>v2alpha1</code> as the <strong>dual-protocol bridge</strong> (default
+  <code>Classic</code>, per-set opt-in <code>ScaleSet</code>;
+  <a href="../archive/q264-scale-set-protocol-phases/#5a-the-three-decisions--analysis-and-recommendations-2026-07-04">Q264 §5a-U7/U8</a>).
+  So retiring the <strong>v1alpha1 API</strong> (Axis 1) and retiring the <strong>classic protocol</strong>
+  (Axis 2) are <em>not the same lever</em> even though they share an end. The fan-out wall
+  is an Axis-2 (protocol) property — a <code>v2alpha1</code> RunnerSet on <code>Classic</code> hits the
+  identical wall, so moving to the v2 API does not, by itself, fix it; selecting the
+  scale-set protocol does.</li>
+<li><strong>Recommendation (updated 2026-07-05 — full form in §6.2): v2/scale-set <em>is</em> the
+  product. Make it the only front door and let migration discipline carry the trust
+  signal.</strong> P4 proved scale-set clears the ceiling classic structurally cannot
+  (<strong>7/7 vs 2/7</strong>), and there are <strong>no real v1 adopters to protect</strong> (§6.3) — so the
+  goal is not to keep classic alive as a safety valve, it is to make v2 the obvious
+  on-ramp and retire v1 <em>cleanly</em>. Concretely:</li>
+<li><strong>Route every new user to v2 now</strong> and deprecate v1 loudly in the docs path —
+    the failure mode is a <em>new</em> user landing on v1, not a v1 user complaining.</li>
+<li><strong>Classic is terminal</strong> (no further investment — the eight re-routes were the
+    last of it) and <strong>v2beta1 stays ScaleSet-only</strong>; the earlier "retain the
+    protocol field as a fallback to v2 GA" hedge protected users who don't exist.
+    The graduation guardrail is <em>technical</em> (clean-green + a short stability soak),
+    not user-migration.</li>
+<li><strong>Commit v1 removal to a stated schedule gated on v2 <em>stability</em> (the v2beta1
+    graduation), not on adopters.</strong> The discipline — announced, scheduled, with a
+    working <code>gag-migrate</code> — <em>is</em> the "safe bet, won't strand you" signal a
+    prospective <strong>v2</strong> adopter is actually reading.</li>
+<li><strong>The real lever is v2 <em>maturation</em> (Q74 / v2beta1), not v1 removal</strong> — "v2 is
+    the front door" only pays off once v2 is beta-stable.</li>
+<li><strong>Building classic first was a defensible bet, not a mistake.</strong> The scale-set
+  protocol was undocumented-internal-to-ARC at design time; the official standalone
+  client only reached Public Preview in 2026. The world changed — that is what
+  makes Option E cheap <em>now</em>, not that it was obviously right <em>then</em>.</li>
+<li><strong>No security or secure-by-default regression</strong> in the migration; the
+  positioning story (the "virtual runners" identity) does shift and must be
+  rewritten in lockstep with the default flip.</li>
+</ul>
+<hr />
+<h2 id="1-untangle-the-axes-first-the-thing-the-question-conflates">1. Untangle the axes first (the thing the question conflates)<a class="headerlink" href="#1-untangle-the-axes-first-the-thing-the-question-conflates" title="Permanent link">&para;</a></h2>
+<p>The maintainer's question — "is v1 kneecapped by the protocol problems?" — folds
+two independent axes into one word ("v1"). The single most important thing this
+memo does is keep them apart.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><strong>Axis 1 — API surface</strong></th>
+<th><strong>Axis 2 — acquisition protocol</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The two ends</td>
+<td><code>v1alpha1</code> (frozen monolithic <code>ActionsGateway</code>/<code>RunnerGroup</code>) vs <code>v2alpha1</code> (decomposed <code>RunnerSet</code>/<code>RunnerTemplate</code>/<code>EgressProxy</code> — the Q74 v2 work)</td>
+<td><strong>classic</strong> per-runner broker (many-acquirers) vs <strong>runner-scale-set</strong> (single-acquirer)</td>
+</tr>
+<tr>
+<td>What it governs</td>
+<td>object shape, tenancy model, reusable templates, standalone egress proxy</td>
+<td><em>how the AGC acquires jobs from GitHub</em> — the fan-out mechanics</td>
+</tr>
+<tr>
+<td>Where it lives</td>
+<td>API group / kinds</td>
+<td><code>RunnerSet.spec.acquisitionProtocol</code> (v2alpha1 only; v1alpha1 is classic-only)</td>
+</tr>
+<tr>
+<td>The fan-out wall?</td>
+<td><strong>Axis-independent</strong></td>
+<td><strong>This is where the wall lives</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Proof they are orthogonal.</strong> The high-burst fan-out failure is a property of the
+<strong>many-acquirers topology</strong> (concurrency = registered runners = acquirers), not of
+the object schema. By design decision
+(<a href="../archive/q264-scale-set-protocol-phases/#u7--where-the-protocol-selector-lives">Q264 §5a-U7</a>),
+<code>acquisitionProtocol: ScaleSet</code> is <strong>v2-exclusive</strong>: a v2alpha1 RunnerSet set to
+<code>Classic</code> reproduces the identical wall, and v1alpha1 never gets ScaleSet at all.
+So:</p>
+<ul>
+<li><strong>Moving from v1alpha1 → v2alpha1 does <em>not</em>, by itself, fix the fan-out wall.</strong>
+  It only <em>unlocks the option</em> to select the protocol that does — <code>v2alpha1</code>
+  defaults to <code>Classic</code>, which carries the identical wall.</li>
+<li><strong>"Retire the classic protocol" and "remove the v1alpha1 API" are separately
+  <em>gated</em>, even though the roadmap binds their endpoints.</strong> Because <code>v2alpha1</code>
+  carries <em>both</em> protocols, the v1alpha1 API can be removed first — tenants move to
+  <code>v2alpha1: Classic</code> via <code>gag-migrate</code>, behaviour unchanged — while the classic
+  <em>protocol</em> lives on. The classic machinery is removed only later, at the Q74
+  v2beta1 graduation (v2beta1 is ScaleSet-only, so that hop strips the field and
+  ends classic). Same end, but the <strong>API</strong> removal is gated on <em>adoption</em> and the
+  <strong>protocol</strong> removal on <em>scale-set maturity</em> — different evidence, different risk,
+  so the memo treats them separately throughout. (This is also the two-step
+  migration safety valve of §6.2: change the API first, change the protocol second,
+  each reversible on its own.)</li>
+</ul>
+<hr />
+<h2 id="2-does-classic-actually-work-per-workload-verdict">2. Does classic actually <em>work</em>? (per-workload verdict)<a class="headerlink" href="#2-does-classic-actually-work-per-workload-verdict" title="Permanent link">&para;</a></h2>
+<p>Grounded in the live dogfood series
+(<a href="../archive/gke-dogfood-turnup-findings/">gke-dogfood.md</a> re-routes #3–#8), the Q260 saga
+(<a href="../archive/q260-fanout-completion-reconciliation/">q260-fanout-completion-reconciliation.md</a>,
+<a href="../archive/q260-planid-dedup-refix/">q260-planid-dedup-refix.md</a>), and the lever spike
+(<a href="../q224-fanout-dispatch-lever-spike/">q224-fanout-dispatch-lever-spike.md</a>). The
+answer is <strong>not binary</strong> — it depends entirely on the concurrency class.</p>
+<table>
+<thead>
+<tr>
+<th>Workload class</th>
+<th>Works?</th>
+<th>Evidence</th>
+<th>Failure mode (if any)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Individual jobs</strong></td>
+<td>✅ Yes</td>
+<td>Every re-route: a job that lands a worker completes green; auth/renew/complete all correct.</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Low / moderate concurrency</strong> (2–3 distinct jobs in flight)</td>
+<td>✅ Yes, with tuning</td>
+<td>Re-route #7 held the pool <strong>stably at <code>maxListeners=12</code></strong>; re-route #5 landed <strong>3/3</strong> jobs that received a planID green and held them past the 15-min timeout.</td>
+<td>Residuals were <strong>capacity</strong> (Q248 SSD ceiling) + cold cache — now fixed, and <em>not</em> topology.</td>
+</tr>
+<tr>
+<td><strong>High concurrent burst</strong> (7+ distinct jobs, near <code>maxListeners</code>)</td>
+<td>❌ No — <em>reliably</em></td>
+<td>Re-route #8, <strong>clean namespace</strong>, all recycle/capacity/tax seams (Q259/Q266/Q267/Q248/Q265) resolved and quiet: <strong>2/7 green, 5/7 wedged <code>in_progress</code> indefinitely</strong>.</td>
+<td><strong>GitHub-server-side fan-out distinct-delivery starvation</strong> (see §4).</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The counter-case is strong and must be stated plainly:</strong> classic is a <em>working</em>
+system for the individual and low/moderate-concurrency segment — which, per the
+go-to-market ICP (<a href="../go-to-market/">go-to-market.md</a> §3: platform teams on shared
+multi-tenant Kubernetes, compliance/egress-driven self-hosting), is a large and
+arguably <em>primary</em> real workload. Writing the whole thing off because it fails at
+reliable 7-way-concurrent-matrix throughput conflates "fails the hardest CI-matrix
+stress test" with "does not work."</p>
+<p><strong>But the ceiling is real and it is not a tuning artifact.</strong> Re-route #8 is the
+decisive datum: on a pristine namespace with every AGC-side seam fixed, a ~7-job
+burst still stranded 5 jobs forever. This is not "needs more fixes" — it is a wall
+(§4).</p>
+<hr />
+<h2 id="3-does-it-scale-does-it-perform">3. Does it <em>scale</em>? Does it <em>perform</em>?<a class="headerlink" href="#3-does-it-scale-does-it-perform" title="Permanent link">&para;</a></h2>
+<h3 id="31-scaling--the-rate-limit-budget-is-the-ceiling-that-grows-with-concurrency">3.1 Scaling — the rate-limit budget is the ceiling that grows with concurrency<a class="headerlink" href="#31-scaling--the-rate-limit-budget-is-the-ceiling-that-grows-with-concurrency" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The GitHub installation budget is <strong>~15,000 req/hr</strong>; a classic long-poll session
+  costs <strong>~72 req/hr</strong> (~50 s holds), giving a practical <strong>~250-session</strong> ceiling
+  (~150 RunnerGroups at one baseline session each with headroom)
+  (<a href="../../design/03-api-contracts/#35-github-api-rate-limit-budget">03-api-contracts.md §3.5</a>;
+  <a href="../../design/appendix-e-capacity-planning/">appendix-e-capacity-planning.md</a>).</li>
+<li><strong>Classic's budget scales <em>with acquisition concurrency</em>:</strong> at burst the session
+  count climbs toward <code>sum(maxListeners)</code> across groups — the very knob you must
+  raise to chase throughput is the knob that consumes the rate-limit budget. This
+  is a genuine scaling coupling.</li>
+<li><strong>Scale-set decouples them:</strong> one session per group at <strong>all</strong> load levels
+  (~72 polls/hr), because concurrency is expressed as the batch size / capacity
+  header, not as a session count. The §3.5 rate-limit ceiling <strong>stops scaling with
+  acquisition concurrency</strong>
+  (<a href="../archive/q264-scale-set-protocol-phases/#improves">Q264 §3 "Improves"</a>). This is a real,
+  structural scaling win for scale-set, not a wash.</li>
+</ul>
+<h3 id="32-performance--density--the-story-cuts-both-ways-and-a-common-misread">3.2 Performance / density — the story cuts both ways, and a common misread<a class="headerlink" href="#32-performance--density--the-story-cuts-both-ways-and-a-common-misread" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>At rest, classic's density was a genuine GAG differentiator:</strong> a ~12 KiB
+  listener goroutine in one shared pod vs ARC's always-on listener pod (+ cluster
+  IP) per scale set
+  (<a href="../../design/appendix-d-alternatives-considered/">appendix-d-alternatives-considered.md</a> §D.3;
+  the earlier "~256 MiB .NET / ~4,000×" framing was retired by #781 — ARC's
+  scale-set listener is Go, and the ratio's denominator was never measured).</li>
+<li><strong>Correcting a tempting misread: scale-set does <em>not</em> serialize concurrency.</strong> It
+  is easy to conclude "one session per group ⇒ one job at a time." That is wrong.
+  The scale-set listener <strong>batch-acquires</strong> and provisions <strong>N workers in
+  parallel</strong>; concurrency is governed by <code>maxWorkers</code>/<code>priorityTiers</code> advertised as
+  <code>X-ScaleSetMaxCapacity</code>, fully decoupled from the single session
+  (<a href="../archive/q264-scale-set-protocol-phases/#23-batch-acquisition--the-call-that-kills-the-fan-out">Q264 §2.3</a>,
+  live-confirmed §2b-1). One session ≠ one concurrent job.</li>
+<li><strong>Scale-set <em>improves</em> at-rest density</strong> — one session/group instead of classic's
+  reactive climb toward <code>maxListeners</code> sessions — while keeping the goroutine-listener
+  footprint (a goroutine in the shared AGC pod, not a per-scale-set listener pod)
+  (<a href="../archive/q264-scale-set-protocol-phases/#4-honest-cost-list-delta-vs-the-q260-4e-estimate">Q264 §4.7</a>,
+  §3 "Improves"). The "ARC's protocol, GAG's efficiency" pitch holds.</li>
+<li><strong>Overhead machinery classic carries that scale-set deletes by construction:</strong> the
+  single-use agent recycle (Q114: 2 REST calls + Secret rewrite + session re-create
+  per job), planID dedup (#512/Q260), the renew loop (Q247), completion fan-out
+  (Option A), and the multiplexer/self-heal ladder (Q152) — all gone under one
+  session + per-job JIT config
+  (<a href="../archive/q264-scale-set-protocol-phases/#3-delta-from-todays-classic-machinery">Q264 §3 "Discarded"/"Improves"</a>).</li>
+</ul>
+<p><strong>Net:</strong> at rest, both are cheap and scale-set is <em>slightly</em> cheaper; at burst,
+classic's rate-limit budget and recycle churn grow with concurrency while
+scale-set's do not. Performance is <strong>not</strong> where classic is kneecapped — the kneecap
+is dispatch reliability (§4), not footprint.</p>
+<hr />
+<h2 id="4-is-it-kneecapped-by-the-protocol-the-crux--structural-ceiling-vs-remaining-bugs">4. Is it kneecapped by the protocol? (the crux — structural ceiling vs remaining bugs)<a class="headerlink" href="#4-is-it-kneecapped-by-the-protocol-the-crux--structural-ceiling-vs-remaining-bugs" title="Permanent link">&para;</a></h2>
+<p><strong>Yes — at high concurrency, structurally, and unfixable from the AGC side.</strong> This
+is the central finding and it must be distinguished carefully from the <em>bugs that
+have already been fixed</em>.</p>
+<p><strong>What was a fixable bug (all now fixed):</strong>
+- Completion accounting — losers silently abandoned → Option A winner-driven
+  <code>completejob</code> per delivery, <strong>live-confirmed GO</strong> (re-route #5: <code>completejob</code>
+  returns OK on a live sibling, jobs conclude green and survive the 15-min timeout;
+  <a href="../archive/q260-fanout-completion-reconciliation/#re-route-5-confirmed-2026-07-04--go">Q260 §5 re-route #5</a>).
+- planID dedup keyed correctly (#512), recycle 422 churn (Q259), slot-stranding
+  (Q266), token-400 ride-out (Q267), SSD capacity ceiling (Q248) — all resolved and
+  confirmed quiet in re-route #8.
+- The Q265 benchmark explicitly found <strong>no completion-tax throughput wall</strong>
+  (<a href="../archive/q260-fanout-completion-reconciliation/#7-q265--fan-out-throughput-benchmark-2026-07-05-tax-wall-or-tuning">Q260 §7</a>) —
+  Option A's accounting is <em>not</em> the bottleneck.</p>
+<p><strong>What is a structural ceiling (unfixable AGC-side):</strong> <em>fan-out distinct-delivery
+starvation.</em> Mechanism, pinned to code and live logs (re-route #8):</p>
+<ol>
+<li>GitHub fans <strong>one</strong> logical job's planID out as ~6 sibling deliveries; the AGC
+   correctly dedups them and releases each via Option A.</li>
+<li>The pool grows <strong>only</strong> on a <em>distinct</em>-planID win — <code>SpawnReplacement</code> runs only
+   <em>after</em> a listener wins past the dedup gate
+   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">goroutine.go:924</a>; a deduped loser
+   skips it entirely). So <strong>F duplicate deliveries of one job grow the pool by
+   exactly 1</strong>, not F.</li>
+<li>Fed duplicates of one job, the idle pool <strong>stalls at 3 online sessions ≪ 48</strong>, so
+   GitHub never sees enough <em>distinct</em> idle runners to place the <strong>5 other distinct
+   jobs</strong> — whose planIDs are therefore <strong>never delivered</strong> and wedge <code>in_progress</code>
+   indefinitely.</li>
+</ol>
+<p>The lever spike tested the two proposed AGC-side escape hatches against this and
+concluded: <strong>no reliable AGC-side lever.</strong> Unique/ephemeral names (H2) add zero
+distinct idle runners (a non-lever); a warm idle-<em>listener</em> baseline (H1) is at best
+a probabilistic green-<em>rate</em> stopgap whose efficacy is unconfirmed and whose
+favourable case <strong>converges on reimplementing the scale-set capacity model on the
+fan-out-prone protocol</strong> — strictly dominated by Option E
+(<a href="../q224-fanout-dispatch-lever-spike/">q224-fanout-dispatch-lever-spike.md</a>, verdict
+§ up-front). The binding constraint (whether GitHub <em>spreads</em> distinct jobs across a
+wide idle pool or <em>fans one out first</em>) is <strong>server-side and unknowable/unchangeable
+from the AGC</strong>.</p>
+<blockquote>
+<p><strong>Verdict:</strong> classic is <strong>structurally kneecapped at reliable high-burst
+concurrency</strong>, not merely buggy. The distinction matters for the timeline: you
+cannot engineer your way out of it on the classic protocol; the only structural
+fix is single-acquirer topology (Option E / scale-set). Below that concurrency
+line, the protocol is not kneecapped at all.</p>
+</blockquote>
+<p><strong>Now confirmed from the other side (P4, 2026-07-05).</strong> The structural claim is no
+longer only theory: on the identical concurrent matrix that pinned classic at 2/7,
+the scale-set path concluded <strong>all 7</strong> distinct jobs (7/7, single acquirer, zero
+dedup) — the fan-out is gone <em>by construction</em>, exactly as §5a-U8 predicted. That is
+the strongest possible evidence both that classic's ceiling is real (the same test,
+same load, opposite outcome) and that Option E is the fix, not merely <em>a</em> fix.</p>
+<hr />
+<h2 id="5-was-scale-set-what-we-should-have-built-from-the-start-hindsight-fairly">5. Was scale-set "what we should have built from the start"? (hindsight, fairly)<a class="headerlink" href="#5-was-scale-set-what-we-should-have-built-from-the-start-hindsight-fairly" title="Permanent link">&para;</a></h2>
+<p><strong>No — building classic first was a defensible bet given what was knowable then.</strong>
+Resisting hindsight bias:</p>
+<ul>
+<li><strong>The protocol was not available as a supported surface at design time.</strong> The
+  runner-scale-set protocol was undocumented-internal-to-ARC (no wire spec; the ARC
+  Go client had to be read at a pinned tag). GitHub only published the <strong>official
+  standalone <code>actions/scaleset</code> client</strong> (Public Preview, MIT) in 2026 — four
+  releases v0.1.0–v0.4.0, Feb–May 2026
+  (<a href="../archive/q264-scale-set-protocol-phases/#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation">Q264 §4, §5a-U6</a>).
+  Building on it <em>then</em> would have meant reverse-engineering a <strong>second</strong>
+  undocumented GitHub-internal protocol and betting the product on a moving,
+  pre-1.0-adjacent target.</li>
+<li><strong>The classic virtual-runner bet bought real, still-valid merits:</strong> the
+  goroutines-in-one-shared-pod at-rest density advantage over ARC's
+  pod-per-scale-set listeners, per-tenant egress isolation, multi-tenant
+  self-service, and zero idle compute (appendix-d §D.3–D.4). None of that was free
+  elsewhere.</li>
+<li><strong>The specific failure was not cleanly foreseeable from source.</strong> The topology
+  consequence (concurrency = acquirers) was arguably visible in principle, but the
+  precise <em>distinct-delivery starvation</em> behaviour only emerged under live
+  high-burst dogfood — source-reading alone would not have surfaced it (indeed the
+  whole Q260→Q224 saga is a sequence of live re-routes correcting source-level
+  assumptions).</li>
+</ul>
+<p><strong>Fair conclusion:</strong> scale-set is "what we'd build today," not "what we obviously
+should have built then." The classic tier also paid for itself — the protocol
+knowledge, the egress/isolation/provisioner machinery, and the <code>scalesettest</code> fake
+all carry straight into Option E (Q264 §3 "Carried over intact"; §6 "P1/P2 are
+useful even if Option A wins").</p>
+<hr />
+<h2 id="6-the-sunset-decision--separated-by-axis">6. The sunset decision — separated by axis<a class="headerlink" href="#6-the-sunset-decision--separated-by-axis" title="Permanent link">&para;</a></h2>
+<h3 id="61-what-the-existing-plan-already-commits-to">6.1 What the existing plan already commits to<a class="headerlink" href="#61-what-the-existing-plan-already-commits-to" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Protocol</strong> (<a href="../archive/q264-scale-set-protocol-phases/#u8--support-matrix-policy">Q264 §5a-U8</a>):
+  coexist behind <code>acquisitionProtocol</code> (default <code>Classic</code>) through P3–P4 → <strong>flip
+  default to <code>ScaleSet</code> at P5</strong> (with the positioning-doc rewrite) → classic
+  deprecated <strong>one minor release</strong> → classic machinery removed in an isolated PR
+  <strong>aligned with the Q74 v2beta1 graduation</strong> (v2beta1 is ScaleSet-only).</li>
+<li><strong>API</strong> (<a href="../../operations/v1alpha1-deprecation/">v1alpha1-deprecation.md</a>):
+  v1alpha1 already <strong>deprecated but served</strong>; removed "once v2 adoption is
+  sufficient," announced as a <strong>named release with ≥1 release of notice</strong>; no action
+  forced until then.</li>
+<li><strong>The coupling:</strong> because ScaleSet is v2-exclusive, classic is v1alpha1's <em>only</em>
+  acquisition path, so classic-machinery removal <strong>is</strong> the end of v1alpha1's ability
+  to acquire jobs — the plan therefore sequences the classic-removal PR after
+  v1alpha1 is itself deprecated, announcing both together (Q264 §5a-U8 "Consequence").</li>
+</ul>
+<blockquote>
+<p><strong>Design question this review raised, now resolved (2026-07-05):
+keep v2beta1 ScaleSet-only.</strong> The question was whether to <em>retain</em>
+<code>acquisitionProtocol</code> (and a <code>Classic</code> fallback) through v2beta1 and drop it only
+at v2 GA, rather than stripping it at graduation (Q264 §5a-U7/U8). The retain-hedge
+existed to preserve a rollback fallback — but that fallback protects <strong>v1/classic
+users who do not exist</strong> (§6.3), so it buys almost nothing while muddying the "one
+protocol, strictly better than ARC" story that drives adoption. Against that:
+<strong>P4 proved the protocol works live</strong> (7/7), <strong>GAG owns its own client</strong> (not
+hostage to upstream's Preview cadence — "Preview" is a label on GitHub's <em>library</em>,
+while the <em>wire protocol</em> is what ARC runs in production at scale), and a cleaner
+beta surface is easier to commit to and support. <strong>Decision: v2beta1 stays
+ScaleSet-only.</strong> The residual risk — GitHub drifts the protocol post-graduation
+with no classic escape — is real but bounded (own-client + ARC-in-prod + a code
+fix is always shippable), and is managed with a <strong>technical</strong> guardrail rather than
+the retain-hedge: <strong>do not graduate v2beta1 until the clean-green dogfood re-run
+plus a short stability soak of the scale-set path</strong> — bet the beta on evidence, not
+one run. Consequence for the backlog: <a href="../../STATUS/#Q272">Q272</a> (scale-set upstream
+maturity) is <em>not</em> a graduation blocker — it lifts the Preview caveat and triggers
+the U6 vendor-vs-own revisit, but the beta cut gates on GAG's own soak, not on
+GitHub's GA timeline.</p>
+</blockquote>
+<h3 id="62-the-recommendation--v2-is-the-product-retire-v1-on-a-stability-schedule">6.2 The recommendation — v2 is the product; retire v1 on a stability schedule<a class="headerlink" href="#62-the-recommendation--v2-is-the-product-retire-v1-on-a-stability-schedule" title="Permanent link">&para;</a></h3>
+<p>An earlier draft of this memo recommended "hold both removals, keep classic as a
+safety valve, gate on an adoption signal." That rested on an assumption since
+corrected: <strong>there is no v1 adopter base to protect, and there won't be one</strong>
+(§6.3). Once that falls away, the safety-valve rationale collapses and the goal
+changes — from <em>protecting v1</em> to making <strong>v2 the only sensible on-ramp</strong> and using
+the v1→v2 handling as a forward-looking trust signal. What that signal is <em>for</em>
+matters: its audience is not v1 users (there are none) but a <strong>prospective v2
+adopter</strong> judging whether GAG is a safe multi-year bet — they read how the project
+treats its own deprecated version as a proxy for how it will treat <em>them</em> at the next
+version bump. Handled poorly the cost is not complaints (no one to complain) — it is
+the adoption failure the maintainer named: <strong>no adoption, or a new user landing on v1
+instead of v2.</strong></p>
+<ol>
+<li><strong>Make v2 the only front door now.</strong> Route README / getting-started / onboarding /
+   new-tenant templates entirely to v2, with a prominent "v1 is deprecated — start on
+   v2" banner on the v1 pages. This directly kills the "new user adopts v1" failure
+   mode and is cheap — it is <em>documentation and positioning</em>, not v1 runtime work.</li>
+<li><strong>Commit v1 removal to a stated schedule gated on v2 <em>stability</em> — not adopters.</strong>
+   Replace the open-ended "removed once v2 adoption is sufficient" (which reads as
+   indecision) with a <strong>named removal release tied to the v2beta1 graduation</strong>. Gating
+   on v2 reaching beta is honest — you should not force anyone onto an alpha — and is
+   <em>not</em> catering to imaginary users. The <strong>discipline</strong> (announced, scheduled,
+   documented, backed by a working <code>gag-migrate</code>) <em>is</em> the "safe bet, won't strand
+   you" signal, far more than the length of the window.</li>
+<li><strong>Reinvest the freed effort into the migration mechanics as a showcase, not the v1
+   runtime.</strong> <code>gag-migrate</code>, the migration guide, the deprecation notice, the
+   "what's preserved / what changes" doc — make these <em>exemplary</em>, because that is the
+   artifact a prospective adopter actually inspects. (This reframes the
+   adoption-signal item <a href="../../STATUS/#Q273">Q273</a> from "instrument who's using it" to
+   "polish the migration story" — a better use of effort when there is no one to
+   measure.)</li>
+<li><strong>Classic is terminal — no further investment.</strong> The eight re-routes were the last
+   classic spend; the residual ceiling is structural (§4). This is the "structural
+   ceiling → stop paying it down" disposition from
+   <a href="../../development/technical-debt/">technical-debt.md</a>.</li>
+<li><strong>v2beta1 stays ScaleSet-only</strong> (§6.1), with a <em>technical</em> graduation guardrail
+   (clean-green + a stability soak), not a user-migration one.</li>
+<li><strong>The real lever is v2 <em>maturation</em>, not v1 removal.</strong> "v2 is the front door" only
+   converts to adoption once v2 is beta-stable, so the priority is the <strong>v2beta1
+   graduation path</strong> — Q74 and its blockers (Q191/Q196/Q197/Q242/Q243; Q224 is now
+   addressed by the scale-set path) — not the v1 sunset. Retiring v1 is the
+   <em>consequence</em> of v2 being ready, not a goal to chase on its own.</li>
+</ol>
+<p><strong>The one risk to hold in view.</strong> Do not let "deprecate v1 loudly" run ahead of v2
+actually being ready to be the sole path — v2 is still alpha with open blockers. Route
+new users to v2 in the docs <em>now</em> (safe: it is the better shape), but keep the loud
+removal <em>commitment</em> pinned to v2beta1 readiness. And stay honest that GAG's weaker
+flank versus ARC is <em>maturity</em> (pre-1.0, a Public-Preview protocol dependency), not
+capability — which is precisely <em>why</em> the migration-discipline signal is worth the
+effort: it is how a young project earns "safe bet" trust before it has the track
+record to claim it.</p>
+<h3 id="63-adoption-reality--the-fact-that-most-changes-the-risk-math">6.3 Adoption reality — the fact that most changes the risk math<a class="headerlink" href="#63-adoption-reality--the-fact-that-most-changes-the-risk-math" title="Permanent link">&para;</a></h3>
+<p>The go-to-market posture is <strong>pre-adoption dogfooding</strong>, and this is decision-load-bearing:</p>
+<ul>
+<li>A <code>v1.0.0</code> tag exists and <code>v1.1.0-rc.*</code> are cut, <strong>but</strong> the public site is <strong>not
+  launched</strong>, seed channels are <strong>not started</strong> ("gated on site + 1.0 install path"),
+  and there are <strong>no external deployers yet</strong> — the goal is still "first handful"
+  (<a href="../go-to-market/">go-to-market.md</a> §8 Phase 0–1). GAG is Apache-2.0,
+  <strong>non-commercial</strong>, deliberately donation-ready, revenue explicitly out of scope.</li>
+<li><strong>Implication (this is the load-bearing turn):</strong> the compat cost of retiring v1 is
+  ~zero — no external user base holds classic or v1alpha1 in production, and none is
+  expected to; new users should hop straight onto v2. That removes the "protect the v1
+  fallback" rationale <strong>entirely</strong> and <em>inverts</em> the risk. The danger is no longer "we
+  strand a v1 user" — it is "a <strong>new</strong> user onboards onto v1, or doesn't adopt at all
+  because the versioning story looks unsafe." So the disposition is not <em>hold</em>: it is
+  <strong>retire v1 cleanly on a stability-gated schedule, and make v2 the only marketed
+  on-ramp now</strong> (§6.2). Removal gates on <strong>v2 reaching beta</strong>, not an adoption count —
+  there is no adopter base to measure, and waiting on one would itself read as
+  indecision. The adoption signal (Q273) is therefore reframed from <em>"gate removal on
+  measuring adopters"</em> to <em>"confirm dogfood-only so we can commit the schedule, and
+  make the migration itself exemplary."</em></li>
+</ul>
+<h3 id="64-gating-evidence-what-must-be-true-before-each-acceleration-step">6.4 Gating evidence (what must be true before each acceleration step)<a class="headerlink" href="#64-gating-evidence-what-must-be-true-before-each-acceleration-step" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Route new users to v2 + deprecate v1 loudly in the docs path</td>
+<td><strong>Do now</strong> — positioning/docs only, no technical gate; kills the "new user lands on v1" failure mode (§6.2 item 1).</td>
+</tr>
+<tr>
+<td>Name ScaleSet the recommended (and, in v2beta1, the only) protocol</td>
+<td><strong>✅ MET (2026-07-05):</strong> P4 ran the full concurrent matrix on scale-set — <strong>7/7</strong> distinct jobs concluded vs classic <strong>2/7</strong> — the fan-out fix is confirmed by construction.</td>
+</tr>
+<tr>
+<td>Graduate v2beta1 (ScaleSet-only) + flip the default</td>
+<td>Clean-green dogfood re-run (P4 <code>WORKER_MODE</code> residual fixed on main) <strong>+</strong> a short <strong>stability soak</strong> of the scale-set path <strong>+</strong> the positioning-doc rewrite in the same change (Q264 §4.7). A <em>technical</em> gate, not adopter-gated.</td>
+</tr>
+<tr>
+<td>Remove v1 (v1alpha1 API <strong>and</strong> classic machinery, together)</td>
+<td>The v2beta1 graduation above <strong>is</strong> the classic removal (ScaleSet-only beta can't store a Classic set) <strong>+</strong> a <strong>named removal release announced with ≥1 release of notice</strong>. Not gated on an adoption count.</td>
+</tr>
+<tr>
+<td><em>(no longer a gate)</em> Scale-set upstream GA / <a href="https://github.com/actions/scaleset/issues/107">actions/scaleset#107</a> documented</td>
+<td>Q272 — lifts the Public-Preview caveat and triggers the U6 vendor-vs-own revisit; <strong>not</strong> a graduation or removal blocker (§6.1).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="7-security--positioning-flags">7. Security &amp; positioning flags<a class="headerlink" href="#7-security--positioning-flags" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>No secure-by-default regression in the migration.</strong> Egress isolation holds (all
+  new endpoints GitHub-hosted, both listener and worker traffic stay behind the
+  per-tenant proxy), workers still never see the App token, the JIT-credential surface
+  is unchanged, and the admission gate (Q59) <em>strengthens</em> under the capacity header
+  (<a href="../archive/q264-scale-set-protocol-phases/#4-honest-cost-list-delta-vs-the-q260-4e-estimate">Q264 §4 "Security check"</a>).
+  The default stays <code>Classic</code> (the more-conservative value) until validated — no
+  security property is relaxed to enable the flip.</li>
+<li><strong>Positioning identity shifts — and this is the adoption lever, not just hygiene.</strong>
+  The "thousands of goroutine-backed virtual runners" story retires; density-at-rest
+  <em>improves</em>. The rewrite should make the <strong>strictly-better-than-ARC</strong> claim for the
+  ICP, not hedge with situational trade-offs (the maintainer's point: "better in
+  certain circumstances" doesn't move anyone off ARC). Going ScaleSet-only <em>sharpens</em>
+  it — one protocol, no "why two?" — so the claim becomes: <strong>everything ARC's
+  scale-set model does, with one shared listener pod per tenant instead of an
+  always-on listener pod + cluster IP per scale set, plus per-tenant
+  egress isolation, self-service multi-tenancy, and zero-idle that ARC lacks
+  natively.</strong> Be honest about the weaker flank — GAG's <em>maturity</em> (pre-1.0, a
+  Public-Preview protocol dependency), not its capability. The <code>why-gag</code> / vs-ARC
+  pages must be rewritten <strong>in the same PR that flips the default</strong> (Q264 §4.7) —
+  flipping first would leave the public positioning contradicting the shipped
+  behaviour.</li>
+<li><strong>User-visible API regression to document, not hide:</strong> ScaleSet collapses
+  <code>runnerLabels</code> to a single <code>runs-on</code> label (the scale-set name) and raises the GHES
+  floor to 3.9 — real trade-offs the migration comms must state (Q264 §4.2/§4.5).</li>
+</ul>
+<hr />
+<h2 id="8-follow-up-items">8. Follow-up items<a class="headerlink" href="#8-follow-up-items" title="Permanent link">&para;</a></h2>
+<p>The direction in §6.2 turns two of these into near-term work and demotes the third:</p>
+<ol>
+<li><strong>[Q273 — active] Make v2 the front door + an exemplary v1→v2 migration story
+   (the adoption trust signal).</strong> Route README / getting-started / onboarding /
+   new-tenant templates to v2; add "v1 deprecated — start on v2" banners; and polish
+   <code>gag-migrate</code> + the migration guide + the "what's preserved / what changes" doc to
+   showcase quality (the artifact a prospective <strong>v2</strong> adopter inspects). Reframed
+   from the earlier "instrument an adoption signal" — with no adopter base to measure,
+   the value is <em>confirm dogfood-only so the removal schedule can be committed</em> and
+   <em>make the migration itself the signal</em>. Partly gated on v2 being ready to be the
+   sole path (§6.2 risk); the docs-routing slice is doable now. Ties to
+   <a href="../go-to-market/">go-to-market.md</a> Phase 1.</li>
+<li><strong>[Q272 — Deferred / watch] Scale-set upstream maturity watch.</strong> Track
+   <code>actions/scaleset</code> reaching GA/v1.0 and the auto-assign contract
+   (<a href="https://github.com/actions/scaleset/issues/107">actions/scaleset#107</a>) getting
+   documented. Per §6.1 this is <strong>not</strong> a graduation or removal blocker — it lifts the
+   Public-Preview caveat and triggers the
+   <a href="../archive/q264-scale-set-protocol-phases/#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation">Q264 §5a-U6</a>
+   vendor-vs-own revisit.</li>
+<li><strong>[folded into the P5 positioning rewrite] Migration guide states <em>why v2/ScaleSet</em>,
+   not a Classic-vs-ScaleSet chooser.</strong> Classic is terminal (§6.2 item 4), so the
+   guide should route everyone to ScaleSet and explain the "no fan-out ceiling" reason
+   — <em>not</em> present the two protocols as a menu. Tracked in Q264 §4.7.</li>
+</ol>
+<p><strong>Flagged, not actioned:</strong> (a) the §6.4 gate table + the §6.1 v2beta1-ScaleSet-only
+resolution should be folded into
+<a href="../archive/q264-scale-set-protocol-phases/#u8--support-matrix-policy">Q264 §5a-U8</a> by the Q264 owner
+(that plan is under active P3–P4 work in a parallel session); (b) no <code>CLAUDE.md</code> change
+and no new milestone — the retirement is already the Q264/Q74 structure, and the
+live-verify meta-lesson is already a CLAUDE.md rule.</p>
+<p><strong>Net thesis (revised).</strong> Not "hold and sequence" — <strong>v2/scale-set is the product.</strong>
+Make v2 the only front door now, treat classic as terminal, keep v2beta1 ScaleSet-only
+with a technical soak guardrail, retire v1 on a schedule gated on <strong>v2 reaching beta</strong>
+(not on adopters), and let migration discipline carry the "safe bet" signal. The one
+lever that actually converts the strategy to adoption is <strong>v2 maturation (v2beta1),
+not the v1 sunset.</strong></p>
+<hr />
+<h2 id="9-answering-the-maintainers-questions-directly">9. Answering the maintainer's questions directly<a class="headerlink" href="#9-answering-the-maintainers-questions-directly" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>Does v1 actually work?</strong> The <strong>classic protocol</strong> works for individual and
+low/moderate-concurrency workloads (a large real segment) and fails <em>reliably</em> only
+at high-burst concurrency. The <strong>v1alpha1 API</strong> works fine — it is just monolithic
+and superseded by the decomposed v2 shape.</p>
+<p><strong>Does it scale? Is it performant?</strong> It performs well (density was a real
+differentiator; scale-set improves it slightly). It <strong>scales sub-linearly on
+reliable concurrent-matrix throughput</strong> because of the fan-out wall, and its
+rate-limit budget grows with acquisition concurrency. Footprint is not the limit.</p>
+<p><strong>Is it kneecapped by the protocol problems?</strong> Yes — at high concurrency,
+<strong>structurally and unfixably</strong> from the AGC side. Not below that line.</p>
+<p><strong>Is v2/scale-set what we should have built from the start?</strong> It is what we'd build
+<em>today</em>. Building classic first was a defensible bet — the protocol wasn't a
+supported surface then, and classic's merits were real.</p>
+<p><strong>Can we sunset v1 faster?</strong> Yes — and we should, but the sharp move isn't "delete
+v1 fast," it's <strong>"make v2 the only front door now."</strong> With no v1 adopters to protect
+and P4 proving scale-set clears the ceiling classic can't, keeping classic alive as
+a fallback protects no one and muddies the ARC comparison. So: route every new user
+to v2 and deprecate v1 loudly today; treat classic as terminal; keep v2beta1
+ScaleSet-only behind a technical soak guardrail; and commit v1 removal to a schedule
+gated on <strong>v2 reaching beta</strong>, not on an adoption count. Handle the v1→v2 migration
+<em>impeccably</em> — that discipline is the "safe bet, won't strand you" signal a
+prospective v2 adopter is actually reading. The real work is <strong>maturing v2</strong>
+(v2beta1); retiring v1 is its consequence, not a separate race.</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

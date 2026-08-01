@@ -2804,7 +2804,7 @@ into a silent capability deletion.</p>
     Note over G: retry with exponential backoff (controller-runtime requeue)</code></pre>
 <p>The GMC reconciler is a standard <code>controller-runtime</code> reconciler. Errors are returned from <code>Reconcile()</code> and trigger automatic requeue with exponential back-off. The GMC sets a <code>Ready=False</code> condition with reason <code>ProvisionFailed</code> and a message containing the specific error on each failed attempt.</p>
 <p><strong>What the tenant observes:</strong> The <code>ActionsGateway</code> CR exists but has <code>Ready=False</code>. No AGC, proxy, or RunnerGroup resources are present. The condition message includes the underlying error.</p>
-<p><strong>Resolution:</strong> See <a href="../../docs/operations/troubleshooting.md#gmc-not-provisioning-tenant-resources">Troubleshooting — GMC Not Provisioning Tenant Resources</a>.</p>
+<p><strong>Resolution:</strong> See <a href="../../operations/troubleshooting/#gmc-not-provisioning-tenant-resources">Troubleshooting — GMC Not Provisioning Tenant Resources</a>.</p>
 <hr />
 <h3 id="job-acquisition-failure-broker-returns-error">Job Acquisition Failure (Broker Returns Error)<a class="headerlink" href="#job-acquisition-failure-broker-returns-error" title="Permanent link">&para;</a></h3>
 <pre class="mermaid"><code>sequenceDiagram

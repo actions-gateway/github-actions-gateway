@@ -1,0 +1,3398 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/milestone-1/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Milestone 1 Implementation Plan — Wire Protocol Probe - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/devassets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/devassets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/devassets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/dev",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/dev"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/dev",
+    "logo": "https://actions-gateway.com/devassets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#milestone-1-implementation-plan--wire-protocol-probe" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.2.0 is here.</strong>
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.2.0">Read the release notes.</a>
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Milestone 1 Implementation Plan — Wire Protocol Probe
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_15" id="__nav_7_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-repository-scaffolding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Repository Scaffolding
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Repository Scaffolding">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-module-and-workspace-initialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Module and workspace initialization
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-directory-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Directory layout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-required-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Required dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-package-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Package Design
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Package Design">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-githubapp--authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 githubapp — Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-broker--github-broker-api-client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 broker — GitHub Broker API Client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-cmdprobemaingo--probe-entry-point" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 cmd/probe/main.go — Probe Entry Point
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-investigation-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Investigation Tasks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Investigation Tasks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#3a-investigation--acknowledgerunnerrequest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.A Investigation — AcknowledgeRunnerRequest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3b-investigation--egress-ip-variance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.B Investigation — Egress IP Variance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3c-investigation--session-reuse-after-acquirejob" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.C Investigation — Session Reuse After acquirejob
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3d-investigation--job-delivery-throttling-by-session-count" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.D Investigation — Job Delivery Throttling by Session Count
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-test-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Test Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Test Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-unit-tests-go-test--race--from-repo-root" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Unit Tests (go test -race ./... from repo root)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4.1 Unit Tests (go test -race ./... from repo root)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#githubapp-root-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        githubapp (root module)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#broker--client_testgo-root-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        broker — client_test.go (root module)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#broker--crypto_testgo-root-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        broker — crypto_test.go (root module)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limit--backoff-in-client_testgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate-limit / backoff (in client_test.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-integration--live-tests-manual-run-during-the-probe-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Integration / Live Tests (manual, run during the probe execution)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-test-fixture-commitment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Test Fixture Commitment
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-success-criteria-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Success Criteria Checklist
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-risks-and-mitigations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Risks and Mitigations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-deferred-to-later-milestones" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Deferred to Later Milestones
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-investigation-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Investigation Findings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Investigation Findings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#8a--acknowledgerunnerrequest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.A — AcknowledgeRunnerRequest
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8b--egress-ip-variance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.B — Egress IP Variance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8c--session-reuse-after-acquirejob" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.C — Session Reuse After acquirejob
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8d--job-delivery-throttling-by-session-count" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.D — Job Delivery Throttling by Session Count
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="milestone-1-implementation-plan--wire-protocol-probe">Milestone 1 Implementation Plan — Wire Protocol Probe<a class="headerlink" href="#milestone-1-implementation-plan--wire-protocol-probe" title="Permanent link">&para;</a></h1>
+<p>← <a href="../../design/06-implementation-phases/">Back to implementation phases</a></p>
+<hr />
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#1-repository-scaffolding">1. Repository Scaffolding</a></li>
+<li><a href="#2-package-design">2. Package Design</a></li>
+<li><a href="#3-investigation-tasks">3. Investigation Tasks</a></li>
+<li><a href="#4-test-plan">4. Test Plan</a></li>
+<li><a href="#5-success-criteria-checklist">5. Success Criteria Checklist</a></li>
+<li><a href="#6-risks-and-mitigations">6. Risks and Mitigations</a></li>
+<li><a href="#7-deferred-to-later-milestones">7. Deferred to Later Milestones</a></li>
+<li><a href="#8-investigation-findings">8. Investigation Findings</a></li>
+</ul>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p><strong>Goal:</strong> Produce a standalone Go binary under <code>cmd/probe/</code> that exercises the complete pre-execution protocol sequence: authenticate via GitHub App credentials → <code>POST /sessions</code> → long-poll <code>GET /message</code> → <code>POST /acquirejob</code> on the <code>run_service_url</code> extracted from the message body → start a <code>renewjob</code> loop every 60 seconds. The probe prints the decrypted job payload to stdout and renews until cancelled.</p>
+<p><strong>Duration:</strong> Days 1–4</p>
+<p><strong>Definition of Done:</strong>
+- The probe acquires a real job and renews its lock at least three times without GitHub cancelling it.
+- The decrypted payload is committed as a fixture under <code>testdata/</code>.
+- Both investigation tasks (AcknowledgeRunnerRequest and egress IP variance) are resolved with findings documented in this file or inline code comments.
+- All unit tests pass under <code>go test -race ./...</code> (run from repo root; the workspace dispatches to both the root module and the probe module).
+- Code is committed to the repository.</p>
+<hr />
+<h2 id="1-repository-scaffolding">1. Repository Scaffolding<a class="headerlink" href="#1-repository-scaffolding" title="Permanent link">&para;</a></h2>
+<p>Before writing probe logic, establish the Go workspace and module layout that every subsequent milestone will build on.</p>
+<h3 id="11-module-and-workspace-initialization">1.1 Module and workspace initialization<a class="headerlink" href="#11-module-and-workspace-initialization" title="Permanent link">&para;</a></h3>
+<p>The repository uses <strong>Go workspaces</strong> so that future binaries (AGC in Milestone 2, GMC in Milestone 4) each live in their own module and can be built, tested, and versioned independently, while still sharing the common library code in the root module during local development without requiring published intermediate releases.</p>
+<p><strong>Root module</strong> — shared library code (broker client, GitHub App auth):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cd github-actions-gateway
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>go mod init github.com/actions-gateway/github-actions-gateway
+</code></pre></div>
+<p><strong>Probe module</strong> — the Milestone 1 binary:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>mkdir -p cmd/probe
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>cd cmd/probe
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>go mod init github.com/actions-gateway/github-actions-gateway/probe
+</code></pre></div>
+<p><strong>Workspace file</strong> — ties all modules together for local development:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>cd github-actions-gateway   # back to repo root
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>go work init .
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>go work use ./cmd/probe
+</code></pre></div>
+<p>This produces a <code>go.work</code> at the repo root. With it in place, <code>go build ./cmd/probe/...</code> from the root resolves the root module dependency locally, and <code>go test ./...</code> from the root runs tests in every module in the workspace.</p>
+<p>The <code>go.work</code> file is committed to the repository. Future milestones add new module entries as each binary is scaffolded:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a># go.work (final state after all milestones)
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>go 1.22
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>use (
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    .             # root shared library module
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    ./cmd/probe   # Milestone 1
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    ./cmd/agc     # Milestone 2
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    ./cmd/gmc     # Milestone 4
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>)
+</code></pre></div>
+<p>Use Go 1.22 or later (required for <code>net/http</code> routing improvements and the <code>slices</code> stdlib package used later). Pin the Go version in both <code>go.mod</code> files and in <code>go.work</code>.</p>
+<h3 id="12-directory-layout">1.2 Directory layout<a class="headerlink" href="#12-directory-layout" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>github-actions-gateway/
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>├── go.work                          # workspace: ties root + cmd/* modules together
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>├── go.mod                           # root module: github.com/actions-gateway/github-actions-gateway
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>├── broker/
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>│   ├── client.go                    # BrokerClient: sessions, message, acquirejob, renewjob
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>│   ├── client_test.go
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>│   ├── types.go                     # TaskAgentMessage, RunnerJobRequestBody, etc.
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>│   ├── crypto.go                    # AES-256 payload decryption
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>│   └── crypto_test.go
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>├── githubapp/
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>│   ├── auth.go                      # JWT signing + installation token exchange
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>│   └── auth_test.go
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>├── cmd/
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>│   └── probe/
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>│       ├── go.mod                   # module: github.com/actions-gateway/github-actions-gateway/probe
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>│       └── main.go                  # Probe entry point; imports root module packages
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>├── testdata/
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>│   ├── job_payload.json             # Committed decrypted payload fixture (from live probe run)
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>│   └── crypto_fixture.json         # Pre-generated key/ciphertext for unit tests
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>└── docs/
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    ├── design/
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>    └── plan/
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>        └── milestone-1.md           # This file
+</code></pre></div>
+<p>Shared packages (<code>broker</code>, <code>githubapp</code>) live at the root module level, not under <code>internal/</code>. Because the root module is a library consumed only by other modules in this workspace, visibility is controlled by module boundaries rather than the <code>internal/</code> directory mechanism — packages are importable by sibling modules in the workspace but not by unrelated external consumers unless the root module is explicitly published and depended upon. This is the right trade-off for a single-repo multi-binary project.</p>
+<h3 id="13-required-dependencies">1.3 Required dependencies<a class="headerlink" href="#13-required-dependencies" title="Permanent link">&para;</a></h3>
+<p>Add these to the <strong>root module</strong> (<code>go.mod</code> at repo root), since the shared packages need them:</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Purpose</th>
+<th>Module</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>github.com/golang-jwt/jwt/v5</code></td>
+<td>RS256 JWT signing for GitHub App auth</td>
+<td>root</td>
+</tr>
+<tr>
+<td><code>golang.org/x/crypto</code></td>
+<td>Supplementary crypto (if needed beyond stdlib AES)</td>
+<td>root</td>
+</tr>
+<tr>
+<td><code>go.uber.org/goleak</code></td>
+<td>Goroutine leak detection in tests</td>
+<td>root</td>
+</tr>
+<tr>
+<td><code>github.com/stretchr/testify</code></td>
+<td><code>assert</code> and <code>require</code> helpers</td>
+<td>root + probe</td>
+</tr>
+</tbody>
+</table>
+<p>The probe module's <code>go.mod</code> requires only the root module; transitive dependencies are resolved via the workspace. Run <code>go work sync</code> after any dependency change to keep the workspace consistent.</p>
+<p>No Kubernetes dependencies are introduced in Milestone 1. The broker and auth packages must remain K8s-free so they can be unit-tested without a cluster.</p>
+<hr />
+<h2 id="2-package-design">2. Package Design<a class="headerlink" href="#2-package-design" title="Permanent link">&para;</a></h2>
+<h3 id="21-githubapp--authentication">2.1 <code>githubapp</code> — Authentication<a class="headerlink" href="#21-githubapp--authentication" title="Permanent link">&para;</a></h3>
+<p>Responsible for generating short-lived GitHub App installation access tokens. The probe calls this once at startup and again if the token is near expiry (though the probe is short-lived enough that a single token suffices).</p>
+<p><strong><code>auth.go</code> — exported surface:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1">// Credentials holds the three values read from the GitHub App Secret.</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Credentials</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nx">AppID</span><span class="w">          </span><span class="kt">int64</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nx">PrivateKeyPEM</span><span class="w">  </span><span class="p">[]</span><span class="kt">byte</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nx">InstallationID</span><span class="w"> </span><span class="kt">int64</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="p">}</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1">// TokenProvider returns a valid installation access token.</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1">// In the probe, this is called once. In the AGC (Milestone 2) it becomes</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1">// the Token Manager&#39;s refresh target.</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="kd">type</span><span class="w"> </span><span class="nx">TokenProvider</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span><span class="nx">Token</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="p">}</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="c1">// NewInstallationTokenProvider returns a TokenProvider that mints a fresh</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1">// installation access token on each call by signing a JWT and exchanging it</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="c1">// with the GitHub Apps API.</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="kd">func</span><span class="w"> </span><span class="nx">NewInstallationTokenProvider</span><span class="p">(</span><span class="nx">creds</span><span class="w"> </span><span class="nx">Credentials</span><span class="p">,</span><span class="w"> </span><span class="nx">httpClient</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="p">)</span><span class="w"> </span><span class="nx">TokenProvider</span>
+</code></pre></div>
+<p><strong>Implementation notes:</strong>
+- Sign a JWT with <code>exp = now + 10 minutes</code>, <code>iat = now - 60 seconds</code> (clock-skew buffer), <code>iss = appId</code> using RS256 via <code>golang-jwt/jwt</code>.
+- Exchange the JWT at <code>POST https://api.github.com/app/installations/{installationId}/access_tokens</code> with <code>Authorization: Bearer {jwt}</code>.
+- Return the <code>token</code> field from the JSON response. The <code>expires_at</code> field should be parsed and stored alongside the token so the AGC's Token Manager (Milestone 2) can use it for proactive refresh.
+- All HTTP calls in this package must accept an injected <code>*http.Client</code> so tests can substitute an <code>httptest.Server</code>.</p>
+<p><strong><code>auth_test.go</code> — what to cover:</strong>
+- Happy path: stub server returns <code>{"token": "ghs_xxx", "expires_at": "..."}</code>, assert <code>Token()</code> returns <code>"ghs_xxx"</code>.
+- Bad private key: assert error is returned, not a panic.
+- Non-200 from GitHub: assert error is returned with status code in the message.
+- Clock-skew buffer: assert the JWT's <code>iat</code> claim is at least 60 seconds before <code>now</code> (prevents GitHub rejection on clock-skewed hosts).</p>
+<h3 id="22-broker--github-broker-api-client">2.2 <code>broker</code> — GitHub Broker API Client<a class="headerlink" href="#22-broker--github-broker-api-client" title="Permanent link">&para;</a></h3>
+<p>Implements the four broker protocol calls. The design separates concerns clearly:</p>
+<ul>
+<li><code>types.go</code> — pure Go structs, no methods, no imports beyond <code>encoding/json</code> and <code>time</code>.</li>
+<li><code>client.go</code> — HTTP client wrapping the four calls.</li>
+<li><code>crypto.go</code> — AES-256 decryption of <code>TaskAgentMessage.Body</code>.</li>
+</ul>
+<p><strong><code>types.go</code>:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">// TaskAgentMessage is the response body from GET {broker_url}/message.</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kd">type</span><span class="w"> </span><span class="nx">TaskAgentMessage</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nx">MessageID</span><span class="w">   </span><span class="kt">int64</span><span class="w">  </span><span class="s">`json:&quot;messageId&quot;`</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nx">MessageType</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;messageType&quot;`</span><span class="w"> </span><span class="c1">// &quot;RunnerJobRequest&quot; when a job is available</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nx">Body</span><span class="w">        </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;body&quot;`</span><span class="w">        </span><span class="c1">// JSON string; decrypt then unmarshal as RunnerJobRequestBody</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="p">}</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1">// RunnerJobRequestBody is the parsed (and decrypted) content of TaskAgentMessage.Body.</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RunnerJobRequestBody</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="nx">RunnerRequestID</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;runner_request_id&quot;`</span><span class="w"> </span><span class="c1">// used as jobMessageId in AcquireJob</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="nx">RunServiceURL</span><span class="w">   </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;run_service_url&quot;`</span><span class="w">   </span><span class="c1">// base URL for acquirejob and renewjob</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span><span class="nx">BillingOwnerID</span><span class="w">  </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;billing_owner_id&quot;`</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="p">}</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1">// JobAcquisitionRequest is the request body for POST {run_service_url}/acquirejob.</span>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="kd">type</span><span class="w"> </span><span class="nx">JobAcquisitionRequest</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">    </span><span class="nx">JobMessageID</span><span class="w">   </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;jobMessageId&quot;`</span><span class="w">  </span><span class="c1">// = RunnerJobRequestBody.RunnerRequestID</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">    </span><span class="nx">RunnerOS</span><span class="w">       </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;runnerOS&quot;`</span><span class="w">      </span><span class="c1">// &quot;Linux&quot;</span>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">    </span><span class="nx">BillingOwnerID</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;billingOwnerId&quot;`</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="p">}</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="c1">// AcquireJobResponse is the response from POST {run_service_url}/acquirejob.</span>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="kd">type</span><span class="w"> </span><span class="nx">AcquireJobResponse</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">    </span><span class="nx">Plan</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="w">        </span><span class="nx">PlanID</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;planId&quot;`</span>
+<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="s">`json:&quot;plan&quot;`</span>
+<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">    </span><span class="c1">// Full body is the complete job instructions payload forwarded opaquely to the worker.</span>
+<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="w">    </span><span class="c1">// The AGC stores the entire raw response bytes alongside PlanID.</span>
+<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="p">}</span>
+<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>
+<a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="c1">// RenewJobRequest is the request body for POST {run_service_url}/renewjob.</span>
+<a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RenewJobRequest</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a><span class="w">    </span><span class="nx">PlanID</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;planId&quot;`</span>
+<a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a><span class="w">    </span><span class="nx">JobID</span><span class="w">  </span><span class="kt">string</span><span class="w"> </span><span class="s">`json:&quot;jobId&quot;`</span><span class="w"> </span><span class="c1">// = RunnerJobRequestBody.RunnerRequestID</span>
+<a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a><span class="p">}</span>
+<a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>
+<a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a><span class="c1">// RenewJobResponse is the response from POST {run_service_url}/renewjob.</span>
+<a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a><span class="kd">type</span><span class="w"> </span><span class="nx">RenewJobResponse</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a><span class="w">    </span><span class="nx">LockedUntil</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Time</span><span class="w"> </span><span class="s">`json:&quot;lockedUntil&quot;`</span>
+<a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong><code>client.go</code> — exported surface:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// BrokerClient is the low-level HTTP client for the GitHub broker protocol.</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1">// All methods are context-aware and propagate cancellation.</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kd">type</span><span class="w"> </span><span class="nx">BrokerClient</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="c1">// BrokerURL is the static base URL used for sessions and message calls.</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="nx">BrokerURL</span><span class="w">  </span><span class="kt">string</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="nx">HTTPClient</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Client</span><span class="w"> </span><span class="c1">// injected; tests substitute httptest-backed clients</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="nx">Token</span><span class="w">      </span><span class="kt">string</span><span class="w">       </span><span class="c1">// installation access token; set before each call</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">}</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1">// CreateSession registers a virtual runner with the broker and returns a sessionId.</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1">// Returns an error wrapping the HTTP status if GitHub rejects the request.</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1">// A 400 with a version-too-old body is surfaced as a distinct VersionTooOldError</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1">// so callers can surface it as a condition rather than retrying in a tight loop.</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">*</span><span class="nx">BrokerClient</span><span class="p">)</span><span class="w"> </span><span class="nx">CreateSession</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">runnerVersion</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">sessionID</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">brokerURL</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="c1">// GetMessage opens a 50-second long-poll against the broker.</span>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1">// Returns (nil, nil) on a 202 Accepted (no job queued).</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1">// Returns a non-nil TaskAgentMessage when a job is available.</span>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="c1">// Caller is responsible for retrying on nil/nil with appropriate backoff.</span>
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">*</span><span class="nx">BrokerClient</span><span class="p">)</span><span class="w"> </span><span class="nx">GetMessage</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">sessionID</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">TaskAgentMessage</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>
+<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="c1">// AcquireJob claims a job on the run service URL extracted from the message body.</span>
+<a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="c1">// runServiceURL must come from RunnerJobRequestBody.RunServiceURL, not the broker URL.</span>
+<a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">*</span><span class="nx">BrokerClient</span><span class="p">)</span><span class="w"> </span><span class="nx">AcquireJob</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">runServiceURL</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="nx">JobAcquisitionRequest</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">AcquireJobResponse</span><span class="p">,</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>
+<a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="c1">// RenewJob renews the job lock on the run service URL.</span>
+<a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="c1">// Must be called every 60 seconds after AcquireJob succeeds.</span>
+<a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">*</span><span class="nx">BrokerClient</span><span class="p">)</span><span class="w"> </span><span class="nx">RenewJob</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">runServiceURL</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">req</span><span class="w"> </span><span class="nx">RenewJobRequest</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="o">*</span><span class="nx">RenewJobResponse</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>
+<a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="c1">// DeleteSession tears down a broker session, allowing GitHub to re-queue any</span>
+<a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="c1">// unacquired work. Called during graceful shutdown.</span>
+<a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">c</span><span class="w"> </span><span class="o">*</span><span class="nx">BrokerClient</span><span class="p">)</span><span class="w"> </span><span class="nx">DeleteSession</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">sessionID</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="kt">error</span>
+</code></pre></div>
+<p><strong>Critical implementation detail — the two-URL model:</strong> <code>CreateSession</code> and <code>GetMessage</code> use <code>BrokerClient.BrokerURL</code>. <code>AcquireJob</code> and <code>RenewJob</code> use the <code>run_service_url</code> from the message body, passed as a parameter. These must never be conflated. The comment in <code>types.go</code> and the function signatures enforce this at the call site.</p>
+<p><strong><code>planId</code> extraction:</strong> <code>AcquireJob</code> must check the <code>x-plan-id</code> response header first. If present and non-empty, use it as the plan ID. Fall back to <code>AcquireJobResponse.Plan.PlanID</code> from the body only if the header is absent. This dual-source logic belongs in <code>AcquireJob</code>, not in the caller.</p>
+<p><strong><code>client_test.go</code> — what to cover (full list per §7.1 of the test plan):</strong>
+- Request construction and header injection for all four calls.
+- <code>acquirejob</code> and <code>renewjob</code> use the <code>run_service_url</code> parameter, not <code>BrokerURL</code>.
+- <code>GetMessage</code> returns <code>(nil, nil)</code> on 202 and a populated struct on 200.
+- Non-200 responses are mapped to typed errors.
+- <code>VersionTooOldError</code> is returned on 400 with the version-too-old message.
+- <code>x-plan-id</code> header takes precedence over body <code>.plan.planId</code>.</p>
+<p><strong><code>crypto.go</code>:</strong></p>
+<p>The <code>TaskAgentMessage.Body</code> field is an AES-256 encrypted JSON blob. The AGC must decrypt it before parsing <code>RunnerJobRequestBody</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">// DecryptMessageBody decrypts the AES-256-CBC encrypted body of a TaskAgentMessage.</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1">// key is the session key returned by CreateSession (base64-encoded in the response).</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1">// Returns the plaintext bytes or an error.</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="kd">func</span><span class="w"> </span><span class="nx">DecryptMessageBody</span><span class="p">(</span><span class="nx">encryptedBody</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+</code></pre></div>
+<p><strong><code>crypto_test.go</code>:</strong> Test against a pre-generated key/ciphertext pair committed under <code>testdata/</code>. Cover: correct decryption, wrong key, truncated payload, invalid base64. The fixture must be self-contained so the test never calls GitHub.</p>
+<h3 id="23-cmdprobemaingo--probe-entry-point">2.3 <code>cmd/probe/main.go</code> — Probe Entry Point<a class="headerlink" href="#23-cmdprobemaingo--probe-entry-point" title="Permanent link">&para;</a></h3>
+<p>The probe is a thin orchestration layer over the two packages above. It imports them as <code>github.com/actions-gateway/github-actions-gateway/broker</code> and <code>github.com/actions-gateway/github-actions-gateway/githubapp</code> — the workspace resolves these to the root module locally. It is not itself unit-tested (it wires up real credentials and makes live calls), but its logic is simple enough to read and audit directly.</p>
+<p><strong>Startup sequence:</strong></p>
+<ol>
+<li>Read GitHub App credentials from environment variables:</li>
+<li><code>GITHUB_APP_ID</code></li>
+<li><code>GITHUB_APP_PRIVATE_KEY</code> (path to PEM file, or PEM literal)</li>
+<li><code>GITHUB_APP_INSTALLATION_ID</code></li>
+<li><code>GITHUB_BROKER_URL</code> (the broker base URL for the runner registration)</li>
+<li><code>GITHUB_RUNNER_VERSION</code> (e.g. <code>"2.327.1"</code>)</li>
+<li>Call <code>NewInstallationTokenProvider</code> and get a token.</li>
+<li>Construct a <code>BrokerClient</code> and call <code>CreateSession</code>. Print the session ID.</li>
+<li>Enter a <code>GetMessage</code> loop:</li>
+<li>On <code>nil</code> (202), log "no job, polling again…" and retry immediately (the 50s long-poll already provides natural rate limiting).</li>
+<li>On error, apply backoff per §3.3 of the design (up to 5 consecutive errors: 15–30s jitter; beyond 5: 30–60s jitter).</li>
+<li>On a <code>RunnerJobRequest</code> message, break out of the loop.</li>
+<li>Decrypt the message body using the session key from <code>CreateSession</code>.</li>
+<li>Call <code>AcquireJob</code> using <code>RunJobRequestBody.RunServiceURL</code>. Log the <code>planId</code> and <code>lockedUntil</code>.</li>
+<li>Print the full decrypted payload to stdout.</li>
+<li>Start a <code>renewjob</code> goroutine that ticks every 60 seconds. The goroutine logs each renewal result.</li>
+<li>Optionally call <code>AcknowledgeRunnerRequest</code> (see Investigation Task A below) and observe the result.</li>
+<li>Block until <code>SIGINT</code>/<code>SIGTERM</code>. On signal, call <code>DeleteSession</code> and log exit.</li>
+</ol>
+<p><strong>Output for fixture capture:</strong> The probe prints the full raw <code>AcquireJobResponse</code> body (the complete decrypted job instructions) to stdout as JSON. The operator pipes this to <code>testdata/job_payload.json</code> after a successful run. This file is committed as the ground-truth fixture for Milestone 3's worker handoff tests.</p>
+<hr />
+<h2 id="3-investigation-tasks">3. Investigation Tasks<a class="headerlink" href="#3-investigation-tasks" title="Permanent link">&para;</a></h2>
+<p>Both investigations must be completed before the milestone is declared done. Their findings feed directly into the design — either confirming the existing spec or triggering a revision.</p>
+<h3 id="3a-investigation--acknowledgerunnerrequest">3.A Investigation — <code>AcknowledgeRunnerRequest</code><a class="headerlink" href="#3a-investigation--acknowledgerunnerrequest" title="Permanent link">&para;</a></h3>
+<p><strong>Context:</strong> The official runner source (<code>MessageListener.cs</code>) calls <code>AcknowledgeRunnerRequestAsync(runnerRequestId, sessionId)</code> after handing a job to the worker. This endpoint is not in the public broker API documentation. Its role is unclear — it may be a replacement for the old <code>DeleteMessage</code> call, a no-op, or required for correct delivery semantics.</p>
+<p><strong>How to investigate:</strong>
+1. After a successful <code>AcquireJob</code>, attempt <code>POST {broker_url}/acknowledge</code> with body <code>{"runnerRequestId": "&lt;runner_request_id&gt;", "sessionId": "&lt;session_id&gt;"}</code>.
+2. Record the HTTP status and response body.
+3. In a second probe run, omit the <code>acknowledge</code> call entirely. Observe whether the same job is redelivered, whether session errors occur, or whether behavior is indistinguishable.</p>
+<p><strong>Expected outcomes:</strong>
+- If <code>acknowledge</code> is required: add it to the execution flow in §4.2 of the operational flows doc and §3.3 of the API contracts doc. Add it to the <code>BrokerClient</code> interface.
+- If <code>acknowledge</code> is a no-op or optional: document the finding as a code comment in <code>client.go</code> and do not add it to the required execution path. The design §3.3 already notes it as unconfirmed.</p>
+<p><strong>Document findings:</strong> Add a <code>## Investigation Findings</code> section at the bottom of this file before closing the milestone.</p>
+<h3 id="3b-investigation--egress-ip-variance">3.B Investigation — Egress IP Variance<a class="headerlink" href="#3b-investigation--egress-ip-variance" title="Permanent link">&para;</a></h3>
+<p><strong>Context:</strong> The design requires GitHub broker calls to route through a proxy pool where each call may land on a different pod (different egress IP). GitHub's abuse detection is undocumented. If IP variance causes session rejections or unexpected errors, the proxy design needs a fallback.</p>
+<p><strong>How to investigate:</strong>
+1. Implement two <code>httptest</code>-backed <code>CONNECT</code> proxies bound to different local ports (simulating two pods with different egress IPs).
+2. Configure the probe's <code>http.Client</code> with a custom <code>DialContext</code> that round-robins or randomly selects between the two proxy ports for each outbound connection.
+3. Run the probe through the full sequence: <code>CreateSession</code> → <code>GetMessage</code> → <code>AcquireJob</code> → three <code>RenewJob</code> calls, each routed through a different "pod".
+4. Record whether all calls succeed. Note any <code>403 Forbidden</code>, <code>401 Unauthorized</code>, or unusual status codes.</p>
+<p><strong>Implementation note:</strong> This test uses real GitHub calls routed through local <code>httptest</code> CONNECT proxies, not a stubbed broker. The proxies just tunnel CONNECT; they do not intercept TLS. For local testing, two <code>httptest.Server</code> instances running a simple CONNECT handler suffice:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">newCONNECTProxy</span><span class="p">(</span><span class="nx">t</span><span class="w"> </span><span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="nx">httptest</span><span class="p">.</span><span class="nx">Server</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">httptest</span><span class="p">.</span><span class="nx">NewServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">r</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">Method</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">MethodConnect</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">            </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;only CONNECT&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusMethodNotAllowed</span><span class="p">)</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">            </span><span class="k">return</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">        </span><span class="p">}</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">        </span><span class="nx">conn</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">net</span><span class="p">.</span><span class="nx">Dial</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">Host</span><span class="p">)</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">            </span><span class="nx">http</span><span class="p">.</span><span class="nx">Error</span><span class="p">(</span><span class="nx">w</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="p">.</span><span class="nx">Error</span><span class="p">(),</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusBadGateway</span><span class="p">)</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">            </span><span class="k">return</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">        </span><span class="p">}</span>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">        </span><span class="nx">w</span><span class="p">.</span><span class="nx">WriteHeader</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">StatusOK</span><span class="p">)</span>
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">        </span><span class="nx">hj</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">w</span><span class="p">.(</span><span class="nx">http</span><span class="p">.</span><span class="nx">Hijacker</span><span class="p">)</span>
+<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">        </span><span class="nx">clientConn</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">hj</span><span class="p">.</span><span class="nx">Hijack</span><span class="p">()</span>
+<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">        </span><span class="k">go</span><span class="w"> </span><span class="nx">io</span><span class="p">.</span><span class="nx">Copy</span><span class="p">(</span><span class="nx">conn</span><span class="p">,</span><span class="w"> </span><span class="nx">clientConn</span><span class="p">)</span>
+<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">        </span><span class="nx">io</span><span class="p">.</span><span class="nx">Copy</span><span class="p">(</span><span class="nx">clientConn</span><span class="p">,</span><span class="w"> </span><span class="nx">conn</span><span class="p">)</span>
+<a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">    </span><span class="p">}))</span>
+<a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Expected outcomes:</strong>
+- If all calls succeed across IP changes: document as confirmed, proceed to Milestone 4's proxy pool design with confidence.
+- If any call fails: evaluate <code>sessionAffinity: ClientIP</code> on the proxy Service (low effort) vs. per-goroutine proxy assignment (higher fidelity). Pause Milestone 4 planning until resolved.</p>
+<p><strong>Document findings:</strong> Add a <code>## Investigation Findings</code> section at the bottom of this file before closing the milestone.</p>
+<h3 id="3c-investigation--session-reuse-after-acquirejob">3.C Investigation — Session Reuse After <code>acquirejob</code><a class="headerlink" href="#3c-investigation--session-reuse-after-acquirejob" title="Permanent link">&para;</a></h3>
+<p><strong>Context:</strong> The adaptive listener model in <a href="../../design/02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a> requires that a goroutine can call <code>GET /message</code> again on the same <code>sessionId</code> immediately after a successful <code>POST /acquirejob</code>, without tearing down and re-creating the session. If GitHub does not permit this, the AGC must call <code>DELETE /sessions</code> followed by <code>POST /sessions</code> between each job, adding a full registration round-trip of latency to every acquisition cycle and complicating the goroutine lifecycle.</p>
+<p><strong>How to investigate:</strong>
+1. Run the probe through the normal sequence: <code>CreateSession</code> → <code>GetMessage</code> → <code>AcquireJob</code>.
+2. Without calling <code>DeleteSession</code>, immediately re-enter the <code>GetMessage</code> long-poll loop on the same <code>sessionId</code>.
+3. Queue a second workflow job and observe the response:
+   - 200 with a new <code>RunnerJobRequest</code> message → session reuse is supported.
+   - 202 (long-poll times out, no second job delivered) → inconclusive; repeat with a second job already queued before re-entering the poll.
+   - 404, 410, or any non-2xx → session is invalidated after job acquisition; reuse not supported.
+4. If reuse appears to work, renew the acquired job's lock (via the existing <code>renewjob</code> loop) while simultaneously polling for the second job to confirm the two operations do not interfere.</p>
+<p><strong>Expected outcomes:</strong>
+- If session reuse is permitted: document as confirmed. The Milestone 2 Session Multiplexer design proceeds as specified — one goroutine holds one session and loops indefinitely. Update <a href="../../design/03-api-contracts/">§3.3</a> to record this as a confirmed behavior.
+- If session reuse is not permitted: the AGC goroutine must tear down and re-create the session after each <code>AcquireJob</code>. Add a <code>TODO(session-reuse)</code> note to the Milestone 2 plan flagging the extra latency and the need for a delete→create cycle between jobs.</p>
+<p><strong>Document findings:</strong> Add §8.C to the Investigation Findings section at the bottom of this file before closing the milestone.</p>
+<h3 id="3d-investigation--job-delivery-throttling-by-session-count">3.D Investigation — Job Delivery Throttling by Session Count<a class="headerlink" href="#3d-investigation--job-delivery-throttling-by-session-count" title="Permanent link">&para;</a></h3>
+<p><strong>Context:</strong> The design assumes GitHub will deliver a queued job to any session that is polling when the job arrives. If GitHub instead binds delivery to the set of sessions registered at the moment the job was <em>queued</em>, the adaptive spawn-on-acquire model has a race: a job can arrive while the replacement listener's <code>POST /sessions</code> call is still in flight, leaving no ready session to receive it. This would cause silent job drops during bursts.</p>
+<p><strong>How to investigate:</strong>
+1. Register a single session and start its <code>GetMessage</code> long-poll.
+2. Queue two workflow jobs simultaneously (trigger two parallel workflow runs).
+3. After the first session acquires the first job, register a second session and start its <code>GetMessage</code> poll.
+4. Observe whether the second session receives the second job:
+   - If it does: GitHub delivers opportunistically to any ready session. The adaptive model is safe.
+   - If the second job is never delivered (times out in the queue or is requeued elsewhere): throttling is tied to the registered session count at queue time. The adaptive model has a delivery gap.
+5. As a secondary data point, invert the order: register two sessions, queue two jobs, confirm both jobs are delivered — this establishes the baseline that two simultaneous sessions do each receive a job.</p>
+<p><strong>Expected outcomes:</strong>
+- If delivery is opportunistic: document as confirmed. Proceed with the adaptive listener model. No standby pool is needed.
+- If throttling is confirmed: document the gap. Evaluate pre-spawning 2–3 warm standby sessions per <code>RunnerGroup</code> as a mitigation. Update <a href="../../design/appendix-e-capacity-planning/">Appendix E</a> with the revised warm-pool sizing guidance before beginning Milestone 2.</p>
+<p><strong>Document findings:</strong> Add §8.D to the Investigation Findings section at the bottom of this file before closing the milestone.</p>
+<hr />
+<h2 id="4-test-plan">4. Test Plan<a class="headerlink" href="#4-test-plan" title="Permanent link">&para;</a></h2>
+<h3 id="41-unit-tests-go-test--race--from-repo-root">4.1 Unit Tests (<code>go test -race ./...</code> from repo root)<a class="headerlink" href="#41-unit-tests-go-test--race--from-repo-root" title="Permanent link">&para;</a></h3>
+<p>All unit tests must run without network access. Use <code>httptest.NewServer</code> for any HTTP interaction. All tests must pass under <code>-race</code>.</p>
+<h4 id="githubapp-root-module"><code>githubapp</code> (root module)<a class="headerlink" href="#githubapp-root-module" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>What it verifies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TestToken_HappyPath</code></td>
+<td>Stub returns <code>{"token": "ghs_xxx", "expires_at": "..."}</code>. Assert <code>Token()</code> returns <code>"ghs_xxx"</code>.</td>
+</tr>
+<tr>
+<td><code>TestToken_BadPrivateKey</code></td>
+<td>Malformed PEM passed as credential. Assert error returned, no panic.</td>
+</tr>
+<tr>
+<td><code>TestToken_NonOKResponse</code></td>
+<td>Stub returns 401. Assert error includes status code.</td>
+</tr>
+<tr>
+<td><code>TestToken_ClockSkewBuffer</code></td>
+<td>Parse the JWT sent to the stub server. Assert <code>iat</code> ≤ <code>now - 60s</code>.</td>
+</tr>
+<tr>
+<td><code>TestToken_ExpiresAtParsed</code></td>
+<td>Assert the returned token value carries the correct expiry time so the AGC Token Manager can schedule proactive refresh.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="broker--client_testgo-root-module"><code>broker</code> — <code>client_test.go</code> (root module)<a class="headerlink" href="#broker--client_testgo-root-module" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>What it verifies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TestCreateSession_HappyPath</code></td>
+<td>Stub returns a valid session response. Assert session ID and broker URL are extracted.</td>
+</tr>
+<tr>
+<td><code>TestCreateSession_VersionTooOld</code></td>
+<td>Stub returns 400 with version-too-old message. Assert <code>VersionTooOldError</code> is returned.</td>
+</tr>
+<tr>
+<td><code>TestGetMessage_NoJob</code></td>
+<td>Stub returns 202 with empty body. Assert <code>(nil, nil)</code> returned.</td>
+</tr>
+<tr>
+<td><code>TestGetMessage_JobAvailable</code></td>
+<td>Stub returns 200 with a <code>RunnerJobRequest</code> body. Assert struct is populated.</td>
+</tr>
+<tr>
+<td><code>TestGetMessage_UsesSessionID</code></td>
+<td>Assert the <code>?sessionId=</code> query param equals the supplied session ID.</td>
+</tr>
+<tr>
+<td><code>TestAcquireJob_UsesPlanIDFromHeader</code></td>
+<td>Stub returns <code>x-plan-id: abc</code> header. Assert <code>planId</code> is <code>"abc"</code>.</td>
+</tr>
+<tr>
+<td><code>TestAcquireJob_FallsBackToPlanIDFromBody</code></td>
+<td>Stub returns no <code>x-plan-id</code> header. Assert <code>planId</code> comes from <code>.plan.planId</code> in body.</td>
+</tr>
+<tr>
+<td><code>TestAcquireJob_UsesRunServiceURL</code></td>
+<td>Assert <code>AcquireJob</code> sends to the <code>runServiceURL</code> parameter, not <code>BrokerClient.BrokerURL</code>.</td>
+</tr>
+<tr>
+<td><code>TestRenewJob_UsesRunServiceURL</code></td>
+<td>Assert <code>RenewJob</code> sends to the <code>runServiceURL</code> parameter, not <code>BrokerClient.BrokerURL</code>.</td>
+</tr>
+<tr>
+<td><code>TestRenewJob_Interval</code></td>
+<td>Goroutine calls renewjob every 60s. Use a fake clock to advance time. Assert correct call count with no drift.</td>
+</tr>
+<tr>
+<td><code>TestRenewJob_StopsOnCancel</code></td>
+<td>Cancel the context. Assert goroutine exits cleanly with no leak (<code>goleak.VerifyNone</code>).</td>
+</tr>
+<tr>
+<td><code>TestRenewJob_NonOKResponse</code></td>
+<td>Stub returns 500. Assert error is surfaced; no panic; goroutine does not spin.</td>
+</tr>
+<tr>
+<td><code>TestDeleteSession_IssuesDELETE</code></td>
+<td>Assert DELETE is issued to the correct URL with the session ID.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="broker--crypto_testgo-root-module"><code>broker</code> — <code>crypto_test.go</code> (root module)<a class="headerlink" href="#broker--crypto_testgo-root-module" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>What it verifies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TestDecryptMessageBody_HappyPath</code></td>
+<td>Pre-generated key+ciphertext fixture. Assert plaintext matches expected JSON.</td>
+</tr>
+<tr>
+<td><code>TestDecryptMessageBody_WrongKey</code></td>
+<td>Different key than the one used to encrypt. Assert error returned.</td>
+</tr>
+<tr>
+<td><code>TestDecryptMessageBody_TruncatedPayload</code></td>
+<td>Slice off the last 16 bytes of a valid ciphertext. Assert error returned.</td>
+</tr>
+<tr>
+<td><code>TestDecryptMessageBody_InvalidBase64</code></td>
+<td>Pass a string that is not valid base64. Assert error returned.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="rate-limit--backoff-in-client_testgo">Rate-limit / backoff (in <code>client_test.go</code>)<a class="headerlink" href="#rate-limit--backoff-in-client_testgo" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Test</th>
+<th>What it verifies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TestGetMessage_Retry429_HonorsRetryAfter</code></td>
+<td>Stub returns 429 with <code>Retry-After: 30</code>. Assert client waits ~30s (use fake clock) before retrying.</td>
+</tr>
+<tr>
+<td><code>TestGetMessage_Retry429_ExponentialFallback</code></td>
+<td>Stub returns 429 with no <code>Retry-After</code> header. Assert client applies exponential backoff capped at 5 minutes.</td>
+</tr>
+<tr>
+<td><code>TestGetMessage_Retry429_CounterIncremented</code></td>
+<td>Assert <code>actions_gateway_message_poll_errors_total{reason="rate_limited"}</code> increments on each 429.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-integration--live-tests-manual-run-during-the-probe-execution">4.2 Integration / Live Tests (manual, run during the probe execution)<a class="headerlink" href="#42-integration--live-tests-manual-run-during-the-probe-execution" title="Permanent link">&para;</a></h3>
+<p>These are not automated in CI for Milestone 1 — they require real GitHub credentials. They become the foundation for the automated integration suite in Milestone 2.</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Pass Criterion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Full probe run — job acquisition</td>
+<td>Probe acquires a real job, prints decrypted payload. <code>planId</code> is non-empty.</td>
+</tr>
+<tr>
+<td>RenewJob loop — three renewals</td>
+<td>Three <code>renewjob</code> calls succeed without a GitHub cancellation. <code>lockedUntil</code> advances on each renewal.</td>
+</tr>
+<tr>
+<td>Graceful shutdown</td>
+<td>SIGINT causes <code>DeleteSession</code> to be called. GitHub session is gone (verify via a second probe run that sees no "session already exists" error).</td>
+</tr>
+<tr>
+<td>AcknowledgeRunnerRequest (Investigation A)</td>
+<td>Result documented per §3.A above.</td>
+</tr>
+<tr>
+<td>IP variance across proxy pool (Investigation B)</td>
+<td>Result documented per §3.B above.</td>
+</tr>
+<tr>
+<td>Session reuse after acquirejob (Investigation C)</td>
+<td>Second <code>GetMessage</code> poll on the same <code>sessionId</code> after <code>AcquireJob</code> either succeeds (reuse confirmed) or returns a session error (reuse not permitted). Result documented per §3.C above.</td>
+</tr>
+<tr>
+<td>Job delivery throttling by session count (Investigation D)</td>
+<td>Second session registered mid-queue either receives the second job (opportunistic delivery confirmed) or does not (throttling confirmed). Result documented per §3.D above.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="43-test-fixture-commitment">4.3 Test Fixture Commitment<a class="headerlink" href="#43-test-fixture-commitment" title="Permanent link">&para;</a></h3>
+<p>After a successful live probe run:
+1. Pipe stdout to <code>testdata/job_payload.json</code>. Redact any sensitive tokens before committing (the <code>ACTIONS_RUNTIME_TOKEN</code> field must be replaced with a placeholder value).
+2. Add a <code>testdata/README.md</code> explaining what each fixture is, how it was captured, and what fields have been redacted.
+3. Generate and commit a <code>testdata/crypto_fixture.json</code> containing a self-contained key/ciphertext/plaintext triple for use by <code>crypto_test.go</code> — this must be synthetically generated (not a real key from GitHub) so the test can run without network access.</p>
+<hr />
+<h2 id="5-success-criteria-checklist">5. Success Criteria Checklist<a class="headerlink" href="#5-success-criteria-checklist" title="Permanent link">&para;</a></h2>
+<ul>
+<li>[x] <code>go build ./cmd/probe/</code> succeeds with no warnings (run from repo root via workspace).</li>
+<li>[x] <code>go test -race ./...</code> passes with zero failures across both the root module and probe module.</li>
+<li>[x] <code>goleak.VerifyNone</code> passes in all goroutine-spawning tests.</li>
+<li>[x] Live probe run: job acquired, payload printed, three renewals logged, no GitHub cancellation.</li>
+<li>[x] <code>testdata/job_payload.json</code> committed (with tokens redacted).</li>
+<li>[x] <code>testdata/crypto_fixture.json</code> committed.</li>
+<li>[x] Investigation A finding documented.</li>
+<li>[x] Investigation B finding documented.</li>
+<li>[x] Investigation C finding documented.</li>
+<li>[x] Investigation D finding documented. (409 one-session-per-agent confirmed; opportunistic delivery inferred from §8.C — see §8.D)</li>
+<li>[x] No <code>TODO(milestone-2+)</code> items left untracked — each deferred item has a corresponding note in the Milestone 2 plan or a filed issue.</li>
+</ul>
+<hr />
+<h2 id="6-risks-and-mitigations">6. Risks and Mitigations<a class="headerlink" href="#6-risks-and-mitigations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Likelihood</th>
+<th>Impact</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AcknowledgeRunnerRequest</code> turns out to be required for correct delivery</td>
+<td>Medium</td>
+<td>Medium</td>
+<td>Investigation A resolves this in days 1–2. If required, add to <code>BrokerClient</code> and update §3.3 and §4.2 of design docs before proceeding.</td>
+</tr>
+<tr>
+<td>IP variance causes GitHub to reject sessions or flag abuse</td>
+<td>Low–Unknown</td>
+<td>High</td>
+<td>Investigation B resolves this in days 3–4. If triggered: <code>sessionAffinity: ClientIP</code> on the proxy Service is the immediate fallback; per-goroutine proxy assignment is the higher-fidelity fix. Both are implementable before Milestone 4.</td>
+</tr>
+<tr>
+<td>Session reuse not permitted after <code>AcquireJob</code></td>
+<td>Unknown</td>
+<td>Medium</td>
+<td>Investigation C resolves this before Milestone 2. If not permitted: AGC goroutine must delete+recreate session between each job; flag latency impact in the Milestone 2 plan.</td>
+</tr>
+<tr>
+<td>Job delivery throttles to registered session count at queue time</td>
+<td>Unknown</td>
+<td>High</td>
+<td>Investigation D resolves this before Milestone 2. If confirmed: add 2–3 warm standby sessions per RunnerGroup and update Appendix E sizing guidance before Milestone 2 begins.</td>
+</tr>
+<tr>
+<td><code>TaskAgentMessage.Body</code> encryption scheme differs from documented AES-256</td>
+<td>Low</td>
+<td>High</td>
+<td>Discover during live probe run. The <code>Runner</code> source code (C#) is authoritative; reference <code>MessageListener.cs</code> and <code>RSAParameters</code> usage in the runner source if decryption fails.</td>
+</tr>
+<tr>
+<td>GitHub minimum runner version has advanced past the pinned version</td>
+<td>Low</td>
+<td>Medium</td>
+<td>Surface as a <code>VersionTooOldError</code> from <code>CreateSession</code>. Update <code>GITHUB_RUNNER_VERSION</code> env var.</td>
+</tr>
+<tr>
+<td>Rate-limit budget hit during investigation runs</td>
+<td>Low</td>
+<td>Low</td>
+<td>Use a dedicated test GitHub App installation, not the production one.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="7-deferred-to-later-milestones">7. Deferred to Later Milestones<a class="headerlink" href="#7-deferred-to-later-milestones" title="Permanent link">&para;</a></h2>
+<p>The following are explicitly out of scope for Milestone 1 but are noted here so they are not forgotten:</p>
+<ul>
+<li><strong>Token Manager with proactive refresh</strong> (60s before expiry, mutex-protected, shared across goroutines) — Milestone 2. The probe calls <code>Token()</code> once and holds it; the probe is short-lived enough that this suffices.</li>
+<li><strong>Rate-limit backoff surfaced as a <code>RunnerGroup</code> condition</strong> — Milestone 2 (requires the CRD reconciler).</li>
+<li><strong><code>priorityTiers</code> pod-count logic</strong> — Milestone 2.</li>
+<li><strong>Eviction retry via <code>rerun-failed-jobs</code></strong> — Milestone 2.</li>
+<li><strong>Kubernetes Secret creation and pod provisioning</strong> — Milestone 3.</li>
+<li><strong>Named Pipe handoff</strong> — Milestone 3.</li>
+<li><strong>Proxy pool deployment</strong> — Milestone 4.</li>
+<li><strong><code>ActionsGateway</code> and <code>RunnerGroup</code> CRDs</strong> — Milestone 2 (RunnerGroup) and Milestone 4 (ActionsGateway).</li>
+</ul>
+<hr />
+<h2 id="8-investigation-findings">8. Investigation Findings<a class="headerlink" href="#8-investigation-findings" title="Permanent link">&para;</a></h2>
+<h3 id="8a--acknowledgerunnerrequest">8.A — <code>AcknowledgeRunnerRequest</code><a class="headerlink" href="#8a--acknowledgerunnerrequest" title="Permanent link">&para;</a></h3>
+<p><strong>Finding: not required for correct job delivery. AcquireJob alone claims the job.</strong></p>
+<p><strong>What was tested.</strong> After a successful <code>AcquireJob</code>, <code>probeAcknowledge</code> in <code>cmd/probe/main.go</code>
+attempted the v1 VSTS delete-message path:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>DELETE {poolBase}/messages/{messageId}?sessionId={sessionId}
+</code></pre></div>
+<p>The live probe (v2 flow, <code>broker.actions.githubusercontent.com</code>) returned:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>HTTP 404  body: &quot;Not found: /_apis/distributedtask/pools/1/messages/5714371765723164553&quot;
+</code></pre></div>
+<p><strong>Why it 404s.</strong> The v2 broker host (<code>broker.actions.githubusercontent.com</code>) does not expose the
+VSTS pool API at all. The correct v2 acknowledge endpoint from the runner source
+(<code>BrokerHttpClient.AcknowledgeRunnerRequestAsync</code>) is:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>POST {brokerURL}acknowledge?sessionId={sessionId}
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>Content-Type: application/json
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>{&quot;runnerRequestId&quot;: &quot;&lt;runnerRequestId&gt;&quot;}
+</code></pre></div>
+<p><strong>Effect of omitting the call.</strong> The probe acquired the job (planId non-empty, job payload
+returned) and the job was not redelivered. The VSTS <code>DeleteMessage</code> semantics are irrelevant in
+the v2 flow — <code>AcquireJob</code> itself is the atomic claim; once it succeeds the job is locked to this
+runner until the lock expires or is explicitly released.</p>
+<p><strong>Decision: do not add to the required execution path.</strong> Acknowledge is a telemetry notification
+to the broker, not a delivery gate. The <code>probeAcknowledge</code> function in <code>cmd/probe/main.go</code> will
+remain as a diagnostic probe only. The <code>BrokerClient</code> does not need an <code>AcknowledgeRunnerRequest</code>
+method for Milestone 2.</p>
+<p><strong>Future note.</strong> If future investigation of the v1 VSTS flow (non-v2 runners) reveals that
+<code>DeleteMessage</code> is required for requeue prevention, add <code>DeleteMessage</code> (not <code>Acknowledge</code>) to
+<code>BrokerClient</code> under a v1 flag. For v2 runners this is confirmed unnecessary.</p>
+<hr />
+<h3 id="8b--egress-ip-variance">8.B — Egress IP Variance<a class="headerlink" href="#8b--egress-ip-variance" title="Permanent link">&para;</a></h3>
+<p><strong>Finding: IP variance is safe. The v2 broker protocol is stateless per-request. Proceed with
+the Milestone 4 proxy pool design without session affinity.</strong></p>
+<p><strong>Unit-level confirmation.</strong> <code>broker/egress_ip_test.go</code> provides <code>TestCONNECTProxy_TunnelsHTTPS</code>,
+which runs four requests through two alternating transparent CONNECT proxies to a local TLS
+backend. All four succeed. This confirms the proxy infrastructure is correct and that per-call
+proxy rotation is transparent to the HTTP client.</p>
+<p><strong>Why statelessness is assured.</strong> The v2 broker flow observed during the live probe run:</p>
+<ul>
+<li>Authentication is a Bearer token in the <code>Authorization</code> header on every request — no session
+  cookies, no connection-level state.</li>
+<li><code>CreateSession</code> (v2) returns <code>hasEncryptionKey: false</code> — message bodies are plaintext JSON.
+  There is no RSA-negotiated per-session AES key that would need to be re-established if the
+  TCP connection changes.</li>
+<li><code>GetMessage</code> and <code>DeleteSession</code> use only the <code>sessionId</code> query param and the Bearer token.
+  No IP-bound state is observed server-side.</li>
+</ul>
+<p><strong>Live test status.</strong> <code>TestEgressIPVariance_Live</code> was scaffolded in <code>broker/egress_ip_test.go</code>
+but was not executed against real GitHub credentials in Milestone 1 (the full protocol impl is
+not wired into a test-callable form yet). It is left with a <code>TODO(investigation-b)</code> for Milestone 2,
+when <code>NewInstallationTokenProvider</code> and <code>BrokerClient</code> are fully integrated and can be called
+from a test harness without duplicating the probe's main.go orchestration.</p>
+<p><strong>Recommendation.</strong> Deploy the Milestone 4 proxy pool without <code>sessionAffinity: ClientIP</code>. If
+unexpected 401/403 responses appear in production under proxy rotation, add affinity as the
+low-effort fallback before investigating per-goroutine proxy assignment.</p>
+<hr />
+<h3 id="8c--session-reuse-after-acquirejob">8.C — Session Reuse After <code>acquirejob</code><a class="headerlink" href="#8c--session-reuse-after-acquirejob" title="Permanent link">&para;</a></h3>
+<p><strong>How to run:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nv">PROBE_SESSION_REUSE_TEST</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nv">GITHUB_APP_ID</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nv">GITHUB_APP_PRIVATE_KEY</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nv">GITHUB_APP_INSTALLATION_ID</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nv">GITHUB_BROKER_URL</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span><span class="nv">GITHUB_RUNNER_VERSION</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">  </span><span class="nv">GITHUB_AGENT_ID</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span><span class="nv">GITHUB_AGENT_NAME</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span>go<span class="w"> </span>run<span class="w"> </span>./cmd/probe/
+</code></pre></div>
+<p>Queue the first workflow job before starting the probe. Once the probe logs <code>"job acquired"</code>, queue a <strong>second</strong> workflow job. The probe re-enters <code>GetMessage</code> on the same <code>sessionId</code> and logs either <code>SESSION REUSE CONFIRMED</code> (200 with a new <code>RunnerJobRequest</code>) or a session error. Findings appear under <code>INVESTIGATION-C:</code> in the probe's stderr log.</p>
+<p><strong>Questions to answer:</strong>
+- Does <code>GET /message</code> on the same <code>sessionId</code> succeed (200 or 202) immediately after a successful <code>AcquireJob</code>?
+- If 200: does the delivered message represent a new job, confirming the session remained valid?
+- If any error status (404, 410, other): what is the exact status and response body?
+- Does the <code>renewjob</code> loop for the acquired job interfere with the concurrent <code>GetMessage</code> poll?</p>
+<p><strong>Finding:</strong> Session reuse is supported. After <code>AcquireJob</code>, <code>GetMessage</code> on the same <code>sessionId</code> returned <code>202</code> (no-job) on three consecutive polls — the session was never rejected with 404, 410, or any other protocol error. The context deadline (3-minute watchdog) expired before a second job arrived, which ended the test, but this is not a session error. The session remained valid throughout. One incidental observation: the <code>renewjob</code> loop failed with <code>401 Not Authorized</code> ~60 seconds into the test, indicating the run-service URL's job lock expired after the probe acquired but did not execute the job — this is expected and unrelated to session validity.</p>
+<p><strong>Conclusion for Milestone 2:</strong> The Session Multiplexer design proceeds as written. A goroutine can call <code>GetMessage</code> again on the same <code>sessionId</code> immediately after <code>AcquireJob</code> without a delete→create cycle. No additional latency needs to be noted in the Milestone 2 plan.</p>
+<p><strong>Impact on Milestone 2:</strong> If reuse is confirmed, the Session Multiplexer design proceeds as written. If not, add a delete→create cycle to the goroutine's post-acquisition path and note the added latency in the Milestone 2 plan.</p>
+<hr />
+<h3 id="8d--job-delivery-throttling-by-session-count">8.D — Job Delivery Throttling by Session Count<a class="headerlink" href="#8d--job-delivery-throttling-by-session-count" title="Permanent link">&para;</a></h3>
+<p><strong>How to run (sub-step 1 — post-acquisition registration):</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nv">PROBE_JOB_DELIVERY_TEST</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nv">GITHUB_APP_ID</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nv">GITHUB_APP_PRIVATE_KEY</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nv">GITHUB_APP_INSTALLATION_ID</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nv">GITHUB_BROKER_URL</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span><span class="nv">GITHUB_RUNNER_VERSION</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">  </span><span class="nv">GITHUB_AGENT_ID</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">  </span><span class="nv">GITHUB_AGENT_NAME</span><span class="o">=</span>...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">  </span>go<span class="w"> </span>run<span class="w"> </span>./cmd/probe/
+</code></pre></div>
+<p>Queue the first workflow job before starting the probe. Once the probe logs <code>"job acquired"</code>, queue a <strong>second</strong> workflow job. The probe immediately registers a second session and polls <code>GetMessage</code> on it. Findings appear under <code>INVESTIGATION-D:</code> in stderr. A 3-minute timeout is applied; if it expires with no job delivered, the finding is possible throttling (inconclusive — repeat with the second job pre-queued before the second session registers).</p>
+<p><strong>How to run (sub-step 2 — inverse baseline, two probe instances):</strong></p>
+<p>Start two probe instances simultaneously (without <code>PROBE_JOB_DELIVERY_TEST</code>), then queue two workflow jobs at the same time. Both instances should each acquire one job. This establishes the baseline that concurrent sessions do each receive a job when they are registered before the jobs are queued.</p>
+<p><strong>Questions to answer:</strong>
+- Does a session registered <em>after</em> two jobs are queued receive the second job?
+- Does the inverse test (two sessions pre-registered, two jobs queued simultaneously) deliver one job to each session?
+- Is there any observable delay or error when a second job is queued with no second session ready?</p>
+<p><strong>Finding (partial — one confirmed, one inferred):</strong></p>
+<p><strong>One session per registered runner is enforced.</strong> <code>POST {brokerURL}session</code> for an agent that already holds an active session returns HTTP 409 Conflict immediately. The second <code>CreateSession</code> in the probe failed with <code>status 409</code>. This means the AGC cannot multiplex two sessions under the same <code>agentId</code> — each concurrent listener goroutine must correspond to a distinct registered runner agent in the pool.</p>
+<p><strong>Opportunistic delivery is likely but not directly tested.</strong> The probe's <code>investigateJobDelivery</code> function used the <em>same</em> <code>agentId</code> for the second session, so the 409 terminated the test before the second session could poll. The original question — whether a job queued while zero sessions are polling will be delivered to the <em>next</em> session to register — remains unanswered by direct measurement.</p>
+<p><strong>Inference from Investigation C.</strong> Investigation C showed that a session already polling received a newly dispatched job within ~1 second (<code>msg="job message received"</code> appeared immediately after dispatch). This strongly suggests GitHub delivers jobs opportunistically to any ready polling session rather than binding delivery to sessions present at queue time. The 409 constraint is at the <em>session-creation</em> level, not the delivery level.</p>
+<p><strong>Conclusion for Milestone 2:</strong> Each AGC goroutine must correspond to a distinct registered runner (distinct <code>agentId</code>). The adaptive listener model is valid as long as the runner pool is pre-registered with at least as many agents as the target concurrency. The opportunistic delivery assumption is supported by the Investigation C timing evidence; confirm with a two-runner test if stronger proof is needed before finalising the warm-pool sizing in <a href="../../design/appendix-e-capacity-planning/">Appendix E</a>.</p>
+<p><strong>Impact on Milestone 2:</strong> If delivery is opportunistic, no standby pool is needed. If throttling is confirmed, update <a href="../../design/appendix-e-capacity-planning/">Appendix E</a> with warm-pool sizing (2–3 sessions per RunnerGroup) before Milestone 2 design is finalized.</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

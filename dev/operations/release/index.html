@@ -2743,7 +2743,7 @@ package + push + sign the chart) → verify → record digests. This is the
 <strong>maintainer</strong> runbook for
 <em>producing</em> a release. Operators <em>consuming</em> a release pin the published digests
 at install time — see <a href="../tenant-onboarding/">tenant-onboarding.md</a> and the
-<a href="../../charts/actions-gateway/README.md">chart README</a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/README.md">chart README</a>.</p>
 <h2 id="what-a-release-produces">What a release produces<a class="headerlink" href="#what-a-release-produces" title="Permanent link">&para;</a></h2>
 <blockquote>
 <p>Operators <em>installing</em> a release pin the published digests at install time —
@@ -2779,7 +2779,7 @@ see <a href="../install/#pin-images-by-digest">install.md § Pin images by diges
   registry (<code>helm install … oci://…</code>) with the published image <strong>digests</strong> pinned
   — no <code>git clone</code> of the chart. OCI (over a <code>gh-pages</code> chart repo) is chosen so
   the chart reuses the images' registry, login, and keyless-signing path; Artifact
-  Hub (see <a href="../../charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> annotations)
+  Hub (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> annotations)
   indexes the OCI ref for discoverability.</li>
 <li>The <strong>opt-in v2 CRD chart</strong>, packaged and pushed alongside the main chart to
   <code>oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2</code>, with the same
@@ -2812,7 +2812,7 @@ see <a href="../install/#pin-images-by-digest">install.md § Pin images by diges
   so a maintainer's pre-tag curated notes are never clobbered.</li>
 </ul>
 <p>Both the image and chart work are automated by the
-<a href="../../.github/workflows/publish.yml"><code>publish.yml</code></a> workflow, which triggers on
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow, which triggers on
 the <code>v*</code> tag push (the <code>chart-publish</code> job runs after every image leg succeeds).
 The maintainer's job is to cut the tag and verify the result.</p>
 <blockquote>
@@ -2940,7 +2940,7 @@ and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.
   ask about belongs in <em>Exploring</em>. A 2026-07-25 audit found six of seven
   near-term items already shipped.</li>
 <li><strong>Optional: refresh the docs-site announce bar's highlight.</strong> The banner in
-  <a href="../../overrides/main.html"><code>overrides/main.html</code></a> is the "vX.Y.Z is here" strip
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/overrides/main.html"><code>overrides/main.html</code></a> is the "vX.Y.Z is here" strip
   at the top of every page on the site. Its <strong>version needs no action</strong>: it is
   derived from the git tags at build time, so a stable tag names itself
   automatically (<a href="../../development/website/#the-announce-bar">website.md § The announce bar</a>).
@@ -3116,7 +3116,7 @@ tag.</p>
 <p>A <code>workflow_dispatch</code> run with a <code>tag</code> input publishes the same way without a
 git tag — use it to dry-run the pipeline against a throwaway <code>vX.Y.Z-rc1</code> tag.</p>
 <p><strong>The docs site publishes this release too (Q238).</strong> A <strong>stable</strong> <code>vX.Y.Z</code> tag
-also triggers <a href="../../.github/workflows/pages.yml"><code>pages.yml</code></a>, which deploys the
+also triggers <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/pages.yml"><code>pages.yml</code></a>, which deploys the
 release's docs as a new version on <a href="https://actions-gateway.com">actions-gateway.com</a>
 and moves the <code>stable</code> alias + the site's default root redirect to it — so the
 public docs default to this release, with the unreleased <code>main</code> docs kept behind
@@ -3218,7 +3218,7 @@ needs a hand-flip. The remaining items below are one-time setup or guardrails, n
 per-release steps:</p>
 <ul>
 <li><strong>Prerelease annotation — derived, not hand-flipped (Q293).</strong>
-  <a href="../../charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> carries
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> carries
   <code>artifacthub.io/prerelease</code>, but its committed value is a <strong>dev placeholder</strong>:
   <code>publish.yml</code> overrides it with <code>yq</code> before <code>helm package</code>, setting <code>"true"</code> for
   a <code>0.x</code> or <code>-rc</code>/<code>-alpha</code>/<code>-beta</code> tag and <code>"false"</code> for a stable <code>≥1.0.0</code> tag
@@ -3226,13 +3226,13 @@ per-release steps:</p>
   to land before or after a cut. The v2 CRD chart is stamped the same way.</li>
 <li><strong>Artifact Hub listing.</strong> Discoverability metadata (description, keywords,
   prerelease flag) ships in the chart's own annotations. Ownership verification
-  uses <a href="../../artifacthub-repo.yml"><code>artifacthub-repo.yml</code></a> at the repo root —
+  uses <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/artifacthub-repo.yml"><code>artifacthub-repo.yml</code></a> at the repo root —
   register the OCI repository in the Artifact Hub control panel, copy the
   assigned <code>repositoryID</code> into that file, and push it to the registry as the
   repository-metadata OCI artifact (the file's header documents the exact
   steps). This is a one-time control-panel action, not part of <code>publish.yml</code>.</li>
 <li><strong>Empty <code>values.yaml</code> digests.</strong> <strong>Do not</strong> commit real <code>sha256:…</code> digests into
-  <a href="../../charts/actions-gateway/values.yaml"><code>values.yaml</code></a>. The empty <code>digest</code>
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/values.yaml"><code>values.yaml</code></a>. The empty <code>digest</code>
   fields are the <em>secure default</em>: an unconfigured install fails closed (the GMC
   rejects floating AGC/proxy tags at startup) until the operator pins a real
   digest at install time. Baking a digest into the shipped chart would defeat
@@ -3364,7 +3364,7 @@ verify-release</code> uses the same version that signed), and <code>syft</code> 
 <code>syft-version</code> input on <code>anchore/sbom-action/download-syft</code> (the action is
 SHA-pinned, but syft itself is a runtime download).</p>
 <p><strong>Bumping a pinned action.</strong> Dependabot's <code>github-actions</code> ecosystem
-(<a href="../../.github/dependabot.yml"><code>.github/dependabot.yml</code></a>) opens weekly PRs that
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/dependabot.yml"><code>.github/dependabot.yml</code></a>) opens weekly PRs that
 bump both the SHA <em>and</em> the <code># vX.Y.Z</code> comment, so the pins don't rot — review and
 merge those like any dependency PR. To pin or bump by hand, resolve the tag to its
 commit SHA and keep the comment in sync:</p>
@@ -3385,7 +3385,7 @@ enforce that a signature can only ever be a tag signature:</p>
 <li><strong><code>make verify-release</code> only accepts a tags identity.</strong> The
   <code>--certificate-identity-regexp</code> is anchored to <code>…/publish\.yml@refs/tags/v.*$</code>
   (sourced from <code>release_identity_regexp</code> in
-  <a href="../../scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>), so a signature minted
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>), so a signature minted
   from <code>refs/heads/…</code> is rejected even if one were somehow produced. The
   <code>scripts/verify-release-test.sh</code> assertions (run by <code>make check</code> and CI) guard
   that the regexp stays tags-only.</li>

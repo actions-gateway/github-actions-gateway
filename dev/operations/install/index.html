@@ -2645,7 +2645,7 @@ runtime from each tenant's <code>ActionsGateway</code> CR. The chart is the <str
 path — there is no kustomize overlay; the plain-YAML files under <code>cmd/gmc/config/</code>
 are the controller-gen codegen + test substrate, not an install vehicle. For the
 full chart reference (every value, the templates it renders, offline validation),
-see the <a href="../../charts/actions-gateway/README.md">chart README</a>.</p>
+see the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/README.md">chart README</a>.</p>
 <hr />
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
@@ -3050,7 +3050,7 @@ digests. The knobs an operator is most likely to override:</p>
 <p>A <code>values.schema.json</code> validates these at install/lint time (digest format,
 enum values, etc.). The <strong>full reference</strong> — every value with its default and
 description — lives in the
-<a href="../../charts/actions-gateway/README.md#values">chart README</a>; this table is
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/README.md#values">chart README</a>; this table is
 only the common subset, not a duplicate.</p>
 <h3 id="the-policy-parameter-is-a-crd-not-a-configmap-q492">The policy parameter is a CRD, not a ConfigMap (Q492)<a class="headerlink" href="#the-policy-parameter-is-a-crd-not-a-configmap-q492" title="Permanent link">&para;</a></h3>
 <p>The guard reads its allowlist from a cluster-scoped <code>PriorityClassAllowlist</code> CR

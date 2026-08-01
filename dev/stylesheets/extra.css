@@ -1193,3 +1193,47 @@ button.persona-pill:focus-visible {
 .md-typeset a.persona-pill:hover {
   background: color-mix(in srgb, var(--md-accent-fg-color) 20%, transparent);
 }
+
+/* Backlog filters on the dev-only STATUS page — one labelled chip bar per
+   dimension, reusing the persona chip look. */
+.backlog-filters {
+  margin: 0 0 1rem;
+}
+
+.backlog-filter {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.backlog-filter__legend {
+  flex: 0 0 3.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--md-default-fg-color--light);
+}
+
+/* The bars sit inside a labelled row, so drop the standalone bottom margin. */
+.backlog-filter .persona-bar {
+  margin: 0;
+}
+
+.md-typeset .backlog-count {
+  margin: 0.2rem 0 0;
+  font-size: 0.7rem;
+  color: var(--md-default-fg-color--light);
+}
+
+/* Row labels select their chip, like the persona pills. */
+.md-typeset code.backlog-label {
+  cursor: pointer;
+}
+
+@media screen and (max-width: 44.9375em) {
+  .backlog-filter__legend {
+    flex-basis: 100%;
+  }
+}

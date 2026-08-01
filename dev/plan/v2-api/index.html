@@ -1,0 +1,3084 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/v2-api/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>v2 API implementation plan - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/devassets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/devassets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/devassets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/dev",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/dev"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/dev",
+    "logo": "https://actions-gateway.com/devassets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#v2-api-implementation-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.2.0 is here.</strong>
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.2.0">Read the release notes.</a>
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              v2 API implementation plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_15" id="__nav_7_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-goals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#coexistence-rollback--parity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coexistence, rollback &amp; parity
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolved-design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolved design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#milestones" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Milestones
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Milestones">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#m1--api-foundation-no-controllers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        M1 — API foundation (no controllers)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#m2--data-kinds-nouns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        M2 — Data kinds (nouns)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#m3a--control-kinds-verbs-single-gateway-parity-the-core-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        M3a — Control kinds (verbs), single-gateway parity (the core build)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#m3b--multi-gateway-per-namespace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        M3b — Multi-gateway per namespace
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#m5--migration-tool--v1v2-cutover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        M5 — Migration tool + v1/v2 cutover
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#itemized-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Itemized tasks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Itemized tasks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#m1--api-foundation-q149" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        M1 — API foundation (Q149)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#m2--data-kinds-q163" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        M2 — Data kinds (Q163)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#m3a--single-gateway-parity-q164--securityprofile-relocation-q175" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        M3a — Single-gateway parity (Q164) + securityProfile relocation (Q175)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="M3a — Single-gateway parity (Q164) + securityProfile relocation (Q175)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-field---condition-parity-checklist-gates-m3a-exit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-field / -condition parity checklist (gates M3a exit)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#m3b--multi-gateway-q167--the-m3a-deferred-tail-closes-q164" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        M3b — Multi-gateway (Q167) + the M3a-deferred tail (closes Q164)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#m5--migration--cutover-q165" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        M5 — Migration + cutover (Q165)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-maturity--graduation-v2alpha1--v2beta1--v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API maturity &amp; graduation (v2alpha1 → v2beta1 → v2)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#definition-of-done-v2-ga" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Definition of done (v2 GA)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deferred-out-of-the-critical-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deferred (out of the critical path)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Deferred (out of the critical path)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#direct-egress-optional-proxy-behavior--shipped-q168" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct egress (optional-proxy behavior) — shipped (Q168)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-default-runnertemplate-q172--shipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional default RunnerTemplate (Q172) — shipped
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bring-your-own-proxy-autoscaler-q173--shipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bring-your-own proxy autoscaler (Q173) — shipped
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bring-your-own-proxy-tls-certificate-q174" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bring-your-own proxy TLS certificate (Q174)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#m4--cross-namespace-egressproxy-sharing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        M4 — Cross-namespace EgressProxy sharing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#also-deferred--opportunistic-per-appendix-h" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Also deferred / opportunistic (per Appendix H)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="v2-api-implementation-plan">v2 API implementation plan<a class="headerlink" href="#v2-api-implementation-plan" title="Permanent link">&para;</a></h1>
+<p><strong>Design source of truth:</strong> <a href="../../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API Decomposition</a>.
+That appendix holds the <em>what</em> and <em>why</em> (the CRD set, the resolved decisions in
+§H.16, the precedent-grounded recommendations). This doc holds the <em>sequencing</em> —
+how the work is split into independently shippable milestones and in what order.</p>
+<p><strong>Goal.</strong> Replace the monolithic <code>v1alpha1</code> <code>ActionsGateway</code> + <code>RunnerGroup</code> API
+with a decomposed <code>v2alpha1</code> API (<code>actions-gateway.com</code> group) that enables large
+reusable pod templates, multiple gateways per namespace, and an optional/shared
+egress proxy — without breaking running <code>v1alpha1</code> tenants.</p>
+<p><strong>Approach.</strong> Serve <code>v1alpha1</code> and <code>v2alpha1</code> side by side (no in-place
+conversion — the split is a fan-out, see <a href="../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">§H.11</a>).
+Build v2 incrementally against the running v1, <strong>nouns before verbs</strong>, with a
+one-shot migration tool last. The group rename folds in for free: <code>v2alpha1</code>
+<em>is</em> <code>actions-gateway.com</code> from birth; <code>v1alpha1</code> keeps the old
+<code>actions-gateway.github.com</code> group until it is removed.</p>
+<h2 id="non-goals">Non-goals<a class="headerlink" href="#non-goals" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>No behavior change.</strong> v2 re-shapes the API; runtime semantics (job
+  acquisition, worker provisioning, quota/PSA enforcement, egress restriction) are
+  preserved. <code>v2alpha1</code> tracks v1 behavior wherever a field is unchanged.</li>
+<li><strong>No in-place v1→v2 conversion</strong> — the split is a tooled fan-out (M5), not a
+  conversion webhook.</li>
+<li><strong>Not the admin policy layer, worker-image allowlist, credentials union, or
+  cross-namespace sharing</strong> — all out of the <code>v2alpha1</code> scope (see below and
+  Appendix H §H.14/§H.15). The credentials union is now scheduled for the
+  <code>v2beta1</code> cut (<a href="../v2beta1/">v2beta1.md</a>); the rest stay deferred.</li>
+</ul>
+<h2 id="coexistence-rollback--parity">Coexistence, rollback &amp; parity<a class="headerlink" href="#coexistence-rollback--parity" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Dual-serve.</strong> <code>v1alpha1</code> and <code>v2alpha1</code> are served simultaneously until v1
+  removal; tenants migrate on their own schedule via the M5 tool. v1 bug-fixes are
+  ported to v2 throughout coexistence.</li>
+<li><strong>Rollback = stay on v1.</strong> Nothing forces a tenant onto v2 until they run the
+  migration, and no milestone removes v1 capability — so a regressed milestone
+  degrades to "keep using <code>v1alpha1</code>", not an outage.</li>
+<li><strong>Parity gate.</strong> <code>v2alpha1</code> must reach v1 feature parity (M3a) before
+  multi-gateway / optional-proxy features build on it; a per-field/-condition
+  parity checklist gates M3a exit.</li>
+</ul>
+<h2 id="resolved-design-decisions">Resolved design decisions<a class="headerlink" href="#resolved-design-decisions" title="Permanent link">&para;</a></h2>
+<p>All settled in <a href="../../design/appendix-h-v2-api-decomposition/#h16-open-questions--sign-off-needed">§H.16</a>:</p>
+<ul>
+<li><strong>Admin policy → keep controller flags</strong> (singleton/class deferred behind triggers, <a href="../../design/appendix-h-v2-api-decomposition/#h14-admin-policy-layer--deferred-until-tiering-is-real">§H.14</a>).</li>
+<li><strong>API group → <code>actions-gateway.com</code></strong>; <strong><code>githubURL</code> immutable</strong>, <code>githubAppRef.name</code> mutable; <strong><code>maxListeners</code> default → <code>10</code></strong>; drop <code>SecretReference.namespace</code>. Field casing: <code>github</code> lowercased, initialisms uppercase (<code>githubURL</code>, <code>githubAppRef</code>).</li>
+<li><strong>Cross-namespace proxy CA → ConfigMap, not secret</strong> (trust-manager pattern).</li>
+<li><strong>Sharing → inline <code>allowedNamespaces</code> only</strong> for v2; <code>ReferenceGrant</code> additive later; consent always provider-side.</li>
+<li><strong>Deletion → degrade-not-block, no finalizer</strong>; <code>referencedBy</code> from the watch.</li>
+<li><strong>Q147 keywords → <code>tenant: managed</code>, <code>allow-profile-downgrade: allowed</code></strong>; dual-read window closes at <code>v1alpha1</code> removal.</li>
+</ul>
+<h2 id="milestones">Milestones<a class="headerlink" href="#milestones" title="Permanent link">&para;</a></h2>
+<p>Nouns (data kinds) before verbs (controller kinds); migration last. Each
+milestone is independently reviewable and leaves the tree green.</p>
+<h3 id="m1--api-foundation-no-controllers">M1 — API foundation (no controllers)<a class="headerlink" href="#m1--api-foundation-no-controllers" title="Permanent link">&para;</a></h3>
+<ul>
+<li>New <code>v2alpha1</code> API group <code>actions-gateway.com</code> with all five kinds:
+  <code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>ClusterRunnerTemplate</code>,
+  <code>EgressProxy</code> (<a href="../../design/appendix-h-v2-api-decomposition/#h3-the-crd-set">§H.3</a>, <a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>).</li>
+<li>Generated deepcopy, CRD manifests, RBAC scaffolding, chart wiring.</li>
+<li>Structural + CEL validation: per-field immutability transitions, name
+  <code>maxLength</code> 52 (<a href="../../design/appendix-h-v2-api-decomposition/#h6-naming-and-length-budgets">§H.6</a>),
+  <code>maxListeners</code> default <code>10</code>, removal of <code>SecretReference.namespace</code>,
+  <code>additionalPrinterColumns</code> + <code>categories</code> + short names.</li>
+<li><strong>Field-naming pass</strong> — freeze acronym/brand casing while still cheap
+  (<code>githubURL</code>/<code>githubAppRef</code>), uniform <code>…Ref</code> shapes (<a href="../../design/appendix-h-v2-api-decomposition/#h6-naming-and-length-budgets">§H.6</a>).</li>
+<li><strong>Uniform status/condition contract</strong> across all five kinds — <code>Ready</code> +
+  <code>observedGeneration</code>, <code>listType=map</code> conditions, specific messages (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">§H.7</a>).</li>
+<li><strong><code>selectableFields: spec.gatewayRef</code></strong> on <code>RunnerSet</code> so M3b's AGC scoping runs
+  server-side (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">§H.7</a>).</li>
+<li>Labels, annotations, and finalizers use the new <code>actions-gateway.com/*</code> domain
+  from birth.</li>
+<li><strong>Exit:</strong> CRDs install and round-trip via the API server alongside <code>v1alpha1</code>;
+  <code>make check</code> green; no reconciler references the new kinds yet.</li>
+</ul>
+<h3 id="m2--data-kinds-nouns">M2 — Data kinds (nouns)<a class="headerlink" href="#m2--data-kinds-nouns" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>EgressProxy</code> reconciler in the GMC: owns its proxy Deployment / Service / HPA /
+  PDB (<a href="../../design/appendix-h-v2-api-decomposition/#h8-ownership-gc-and-deletion">§H.8</a>). <strong>Same-namespace only</strong> at this stage.</li>
+<li><code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code>: pure data; the reserved-pod-field
+  rejection webhook moves here from <code>RunnerGroup</code> (<a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>).</li>
+<li><strong>Free observability win:</strong> because each <code>EgressProxy</code> Deployment is now
+  per-gateway, its proxy metrics carry the gateway label automatically — the
+  per-tenant proxy-connection visibility v1's shared-proxy shape could not express.</li>
+<li><strong>Exit:</strong> a standalone <code>EgressProxy</code> reconciles a working proxy pool; a
+  <code>RunnerTemplate</code> validates and is readable by name; envtest coverage for both.</li>
+</ul>
+<h3 id="m3a--control-kinds-verbs-single-gateway-parity-the-core-build">M3a — Control kinds (verbs), single-gateway parity <em>(the core build)</em><a class="headerlink" href="#m3a--control-kinds-verbs-single-gateway-parity-the-core-build" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>ActionsGateway</code> + <code>RunnerSet</code> reconcilers; <strong>one gateway per namespace</strong> —
+  v1 feature parity on the new shape.</li>
+<li><strong>Reference resolution at runtime</strong> (<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">§H.7</a>):
+  resolve <code>templateRef</code>/<code>proxyRef</code> via watch + enqueue; surface
+  <code>TemplateNotFound</code>/<code>ProxyNotFound</code> conditions; fail-closed (no wiring until refs
+  resolve).</li>
+<li>Proxy optional (same-namespace <code>EgressProxy</code> via <code>proxyRef</code>/<code>defaultProxyRef</code>);
+  no proxy ⇒ direct egress, shipped as a separate slice (Q168, below).</li>
+<li><strong>Exit:</strong> a v1-equivalent setup runs end-to-end on <code>v2alpha1</code> (job acquired →
+  worker pod → proxied egress); the parity checklist passes; envtest coverage.</li>
+</ul>
+<h3 id="m3b--multi-gateway-per-namespace">M3b — Multi-gateway per namespace<a class="headerlink" href="#m3b--multi-gateway-per-namespace" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Per-gateway resource naming under the 52-char cap; <strong>AGC scoping</strong> via the
+  <code>gatewayRef</code> field selector so each AGC reconciles only its gateway's
+  <code>RunnerSet</code>s; per-gateway ownership for clean GC. The <code>gmc-tenant-resource-guard</code>
+  VAP is unchanged — it keys on the namespace marker, not names (<a href="../../design/appendix-h-v2-api-decomposition/#h16-open-questions--sign-off-needed">§H.16 #1</a>).</li>
+<li><strong>Exit:</strong> two <code>ActionsGateway</code>s with their own <code>RunnerSet</code>s run concurrently in
+  one namespace; envtest + a kind e2e prove per-gateway isolation.</li>
+</ul>
+<h3 id="m5--migration-tool--v1v2-cutover">M5 — Migration tool + v1/v2 cutover<a class="headerlink" href="#m5--migration-tool--v1v2-cutover" title="Permanent link">&para;</a></h3>
+<ul>
+<li>One-shot fan-out migration tool (<a href="../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">§H.11</a>):
+  reads <code>v1alpha1</code> CRs, emits the <code>v2alpha1</code> object set (extract inline
+  <code>podTemplate</code> → <code>RunnerTemplate</code>, inline <code>proxy</code> → <code>EgressProxy</code>, rewrite
+  references). Dry-run to manifests by default; <code>--apply</code> to apply. Plus tests.</li>
+<li><strong>Dual-read window — group domain + Q147 values</strong> (<a href="../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>):
+  VAPs + downgrade webhook accept either domain (<code>actions-gateway.github.com/*</code> or
+  <code>actions-gateway.com/*</code>) <strong>and</strong> either value (<code>"true"</code> or the new keyword) until
+  v1 removal; the tool relabels keys and rewrites values (plus finalizer names) in
+  one pass.</li>
+<li>Operator migration guide; <code>v1alpha1</code> deprecation notice.</li>
+<li><strong>Exit:</strong> the tool migrates a representative v1 namespace to a working v2 object
+  set in dry-run and <code>--apply</code>; dual-read verified; docs updated.</li>
+</ul>
+<h2 id="itemized-tasks">Itemized tasks<a class="headerlink" href="#itemized-tasks" title="Permanent link">&para;</a></h2>
+<p>The actionable breakdown per milestone. Each box is a self-contained unit of work;
+a milestone is done when every box is checked and its exit criterion holds.</p>
+<h3 id="m1--api-foundation-q149">M1 — API foundation (Q149)<a class="headerlink" href="#m1--api-foundation-q149" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] Scaffold <code>cmd/agc/api/v2alpha1/</code> and <code>cmd/gmc/api/v2alpha1/</code> (group <code>actions-gateway.com</code>, <code>groupversion_info.go</code>).</li>
+<li>[x] Define the five kinds + shared subtypes (<code>ObjectRef</code>, <code>LocalSecretReference</code>, <code>PriorityTier</code>, <code>TracingConfig</code>).</li>
+<li>[x] Field-naming pass — <code>githubURL</code>/<code>githubAppRef</code>, uniform <code>…Ref</code>, plural list fields.</li>
+<li>[x] CEL/structural validation — name <code>maxLength</code> 52; <code>githubURL</code> immutable (<code>oldSelf</code>); <code>maxListeners</code> default 10; <code>maxWorkers == priorityTiers[last].threshold</code>; reserved-pod-field rules on <code>RunnerTemplate</code>.</li>
+<li>[x] <code>selectableFields: spec.gatewayRef.name</code> on <code>RunnerSet</code>.</li>
+<li>[x] Uniform status/condition contract across all five kinds (<code>Ready</code> + <code>observedGeneration</code>, <code>listType=map</code>, specific messages).</li>
+<li>[x] <code>additionalPrinterColumns</code>, <code>categories</code>, short names (<code>ag</code>/<code>rs</code>/<code>rt</code>/<code>crt</code>/<code>ep</code>).</li>
+<li>[x] Labels/annotations/finalizers on the <code>actions-gateway.com/*</code> domain.</li>
+<li>[x] Codegen: deepcopy, CRD manifests, RBAC markers, chart wiring; both groups served beside <code>v1alpha1</code>.</li>
+<li>[x] Reserved-pod-field CEL covers the cheap, scalar pod-level fields (<code>serviceAccountName</code>, <code>host{PID,Network,IPC}</code>, <code>automountServiceAccountToken</code>); the per-container checks (privileged containers, proxy env vars) need an unbounded-array walk that exceeds the CEL cost budget, so they stay for the M2 <code>RunnerTemplate</code> webhook.</li>
+</ul>
+<h3 id="m2--data-kinds-q163">M2 — Data kinds (Q163)<a class="headerlink" href="#m2--data-kinds-q163" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] <code>EgressProxy</code> reconciler (GMC): owns Deployment/Service/HPA/PDB/NetworkPolicy + self-signed proxy TLS Secret via controller owner refs; per-<code>EgressProxy</code> name <code>&lt;ep&gt;-proxy</code>; same-namespace only.</li>
+<li>[x] Per-<code>EgressProxy</code> identity label (<code>actions-gateway.com/egress-proxy: &lt;name&gt;</code>) on pods + children, so proxy metrics carry the proxy identity (free win) <strong>and</strong> multiple proxy pools in one namespace stay selector-isolated.</li>
+<li>[x] <code>RunnerTemplate</code> / <code>ClusterRunnerTemplate</code>: data only; reserved-pod-field rejection webhook (GMC-hosted) — per-container proxy env vars on both kinds; privileged rejected on namespaced <code>RunnerTemplate</code>, allowed on platform-authored <code>ClusterRunnerTemplate</code>. Scalar reserved fields stay on M1 CEL.</li>
+<li>[x] envtest for both kinds (reconcile + owner-refs + defaulting + status; webhook accept/reject).</li>
+<li>Metrics-mTLS listener + ServiceMonitor on the standalone proxy are <strong>deferred to M3a</strong> (the metrics CA is jointly owned with the AGC). M2 stamps the identity label so the metric series carry the proxy identity once the M3a scrape is wired; the proxy boots fine without the metrics listener.</li>
+</ul>
+<h3 id="m3a--single-gateway-parity-q164--securityprofile-relocation-q175">M3a — Single-gateway parity (Q164) + securityProfile relocation (Q175)<a class="headerlink" href="#m3a--single-gateway-parity-q164--securityprofile-relocation-q175" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] <strong>securityProfile → namespace (Q175, §H.16 #7).</strong> <code>SecurityProfile</code> removed from
+  the v2 <code>ActionsGatewaySpec</code>; the namespace <code>actions-gateway.com/security-profile</code>
+  label is the new selector. <code>NamespacePSAReconciler</code> (GMC) stamps the six PSA labels
+  from it; the <code>gmc-namespace-security-profile-guard</code> ValidatingAdmissionPolicy guards
+  enum / no-silent-downgrade / privileged-eligibility (none weaker than the v1 webhook,
+  now a VAP because the checks no longer cross objects). The <code>namespace-psa-guard</code> and
+  <code>tenant-resource-guard</code> VAPs dual-read the v1/v2 tenant markers so the GMC can stamp
+  and provision in v2 tenant namespaces. envtest covers the VAP and the reconciler.</li>
+<li>[x] <code>ActionsGateway</code> reconciler (GMC): AGC Deployment/SA/RoleBinding, credential mount,
+  AGC + workload NetworkPolicy, metrics certs; proxy egress wired from
+  <code>defaultProxyRef</code> → resolved <code>EgressProxy</code>; one gateway/ns. (PSA stamping is now the
+  <code>NamespacePSAReconciler</code>'s job; proxy pool / HPA / PDB are the <code>EgressProxy</code>
+  reconciler's — both removed from the gateway's responsibility vs. v1.) Children are
+  owner-referenced for cascade GC; the AGC Deployment/NetworkPolicy assembly is shared
+  with v1 via <code>buildAGCDeploymentFrom</code>/<code>buildAGCNetworkPolicyFrom</code>. envtest covers
+  provisioning, owner-refs, egress/security-profile wiring, and the fail-closed
+  <code>CredentialUnavailable</code>/<code>ProxyNotFound</code> conditions.</li>
+<li>[x] <code>RunnerSet</code> reconciler (AGC): resolve <code>gatewayRef</code>/<code>templateRef</code>/<code>proxyRef</code> via
+  watch + enqueue; <code>GatewayNotFound</code>/<code>TemplateNotFound</code>/<code>ProxyNotFound</code> conditions +
+  <code>observedGeneration</code>; fail-closed (no worker wiring until refs resolve). Drives the
+  same listener/multiplexer/provisioner stack as v1 via the provisioner <strong>Target seam</strong>
+  (<code>Target</code>/<code>ResolvedSpec</code>): the provisioner own-refs the real <code>RunnerSet</code> and
+  re-resolves the template/proxy per job (Q117), with v1 <code>RunnerGroup</code> unchanged
+  (HandlerFor/AdmitFor wrap a v1 adapter). Cluster-scoped <code>ClusterRunnerTemplate</code> reads
+  need a ClusterRoleBinding and are deferred to M3b (fail closed with a clear condition
+  until then); namespaced <code>RunnerTemplate</code> gives v1 parity. Both obstacles below are
+  resolved:</li>
+<li><strong>Module dependency cycle — RESOLVED (option (a), neutral <code>api/</code> module).</strong>
+    <code>gatewayRef</code> resolves to a GMC-group <code>ActionsGateway</code> and <code>proxyRef</code> to a GMC-group
+    <code>EgressProxy</code>, so the AGC must read those kinds — but the <strong>GMC module already
+    depends on the AGC module</strong> (<code>cmd/gmc/go.mod</code> requires <code>…/agc</code> to build <code>RunnerSet</code>
+    CRs), and importing the GMC types into the AGC would close a module cycle. Resolved
+    by extracting <strong>all five</strong> v2 <code>v2alpha1</code> kinds (the previously GMC-owned
+    <code>ActionsGateway</code>/<code>EgressProxy</code> and AGC-owned <code>RunnerSet</code>/<code>RunnerTemplate</code>/
+    <code>ClusterRunnerTemplate</code>) into a neutral <code>api/</code> module
+    (<code>github.com/actions-gateway/github-actions-gateway/api</code>) that both controllers
+    import — chosen over (b) the dynamic/unstructured client because the reconciler
+    wants typed, cached, watch-driven reads, not existence-only probes. Pure relocation:
+    no API shape change, CRD/chart manifests byte-identical, v1 kinds untouched. The
+    <code>RunnerSet</code> reconciler can now import the resolved <code>ActionsGateway</code>/<code>EgressProxy</code>
+    types directly. See <code>docs/development/go-workspaces.md</code> (module table) and
+    <code>docs/development/code-generation.md</code> (api-module codegen).</li>
+<li><strong>Provisioner owner-ref seam.</strong> The <code>provisioner</code>/<code>listener</code>/<code>multiplexer</code> stack is
+    pervasively typed to <code>*v1alpha1.RunnerGroup</code>, and worker pods/Secrets carry an
+    OwnerReference to it — a synthesized in-memory RunnerGroup cannot be used (its
+    dangling owner-ref would make the apiserver immediately GC every worker pod), so the
+    provisioner must be refactored to own-ref the real <code>RunnerSet</code>. Tracked as the
+    runtime half of M3a.</li>
+<li>[x] Proxy required (<code>proxyRef</code>/<code>defaultProxyRef</code>, same-namespace).</li>
+<li>[x] envtest (both suites: GMC provisioning + owner-refs + fail-closed conditions; AGC
+  ref-resolution + fail-closed conditions + end-to-end worker provisioning via the
+  broker stub). <strong>kind e2e</strong> (a live job → worker pod → proxied egress → GitHub run) is
+  deferred to M3b per the task — the M3a minimum is envtest; the worker→pod→proxy path
+  is exercised by the AGC envtest's broker-stub job-delivery test.</li>
+</ul>
+<h4 id="per-field---condition-parity-checklist-gates-m3a-exit">Per-field / -condition parity checklist (gates M3a exit)<a class="headerlink" href="#per-field---condition-parity-checklist-gates-m3a-exit" title="Permanent link">&para;</a></h4>
+<p>The v1 <code>RunnerGroup</code> + <code>ActionsGateway</code> behavior the v2 shape must preserve, and where
+each lands in v2. <strong>✓</strong> = implemented + tested this milestone; <strong>◻</strong> = remaining.</p>
+<table>
+<thead>
+<tr>
+<th>v1 behavior</th>
+<th>v2 home</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>securityProfile</code> → namespace PSA enforce/warn/audit labels</td>
+<td><code>NamespacePSAReconciler</code> ← <code>security-profile</code> label</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>PSA downgrade protection (<code>allow-profile-downgrade</code>)</td>
+<td><code>namespace-security-profile-guard</code> VAP</td>
+<td>✓</td>
+</tr>
+<tr>
+<td><code>privileged</code> eligibility (<code>privileged-profile=allowed</code>)</td>
+<td>same VAP</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>GMC confinement to tenant namespaces (PSA + provisioning)</td>
+<td>dual-marker <code>namespace-psa-guard</code> / <code>tenant-resource-guard</code> VAPs</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>AGC Deployment / SA / RoleBinding (control plane)</td>
+<td><code>ActionsGateway</code> reconciler (GMC)</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>GitHub App credential mount + <code>CredentialUnavailable</code></td>
+<td><code>ActionsGateway</code> reconciler</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>AGC + workload NetworkPolicy (egress lockdown)</td>
+<td><code>ActionsGateway</code> reconciler</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>metrics mTLS certs (jointly owned w/ AGC)</td>
+<td><code>ActionsGateway</code> reconciler (AGC server bundle; proxy-side metrics listener deferred to M3b)</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>proxy egress wiring (<code>HTTP(S)_PROXY</code> + CA mount)</td>
+<td><code>ActionsGateway</code> ← <code>defaultProxyRef</code> → <code>EgressProxy</code></td>
+<td>✓</td>
+</tr>
+<tr>
+<td><code>Ready</code> + <code>observedGeneration</code> uniform contract</td>
+<td>both reconcilers</td>
+<td>✓</td>
+</tr>
+<tr>
+<td><code>templateRef</code>/<code>proxyRef</code>/<code>gatewayRef</code> resolution + NotFound conditions</td>
+<td><code>RunnerSet</code> reconciler (AGC)</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>job acquired → worker pod (provisioner/listener/multiplexer)</td>
+<td><code>RunnerSet</code> reconciler + provisioner Target seam</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>reaper / unschedulable / quota lifecycle tunables</td>
+<td>provisioner Target + RunnerSet reaper (unschedulable/quota <em>conditions</em> are advisory observability, deferred)</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>proxied egress proven end-to-end (job → pod → proxy → GitHub)</td>
+<td>kind e2e</td>
+<td>✓ (M3b <code>E2E_V2_MultiGateway</code>: job→worker pod via the broker stub; workload pod→v2 EgressProxy→GitHub via the curl CONNECT spec)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="m3b--multi-gateway-q167--the-m3a-deferred-tail-closes-q164">M3b — Multi-gateway (Q167) + the M3a-deferred tail (closes Q164)<a class="headerlink" href="#m3b--multi-gateway-q167--the-m3a-deferred-tail-closes-q164" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] Per-gateway derived naming across every GMC-created AGC child (52-char cap):
+  <code>&lt;ag&gt;-agc</code> (Deployment/SA/RoleBinding/Service/AGC NetworkPolicy + pod <code>app</code> label),
+  <code>&lt;ag&gt;-worker</code> (worker SA), <code>&lt;ag&gt;-workload</code> (workload NetworkPolicy), and
+  <code>&lt;ag&gt;-agc-metrics-{tls,client}</code> (metrics Secrets). <code>buildAGCDeploymentFrom</code>/
+  <code>buildAGCNetworkPolicyFrom</code> take per-gateway names; v1 passes the fixed singleton
+  names (no behavior change). The <code>gmc-tenant-resource-guard</code> VAP is unchanged (it
+  keys on the namespace marker, not names).</li>
+<li>[x] AGC watch-scoping via the <code>gatewayRef</code> field selector (server-side): the GMC
+  stamps <code>GATEWAY_NAME</code> on each AGC Deployment; the AGC scopes its RunnerSet informer
+  with <code>cache.ByObject{Field: spec.gatewayRef.name=&lt;gw&gt;}</code> (KEP-4358) plus a
+  defense-in-depth guard in <code>Reconcile</code>. <strong>Requires k8s ≥ 1.31</strong> (alpha-off in 1.30);
+  the integration-test CI tier was bumped from envtest <strong>1.30.x → 1.35.x</strong>
+  (<code>.github/workflows/integration-test.yml</code>) so the scoping test runs in CI. The e2e
+  kind cluster is already v1.35.</li>
+<li>[x] Per-gateway ownership refs for clean cascade GC: per-gateway names mean deleting
+  one gateway GCs only its own children. The cluster-scoped ClusterRunnerTemplate
+  ClusterRoleBinding cannot carry a cross-scope owner ref, so <code>reconcileDelete</code>
+  removes it explicitly.</li>
+<li>[x] <strong>ClusterRunnerTemplate access (the M3a deferral, closes Q164):</strong> shipped
+  read-only ClusterRole <code>agc-clusterrunnertemplate-reader</code>; the GMC creates a
+  per-gateway ClusterRoleBinding (holds only <code>bind</code> on that name) so the AGC gains
+  least-privilege cluster-scoped read. <code>resolveTemplate</code> resolves ClusterRunnerTemplate
+  live and the RunnerSet watches the kind.</li>
+<li>[x] envtest (both suites: AGC field-scoped isolation + ClusterRunnerTemplate
+  resolution; GMC per-gateway naming + per-gateway ownership/GC) <strong>and kind e2e</strong>
+  (<code>E2E_V2_MultiGateway</code>): two gateways in one namespace, each AGC scoped to its
+  RunnerSet (proven by the worker pod's per-gateway worker ServiceAccount), plus a
+  workload pod reaching GitHub through the v2 EgressProxy (proxy-egress parity).</li>
+</ul>
+<h3 id="m5--migration--cutover-q165">M5 — Migration + cutover (Q165)<a class="headerlink" href="#m5--migration--cutover-q165" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] Fan-out migration tool (<code>gag-migrate</code>: core <code>cmd/gmc/internal/migrate</code>, CLI <code>cmd/gmc/migrate</code>): v1 → v2 object set; dry-run default, <code>--apply</code>. Never reads Secret contents (rewrites the <code>githubAppRef</code> name only); never deletes v1 objects (coexistence/rollback).</li>
+<li>[x] Dual-read window: the three VAPs (M3a/M3b) <strong>and</strong> the v1 GMC <code>ActionsGateway</code> webhook (M5) accept both domains <em>and</em> both values; tool relabels keys/values additively (adds v2 keys, keeps v1 keys, so nothing is stranded). Finalizer names migrated as code constants (v2 objects carry v2 finalizers; v1 objects keep theirs until v1 removal).</li>
+<li>[x] Operator migration guide (<a href="../../operations/migration-v1-to-v2/">migration-v1-to-v2.md</a>); <a href="../../operations/v1alpha1-deprecation/"><code>v1alpha1</code> deprecation notice</a> (named removal release announced at removal time).</li>
+<li>[ ] Conversion scaffolding (Q74 <code>Hub</code>/<code>Convertible</code>) staged for the <code>v2alpha1</code>→<code>v2beta1</code> graduation. <strong>Deferred — distinct from the M5 fan-out:</strong> a conversion webhook is an in-place graduation mechanism the fan-out tool cannot replace, and it lands at the first graduation hop, not the v1→v2 cutover (see <a href="#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a>). Tracked as Q74.</li>
+<li>[x] Coexistence test (v1 keeps working while v2 served) + migration golden tests (golden-manifest unit tests + envtest apply-path/dual-read/coexistence).</li>
+<li>[x] <strong>Behavior-preservation acceptance checks</strong> (<a href="../../design/appendix-h-v2-api-decomposition/#h17-migration-correctness--the-fan-outs-untested-invariants">§H.17</a>): proxied→proxied (always wires <code>defaultProxyRef</code>, never silent direct egress); <code>maxListeners</code> pinned to the v1 effective value; emitted objects pass v2 CEL under envtest; K identical templates → one content-addressed <code>RunnerTemplate</code>; standalone-vs-inline precedence (standalone wins) defined.</li>
+</ul>
+<h2 id="api-maturity--graduation-v2alpha1--v2beta1--v2">API maturity &amp; graduation (<code>v2alpha1</code> → <code>v2beta1</code> → <code>v2</code>)<a class="headerlink" href="#api-maturity--graduation-v2alpha1--v2beta1--v2" title="Permanent link">&para;</a></h2>
+<p><strong>Why <code>v2alpha1</code> and not <code>v1alpha1</code> in the new group?</strong> Nothing technical forces
+the version bump: a CRD is identified by <strong>group + kind</strong>, and the version is
+orthogonal, so <code>actionsgateways.actions-gateway.com</code> would coexist with
+<code>actionsgateways.actions-gateway.github.com</code> just as cleanly at <code>v1alpha1</code>. The
+breaking-ness comes entirely from the group rename and the decomposition (the
+fan-out the migration tool handles), not from the version number. <code>v2alpha1</code> is a
+<strong>deliberate communication choice</strong>: this whole effort is named "v2" throughout the
+docs, the migration is "v1→v2", and the graduation ladder targets <code>v2</code> — so serving
+it as <code>v1alpha1</code> would leave the API surface contradicting how everyone refers to
+it. It also keeps the in-module Go layout unambiguous (<code>api/v1alpha1</code> +
+<code>api/v2alpha1</code>, rather than two <code>api/v1alpha1</code> packages). The minor cost — a fresh
+group whose first GA is <code>v2</code>, skipping <code>v1</code> — is accepted. (Confirmed 2026-06-21.)</p>
+<p>The milestones above ship <code>v2alpha1</code>. Reaching the stable <code>v2</code> group involves two
+<em>different</em> kinds of transition — do not conflate them:</p>
+<ul>
+<li><strong><code>v1alpha1</code> → <code>v2alpha1</code> is a fan-out, done once.</strong> One v1 object becomes
+  several v2 objects, which a conversion webhook cannot express — hence the M5
+  migration tool (<a href="../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">§H.11</a>).
+  This is the only expensive transition.</li>
+<li><strong><code>v2alpha1</code> → <code>v2beta1</code> → <code>v2</code> are in-place graduations of the same kinds.</strong>
+  Field changes are refinements within the same object shape, so a conversion
+  webhook round-trips served versions automatically — no tenant re-apply, no
+  migration tool.</li>
+</ul>
+<p>We graduate <strong>through beta</strong>, not <code>alpha → GA</code> directly: GA's contract is
+permanent backward compatibility, and <code>v2</code>'s large surface (five kinds,
+multi-gateway, cross-references) needs a beta soak — where operators can rely on
+it in production while shape problems can still be fixed <em>with</em> a migration path —
+before that contract is signed.</p>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Contract</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>v2alpha1</code></td>
+<td>may change incompatibly or be dropped without notice; early adopters only</td>
+</tr>
+<tr>
+<td><code>v2beta1</code></td>
+<td>won't be removed; changes carry a migration path; production-relyable</td>
+</tr>
+<tr>
+<td><code>v2</code> (GA)</td>
+<td>backward-compatible, effectively frozen</td>
+</tr>
+</tbody>
+</table>
+<p>Each graduation hop is cheap but not free:</p>
+<ol>
+<li>Add the new version to each CRD; mark it the <strong>storage version</strong>.</li>
+<li><strong>Conversion webhook</strong> round-trips served versions — <a href="../../STATUS/#deferred">Q74</a>
+   (<code>Hub</code>/<code>Convertible</code> scaffolding) lands at the first graduation, and is
+   distinct from the M5 fan-out tool a conversion webhook cannot replace.</li>
+<li><strong>Storage migration</strong> — rewrite stored objects to the new version, then drop
+   the superseded served version.</li>
+</ol>
+<p><code>v1alpha1</code> is deprecated and removed on its own track once v2 adoption is
+sufficient — which is also when the Q147 dual-read window closes (M5,
+<a href="../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>).</p>
+<h2 id="definition-of-done-v2-ga">Definition of done (v2 GA)<a class="headerlink" href="#definition-of-done-v2-ga" title="Permanent link">&para;</a></h2>
+<p>v2 is GA when <strong>all</strong> hold: M1, M2, M3a, M3b, and M5 have shipped; the API has
+graduated <code>v2alpha1 → v2beta1 → v2</code> (conversion webhook + storage migration per
+hop); at least one representative tenant has migrated v1→v2 with the tool for
+real; <code>v1alpha1</code> is deprecated with a named removal release; and the
+operator-facing docs (onboarding, migration guide, CRD reference) are updated.
+Cross-namespace sharing (M4) and direct egress are <strong>not</strong> GA gates.</p>
+<p><strong>Website per capability.</strong> Any milestone that lands a user-facing capability —
+notably <strong>M2</strong> (reusable <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code> golden images)
+and <strong>M3b</strong> (multiple gateways per namespace) — updates the positioning pages
+(<a href="../../why-gag/">why-gag.md</a>, <a href="../../">index.md</a>) in the same PR, so the
+competitive story vs ARC tracks what actually ships. Per the
+<a href="../../development/doc-update-matrix/">doc-update matrix</a>. Internal-only milestones
+(M1 types, M5 tooling) need no website change.</p>
+<h2 id="deferred-out-of-the-critical-path">Deferred (out of the critical path)<a class="headerlink" href="#deferred-out-of-the-critical-path" title="Permanent link">&para;</a></h2>
+<h3 id="direct-egress-optional-proxy-behavior--shipped-q168">Direct egress (optional-proxy behavior) — shipped (Q168)<a class="headerlink" href="#direct-egress-optional-proxy-behavior--shipped-q168" title="Permanent link">&para;</a></h3>
+<p>The <code>proxyRef</code>-optional <em>schema</em> landed in M1; the direct-egress <em>behavior</em> shipped
+in Q168 as an additive fast-follow on M3a: an unset <code>proxyRef</code>/<code>defaultProxyRef</code>
+resolves to <code>proxyMode: Direct</code>, the AGC + workload NetworkPolicies gain the
+GitHub-CIDR allowlist (default-deny egress, allow only DNS + GitHub + the kube API
+for the AGC — restriction preserved, only per-tenant IP <em>identity</em> is lost), the
+managed GitHub-IP refresh was relocated to the gateway level (the <code>IPRangeReconciler</code>
+patches each direct gateway's NetworkPolicies), and the proxy-less gateway/runner set
+carry an advisory <code>EgressUnattributed</code> condition. A reference that names a <em>missing</em>
+proxy still fails closed (<code>ProxyNotFound</code>). See
+<a href="../../design/appendix-h-v2-api-decomposition/#h10-the-egress-proxy-becomes-optional">§H.10</a>.</p>
+<h3 id="optional-default-runnertemplate-q172--shipped">Optional default RunnerTemplate (Q172) — <strong>shipped</strong><a class="headerlink" href="#optional-default-runnertemplate-q172--shipped" title="Permanent link">&para;</a></h3>
+<p>The parallel relaxation for <code>templateRef</code>, now implemented. <code>templateRef</code> is
+optional: omit it and resolve via the chain <code>rs.templateRef</code> →
+<code>ActionsGateway.defaultTemplateRef</code> → the single default-marked <code>ClusterRunnerTemplate</code>
+(annotation <code>actions-gateway.com/is-default-template: "true"</code>, the <code>StorageClass</code>
+pattern) → <strong>fail-closed</strong> <code>TemplateNotFound</code>, never a synthesized phantom pod.
+At-most-one cluster-default is enforced at runtime (<code>AmbiguousDefault</code> if two are
+marked, not a silent pick); <code>status.templateSource</code> reports which rung resolved.
+Required → optional is backward-compatible. See
+<a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>.</p>
+<h3 id="bring-your-own-proxy-autoscaler-q173--shipped">Bring-your-own proxy autoscaler (Q173) — <strong>shipped</strong><a class="headerlink" href="#bring-your-own-proxy-autoscaler-q173--shipped" title="Permanent link">&para;</a></h3>
+<p><code>targetCPUUtilizationPercentage</code> is the <em>managed-default</em> knob, not the ceiling on
+flexibility. Mirroring <code>managedNetworkPolicy</code>, <code>managedAutoscaling</code> (default
+<code>true</code>) is now implemented: GMC manages the proxy HPA by default; setting it
+<code>false</code> makes GMC create only the proxy Deployment (stable <code>&lt;name&gt;-proxy</code> name,
+labels) and <strong>no HPA</strong> — a previously managed HPA is deleted on the flip — so an
+operator can target the Deployment with KEDA, VPA, or a custom HPA. While <code>false</code>
+the external scaler owns <code>.spec.replicas</code> outright (scale-to-zero included — the
+reconciler's zero-restore only applies to the managed-HPA mode),
+<code>maxReplicas</code>/<code>targetCPUUtilizationPercentage</code> are inert, and Ready and
+<code>ProxyQuotaPressure</code> are measured against the Deployment's own desired count.
+Distinct from improving the <em>managed</em> metric (CPU → connection-based), which is
+the Q19 proxy-features work. See
+<a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>.</p>
+<h3 id="bring-your-own-proxy-tls-certificate-q174">Bring-your-own proxy TLS certificate (Q174)<a class="headerlink" href="#bring-your-own-proxy-tls-certificate-q174" title="Permanent link">&para;</a></h3>
+<p>The proxy CA/cert is GMC-generated (self-signed) by default. Same pattern: add an
+operator-supplied <code>certificateSecretRef</code> on <code>EgressProxy</code> — when set, GMC uses that
+TLS Secret instead of generating one, letting operators source proxy certs from an
+external PKI/Vault (different algorithm, lifetime, or HSM-backed issuance). <strong>Security
+invariant:</strong> the referenced Secret must be a same-namespace TLS Secret — no
+cross-tenant reuse. Additive optional field, deferred until an operator with managed
+PKI asks. Instantiates <a href="../../design/01-executive-summary/#design-goals">design goal 6</a>.</p>
+<h3 id="m4--cross-namespace-egressproxy-sharing">M4 — Cross-namespace <code>EgressProxy</code> sharing<a class="headerlink" href="#m4--cross-namespace-egressproxy-sharing" title="Permanent link">&para;</a></h3>
+<p>Additive on M3, gated on a <strong>concrete operator ask</strong> for cross-namespace sharing
+(same-namespace sharing already works without it). Adds: inline
+<code>spec.sharing.allowedNamespaces</code> provider consent, ConfigMap CA distribution into
+granted namespaces (trust-manager pattern), dual-side NetworkPolicy, and the
+managed-IP refresh relocation for remote consumers (<a href="../../design/appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharing">§H.9</a>).
+Tracked in <a href="../../STATUS/#deferred">STATUS.md Deferred</a>.</p>
+<h3 id="also-deferred--opportunistic-per-appendix-h">Also deferred / opportunistic (per Appendix H)<a class="headerlink" href="#also-deferred--opportunistic-per-appendix-h" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Admin policy singleton/class</strong> — keep flags; promote on the documented triggers (<a href="../../design/appendix-h-v2-api-decomposition/#h14-admin-policy-layer--deferred-until-tiering-is-real">§H.14</a>).</li>
+<li><strong>Worker-image registry allowlist</strong> — lands with the admin policy layer, not as a standalone tenant field (<a href="../../design/appendix-h-v2-api-decomposition/#h15-other-breaking-changes-worth-batching">§H.15</a>).</li>
+<li><strong>Credentials discriminated union</strong> — ~~a future <code>workloadIdentityRef</code> sibling field is additive; keep the single <code>githubAppRef</code> now.~~ <strong>Reversed (Q196):</strong> nesting the credential under an explicit-discriminator <code>spec.credentials</code> parent is itself break-only, so it ships in <code>v2alpha1</code> before the v2beta1 freeze. See <a href="../v2beta1/">v2beta1.md</a> and <a href="../../design/appendix-h-v2-api-decomposition/#h15-other-breaking-changes-worth-batching">§H.15</a>.</li>
+<li><strong>Webhook → CEL migration</strong> — opportunistic during M1's schema rewrite, not a gate.</li>
+</ul>
+<p><strong>Architecture review (enhancements evaluated).</strong> A full architecture pass found
+no new <em>breaking</em> holes — the breaking surface is fully covered by the milestones
+above. New <em>additive</em> enhancements were filed as backlog rather than pulled into
+v2: AGC horizontal-scaling/HA (Q169), Kubernetes Events for job lifecycle (Q170),
+and tenant-tunable AGC resources (Q171). Deliberately <strong>not</strong> pre-added to the v2
+schema: the proxy feature fields (destination allowlist, audit logging, in-cluster
+TLS, per-set dedicated pool — Q19). An optional field added later is non-breaking,
+so per the simplicity principle they wait for their trigger; pre-adding them now
+would be abstraction ahead of need.</p>
+<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
+<p>Each milestone adds to the existing tiers (see <a href="../../development/testing/">testing.md</a>):
+M1 unit + CRD install; M2/M3a envtest integration (real apiserver: defaulting,
+CEL, watch-driven conditions); M3b a kind e2e for per-gateway isolation; M5
+migration-tool unit + a round-trip integration test.</p>
+<p>Two cross-cutting checks: a <strong>coexistence test</strong> asserting <code>v1alpha1</code> keeps
+working while <code>v2alpha1</code> is served (the no-behavior-change non-goal), and — because
+the migration tool targets the latest <em>served</em> v2 version — its golden output is
+regenerated and re-validated at each graduation (alpha→beta→GA).</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

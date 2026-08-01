@@ -1,0 +1,3382 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/q243-egress-ip-reference-arch/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Per-Tenant Egress-IP Reference Architecture (Cloud) - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/devassets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/devassets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/devassets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/dev",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/dev"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/dev",
+    "logo": "https://actions-gateway.com/devassets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#per-tenant-egress-ip-reference-architecture-cloud" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v1.2.0 is here.</strong>
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.2.0">Read the release notes.</a>
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Per-Tenant Egress-IP Reference Architecture (Cloud)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_15" id="__nav_7_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-this-exists-the-claim-vs-the-current-mechanism" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this exists: the claim vs. the current mechanism
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-state-grounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current state (grounded)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-per-tenant-egress-ip-actually-requires" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What "per-tenant egress IP" actually requires
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#approach-a--cilium-egress-gateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Approach A — Cilium Egress Gateway
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Approach A — Cilium Egress Gateway">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-maps-tenants--egress-ips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it maps tenants → egress IPs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#high-availability--scale-caveats-secure-by-default-relevant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High-availability &amp; scale caveats (secure-by-default relevant)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#composition-with-the-existing-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composition with the existing stack
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#approach-b--per-tenant-cloud-nat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Approach B — Per-tenant cloud NAT
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Approach B — Per-tenant cloud NAT">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ip-allocation-model-gke-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IP-allocation model (GKE reference)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling--cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scaling &amp; cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#composition-with-the-existing-stack_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Composition with the existing stack
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comparison">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#recommendation-secure-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommendation (secure-by-default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#topology-single-tenant-direct-dogfood-vs-production-multi-tenant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Topology: single-tenant-direct (dogfood) vs. production multi-tenant
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Topology: single-tenant-direct (dogfood) vs. production multi-tenant">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#single-tenant-direct--what-dogfood-does-today" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-tenant-DIRECT — what dogfood does today
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#production-multi-tenant--per-tenant-egress-ip" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Production MULTI-TENANT — per-tenant egress IP
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-model-per-tenant-order-of-magnitude-gke" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cost model (per tenant, order-of-magnitude, GKE)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live-validation-results-2026-07-07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Live-validation results (2026-07-07)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Live-validation results (2026-07-07)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#placement-pass-through-q282" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Placement pass-through (Q282)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#re-runnable-live-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Re-runnable live validation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Re-runnable live validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#result--pass-2026-07-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result — PASS (2026-07-13)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live-validation-plan-original-spec--retained-for-the-deferred-parts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Live-validation plan (original spec — retained for the deferred parts)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Live-validation plan (original spec — retained for the deferred parts)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-the-spike-must-prove" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the spike must prove
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#smallest-cluster-to-prove-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Smallest cluster to prove it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rough-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rough cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#follow-up-task--done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Follow-up task — DONE
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions-resolve-during-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions (resolve during validation)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="per-tenant-egress-ip-reference-architecture-cloud">Per-Tenant Egress-IP Reference Architecture (Cloud)<a class="headerlink" href="#per-tenant-egress-ip-reference-architecture-cloud" title="Permanent link">&para;</a></h1>
+<p>Reference architecture for how GAG delivers <strong>per-tenant egress-IP
+isolation</strong> — each tenant's GitHub traffic egressing from a distinct, stable
+set of source IPs — on a production cloud cluster. It compares the two viable
+production mechanisms (Cilium Egress Gateway vs per-tenant cloud NAT),
+documents the single-tenant-direct (dogfood) vs multi-tenant (production)
+topology and its cost, and defines a live-validation plan for a follow-up.</p>
+<p><strong>Scope of this document: design + written reference architecture, now fully
+live-validated.</strong> Two live runs on throwaway GKE Dataplane V2 clusters (torn down
+same-session) proved the claim end-to-end:</p>
+<ul>
+<li>✅ The <strong>Cloud NAT mechanism is proven</strong> (<a href="../q243-q245-q230-live-validation-campaign/">campaign, 2026-07-07</a>):
+  two tenants (distinguished by node pool + pod secondary range) egress from
+  <strong>distinct, stable</strong> source IPs, stable across pod reschedule (see
+  <a href="#live-validation-results-2026-07-07">Live-validation results</a>).</li>
+<li>✅ <strong>GAG binds a real EgressProxy to its egress IP — proven live</strong> <em>(2026-07-13;
+  the design was resolved by <a href="../../STATUS/">Q282</a> and asserted only in envtest until
+  this run)</em>: a GMC-provisioned <code>EgressProxy</code> with <code>spec.scheduling</code> lands <strong>both</strong>
+  replicas on one tenant pool → <strong>one</strong> Cloud NAT IP, distinct per tenant and stable
+  across reschedule. <code>EgressProxy.spec.scheduling</code> and <code>ActionsGateway.spec.scheduling</code>
+  carry <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code> through to the proxy pool and AGC pods,
+  and a supplied <code>podAntiAffinity</code> <strong>replaces</strong> the builder's required cross-node
+  spread (so a single-node tenant pool no longer strands replicas in <code>Pending</code>). The
+  2026-07-07 two-IP spread is gone. See <a href="#result--pass-2026-07-13">Result — PASS (2026-07-13)</a>
+  and <a href="#placement-pass-through-q282">Placement pass-through</a>.</li>
+<li>📝 <strong>GKE mechanism corrected</strong>: Approach B's "dedicated <em>subnet</em> per tenant" is
+  inaccurate for GKE (all node pools share the cluster subnet). The working
+  primitive is a <strong>dedicated pod secondary range per tenant node pool + a per-range
+  Cloud NAT + <code>--disable-default-snat</code></strong> (so pod IPs, not the node IP, are the NAT
+  source). Corrected in <a href="#approach-b--per-tenant-cloud-nat">Approach B</a>.</li>
+</ul>
+<p>Completes Q243 (the <a href="../../STATUS/">STATUS</a> Queue row is removed on completion —
+this doc is the durable reference). Was a v2beta1 (Q74) blocker alongside Q224 and
+<a href="../archive/q242-g1-proxy-destination-allowlist/">Q242</a>.</p>
+<hr />
+<h2 id="why-this-exists-the-claim-vs-the-current-mechanism">Why this exists: the claim vs. the current mechanism<a class="headerlink" href="#why-this-exists-the-claim-vs-the-current-mechanism" title="Permanent link">&para;</a></h2>
+<p>GAG's headline multi-tenant differentiator is per-tenant egress-IP isolation.
+The executive summary states it plainly:</p>
+<blockquote>
+<p>Every tenant's GitHub traffic exits through a dedicated egress IP pool,
+enabling per-team IP allowlisting on the GitHub side and per-tenant audit
+attribution. — <a href="../../design/01-executive-summary/">01-executive-summary.md</a></p>
+</blockquote>
+<p>And <a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">§2.3</a> describes
+the Tier-3 proxy pool as "giving each tenant a distinct set of egress IPs that
+are never shared with other tenants."</p>
+<p><strong>The gap this plan closes: the per-tenant egress <em>proxy pool</em> is a necessary
+prerequisite for that claim, but it is not by itself sufficient.</strong> The proxy
+pool gives each tenant a per-tenant <strong>choke point</strong> — a single, identifiable
+set of pods through which <em>all</em> of that tenant's GitHub traffic (AGC control
+plane + worker data plane) is funnelled. What source IP GitHub actually
+<em>sees</em>, however, is decided one layer lower, by how the cluster masquerades
+(SNATs) pod traffic on the way out of the node:</p>
+<ul>
+<li>On a stock cloud cluster, proxy-pod egress is SNATed to the <strong>node's</strong>
+  external IP (GKE Cloud NAT, an EKS NAT gateway, an AKS outbound rule, or
+  node IP masquerade). That node IP is <strong>shared</strong> across every pod on the node
+  — including other tenants' proxy pods — and is <strong>not stable</strong> across a proxy
+  pod rescheduling to a different node (HPA scale, node drain, rolling
+  update).</li>
+<li>So today, absent an egress-IP mechanism, "distinct set of egress IPs per
+  tenant" is <strong>aspirational</strong>: the choke point exists, but the source IP at
+  GitHub is the cluster's shared egress IP set, not a per-tenant one.</li>
+</ul>
+<p>This is visible in the existing tradeoff table
+(<a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">02-architecture.md</a>,
+<a href="../worker-egress-proxy/">worker-egress-proxy.md</a>), which lists the chosen path
+as "Egress IP at GitHub: Per-tenant, stable." That column is only true once an
+<strong>egress-IP mechanism</strong> binds each tenant's choke-point traffic to a distinct,
+stable source IP. <strong>This plan specifies that mechanism.</strong> It does not change
+the proxy pool; it adds the source-IP binding underneath it.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>   What exists today (proxy pool = choke point)      What Q243 adds (source-IP binding)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>   ────────────────────────────────────────────      ──────────────────────────────────
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>   tenant-A workers ─┐                                tenant-A proxy ─▶ egress-IP-A ─▶ GitHub
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>                     ├─▶ tenant-A proxy ─┐                                 (distinct, stable)
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>   tenant-A AGC   ───┘                   │
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                                         ├─SNAT▶      tenant-B proxy ─▶ egress-IP-B ─▶ GitHub
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>   tenant-B workers ─┐                   │ node-IP                        (distinct, stable)
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>                     ├─▶ tenant-B proxy ─┘ (SHARED
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>   tenant-B AGC   ───┘                     across
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>                                           tenants,
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>                                           unstable)
+</code></pre></div>
+<hr />
+<h2 id="current-state-grounded">Current state (grounded)<a class="headerlink" href="#current-state-grounded" title="Permanent link">&para;</a></h2>
+<p>What exists in the repo today, so the delta is precise:</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Current state</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Per-tenant proxy pool</strong></td>
+<td>GMC provisions a per-tenant <code>EgressProxy</code> (Deployment + ClusterIP Service + HPA + PDB + pod anti-affinity) in the tenant namespace. Stateless HTTPS <code>CONNECT</code> forwarders; no TLS termination.</td>
+<td><a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">§2.3</a>, <code>cmd/gmc/internal/controller/egressproxy_builder.go</code></td>
+</tr>
+<tr>
+<td><strong>Choke-point enforcement</strong></td>
+<td>Three per-tenant <code>NetworkPolicy</code> objects: workload pods egress only to the proxy + DNS; proxy egresses only to GitHub CIDRs + DNS; AGC-only rule for the K8s API. Worker pods cannot egress to GitHub directly.</td>
+<td><a href="../../design/network-architecture/#networkpolicy-rules">network-architecture.md</a></td>
+</tr>
+<tr>
+<td><strong>Destination allowlist</strong></td>
+<td><a href="../archive/q242-g1-proxy-destination-allowlist/">Q242 G.1</a>: admin-gated <code>destinationFQDNs</code>/<code>destinationCIDRs</code> on the <code>EgressProxy</code> widen the choke point to a small non-GitHub set without forfeiting attribution.</td>
+<td><a href="../archive/q242-g1-proxy-destination-allowlist/">q242-g1</a></td>
+</tr>
+<tr>
+<td><strong>FQDN egress (opt-in)</strong></td>
+<td>Q208 <code>egressPolicyMode: CiliumFQDN</code>/<code>CalicoFQDN</code> express the GitHub allowlist by hostname on DNS-aware CNIs. GKE Dataplane V2's managed Cilium lacks the <code>CiliumNetworkPolicy</code> CRD, so <code>CiliumFQDN</code> is unusable there (fail-closed).</td>
+<td><a href="../../design/network-architecture/#cni-native-fqdn-egress-mode-opt-in-q208-q245">network-architecture.md</a></td>
+</tr>
+<tr>
+<td><strong>Source-IP binding (egress IP)</strong></td>
+<td><strong>None.</strong> No component assigns a per-tenant source IP; proxy egress SNATs to the node's cloud egress IP, shared across tenants and unstable across reschedules.</td>
+<td><em>(this gap)</em></td>
+</tr>
+<tr>
+<td><strong>Dogfood posture</strong></td>
+<td>Single-tenant, <strong>direct egress</strong> — no <code>EgressProxy</code>, workers egress straight to GitHub behind the default-deny NetworkPolicy. No per-tenant egress isolation is exercised.</td>
+<td><a href="../gke-dogfood/">gke-dogfood.md</a></td>
+</tr>
+</tbody>
+</table>
+<p>Because dogfood runs single-tenant-direct, the production multi-tenant
+isolation claim is currently <strong>un-substantiated by any running system</strong> — the
+reason Q243 is a v2beta1 blocker.</p>
+<hr />
+<h2 id="what-per-tenant-egress-ip-actually-requires">What "per-tenant egress IP" actually requires<a class="headerlink" href="#what-per-tenant-egress-ip-actually-requires" title="Permanent link">&para;</a></h2>
+<p>Four downstream properties depend on the egress IP being per-tenant, distinct,
+and stable (from <a href="../worker-egress-proxy/#why-route-worker-traffic-through-the-proxy">worker-egress-proxy.md</a>):</p>
+<ol>
+<li><strong>GitHub-side IP allowlisting</strong> — GHES / GitHub App IP-allowlist filters
+   inbound by source IP. Only works if a tenant's traffic arrives from a
+   <em>known, stable, tenant-specific</em> IP set.</li>
+<li><strong>Per-tenant audit attribution</strong> — GitHub's audit log groups by source IP;
+   a shared node IP attributes to the cluster, not the tenant.</li>
+<li><strong>GitHub-side incident containment</strong> — a rate limit / abuse flag / IP ban
+   against one tenant's IPs must not touch another tenant. Shared IPs collapse
+   this.</li>
+<li><strong>Per-tenant kill-switch</strong> — halting one tenant's egress must be one
+   operation on that tenant's egress path.</li>
+</ol>
+<p>A mechanism satisfies Q243 iff it makes GitHub observe, for tenant <em>T</em>, a
+<strong>distinct</strong> and <strong>stable</strong> source-IP set <em>S(T)</em>, disjoint from <em>S(T′)</em> for
+every other tenant <em>T′</em>, and stable across proxy-pod reschedules. Two
+production mechanisms can do this. Neither replaces the proxy pool or the
+NetworkPolicy — they bind a source IP to the choke point the proxy already
+establishes.</p>
+<hr />
+<h2 id="approach-a--cilium-egress-gateway">Approach A — Cilium Egress Gateway<a class="headerlink" href="#approach-a--cilium-egress-gateway" title="Permanent link">&para;</a></h2>
+<p>Cilium's Egress Gateway SNATs traffic from selected pods, leaving the cluster
+through a designated <strong>gateway node</strong> with a configured <strong>egress IP</strong>
+(<a href="https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/">Cilium docs</a>).
+Mapping tenants → egress IPs is a direct fit because the policy selects pods by
+namespace label.</p>
+<h3 id="how-it-maps-tenants--egress-ips">How it maps tenants → egress IPs<a class="headerlink" href="#how-it-maps-tenants--egress-ips" title="Permanent link">&para;</a></h3>
+<p>One cluster-scoped <code>CiliumEgressGatewayPolicy</code> per tenant selects that tenant's
+proxy pods (by the <code>io.kubernetes.pod.namespace</code> label) and pins their egress
+to a specific gateway node + egress IP:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cilium.io/v2</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CiliumEgressGatewayPolicy</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">egress-tenant-a</span><span class="w">          </span><span class="c1"># cluster-scoped: no namespace field</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">selectors</span><span class="p">:</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">podSelector</span><span class="p">:</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">        </span><span class="nt">matchLabels</span><span class="p">:</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">          </span><span class="nt">io.kubernetes.pod.namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tenant-a</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">          </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway-proxy</span><span class="w">      </span><span class="c1"># only the proxy pool egresses externally</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="nt">destinationCIDRs</span><span class="p">:</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0.0.0/0</span><span class="w">                   </span><span class="c1"># scope to GitHub CIDRs in practice</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span><span class="nt">egressGateway</span><span class="p">:</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">      </span><span class="nt">matchLabels</span><span class="p">:</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">        </span><span class="nt">egress-gateway</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="nt">egressIP</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">203.0.113.10</span><span class="w">        </span><span class="c1"># distinct, stable per-tenant source IP</span>
+</code></pre></div>
+<p>Selecting only <code>app: actions-gateway-proxy</code> (not all namespace pods) keeps the
+egress IP bound to the choke point; worker/AGC pods already reach GitHub only
+<em>through</em> the proxy, so their external identity follows the proxy's.</p>
+<h3 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Self-managed Cilium</strong> with the egress-gateway feature: <code>egressGateway.enabled=true</code>,
+  <code>bpf.masquerade=true</code>, <code>kubeProxyReplacement=true</code>, and <code>identityAllocationMode=crd</code>
+  (<a href="https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/">Cilium docs</a>).</li>
+<li>One or more <strong>gateway nodes</strong> with the per-tenant egress IPs configured on a
+  node interface (or assigned as cloud secondary/alias IPs the node can source
+  from).</li>
+<li><strong>Not available on GKE Dataplane V2.</strong> GKE's managed Cilium does not expose
+  <code>CiliumEgressGatewayPolicy</code> (it does not even install the <code>CiliumNetworkPolicy</code>
+  CRD — the same limitation that makes Q208 <code>CiliumFQDN</code> unusable on dogfood,
+  see <a href="../../design/network-architecture/#cni-native-fqdn-egress-mode-opt-in-q208-q245">network-architecture.md</a>).
+  Using this approach on GKE means a <strong>self-managed Cilium</strong> cluster
+  (<code>--enable-dataplane-v2=false</code> + BYO Cilium), forfeiting DPv2's managed
+  operations. On EKS it means replacing the AWS VPC CNI with self-managed
+  Cilium (unsupported by AWS). On AKS it is reachable via Azure CNI Powered by
+  Cilium / BYOCNI (<a href="https://isovalent.com/blog/post/cilium-egress-gateway-aks/">Isovalent: Cilium Egress Gateway on AKS</a>).</li>
+</ul>
+<h3 id="high-availability--scale-caveats-secure-by-default-relevant">High-availability &amp; scale caveats (secure-by-default relevant)<a class="headerlink" href="#high-availability--scale-caveats-secure-by-default-relevant" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Single active gateway per endpoint.</strong> Traffic from a matched pod egresses
+  through <strong>one</strong> gateway node, not all — and <em>"changing the gateway node will
+  break existing egress connections"</em> with <strong>no automatic failover</strong> in-flight
+  (<a href="https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/">Cilium docs</a>).
+  The gateway node is a per-tenant availability chokepoint and a SNAT
+  port-exhaustion ceiling under high concurrent-connection fan-out (relevant
+  given GAG's thousands-of-sessions design).</li>
+<li><strong>Policy-application delay on pod start</strong> — a brief window where a
+  newly-scheduled proxy pod's traffic may egress <strong>un-SNATed</strong> (node IP) before
+  the egress policy applies. This is a <em>fail-open</em> window on the isolation
+  property and must be called out: it means the per-tenant IP guarantee is
+  "eventually, within seconds of pod start," not "from the first packet."
+  <strong>(to be validated</strong> — measure the window and whether GitHub calls land in
+  it.)</li>
+</ul>
+<h3 id="composition-with-the-existing-stack">Composition with the existing stack<a class="headerlink" href="#composition-with-the-existing-stack" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Proxy pool:</strong> unchanged. The egress-gateway policy binds the source IP of
+  the proxy pods' already-funnelled traffic.</li>
+<li><strong>NetworkPolicy:</strong> orthogonal and complementary — the three per-tenant
+  <code>NetworkPolicy</code> objects still enforce the choke point; the egress-gateway
+  policy only rewrites source IP for traffic that policy already permits.</li>
+<li><strong>Q242 allowlist:</strong> unchanged. Widened destinations still egress from the
+  same per-tenant gateway IP, preserving attribution for non-GitHub
+  destinations too.</li>
+</ul>
+<hr />
+<h2 id="approach-b--per-tenant-cloud-nat">Approach B — Per-tenant cloud NAT<a class="headerlink" href="#approach-b--per-tenant-cloud-nat" title="Permanent link">&para;</a></h2>
+<p>Give each tenant a distinct cloud egress IP by routing its proxy pods through a
+tenant-dedicated NAT path. On GCP this is <strong>Cloud NAT scoped to a
+tenant-dedicated subnet/node-pool</strong> with a reserved static IP pool; the
+equivalent on EKS is a per-tenant subnet + NAT gateway, on AKS a per-node-pool
+NAT gateway.</p>
+<h3 id="ip-allocation-model-gke-reference">IP-allocation model (GKE reference)<a class="headerlink" href="#ip-allocation-model-gke-reference" title="Permanent link">&para;</a></h3>
+<p>Cloud NAT is a <strong>VPC/subnet-level</strong> construct — it has <strong>no native
+per-namespace granularity</strong>
+(<a href="https://docs.cloud.google.com/nat/docs/ports-and-addresses">GCP Cloud NAT docs</a>).</p>
+<blockquote>
+<p><strong>Corrected against live validation (2026-07-07).</strong> On GKE all node pools of a
+cluster share the <strong>cluster subnet</strong> — you cannot put node pools on separate
+subnets in one cluster, so "a dedicated <em>subnet</em> per tenant" (the diagram below)
+is not how it works on a single GKE cluster. The validated mechanism is a
+<strong>dedicated pod <em>secondary range</em> per tenant node pool</strong> (<code>--pod-ipv4-range</code>),
+a <strong>per-range Cloud NAT</strong> (<code>--nat-custom-subnet-ip-ranges=SUBNET:RANGE</code>, one per
+tenant, all on one Cloud Router), and <strong><code>--disable-default-snat</code></strong> on the
+cluster so pods egress with their pod IP (from the tenant range) instead of
+being masqueraded to the shared node IP — that is what makes the per-range NAT
+deterministic. Confirmed: 3 NATs covering 3 disjoint secondary ranges of one
+subnet coexist on one router, giving distinct + stable per-tenant IPs
+(<a href="#live-validation-results-2026-07-07">results</a>). Read "subnet" below as "pod
+secondary range." The EKS/AKS shapes (genuinely per-subnet / per-node-pool NAT)
+are unaffected.</p>
+</blockquote>
+<p>Per-tenant IPs are achieved by pinning each tenant's proxy pods to a dedicated
+<strong>node pool</strong> on a dedicated <strong>subnet</strong>, and attaching a Cloud NAT config with
+a reserved static IP pool to that subnet's ranges:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>  Tenant A                          Tenant B
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  ────────                          ────────
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  node pool: pool-tenant-a          node pool: pool-tenant-b
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>   (taint tenant=a:NoSchedule)       (taint tenant=b:NoSchedule)
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  subnet:   subnet-tenant-a         subnet:   subnet-tenant-b
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>   pods-range :ALL ──┐               pods-range :ALL ──┐
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>                     ▼                                 ▼
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  Cloud NAT: nat-a                  Cloud NAT: nat-b
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>   --nat-external-ip-pool=IP-A       --nat-external-ip-pool=IP-B
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>                     │                                 │
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>                     ▼                                 ▼
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>                 GitHub sees IP-A                  GitHub sees IP-B
+</code></pre></div>
+<ul>
+<li>The tenant's <code>EgressProxy</code> pods (and only those — via nodeSelector/toleration
+  to the tenant pool) schedule on <code>pool-tenant-a</code>; their egress SNATs through
+  <code>nat-a</code>'s reserved static IP(s).</li>
+<li>Cloud NAT covers the pod secondary range via the <code>:ALL</code> / custom-subnet-range
+  option so pod IPs (not just node IPs) are NATed
+  (<a href="https://dev.to/lbcristaldo/static-ip-addresses-for-gke-outbound-traffic-a-practical-guide-to-cloud-nat-1ie8">DEV: Static IPs for GKE outbound via Cloud NAT</a>).</li>
+</ul>
+<h3 id="scaling--cost">Scaling &amp; cost<a class="headerlink" href="#scaling--cost" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>IP allocation</strong> is per Cloud NAT gateway; multiple static IPs per tenant
+  give SNAT port headroom (Cloud NAT allocates ports per NAT IP). Heavy
+  fan-out tenants raise their IP count, not their gateway count.</li>
+<li><strong>Cost drivers:</strong> reserved static IPs (per-IP hourly), Cloud NAT data
+  processing per GB, and — the real cost — a <strong>dedicated node pool per tenant</strong>
+  (minimum node footprint even at idle, which fights GAG's zero-idle-compute
+  premise). This is the crux tradeoff vs. Approach A (see cost model below).</li>
+<li><strong>Managed HA:</strong> Cloud NAT is a managed, horizontally-redundant service — no
+  single gateway-node SPOF (unlike Approach A), and no in-flight-connection
+  break on scaling.</li>
+</ul>
+<h3 id="composition-with-the-existing-stack_1">Composition with the existing stack<a class="headerlink" href="#composition-with-the-existing-stack_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Proxy pool / NetworkPolicy / Q242:</strong> all unchanged and orthogonal, same as
+  Approach A. The NAT binds the source IP; the policies still enforce the choke
+  point.</li>
+<li><strong>Portability:</strong> the pattern (dedicated subnet/node-pool + managed NAT +
+  reserved IP pool) maps cleanly to <strong>EKS</strong> (subnet + NAT gateway per tenant)
+  and <strong>AKS</strong> (NAT gateway per node pool) — a <strong>cloud-portable</strong> pattern that
+  does not depend on a specific CNI.</li>
+</ul>
+<hr />
+<h2 id="comparison">Comparison<a class="headerlink" href="#comparison" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>A — Cilium Egress Gateway</th>
+<th>B — Per-tenant cloud NAT</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Isolation guarantee</strong></td>
+<td>Distinct per-tenant egress IP via BPF SNAT; <strong>fail-open window</strong> on pod-start until policy applies <strong>(to be validated)</strong></td>
+<td>Distinct per-tenant egress IP via managed NAT; no policy-application window (subnet-scoped)</td>
+</tr>
+<tr>
+<td><strong>Stability across reschedule</strong></td>
+<td>Stable as long as proxy pods stay selected; egress IP fixed on gateway node</td>
+<td>Stable — bound to subnet/node-pool, independent of which node the pod lands on</td>
+</tr>
+<tr>
+<td><strong>HA</strong></td>
+<td><strong>Single active gateway node per endpoint; no in-flight failover</strong> — availability + SNAT-port chokepoint</td>
+<td>Managed, redundant NAT; no SPOF, no in-flight break</td>
+</tr>
+<tr>
+<td><strong>Cost per tenant</strong></td>
+<td>Cheap — no dedicated node pool required; egress IPs on shared gateway node(s). Marginal cost ≈ per-tenant policy + IP</td>
+<td><strong>Higher — dedicated node pool + subnet + NAT + static IPs per tenant.</strong> Idle node floor fights zero-idle-compute</td>
+</tr>
+<tr>
+<td><strong>Operational complexity</strong></td>
+<td>Self-managed Cilium (BPF masquerade, kube-proxy replacement, CRD identity mode); GAG emits one cluster-scoped policy per tenant</td>
+<td>Cloud-native primitives; per-tenant subnet/node-pool/NAT lifecycle wired to tenant CRUD (Terraform / cloud API), no CNI change</td>
+</tr>
+<tr>
+<td><strong>Cloud portability</strong></td>
+<td>GKE: <strong>self-managed only</strong> (not DPv2). EKS: replace VPC CNI (AWS-unsupported). AKS: Azure CNI Powered by Cilium / BYOCNI</td>
+<td><strong>Portable</strong> — GKE Cloud NAT, EKS NAT gateway, AKS NAT gateway; same shape, no CNI dependency</td>
+</tr>
+<tr>
+<td><strong>Composes with proxy + NetworkPolicy + Q242</strong></td>
+<td>Yes — orthogonal; binds source IP only</td>
+<td>Yes — orthogonal; binds source IP only</td>
+</tr>
+<tr>
+<td><strong>Granularity</strong></td>
+<td>Per-namespace (per-tenant) or finer (per-pod-label)</td>
+<td>Per-subnet/node-pool (per-tenant); finer-than-tenant needs more subnets</td>
+</tr>
+</tbody>
+</table>
+<h3 id="recommendation-secure-by-default">Recommendation (secure-by-default)<a class="headerlink" href="#recommendation-secure-by-default" title="Permanent link">&para;</a></h3>
+<p><strong>No single default yet — the choice is platform-shaped, and the recommended
+default is the one that does not trade away an isolation or availability
+property on the target platform.</strong> Concretely:</p>
+<ul>
+<li><strong>Prefer Approach B (per-tenant cloud NAT) as the portable, managed-HA
+  default</strong> where the per-tenant node-pool cost is acceptable. It has no
+  fail-open pod-start window, no gateway-node SPOF, and is cloud-portable
+  without a CNI swap — so it does not regress availability or the
+  from-first-packet isolation property. Its cost (a node-pool floor per tenant)
+  is an economic tradeoff, not a security regression.</li>
+<li><strong>Approach A (Cilium Egress Gateway)</strong> is the better fit for
+  <strong>already-self-managed-Cilium</strong> clusters and cost-sensitive high-tenant-density
+  deployments, <strong>provided</strong> the pod-start fail-open window and single-active-gateway
+  HA characteristics are validated as acceptable for the tenant's threat model.
+  Per secure-by-default, A must not become the default on a platform where it
+  silently introduces the fail-open window without operator sign-off.</li>
+<li><strong>On GKE Dataplane V2 specifically</strong> (GAG's dogfood/reference platform), A is
+  <strong>not available</strong> without abandoning DPv2 — so B is the de-facto GKE path.</li>
+</ul>
+<p>The mechanism should be an <strong>operator choice</strong>, surfaced as an explicit,
+documented opt-in with the tradeoff spelled out — never a silent default that
+regresses isolation or availability. <strong>The final default is a decision to
+confirm against the live-validation results, not to fix in this doc.</strong></p>
+<hr />
+<h2 id="topology-single-tenant-direct-dogfood-vs-production-multi-tenant">Topology: single-tenant-direct (dogfood) vs. production multi-tenant<a class="headerlink" href="#topology-single-tenant-direct-dogfood-vs-production-multi-tenant" title="Permanent link">&para;</a></h2>
+<h3 id="single-tenant-direct--what-dogfood-does-today">Single-tenant-DIRECT — what dogfood does today<a class="headerlink" href="#single-tenant-direct--what-dogfood-does-today" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>  gag-dogfood namespace (single tenant)
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  ═════════════════════════════════════
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>   AGC ─────┐
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>            ├──────────────▶ GitHub          (direct egress; default-deny NP
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>   worker ──┘   node SNAT / Cloud NAT         allows DNS + GitHub CIDR only)
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>                (cluster-shared egress IP)
+</code></pre></div>
+<ul>
+<li><strong>No <code>EgressProxy</code>, no per-tenant egress IP.</strong> Workers egress directly to
+  GitHub behind the default-deny NetworkPolicy (DNS + GitHub CIDR)
+  (<a href="../gke-dogfood/">gke-dogfood.md</a>).</li>
+<li><strong>Why acceptable for dogfood:</strong> dogfood is <strong>single-tenant</strong> — there is no
+  second tenant to be isolated <em>from</em>, so the per-tenant-IP property is vacuous.
+  Direct egress also avoids running a proxy pool on the small <code>e2-standard-2</code>
+  system node, which cannot fit a proxy pool alongside GMC + AGC + Athens. The
+  isolation claim is a <strong>multi-tenant</strong> property; dogfood exercises the runner
+  lifecycle, not tenant isolation.</li>
+</ul>
+<h3 id="production-multi-tenant--per-tenant-egress-ip">Production MULTI-TENANT — per-tenant egress IP<a class="headerlink" href="#production-multi-tenant--per-tenant-egress-ip" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>  Cluster (egress-enforcing CNI; egress-IP mechanism A or B)
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  ══════════════════════════════════════════════════════════
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>   tenant-a ns                          tenant-b ns
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>   ───────────                          ───────────
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>   AGC-a ──┐                            AGC-b ──┐
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>           ├─▶ proxy-a ──┐                      ├─▶ proxy-b ──┐
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>   wkr-a ──┘   (choke     │              wkr-b ─┘   (choke     │
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>               point)     │                          point)   │
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>                          ▼ egress-IP mechanism                ▼
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>                    ┌─────────────┐                     ┌─────────────┐
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>                    │ A: Cilium EG│                     │ A: Cilium EG│
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>                    │    node+IP-A│                     │    node+IP-B│
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>                    │ B: NAT-a/IP-A│                    │ B: NAT-b/IP-B│
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>                    └──────┬──────┘                     └──────┬──────┘
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>                           ▼                                   ▼
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>                   GitHub sees IP-A                    GitHub sees IP-B
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>                   (distinct, stable,                  (distinct, stable,
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>                    per-tenant)                         per-tenant)
+</code></pre></div>
+<ul>
+<li>All of tenant A's GitHub traffic (AGC + workers, via proxy-a) egresses from
+  IP-set A; tenant B's from IP-set B; A ∩ B = ∅. This is what makes GitHub-side
+  IP allowlisting, per-tenant audit attribution, incident containment, and the
+  per-tenant kill-switch coherent claims.</li>
+</ul>
+<h3 id="cost-model-per-tenant-order-of-magnitude-gke">Cost model (per tenant, order-of-magnitude, GKE)<a class="headerlink" href="#cost-model-per-tenant-order-of-magnitude-gke" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>A — Cilium Egress Gateway</th>
+<th>B — Per-tenant cloud NAT</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dedicated node pool</td>
+<td>Not required (shared gateway node[s])</td>
+<td><strong>Required</strong> — ≥1 node idle floor per tenant</td>
+</tr>
+<tr>
+<td>Reserved static egress IP(s)</td>
+<td>1+ per tenant (on gateway node)</td>
+<td>1+ per tenant (on Cloud NAT)</td>
+</tr>
+<tr>
+<td>Managed NAT data processing</td>
+<td>n/a (BPF SNAT on gateway node)</td>
+<td>per-GB egress processed</td>
+</tr>
+<tr>
+<td>Gateway-node compute</td>
+<td>shared, amortized across tenants</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td><strong>Dominant cost</strong></td>
+<td>per-tenant IP + policy (low)</td>
+<td><strong>per-tenant node-pool floor</strong> (fights zero-idle-compute)</td>
+</tr>
+</tbody>
+</table>
+<p>The exact figures are cloud- and region-specific and are a <strong>live-validation
+deliverable</strong> — this table gives the shape (A is cheaper per tenant; B trades
+cost for managed HA and portability), not billable numbers.</p>
+<hr />
+<h2 id="live-validation-results-2026-07-07">Live-validation results (2026-07-07)<a class="headerlink" href="#live-validation-results-2026-07-07" title="Permanent link">&para;</a></h2>
+<p>Run on a throwaway GKE Standard / Dataplane V2 cluster (<code>gag-val</code>, project
+deleted after) — full setup in <a href="../q243-q245-q230-live-validation-campaign/">the campaign plan</a>.
+The mechanism used was <strong>Approach B on a single cluster</strong>: three pod secondary
+ranges (<code>pods-default</code>/<code>pods-a</code>/<code>pods-b</code>) on one subnet, one node pool per
+tenant pinned to its range (<code>--pod-ipv4-range</code>), three per-range Cloud NAT
+gateways on one router, and <code>--disable-default-snat</code> so pod IPs are the NAT
+source.</p>
+<table>
+<thead>
+<tr>
+<th>Property (from "what the spike must prove")</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Distinct egress IPs</strong> — 2 tenants → disjoint source IPs</td>
+<td>✅ tenant-A <code>34.24.58.224</code> (nat-a), tenant-B <code>34.26.87.185</code> (nat-b), disjoint, consistent over 3 runs, observed at an external IP reflector</td>
+</tr>
+<tr>
+<td><strong>Stability across reschedule</strong> — delete/relocate a pod, IP unchanged</td>
+<td>✅ pool-a pod deleted+recreated (pod IP 10.5.0.6→10.5.0.7) → still <code>34.24.58.224</code> (the IP binds to the pod <em>range</em>, not the pod)</td>
+</tr>
+<tr>
+<td><strong>Composition intact</strong> — base NetworkPolicy still enforces the choke point</td>
+<td>✅ validated alongside Q245 (base default-deny NP blocks non-allowlisted egress)</td>
+</tr>
+<tr>
+<td><strong>GAG can bind a tenant's proxy to its egress IP</strong></td>
+<td>✅ <em>(was ❌; closed by Q282 — see below)</em></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The gap as found (2026-07-07).</strong> <code>EgressProxy.spec</code> exposed no
+<code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code>, and <code>buildEgressProxyDeployment</code> set a
+<strong>required cross-node pod anti-affinity</strong> that <em>spreads</em> proxy pods across nodes.
+Live proof: scaling one tenant's <code>EgressProxy</code> to 2 replicas landed the pods on
+<strong>different</strong> pools — <code>10.5.0.5</code> (pool-a → nat-a → <code>34.24.58.224</code>) <em>and</em> <code>10.6.0.6</code>
+(pool-b → nat-b → <code>34.26.87.185</code>) — so a single tenant egressed from <strong>two</strong> IPs.
+The reference arch's Approach B assumes "the tenant's <code>EgressProxy</code> pods … via
+nodeSelector/toleration to the tenant pool"; that binding did not exist in the API,
+and the anti-affinity actively worked against it. GAG delivered the <em>choke point</em>
+but not the <em>per-tenant IP</em>.</p>
+<h3 id="placement-pass-through-q282">Placement pass-through (Q282)<a class="headerlink" href="#placement-pass-through-q282" title="Permanent link">&para;</a></h3>
+<p><strong>Closed 2026-07-07.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2beta1/egressproxy_types.go"><code>EgressProxy.spec.scheduling</code></a>
+and <code>ActionsGateway.spec.scheduling</code> (a shared <code>PodScheduling</code>:
+<code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code>, served at both <code>v2alpha1</code> and <code>v2beta1</code>) are
+plumbed into the proxy pool Deployment and the AGC Deployment
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>egressproxy_builder.go</code></a>,
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go</code></a>).
+The two design points the gap raised were resolved as:</p>
+<p><strong>(a) Anti-affinity composition.</strong> A supplied <code>nodeAffinity</code>/<code>podAffinity</code> is applied
+<em>alongside</em> the builder's required cross-node anti-affinity, which is preserved
+(pinning to a pool should not disable HA <em>within</em> it). A supplied <code>podAntiAffinity</code> —
+any non-nil value — <strong>replaces</strong> the built-in term entirely. An explicit
+<code>podAntiAffinity: {}</code> therefore opts out of spreading, which is what a single-node
+tenant pool needs; <code>minReplicas: 1</code> is the other route. That the apiserver preserves
+an empty known object as a non-nil pointer is the load-bearing fact, asserted
+end-to-end in envtest rather than assumed.</p>
+<p><strong>(b) Governance — reversed from the original framing.</strong> The gap note asserted
+placement must be "platform-owned, not tenant-set (a tenant must not self-select an
+egress IP)". <strong>That was wrong</strong>, and Q282 reversed it after review:</p>
+<ul>
+<li><strong>A distinct egress IP is a feature, not an escape.</strong> Tenants want one so they do
+  not share a rate limit or a block radius. Electing one's own egress path is the
+  intended use.</li>
+<li>The capability is <strong>already reachable, but the symmetry is only partial</strong> — worth
+  stating precisely rather than overselling. <code>RunnerTemplate.spec.podTemplate</code> is a
+  full <code>PodTemplateSpec</code> whose reserved-field guardrail (§H.4) withholds
+  <code>serviceAccountName</code>, <code>automountServiceAccountToken</code>, <code>hostPID</code>, <code>hostNetwork</code>,
+  <code>hostIPC</code> — and <em>deliberately not</em> scheduling. In <strong>direct</strong>-egress mode (§H.10)
+  worker placement already selects the egress IP, un-gated. In the <strong>proxied default</strong>
+  it does not: NetworkPolicy forces worker traffic through the proxy, so the <em>proxy
+  pool's</em> placement selects the IP. <code>EgressProxy.spec.scheduling</code> therefore does
+  extend the capability to the default posture. Gating it would still leave the
+  direct-egress path open — and, per the next bullet, no validating gate could be
+  sound regardless.</li>
+<li><strong>A validating allowlist of placement values is unsound.</strong>
+  <code>affinity.nodeAffinity</code> supports <code>NotIn</code>/<code>DoesNotExist</code>, so "any pool except mine"
+  is expressible and no key=value allowlist rejects it in general. Pinning
+  <code>nodeSelector</code> by <strong>mutation</strong> <em>is</em> sound (Kubernetes ANDs it with <code>nodeAffinity</code>,
+  and affinity can only narrow) — which is a policy-engine job, not a CRD-webhook job.</li>
+</ul>
+<p>What this actually costs is <strong>attribution</strong>, not isolation: a CR author who retargets
+onto another pool's egress path makes both tenants leave via one IP. Recorded in
+<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">05-security.md §5.2</a>,
+with Kyverno + Gatekeeper mutating-pin samples in
+<a href="../../operations/admission-policies/#governing-where-gag-pods-schedule">admission-policies.md § Governing where GAG pods schedule</a>
+for operators who attribute by source IP and do not fully trust tenant CR authors.
+The same layer is where a cluster granting tenants <code>pods: create</code> must constrain
+placement anyway — GAG's NetworkPolicies select GAG-labelled pods, so an unlabelled
+tenant-created pod is selected by none of them.</p>
+<p>Operator recipe: <a href="../../operations/security-operations/#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling">security-operations.md § Pinning a tenant's proxy pool to its egress IP</a>.</p>
+<h2 id="re-runnable-live-validation">Re-runnable live validation<a class="headerlink" href="#re-runnable-live-validation" title="Permanent link">&para;</a></h2>
+<p>The one gate that Q282 left un-exercised is a <strong>live</strong> end-to-end run: with
+<code>spec.scheduling</code> set, does a real GMC-provisioned <code>EgressProxy</code> land <em>all</em> its
+replicas on one tenant node pool — so the whole pool egresses from a <em>single</em>
+Cloud NAT IP — rather than spreading (the 2026-07-07 two-IP result)? Q282's fix
+is only asserted in envtest; envtest has no scheduler, so it can prove the emitted
+pod spec but not the placement + the NAT source IP end-to-end. That needs a cloud
+run, and per the repo rule ("treat ✅ findings as unverified until confirmed
+end-to-end — actually exec the thing") it is the honest close for Q243.</p>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/validate-egress-ip.sh"><code>scripts/validate-egress-ip.sh</code></a> automates it,
+teardown-safe, so the run is one authorized command rather than a bespoke sequence
+(and re-runnable at future egress-path changes — this class of regression is exactly
+what unit/envtest can miss):</p>
+<ol>
+<li>Stands up a throwaway GKE <strong>Standard / Dataplane V2</strong> cluster with a system pool
+   plus two tenant node pools, each pinned to its own <strong>pod secondary range</strong>
+   (<code>--pod-ipv4-range</code>), behind <strong>per-range Cloud NAT</strong> gateways + reserved static
+   IPs and <code>--disable-default-snat</code> (so pod IPs, from the tenant range, are the NAT
+   source — the mechanism already proven on 2026-07-07).</li>
+<li>Installs the GMC (from <code>GAG_IMAGE_TAG</code>, which must carry Q282), then deploys one
+   <code>EgressProxy</code> per tenant whose <code>spec.scheduling</code> pins it to the tenant pool with
+   <code>affinity.podAntiAffinity: {}</code> (opting out of the built-in spread). <code>minReplicas</code>
+   defaults to 2, so each pool has two pods to (dis)prove pinning.</li>
+<li><strong>Asserts</strong> per tenant: every proxy pod's IP is inside the tenant's pod range
+   (no spill to the other pool), a probe pinned like the proxy egresses from the
+   tenant's reserved static IP, the two tenants' IPs are disjoint, and the IP is
+   unchanged after deleting a proxy pod (stability across reschedule).</li>
+<li>Tears the infra down on exit (<code>KEEP=1</code> to inspect; <code>--teardown-only</code> to clean up
+   later). The billable steps are gated behind a dogfood-project guard + confirmation.</li>
+</ol>
+<p><strong>PASS</strong> = each tenant's pool → one distinct, stable IP. <strong>FAIL</strong> (a pool spanning
+ranges / &gt;1 egress IP, colliding IPs, or an IP that moves on reschedule) is a real
+Q243 regression — record it honestly, do not paper over it. Cost/teardown/method
+mirror <a href="../q243-q245-q230-live-validation-campaign/">the 2026-07-07 campaign</a>: a few
+USD if torn down same-session; prefer a throwaway project deleted wholesale for
+atomic cost hygiene.</p>
+<h3 id="result--pass-2026-07-13">Result — PASS (2026-07-13)<a class="headerlink" href="#result--pass-2026-07-13" title="Permanent link">&para;</a></h3>
+<p>Ran end-to-end on a throwaway GKE Standard / Dataplane V2 cluster (a scratch
+project, torn down same-session). <strong>Every assertion passed</strong>, closing the last
+Q243 gate — the per-tenant egress-IP claim is now substantiated by a running
+system, not just design:</p>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Distinct egress IPs</strong></td>
+<td>✅ tenant-a <code>35.229.44.8</code> (nat-a), tenant-b <code>34.75.214.64</code> (nat-b) — disjoint</td>
+</tr>
+<tr>
+<td><strong>All proxy pods in-range</strong></td>
+<td>✅ both tenant-a replicas in <code>10.5.0.0/16</code>, both tenant-b replicas in <code>10.6.0.0/16</code> — no pool spill</td>
+</tr>
+<tr>
+<td><strong>Egress IP == reserved NAT IP</strong></td>
+<td>✅ each tenant's live probe egressed from its own reserved static IP</td>
+</tr>
+<tr>
+<td><strong>Stable across reschedule</strong></td>
+<td>✅ after deleting a tenant-a proxy pod, egress IP unchanged at <code>35.229.44.8</code></td>
+</tr>
+</tbody>
+</table>
+<p>This is the live proof Q282 lacked: with <code>spec.scheduling</code> (<code>nodeSelector</code> +
+tolerations + <code>affinity.podAntiAffinity: {}</code>), a real GMC-provisioned
+<code>EgressProxy</code> lands <strong>both</strong> replicas on the one tenant node pool, so the pool
+egresses from a <strong>single</strong> Cloud NAT IP — the 2026-07-07 two-IP spread is gone.</p>
+<p><strong>Per the repo rule ("treat ✅ findings as unverified until confirmed
+end-to-end"), the first real run mattered:</strong> the harness (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/validate-egress-ip.sh"><code>scripts/validate-egress-ip.sh</code></a>)
+had never been executed against live GKE, and seven distinct defects surfaced
+only on contact — each gating a step deeper: private-nodes control-plane access
+(authorize the operator IP), the <code>--disable-default-snat</code>/<code>--enable-private-nodes</code>
+coupling, the GMC Deployment name (<code>gmc-controller-manager</code>), the missing
+conversion-webhook caBundle wiring (Q279), the <code>tenant=managed</code> namespace label
+the <code>gmc-tenant-resource-guard</code> ValidatingAdmissionPolicy requires, a
+Deployment-vs-pod label mismatch in the readiness wait, and <code>kubectl run -i --rm</code>
+polluting the captured egress IP. All fixed; the script is now green and
+re-runnable at future egress-path changes — the regression class unit/envtest
+can't catch.</p>
+<h2 id="live-validation-plan-original-spec--retained-for-the-deferred-parts">Live-validation plan (original spec — retained for the deferred parts)<a class="headerlink" href="#live-validation-plan-original-spec--retained-for-the-deferred-parts" title="Permanent link">&para;</a></h2>
+<p><strong>The distinct/stable/composition parts above are DONE.</strong> The parts below that
+were <em>not</em> exercised (Approach A's fail-open window, kill-switch, SNAT-port
+headroom) stay deferred. Rationale for the original deferral: a live
+egress spike consumes cloud spend and would contend with / risk the shared
+dogfood cluster.</p>
+<h3 id="what-the-spike-must-prove">What the spike must prove<a class="headerlink" href="#what-the-spike-must-prove" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Distinct egress IPs.</strong> Two tenants (namespace-a, namespace-b), each with a
+   proxy pool and an egress-IP binding, are observed by an external
+   IP-reflector (e.g. an owned <code>https://&lt;echo&gt;/ip</code> endpoint, or GitHub's
+   received-from IP in an audit event) egressing from <strong>disjoint</strong> source-IP
+   sets.</li>
+<li><strong>Stability across reschedule.</strong> Delete/relocate a tenant's proxy pod (force
+   a node change); confirm the observed egress IP is unchanged.</li>
+<li><strong>Isolation holds under the mechanism's failure mode.</strong> For A: measure the
+   pod-start fail-open window (does any GitHub-bound call egress un-SNATed
+   before the policy applies?) and gateway-node-failover behavior. For B:
+   confirm no cross-tenant IP bleed when pods churn.</li>
+<li><strong>Composition is intact.</strong> The three per-tenant <code>NetworkPolicy</code> objects
+   still enforce the choke point (direct-to-GitHub still blocked), and a Q242
+   allowlisted non-GitHub destination still egresses from the per-tenant IP.</li>
+<li><strong>Kill-switch.</strong> Draining one tenant's egress path halts only that tenant.</li>
+</ol>
+<h3 id="smallest-cluster-to-prove-it">Smallest cluster to prove it<a class="headerlink" href="#smallest-cluster-to-prove-it" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Two tenant namespaces</strong> on <strong>one</strong> cluster is sufficient — isolation is a
+  pairwise property; more tenants add no proof.</li>
+<li><strong>Approach A:</strong> a self-managed-Cilium cluster (e.g. GKE with DPv2 disabled +
+  BYO Cilium, or kind/self-managed) with ≥1 gateway node and 2 reserved egress
+  IPs. 3 small nodes (1 gateway + 2 workload) suffices.</li>
+<li><strong>Approach B:</strong> a GKE cluster with 2 tenant node pools (1 node each), 2
+  dedicated subnets, 2 Cloud NAT configs, 2 reserved static IPs. Autopilot is
+  unsuitable (narrower NAT/node-pool control); use Standard.</li>
+<li><strong>Teardown-on-completion</strong> runbook (mirror <a href="../gke-dogfood/">gke-dogfood.md</a>'s
+  scale-to-zero / delete discipline) so the spike leaves no idle spend.</li>
+</ul>
+<h3 id="rough-cost">Rough cost<a class="headerlink" href="#rough-cost" title="Permanent link">&para;</a></h3>
+<p>Order-of-magnitude, <strong>hours not days</strong> of a 3-node small cluster + a handful of
+reserved IPs + minimal NAT data processing — target <strong>&lt; a few USD</strong> if torn
+down same-session. The follow-up should confirm exact figures as deliverable
+(1) above; do not commit to a number here.</p>
+<h3 id="follow-up-task--done">Follow-up task — DONE<a class="headerlink" href="#follow-up-task--done" title="Permanent link">&para;</a></h3>
+<p>The live-cloud egress-IP validation that was the actual v2beta1 gate <strong>has run
+and PASSED</strong> (2026-07-13; see <a href="#result--pass-2026-07-13">Result — PASS</a>), so the
+Q243 Queue row is removed. What remains is genuinely deferred and out of the
+critical path: Approach A's (Cilium Egress Gateway) fail-open pod-start window,
+gateway-node failover, kill-switch drain, and SNAT-port headroom under
+thousands-of-sessions fan-out — none of which apply to the validated Approach-B
+(per-tenant Cloud NAT) GKE path, and all of which only matter once a
+self-managed-Cilium deployment is in scope (see the deferred section below).</p>
+<hr />
+<h2 id="open-questions-resolve-during-validation">Open questions (resolve during validation)<a class="headerlink" href="#open-questions-resolve-during-validation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Default mechanism per platform</strong> — confirm B-on-GKE / A-on-self-managed-Cilium
+  against measured cost + the A fail-open window; encode the default only after.</li>
+<li><strong>Where the egress-IP config attaches in the API</strong> — a field on <code>EgressProxy</code>
+  (e.g. <code>spec.egressIP</code> / <code>spec.egressMechanism</code>), a platform-owned mapping
+  (tenant → IP) the GMC consumes, or out-of-band infra (Terraform) the operator
+  wires. Leaning platform-owned (secure-by-default: tenants must not choose
+  their own egress IP). Decide with the API-graduation work
+  (Q74).</li>
+<li><strong>Per-RunnerSet egress IPs</strong> — whether a heavy runner group can get its own
+  IP (finer than per-tenant). Out of scope until per-tenant is proven.</li>
+<li><strong>SNAT port exhaustion under thousands-of-sessions fan-out</strong> — both
+  mechanisms have a per-IP port ceiling; validate headroom and the
+  IPs-per-tenant knob.</li>
+</ul>
+<hr />
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../../design/01-executive-summary/">01-executive-summary.md</a> — the per-tenant egress-IP claim</li>
+<li><a href="../../design/02-architecture/#23-tier-3--egress-proxy-pool">02-architecture.md §2.3</a> — Tier-3 proxy pool</li>
+<li><a href="../../design/network-architecture/">network-architecture.md</a> — NetworkPolicy topology + FQDN modes</li>
+<li><a href="../worker-egress-proxy/">worker-egress-proxy.md</a> — why worker traffic routes through the proxy</li>
+<li><a href="../archive/q242-g1-proxy-destination-allowlist/">q242-g1-proxy-destination-allowlist.md</a> — destination allowlist</li>
+<li><a href="../gke-dogfood/">gke-dogfood.md</a> — single-tenant-direct dogfood posture</li>
+<li><a href="https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/">Cilium Egress Gateway docs</a></li>
+<li><a href="https://docs.cloud.google.com/nat/docs/ports-and-addresses">GCP Cloud NAT — IP addresses and ports</a></li>
+<li><a href="https://dev.to/lbcristaldo/static-ip-addresses-for-gke-outbound-traffic-a-practical-guide-to-cloud-nat-1ie8">Static IPs for GKE outbound via Cloud NAT</a></li>
+<li><a href="https://isovalent.com/blog/post/cilium-egress-gateway-aks/">Isovalent — Cilium Egress Gateway on AKS</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

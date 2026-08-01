@@ -2674,7 +2674,7 @@ the other kinds.</p>
 unconditionally for every <code>ActionsGateway</code>. The Gateway Manager
 Controller (GMC) always emits the proxy <code>Deployment</code>, <code>Service</code>, <code>HPA</code>,
 <code>PodDisruptionBudget</code>, and TLS cert <code>Secret</code>, and the workload
-<code>NetworkPolicy</code> (<a href="../../cmd/gmc/internal/controller/builder.go"><code>buildWorkloadNetworkPolicy</code></a>)
+<code>NetworkPolicy</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go"><code>buildWorkloadNetworkPolicy</code></a>)
 grants Actions Gateway Controller (AGC) and worker pods egress to
 <em>only</em> cluster DNS and the proxy on port 8080 — so with no proxy, those
 pods have no network path to GitHub at all. <code>spec.proxy</code> is <code>+optional</code>,
@@ -2741,7 +2741,7 @@ layer and wants to shed the proxy's always-on cost.</p>
 <hr />
 <h2 id="g9-networkpolicy-egress-extensibility-signers-telemetry-job-dependencies">G.9. NetworkPolicy Egress Extensibility (signers, telemetry, job dependencies)<a class="headerlink" href="#g9-networkpolicy-egress-extensibility-signers-telemetry-job-dependencies" title="Permanent link">&para;</a></h2>
 <p><strong>Current behavior.</strong> The GMC reconciles three default-deny per-tenant
-NetworkPolicies (§5.2, <a href="../../cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>).
+NetworkPolicies (§5.2, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>).
 The <strong>AGC</strong> policy permits egress to cluster DNS + the kube API server
 (+ the GitHub CIDR allowlist in direct mode), and — once the Vault egress
 work landed — a <em>scoped</em> AGC→Vault rule when a workload-identity gateway
@@ -2756,7 +2756,7 @@ for anything else.</p>
 default-deny envelope: a peer the <strong>tenant names in its own CR</strong>, that the
 <strong>GMC scopes</strong> to a single peer + port, attached to the <strong>AGC policy only</strong>
 so untrusted worker pods never inherit it. That peer descriptor is now the
-shared <a href="../../api/v2alpha1/actionsgateway_types.go"><code>EgressPeer</code></a> type
+shared <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/actionsgateway_types.go"><code>EgressPeer</code></a> type
 (selector | CIDR + optional explicit port), extracted from the Vault-specific
 shape before the v2 freeze so future consumers reuse one descriptor (Q204; see
 the pre-v2 analysis below). The entries below are the other egress holes we can
@@ -2830,7 +2830,7 @@ work shipped a per-feature peer descriptor (<code>VaultNetworkPolicy</code>: sel
 CIDR, port derived from the address). If KMS, telemetry, and worker-egress had
 each grown their own near-duplicate descriptor, v2 would freeze three
 inconsistent shapes. <strong>Resolved (Q204):</strong> the descriptor is now the shared
-<a href="../../api/v2alpha1/actionsgateway_types.go"><code>EgressPeer</code></a> type (selector | CIDR
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/actionsgateway_types.go"><code>EgressPeer</code></a> type (selector | CIDR
 + an optional explicit port), and <code>signer.vault.networkPolicy</code> references it.
 The extraction is serialization-compatible — the field keys (<code>podSelector</code>,
 <code>namespaceSelector</code>, <code>cidr</code>) are unchanged, so the v2alpha1 shape already
@@ -2846,7 +2846,7 @@ peer descriptor.</p>
 <p><strong>Related.</strong> <a href="../05-security/">05-security.md</a> (the per-tenant NetworkPolicy
 isolation model); <a href="#g1-proxy-enforced-destination-allowlist">G.1 Proxy-Enforced Destination Allowlist</a>;
 <a href="#g8-optional-disable-able-egress-proxy">G.8 Optional Egress Proxy</a>;
-<a href="../../cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go"><code>builder.go</code></a>.</p>
 <hr />
 <h2 id="g10-controller-discovered-apiserver-cidr-auto-narrowing">G.10. Controller-Discovered apiserver-CIDR Auto-Narrowing<a class="headerlink" href="#g10-controller-discovered-apiserver-cidr-auto-narrowing" title="Permanent link">&para;</a></h2>
 <p><strong>Current behavior.</strong> The AGC NetworkPolicy's Kubernetes API server egress rule
@@ -2888,7 +2888,7 @@ operator-confirmed, per-cluster <code>apiServerCIDRs</code> opt-in.</p>
 <p><strong>Related.</strong> <a href="../05-security/#52-agc--proxy-level-threats-namespace-scoped">05-security.md §5.2</a>;
 <a href="../../operations/security-operations/#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist">security-operations.md § Tightening AGC apiserver egress</a>;
 <a href="../network-architecture/#policy-2-actions-gateway-controller--agc--kubernetes-api-server">network-architecture.md § Policy 2</a>;
-<a href="../../cmd/gmc/internal/controller/shared_networkpolicy.go"><code>shared_networkpolicy.go</code></a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_networkpolicy.go"><code>shared_networkpolicy.go</code></a>.</p>
 <hr />
 <h2 id="g11-worker-scale-up-rate-limiting-anti-stampede">G.11. Worker Scale-Up Rate Limiting (anti-stampede)<a class="headerlink" href="#g11-worker-scale-up-rate-limiting-anti-stampede" title="Permanent link">&para;</a></h2>
 <blockquote>

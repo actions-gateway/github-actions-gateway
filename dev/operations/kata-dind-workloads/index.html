@@ -2637,7 +2637,7 @@ restricted by machine family:</p>
 </tr>
 <tr>
 <td>Machine family</td>
-<td><strong>N2, N2D, C2, C2D</strong> support nested virtualization and are the families the shipped <a href="../../scripts/kata-node-pool.sh"><code>scripts/kata-node-pool.sh</code></a> accepts. <strong>N1</strong> also supports nested virtualization on GKE, but the provisioning script rejects it — provision an N1 pool manually if you need it. <strong>E2 does not.</strong> The GPU families (<strong>A2, A3, G2</strong>) do not either — GPU + Kata on cloud needs bare metal or dedicated instances.</td>
+<td><strong>N2, N2D, C2, C2D</strong> support nested virtualization and are the families the shipped <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/kata-node-pool.sh"><code>scripts/kata-node-pool.sh</code></a> accepts. <strong>N1</strong> also supports nested virtualization on GKE, but the provisioning script rejects it — provision an N1 pool manually if you need it. <strong>E2 does not.</strong> The GPU families (<strong>A2, A3, G2</strong>) do not either — GPU + Kata on cloud needs bare metal or dedicated instances.</td>
 </tr>
 <tr>
 <td>Node image</td>
@@ -2666,7 +2666,7 @@ restricted by machine family:</p>
 </tbody>
 </table>
 <p>The repo ships a parameterized provisioning script —
-<a href="../../scripts/kata-node-pool.sh"><code>scripts/kata-node-pool.sh</code></a> — that wraps
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/kata-node-pool.sh"><code>scripts/kata-node-pool.sh</code></a> — that wraps
 the <code>gcloud container node-pools create</code> call with these flags. Preview it
 with <code>DRY_RUN=1</code> before spending cloud time; see
 <a href="../kata-ci-spike-runbook/#step-1--create-a-nested-virt-cluster">runbook step 1</a>.</p>
@@ -2718,7 +2718,7 @@ exist yet.</p>
    (with the correct pod <code>overhead</code>). The repo ships only a stable <code>kata</code>
    alias, so the hypervisor can be retargeted later without editing every
    pod spec — see
-   <a href="../../deploy/kata-ci/runtimeclass.yaml"><code>deploy/kata-ci/runtimeclass.yaml</code></a>:</li>
+   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/runtimeclass.yaml"><code>deploy/kata-ci/runtimeclass.yaml</code></a>:</li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">node.k8s.io/v1</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RuntimeClass</span>
@@ -2778,9 +2778,9 @@ should be able to self-author, and platform ownership is what enforces the
 <p>The complete, production-shaped example — including the raw block volume
 for <code>/var/lib/docker</code>, the six-step entrypoint, and measured resource
 sizing — is GAG's own e2e worker template:
-<a href="../../deploy/dogfood-e2e/overlays/kata/resources.yaml"><code>deploy/dogfood-e2e/overlays/kata/resources.yaml</code></a>.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/resources.yaml"><code>deploy/dogfood-e2e/overlays/kata/resources.yaml</code></a>.
 The single-pod (non-GAG) reference the spike validated is
-<a href="../../deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>.</p>
 <p>The AGC honours a template-set <code>runtimeClassName</code> and applies no override
 that strips it. If <code>dockerd</code> still fails inside the guest, add one Linux
 capability at a time to the container's
@@ -2791,7 +2791,7 @@ runbook.</p>
 <p>Dropping <code>privileged: true</code> does not come free — six things must be arranged
 that a privileged container gets implicitly. All were validated live; the
 reference implementation is the <code>args:</code> block of
-<a href="../../deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/kata-ci/runner-pod.yaml"><code>deploy/kata-ci/runner-pod.yaml</code></a>.</p>
 <ol>
 <li><strong><code>/var/lib/docker</code> must be a raw block volume, not an <code>emptyDir</code>.</strong> Kata
    surfaces an <code>emptyDir</code> as <strong>virtiofs</strong>, and Docker cannot run <code>overlay2</code>
@@ -3004,7 +3004,7 @@ egress to <code>169.254.169.254/32</code>. Kata alone is not the control.</p>
   (<code>1.35.5-gke.1241004</code>, Ubuntu 24.04, <code>c2-standard-4</code> nested-virt, Kata
   3.32.0/QEMU) — see <a href="../../plan/archive/kata-on-gke/">Kata Containers on GKE</a> for the
   evidence. GAG's dogfood e2e ships the Kata worker shape as
-  <a href="../../deploy/dogfood-e2e/overlays/kata"><code>deploy/dogfood-e2e/overlays/kata</code></a>
+  <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/dogfood-e2e/overlays/kata"><code>deploy/dogfood-e2e/overlays/kata</code></a>
   and selects it <strong>by default</strong>; <code>E2E_VARIANT=dind scripts/dogfood/e2e-start.sh</code>
   is the explicit fallback. No bundled all-in-one runner image is needed: the
   daemon is a stock <code>docker:28-dind</code> native sidecar with a six-step entrypoint,
