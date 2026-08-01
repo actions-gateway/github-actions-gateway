@@ -15,7 +15,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -45,12 +47,27 @@ import (
 // count — hence capacity_withheld{reason="capacity"} is its counterpart.
 
 // waitForCapacityDeclined blocks until the named RunnerSet's WorkerCapacityDeclined
-// condition is True for the given reason, which is both the operator's signal and the
-// value the admission rung reads.
-func waitForCapacityDeclined(t *testing.T, ns, name, reason string, within time.Duration) {
+// condition is True for the given reason, as seen through reader.
+//
+// The reader is load-bearing (Q559). The condition has two observers that do not
+// update together: the apiserver, read directly by the suite's k8sClient, and the
+// manager's informer cache, which is what the admission rung reads back in
+// runnerSetTarget.capacityGateCondition. The apiserver is the earlier of the two, so
+// a caller that waits on k8sClient and then delivers a job races the watch — the rung
+// still sees an open gate, admits, and acquires.
+//
+// A caller asserting an admission outcome therefore passes the reconciler's own
+// client. One asserting a per-poll advertisement may pass k8sClient: that tier
+// re-reads every poll, so a stale read self-corrects, while the classic tier gets one
+// delivery and no second chance. Detail: docs/development/testing.md.
+func waitForCapacityDeclined(t *testing.T, reader client.Reader, ns, name, reason string, within time.Duration) {
 	t.Helper()
 	require.Eventually(t, func() bool {
-		c := setCondition(t, ns, name, v2alpha1.ConditionWorkerCapacityDeclined)
+		var rs v2alpha1.RunnerSet
+		if err := reader.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
+			return false
+		}
+		c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
 		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == reason
 	}, within, 100*time.Millisecond,
 		"an unplaceable worker pod must close the capacity gate on RunnerSet %s/%s with reason %s",
@@ -124,7 +141,7 @@ func TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter(t *test
 		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
-	startRunnerSetReconciler(t)
+	rec := startRunnerSetReconciler(t)
 	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
 
 	// --- half one: an ordinary scheduler failure must NOT close the gate -------
@@ -168,7 +185,7 @@ func TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter(t *test
 		"pod didn't trigger scale-up: 1 max node group size reached, 2 node(s) had untolerated taint {dedicated: gpu}",
 		time.Now())
 
-	waitForCapacityDeclined(t, ns, setName, v2alpha1.ReasonScaleUpDeclined, 25*time.Second)
+	waitForCapacityDeclined(t, rec.Client, ns, setName, v2alpha1.ReasonScaleUpDeclined, 25*time.Second)
 
 	gate = setCondition(t, ns, setName, v2alpha1.ConditionWorkerCapacityDeclined)
 	require.Contains(t, gate.Message, "max node group size reached",
@@ -223,7 +240,7 @@ func TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
-	startRunnerSetReconciler(t)
+	rec := startRunnerSetReconciler(t)
 	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
 
 	acquiresBefore := brokerStub.AcquireJobCalls()
@@ -234,7 +251,7 @@ func TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire(t *testing.T) {
 	// The scheduler cannot place this set's worker shape.
 	pod := createV2WorkerPod(t, ns, setName, "worker-unplaceable")
 	markUnschedulable(t, pod, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
-	waitForCapacityDeclined(t, ns, setName, v2alpha1.ReasonPodsUnschedulable, 25*time.Second)
+	waitForCapacityDeclined(t, rec.Client, ns, setName, v2alpha1.ReasonPodsUnschedulable, 25*time.Second)
 
 	id := enqueueJobOnOwnerSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
 	require.NotEmpty(t, id, "a session for %s should be active", setName)
@@ -317,7 +334,7 @@ func TestV2_RunnerSet_ScaleSet_CapacityGateWithholdsAdvertisedCapacity(t *testin
 
 	pod := createV2WorkerPod(t, ns, setName, "worker-unplaceable")
 	markUnschedulable(t, pod, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
-	waitForCapacityDeclined(t, ns, setName, v2alpha1.ReasonPodsUnschedulable, 35*time.Second)
+	waitForCapacityDeclined(t, k8sClient, ns, setName, v2alpha1.ReasonPodsUnschedulable, 35*time.Second)
 
 	require.Eventually(t, func() bool {
 		advertised := testutil.ToFloat64(scaleSetTestMetrics.AdvertisedCapacity.WithLabelValues(ns, setName))

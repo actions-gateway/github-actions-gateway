@@ -767,6 +767,19 @@ The gap can also sit **inside a single stub handler**, which is harder to see be
 
 To prove a window like this rather than guess at it, widen it: drop a `time.Sleep` between the two effects and confirm the test fails every time. Q490's probe took the flake from unreproducible in 200 local runs to 5 failures out of 5, and re-running it against the fix — still 8/8 green with the sleep in place — is the [negative control](#proving-a-flake-fix-invert-it) that shows the ordering, not luck, is what closed it.
 
+#### The two effects can be one object read through two clients
+
+There need not be a stub involved at all. A controller-runtime manager serves reads from its informer cache while an envtest suite's `k8sClient` reads the apiserver directly, so one status condition has **two observers that never update together**: the apiserver first, the cache a watch-delivery later. A test that waits on `k8sClient` and then does something the *controller* must judge has synchronized on the earlier of the two.
+
+Q559 is the worked example. `TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire` waited for `WorkerCapacityDeclined` through `k8sClient`, then enqueued one job and asserted it was rejected with `reason=capacity`. The admission rung reads that same condition back through `mgr.GetClient()`'s cache (`runnerSetTarget.capacityGateCondition`), so a delivery landing inside the gap is admitted and **acquired** — the CI failure's own log carries the `AcquireJob` line the passing run does not. The classic tier delivers a job once, so nothing redelivers and no larger timeout could have helped.
+
+The gap measured **~1 ms** on an idle dev machine. It reads as ~10 µs if you sample it right after a wait that polls every 100 ms — the poll interval, not the gap, is what hides it. That width is too narrow to lose the race on an idle machine, and the flake was never reproduced at native timing; what the measurement establishes is that the window exists and that the old wait did not cover it. Removing the barrier entirely reproduced the CI symptom exactly, which is what tied the two together.
+
+Two rules follow:
+
+- **Wait on the client the code under test reads**, not the one that is convenient. Where an object has both, the cached one is the later observer.
+- **A one-shot stimulus needs the stronger barrier.** The same file's scale-set test may wait on `k8sClient`: it asserts a per-poll advertisement that re-reads on every poll, so a stale read self-corrects. A single delivered job has no such recovery — which is why `waitForCapacityDeclined` takes its reader as an explicit parameter, making the choice visible at each call site.
+
 ### Script tests: neutralize the clock, never measure it
 
 The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion. `make scripts-test` runs all 32 suites concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh), inside a `make check` that is already saturating the machine with the Go tests. A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.
