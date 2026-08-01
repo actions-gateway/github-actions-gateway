@@ -158,11 +158,36 @@ preference order:
 plugin the operator installs per that repo's README. After a `gh pr create` or a
 PR-branch `git push`, its `PostToolUse` hook nudges the session to launch a tiny
 `bash` watcher as a **background task** (`run_in_background`) — the exact command
-the nudge names:
+the nudge names, which is always three tokens:
 
 ```
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/pr-sentinel-watch.sh" <PR>
+bash "<the absolute path the nudge printed>" <PR>
 ```
+
+There is no path to copy from this page on purpose: the nudge prints the real
+one, resolved for the installed plugin version, every time it fires.
+
+**Copy the path out of the nudge verbatim.** Do not substitute
+`"${CLAUDE_PLUGIN_ROOT}/scripts/pr-sentinel-watch.sh"`, a `$(…)` lookup, or any
+other indirection for it — two independent things break, and the second is the
+one that bites:
+
+- The variable is not set in the shell the Bash tool runs (measured 2026-08-01 —
+  the other `CLAUDE_*` variables are present, this one is not), so the form
+  expands to `/scripts/pr-sentinel-watch.sh` and exits 127. Loud, and one retry
+  against the nudge's path recovers it.
+- pr-sentinel's own `PreToolUse` guard auto-approves the launch only when
+  `argv[1]` **realpath-equals** its watcher script, and it tokenizes with
+  `shlex.split`, which expands nothing. A variable or `$(…)` is compared as
+  literal text, so it can never match, and the launch falls through to a prompt.
+  **Setting `CLAUDE_PLUGIN_ROOT` somewhere would therefore trade the loud 127 for
+  a silent stall** — an unattended worker waits at that prompt and its PR spends
+  the rest of its life unwatched.
+
+Copying the resolved path is not a workaround, then, but the only shape that
+auto-approves; the guard refuses to resolve indirection precisely so it cannot be
+tricked into auto-approving some other script. The nudge re-resolves the path on
+every push, so it stays correct across plugin version bumps.
 
 **Launch it bare — never with an inline `VAR=…` prefix.** pr-sentinel
 auto-approves its own watcher launch only for that exact three-token shape; an
