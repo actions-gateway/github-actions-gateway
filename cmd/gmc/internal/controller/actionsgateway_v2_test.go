@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"strings"
@@ -909,4 +910,48 @@ func TestActionsGatewayV2Reconcile_FailsClosedOnFreshInstallEmptyCache(t *testin
 	// remains on the AGC NP; the GitHub allowlist simply arrives on the IPRange patch.
 	assert.True(t, hasDNSEgress(&wnp), "workload NP still permits DNS")
 	assert.NotNil(t, findApiserverEgressRule(&anp), "AGC NP keeps apiserver egress")
+}
+
+// TestBuildAGCDeploymentV2_RenderIsDeterministic: identical inputs must produce a
+// byte-identical Deployment, because the pod template is hashed into a
+// pod-template-hash and any difference rolls the tenant's control plane (Q587).
+// The fixture is loaded with every map-valued input the builder touches —
+// resourceAttributes, nodeSelector, the agcResources overlay — since a map ranged
+// into an ordered field is how that difference gets in. Go randomizes map
+// iteration per range, so one process re-rendering is a valid probe.
+func TestBuildAGCDeploymentV2_RenderIsDeterministic(t *testing.T) {
+	ag := v2Gateway("gw", "team-a", "github-app", "shared")
+	ag.Spec.Tracing = gmcv2alpha1.TracingConfig{
+		Endpoint:           "otel:4317",
+		Sampler:            "parentbased_traceidratio",
+		SamplerArg:         "0.1",
+		ResourceAttributes: map[string]string{"a": "1", "b": "2", "c": "3", "d": "4", "e": "5"},
+	}
+	ag.Spec.AGCResources = &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m")},
+		Limits:   corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("8Gi")},
+	}
+	ag.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+		NodeSelector: map[string]string{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4"},
+		Tolerations:  []corev1.Toleration{{Key: "t1", Operator: corev1.TolerationOpExists}},
+	}
+	proxy := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "team-a"},
+		Spec:       gmcv2alpha1.EgressProxySpec{NoProxyCIDRs: []string{"10.20.0.0/16", "10.30.0.0/16"}},
+	}
+	extraEnv := []corev1.EnvVar{
+		{Name: "GITHUB_API_BASE_URL", Value: "http://fakegithub:8080"},
+		{Name: "WRAPPER_IMAGE", Value: "wrapper:test"},
+	}
+
+	render := func() string {
+		b, err := json.Marshal(buildAGCDeploymentV2(ag.DeepCopy(), "agc:test", proxy.DeepCopy(),
+			gmcv2alpha1.SecurityProfileBaseline, extraEnv))
+		require.NoError(t, err)
+		return string(b)
+	}
+	first := render()
+	for i := range 100 {
+		require.Equal(t, first, render(), "render %d differs from the first", i)
+	}
 }

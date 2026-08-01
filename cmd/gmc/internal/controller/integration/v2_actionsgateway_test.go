@@ -41,6 +41,16 @@ func startActionsGatewayV2Reconciler(t *testing.T) {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
+	startActionsGatewayV2ReconcilerIn(t, mgrCtx, nil)
+}
+
+// startActionsGatewayV2ReconcilerIn starts a reconciler bound to mgrCtx and
+// returns a channel closed once its manager has stopped. Taking the context from
+// the caller is what lets a test stop one GMC "process" and start another —
+// the shape a GMC restart takes in this tier (Q587). agcExtraEnv is the
+// AGC_EXTRA_* passthrough; nil is the default wiring.
+func startActionsGatewayV2ReconcilerIn(t *testing.T, mgrCtx context.Context, agcExtraEnv []corev1.EnvVar) <-chan struct{} {
+	t.Helper()
 
 	skipNameValidation := true
 	syncPeriod := 2 * time.Second
@@ -55,15 +65,21 @@ func startActionsGatewayV2Reconciler(t *testing.T) {
 	require.NoError(t, err)
 
 	err = (&controller.ActionsGatewayV2Reconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		AGCImage: "agc:test",
-		Recorder: mgr.GetEventRecorder("actionsgateway-v2-controller"),
-		Reader:   mgr.GetAPIReader(),
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		AGCImage:    "agc:test",
+		AGCExtraEnv: agcExtraEnv,
+		Recorder:    mgr.GetEventRecorder("actionsgateway-v2-controller"),
+		Reader:      mgr.GetAPIReader(),
 	}).SetupWithManager(mgr)
 	require.NoError(t, err)
 
-	go func() { _ = mgr.Start(mgrCtx) }()
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		_ = mgr.Start(mgrCtx)
+	}()
+	return stopped
 }
 
 // newV2ActionsGateway builds a v2 ActionsGateway referencing the given GitHub App

@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
+	"slices"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -186,6 +187,9 @@ func resolveImages(cfg *gmcFlags, getenv func(string) string, environ func() []s
 	// AGC_EXTRA_<NAME>=<VALUE> env vars on the GMC pod are forwarded verbatim to
 	// each AGC Deployment the controller creates. Gate-flagged to prevent
 	// accidental capability escalation in production deployments.
+	// Sorted by name below: the slice lands in the AGC pod template, whose hash
+	// decides whether a tenant's control plane rolls, and os.Environ's order is
+	// unspecified (Q587).
 	var agcExtraEnv []corev1.EnvVar
 	if cfg.allowAgcExtraEnv {
 		for _, kv := range environ() {
@@ -201,6 +205,7 @@ func resolveImages(cfg *gmcFlags, getenv func(string) string, environ func() []s
 				})
 			}
 		}
+		slices.SortFunc(agcExtraEnv, func(a, b corev1.EnvVar) int { return strings.Compare(a.Name, b.Name) })
 	}
 
 	// WRAPPER_IMAGE (optional) enables runtime worker-wrapper injection (Q235):
