@@ -2591,14 +2591,6 @@
 <td>Failed once on <code>main</code> (run 30658951388, 2026-07-31, hosted): 90s timeout at worker_scaleset_recovery_test.go:247. Passed on the next two main commits untouched — flake, not a Q528 regression. Diagnose the timed-out wait; flake cost compounds.</td>
 </tr>
 <tr>
-<td><a id="Q576"></a>Q576</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">Ceiling-blocked provisioning retries hot, one GitHub deregister per attempt</a></td>
-<td><code>bug</code> <code>infra</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Live on the rc.3 gate (2026-08-01): maxWorkers saturated, the listener retried a 9th job ~0.8/s for 14+ min, a GitHub deregister call per attempt (704 total). Q551's backoff covers the name-conflict path, not this one.</td>
-</tr>
-<tr>
 <td><a id="Q575"></a>Q575</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">A worker pod whose <code>job-payload</code> secret is absent stalls until something else clears it</a></td>
 <td><code>bug</code></td>
