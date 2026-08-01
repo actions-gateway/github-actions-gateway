@@ -484,6 +484,22 @@ func TestMain(m *testing.M) {
 
 **Add that `TestMain` to any new GMC test package whose code under test logs through controller-runtime**, so the package's output never becomes a function of how long it takes to run. Under `-v` (`V=1 make test`, `V=1 make cover-check`) the installed logger writes to stderr, so controller-runtime output is available when you want it; otherwise it discards.
 
+### A flake that passed on rerun has two logs — diff them
+
+A rerun that passes is not the flake's dismissal; it is **half the evidence**. GitHub keeps each attempt separately, so one run ID yields both a failing and a passing log over the same test on the same commit:
+
+```bash
+gh run view <run-id> --attempt 1 --job <job-id> --log
+```
+
+Without `--attempt`, `gh` serves the *latest* attempt — the one that passed — which is why the failing log is easy to miss entirely.
+
+Diff the two across the failing test's window instead of reading the failing one alone. What the failing side contains **and the passing side does not** is the defect, and it is usually one line.
+
+Q559 is the worked example. Its row read "a closed capacity gate never rejected the delivery" — a timeout, which reads as a slow wait. The failing attempt carried an `AcquireJob` line in the test's own namespace at the instant of the enqueue, plus a minted job Secret at teardown; the 17.00s passing attempt carried neither. So the job had been **admitted**, not slowly rejected. That reclassifies the fix from "raise the timeout" to "synchronize on the right signal" before any code is read — and rules the timeout out entirely, since on that tier nothing redelivers.
+
+The general form: **a flake's two attempts are a controlled experiment CI already ran for you** — same commit, same suite, one bit different. Diff them before forming a hypothesis, not after one fails to hold up.
+
 ### Proving a flake fix: invert it
 
 Repeated passes do not validate a flake fix. A green `-count=20` is equally consistent with *"the race is closed"* and *"the race didn't fire this time"* — and on an unloaded dev machine the second is the more likely of the two, because the timing that produces the flake on a loaded CI runner often can't be reproduced locally at all. Passing-after is necessary evidence, not sufficient evidence.
