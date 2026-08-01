@@ -3354,10 +3354,12 @@ construction, and the split can, so the boundary and exclusion cases are pinned
 rather than left to a full coverage run to notice.</p>
 <h2 id="follow-ups-not-in-this-change">Follow-ups (not in this change)<a class="headerlink" href="#follow-ups-not-in-this-change" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Worktree hygiene</strong> (<a href="../../../STATUS/#Q491">Q491</a>). 58 live worktrees × ~226 MB ≈ 13 GB,
-  all Spotlight-indexed. <code>git worktree prune</code> plus a Spotlight exclusion on
-  <code>.claude/worktrees</code> removes background I/O contention that the QoS demotion
-  cannot help with.</li>
+<li><strong>Worktree hygiene</strong> (Q491, retired 2026-08-01 — not repo work). 58 live
+  worktrees × ~226 MB ≈ 13 GB, all Spotlight-indexed. Pruning is off the table:
+  the stale worktrees are kept deliberately as the corpus for Claude metrics and
+  friction reports. A Spotlight exclusion on <code>.claude/worktrees</code> still removes
+  the background I/O the QoS demotion cannot reach, and leaves them intact — a
+  workstation setting, not a backlog item.</li>
 </ul>
 
 

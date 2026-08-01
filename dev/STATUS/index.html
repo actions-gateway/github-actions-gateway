@@ -2616,11 +2616,11 @@
 </tr>
 <tr>
 <td><a id="Q577"></a>Q577</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/stop.sh"><code>stop.sh</code> leaves the pool up when its cluster-wide drain cannot converge</a></td>
+<td><a href="../plan/gke-dogfood/#reading-a-timed-out-drain"><code>stop.sh</code> leaves the pool up when its drain cannot converge</a></td>
 <td><code>infra</code> <code>bug</code></td>
-<td>🔲</td>
+<td>🚫</td>
 <td>S</td>
-<td><code>WORKER_POD_NAMESPACE</code> is empty, so the drain counts the always-on <code>ci</code> tenant, which never idles. It times out, the stop fails, and the pool is left UP, not at rest — a cost leak. Not Q553.</td>
+<td>Blocked by <a href="#Q553">Q553</a>. Not a namespace-scope bug — the drain is cluster-wide because the resize evicts every tenant's AGC. Diagnostics shipped; the wedge that stalls it is Q553/Q575/Q576.</td>
 </tr>
 <tr>
 <td><a id="Q578"></a>Q578</td>
@@ -2869,14 +2869,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>The 2026-07-29 runs predate the fix (images from 719e67f1): every worker matched by the snapshot fallback, none by the annotation — the unfixed build's behaviour. Classic drain recovery rests on it; check <code>run-id</code> on the next credentialed run.</td>
-</tr>
-<tr>
-<td><a id="Q491"></a>Q491</td>
-<td><a href="../development/testing/#resource-auto-throttle-on-gui-dev-machines">Prune stale worktrees and de-index them from Spotlight</a></td>
-<td><code>speed</code> <code>infra</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>58 live worktrees × ~226 MB ≈ 13 GB, every one Spotlight-indexed. <code>git worktree prune</code> plus a standing <code>.claude/worktrees</code> exclusion removes background I/O the QoS demotion cannot reach; testing.md names that exclusion only as a GPU-stall fix.</td>
 </tr>
 <tr>
 <td><a id="Q522"></a>Q522</td>

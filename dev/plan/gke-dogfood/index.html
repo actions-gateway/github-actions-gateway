@@ -2668,6 +2668,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#reading-a-timed-out-drain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading a timed-out drain
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3623,14 +3634,56 @@ is exactly why the wait exists rather than a "looks idle to me" glance.</p>
 </tr>
 </tbody>
 </table>
+<p>The drain is <strong>cluster-wide on purpose.</strong> The resize evicts <em>every</em> tenant's
+AGC, so it has to see every tenant's workers; scoping it to one namespace would
+scale down under another tenant's live jobs and re-open the incident above.
+(<code>e2e-stop.sh</code> does scope its drain, because it deletes one gateway and touches
+no other tenant.)</p>
 <p>A drain that does not finish inside <code>DRAIN_TIMEOUT</code> <strong>fails the stop and leaves
 the pool up</strong> — two <code>e2-standard-2</code> nodes cost far less than stranded worker
-nodes, and keeping the AGC alive is what lets it finish reaping. The error names
-the pods still in flight and the three ways out: wait and re-run, bounce a
-wedged AGC (<code>scripts/dogfood/ops.sh agc-bounce ci</code>) and re-run, or delete
-genuine orphans by hand. <code>SKIP_DRAIN=1</code> is the deliberate override — reach for
-it when the AGC is already down, since an AGC that cannot reap will never let
-the drain finish.</p>
+nodes, and keeping the AGC alive is what lets it finish reaping.</p>
+<h4 id="reading-a-timed-out-drain">Reading a timed-out drain<a class="headerlink" href="#reading-a-timed-out-drain" title="Permanent link">&para;</a></h4>
+<p>The error answers two questions, because they take opposite remedies.</p>
+<p><strong>Why is each pod still in flight?</strong> Every in-flight pod is listed with its
+scheduling and container-waiting reasons, then with its latest warning event.
+<code>Pending</code> alone does not distinguish a pod waiting on a node coming up from one
+that will never start; the event does — <code>FailedScheduling</code> names the resource
+the pod cannot get, and <code>FailedMount</code> names the <code>job-payload</code> secret that does
+not exist. Without it a pod pinned on a missing secret reads as a bare
+<code>ContainerCreating</code>.</p>
+<p><strong>Was the drain moving at all?</strong> The stop compares the pods in flight at the
+first and last polls. Pod <em>turnover</em> is the signal, not the count: a tenant at
+its <code>maxWorkers</code> ceiling admits a pod for every one it reaps, so a drain working
+through a backlog and a livelocked one both hold the count flat.</p>
+<table>
+<thead>
+<tr>
+<th>Verdict</th>
+<th>Meaning</th>
+<th>Do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>converging</em></td>
+<td>Some pods turned over — work is completing</td>
+<td>Re-run, or re-run with a larger <code>DRAIN_TIMEOUT</code></td>
+</tr>
+<tr>
+<td><em>NOT converging</em></td>
+<td>The same pods held the whole wait</td>
+<td>Delete those pods by hand, then re-run — waiting longer will not clear it</td>
+</tr>
+</tbody>
+</table>
+<p>A pod stuck on <code>FailedMount</code> or <code>FailedScheduling</code> holds one of its tenant's
+concurrency slots until it is deleted, which is what stops the rest of the queue
+from draining. Bouncing the AGC (<code>scripts/dogfood/ops.sh agc-bounce &lt;tenant&gt;</code>)
+does <strong>not</strong> clear stuck pods, and a fresh listener re-acquires the same
+assignments — it is worth trying only when the pods are gone but the listener
+still holds work.</p>
+<p><code>SKIP_DRAIN=1</code> is the deliberate override — reach for it when the AGC is already
+down, since an AGC that cannot reap will never let the drain finish.</p>
 <h3 id="route-all-ci-to-gag-milestone-end-state">Route all CI to GAG (milestone end-state)<a class="headerlink" href="#route-all-ci-to-gag-milestone-end-state" title="Permanent link">&para;</a></h3>
 <p>The opt-in dispatch above is the day-to-day validation path. The Q224 end goal
 — routing <em>every</em> push/PR run to GAG — is a deliberate, separate step because it
