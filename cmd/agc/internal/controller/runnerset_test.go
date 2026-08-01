@@ -467,13 +467,18 @@ func TestRunnerSetReaper_DeletesExpiredPods(t *testing.T) {
 	assert.Equal(t, int32(0), counts.pending, "no Pending pods")
 }
 
-// reapTestMetrics builds a Metrics carrying only the reaper counter, unregistered
-// (kept off the global Prometheus registry) for per-test isolation.
+// reapTestMetrics builds a Metrics carrying the collectors a reap path touches,
+// unregistered (kept off the global Prometheus registry) for per-test isolation. The
+// sidecar gauge is here because a reap driven through Reconcile also runs the status
+// helpers, which set it unconditionally once Metrics is non-nil.
 func reapTestMetrics() *runnercore.Metrics {
 	return &runnercore.Metrics{
 		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_runnerset_worker_pods_reaped_total",
 		}, []string{"namespace", "runner_group", "runner_set", "reason"}),
+		ReapBlockingSidecarTemplates: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "t_runnerset_reap_blocking_sidecar_templates",
+		}, []string{"namespace", "runner_set"}),
 	}
 }
 

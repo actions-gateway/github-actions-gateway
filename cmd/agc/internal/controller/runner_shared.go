@@ -251,6 +251,110 @@ type reapHooks struct {
 	deregisterRunner func(ctx context.Context, runnerName string)
 }
 
+// reapTarget binds a reap to one owning CR: which worker pods it selects, where it
+// reports, and the owner-bound side effects. Both reap entry points build one so the
+// select-stamp-deregister-delete sequence is written once.
+type reapTarget struct {
+	c                         client.Client
+	namespace, name, labelKey string
+	log                       *slog.Logger
+	metrics                   *runnercore.Metrics
+	hooks                     reapHooks
+}
+
+func (t reapTarget) list(ctx context.Context) (*corev1.PodList, error) {
+	var pods corev1.PodList
+	if err := t.c.List(ctx, &pods,
+		client.InNamespace(t.namespace),
+		client.MatchingLabels{t.labelKey: t.name},
+	); err != nil {
+		return nil, fmt.Errorf("reaper: list worker pods: %w", err)
+	}
+	return &pods, nil
+}
+
+// delete stamps pod with reason and deletes it, deregistering its GitHub runner
+// record first when it has one. It reports false with a nil error for a pod that
+// vanished under it — already reaped, nothing to account for.
+func (t reapTarget) delete(ctx context.Context, pod *corev1.Pod, reason string) (bool, error) {
+	// Stamp the deletion as the AGC's own before issuing it, so neither tier's
+	// graceful-deletion recovery reads a reaper delete as a disruption and re-runs
+	// a job the AGC itself gave up on (Q502). Stamp-then-delete: a stamp that lands
+	// without its delete only suppresses recovery for a pod the AGC had already
+	// condemned, while the reverse order would leave a re-run trigger.
+	patch := client.MergeFrom(pod.DeepCopy())
+	if pod.Annotations == nil {
+		pod.Annotations = map[string]string{}
+	}
+	pod.Annotations[provisioner.AnnotationDeletionReason] = reason
+	if err := t.c.Patch(ctx, pod, patch); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return false, nil
+		}
+		return false, fmt.Errorf("reaper: mark worker pod %s for deletion: %w", pod.Name, err)
+	}
+	// Deregister the pod's runner record before deleting the pod, so a delete that
+	// fails still leaves the registration clean — the reverse order is what leaks
+	// (Q550). A pod with no runner-name annotation (every classic worker) skips it.
+	if runnerName := pod.Annotations[provisioner.AnnotationRunnerName]; runnerName != "" && t.hooks.deregisterRunner != nil {
+		t.hooks.deregisterRunner(ctx, runnerName)
+	}
+	if err := t.c.Delete(ctx, pod, client.Preconditions{UID: &pod.UID}); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return false, nil
+		}
+		return false, fmt.Errorf("reaper: delete worker pod %s: %w", pod.Name, err)
+	}
+	t.log.Info("reaped worker pod", "pod", pod.Name, "phase", pod.Status.Phase, "reason", reason)
+	if t.metrics != nil {
+		// runner_set aliases name on scale-set reaps so the reap series join the
+		// runner_set-labelled scaleset_* gauges; runner_group carries name on both
+		// tiers unchanged (Q514).
+		runnerSet := ""
+		if t.labelKey == provisioner.LabelRunnerSet {
+			runnerSet = t.name
+		}
+		t.metrics.WorkerPodsReaped.WithLabelValues(t.namespace, t.name, runnerSet, reason).Inc()
+	}
+	return true, nil
+}
+
+// reapAllWorkerPodsByLabel deletes every worker pod the owning CR still has, with no
+// TTL, deadline or phase test — the teardown counterpart of reapWorkerPodsByLabel,
+// used when the owning ActionsGateway is terminating and the AGC is about to stop
+// being the pods' reaper (Q547). It returns how many deletes it issued. Pods already
+// carrying a deletion timestamp are skipped: the kubelet finishes those with no
+// controller involved, which is the state this whole path is trying to reach.
+func reapAllWorkerPodsByLabel(
+	ctx context.Context,
+	c client.Client,
+	namespace, name, labelKey, reason string,
+	log *slog.Logger,
+	metrics *runnercore.Metrics,
+	hooks reapHooks,
+) (int, error) {
+	target := reapTarget{c: c, namespace: namespace, name: name, labelKey: labelKey, log: log, metrics: metrics, hooks: hooks}
+	pods, err := target.list(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var reaped int
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if !pod.DeletionTimestamp.IsZero() {
+			continue
+		}
+		deleted, err := target.delete(ctx, pod, reason)
+		if err != nil {
+			return reaped, err
+		}
+		if deleted {
+			reaped++
+		}
+	}
+	return reaped, nil
+}
+
 // reapWorkerPodsByLabel deletes worker pods (selected by labelKey == name in
 // namespace) that the owning CR no longer needs: terminal pods older than ttl,
 // Pending pods older than deadline, and pods still Pending or Running more than
@@ -268,20 +372,10 @@ func reapWorkerPodsByLabel(
 	metrics *runnercore.Metrics,
 	hooks reapHooks,
 ) (time.Duration, workerPodCounts, error) {
-	var pods corev1.PodList
-	if err := c.List(ctx, &pods,
-		client.InNamespace(namespace),
-		client.MatchingLabels{labelKey: name},
-	); err != nil {
-		return 0, workerPodCounts{}, fmt.Errorf("reaper: list worker pods: %w", err)
-	}
-
-	// runner_set aliases name on scale-set reaps so the reap series join the
-	// runner_set-labelled scaleset_* gauges; runner_group carries name on both
-	// tiers unchanged (Q514).
-	runnerSet := ""
-	if labelKey == provisioner.LabelRunnerSet {
-		runnerSet = name
+	target := reapTarget{c: c, namespace: namespace, name: name, labelKey: labelKey, log: log, metrics: metrics, hooks: hooks}
+	pods, err := target.list(ctx)
+	if err != nil {
+		return 0, workerPodCounts{}, err
 	}
 
 	var next time.Duration
@@ -344,37 +438,12 @@ func reapWorkerPodsByLabel(
 			continue
 		}
 
-		// Stamp the deletion as the AGC's own before issuing it, so neither tier's
-		// graceful-deletion recovery reads a reaper delete as a disruption and re-runs
-		// a job the AGC itself gave up on (Q502). Stamp-then-delete: a stamp that lands
-		// without its delete only suppresses recovery for a pod the AGC had already
-		// condemned, while the reverse order would leave a re-run trigger.
-		patch := client.MergeFrom(pod.DeepCopy())
-		if pod.Annotations == nil {
-			pod.Annotations = map[string]string{}
+		deleted, err := target.delete(ctx, pod, reason)
+		if err != nil {
+			return next, counts, err
 		}
-		pod.Annotations[provisioner.AnnotationDeletionReason] = reason
-		if err := c.Patch(ctx, pod, patch); err != nil {
-			if client.IgnoreNotFound(err) == nil {
-				continue
-			}
-			return next, counts, fmt.Errorf("reaper: mark worker pod %s for deletion: %w", pod.Name, err)
-		}
-		// Deregister the pod's runner record before deleting the pod, so a delete that
-		// fails still leaves the registration clean — the reverse order is what leaks
-		// (Q550). A pod with no runner-name annotation (every classic worker) skips it.
-		if runnerName := pod.Annotations[provisioner.AnnotationRunnerName]; runnerName != "" && hooks.deregisterRunner != nil {
-			hooks.deregisterRunner(ctx, runnerName)
-		}
-		if err := c.Delete(ctx, pod, client.Preconditions{UID: &pod.UID}); err != nil {
-			if client.IgnoreNotFound(err) == nil {
-				continue
-			}
-			return next, counts, fmt.Errorf("reaper: delete worker pod %s: %w", pod.Name, err)
-		}
-		log.Info("reaped worker pod", "pod", pod.Name, "phase", pod.Status.Phase, "reason", reason)
-		if metrics != nil {
-			metrics.WorkerPodsReaped.WithLabelValues(namespace, name, runnerSet, reason).Inc()
+		if !deleted {
+			continue
 		}
 		if reason == reapReasonPendingDeadline && hooks.emitStuckPending != nil {
 			hooks.emitStuckPending(pod.Name, deadline)

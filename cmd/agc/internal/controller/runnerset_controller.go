@@ -323,6 +323,17 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// The gateway going away takes this AGC with it, and it is the only reaper the
+	// set's worker pods have. Checked before reference resolution so a set whose
+	// template or proxy is also missing still reaps (Q547).
+	terminating, err := gatewayTerminating(ctx, r.Client, &rs)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if terminating {
+		return r.reconcileGatewayTerminating(ctx, log, &rs)
+	}
+
 	// 1. Resolve references. Fail closed: until every reference resolves, the
 	// RunnerSet sits Ready=False/<Ref>NotFound with no listeners running, so no
 	// worker pod is ever provisioned in the gap (§H.7). The referent watches

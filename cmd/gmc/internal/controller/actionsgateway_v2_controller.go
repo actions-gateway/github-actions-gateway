@@ -102,6 +102,16 @@ type ActionsGatewayV2Reconciler struct {
 	// would still return the just-deleted object and make every clean teardown look
 	// incomplete. nil (unit tests) falls back to the cached Client.
 	Reader client.Reader
+	// Now supplies the current time for the teardown worker-drain deadline. nil is
+	// time.Now; tests inject to drive the deadline without sleeping.
+	Now func() time.Time
+}
+
+func (r *ActionsGatewayV2Reconciler) nowFunc() func() time.Time {
+	if r.Now != nil {
+		return r.Now
+	}
+	return time.Now
 }
 
 // teardownReader returns the uncached reader for teardown verification, falling
@@ -806,6 +816,38 @@ func runnerSetImpairments(conditions []metav1.Condition) []string {
 	return tripped
 }
 
+// workerDrainTimeout bounds how long v2 teardown holds the gateway open waiting for
+// the AGC to reap its tenant's worker pods (Q547). The AGC only has to observe the
+// deletion timestamp through its cache and issue the deletes, so this is generous for
+// the healthy path; its real job is to bound the unhealthy one, where no AGC is
+// running to reap and every gateway deletion would otherwise pay the full wait.
+const workerDrainTimeout = 2 * time.Minute
+
+// undrainedRunnerSets returns "<name> (N active, M pending)" for each RunnerSet bound
+// to ag that still reports worker pods, in the same list-and-match-gatewayRef shape
+// evalRunnerSetHealth uses — v2 RunnerSets are not owned by the gateway, so there are
+// no owner labels to select on. A read failure yields nothing: teardown must not wedge
+// on an unreadable list, and the deadline would release it anyway.
+func (r *ActionsGatewayV2Reconciler) undrainedRunnerSets(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) []string {
+	var rsList gmcv2alpha1.RunnerSetList
+	if err := r.List(ctx, &rsList, client.InNamespace(ag.Namespace)); err != nil {
+		logf.FromContext(ctx).Error(err, "could not read bound RunnerSets for the teardown worker drain")
+		return nil
+	}
+	var undrained []string
+	for i := range rsList.Items {
+		rs := &rsList.Items[i]
+		if rs.Spec.GatewayRef.Name != ag.Name {
+			continue
+		}
+		if rs.Status.ActiveJobs+rs.Status.PendingJobs > 0 {
+			undrained = append(undrained, fmt.Sprintf("%s (%d active, %d pending)",
+				rs.Name, rs.Status.ActiveJobs, rs.Status.PendingJobs))
+		}
+	}
+	return undrained
+}
+
 // reconcileDelete tears down the per-gateway control plane fail-closed (Q125,
 // ported from v1's reconcileDelete via Q328): every child is deleted explicitly
 // and the finalizer is NOT removed until each one is verifiably gone. The
@@ -824,9 +866,38 @@ func runnerSetImpairments(conditions []metav1.Condition) []string {
 // cleanup. The metrics mTLS Secrets are left to owner-ref GC — the GMC
 // deliberately holds no delete verb on secrets (mirrors v1's proxy TLS Secret).
 // RunnerSets reference the gateway but are not owned by it, so they are not
-// deleted — they degrade to Ready=False/GatewayNotFound via their own watch.
+// deleted — they degrade to Ready=False/GatewayNotFound via their own watch. Their
+// worker pods do have to go, though, and only the AGC can reap them: teardown holds
+// until it has (undrainedRunnerSets, Q547) before deleting the AGC out from under
+// them.
 func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
+
+	// Worker drain (Q547), before any child is deleted. The tenant's worker pods are
+	// owned by RunnerSets, which survive gateway deletion by design, so this AGC is
+	// their only reaper — and it reaps them itself once it observes the gateway's
+	// deletion timestamp. Deleting its Deployment (and, moments later, its RoleBinding
+	// and ServiceAccount) before it gets there strands the pods with their
+	// do-not-disrupt annotations, pinning a billable node until the kubelet's
+	// activeDeadlineSeconds fires up to maxWorkerLifetime later. So teardown waits for
+	// the counts to reach zero — which happens as soon as the deletes are ISSUED, since
+	// the AGC's reaper stops counting a pod that already carries a deletion timestamp.
+	if undrained := r.undrainedRunnerSets(ctx, ag); len(undrained) > 0 {
+		if r.nowFunc()().Before(ag.DeletionTimestamp.Add(workerDrainTimeout)) {
+			r.recordEvent(ag, corev1.EventTypeNormal, "WaitingForWorkerDrain", "ReconcileDelete",
+				"Holding gateway teardown until the AGC reaps its worker pods: %s",
+				strings.Join(undrained, ", "))
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
+		// The AGC never got there — crashed, scaled to zero, or never healthy. Proceed
+		// rather than hold the gateway forever, and name what is being left behind:
+		// those pods now have no reaper and are bounded only by maxWorkerLifetime.
+		r.recordEvent(ag, corev1.EventTypeWarning, "WorkerDrainTimeout", "ReconcileDelete",
+			"Worker pods did not drain within %s of deletion; tearing down anyway, so any pod still "+
+				"running is orphaned until its spec.maxWorkerLifetime deadline: %s",
+			workerDrainTimeout, strings.Join(undrained, ", "))
+	}
+
 	var errs []error
 	var lingering []string
 	// del deletes one child and verifies it is gone. A delete error is collected;
