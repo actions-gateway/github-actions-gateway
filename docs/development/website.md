@@ -496,6 +496,10 @@ plausible-looking 404. So is a **directory under `docs/`**, which resolves to
 that directory's page rather than to the tree ([§ The two link
 gates](#the-two-link-gates) owns that case).
 
+Both link syntaxes are rewritten — inline `](target)` and the reference-style
+`[label]: target` definition. Python-Markdown resolves the two into the same
+link, so covering only the first would leave the rarer form silently dead.
+
 This was already needed before the backlog page: `design/` and `operations/`
 shipped such links dead. Publishing the repo-internal docs made it load-bearing
 — 724 links across the tree, 34 on `STATUS.md` alone.

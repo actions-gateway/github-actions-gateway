@@ -25,6 +25,9 @@ from the file set.
 pages.yml` sets it to the tag when deploying a release, so each version links to
 the source it documents.
 
+Both link syntaxes are covered — inline `](target)` and the reference-style
+`[label]: target` definition Python-Markdown resolves into one.
+
 A target that does not exist in the working tree is left alone: a typo should
 keep failing MkDocs' link check rather than become a plausible-looking 404.
 
@@ -42,6 +45,12 @@ import re
 # nested parens and whitespace, which is the whole corpus and keeps an optional
 # `"title"` suffix out of the captured target.
 _TARGET = re.compile(r"(?<=]\()([^()\s]+)(?=[)\s])")
+
+# The destination of a reference-style definition — `[label]: target`, up to
+# CommonMark's three leading spaces, with any `"title"` left after the match.
+# Python-Markdown resolves these into ordinary links, so a target skipped here
+# ships exactly as dead as an inline one; the label group is preserved verbatim.
+_REF_TARGET = re.compile(r"(?m)^( {0,3}\[[^\]\n]+\]:[ \t]+)(\S+)")
 
 # `scheme://…` or `mailto:…`. Deliberately narrower than RFC 3986: the repo
 # writes source references as `path/to/file.go:91`, which a general scheme
@@ -91,8 +100,7 @@ def on_files(files, config):
 def rewrite(markdown, page_dir, repo_root, docs_prefix, base, ref, published):
     """Return markdown with every unserved relative target absolutized."""
 
-    def replace(match):
-        target = match.group(1)
+    def absolutize(target):
         if not _is_relative(target):
             return target
         path, _, fragment = target.partition("#")
@@ -118,7 +126,8 @@ def rewrite(markdown, page_dir, repo_root, docs_prefix, base, ref, published):
         url = f"{base}/{kind}/{ref}/{resolved}"
         return f"{url}#{fragment}" if fragment else url
 
-    return _TARGET.sub(replace, markdown)
+    markdown = _TARGET.sub(lambda m: absolutize(m.group(1)), markdown)
+    return _REF_TARGET.sub(lambda m: m.group(1) + absolutize(m.group(2)), markdown)
 
 
 def on_page_markdown(markdown, page, config, **_kwargs):
