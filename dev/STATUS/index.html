@@ -2687,6 +2687,14 @@
 <td>Three docs credit <code>actionlint</code>: <code>release.md:540</code> with keeping SHA-pinned <code>uses:</code> clean, <code>Makefile:446</code> and <code>testing.md:183</code> with inline <code>run:</code> blocks. No workflow runs it — the <code>lint</code> job is golangci-lint, so a workflow-only PR ships unlinted.</td>
 </tr>
 <tr>
+<td><a id="Q589"></a>Q589</td>
+<td><a href="../development/testing/#never-foreground-poll-ci-logs-or-files">foreground-guard cannot see a scheduled-poll background task</a></td>
+<td><code>infra</code> <code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>testing.md already names <code>sleep N; tail &lt;log&gt;</code> launched as a second background task as an evasion of the hook. Q559's session ran it ~6 times and misread stale output as a stalled run. File upstream against the plugin.</td>
+</tr>
+<tr>
 <td><a id="Q563"></a>Q563</td>
 <td><a href="../development/website/#what-belongs-in-nav">Nothing gates a published page that lands in no nav section</a></td>
 <td><code>docs</code> <code>infra</code> <code>retro</code></td>
