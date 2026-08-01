@@ -186,6 +186,33 @@ Only the first two were written down before. A 2026-07-30 groom that deferred [Q
 
 Do **not** tag Queue rows with speculative future release versions (`1.1`, `2.0`). Introduce a release label only once that release is *concretely scoped* — a plan doc defining its Definition of Done exists — at which point the label answers a real yes/no question ("does this block that tag?"). Post-release estimates are guesses that move (churn without signal), position already encodes priority, and an undefined version anchors nothing. The right pattern is the one `1.0-gate` followed: scope the release in a plan doc first, then add the label.
 
+**The corollary: once a release *is* scoped, only what blocks the tag gets a label.** An item that is planned for the release but does not gate it belongs in that release's scope ledger (below), never in a second, softer label class. A soft `1.4-plan` label would be a guess nothing enforces — it goes stale silently, needs relabeling on every slip, and blurs the `-gate` label's one crisp meaning, *the tag waits for this*. The ledger can carry "planned" honestly because its lifecycle matches the release's: written when the release is scoped, archived when the tag is cut.
+
+## Cutting a release: the scope ledger
+
+Deciding a release is worth cutting is a [release.md](../operations/release.md#when-to-cut) question, answered from `scripts/release-delta.sh`. Everything from that decision to the tag is a backlog question, and this is its shape.
+
+**A release plan doc opens with a scope ledger** — one row per planned item, so "planned vs delivered" is readable at a glance instead of reconstructed from a prose status banner:
+
+| Q-ID | Item | Gates? | Status |
+|---|---|---|---|
+| Q550 | Scale-set runner registration leak | `1.3-gate` | ✅ shipped |
+| Q551 | Job skipped permanently after 4 attempts | `1.3-gate` | 🔲 open |
+| Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted (see *Explicitly out of scope*) |
+
+Link each ID to its `STATUS.md` anchor while the row is open; a shipped or punted row's link goes stale when the row is deleted, so drop it as the row's status flips — the Q-ID itself stays, and it is what git history is searchable by.
+
+**Delivered is a tick, not a narrative.** A row flips to ✅ in the same change that deletes its Queue row — the plan-docs-stay-current discipline already owns that edit, so the ledger costs nothing extra to keep true.
+
+**The cut condition is one grep:** no `-gate` row for this release remains in the Queue (`grep '1.3-gate' docs/STATUS.md`), plus the release-candidate dogfood validation, which is deliberately not a Queue row because it can only run against a published RC.
+
+**Punt vs delay — the two ways scope changes:**
+
+- **Punt** (the item leaves the release): remove its `-gate` label and move it to the plan doc's *Explicitly out of scope* table with the reason. It **keeps its Queue position** — punting from a release is a statement about the tag, not a demotion; an item can be too important to rush and still be the next thing worked on.
+- **Delay** (the release waits): change nothing. The label stays on, the ledger row stays open, and the tag waits. Leaving the label on *is* the decision to delay — there is no separate marker for it.
+
+Both are reversible and both are cheap, which is the point: the expensive failure is a release whose scope quietly drifts because nothing recorded what it was.
+
 ## Archiving completed plan docs
 
 When a plan's work fully lands and `docs/STATUS.md` no longer references it (no Progress row, no Queue/Deferred row), move the doc under `docs/plan/archive/` rather than deleting it. The rationale is usually more valuable than the diff, but a fully-closed plan in the top level of `docs/plan/` is noise for the next session scanning for active work.

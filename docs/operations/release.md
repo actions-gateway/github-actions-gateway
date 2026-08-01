@@ -106,6 +106,52 @@ The maintainer's job is to cut the tag and verify the result.
    provenance, `attestations: write` for the build-provenance attestation). No
    repo secret is required — that is the point of keyless signing.
 
+## When to cut
+
+Everything below this section is *how* to cut a release. This section is *whether*
+to — the question the rest of the page assumes has already been answered.
+
+Start from the record, not from memory. The delete-on-done Queue erases delivered
+work from `STATUS.md` by design, so nothing in the backlog shows what has piled up
+since the last tag:
+
+```bash
+scripts/release-delta.sh
+```
+
+It reports, for `<last stable tag>..origin/main`, the commits by Conventional
+Commit type (breaking ones called out), the Queue rows closed in that window, the
+API diffstat that is the semver signal, and the operator-facing pages touched.
+Pass an explicit `FROM` (and optionally `TO`) to look at a different window.
+
+**The triggers.** Any one of these is reason enough to scope a release; none of
+them is automatic, and the report is the input to the judgement rather than a
+substitute for it:
+
+- **A security fix users cannot get any other way.** Cut promptly, as a patch off
+  the release branch if `main` carries unrelated risk ([Patch releases and
+  backports](#patch-releases-and-backports)).
+- **A headline capability landed.** Scope a minor around it — one thing an adopter
+  would upgrade *for*, with the rest of the window riding along. That is the
+  [1.3](../plan/release-1.3.md) pattern: worker right-sizing was the headline, and
+  three dozen other changes shipped underneath it.
+- **User-visible fixes accumulated with no feature.** A patch release. The bar is
+  that an operator running the current tag is hitting something already fixed, not
+  that the fix count crossed a number.
+- **Internal-only churn.** Wait. Refactors, test coverage, CI work, and docs the
+  site publishes continuously do not need a tag to reach anyone.
+
+**The counterweight — a tag is not free.** Every GA cut spends the
+[release-candidate dogfood validation](#validate-the-release-candidate-on-dogfood):
+a real GKE cluster, a live e2e matrix, and a maintainer watching it. That cost is
+what makes "enough" a real bar rather than a formality — it is also why the
+answer to a thin delta is *wait*, not *cut a small one*.
+
+**Once you decide to cut, the question changes.** From that point the report stops
+being the view: write the release plan doc, open it with a
+[scope ledger](../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger),
+and let the ledger's `-gate` rows answer "is it done?" until the tag.
+
 ## Release sequence
 
 ### 1. Pre-flight
