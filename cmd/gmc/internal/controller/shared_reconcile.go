@@ -32,6 +32,11 @@ func (e *provisioningError) Unwrap() error { return e.err }
 // recreated rather than patched. It never escapes the applyRoleBinding helpers.
 var errRoleRefImmutable = errors.New("rolebinding roleRef changed; recreate required")
 
+// errDeploymentSelectorImmutable signals that an existing Deployment's
+// spec.selector differs from the desired one, so it must be deleted and recreated
+// rather than patched. It never escapes the applyDeployment helper.
+var errDeploymentSelectorImmutable = errors.New("deployment selector changed; recreate required")
+
 // DefaultEgressStaleThreshold is the EgressRulesStale age threshold when a
 // reconciler's EgressStaleThreshold is unset. It is just over twice the 24h
 // IP-range refresh interval, so a single entirely-missed refresh (age peaks at

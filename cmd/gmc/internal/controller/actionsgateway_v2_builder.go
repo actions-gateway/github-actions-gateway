@@ -171,9 +171,13 @@ func buildAGCServiceV2(ag *gmcv2alpha1.ActionsGateway) *corev1.Service {
 
 // buildWorkloadNetworkPolicyV2 is the v2 workload egress lockdown: AGC and worker
 // pods may reach DNS and the proxy on :8080; default-deny ingress. In the proxied
-// case it is identical in shape to v1's buildWorkloadNetworkPolicy (the proxy
-// podSelector "app: proxy" matches the EgressProxy pods), so worker egress-IP
-// attribution is no weaker than v1.
+// case it is identical in shape to v1's buildWorkloadNetworkPolicy, so worker
+// egress-IP attribution is no weaker than v1 — only the proxy peer differs: it
+// selects EgressProxy pool pods by the identity label rather than v1's bare
+// `app: actions-gateway-proxy`, which v2 pods no longer carry (Q582). That is a
+// tightening, not a loosening: the peer covers every EgressProxy pool in the
+// namespace (a RunnerSet may name its own proxyRef, so no single pool's name will
+// do) and no longer reaches a coexisting v1 pool's pods.
 //
 // When the gateway has no defaultProxyRef (direct egress, §H.10) the policy
 // additionally permits the GitHub CIDRs on 443 so proxy-less workers reach GitHub
@@ -189,7 +193,7 @@ func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, githubCIDRs []
 		{
 			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
 			To: []networkingv1.NetworkPolicyPeer{{
-				PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": proxyAppName}},
+				PodSelector: egressProxyPodPeerSelector(),
 			}},
 		},
 	}

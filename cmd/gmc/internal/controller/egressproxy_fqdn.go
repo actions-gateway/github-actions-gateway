@@ -270,9 +270,9 @@ func buildEgressProxyCalicoNetworkPolicy(ep *gmcv2alpha1.EgressProxy, gitHubHost
 	}
 
 	// Calico uses a label-expression selector string, not a structured matchLabels.
-	// Scope to this pool's proxy pods by the app label and the per-EgressProxy
-	// identity label so it never governs another pool.
-	podSelector := fmt.Sprintf("app == '%s' && %s == '%s'", proxyAppName, egressProxyComponentLabel, ep.Name)
+	// Scope to this pool's proxy pods by the per-EgressProxy identity label so it
+	// never governs another pool — nor a coexisting v1 pool (Q582).
+	podSelector := fmt.Sprintf("%s == '%s'", egressProxyComponentLabel, ep.Name)
 	dnsNamespaceSelector := fmt.Sprintf("%s == '%s'", dnsNamespaceLabel, dnsNamespaceValue)
 
 	// dnsRule allows port-53 to a specific cluster-DNS pod label. node-local-dns is

@@ -91,8 +91,7 @@ func TestBuildEgressProxyGKEFQDNNetworkPolicy(t *testing.T) {
 	sel, found, err := unstructured.NestedStringMap(u.Object, "spec", "podSelector", "matchLabels")
 	require.NoError(t, err)
 	require.True(t, found)
-	assert.Equal(t, proxyAppName, sel["app"])
-	assert.Equal(t, "shared", sel[egressProxyComponentLabel])
+	assert.Equal(t, map[string]string{egressProxyComponentLabel: "shared"}, sel)
 
 	// A single egress entry: GitHub (+ extra) FQDNs on TCP/443. NO DNS rule — DNS is
 	// handled by the base NetworkPolicy, and GKE FQDN enforcement bypasses DNS (Q245).
@@ -173,8 +172,7 @@ func TestBuildEgressProxyCiliumNetworkPolicy(t *testing.T) {
 	sel, found, err := unstructured.NestedStringMap(u.Object, "spec", "endpointSelector", "matchLabels")
 	require.NoError(t, err)
 	require.True(t, found)
-	assert.Equal(t, proxyAppName, sel["app"])
-	assert.Equal(t, "shared", sel[egressProxyComponentLabel])
+	assert.Equal(t, map[string]string{egressProxyComponentLabel: "shared"}, sel)
 
 	egress, found, err := unstructured.NestedSlice(u.Object, "spec", "egress")
 	require.NoError(t, err)
@@ -239,8 +237,9 @@ func TestBuildEgressProxyCalicoNetworkPolicy(t *testing.T) {
 	selector, found, err := unstructured.NestedString(u.Object, "spec", "selector")
 	require.NoError(t, err)
 	require.True(t, found)
-	assert.Contains(t, selector, "app == '"+proxyAppName+"'")
-	assert.Contains(t, selector, egressProxyComponentLabel+" == 'shared'")
+	assert.Equal(t, egressProxyComponentLabel+" == 'shared'", selector)
+	assert.NotContains(t, selector, "app == '"+proxyAppName+"'",
+		"v1's bare app label must not scope a v2 pool's policy (Q582)")
 
 	types, _, _ := unstructured.NestedStringSlice(u.Object, "spec", "types")
 	assert.Equal(t, []string{"Egress"}, types, "Egress-only policy default-denies other egress")

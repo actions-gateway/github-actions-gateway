@@ -19,6 +19,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -220,12 +221,23 @@ func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: gwWorkloadNP}, &workloadNP))
 	assert.True(t, hasGatewayOwnerRef(workloadNP.OwnerReferences, "gw"))
 	assert.Empty(t, workloadNP.Spec.Ingress, "workload NetworkPolicy must default-deny ingress")
+	// The peer must select an EgressProxy pool's pods by their identity label — NOT by
+	// v1's bare `app: actions-gateway-proxy`, which a v2 pool no longer carries and
+	// which would make this rule reach a coexisting v1 pool instead (Q582).
 	foundProxyEgress := false
+	poolPod := labels.Set{proxyIdentityLabel(): "any-pool"}
 	for _, rule := range workloadNP.Spec.Egress {
 		for _, peer := range rule.To {
-			if peer.PodSelector != nil && peer.PodSelector.MatchLabels["app"] == proxyName {
+			if peer.PodSelector == nil {
+				continue
+			}
+			sel, err := metav1.LabelSelectorAsSelector(peer.PodSelector)
+			require.NoError(t, err)
+			if sel.Matches(poolPod) {
 				foundProxyEgress = true
 			}
+			assert.NotEqual(t, proxyName, peer.PodSelector.MatchLabels["app"],
+				"the workload egress peer must not key on v1's pool label")
 		}
 	}
 	assert.True(t, foundProxyEgress, "workload egress must target the proxy pods")

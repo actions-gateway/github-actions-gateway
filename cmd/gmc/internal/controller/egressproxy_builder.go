@@ -27,8 +27,10 @@ const (
 	// child object and pod. It is load-bearing twice over:
 	//   1. Selector isolation — multiple EgressProxy pools in one namespace must not
 	//      collide on a shared selector (v1 could assume a single proxy per
-	//      namespace). Every Deployment/Service/PDB/HPA/NetworkPolicy selector and
-	//      the pod anti-affinity key on this label.
+	//      namespace). It is the SOLE key of every Deployment/Service/PDB/
+	//      NetworkPolicy selector and of the pod anti-affinity term, which is what
+	//      also keeps a pool clear of v1's coexisting one — see
+	//      egressProxyPodSelector (Q582).
 	//   2. Free observability win (§H.8) — a per-EgressProxy Deployment means proxy
 	//      metrics carry the proxy identity automatically once a scrape is wired.
 	egressProxyComponentLabel = "actions-gateway.com/egress-proxy"
@@ -61,13 +63,36 @@ func egressProxyLabels(ep *gmcv2alpha1.EgressProxy) map[string]string {
 }
 
 // egressProxyPodSelector returns the label set used as both the pod template
-// labels and the Deployment/Service/PDB/NetworkPolicy selector. It carries the
-// egress-proxy identity (so it never selects another EgressProxy's pods) and the
-// generic app label so workload NetworkPolicies and tooling can match proxy pods.
+// labels and the Deployment/Service/PDB/NetworkPolicy selector. The per-EgressProxy
+// identity is the whole selector, so it never selects another EgressProxy's pods —
+// nor v1's.
+//
+// It deliberately does NOT carry v1's generic `app: actions-gateway-proxy` (Q582).
+// v1 has one fixed-name pool per namespace and keys its PDB selector, its Deployment
+// selector, and its required hostname anti-affinity term on that bare label, so a v2
+// pod wearing it is claimed by all three throughout a migration's coexistence window:
+// each pool's pods fall under the other's PDB, both HPAs wedge on AmbiguousSelector
+// (the HPA controller reads the scale target's — the Deployment's — selector and
+// refuses to act on pods another HPA also controls, so neither pool autoscales), and
+// the two pools repel each other off every node. The generic "this is a proxy pod"
+// identity for humans and tooling is the recommended `app.kubernetes.io/name` label,
+// which is additive metadata that nothing selects on; the v2 workload NetworkPolicy
+// reaches proxy pods via egressProxyPodPeerSelector instead.
 func egressProxyPodSelector(ep *gmcv2alpha1.EgressProxy) map[string]string {
-	return map[string]string{
-		"app":                     proxyAppName,
-		egressProxyComponentLabel: ep.Name,
+	return map[string]string{egressProxyComponentLabel: ep.Name}
+}
+
+// egressProxyPodPeerSelector selects the pods of EVERY EgressProxy pool in a
+// namespace — any pod carrying the identity label, whichever pool owns it. It is the
+// v2 workload NetworkPolicy's proxy peer: a gateway's RunnerSets may each name their
+// own proxyRef, so the policy cannot key on one pool's name. No v1 proxy pod carries
+// the label, so v2 workload egress no longer reaches v1's pool either (Q582).
+func egressProxyPodPeerSelector() *metav1.LabelSelector {
+	return &metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{{
+			Key:      egressProxyComponentLabel,
+			Operator: metav1.LabelSelectorOpExists,
+		}},
 	}
 }
 

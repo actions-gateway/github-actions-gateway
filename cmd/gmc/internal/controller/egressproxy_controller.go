@@ -21,6 +21,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -31,6 +32,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,6 +44,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -401,9 +404,24 @@ func (r *EgressProxyReconciler) recordEvent(ep *gmcv2alpha1.EgressProxy, eventty
 // managedAutoscaling is false — so `.spec.replicas` is assigned selectively
 // rather than by a blanket spec overwrite: see assignHPATargetDeploymentSpec
 // (Q283) and its externally-scaled variant (Q173).
+//
+// spec.selector is immutable, so a pool provisioned before Q582 — whose selector
+// still carries v1's `app: actions-gateway-proxy` alongside the identity label —
+// cannot be patched onto the narrowed selector: the apiserver rejects the update
+// and the reconcile wedges Degraded forever. Such a pool is deleted and recreated,
+// mirroring applyRoleBinding's immutable-roleRef path. The delete is explicitly
+// Background: Orphan would strand a ReplicaSet that keeps replacing pods no owner
+// reclaims, and those pods hold the hostname anti-affinity slots the replacement
+// needs. The replacement's pods still wait out the old pods' termination grace
+// period on that anti-affinity, so the pool is briefly unavailable — a one-time
+// cost, and one a migration never pays: gag-migrate creates the EgressProxy after
+// the upgrade, so its pool is born with the narrowed selector.
 func (r *EgressProxyReconciler) applyDeployment(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *appsv1.Deployment) error {
 	obj := &appsv1.Deployment{}
-	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
+	err := applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
+		if obj.ResourceVersion != "" && !equality.Semantic.DeepEqual(obj.Spec.Selector, desired.Spec.Selector) {
+			return errDeploymentSelectorImmutable
+		}
 		if egressProxyManagedAutoscaling(ep) {
 			assignHPATargetDeploymentSpec(&obj.Spec, desired.Spec)
 		} else {
@@ -411,6 +429,18 @@ func (r *EgressProxyReconciler) applyDeployment(ctx context.Context, ep *gmcv2al
 		}
 		return nil
 	})
+	if errors.Is(err, errDeploymentSelectorImmutable) {
+		if delErr := r.Delete(ctx, obj, client.PropagationPolicy(metav1.DeletePropagationBackground)); delErr != nil && !apierrors.IsNotFound(delErr) {
+			return delErr
+		}
+		if refErr := controllerutil.SetControllerReference(ep, desired, r.Scheme); refErr != nil {
+			return refErr
+		}
+		// An AlreadyExists here means the delete has not yet drained from the
+		// apiserver; the reconcile requeues and the create lands on the retry.
+		return r.Create(ctx, desired)
+	}
+	return err
 }
 
 func (r *EgressProxyReconciler) applyService(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *corev1.Service) error {

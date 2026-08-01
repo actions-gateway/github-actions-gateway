@@ -67,11 +67,12 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
 
 		By("applying the v1 DinD tenant")
-		// One proxy replica, unautoscalable: the migrated pool coexists with this one
-		// and the two repel each other by hostname anti-affinity, so a v1 pool free to
-		// autoscale leaves the migrated pool nowhere to schedule (Q570).
+		// Deliberately NOT pinned to one unautoscalable replica. That pin was the Q570
+		// workaround for the collision Q582 fixed — the two pools shared a selector
+		// label, so they repelled each other by hostname anti-affinity and a v1 pool
+		// free to autoscale left the migrated pool nowhere to schedule. Keeping the pin
+		// would also keep this spec blind to a regression of exactly that.
 		utils.DinDTenant(tenantNS, agName, secretName, workerImage).
-			WithProxyReplicas(1, 1).
 			ApplyWithWebhookRetry()
 
 		By("waiting for the v1 AGC control plane to be ready")
