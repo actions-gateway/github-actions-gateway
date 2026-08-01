@@ -329,6 +329,25 @@
   
   
     <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
       <a href="../../demo/" class="md-tabs__link">
         
   
@@ -531,6 +550,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../demo/" class="md-nav__link">
         
   
@@ -667,7 +713,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -689,14 +735,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1300,7 +1346,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1322,14 +1368,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1742,10 +1788,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_15" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_15" id="__nav_7_15_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
             
   
   
@@ -1763,8 +1809,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_15_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_15">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3029,16 +3075,18 @@ and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.
   recorded correctly in <code>docs/operations/upgrade.md</code> by the change that
   introduced it, and each invisible to anyone reading a generated changelog.</p>
 <ul>
-<li><strong>Reconcile <a href="../../roadmap/"><code>docs/roadmap.md</code></a> against
+<li><strong>Reconcile <a href="../../roadmap/"><code>docs/roadmap.md</code></a> and <a href="../../features/"><code>docs/features.md</code></a>
+  against
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md"><code>docs/STATUS.md</code></a>
   before you tag.</strong> The same freeze that applies to the announce bar applies
   here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is
-  published permanently under that version. Nothing lints this. Walk the three
-  sections against the backlog: anything in <em>In progress / near-term</em> with no
-  Queue row has either shipped (move it to <em>Available now</em>) or been parked (move
-  it to <em>Exploring</em>), and a Deferred row describing a capability an adopter would
-  ask about belongs in <em>Exploring</em>. A 2026-07-25 audit found six of seven
-  near-term items already shipped.</li>
+  published permanently under that version. <code>make roadmap-check</code> catches the
+  mechanical half — a roadmap bullet naming a deleted Queue row, or one sitting
+  in the wrong section — and it runs in CI. What it cannot catch is the move
+  itself: <strong>work that shipped this cycle needs a <code>docs/features.md</code> line</strong>, and a
+  Deferred row describing a capability an adopter would ask about belongs in
+  <em>Exploring</em>. A 2026-07-25 audit found six of seven near-term items already
+  shipped.</li>
 <li><strong>Optional: refresh the docs-site announce bar's highlight.</strong> The banner in
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/overrides/main.html"><code>overrides/main.html</code></a> is the "vX.Y.Z is here" strip
   at the top of every page on the site. Its <strong>version needs no action</strong>: it is
