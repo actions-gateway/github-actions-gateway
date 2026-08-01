@@ -141,6 +141,23 @@ run_coverage() {
 		echo "coverage: 'go test' failed (output above)" >&2
 		exit 1
 	}
+
+	# Modules outside go.work get no baseline row — their profile cannot join the
+	# workspace one — but their tests must still RUN here: `make check` uses
+	# cover-check in place of `make test`, so without this pass they would only
+	# execute under `make test`/`make test-race`.
+	for dir in $(firstparty_nonworkspace_modules); do
+		echo "==> go test ./$dir/... (GOWORK=off, unmeasured)" >&2
+		(
+			cd "$dir"
+			export GOWORK=off
+			# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
+			$THROTTLE_PREFIX go test -trimpath -timeout 2m $p_flag $verbose_flag ./... >&2
+		) || {
+			echo "coverage: 'go test' failed in $dir (output above)" >&2
+			exit 1
+		}
+	done
 }
 
 # measure_all — echo "DIR<TAB>PCT" per go.work module, in go.work order. PCT is

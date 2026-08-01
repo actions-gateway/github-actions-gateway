@@ -93,7 +93,7 @@ Outside `go.work` the Go gates do not see the module: `go-test.sh`, `go-lint.sh`
 
 Each gate needs its own `GOWORK=off` pass rather than a widened module list: they run a single workspace-wide invocation (`go test` over every module pattern, `gofmt -l` over every module dir), and that invocation resolves against `go.work`, which by construction does not list this module.
 
-**`coverage.sh` is the deliberate exception.** Its ratchet builds one profile from the workspace build list and filters it per module, so a non-workspace module carries no baseline row and no floor. Its unit tests still run under `go-test.sh`, and it is still linted and scanned — only the coverage ratchet skips it. Widening the ratchet means merging a second profile, which has not been worth it for a module of this size.
+**`coverage.sh` is a partial exception.** Its ratchet builds one profile from the workspace build list and filters it per module, so a non-workspace module carries no baseline row and no floor — widening that means merging a second profile, which has not been worth it for a module of this size. It does still *run* those tests, unmeasured, because `make check` calls `cover-check` in place of `make test`: without that pass the fast gate would never execute them, and they would only run under `make test`/`make test-race`.
 
 `scripts/go/check-go-version.sh` needs no change: it already asserts a single `go` directive across every `go.mod`, so a new module inherits the check.
 

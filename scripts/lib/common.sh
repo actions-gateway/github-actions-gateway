@@ -110,9 +110,11 @@ workspace_modules() {
 # go-lint.sh and go-vulncheck.sh loop these separately with GOWORK=off. Omit a
 # module here and nothing tests, lints, or scans it.
 #
-# coverage.sh is the deliberate exception: its ratchet derives one profile from
-# the workspace build list and filters it per module, so these modules carry no
-# baseline row and no floor. Their unit tests still run under go-test.sh.
+# coverage.sh is a partial exception: its ratchet derives one profile from the
+# workspace build list and filters it per module, so these modules carry no
+# baseline row and no floor. It does still run their tests, unmeasured — `make
+# check` calls cover-check in place of `make test`, so skipping them there would
+# leave the fast gate never executing them at all.
 #
 # `tools/` is excluded on purpose — it pins third-party build tools via blank
 # imports and holds no first-party code.
