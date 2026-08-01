@@ -483,10 +483,11 @@ func (r *ActionsGatewayV2Reconciler) applyNetworkPolicy(ctx context.Context, ag 
 // is safe here: no HPA targets the AGC (v2 moved the autoscaled proxy pool out to
 // EgressProxy), so no other controller owns `.spec.replicas`. An HPA-targeted
 // Deployment must not be applied this way — see assignHPATargetDeploymentSpec (Q283).
+// The tolerated pod-template annotations survive the replace (Q552).
 func (r *ActionsGatewayV2Reconciler) applyDeployment(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *appsv1.Deployment) error {
 	obj := &appsv1.Deployment{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
-		obj.Spec = desired.Spec
+		assignManagedDeploymentSpec(&obj.Spec, desired.Spec)
 		return nil
 	})
 }
