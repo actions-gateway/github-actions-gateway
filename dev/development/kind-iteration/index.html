@@ -2386,6 +2386,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-state-change-you-observe-is-not-necessarily-one-you-caused" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A state change you observe is not necessarily one you caused
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#image-tag-caching" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2559,6 +2570,16 @@
 <p>Never run a destructive verb against a prod-looking target without explicit user confirmation.</p>
 <p>The dogfood cluster (<code>gag-dogfood</code> / project <code>actions-gateway-dogfood</code>) is hard-classified prod via the checked-in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/prod-guard.json"><code>.claude/prod-guard.json</code></a>, so the prod-guard hook denies ad-hoc destructive commands against it — prefix an intentional one with <code>PROD_GUARD_OVERRIDE=&lt;reason&gt;</code>. Lifecycle scripts (<code>scripts/dogfood/*</code>) run as <code>bash …</code>, which the hook doesn't parse, so they're unaffected. The echo-and-confirm convention still applies to every other prod-looking target, and for contributors who don't have the hook installed.</p>
 <p>If a legitimate non-prod target keeps prompting because prod-guard can't classify it, add it to <code>.claude/prod-guard.json</code> under <code>nonprod</code> rather than approving repeatedly — and never <code>use-context</code>/<code>config set</code> to dodge the prompt, since that repoints every parallel session (see above).</p>
+<h3 id="a-state-change-you-observe-is-not-necessarily-one-you-caused">A state change you observe is not necessarily one you caused<a class="headerlink" href="#a-state-change-you-observe-is-not-necessarily-one-you-caused" title="Permanent link">&para;</a></h3>
+<p>The same sharing that makes ambient context dangerous to <em>write</em> makes before/after readings dangerous to <em>interpret</em>. A parallel session can delete pods, bounce a controller, resize a pool, or run a lifecycle script between your two reads — so "busy at T1, empty at T2" establishes only that it changed, never that your action, or the passage of time, is what changed it.</p>
+<p>This matters most when the inference becomes a claim: a commit message, a plan doc, or a Queue row asserting a mechanism. Q577's diagnostics shipped alongside exactly that error — worker pods on the dogfood cluster went from eight to zero across two reads, which was reported as a drain converging unaided when a parallel session had in fact cleared it by hand. The design survived because its reasoning was independent, not because the premise held.</p>
+<p>Before attributing an observed change:</p>
+<ul>
+<li><strong>Check for other actors.</strong> <code>gh pr list</code> for in-flight sessions on the same subject, and ask the user — they are usually the other actor, and they know.</li>
+<li><strong>Prefer a mechanism reading over a boundary reading.</strong> Controller logs, events, and <code>.status</code> say <em>what happened</em>; two snapshots either side of a gap say only that something did.</li>
+<li><strong>State what you measured, separately from what you infer.</strong> "Pods absent at 13:15Z" is durable; "the drain converged" is a hypothesis about why.</li>
+</ul>
+<p>This is the shared-resource case of the general rule that a claim cites a measurement — here the measurement is real and the <em>causal step</em> is what goes unverified.</p>
 <h3 id="image-tag-caching">Image tag caching<a class="headerlink" href="#image-tag-caching" title="Permanent link">&para;</a></h3>
 <p>Kind nodes use <code>imagePullPolicy: IfNotPresent</code> and will keep serving the cached layer when you re-push the same tag. <strong>Pushing to <code>127.0.0.1:5000/foo:e2e-abc123</code> a second time does not refresh what kubelet runs.</strong></p>
 <p>Two options:
