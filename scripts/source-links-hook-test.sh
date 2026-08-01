@@ -151,6 +151,27 @@ expect 'a published operator page stays relative' \
 
 PUBLISHED='index.md STATUS.md plan/sibling.md development/testing.md operations/install.md'
 
+# --- reference-style definitions: same rewrite, other syntax -----------------
+#
+# Python-Markdown resolves `[label]: target` into an ordinary link, so a target
+# skipped here ships as dead as an inline one. The label half is preserved.
+
+expect 'reference definition escaping docs/ -> blob URL' \
+	"[m]: $BASE/blob/main/cmd/agc/main.go" plan '[m]: ../../cmd/agc/main.go'
+expect 'reference definition keeps its title' \
+	"[m]: $BASE/blob/main/Makefile \"the build\"" plan '[m]: ../../Makefile "the build"'
+expect 'indented reference definition still matches' \
+	"   [m]: $BASE/blob/main/Makefile" plan '   [m]: ../../Makefile'
+expect 'reference definition to a published page stays relative' \
+	'[s]: sibling.md' plan '[s]: sibling.md'
+expect 'a colon inside a sentence is not a definition' \
+	'see [x](sibling.md): ../Makefile' plan 'see [x](sibling.md): ../Makefile'
+
+PUBLISHED="$RELEASE_SCOPE"
+expect 'reference definition to an unpublished doc -> blob URL' \
+	"[q]: $BASE/blob/main/docs/STATUS.md#Q12" operations '[q]: ../STATUS.md#Q12'
+PUBLISHED='index.md STATUS.md plan/sibling.md development/testing.md operations/install.md'
+
 # --- the scheme test itself --------------------------------------------------
 #
 # `path/to/file.go:91` is a relative target, not a URL in the `path/to/file.go`
