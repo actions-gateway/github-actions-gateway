@@ -405,8 +405,8 @@ wait_proxy_ready() {
 	echo "Waiting for ${dep} to be created by the GMC in ${ns}..."
 	# Poll by EXACT name (the EgressProxy reconciler names the Deployment
 	# "<ep.Name>-proxy"), not by a label selector: the Deployment's own metadata
-	# labels are the app.kubernetes.io/* recommended set, NOT the pods'
-	# app=actions-gateway-proxy — a pod-style selector matches zero Deployments even
+	# labels are the app.kubernetes.io/* recommended set, NOT the pods' functional
+	# selector — a pod-style selector matches zero Deployments even
 	# when a healthy one exists. rollout status fast-fails "not found" before the
 	# reconciler creates it, so wait for it to appear first.
 	for ((i = 0; i < 60; i++)); do
@@ -425,10 +425,12 @@ wait_proxy_ready() {
 
 # --- Assertions -------------------------------------------------------------
 
-# proxy_pod_nodes NS — print "podIP nodePool" for each proxy pod in NS.
+# proxy_pod_nodes NS — print "podIP nodePool" for each proxy pod in NS. Selects by
+# the presence of the per-EgressProxy identity label, which every v2 pool's pods
+# carry and no v1 pool's do (Q582); the pools this script stands up are v2.
 proxy_pod_nodes() {
 	local ns="$1"
-	kubectl -n "${ns}" get pods -l "app=actions-gateway-proxy" \
+	kubectl -n "${ns}" get pods -l "actions-gateway.com/egress-proxy" \
 		-o jsonpath='{range .items[*]}{.status.podIP}{" "}{.spec.nodeName}{"\n"}{end}'
 }
 
@@ -516,7 +518,7 @@ assert_pinning() {
 	echo "-- Stability: delete a tenant-a proxy pod, confirm the egress IP is unchanged"
 	local a_name a_pool a_ip_name
 	read -r a_name a_pool _ _ a_ip_name _ <<<"${TENANTS[0]}"
-	kubectl -n "tenant-${a_name}" delete pod -l "app=actions-gateway-proxy" \
+	kubectl -n "tenant-${a_name}" delete pod -l "actions-gateway.com/egress-proxy" \
 		--field-selector="status.phase=Running" --wait=false | head -1 || true
 	# rollout status (via wait_proxy_ready), not a pod-selector wait: after the delete
 	# the terminating pod still matches the selector and never reaches Ready, which
