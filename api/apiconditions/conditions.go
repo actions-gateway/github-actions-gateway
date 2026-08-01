@@ -418,12 +418,12 @@ const (
 )
 
 // Job-provisioning stall condition (Q551), ScaleSet-only. A job GitHub assigned to
-// the scale set needs a runner registered under a name derived from its job id; when
-// a stale registration holds that name and neither deregistering it (Q334) nor a
-// bounded run of fresh suffixed names (Q270) clears it, no worker can be created for
-// that one job. The assignment is acked past so it cannot wedge the queue cursor, and
-// the queue never re-offers it — so the listener keeps re-offering it itself, and
-// reports the stall here meanwhile.
+// the scale set cannot be turned into a worker right now — either a stale registration
+// holds the runner name it needs and neither deregistering it (Q334) nor a bounded run
+// of fresh suffixed names (Q270) clears it, or the owner is already at its declared
+// worker ceiling (Q576). The assignment is acked past so it cannot wedge the queue
+// cursor, and the queue never re-offers it — so the listener keeps re-offering it
+// itself, and reports the stall here meanwhile.
 //
 // Advisory (abnormal-is-True) and not in ImpairingConditionTypes: every other job the
 // set is assigned still provisions, so rolling it up as "this RunnerSet cannot serve
@@ -435,11 +435,20 @@ const (
 	ConditionJobProvisionStalled = "JobProvisionStalled"
 
 	// ReasonRunnerNameConflict is the JobProvisionStalled=True reason: the runner
-	// name each stalled job needs is held by a registration that has not cleared.
+	// name at least one stalled job needs is held by a registration that has not
+	// cleared. It outranks ReasonWorkerCeilingReached whenever both classes are held
+	// at once, because it is the one an operator can act on — a full ceiling clears
+	// itself as workers finish.
 	ReasonRunnerNameConflict = "RunnerNameConflict"
+	// ReasonWorkerCeilingReached is the JobProvisionStalled=True reason when every
+	// stalled job is waiting only on worker capacity: the owner is at the ceiling its
+	// spec declares (maxWorkers, or the last priorityTiers threshold), so the jobs are
+	// re-offered until a running worker finishes. Expected backpressure on a saturated
+	// set, not a fault.
+	ReasonWorkerCeilingReached = "WorkerCeilingReached"
 	// ReasonJobsProvisioning is the JobProvisionStalled=False reason: no assigned job
-	// is waiting on a runner name — either none ever was (published when the listener
-	// starts) or the last stalled job provisioned or completed.
+	// is waiting on a runner name or on capacity — either none ever was (published
+	// when the listener starts) or the last stalled job provisioned or completed.
 	ReasonJobsProvisioning = "JobsProvisioning"
 )
 

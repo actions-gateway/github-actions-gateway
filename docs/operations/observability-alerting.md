@@ -13,7 +13,8 @@ Part of the [Observability](observability.md) guide. The metrics referenced belo
 | Jobs are not being acquired | `active_sessions` (should be ≥ 1 per RunnerGroup), `job_acquisition_errors_total` | Zero sessions = no polling |
 | Jobs are queuing but not starting | `active_sessions` (OK) vs `jobs_acquired_total` not incrementing | Check `RateLimited` condition |
 | Scale-set jobs assigned but not starting | `scaleset_jobs_assigned_total` rising vs `scaleset_jobs_provisioned_total` flat | Tier wedged; check `scaleset_provision_errors_total` and worker-pod quota (scale-set has no `active_sessions` gauge) |
-| One scale-set job never starts, the rest do | `scaleset_jobs_deferred` > 0 | Its runner name will not register; the listener re-offers it on a backoff. Read the `RunnerSet`'s `JobProvisionStalled` condition for the job ids; see the [runbook](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
+| One scale-set job never starts, the rest do | `scaleset_jobs_deferred{reason="name_conflict"}` > 0 | Its runner name will not register; the listener re-offers it on a backoff. Read the `RunnerSet`'s `JobProvisionStalled` condition for the job ids; see the [runbook](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
+| Scale-set jobs queue while its workers all run | `scaleset_jobs_deferred{reason="ceiling"}` > 0 | Expected: the set is at the worker ceiling its spec declares, and the held jobs start as workers finish. Alert only on it being sustained; see the [runbook](troubleshooting.md#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |
 | Runner credentials are broken | `token_refresh_errors_total` | Spikes indicate Secret or GitHub App issue |
 | Evictions causing re-runs | `eviction_retries_total`, `eviction_retries_exhausted_total` | Exhausted budget requires manual intervention |
 | Quota rejecting worker pods | `quota_retries_total`, `quota_retries_exhausted_total` | Sustained retries mean tight quota headroom; exhausted budget requires manual intervention |
@@ -296,10 +297,12 @@ groups:
           summary: "Scale-set provision errors for {{ $labels.runner_set }} in {{ $labels.namespace }}"
           description: "The scale-set acquisition tier is failing to provision worker pods (JIT-config mint or pod create) at >0.1/s for 10m. A transient failure retries on a later poll, but a sustained rate means provisioning is degraded — check the run service's generate-jitconfig responses and namespace quota headroom."
 
-      # Ticket: a job's runner name will not register, so nothing can run it (Q551)
+      # Ticket: a job's runner name will not register, so nothing can run it (Q551).
+      # Scoped to reason="name_conflict": reason="ceiling" is a set running at the
+      # concurrency its spec declares, which is not an incident (Q576).
       - alert: ActionsGatewayScaleSetJobsDeferred
         expr: |
-          actions_gateway_scaleset_jobs_deferred > 0
+          actions_gateway_scaleset_jobs_deferred{reason="name_conflict"} > 0
         for: 15m
         labels:
           severity: warning

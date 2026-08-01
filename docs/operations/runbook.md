@@ -183,6 +183,8 @@ procedure rather than just the alert's `summary`/`description`. Severity classes
 
 **Ticket.** One or more jobs assigned to a scale set cannot register their runner name (`generate-jitconfig` 409 that neither deleting the stale record nor a fresh suffixed name cleared), so no worker is running them. The listener holds each one and re-offers it on a backoff, so the run starts by itself as soon as the name is free — but until then it sits queued at GitHub. Read the job ids off the `RunnerSet`'s `JobProvisionStalled` condition, then free the conflicting runner records per [Scale-Set Job Stranded by a Stale Runner Record](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409).
 
+The alert is scoped to `reason="name_conflict"`. The other reason the same gauge carries, `reason="ceiling"`, is a set running at the worker concurrency its spec declares — expected backpressure with no action to take, covered by [Scale-Set Jobs Waiting at the Worker Ceiling](troubleshooting.md#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached).
+
 ### ActionsGatewayProxyConnectDenied
 
 **Ticket.** The egress proxy is refusing CONNECT requests to destinations off the egress allowlist at a sustained rate — a Server-Side Request Forgery (SSRF) / egress-policy signal. Every increment is an explicit allowlist denial (sharper than `dial_errors`, which also counts transient failures to *allowed* hosts).

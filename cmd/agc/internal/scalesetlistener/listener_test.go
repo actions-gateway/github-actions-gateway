@@ -116,12 +116,12 @@ type countingMetrics struct {
 	mu                           sync.Mutex
 	assigned, provisionedC, errs int
 	completed                    int
-	deferred                     int
+	deferred                     map[string]int
 	completedResults             map[string]int
 }
 
 func newCountingMetrics() *countingMetrics {
-	return &countingMetrics{completedResults: map[string]int{}}
+	return &countingMetrics{completedResults: map[string]int{}, deferred: map[string]int{}}
 }
 func (m *countingMetrics) IncJobAssigned()    { m.mu.Lock(); m.assigned++; m.mu.Unlock() }
 func (m *countingMetrics) IncJobProvisioned() { m.mu.Lock(); m.provisionedC++; m.mu.Unlock() }
@@ -132,18 +132,37 @@ func (m *countingMetrics) IncJobCompleted(result string) {
 	m.completedResults[result]++
 	m.mu.Unlock()
 }
-func (m *countingMetrics) SetDeferredJobs(n int) { m.mu.Lock(); m.deferred = n; m.mu.Unlock() }
+func (m *countingMetrics) SetDeferredJobs(byReason map[string]int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for reason, n := range byReason {
+		m.deferred[reason] = n
+	}
+}
 func (m *countingMetrics) completedCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.completed
 }
 
-// deferredCount returns the most recently published deferred-job gauge.
+// deferredCount returns the most recently published deferred-job gauge, summed over
+// every reason.
 func (m *countingMetrics) deferredCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.deferred
+	total := 0
+	for _, n := range m.deferred {
+		total += n
+	}
+	return total
+}
+
+// deferredFor returns the most recently published deferred-job gauge for one
+// DeferReason*, which is what separates expected backpressure from an anomaly.
+func (m *countingMetrics) deferredFor(reason string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.deferred[reason]
 }
 
 // provisionedCount returns the provisioned-worker metric. A test that asserts on this

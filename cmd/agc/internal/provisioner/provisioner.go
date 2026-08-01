@@ -738,7 +738,11 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	priorityClass, held := ceilingCheck(spec, count)
 	if held {
 		unstage()
-		return fmt.Errorf("provisioner: concurrency ceiling reached (%d active pods); listener will retry", count)
+		// Typed, so the listener re-offers the job on a backoff instead of holding the
+		// queue cursor for an immediate redelivery that would find the same full ceiling
+		// (Q576). The listener normally asks CheckScaleSetCapacity before it mints the
+		// JIT config, so reaching this is the race that check cannot close.
+		return &CeilingReachedError{ActivePods: count}
 	}
 
 	// 3. Scale-up rate limit (Q223): gate pod creation on the owner's opt-in token
