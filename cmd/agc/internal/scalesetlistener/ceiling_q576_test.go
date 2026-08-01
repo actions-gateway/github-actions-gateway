@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Tests for the Q576 ceiling path. A saturated set on the rc.3 dogfood gate retried one
@@ -158,6 +160,54 @@ func TestListener_CeilingRejectionFromProvisionIsDeferredNotRedelivered(t *testi
 	gate.setFull(false)
 	require.Eventually(t, func() bool { return provisioned.get() == 1 }, 5*time.Second, 10*time.Millisecond,
 		"the job must provision once capacity frees")
+}
+
+// TestListener_CeilingStallReportsItsOwnConditionAndEvent covers the operator surface.
+// Reporting a saturated set as RunnerNameConflict would send an operator hunting stale
+// registrations that do not exist, and a Warning for a set running at the concurrency its
+// own spec declares is noise. When a real name conflict then joins the episode, it has to
+// surface anyway rather than being swallowed by the Normal event already recorded.
+func TestListener_CeilingStallReportsItsOwnConditionAndEvent(t *testing.T) {
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	sink := &statusSink{}
+	gate := &ceilingGate{full: true}
+	_, ssID := startListenerWithSink(t, srv, sink, fastCapacityRetry, fastDeferredRetry,
+		func(c *scalesetlistener.Config) {
+			c.CheckCapacity = gate.check
+			c.Capacity = fixedCapacity(5)
+		})
+
+	srv.EnqueueJob(ssID)
+
+	require.Eventually(t, func() bool {
+		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionTrue,
+			v2alpha1.ReasonWorkerCeilingReached)
+	}, 5*time.Second, 10*time.Millisecond,
+		"a capacity stall must report its own reason, not a runner-name conflict")
+
+	cond, _ := sink.last(v2alpha1.ConditionJobProvisionStalled)
+	assert.Contains(t, cond.Message, "waiting for worker capacity",
+		"the message must say what the jobs are waiting on")
+	assert.Equal(t, 1, sink.eventCount("WorkerCeilingReached"), "one event per episode")
+	assert.Zero(t, sink.eventCount("JobProvisionStalled"),
+		"expected backpressure must not be reported as a provisioning stall Warning")
+
+	// A job whose runner name will not register joins the same episode. It outranks the
+	// ceiling — it is the one an operator can act on — so both the condition reason and a
+	// Warning event must follow it even though the set is already stalled.
+	_, stuckJobID := srv.EnqueueJob(ssID)
+	srv.FailJITConfigNamePrefix("linux-" + stuckJobID)
+	gate.setFull(false)
+
+	require.Eventually(t, func() bool {
+		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionTrue,
+			v2alpha1.ReasonRunnerNameConflict)
+	}, 5*time.Second, 10*time.Millisecond,
+		"a runner-name conflict must outrank a ceiling hold in the reported reason")
+	assert.Positive(t, sink.eventCount("JobProvisionStalled"),
+		"the conflict must record its Warning even though the episode was already open")
 }
 
 // TestListener_TransientProvisionErrorStillRedelivers pins the distinction Q576 turns on.

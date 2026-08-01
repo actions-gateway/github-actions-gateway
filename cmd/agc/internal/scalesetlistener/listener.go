@@ -386,6 +386,10 @@ type Listener struct {
 	rateLimitedCond  bool      // RateLimited=True has been pushed for the current episode
 	unauthorizedCond bool      // Degraded=True/Unauthorized has been pushed
 	stalledCond      bool      // JobProvisionStalled=True has been pushed
+	// stalledEventReason is the Event reason recorded for the current stall episode, so
+	// an episode that changes class (a name conflict joining a ceiling hold) records the
+	// new class's Event instead of being suppressed as "already surfaced".
+	stalledEventReason string
 
 	// deferred holds assignments that could not be provisioned, keyed by jobID, each
 	// carrying the time of its next re-offer (Q551). Same ownership as the condition
@@ -1055,6 +1059,7 @@ func (l *Listener) refreshStalled() {
 	if len(l.deferred) == 0 {
 		if l.stalledCond {
 			l.stalledCond = false
+			l.stalledEventReason = ""
 			l.setCondition(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse,
 				v2alpha1.ReasonJobsProvisioning, "no assigned job is waiting on a runner name or on worker capacity")
 		}
@@ -1070,8 +1075,12 @@ func (l *Listener) refreshStalled() {
 	}
 	l.setCondition(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionTrue,
 		reason, l.stalledMessage(counts))
-	if !l.stalledCond {
+	// Once per episode, on the transition in — and again when the episode changes class,
+	// so a name conflict arriving while a set is already held at its ceiling still gets
+	// its Warning rather than being swallowed by the Normal one already recorded.
+	if !l.stalledCond || l.stalledEventReason != eventReason {
 		l.stalledCond = true
+		l.stalledEventReason = eventReason
 		// The event note deliberately names no job ids: the apiserver aggregates
 		// repeats of an identical note into one counted event, and a saturated set
 		// enters and leaves this state as fast as its jobs turn over.
