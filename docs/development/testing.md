@@ -249,8 +249,22 @@ Four assertions, cheapest first:
 2. **Module coverage.** Every `WORKSPACE_FILTERS` entry matches every `go.work` module. Only a recursive glob rooted at the module or an ancestor counts: a bare `api` matches the literal path and nothing beneath it, and `api/config/**` leaves the rest of the module ungated. Failures name the module, the workflow, and the exact pattern to add, one per gap.
 3. **Live paths.** Every pattern's literal prefix still exists on disk. A pattern left behind by a rename matches nothing, which narrows its gate as silently as a missing module does.
 4. **Shared-lane agreement.** Two filters gating the same reusable workflow list the same `scripts/` patterns. `SHARED_LANE_FILTERS` pairs them; the failure prints a diff of the two sets. `e2e-test.yml` and `e2e-calico.yml` both call `e2e-reusable.yml` yet disagreed by roughly 60× about which scripts it runs — the Calico lane named two of the six the reusable workflow invokes directly, so a `free-runner-disk.sh` change skipped the lane that exercises it (Q571).
+5. **Push-trigger agreement.** A workflow that scopes its post-merge leg with `on.push.paths` lists the same paths as its `changes` filter. `PUSH_TRIGGER_FILTERS` registers the pairs. See below for why this one is easy to miss.
 
 **So adding a workspace module now fails the gate instead of slipping through** — but the gate only knows about *whole-workspace* coverage. Judgement is still yours for the narrow filters: when you add a module, ask what each gate actually compiles, scans, or bakes, and remember the same applies to a gate that names files individually (`manifest-validate.sh`'s `standalone_manifests` — adding a path there means adding its directory to the filter). Wired into `make check` and CI's `path-filters` job in `unit-test.yml`, which is gated on the `workflows` filter — the one filter watching all of `.github/workflows/`, so editing any `filters:` block re-runs the gate that lints it. Behaviour, including that each assertion fails when it should, is asserted by `scripts/ci/check-path-filters-test.sh` under `make scripts-test`.
+
+#### A path list written twice: the trigger and the filter
+
+Three workflows — `e2e-calico.yml`, `plan-hygiene.yml`, `status-lint.yml` — express the same scoping decision **twice**, because the two legs are gated by different mechanisms:
+
+- **The PR leg** triggers on every `pull_request` with no path filter (so its `gate` job always reports its required check) and is scoped by the internal `changes` filter.
+- **The post-merge leg** triggers on `push` to `main` and is scoped by `on.push.paths` — a plain GitHub Actions trigger filter, not a `dorny/paths-filter` block.
+
+GitHub Actions does not reliably resolve YAML anchors, so the list is duplicated rather than shared. **Drift between the two is invisible on a PR.** Every PR classifies correctly off the filter; only the post-merge leg silently stops running, and a leg that does not run leaves nothing red to notice.
+
+Q571 shipped exactly that regression and merged green: it rewrote `e2e-calico.yml`'s filter to `scripts/{e2e,fetch,lib}/**` and left the push list naming the two now-moved files it had always enumerated. Assertion 5 is the recurrence guard — it compares the two as sorted sets and prints a diff of the difference.
+
+Two more workflows (`doc-links.yml`, `dockerfile-lint.yml`) duplicate a list across `pull_request.paths` and `push.paths` instead. That is the same hazard in a different shape and is **not** yet gated; both lists agree today (Q572).
 
 #### `scripts/` is grouped by blast radius
 

@@ -13,7 +13,7 @@
 # skipped envtest, e2e, govulncheck, and trivy entirely. Q400 fixed four
 # workflows by hand; this gate is the recurrence guard.
 #
-# Four assertions, cheapest first:
+# Five assertions, cheapest first:
 #
 #   1. Registry completeness. Every filter in every `filters:` block is listed
 #      below as either workspace-covering or narrow-by-design. A new workflow, or
@@ -30,6 +30,12 @@
 #      e2e-reusable.yml, yet disagreed by ~60× about which scripts it runs —
 #      calico named 2 of the ≥6, so a free-runner-disk.sh change skipped the lane
 #      that exercises it (Q571).
+#   5. Push-trigger agreement. A workflow that scopes its post-merge leg with
+#      `on.push.paths` lists the same paths as its `changes` filter. The two are
+#      one decision written twice (no YAML anchors in Actions), and drift is
+#      invisible on a PR — `pull_request` carries no path filter, so only the
+#      post-merge leg silently stops running. Q571's own regrouping did exactly
+#      this to e2e-calico.yml and merged green.
 #
 # Costs a fraction of a second: it parses YAML and stats paths, it compiles
 # nothing. Backs `make path-filters-check` (part of `make check`) and the
@@ -95,6 +101,19 @@ SHARED_LANE_FILTERS=(
 	'e2e-test.yml:e2e|e2e-calico.yml:calico' # both call .github/workflows/e2e-reusable.yml
 )
 
+# Workflows that scope their post-merge leg with an `on.push.paths` list AND
+# classify PRs with a `changes` filter, as "<workflow>:<filter>". The two lists
+# are the same decision expressed twice — GitHub Actions does not resolve YAML
+# anchors, so they are duplicated rather than shared — and nothing but this
+# assertion keeps them in step. Drift is invisible on a PR (`pull_request` has no
+# path filter, so the PR leg always classifies correctly) and only shows up as a
+# post-merge leg that silently did not run.
+PUSH_TRIGGER_FILTERS=(
+	'e2e-calico.yml:calico'
+	'plan-hygiene.yml:plan'
+	'status-lint.yml:status'
+)
+
 # parse_filters WORKFLOW_PATH — print one "<filter>\t<pattern>" row per pattern in
 # the file's `filters: |` block. The block is a YAML string nested inside YAML, so
 # it is read positionally: everything indented deeper than the `filters:` key,
@@ -142,6 +161,51 @@ parse_filters() {
 			sub(/:[[:space:]]*$/, "", line)
 			filter = line
 		}
+	}
+	' "$1"
+}
+
+# parse_push_paths WORKFLOW_PATH — print the `on.push.paths` entries, one per
+# line. Read positionally like parse_filters, but over real YAML rather than a
+# nested string: find `push:` under the top-level `on:` mapping, then its `paths:`
+# key, then collect list items until something dedents back to `paths:` or above.
+# A workflow with no push-paths list prints nothing.
+parse_push_paths() {
+	awk '
+	function value(s,   quote, first, closing) {
+		sub(/^-[[:space:]]*/, "", s)
+		quote = sprintf("%c", 39)
+		first = substr(s, 1, 1)
+		if (first == quote || first == "\"") {
+			s = substr(s, 2)
+			closing = index(s, first)
+			if (closing > 0) s = substr(s, 1, closing - 1)
+			return s
+		}
+		sub(/[[:space:]]*#.*$/, "", s)
+		sub(/[[:space:]]+$/, "", s)
+		return s
+	}
+	/^on:[[:space:]]*$/ { inon = 1; next }
+	!inon { next }
+	# A key at column 0 ends the `on:` mapping.
+	/^[^[:space:]#]/ { inon = 0; inpush = 0; inpaths = 0; next }
+	{
+		if ($0 ~ /^[[:space:]]*$/) next
+		match($0, /^[[:space:]]*/)
+		indent = RLENGTH
+		line = substr($0, indent + 1)
+		if (line ~ /^#/) next
+		if (inpaths) {
+			if (indent > pathsindent && line ~ /^-([[:space:]]|$)/) { print value(line); next }
+			inpaths = 0
+		}
+		if (inpush && indent <= pushindent) inpush = 0
+		if (!inpush) {
+			if (line ~ /^push:[[:space:]]*$/) { inpush = 1; pushindent = indent }
+			next
+		}
+		if (line ~ /^paths:[[:space:]]*$/) { inpaths = 1; pathsindent = indent }
 	}
 	' "$1"
 }
@@ -290,6 +354,26 @@ $(diff <(printf '%s\n' "$left_patterns") <(printf '%s\n' "$right_patterns") | se
 	done
 }
 
+# assert_push_paths_match_filter — each registered workflow's `on.push.paths`
+# list equals its `changes` filter. Compared as sorted sets: the two lists are
+# maintained by hand in two places and their order need not agree.
+assert_push_paths_match_filter() {
+	local key workflow filter push_paths filter_paths
+	for key in "${PUSH_TRIGGER_FILTERS[@]}"; do
+		workflow="${key%%:*}"
+		filter="${key#*:}"
+		push_paths="$(parse_push_paths "$WORKFLOW_DIR/$workflow" | LC_ALL=C sort)"
+		filter_paths="$(parse_filters "$WORKFLOW_DIR/$workflow" |
+			awk -F'\t' -v f="$filter" '$1==f{print $2}' | LC_ALL=C sort)"
+		[[ "$push_paths" == "$filter_paths" ]] && continue
+		fail "$WORKFLOW_DIR/$workflow scopes its push leg with paths that differ from filter '$filter':
+$(diff <(printf '%s\n' "$push_paths") <(printf '%s\n' "$filter_paths") | sed 's/^/    /')
+  '<' is push-only, '>' is filter-only. The PR leg classifies off the filter and
+  the post-merge leg off the push list, so a filter-only entry means merging that
+  change silently skips this workflow on main (Q571). Make the two sets identical."
+	done
+}
+
 main() {
 	local modules=() found=() workflow filter module_dir
 	while IFS= read -r module_dir; do
@@ -315,6 +399,7 @@ main() {
 	assert_module_coverage "${modules[@]}"
 	assert_paths_live "${found[@]}"
 	assert_shared_lanes_agree
+	assert_push_paths_match_filter
 
 	if ((failures > 0)); then
 		echo >&2
