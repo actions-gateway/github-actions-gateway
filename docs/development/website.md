@@ -392,6 +392,13 @@ twice), so a PR that breaks a plan or development page fails there rather than o
 `main`. `make docs-build` does the same locally — see
 [§ The two link gates](#the-two-link-gates).
 
+A push to `main` re-runs that gate (`pages.yml`'s `validate` job), because a PR
+gate only ever sees its own base. Two PRs open at once can each pass and still
+merge into a red `main` — Q560 raised the link validation to warnings while Q558
+added a link that trips it, and the breakage surfaced two hours later on an
+unrelated docs PR (Q562). `validate` runs beside the deploy rather than gating
+it: the point is a red status on `main`, not a stalled `dev` version.
+
 ### What belongs in `nav`
 
 The `nav` is the operator-facing table of contents, so a published page is

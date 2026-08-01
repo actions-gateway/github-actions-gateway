@@ -13,7 +13,9 @@ on:
       - '.github/workflows/pages.yml'
   # Versioned docs deploy (Q238). The public site is a mike-managed versioned
   # tree on the `gh-pages` branch, NOT a single copy of `main`:
-  #   - a push to `main`      -> (re)deploys the `dev` version (unreleased)
+  #   - a push to `main`      -> (re)deploys the `dev` version (unreleased), and
+  #                              re-runs the strict PR gate on the merged tree
+  #                              (`validate`, which a tag push deliberately skips)
   #   - a STABLE `v*` tag push -> deploys that release and moves the `stable`
   #                               alias + default root redirect to it
   #   - a prerelease tag (0.x, -rc/-alpha/-beta) -> no deploy
@@ -93,6 +95,38 @@ jobs:
       # The `dev` version publishes the repo-internal docs as well (Q558), a
       # scope the release build above never exercises. Build it too, so a PR
       # that breaks a plan/development page fails here rather than on `main`.
+      - name: Build the dev scope (repo-internal docs included)
+        env:
+          MKDOCS_EXCLUDE_DOCS: /README.md
+        run: mkdocs build --strict --site-dir _site-dev
+
+  # Push to main: re-run the PR gate against the merged tree.
+  #
+  # Two individually-green PRs can merge into a red `main`, because neither gate
+  # sees the other's change. Q560 raised MkDocs' link validation to warnings and
+  # Q558 added a link that trips it; each passed on a base without the other, and
+  # `main` built dirty from the second merge until the next docs PR inherited the
+  # failure (Q562). Nothing caught it in between: `publish` below is deliberately
+  # non-strict, so it deployed the broken tree without complaint.
+  #
+  # Deliberately parallel to `publish` rather than gating it. The signal wanted
+  # here is a red commit status on `main`, not a stalled `dev` deploy — the same
+  # reason `publish` stays non-strict, since a release cut before these gates
+  # existed must still be publishable. Tags and dispatches are excluded for that
+  # reason too; only `main` is held to the gate its PRs already pass.
+  validate:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.x'
+      - run: pip install -r requirements-docs.txt
+      - run: mkdocs build --strict --site-dir _site
       - name: Build the dev scope (repo-internal docs included)
         env:
           MKDOCS_EXCLUDE_DOCS: /README.md
