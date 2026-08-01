@@ -3000,6 +3000,12 @@ repo-internal page.</p>
 twice), so a PR that breaks a plan or development page fails there rather than on
 <code>main</code>. <code>make docs-build</code> does the same locally — see
 <a href="#the-two-link-gates">§ The two link gates</a>.</p>
+<p>A push to <code>main</code> re-runs that gate (<code>pages.yml</code>'s <code>validate</code> job), because a PR
+gate only ever sees its own base. Two PRs open at once can each pass and still
+merge into a red <code>main</code> — Q560 raised the link validation to warnings while Q558
+added a link that trips it, and the breakage surfaced two hours later on an
+unrelated docs PR (Q562). <code>validate</code> runs beside the deploy rather than gating
+it: the point is a red status on <code>main</code>, not a stalled <code>dev</code> version.</p>
 <h3 id="what-belongs-in-nav">What belongs in <code>nav</code><a class="headerlink" href="#what-belongs-in-nav" title="Permanent link">&para;</a></h3>
 <p>The <code>nav</code> is the operator-facing table of contents, so a published page is
 either in it or declared in <code>not_in_nav</code>. Two kinds are declared:</p>
