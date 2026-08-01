@@ -35,9 +35,10 @@ Three measurements taken 2026-08-01, before the change:
   shipped, some frozen into published releases.
 - **`STATUS.md` stacks three registers in one file:** the Queue (a priority list
   read top-down), Deferred, and Flake watch (a parked register grepped when a
-  trigger fires). Only the Queue is what a session reads to pick work. At the
-  time of writing that is 42 Queue rows above 38 parked ones; the counts move,
-  the ratio does not.
+  trigger fires). Only the Queue is what a session reads to pick work. On
+  2026-08-01 that was 44 Queue rows above 38 parked ones — a count that moved
+  three times during this change alone, which is why the Queue row states the
+  shape rather than the number.
 
 ## The reader-job model
 
