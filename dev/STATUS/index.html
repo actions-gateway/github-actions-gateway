@@ -2943,6 +2943,14 @@
 <td>Three shapes, three bespoke checks: shared paths across two <code>filters:</code> (Q533), <code>on.push.paths</code> vs its filter (gated), <code>pull_request.paths</code> vs <code>push.paths</code> (ungated). One registry replaces all three, over Q584's <code>devtools/ci/pathfilters</code> parser.</td>
 </tr>
 <tr>
+<td><a id="Q591"></a>Q591</td>
+<td><a href="../operations/troubleshooting/#proxy-pool-not-scaling">The <code>AmbiguousSelector</code> runbook quotes a controller message nothing measured</a></td>
+<td><code>docs</code> <code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q582's runbook quotes a verbatim <code>AmbiguousSelector</code> message from source recollection: k8s.io/kubernetes is not vendored and envtest runs no HPA controller. The kind e2e has one plus metrics-server — measure there. Another <a href="#Q534">Q534</a> instance.</td>
+</tr>
+<tr>
 <td><a id="Q534"></a>Q534</td>
 <td><a href="../development/documentation-standards/">Rule: an upstream-behavior claim cites a measurement, in docs and in code comments</a></td>
 <td><code>docs</code> <code>retro</code></td>
@@ -2957,6 +2965,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Matrix row 17 says a new script gets a row in its group's table; <code>dogfood/</code> is a bare directory link with no table, so #1106 and Q581 each added a test script and silently added none. Give the group a table, or name the exception.</td>
+</tr>
+<tr>
+<td><a id="Q592"></a>Q592</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile">No way to run one integration test without hand-assembling <code>KUBEBUILDER_ASSETS</code></a></td>
+<td><code>infra</code> <code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>make test-integration</code> runs a whole module; a targeted run means resolving setup-envtest by hand — three attempts in Q582 (wrong version, then a relative <code>--bin-dir</code> the test binary resolves from its own package dir). Add a <code>RUN=</code> passthrough.</td>
 </tr>
 </tbody>
 </table>
