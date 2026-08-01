@@ -78,11 +78,11 @@ func verify(t *testing.T, leaf *x509.Certificate, pool *x509.CertPool, dnsName s
 	return err
 }
 
-// TestBuildProxyTrustPool_NilPEM verifies that an empty/missing PEM returns
+// TestBuildTrustPool_NilPEM verifies that an empty/missing PEM returns
 // (nil, nil) so callers fall through to the default transport. This is the
 // "local dev, no TLS proxy" case.
-func TestBuildProxyTrustPool_NilPEM(t *testing.T) {
-	pool, err := BuildProxyTrustPool(nil)
+func TestBuildTrustPool_NilPEM(t *testing.T) {
+	pool, err := BuildTrustPool(nil)
 	if err != nil {
 		t.Fatalf("nil PEM: unexpected error: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestBuildProxyTrustPool_NilPEM(t *testing.T) {
 		t.Fatalf("nil PEM: want nil pool, got %v", pool)
 	}
 
-	pool, err = BuildProxyTrustPool([]byte{})
+	pool, err = BuildTrustPool([]byte{})
 	if err != nil {
 		t.Fatalf("empty PEM: unexpected error: %v", err)
 	}
@@ -99,12 +99,12 @@ func TestBuildProxyTrustPool_NilPEM(t *testing.T) {
 	}
 }
 
-// TestBuildProxyTrustPool_InvalidPEM verifies that non-empty but
+// TestBuildTrustPool_InvalidPEM verifies that non-empty but
 // unparseable input returns an error rather than silently producing a
 // pool that contains only the system roots — which would let an attacker
 // with any system-trusted cert impersonate the per-tenant proxy.
-func TestBuildProxyTrustPool_InvalidPEM(t *testing.T) {
-	pool, err := BuildProxyTrustPool([]byte("not a certificate"))
+func TestBuildTrustPool_InvalidPEM(t *testing.T) {
+	pool, err := BuildTrustPool([]byte("not a certificate"))
 	if err == nil {
 		t.Fatalf("invalid PEM: want error, got pool=%v", pool)
 	}
@@ -113,20 +113,20 @@ func TestBuildProxyTrustPool_InvalidPEM(t *testing.T) {
 	}
 }
 
-// TestBuildProxyTrustPool_ValidatesProxyLeaf verifies the core regression
+// TestBuildTrustPool_ValidatesProxyLeaf verifies the core regression
 // guard for PR #59's `fix(agc): append proxy CA to system pool instead of
 // replacing it`: a leaf signed by the supplied proxy CA validates against
 // the returned pool.
-func TestBuildProxyTrustPool_ValidatesProxyLeaf(t *testing.T) {
+func TestBuildTrustPool_ValidatesProxyLeaf(t *testing.T) {
 	proxyCA, proxyKey, proxyPEM := generateCA(t, "proxy-ca")
 	leaf := generateLeaf(t, "proxy.tenant.svc.cluster.local", proxyCA, proxyKey)
 
-	pool, err := BuildProxyTrustPool(proxyPEM)
+	pool, err := BuildTrustPool(proxyPEM)
 	if err != nil {
-		t.Fatalf("BuildProxyTrustPool: %v", err)
+		t.Fatalf("BuildTrustPool: %v", err)
 	}
 	if pool == nil {
-		t.Fatalf("BuildProxyTrustPool: want non-nil pool")
+		t.Fatalf("BuildTrustPool: want non-nil pool")
 	}
 
 	if err := verify(t, leaf, pool, "proxy.tenant.svc.cluster.local"); err != nil {
@@ -134,17 +134,17 @@ func TestBuildProxyTrustPool_ValidatesProxyLeaf(t *testing.T) {
 	}
 }
 
-// TestBuildProxyTrustPool_RejectsUnrelatedCA verifies that a leaf signed
+// TestBuildTrustPool_RejectsUnrelatedCA verifies that a leaf signed
 // by a CA that is neither in the system store nor the supplied proxy CA
-// is rejected. Confirms BuildProxyTrustPool does not over-trust.
-func TestBuildProxyTrustPool_RejectsUnrelatedCA(t *testing.T) {
+// is rejected. Confirms BuildTrustPool does not over-trust.
+func TestBuildTrustPool_RejectsUnrelatedCA(t *testing.T) {
 	_, _, proxyPEM := generateCA(t, "proxy-ca")
 	attackerCA, attackerKey, _ := generateCA(t, "attacker-ca")
 	leaf := generateLeaf(t, "proxy.tenant.svc.cluster.local", attackerCA, attackerKey)
 
-	pool, err := BuildProxyTrustPool(proxyPEM)
+	pool, err := BuildTrustPool(proxyPEM)
 	if err != nil {
-		t.Fatalf("BuildProxyTrustPool: %v", err)
+		t.Fatalf("BuildTrustPool: %v", err)
 	}
 
 	if err := verify(t, leaf, pool, "proxy.tenant.svc.cluster.local"); err == nil {
@@ -152,7 +152,7 @@ func TestBuildProxyTrustPool_RejectsUnrelatedCA(t *testing.T) {
 	}
 }
 
-// TestBuildProxyTrustPool_PreservesSystemRoots verifies that the returned
+// TestBuildTrustPool_PreservesSystemRoots verifies that the returned
 // pool still trusts certs chaining to the system root store — i.e. the
 // supplied proxy CA is *appended* rather than *replacing* the system
 // roots. This is the second half of PR #59's `fix(agc): append proxy CA
@@ -163,25 +163,79 @@ func TestBuildProxyTrustPool_RejectsUnrelatedCA(t *testing.T) {
 // We exercise this by capturing the system pool directly and confirming
 // the combined pool's subject set is a strict superset (system subjects
 // plus the proxy CA's subject).
-func TestBuildProxyTrustPool_PreservesSystemRoots(t *testing.T) {
+func TestBuildTrustPool_PreservesSystemRoots(t *testing.T) {
 	sys, err := x509.SystemCertPool()
 	if err != nil {
 		t.Skipf("system cert pool unavailable on this platform: %v", err)
 	}
-	sysSubjects := len(sys.Subjects())
+	sysSubjects := len(sys.Subjects()) //nolint:staticcheck // SA1019: counting subjects is the only way to observe "appended, not replaced"; the empty-pool skip below covers the platform-verifier case the deprecation warns about
 	if sysSubjects == 0 {
 		t.Skip("system cert pool is empty; cannot verify superset property")
 	}
 
 	_, _, proxyPEM := generateCA(t, "proxy-ca")
-	pool, err := BuildProxyTrustPool(proxyPEM)
+	pool, err := BuildTrustPool(proxyPEM)
 	if err != nil {
-		t.Fatalf("BuildProxyTrustPool: %v", err)
+		t.Fatalf("BuildTrustPool: %v", err)
 	}
 
-	combined := len(pool.Subjects())
+	combined := len(pool.Subjects()) //nolint:staticcheck // SA1019: see the sysSubjects note above
 	if combined != sysSubjects+1 {
 		t.Fatalf("combined pool: want %d subjects (system %d + 1 proxy), got %d",
 			sysSubjects+1, sysSubjects, combined)
+	}
+}
+
+// TestBuildTrustPool_ValidatesGHESLeaf is the Q536 guard: a leaf signed by the
+// operator-supplied GitHub CA — a GHES appliance's certificate — validates against
+// the pool, and does so alongside the proxy CA rather than in place of it. Before
+// the second source existed, the same leaf was the one
+// TestBuildTrustPool_RejectsUnrelatedCA required to fail.
+func TestBuildTrustPool_ValidatesGHESLeaf(t *testing.T) {
+	proxyCA, proxyKey, proxyPEM := generateCA(t, "proxy-ca")
+	ghesCA, ghesKey, ghesPEM := generateCA(t, "corp-root-ca")
+	proxyLeaf := generateLeaf(t, "proxy.tenant.svc.cluster.local", proxyCA, proxyKey)
+	ghesLeaf := generateLeaf(t, "ghes.corp.example", ghesCA, ghesKey)
+
+	pool, err := BuildTrustPool(proxyPEM, ghesPEM)
+	if err != nil {
+		t.Fatalf("BuildTrustPool: %v", err)
+	}
+
+	if err := verify(t, ghesLeaf, pool, "ghes.corp.example"); err != nil {
+		t.Fatalf("GHES leaf should verify against the combined pool: %v", err)
+	}
+	if err := verify(t, proxyLeaf, pool, "proxy.tenant.svc.cluster.local"); err != nil {
+		t.Fatalf("proxy leaf should still verify with a GitHub CA supplied too: %v", err)
+	}
+}
+
+// TestBuildTrustPool_GHESOnly covers the direct-egress GHES gateway: no proxy CA is
+// mounted, so the GitHub CA is the only supplied source and must still be appended
+// to the system roots rather than replacing them.
+func TestBuildTrustPool_GHESOnly(t *testing.T) {
+	ghesCA, ghesKey, ghesPEM := generateCA(t, "corp-root-ca")
+	leaf := generateLeaf(t, "ghes.corp.example", ghesCA, ghesKey)
+
+	pool, err := BuildTrustPool(nil, ghesPEM)
+	if err != nil {
+		t.Fatalf("BuildTrustPool: %v", err)
+	}
+	if pool == nil {
+		t.Fatalf("BuildTrustPool: want non-nil pool from a GitHub-CA-only call")
+	}
+	if err := verify(t, leaf, pool, "ghes.corp.example"); err != nil {
+		t.Fatalf("GHES leaf should verify with no proxy CA supplied: %v", err)
+	}
+}
+
+// TestBuildTrustPool_RejectsInvalidGitHubPEM verifies the opt-in fails loudly: a
+// githubCABundleRef whose ConfigMap holds garbage must error rather than yield a
+// system-roots-only pool the AGC would then run with, silently untrusting.
+func TestBuildTrustPool_RejectsInvalidGitHubPEM(t *testing.T) {
+	_, _, proxyPEM := generateCA(t, "proxy-ca")
+	pool, err := BuildTrustPool(proxyPEM, []byte("-----BEGIN CERTIFICATE-----\nnope\n"))
+	if err == nil {
+		t.Fatalf("invalid GitHub CA PEM: want error, got pool=%v", pool)
 	}
 }

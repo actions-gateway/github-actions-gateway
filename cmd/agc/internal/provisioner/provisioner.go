@@ -173,6 +173,17 @@ const (
 	proxyCAMountPath  = "/etc/actions-gateway/proxy-ca"
 	proxyCAFileName   = "tls.crt"
 
+	// githubCAVolumeName / githubCAMountPath / githubCAFileName describe how the
+	// operator-supplied GitHub CA bundle is projected into the worker pod (Q536).
+	// Same shape and same reason as the proxy CA above, one hop further out: on a
+	// GHES appliance behind a private CA the runner's own calls — checkout, log and
+	// artifact upload — fail the handshake unless the appliance's CA is in its trust
+	// store. The path matches the AGC's own mount in
+	// [cmd/gmc/internal/controller/actionsgateway_v2_builder.go].
+	githubCAVolumeName = "github-ca"
+	githubCAMountPath  = "/etc/actions-gateway/github-ca"
+	githubCAFileName   = "ca.crt"
+
 	// DefaultCompletedPodTTL is the effective retention for worker pods in a
 	// terminal phase when RunnerGroup.Spec.CompletedPodTTL is omitted. Long
 	// enough for an operator to inspect a just-failed pod, short enough to keep
@@ -311,6 +322,14 @@ type Provisioner struct {
 	// mount, which is the right behaviour for tests and any deployment that
 	// runs without the per-tenant egress proxy.
 	ProxyTLSSecretName string
+
+	// GitHubCAConfigMapName names a ConfigMap in the tenant namespace whose ca.crt
+	// key is the CA bundle fronting this gateway's GHES appliance
+	// (ActionsGateway.spec.githubCABundleRef). When non-empty the provisioner
+	// projects it into the worker pod at githubCAMountPath/githubCAFileName so the
+	// wrapper can add it to the runner's trust store alongside the proxy CA. Empty
+	// (the default) skips the mount — public GitHub needs no extra trust.
+	GitHubCAConfigMapName string
 
 	// Waiter blocks until a worker pod reaches a terminal phase. When set
 	// (production wires an InformerPodWaiter via main.go), completion is

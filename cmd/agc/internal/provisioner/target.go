@@ -256,6 +256,12 @@ type ResolvedSpec struct {
 	NoProxy            string
 	ProxyTLSSecretName string
 
+	// GitHubCAConfigMapName names the ConfigMap holding the CA bundle fronting this
+	// gateway's GHES appliance, projected into the runner container so it trusts the
+	// same appliance the AGC does (Q536). v2 only: it comes from the gateway's
+	// spec.githubCABundleRef, which v1alpha1 has no field for.
+	GitHubCAConfigMapName string
+
 	// SecurityProfile scales the secure-by-default worker SecurityContext to the
 	// namespace's Pod Security Admission level (baseline/restricted/privileged).
 	SecurityProfile string

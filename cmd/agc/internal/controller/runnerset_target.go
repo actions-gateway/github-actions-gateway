@@ -340,6 +340,10 @@ func (t *runnerSetTarget) Resolve(ctx context.Context) (*provisioner.ResolvedSpe
 		CompletedPodTTL:    provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL),
 		MaxWorkerLifetime:  provisioner.MaxWorkerLifetimeOrDefault(rs.Spec.MaxWorkerLifetime),
 		SecurityProfile:    t.prov.SecurityProfile,
+		// Per-gateway, not per-proxy: the appliance's CA is the same whether the
+		// worker egresses through the proxy or directly, so it is set outside the
+		// proxied branch below.
+		GitHubCAConfigMapName: t.prov.GitHubCAConfigMapName,
 	}
 	// Proxied: wire the worker's egress through the resolved EgressProxy. Direct
 	// (refs.proxy == nil, §H.10): leave the proxy fields empty so the worker gets no

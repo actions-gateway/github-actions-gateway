@@ -142,13 +142,15 @@ func TestSlogDebugSurfacesThroughBridge(t *testing.T) {
 	})
 }
 
-// TestConfigureProxyTrust covers the mount states the GMC can leave at
-// certDir/tls.crt. A cert that is present but unreadable or unparseable must
+// TestConfigureTrustPool covers the mount states the GMC can leave at
+// proxyDir/tls.crt. A cert that is present but unreadable or unparseable must
 // fail startup rather than be swallowed as "no TLS proxy configured" (Q520):
 // silently continuing strips proxy trust and surfaces much later as an
-// unrelated-looking x509 failure on the first proxied GitHub call.
-func TestConfigureProxyTrust(t *testing.T) {
-	// configureProxyTrust mutates the process-wide transport; restore it so
+// unrelated-looking x509 failure on the first proxied GitHub call. The GitHub CA
+// half is opt-in via GITHUB_CA_CONFIGMAP_NAME, unset throughout here and covered
+// by TestConfigureTrustPool_GitHubCA.
+func TestConfigureTrustPool(t *testing.T) {
+	// configureTrustPool mutates the process-wide transport; restore it so
 	// nothing else in the package inherits a subtest's pool.
 	pinDefaultTransport := func(t *testing.T) http.RoundTripper {
 		t.Helper()
@@ -159,7 +161,7 @@ func TestConfigureProxyTrust(t *testing.T) {
 
 	t.Run("absent cert leaves the default transport unchanged", func(t *testing.T) {
 		orig := pinDefaultTransport(t)
-		if err := configureProxyTrust(filepath.Join(t.TempDir(), "does-not-exist"), logr.Discard()); err != nil {
+		if err := configureTrustPool(filepath.Join(t.TempDir(), "does-not-exist"), t.TempDir(), logr.Discard()); err != nil {
 			t.Fatalf("an unmounted proxy CA must be a no-op; got %v", err)
 		}
 		if http.DefaultTransport != orig {
@@ -176,7 +178,7 @@ func TestConfigureProxyTrust(t *testing.T) {
 		if err := os.Mkdir(filepath.Join(dir, "tls.crt"), 0o700); err != nil {
 			t.Fatal(err)
 		}
-		err := configureProxyTrust(dir, logr.Discard())
+		err := configureTrustPool(dir, t.TempDir(), logr.Discard())
 		if err == nil {
 			t.Fatal("an unreadable proxy CA must fail startup, not pass as no-proxy-configured")
 		}
@@ -194,11 +196,11 @@ func TestConfigureProxyTrust(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "tls.crt"), []byte("not a certificate\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		err := configureProxyTrust(dir, logr.Discard())
+		err := configureTrustPool(dir, t.TempDir(), logr.Discard())
 		if err == nil {
 			t.Fatal("a proxy CA with no parseable certificate must fail startup")
 		}
-		if !strings.Contains(err.Error(), "build proxy trust pool") {
+		if !strings.Contains(err.Error(), "build trust pool") {
 			t.Errorf("error must name the pool failure; got %v", err)
 		}
 	})
@@ -209,7 +211,7 @@ func TestConfigureProxyTrust(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "tls.crt"), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := configureProxyTrust(dir, logr.Discard()); err != nil {
+		if err := configureTrustPool(dir, t.TempDir(), logr.Discard()); err != nil {
 			t.Fatalf("an empty proxy CA is tolerated like the worker wrapper's; got %v", err)
 		}
 		if http.DefaultTransport != orig {
@@ -224,7 +226,7 @@ func TestConfigureProxyTrust(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "tls.crt"), caPEM, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := configureProxyTrust(dir, logr.Discard()); err != nil {
+		if err := configureTrustPool(dir, t.TempDir(), logr.Discard()); err != nil {
 			t.Fatalf("a valid proxy CA must configure trust; got %v", err)
 		}
 		tr, ok := http.DefaultTransport.(*http.Transport)
@@ -242,6 +244,96 @@ func TestConfigureProxyTrust(t *testing.T) {
 			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		}); err != nil {
 			t.Errorf("a cert signed by the mounted proxy CA must validate against the transport pool: %v", err)
+		}
+	})
+}
+
+// TestConfigureTrustPool_GitHubCA covers the Q536 half: the bundle the GMC mounts
+// for a GHES appliance behind a private CA. Unlike the proxy CA it is opt-in —
+// GITHUB_CA_CONFIGMAP_NAME is set only when the gateway named a ConfigMap — so
+// there is no "not configured" reading of a failed read and every one is fatal.
+func TestConfigureTrustPool_GitHubCA(t *testing.T) {
+	pinDefaultTransport := func(t *testing.T) http.RoundTripper {
+		t.Helper()
+		orig := http.DefaultTransport
+		t.Cleanup(func() { http.DefaultTransport = orig })
+		return orig
+	}
+
+	t.Run("mounted bundle is trusted with no proxy CA", func(t *testing.T) {
+		orig := pinDefaultTransport(t)
+		caPEM, serverKP, _ := genCABundle(t)
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, githubCACertFile), caPEM, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(githubCAConfigMapEnv, "ghes-ca")
+
+		if err := configureTrustPool(t.TempDir(), dir, logr.Discard()); err != nil {
+			t.Fatalf("a valid GitHub CA bundle must configure trust; got %v", err)
+		}
+		tr, ok := http.DefaultTransport.(*http.Transport)
+		if !ok || http.DefaultTransport == orig {
+			t.Fatal("default transport must be replaced with an appliance-trusting clone")
+		}
+		leaf, err := x509.ParseCertificate(serverKP.Certificate[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := leaf.Verify(x509.VerifyOptions{
+			Roots:     tr.TLSClientConfig.RootCAs,
+			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		}); err != nil {
+			t.Errorf("a cert signed by the mounted GitHub CA must validate against the transport pool: %v", err)
+		}
+	})
+
+	t.Run("absent bundle fails startup when opted in", func(t *testing.T) {
+		orig := pinDefaultTransport(t)
+		t.Setenv(githubCAConfigMapEnv, "ghes-ca")
+
+		err := configureTrustPool(t.TempDir(), filepath.Join(t.TempDir(), "does-not-exist"), logr.Discard())
+		if err == nil {
+			t.Fatal("an opted-in but unmounted GitHub CA must fail startup, not run untrusting")
+		}
+		if !strings.Contains(err.Error(), "read GitHub CA bundle") {
+			t.Errorf("error must name the read failure; got %v", err)
+		}
+		if http.DefaultTransport != orig {
+			t.Error("default transport must not be replaced when the bundle is unreadable")
+		}
+	})
+
+	t.Run("empty bundle fails startup when opted in", func(t *testing.T) {
+		pinDefaultTransport(t)
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, githubCACertFile), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(githubCAConfigMapEnv, "ghes-ca")
+
+		err := configureTrustPool(t.TempDir(), dir, logr.Discard())
+		if err == nil {
+			t.Fatal("an empty GitHub CA bundle must fail startup: the appliance would not be trusted")
+		}
+		if !strings.Contains(err.Error(), "is empty") {
+			t.Errorf("error must say the bundle is empty; got %v", err)
+		}
+	})
+
+	t.Run("bundle is ignored when not opted in", func(t *testing.T) {
+		orig := pinDefaultTransport(t)
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, githubCACertFile), []byte("not a certificate\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		// GITHUB_CA_CONFIGMAP_NAME unset: a public-GitHub gateway never reads the
+		// path, so even a garbage file there cannot affect startup.
+		if err := configureTrustPool(t.TempDir(), dir, logr.Discard()); err != nil {
+			t.Fatalf("an unset opt-in must leave the bundle unread; got %v", err)
+		}
+		if http.DefaultTransport != orig {
+			t.Error("default transport must not be replaced when nothing is mounted")
 		}
 	})
 }

@@ -34,6 +34,7 @@ type agcConfig struct {
 	HTTPSProxy           string // HTTPS_PROXY
 	NoProxy              string // NO_PROXY
 	ProxyTLSSecretName   string // PROXY_TLS_SECRET_NAME
+	GitHubCAConfigMap    string // GITHUB_CA_CONFIGMAP_NAME
 	SecurityProfile      string // SECURITY_PROFILE
 	WorkerImage          string // WORKER_IMAGE (empty keeps the provisioner default)
 	WrapperImage         string // WRAPPER_IMAGE (empty disables wrapper injection, Q235)
@@ -77,6 +78,7 @@ func loadConfig(getenv func(string) string) agcConfig {
 		HTTPSProxy:                getenv("HTTPS_PROXY"),
 		NoProxy:                   getenv("NO_PROXY"),
 		ProxyTLSSecretName:        getenv("PROXY_TLS_SECRET_NAME"),
+		GitHubCAConfigMap:         getenv(githubCAConfigMapEnv),
 		SecurityProfile:           getenv("SECURITY_PROFILE"),
 		WorkerImage:               getenv("WORKER_IMAGE"),
 		WrapperImage:              getenv("WRAPPER_IMAGE"),

@@ -92,11 +92,11 @@ const (
 	exitSucceeded           = returnCodeOffset
 	exitSucceededWithIssues = returnCodeOffset + 1
 
-	// proxyCABundleFile is the file name (under RUNNER_HOME_DIR) where the
-	// wrapper writes the combined system + per-tenant-proxy CA bundle.
-	// SSL_CERT_FILE points the .NET HttpClient at this file so its TLS
-	// handshake with the egress proxy succeeds.
-	proxyCABundleFile = "proxy-ca-bundle.crt"
+	// caBundleFile is the file name (under RUNNER_HOME_DIR) where the wrapper writes
+	// the combined system + supplied CA bundle — the per-tenant egress proxy's CA,
+	// and on GHES the CA fronting the appliance (Q536). SSL_CERT_FILE points the
+	// .NET HttpClient at this file so its TLS handshakes succeed.
+	caBundleFile = "ca-bundle.crt"
 
 	// workerModeEnv selects the wrapper's execution mode. Empty (the default) is
 	// the classic M3 mode: the AGC already acquired the job and hands its payload
@@ -266,17 +266,18 @@ func run() error {
 		return fmt.Errorf("materialize JIT config: %w", err)
 	}
 
-	// 2a. Install the per-tenant egress-proxy CA cert into a combined trust
-	// bundle and prepare the env var the child Runner.Worker (and any of its
-	// own children — job steps, shell scripts, etc.) needs to find it. The
-	// AGC provisioner mounts the CA at PROXY_CA_CERT_PATH; without trust
-	// install, Runner.Worker's .NET HttpClient rejects the proxy's TLS cert
-	// with UntrustedRoot before any traffic reaches GitHub. A missing path
-	// (e.g. tests, deployments with no per-tenant proxy) is a tolerated
+	// 2a. Install the mounted CA certs into a combined trust bundle and prepare the
+	// env var the child Runner.Worker (and any of its own children — job steps, shell
+	// scripts, etc.) needs to find it. The AGC provisioner mounts the egress proxy's
+	// CA at PROXY_CA_CERT_PATH and a GHES appliance's CA at GITHUB_CA_CERT_PATH;
+	// without trust install, Runner.Worker's .NET HttpClient rejects the corresponding
+	// TLS cert with UntrustedRoot before any traffic reaches GitHub. A missing path
+	// (e.g. tests, deployments with no per-tenant proxy, public GitHub) is a tolerated
 	// no-op.
-	proxyTrustEnv, err := installProxyCATrust(os.Getenv("PROXY_CA_CERT_PATH"), runnerHome)
+	caTrustEnv, err := installCATrust(runnerHome,
+		os.Getenv("PROXY_CA_CERT_PATH"), os.Getenv("GITHUB_CA_CERT_PATH"))
 	if err != nil {
-		return fmt.Errorf("install proxy CA trust: %w", err)
+		return fmt.Errorf("install CA trust: %w", err)
 	}
 
 	// 3. Create anonymous pipes.
@@ -315,8 +316,8 @@ func run() error {
 	// OpenSSL store picks up our combined bundle. Empty slice means no proxy
 	// CA was configured; in that case we leave cmd.Env nil and the child
 	// inherits the wrapper's env unchanged.
-	if len(proxyTrustEnv) > 0 {
-		cmd.Env = append(os.Environ(), proxyTrustEnv...)
+	if len(caTrustEnv) > 0 {
+		cmd.Env = append(os.Environ(), caTrustEnv...)
 	}
 	// Relay pod termination to Runner.Worker: it is not PID 1, so it never sees
 	// the pod's SIGTERM on its own (Q385). Arm before starting it — a signal that
@@ -394,9 +395,10 @@ func runScaleSet(payloadDir, runnerHome string) error {
 		return err
 	}
 
-	proxyTrustEnv, err := installProxyCATrust(os.Getenv("PROXY_CA_CERT_PATH"), runnerHome)
+	caTrustEnv, err := installCATrust(runnerHome,
+		os.Getenv("PROXY_CA_CERT_PATH"), os.Getenv("GITHUB_CA_CERT_PATH"))
 	if err != nil {
-		return fmt.Errorf("install proxy CA trust: %w", err)
+		return fmt.Errorf("install CA trust: %w", err)
 	}
 
 	runScript := filepath.Join(runnerHome, runnerRunScript)
@@ -405,8 +407,8 @@ func runScaleSet(payloadDir, runnerHome string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
-	if len(proxyTrustEnv) > 0 {
-		cmd.Env = append(cmd.Env, proxyTrustEnv...)
+	if len(caTrustEnv) > 0 {
+		cmd.Env = append(cmd.Env, caTrustEnv...)
 	}
 
 	slog.Info("starting scale-set runner", "script", runScript)
@@ -740,43 +742,56 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// installProxyCATrust reads the per-tenant egress-proxy CA cert from caPath,
-// concatenates it with the host's existing OS trust bundle, writes the
-// combined PEM into runnerHome under proxyCABundleFile, and returns the env
-// vars the child Runner.Worker (and any of its own subprocesses) needs to use
-// that bundle. The returned slice is `KEY=VALUE` strings ready for
-// append-onto-os.Environ().
+// installCATrust reads each supplied CA cert path, concatenates them with the
+// host's existing OS trust bundle, writes the combined PEM into runnerHome under
+// caBundleFile, and returns the env vars the child Runner.Worker (and any of its own
+// subprocesses) needs to use that bundle. The returned slice is `KEY=VALUE` strings
+// ready for append-onto-os.Environ().
 //
-// Behaviour:
+// The paths are the per-tenant egress proxy's CA and, on a GHES appliance behind a
+// private CA, that appliance's CA (Q536). Both are additive to the system bundle,
+// never a replacement.
 //
-//   - caPath == "" → no proxy configured, returns nil env (no-op).
-//   - caPath points at a missing file → tolerated as a no-op so the wrapper
-//     keeps working in unit tests or when the AGC provisioner ran without a
-//     proxy TLS Secret. The wrapper logs and continues.
-//   - caPath read fails for any other reason → error (the AGC mounted a
-//     Secret but we can't read it; failing fast surfaces a misconfiguration
-//     before the runner times out chasing an UntrustedRoot).
+// Behaviour, per path:
+//
+//   - "" → not configured, contributes nothing.
+//   - a missing file → tolerated as a no-op so the wrapper keeps working in unit
+//     tests or when the AGC provisioner ran without the corresponding mount. The
+//     wrapper logs and continues.
+//   - a read failure for any other reason → error (the AGC mounted it but we can't
+//     read it; failing fast surfaces a misconfiguration before the runner times out
+//     chasing an UntrustedRoot).
+//
+// With no path contributing a cert the bundle is not written at all and nil env is
+// returned, leaving the runner on its image's own trust store.
 //
 // The combined bundle is written world-readable (0o644) because the runner
 // user (UID 1001 in the actions-runner image) is also the only consumer; the
 // cert is public and adding restrictive permissions would just risk locking
 // out a future supplemental container running as a different UID.
-func installProxyCATrust(caPath, runnerHome string) ([]string, error) {
-	if caPath == "" {
-		return nil, nil
-	}
-	caPEM, err := os.ReadFile(caPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			slog.Info("no proxy CA cert mounted; skipping trust-store install",
-				"path", caPath)
-			return nil, nil
+func installCATrust(runnerHome string, caPaths ...string) ([]string, error) {
+	var extra [][]byte
+	var installed []string
+	for _, caPath := range caPaths {
+		if caPath == "" {
+			continue
 		}
-		return nil, fmt.Errorf("read proxy CA cert %s: %w", caPath, err)
+		caPEM, err := os.ReadFile(caPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				slog.Info("no CA cert mounted at this path; skipping it", "path", caPath)
+				continue
+			}
+			return nil, fmt.Errorf("read CA cert %s: %w", caPath, err)
+		}
+		if len(bytes.TrimSpace(caPEM)) == 0 {
+			slog.Warn("CA cert file is empty; skipping it", "path", caPath)
+			continue
+		}
+		extra = append(extra, caPEM)
+		installed = append(installed, caPath)
 	}
-	if len(bytes.TrimSpace(caPEM)) == 0 {
-		slog.Warn("proxy CA cert file is empty; skipping trust-store install",
-			"path", caPath)
+	if len(extra) == 0 {
 		return nil, nil
 	}
 
@@ -790,20 +805,22 @@ func installProxyCATrust(caPath, runnerHome string) ([]string, error) {
 	if len(systemPEM) > 0 && !bytes.HasSuffix(systemPEM, []byte("\n")) {
 		combined.WriteByte('\n')
 	}
-	combined.Write(caPEM)
-	if !bytes.HasSuffix(caPEM, []byte("\n")) {
-		combined.WriteByte('\n')
+	for _, caPEM := range extra {
+		combined.Write(caPEM)
+		if !bytes.HasSuffix(caPEM, []byte("\n")) {
+			combined.WriteByte('\n')
+		}
 	}
 
 	if err := os.MkdirAll(runnerHome, 0o700); err != nil {
 		return nil, fmt.Errorf("create runner home %s: %w", runnerHome, err)
 	}
-	target := filepath.Join(runnerHome, proxyCABundleFile)
+	target := filepath.Join(runnerHome, caBundleFile)
 	if err := os.WriteFile(target, combined.Bytes(), 0o644); err != nil { //nolint:gosec // G306: a CA trust bundle holds public certs and must be world-readable for the runner
 		return nil, fmt.Errorf("write combined CA bundle %s: %w", target, err)
 	}
-	slog.Info("proxy CA trust installed",
-		"bundle", target, "extra_cert", caPath, "system_bytes", len(systemPEM))
+	slog.Info("CA trust installed",
+		"bundle", target, "extra_certs", installed, "system_bytes", len(systemPEM))
 
 	// SSL_CERT_FILE is honored by OpenSSL's default verify-paths logic; .NET 6+
 	// on Linux delegates X509Chain validation to OpenSSL via X509_STORE so it
@@ -816,8 +833,8 @@ func installProxyCATrust(caPath, runnerHome string) ([]string, error) {
 
 // readSystemCABundle returns the contents of the first existing OS trust
 // bundle from systemCABundleCandidates. Empty result with no error is valid
-// (some minimal base images ship without one — the proxy CA alone still works
-// for the proxy handshake, just not for any other TLS endpoint).
+// (some minimal base images ship without one — the supplied CAs alone still work
+// for their own endpoints, just not for any other TLS endpoint).
 func readSystemCABundle() ([]byte, error) {
 	for _, p := range systemCABundleCandidates {
 		b, err := os.ReadFile(p)

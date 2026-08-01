@@ -25,11 +25,19 @@
 // resizes the workload it targets, and every object the GMC creates is scoped to a
 // tenant namespace by the tenant-resource-guard admission policy.
 // +kubebuilder:rbac:groups=autoscaling.k8s.io,resources=verticalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
+//
+// GHES private-CA trust (Q536): spec.githubCABundleRef names a tenant ConfigMap the
+// reconciler reads to validate before mounting it on the AGC. `get` only, and no
+// list/watch — the read is uncached, so no ConfigMap informer is started and the
+// name-pinned scoping of the egress-allowlist watch is left intact. Strictly narrower
+// than the secrets grant the credential path already holds.
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get
 
 package controller
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -97,10 +105,11 @@ type ActionsGatewayV2Reconciler struct {
 	IPCache *IPRangeCache
 	// Recorder emits Kubernetes Events on the ActionsGateway. May be nil in tests.
 	Recorder events.EventRecorder
-	// Reader is an uncached apiserver reader (mgr.GetAPIReader()) used by teardown
-	// to verify a child is actually gone right after its delete — the cached client
-	// would still return the just-deleted object and make every clean teardown look
-	// incomplete. nil (unit tests) falls back to the cached Client.
+	// Reader is an uncached apiserver reader (mgr.GetAPIReader()) for the reads the
+	// cache cannot serve: teardown verification, where the cached client would still
+	// return a just-deleted child and make every clean teardown look incomplete, and
+	// the githubCABundleRef ConfigMap, which the name-pinned ConfigMap informer does
+	// not cover. nil (unit tests) falls back to the cached Client.
 	Reader client.Reader
 	// Now supplies the current time for the teardown worker-drain deadline. nil is
 	// time.Now; tests inject to drive the deadline without sleeping.
@@ -114,9 +123,12 @@ func (r *ActionsGatewayV2Reconciler) nowFunc() func() time.Time {
 	return time.Now
 }
 
-// teardownReader returns the uncached reader for teardown verification, falling
-// back to the cached client when none is wired (unit tests use an uncached fake).
-func (r *ActionsGatewayV2Reconciler) teardownReader() client.Reader {
+// uncachedReader returns the uncached apiserver reader, falling back to the cached
+// client when none is wired (unit tests use an uncached fake). Two callers need it:
+// teardown verification, where the cache would still return a just-deleted child, and
+// the githubCABundleRef resolution, whose tenant ConfigMap the GMC's name-pinned
+// ConfigMap informer does not cover.
+func (r *ActionsGatewayV2Reconciler) uncachedReader() client.Reader {
 	if r.Reader != nil {
 		return r.Reader
 	}
@@ -215,6 +227,24 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 				fmt.Sprintf("EgressProxy %q (defaultProxyRef) not found in namespace %q", ag.Spec.DefaultProxyRef.Name, ag.Namespace))
 		}
 		proxy = &p
+	}
+
+	// GHES private-CA trust (Q536): provisioning an AGC with a mount it cannot read
+	// wedges the pod at ContainerCreating with no explanation, so an unresolvable
+	// githubCABundleRef fails closed here instead.
+	if caReason, caMsg, caErr := r.checkGitHubCABundle(ctx, &ag); caErr != nil {
+		return ctrl.Result{}, caErr
+	} else if caReason != "" {
+		res, err := r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionDegraded, caReason, caMsg)
+		if err != nil {
+			return res, err
+		}
+		// Polled rather than watched: the GMC's ConfigMap informer is pinned to one
+		// object in its own namespace (buildCacheOptions), so watching a tenant
+		// ConfigMap would mean a cluster-wide ConfigMap cache and the broad read grant
+		// that scoping exists to avoid.
+		res.RequeueAfter = githubCABundleReprobeInterval
+		return res, nil
 	}
 
 	// Read the namespace's effective security profile (the source label the
@@ -335,6 +365,50 @@ func (r *ActionsGatewayV2Reconciler) namespaceSecurityProfile(ctx context.Contex
 		return "", fmt.Errorf("read namespace %q for security profile: %w", namespace, err)
 	}
 	return gmcv2alpha1.EffectiveSecurityProfile(ns.Labels[gmcv2alpha1.SecurityProfileLabel]), nil
+}
+
+// githubCABundleReprobeInterval is how often a gateway whose githubCABundleRef does
+// not resolve re-reads the ConfigMap. Short enough that applying the missing
+// ConfigMap converges while the operator is still watching, and it only runs while
+// the gateway is failed closed.
+const githubCABundleReprobeInterval = time.Minute
+
+// checkGitHubCABundle resolves spec.githubCABundleRef. It returns a Degraded reason
+// and message when the reference does not resolve, ("", "", nil) when it resolves or
+// is unset, and an error only for an apiserver failure.
+//
+// The read is uncached: the GMC's ConfigMap informer is pinned to a single object in
+// its own namespace, so it cannot serve a tenant ConfigMap.
+//
+// Parsing here rather than letting the AGC fail at startup is deliberate — a Degraded
+// condition naming the ConfigMap is a better operator signal than a CrashLoopBackOff.
+func (r *ActionsGatewayV2Reconciler) checkGitHubCABundle(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) (string, string, error) {
+	ref := ag.Spec.GitHubCABundleRef
+	if ref == nil {
+		return "", "", nil
+	}
+	var cm corev1.ConfigMap
+	err := r.uncachedReader().Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ref.Name}, &cm)
+	if apierrors.IsNotFound(err) {
+		return gmcv2alpha1.ReasonCABundleNotFound,
+			fmt.Sprintf("ConfigMap %q (githubCABundleRef) not found in namespace %q", ref.Name, ag.Namespace), nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	bundle := cm.Data[githubCABundleKey]
+	if bundle == "" {
+		bundle = string(cm.BinaryData[githubCABundleKey])
+	}
+	if bundle == "" {
+		return gmcv2alpha1.ReasonCABundleInvalid,
+			fmt.Sprintf("ConfigMap %q (githubCABundleRef) has no %q key", ref.Name, githubCABundleKey), nil
+	}
+	if !x509.NewCertPool().AppendCertsFromPEM([]byte(bundle)) {
+		return gmcv2alpha1.ReasonCABundleInvalid,
+			fmt.Sprintf("ConfigMap %q key %q holds no PEM-encoded certificate", ref.Name, githubCABundleKey), nil
+	}
+	return "", "", nil
 }
 
 // ensureMetricsCerts ensures the per-tenant metrics mTLS bundle exists and is not
@@ -915,7 +989,7 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 			errs = append(errs, fmt.Errorf("%s %s: %w", kind, name, err))
 			return
 		}
-		if err := r.teardownReader().Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, obj); err == nil {
+		if err := r.uncachedReader().Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, obj); err == nil {
 			lingering = append(lingering, fmt.Sprintf("%s %s", kind, name))
 		} else if client.IgnoreNotFound(err) != nil {
 			errs = append(errs, fmt.Errorf("%s %s: %w", kind, name, err))

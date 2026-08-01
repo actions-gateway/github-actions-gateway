@@ -182,20 +182,50 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 		})
 	}
 
+	// Project the GHES appliance's CA bundle (Q536) the same way, from the ConfigMap
+	// the gateway's githubCABundleRef names. A certificate is public material, so the
+	// carrier is a ConfigMap and Items still pins the projection to the one key.
+	if spec.GitHubCAConfigMapName != "" {
+		caMode := int32(0o444)
+		template.Spec.Volumes = append(template.Spec.Volumes, corev1.Volume{
+			Name: githubCAVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: spec.GitHubCAConfigMapName},
+					Items: []corev1.KeyToPath{{
+						Key:  githubCAFileName,
+						Path: githubCAFileName,
+					}},
+					DefaultMode: &caMode,
+				},
+			},
+		})
+		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
+			Name:      githubCAVolumeName,
+			MountPath: githubCAMountPath,
+			ReadOnly:  true,
+		})
+	}
+
 	// Inject proxy env vars into the runner container (controller-enforced invariants).
-	// PROXY_CA_CERT_PATH tells the worker wrapper where to find the mounted CA;
-	// empty when ProxyTLSSecretName is unset, in which case the wrapper skips
-	// the trust-store install and HTTPS_PROXY traffic falls back to whatever
-	// the base image already trusts.
+	// PROXY_CA_CERT_PATH and GITHUB_CA_CERT_PATH tell the worker wrapper which CAs to
+	// add to the runner's trust store; each is empty when its mount is absent, and
+	// with both empty the wrapper skips the trust-store install and traffic falls back
+	// to whatever the base image already trusts.
 	proxyCACertPath := ""
 	if spec.ProxyTLSSecretName != "" {
 		proxyCACertPath = proxyCAMountPath + "/" + proxyCAFileName
+	}
+	githubCACertPath := ""
+	if spec.GitHubCAConfigMapName != "" {
+		githubCACertPath = githubCAMountPath + "/" + githubCAFileName
 	}
 	proxyEnvs := []corev1.EnvVar{
 		{Name: "HTTP_PROXY", Value: spec.HTTPProxy},
 		{Name: "HTTPS_PROXY", Value: spec.HTTPSProxy},
 		{Name: "NO_PROXY", Value: spec.NoProxy},
 		{Name: "PROXY_CA_CERT_PATH", Value: proxyCACertPath},
+		{Name: "GITHUB_CA_CERT_PATH", Value: githubCACertPath},
 	}
 	c.Env = mergeEnvOverride(c.Env, proxyEnvs)
 
