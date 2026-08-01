@@ -44,6 +44,20 @@ The repo scripts already do this — `scripts/e2e/kind-with-registry.sh` threads
 
 The same ambient-state hazard applies to **`gcloud`**: the active project/account/region live in the shared `~/.config/gcloud` active configuration, so a parallel `gcloud config set` repoints your invocations too. Pass `--project`, `--account`, and `--zone`/`--region` explicitly on each command rather than depending on `gcloud config` (or scope a private config with `CLOUDSDK_ACTIVE_CONFIG_NAME` / `gcloud --configuration=<name>`).
 
+#### The e2e suite has no `--context` to pin — give it a private `KUBECONFIG`
+
+`make e2e` threads `KIND_CLUSTER` through for the scripts that read it, but the suite's own `kubectl` calls (`utils.Run(exec.Command("kubectl", …))`) carry no `--context`, so they follow whatever `current-context` happens to be. There is nothing to pin per-command, and `kubectl config use-context` is exactly the shared-state write the rule above forbids — it repoints every parallel session.
+
+Point the run at its own kubeconfig instead:
+
+```bash
+kind get kubeconfig --name actions-gateway-e2e > tmp/kubeconfig
+```
+
+then set `KUBECONFIG=$PWD/tmp/kubeconfig` on the `ginkgo`/`make e2e` invocation. The suite and everything it shells out to inherit it, no shared file is touched, and a parallel session's `use-context` cannot steal the run mid-flight. `tmp/` at the repo root is gitignored and inside the workspace, which is where scratch files belong.
+
+Without it the first `kubectl` fails against the empty default — `dial tcp [::1]:8080: connect: connection refused`, usually surfacing as a cert-manager install failure in `SynchronizedBeforeSuite` rather than as anything about contexts.
+
 ### Verify the resolved target before any mutating command
 
 An explicit `--context` still points *somewhere*. Before a destructive verb (`apply`/`delete`/`scale`/`patch`/`rollout` on kubectl, `upgrade`/`uninstall` on helm, `delete`/`destroy` on gcloud/terraform), confirm the effective target isn't a live/prod environment — echo it and stop if it looks like prod (the shared GKE dogfood cluster counts):
