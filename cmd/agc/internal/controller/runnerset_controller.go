@@ -902,8 +902,8 @@ func (r *RunnerSetReconciler) provisionerTarget(rs *v2alpha1.RunnerSet) *runnerS
 }
 
 // reapWorkerPods deletes worker pods this RunnerSet no longer needs (terminal past
-// completedPodTTL, Pending past pendingPodDeadline, Running past its own job's
-// completion), mirroring the RunnerGroup reaper but filtering on LabelRunnerSet and
+// completedPodTTL, Pending past pendingPodDeadline, and Pending or Running past its own
+// job's completion), mirroring the RunnerGroup reaper but filtering on LabelRunnerSet and
 // reading the RunnerSet's tunables. It returns the time until the earliest retained
 // pod becomes due (0 = none) and a pod phase count for status.activeJobs/pendingJobs.
 func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) (time.Duration, workerPodCounts, error) {
@@ -925,6 +925,14 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 				r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodOrphanedRunning", "ReapWorkerPods",
 					"worker pod %s was still Running %s after its job completed and has been deleted; "+
 						"the runner never received its job, or a container in the pod outlived it", podName, grace)
+			},
+			emitCompletedPending: func(podName string, grace time.Duration) {
+				// Operator-visible: this is the scale-set tier's own failure mode — the
+				// job completed while its worker was still Pending, so the completion
+				// reclaimed the Secret the pod had not mounted yet (Q575).
+				r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodCompletedPending", "ReapWorkerPods",
+					"worker pod %s was still Pending %s after its job completed and has been deleted; "+
+						"the job ended before the pod could start, so the pod had nothing to run", podName, grace)
 			},
 			emitLifetimeExceeded: func(podName string) {
 				// Operator-visible: name the cause and the field to raise, so a

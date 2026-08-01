@@ -100,8 +100,8 @@ The prose below carries the *why* of each; this table is the state.
 | Q552 | GMC reverts a `kubectl rollout restart` of a managed AGC | `1.3-gate` | ✅ shipped 2026-08-01 |
 | Q553 | AGC re-provisions jobs GitHub no longer has, livelocking a drain | `1.3-gate` | ✅ shipped 2026-08-01 |
 | Q582 | v1/v2 proxy pools collide throughout migration coexistence | `1.3-gate` | ✅ shipped 2026-08-01 |
-| [Q575](../STATUS.md#Q575) | A worker whose `job-payload` secret is absent stalls | `1.3-gate` | 🔲 in flight (#1119) |
-| [Q577](../STATUS.md#Q577) | `stop.sh` leaves the pool up when its drain cannot converge | `1.3-gate` | 🚫 blocked by Q575 — re-verify when it lands |
+| Q575 | A worker whose `job-payload` secret is absent stalls | `1.3-gate` | ✅ shipped 2026-08-01 |
+| [Q577](../STATUS.md#Q577) | `stop.sh` leaves the pool up when its drain cannot converge | `1.3-gate` | 🔲 unblocked — re-measure at the gate, it may no longer be real |
 | [Q583](../STATUS.md#Q583) | An AGC restart replays the queue and re-provisions jobs long gone | rides | ⤴ measure at the rc.4 gate first — see below |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
@@ -125,8 +125,9 @@ row exists so the fourth does not.
 ### What rc.4 carries, and the two scope calls behind it
 
 rc.3's validation window produced five defects (Q575–Q578, Q580) plus a revive
-trigger on Q553. Q576, Q578, and Q580 have shipped; Q575 is in flight and Q577 is
-blocked behind it. **Q576, Q552, and Q553 gate rather than ride** for the same
+trigger on Q553. Q575, Q576, Q578, and Q580 have shipped; Q577 is unblocked by
+Q575 landing, but both stalls its row named are now fixed, so the gate should
+re-measure it rather than assume it is still real. **Q576, Q552, and Q553 gate rather than ride** for the same
 reason Q550 and Q551 did: each is an availability bug an ordinary tenant reaches,
 not a dogfood-harness artifact. Q576 in particular spun a saturated scale set at
 ~0.8 provisioning attempts/s for 14 minutes, issuing 704 GitHub deregister calls

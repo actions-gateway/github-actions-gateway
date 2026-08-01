@@ -436,7 +436,10 @@ type Listener struct {
 	mu          sync.Mutex
 	scaleSetID  int
 	provisioned map[string]bool // jobIDs provisioned this process (idempotency + replay guard)
-	completed   map[string]bool // jobIDs seen completed (guards double-counting on replay)
+	// completed holds jobIDs GitHub has reported terminal. It guards double-counting on
+	// replay, and gates provisioning: a worker for a completed job would stall on the
+	// Secret that job's completion reclaimed (Q575).
+	completed map[string]bool
 	// abandoned holds the jobIDs concluded gone at GitHub (Q553). Without it the fix
 	// would be undone by the ordinary 404 heal: a re-created session polls from cursor 0
 	// and replays the very JobAssigned the check acted on, and a jobID is a job's UUID —
@@ -954,6 +957,16 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 		}
 	}
 
+	// Completions first, then assignments. A batch can carry both messages for one job
+	// — a run cancelled between two polls, and every job in the queue when a re-created
+	// session replays from cursor 0 — and provisioning first builds a worker whose
+	// Secret the completion then deletes, stranding the pod Pending on a Secret that no
+	// longer exists (Q575). Handling the completion first lets provisionAssigned ack
+	// past the assignment instead, so no pod is created for a job already over.
+	for _, cj := range completedJobs(jobs) {
+		l.completeJob(ctx, cj)
+	}
+
 	ackable := true
 	for _, aj := range scaleset.AssignedJobs(jobs) {
 		l.metricsIncAssigned()
@@ -964,9 +977,6 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 		case outcome.deferReason() != "":
 			l.deferJob(aj, outcome.deferReason())
 		}
-	}
-	for _, cj := range completedJobs(jobs) {
-		l.completeJob(ctx, cj)
 	}
 
 	// Ack (advance the cursor) unless a job needs a redelivery retry. A provisioned or
@@ -1318,7 +1328,7 @@ func (o provisionOutcome) deferReason() string {
 // (ack past it rather than wedge the cursor — Q270; the caller defers it — Q551/Q576).
 func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.JobMessage) provisionOutcome {
 	l.mu.Lock()
-	already, gone := l.provisioned[aj.JobID], l.abandoned[aj.JobID]
+	already, gone, over := l.provisioned[aj.JobID], l.abandoned[aj.JobID], l.completed[aj.JobID]
 	l.mu.Unlock()
 	if already {
 		return provisionAcked
@@ -1327,6 +1337,15 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 		// A replay of an assignment the check concluded GitHub no longer holds. Ack past
 		// it rather than build a worker with nothing to run (Q553).
 		l.log.Debug("scaleset: skipping replayed assignment for a job GitHub no longer has",
+			"scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID)
+		return provisionAcked
+	}
+	if over {
+		// GitHub already reported this job terminal, so its Secret is reclaimed and a
+		// worker built now would stall Pending on a Secret that no longer exists (Q575).
+		// Reached from the same batch (completions are handled first) and from a replay
+		// after the completion.
+		l.log.Debug("scaleset: skipping assignment for a job already completed",
 			"scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID)
 		return provisionAcked
 	}

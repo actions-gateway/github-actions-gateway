@@ -34,6 +34,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created)
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
+- [Worker Pod Reaped While Pending After Its Job Completed (WorkerPodCompletedPending)](#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending)
 - [Worker Pod Reaped While Running (WorkerPodOrphanedRunning)](#worker-pod-reaped-while-running-workerpodorphanedrunning)
 - [Workers Left Behind by an AGC That Was Down](#workers-left-behind-by-an-agc-that-was-down)
 - [Worker Killed by the Lifetime Cap (WorkerPodLifetimeExceeded)](#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded)
@@ -1409,6 +1410,46 @@ kubectl describe pod -n <namespace> <worker-pod-name>
 - Fix the unpullable image or unsatisfiable scheduling constraint — that is the root cause; the reap is the messenger.
 - If scheduling is legitimately slow (autoscaled GPU nodes), raise `spec.pendingPodDeadline` on the RunnerGroup (or the matching `runnerGroups[]` entry of the `ActionsGateway` CR) above the worst-case node-provisioning time, e.g. `pendingPodDeadline: "30m"`.
 - Re-run the cancelled workflow from the GitHub UI once the cause is fixed.
+
+---
+
+## Worker Pod Reaped While Pending After Its Job Completed (WorkerPodCompletedPending)
+
+**Symptoms.** A `Warning` Event with reason `WorkerPodCompletedPending` appears on the `RunnerSet` (`kubectl describe runnerset <name> -n <namespace>`) and `actions_gateway_worker_pods_reaped_total{reason="completed_pending"}` increments. Before the reap, the pod is `Pending` with a `FailedMount` event naming a `job-ss-<jobID>` Secret that does not exist.
+
+**What happened.** GitHub reported the job terminal while its worker pod was still `Pending`, so the AGC deleted the pod thirty seconds later. That pod could never have run: on the ScaleSet tier the job's terminal `JobCompleted` reclaims the JIT-config Secret the pod mounts, and a pod that has not mounted yet cannot mount one that is gone.
+
+This is **not** a scheduling problem, which is why it is a separate reason from [`WorkerPodStuckPending`](#worker-pod-reaped-while-pending-workerpodstuckpending) — the scheduler placed the pod fine. Before Q575 these pods were left to the unrelated `pendingPodDeadline` (default 10m), holding a concurrency slot and a node the whole time and then reporting themselves as a scheduling stall.
+
+**Likely causes.**
+- **Workflow runs cancelled shortly after being assigned** — the common one, and benign. The job ends between the assignment and the pod starting.
+- **An AGC restart replaying its message queue.** A re-created scale-set session polls from cursor 0, so a burst of these can follow an AGC restart. Expect them in a batch, correlated with the AGC pod's restart time.
+- **Pod startup slower than the job's own lifetime** — slow image pulls or node scale-up against very short jobs.
+
+**Diagnostics.**
+
+```sh
+# The reap event names the deleted pod and the grace that elapsed
+kubectl get events -n <namespace> --field-selector reason=WorkerPodCompletedPending
+```
+
+```sh
+# Which Pending workers already have a completion stamp (they are on the clock)
+kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<set> \
+  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at'
+```
+
+```sh
+# Correlate a burst with an AGC restart
+kubectl get pods -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller
+```
+
+**Resolution.** A low background rate needs no action — the reap returns the slot and the node, and the workflow run was already over. Treat a *sustained* or *bursty* rate as the signal:
+
+- A burst right after an AGC restart is the queue replay. It is self-limiting; if it recurs on every restart, check the AGC's restart cause first.
+- A steady rate with no restarts means jobs are being cancelled faster than pods start. Look at pod startup time (`kubectl describe pod` → image pull duration) rather than at the AGC.
+
+The thirty-second grace is a fixed constant, not a CRD field: the pod has not started, so there is no runner shutdown to wait out — the grace exists only to let a pod that was already mid-start reach `Running`, where the longer [`orphaned_running`](#worker-pod-reaped-while-running-workerpodorphanedrunning) grace takes over.
 
 ---
 
