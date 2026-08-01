@@ -187,7 +187,7 @@ kubectl describe replicaset -n gmc-system -l app.kubernetes.io/name=gmc
 
 ---
 
-## `helm upgrade` Fails With `nil pointer evaluating interface {}.<field>`
+## `helm upgrade` Fails With `nil pointer evaluating interface {}.FIELD`
 
 **Symptoms.** An upgrade fails while rendering a template you did not touch, naming
 a values key you may never have set:
@@ -739,7 +739,7 @@ states per policy class whether GAG complies or what to allow. In short:
   control plane, `ghcr.io/actions/actions-runner` for the default worker).
 - For `drop-ALL` / no-privilege-escalation requirements: have tenants set
   `securityProfile: restricted` (which satisfies them), or apply the scoped
-  [exception samples](examples/policies/) so `baseline` workers pass.
+  [exception samples](examples/policies/README.md) so `baseline` workers pass.
 - For `readOnlyRootFilesystem`: exempt worker pods (no profile can satisfy it).
 - For "require limits" on AGC v1alpha1: migrate the tenant to a v2alpha1
   `ActionsGateway`, or exempt AGC pods.
@@ -3791,4 +3791,4 @@ sync, so it is not a durable way to resize a pool. Change
 
 ---
 
-← [Back to Operations](.)
+← [Back to Operations](README.md)

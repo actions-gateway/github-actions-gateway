@@ -32,22 +32,22 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [GMC manager NetworkPolicy is now enabled by default](#gmc-manager-networkpolicy-is-now-enabled-by-default)
 - [GMC Upgrade](#gmc-upgrade)
   - [GMC install and upgrade via Helm (recommended)](#gmc-install-and-upgrade-via-helm-recommended)
-  - [Post-upgrade validation](#post-upgrade-validation)
-  - [Rollback](#rollback)
+  - [GMC post-upgrade validation](#gmc-post-upgrade-validation)
+  - [GMC rollback](#gmc-rollback)
 - [AGC Upgrade](#agc-upgrade)
   - [Per-Tenant Upgrade Procedure](#per-tenant-upgrade-procedure)
-  - [Rollback](#rollback-1)
+  - [AGC rollback](#agc-rollback)
 - [Proxy Upgrade](#proxy-upgrade)
   - [Step 1: Pre-Upgrade Checks](#step-1-pre-upgrade-checks)
   - [Step 2: Update the Proxy Image](#step-2-update-the-proxy-image)
   - [Step 3: Watch the Rollout](#step-3-watch-the-rollout)
   - [Step 4: Post-Upgrade Validation](#step-4-post-upgrade-validation)
-  - [Rollback](#rollback-2)
+  - [Proxy rollback](#proxy-rollback)
 - [Worker Image Upgrade](#worker-image-upgrade)
   - [Upgrade Procedure](#upgrade-procedure)
   - [Canary Testing a New Worker Image](#canary-testing-a-new-worker-image)
   - [Minimum Version Requirement](#minimum-version-requirement)
-  - [Rollback](#rollback-3)
+  - [Worker image rollback](#worker-image-rollback)
 - [Post-Upgrade Validation](#post-upgrade-validation)
 - [Zero-Downtime Configuration](#zero-downtime-configuration)
 
@@ -1022,7 +1022,7 @@ kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 
 The rolling update replaces one replica at a time. Leadership transfers before the old leader is deleted. The total rollout time is typically < 30 seconds.
 
-### Post-upgrade validation
+### GMC post-upgrade validation
 
 ```sh
 # Confirm both replicas are on the new image
@@ -1038,7 +1038,7 @@ kubectl get lease -n gmc-system
 kubectl describe actionsgateway -n <namespace> <name>
 ```
 
-### Rollback
+### GMC rollback
 
 Roll back to the previously deployed release with `helm rollback` (see the Helm
 section above):
@@ -1114,7 +1114,7 @@ kubectl rollout status deploy/actions-gateway-controller -n <namespace>
 
 After the rollout, verify that jobs active during the restart have either completed or been redelivered. Check the GitHub Actions UI for any unexpectedly cancelled runs.
 
-### Rollback
+### AGC rollback
 
 ```sh
 kubectl rollout undo deploy/actions-gateway-controller -n <namespace>
@@ -1177,7 +1177,7 @@ kubectl get hpa -n <namespace>
 # Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_renew_job_errors_total
 ```
 
-### Rollback
+### Proxy rollback
 
 ```sh
 kubectl rollout undo deploy/actions-gateway-proxy -n <namespace>
@@ -1221,7 +1221,7 @@ To test a new image on a subset of jobs before rolling it out broadly:
 
 GitHub enforces a minimum runner version at session creation time. If the worker image contains a runner below this threshold, the session goroutine will receive a `400 Bad Request` and surface a `VersionTooOld` condition on the `RunnerGroup`. Monitor `actions_gateway_active_sessions` and RunnerGroup conditions for this symptom after deploying an older image.
 
-### Rollback
+### Worker image rollback
 
 Set `workerImage` back to the previous digest:
 
@@ -1266,4 +1266,4 @@ The GMC and worker image upgrades are non-disruptive. The AGC upgrade is the onl
 
 ---
 
-← [Back to Operations](.)
+← [Back to Operations](README.md)

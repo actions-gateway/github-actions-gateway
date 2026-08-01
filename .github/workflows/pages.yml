@@ -84,14 +84,19 @@ jobs:
         with:
           python-version: '3.x'
       - run: pip install -r requirements-docs.txt
-      - run: mkdocs build --site-dir _site
+      # --strict promotes MkDocs' link/anchor warnings to build failures (Q560);
+      # mkdocs.yml's `validation` block is what raises them to warnings in the
+      # first place. Only the PR gate is strict — the deploy job below builds a
+      # tag's own docs, and a release cut before this gate existed must still be
+      # publishable.
+      - run: mkdocs build --strict --site-dir _site
       # The `dev` version publishes the repo-internal docs as well (Q558), a
       # scope the release build above never exercises. Build it too, so a PR
       # that breaks a plan/development page fails here rather than on `main`.
       - name: Build the dev scope (repo-internal docs included)
         env:
           MKDOCS_EXCLUDE_DOCS: /README.md
-        run: mkdocs build --site-dir _site-dev
+        run: mkdocs build --strict --site-dir _site-dev
 
   # Push/dispatch: update the mike version tree on gh-pages and deploy it.
   publish:

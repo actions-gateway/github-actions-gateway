@@ -150,7 +150,7 @@ limits) or exempt AGC pods. The GMC's resources come from the chart's
 ## Sample policies
 
 Ready-to-apply samples live in
-[`examples/policies/`](examples/policies/). Two complementary kinds, for both
+[`examples/policies/`](examples/policies/README.md). Two complementary kinds, for both
 engines:
 
 | File | Engine | Purpose |

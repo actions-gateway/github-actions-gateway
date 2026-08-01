@@ -301,7 +301,7 @@ above the fold, preload it too, or it may briefly render in the fallback.
 
 ```sh
 make docs-serve   # live-reload preview at http://localhost:8000/
-make docs-build   # one-shot static build into site/
+make docs-build   # strict build of both scopes into site/ and site-dev/
 ```
 
 Both targets provision an **isolated venv** (`.venv-docs/`, gitignored) from the
@@ -313,6 +313,43 @@ fails.
 
 The toolchain is pinned **exactly** — MkDocs 2.0 is incompatible with Material 9.x,
 so don't float the versions in `requirements-docs.txt`.
+
+## The two link gates
+
+`docs/` is rendered by two engines with different link semantics, so **one gate
+cannot cover both** (Q560):
+
+| Gate | Oracle | Runs in |
+|---|---|---|
+| `make doc-links` (`scripts/check-doc-links.sh`) | github.com — GitHub's heading slugger, directory listings | `doc-links.yml`, `make check` |
+| `make docs-build` (`mkdocs build --strict`) | the published site — Python-Markdown slugs, MkDocs path resolution | `pages.yml`'s PR `build` job |
+
+A link can pass one and 404 on the other. Three divergences have actually shipped
+broken:
+
+- **Duplicate headings.** Both engines de-duplicate repeated heading slugs, with
+  different suffixes: GitHub writes `#rollback-1`, Python-Markdown writes
+  `#rollback_1`. Neither suffix is configurable, so **make the headings unique**
+  rather than linking a generated suffix — four `### Rollback` sections became
+  `### GMC rollback`, `### AGC rollback`, and so on. A duplicate heading is also
+  how a repo-local TOC silently lies: two entries resolve to the same anchor and
+  both gates pass.
+- **Bare `dir/` targets.** GitHub renders `[x](examples/policies/)` as that
+  directory's `README.md`; MkDocs has no directory to serve, leaves the link
+  alone, and it resolves under the *page* URL. Link the `README.md` explicitly —
+  MkDocs maps it to the section index, so both renderings work.
+- **Angle brackets in a heading.** Python-Markdown strips `<field>` as an HTML
+  tag before slugging; GitHub keeps the word and drops only the brackets. Spell
+  placeholders without `<>`.
+
+Only the PR gate is strict. The deploy job builds a tag's own docs, and a release
+cut before this gate existed must stay publishable.
+
+`mkdocs.yml`'s `validation` block is what makes this fail at all: MkDocs reports
+these as INFO by default, invisible under a green build. `absolute_links` and the
+`nav` keys keep their defaults deliberately — a link to a page excluded from the
+built scope stays INFO, which is what [§ Publication scope](#publication-scope)
+requires.
 
 ## Publication scope
 
@@ -352,7 +389,8 @@ URL, by search, and from the roadmap's backlog link. `not_in_nav` in
 
 PR builds validate **both** scopes (`pages.yml`'s `build` job runs `mkdocs build`
 twice), so a PR that breaks a plan or development page fails there rather than on
-`main`.
+`main`. `make docs-build` does the same locally — see
+[§ The two link gates](#the-two-link-gates).
 
 ### The backlog page
 
