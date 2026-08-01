@@ -11,6 +11,7 @@ on:
     paths:
       - 'docs/STATUS.md'
       - 'docs/roadmap.md'
+      - 'docs/features.md'
       - 'scripts/lint-backlog.sh'
       - 'scripts/check-roadmap.sh'
       - '.github/workflows/status-lint.yml'
@@ -48,6 +49,7 @@ jobs:
             status:
               - 'docs/STATUS.md'
               - 'docs/roadmap.md'
+              - 'docs/features.md'
               - 'scripts/lint-backlog.sh'
               - 'scripts/check-roadmap.sh'
               - '.github/workflows/status-lint.yml'

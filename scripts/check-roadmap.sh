@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# check-roadmap.sh — keep the public roadmap honest against the backlog.
+# check-roadmap.sh — keep the public roadmap honest against the backlog, and
+# keep the feature index from regrowing into prose.
 #
 # docs/roadmap.md is adopter-facing narrative; docs/STATUS.md is the terse
 # internal backlog. Neither can be generated from the other, so they drift: a
@@ -31,22 +32,44 @@
 #      ID that moved into the Queue is active work and belongs under
 #      "In progress / near-term").
 #
-# "Available now" is deliberately ungated: it describes shipped capability in
-# editorial prose, with no backlog row left to point at.
+# Shipped capability lives in docs/features.md instead, where no backlog row is
+# left to point at. That page rots a different way — it was extracted from a
+# roadmap section whose bullets had grown to 126 words apiece precisely because
+# nothing made them link out. So it gets its own rule:
+#
+#   5. Every top-level bullet in docs/features.md carries a Markdown link and
+#      stays under MAX_FEATURE_WORDS words. A capability with no doc to link is
+#      a documentation gap to file, not a longer bullet.
+#   6. The same for the roadmap's own gated bullets, under MAX_ROADMAP_WORDS —
+#      looser, because a roadmap bullet also has to name the gate it waits on.
+#      The detail belongs in the plan doc or the Appendix G section behind it,
+#      both of which a release build absolutizes to github.com (Q561), so the
+#      link resolves on every version.
 #
 # Usage:
-#   check-roadmap.sh [path/to/roadmap.md] [path/to/STATUS.md]
+#   check-roadmap.sh [path/to/roadmap.md] [path/to/STATUS.md] [path/to/features.md]
 
 set -euo pipefail
 
 NEAR_TERM_HEADING="In progress / near-term"
 EXPLORING_HEADING="Exploring / longer-term"
 
+# Generous enough that a capability plus one qualifying clause fits; the longest
+# bullet at extraction was 31 words. Tight enough that the 126-word paragraphs
+# this page replaced cannot come back.
+MAX_FEATURE_WORDS=45
+
+# Looser than the feature cap: a roadmap bullet carries what is missing, what
+# would change, and the gate it waits on. At extraction the five worst ran
+# 74-123 words by explaining the whole approach inline; all now fit here.
+MAX_ROADMAP_WORDS=60
+
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ROADMAP="${1:-$repo_root/docs/roadmap.md}"
 STATUS="${2:-$repo_root/docs/STATUS.md}"
+FEATURES="${3:-$repo_root/docs/features.md}"
 
-for f in "$ROADMAP" "$STATUS"; do
+for f in "$ROADMAP" "$STATUS" "$FEATURES"; do
     if [[ ! -f "$f" ]]; then
         printf 'check-roadmap: file not found: %s\n' "$f" >&2
         exit 2
@@ -90,7 +113,8 @@ in_list() {
 bullets() {
     awk -v near="^## $NEAR_TERM_HEADING\$" -v exploring="^## $EXPLORING_HEADING\$" '
         function flush() {
-            if (label != "") printf "%s\t%d\t%s\t%s\n", section, line_no, label, ids
+            if (label != "") printf "%s\t%d\t%d\t%d\t%s\t%s\n", \
+                section, line_no, words, has_link, label, ids
             label = ""; ids = ""
         }
         $0 ~ near      { flush(); section = "near-term"; next }
@@ -101,9 +125,21 @@ bullets() {
             flush()
             line_no = NR
             label = $0
+            words = 0; has_link = 0
             sub(/^- +/, "", label)
             sub(/\*\*/, "", label)
             sub(/\*\*.*$/, "", label)
+            # A title is often itself a link; report the text, not the markup.
+            gsub(/\[|\]\([^)]*\)/, "", label)
+        }
+        # Same accounting as the features pass: the q-annotation and any badge
+        # span are markup, and a link costs its text but not its target.
+        label != "" {
+            text = $0
+            gsub(/<[^>]*>/, "", text)
+            gsub(/\]\([^)]*\)/, "]", text)
+            words += split(text, _, /[[:space:]]+/)
+            if ($0 ~ /\]\(/) has_link = 1
         }
         label != "" && /<!-- *q:/ {
             annotation = $0
@@ -124,9 +160,17 @@ report() {
     fail=1
 }
 
-while IFS=$'\t' read -r section line_no label ids; do
+while IFS=$'\t' read -r section line_no words has_link label ids; do
     [[ -n "$section" ]] || continue
     checked=$((checked + 1))
+
+    # Rule 6.
+    if (( ! has_link )); then
+        report "$line_no" "\"$label\" has no link. Point at the plan doc or Appendix G section carrying the detail."
+    fi
+    if (( words > MAX_ROADMAP_WORDS )); then
+        report "$line_no" "\"$label\" is $words words (max $MAX_ROADMAP_WORDS). Say what is missing, what changes, and what it waits on — the rest belongs in the linked doc."
+    fi
 
     if [[ -z "$ids" ]]; then
         report "$line_no" "\"$label\" has no <!-- q:QN --> annotation. Name the backlog row(s) behind it so this bullet fails when they ship."
@@ -147,7 +191,7 @@ while IFS=$'\t' read -r section line_no label ids; do
         elif in_list "$id" "$deferred_ids"; then
             local_in_deferred=1
         else
-            report "$line_no" "\"$label\" names $id, which no longer exists in STATUS.md — the row was deleted, so the work shipped. Move this bullet to \"Available now\", or drop $id if only part of it shipped."
+            report "$line_no" "\"$label\" names $id, which no longer exists in STATUS.md — the row was deleted, so the work shipped. Move this bullet to docs/features.md, or drop $id if only part of it shipped."
         fi
     done
 
@@ -166,9 +210,53 @@ if (( checked == 0 )); then
     exit 2
 fi
 
+# Rule 5. Word count ignores the badge markup, which is presentation, not prose.
+features=0
+while IFS=$'\t' read -r line_no words has_link label; do
+    features=$((features + 1))
+    if (( ! has_link )); then
+        printf 'check-roadmap: %s:%s: "%s" has no link. Every capability points at the doc that explains it; if none exists, that is a docs gap to file.\n' \
+            "${FEATURES##*/}" "$line_no" "$label" >&2
+        fail=1
+    fi
+    if (( words > MAX_FEATURE_WORDS )); then
+        printf 'check-roadmap: %s:%s: "%s" is %d words (max %d). Move the detail into the linked doc.\n' \
+            "${FEATURES##*/}" "$line_no" "$label" "$words" "$MAX_FEATURE_WORDS" >&2
+        fail=1
+    fi
+done < <(awk '
+    function flush() {
+        if (label != "") printf "%d\t%d\t%d\t%s\n", line_no, words, has_link, label
+        label = ""
+    }
+    /^## / { flush(); in_section = 1; next }
+    !in_section { next }
+    /^- / {
+        flush()
+        line_no = NR; label = $0; has_link = 0; words = 0
+        sub(/^- +/, "", label)
+        sub(/\*\*/, "", label); sub(/\*\*.*$/, "", label)
+        gsub(/\[|\]\([^)]*\)/, "", label)
+    }
+    label != "" {
+        text = $0
+        gsub(/<[^>]*>/, "", text)        # badge spans
+        gsub(/\]\([^)]*\)/, "]", text)   # link targets, not the link text
+        words += split(text, _, /[[:space:]]+/)
+        if ($0 ~ /\]\(/) has_link = 1
+    }
+    END { flush() }
+' "$FEATURES")
+
+if (( features == 0 )); then
+    printf 'check-roadmap: found no capability bullets in %s — the page format changed?\n' "$FEATURES" >&2
+    exit 2
+fi
+
 if (( fail )); then
-    printf 'check-roadmap: roadmap and backlog disagree (see above). Reconcile per docs/development/doc-update-matrix.md.\n' >&2
+    printf 'check-roadmap: roadmap and backlog disagree, or the feature index drifted (see above). Reconcile per docs/development/doc-update-matrix.md.\n' >&2
     exit 1
 fi
 
-printf 'check-roadmap: ok (%d forward-looking bullet(s) all backed by live STATUS.md rows)\n' "$checked"
+printf 'check-roadmap: ok (%d forward-looking bullet(s) backed by live STATUS.md rows; %d feature(s) linked)\n' \
+    "$checked" "$features"

@@ -54,7 +54,7 @@ kubectl apply --server-side -f \
 
 ## What GAG gives you
 
-Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc): no idle GPUs, fewer always-on resources, and guaranteed throughput instead of blocked critical jobs. [Estimate your savings vs ARC →](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc)
+Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc): no idle GPUs, fewer always-on resources, and guaranteed throughput instead of blocked critical jobs. [Estimate your savings vs ARC →](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc) · [See every feature →](features.md)
 
 </div>
 
@@ -250,4 +250,4 @@ A four-tier system: a cluster-scoped manager gives each tenant an isolated gatew
   </div>
 </div>
 
-<p class="gag-flow__caption" markdown="span">Read the [architecture overview](design/02-architecture.md) for the full breakdown, jump to [why GAG over ARC](why-gag.md), or see the [public roadmap](roadmap.md) for what's shipped and what's next.</p>
+<p class="gag-flow__caption" markdown="span">Read the [architecture overview](design/02-architecture.md) for the full breakdown, jump to [why GAG over ARC](why-gag.md), browse [every feature](features.md), or see the [public roadmap](roadmap.md) for what's next.</p>

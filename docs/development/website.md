@@ -360,7 +360,7 @@ Scope is **per version**, not per site (Q558):
 
 | Version | Publishes |
 |---|---|
-| `stable` and every numbered release | Operator docs only: `docs/design/`, `docs/operations/`, `docs/index.md`, `why-gag.md`, `roadmap.md` |
+| `stable` and every numbered release | Operator docs only: `docs/design/`, `docs/operations/`, `docs/index.md`, `why-gag.md`, `features.md`, `roadmap.md` |
 | `dev` | The above **plus** the repo-internal docs: `docs/STATUS.md` (the [backlog](#the-backlog-page)), `docs/plan/`, `docs/development/` (this file included), `docs/assets/`'s READMEs |
 
 A release is a frozen build, so a backlog published in one would be a snapshot

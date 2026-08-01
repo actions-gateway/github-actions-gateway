@@ -132,7 +132,8 @@ Questions, ideas, or running GAG in a real cluster?
 — it's the place for setup help, bug reports, and feature requests. Issues
 opened by operators are the adoption signal the project cares about most.
 
-See the [public roadmap](docs/roadmap.md) for what's shipped and what's next.
+See [Features](docs/features.md) for what GAG does today, and the
+[public roadmap](docs/roadmap.md) for what's next.
 
 ## Development
 

@@ -212,16 +212,18 @@ and let the ledger's `-gate` rows answer "is it done?" until the tag.
   recorded correctly in `docs/operations/upgrade.md` by the change that
   introduced it, and each invisible to anyone reading a generated changelog.
 
-- **Reconcile [`docs/roadmap.md`](../roadmap.md) against
+- **Reconcile [`docs/roadmap.md`](../roadmap.md) and [`docs/features.md`](../features.md)
+  against
   [`docs/STATUS.md`](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/STATUS.md)
   before you tag.** The same freeze that applies to the announce bar applies
   here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is
-  published permanently under that version. Nothing lints this. Walk the three
-  sections against the backlog: anything in *In progress / near-term* with no
-  Queue row has either shipped (move it to *Available now*) or been parked (move
-  it to *Exploring*), and a Deferred row describing a capability an adopter would
-  ask about belongs in *Exploring*. A 2026-07-25 audit found six of seven
-  near-term items already shipped.
+  published permanently under that version. `make roadmap-check` catches the
+  mechanical half — a roadmap bullet naming a deleted Queue row, or one sitting
+  in the wrong section — and it runs in CI. What it cannot catch is the move
+  itself: **work that shipped this cycle needs a `docs/features.md` line**, and a
+  Deferred row describing a capability an adopter would ask about belongs in
+  *Exploring*. A 2026-07-25 audit found six of seven near-term items already
+  shipped.
 - **Optional: refresh the docs-site announce bar's highlight.** The banner in
   [`overrides/main.html`](../../overrides/main.html) is the "vX.Y.Z is here" strip
   at the top of every page on the site. Its **version needs no action**: it is
