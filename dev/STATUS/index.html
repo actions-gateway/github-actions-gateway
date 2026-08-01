@@ -2625,14 +2625,6 @@
 <td>Report it against <a href="https://github.com/karlkfi/claude-skills">karlkfi/claude-skills</a>, where the skill lives. CLAUDE.md overrides it here so sessions stay correct, but the skill and its vendored lint drift until upstream updates.</td>
 </tr>
 <tr>
-<td><a id="Q561"></a>Q561</td>
-<td><a href="../development/website/#publication-scope">Operator pages link to docs no released version publishes</a></td>
-<td><code>docs</code> <code>infra</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Release scopes exclude <code>plan/</code> and <code>development/</code>, so 120 links across 22 operator pages 404 on every numbered version. The site link gate leaves these at INFO deliberately. Absolutize to GitHub like <code>hooks/source_links.py</code> does, or drop them.</td>
-</tr>
-<tr>
 <td><a id="Q563"></a>Q563</td>
 <td><a href="../development/website/#what-belongs-in-nav">Nothing gates a published page that lands in no nav section</a></td>
 <td><code>docs</code> <code>infra</code> <code>retro</code></td>

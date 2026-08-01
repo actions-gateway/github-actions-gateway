@@ -2475,6 +2475,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Links into the source tree">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unpublished-is-per-build-not-per-path-q561" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unpublished is per build, not per path (Q561)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2932,9 +2949,11 @@ broken:</p>
 cut before this gate existed must stay publishable.</p>
 <p><code>mkdocs.yml</code>'s <code>validation</code> block is what makes this fail at all: MkDocs reports
 these as INFO by default, invisible under a green build. <code>absolute_links</code> and the
-<code>nav</code> keys keep their defaults deliberately — a link to a page excluded from the
-built scope stays INFO, which is what <a href="#publication-scope">§ Publication scope</a>
-requires.</p>
+<code>nav</code> keys keep their defaults deliberately.</p>
+<p>Neither gate covers a link to a page the build's own scope excludes — MkDocs
+clamps that one below warning level whatever <code>validation</code> says. That is
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/source_links.py"><code>hooks/source_links.py</code></a>'s job instead; see
+<a href="#unpublished-is-per-build-not-per-path-q561">§ Unpublished is per build, not per path</a>.</p>
 <h2 id="publication-scope">Publication scope<a class="headerlink" href="#publication-scope" title="Permanent link">&para;</a></h2>
 <p>Scope is <strong>per version</strong>, not per site (Q558):</p>
 <table>
@@ -3066,8 +3085,8 @@ therefore gets the warning without a link that would 404.</p>
 link like <code>../cmd/agc/main.go</code> resolves to the source file. MkDocs has no such
 file to serve, so it leaves the link alone and the published page 404s.
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/source_links.py"><code>hooks/source_links.py</code></a> rewrites every relative
-target that escapes <code>docs/</code> into an absolute URL under <code>repo_url</code>, so one
-markdown link works in both places:</p>
+target <strong>this build does not publish</strong> into an absolute URL under <code>repo_url</code>, so
+one markdown link works in both places:</p>
 <table>
 <thead>
 <tr>
@@ -3094,12 +3113,59 @@ markdown link works in both places:</p>
 the tag when deploying a release, so each version links to the source it
 documents. A target that <strong>doesn't exist in the working tree is left alone</strong> —
 a typo should keep failing MkDocs' link check rather than become a
-plausible-looking 404.</p>
+plausible-looking 404. So is a <strong>directory under <code>docs/</code></strong>, which resolves to
+that directory's page rather than to the tree (<a href="#the-two-link-gates">§ The two link
+gates</a> owns that case).</p>
 <p>This was already needed before the backlog page: <code>design/</code> and <code>operations/</code>
 shipped such links dead. Publishing the repo-internal docs made it load-bearing
 — 724 links across the tree, 34 on <code>STATUS.md</code> alone.
 <code>scripts/source-links-hook-test.sh</code> asserts the rewrite in both directions under
 <code>make check</code>.</p>
+<h3 id="unpublished-is-per-build-not-per-path-q561">Unpublished is per build, not per path (Q561)<a class="headerlink" href="#unpublished-is-per-build-not-per-path-q561" title="Permanent link">&para;</a></h3>
+<p>"Does not publish" is decided <strong>per build, from its own file set</strong> — <code>on_files</code>
+records the src_uris whose <code>inclusion.is_included()</code>, the same derivation
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/backlog_link.py"><code>hooks/backlog_link.py</code></a> uses for the banner link.
+Escaping <code>docs/</code> is only one way to qualify. The other is
+<a href="#publication-scope">publication scope</a>: <code>plan/</code>, <code>development/</code> and <code>STATUS.md</code>
+are pages on <code>dev</code> and absent from every release, so a <code>design/</code> page citing
+<code>../plan/milestone-4.md</code> must resolve <strong>in-site on <code>dev</code></strong> and <strong>on github.com
+from a release</strong>. One markdown source, both renderings, no per-version editing:</p>
+<table>
+<thead>
+<tr>
+<th>Scope</th>
+<th><code>../plan/milestone-4.md</code> becomes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dev</code></td>
+<td><code>../../plan/milestone-4/</code> — the published page</td>
+</tr>
+<tr>
+<td><code>stable</code>, every release</td>
+<td><code>{repo_url}/blob/{ref}/docs/plan/milestone-4.md</code></td>
+</tr>
+</tbody>
+</table>
+<p>Fragments ride along verbatim (<code>#12-live-multi-tenant-validation-evidence…</code>),
+which is why the two gates still get the last word on anchors: <code>make doc-links</code>
+already validates them with GitHub's slugger, and GitHub's blob view is exactly
+where a release now sends the reader.</p>
+<p><strong>Why this can't be a gate instead.</strong> MkDocs reports a link to an excluded page
+as <code>Doc file 'X' contains a link to 'Y' which is excluded from the built site</code> —
+and clamps it with <code>min(logging.INFO, validation.links.not_found)</code>, so
+<strong>no <code>validation</code> setting can raise it to a warning</strong> and <code>--strict</code> will never
+fail on one. It also still emits the relative URL, so the page ships a
+live-looking link that 404s. Before this rewrite existed that was 120 links
+across 22 operator pages on every numbered version. Handling it in the hook, per
+build, is what makes the class of bug unreachable rather than merely fixed:
+there is no link left to write incorrectly.</p>
+<p><strong><code>docs/README.md</code> is unpublished on every version, <code>dev</code> included</strong> — MkDocs
+drops it outright where an <code>index.md</code> shares the directory, so it never reaches
+<code>files</code> at all (<code>exclude_docs</code> listing it only keeps that from surfacing as a
+build warning). The hook absolutizes it to github.com, which is where that link
+means to go anyway.</p>
 <h2 id="brand-assets">Brand assets<a class="headerlink" href="#brand-assets" title="Permanent link">&para;</a></h2>
 <p>The logomark and icon set are <strong>generated, not hand-edited</strong>. Edit
 <code>docs/assets/generate-logomark.py</code> (the parametric faceted-ring mark) and
