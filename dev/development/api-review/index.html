@@ -3054,7 +3054,7 @@ the <em>merged, before the tag</em> row of <a href="#the-cost-curve">the cost cu
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>grep<span class="w"> </span>-l<span class="w"> </span><span class="s1">&#39;&lt;field&gt;&#39;</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>git<span class="w"> </span>tag<span class="w"> </span>--list<span class="w"> </span><span class="s1">&#39;v*&#39;</span><span class="w"> </span>--sort<span class="o">=</span>-v:refname<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>--<span class="w"> </span><span class="s1">&#39;-&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>--<span class="w"> </span>api<span class="w"> </span>cmd/agc/api<span class="w"> </span>cmd/gmc/api
 </code></pre></div>
 <p>No hit means no cluster can be holding it and no manifest can name it: not
-breaking. <code>scripts/api-surface-since.sh &lt;tag&gt;</code> lists everything a tag cut now
+breaking. <code>scripts/release/api-surface-since.sh &lt;tag&gt;</code> lists everything a tag cut now
 would publish for the first time, which is the same question asked over the whole
 surface at once. If you still mark the commit <code>!</code> for a Go-symbol break, say so
 in the body — nothing downstream can tell the two kinds of break apart, and only
@@ -3160,13 +3160,13 @@ version packages byte-identical except for the entitled differences, which
 <p>Run this in <a href="../../operations/release/#1-pre-flight">release pre-flight</a>, before
 tagging any release — including a prerelease that will become a stable line.</p>
 <h3 id="step-1--enumerate-what-is-new">Step 1 — enumerate what is new<a class="headerlink" href="#step-1--enumerate-what-is-new" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/api-surface-since.sh
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/release/api-surface-since.sh
 </code></pre></div>
 <p>It diffs the API packages and CRD manifests between the last tag and <code>HEAD</code> and
 prints what changed. Everything it lists is surface this release publishes for
 the first time; everything it does not list has already shipped and is governed
 by the compatibility rules instead.</p>
-<p>Pass an explicit ref to review a different span, e.g. <code>scripts/api-surface-since.sh v1.1.0</code>.</p>
+<p>Pass an explicit ref to review a different span, e.g. <code>scripts/release/api-surface-since.sh v1.1.0</code>.</p>
 <p>It reports rather than passing or failing on purpose: every question below needs
 a human, and a gate answering them mechanically would be wrong in both
 directions.</p>

@@ -2369,10 +2369,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#1-scriptsrelease-deltash" class="md-nav__link">
+  <a href="#1-scriptsreleaserelease-deltash" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. scripts/release-delta.sh
+        1. scripts/release/release-delta.sh
       
     </span>
   </a>
@@ -2457,7 +2457,7 @@ discussion; this doc records the decisions so the implementing session
 doesn't re-litigate them.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <p><strong>Complete.</strong> All three deliverables shipped 2026-07-31:
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release-delta.sh"><code>scripts/release-delta.sh</code></a> with
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/release-delta.sh"><code>scripts/release/release-delta.sh</code></a> with
 <code>release-delta-test.sh</code> under <code>make scripts-test</code>, the <em>When to cut</em> section in
 <a href="../../../operations/release/#when-to-cut">operations/release.md</a>, and the
 scope-ledger convention in
@@ -2510,7 +2510,7 @@ This view is what <em>triggers</em> scoping a release plan doc.</p>
 ledger + <code>-gate</code> labels. Takes over from the moment the release doc is
 written until the tag.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
-<h3 id="1-scriptsrelease-deltash">1. <code>scripts/release-delta.sh</code><a class="headerlink" href="#1-scriptsrelease-deltash" title="Permanent link">&para;</a></h3>
+<h3 id="1-scriptsreleaserelease-deltash">1. <code>scripts/release/release-delta.sh</code><a class="headerlink" href="#1-scriptsreleaserelease-deltash" title="Permanent link">&para;</a></h3>
 <p>Prints, for the range <code>&lt;last non-RC tag&gt;..origin/main</code> (tag overridable by
 argument):</p>
 <ul>
@@ -2557,7 +2557,7 @@ in the ledger, never as labels.</p>
 </ul>
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
 <ol>
-<li><code>scripts/release-delta.sh</code> ships with a test and produces the four report
+<li><code>scripts/release/release-delta.sh</code> ships with a test and produces the four report
    sections against the live repo.</li>
 <li>release.md gains "When to cut" with the triggers and the RC-cost
    counterweight, referencing the script.</li>

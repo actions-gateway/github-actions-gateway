@@ -3241,14 +3241,14 @@ containerd is configured to mirror <code>127.0.0.1:5000</code> → <code>kind-re
 buildx pushes directly to the registry; pods pull on demand. (The host ref is
 the literal IPv4 loopback, not <code>localhost</code>: the registry is published IPv4-only,
 so a pusher that resolves <code>localhost</code> to IPv6 <code>[::1]</code> first fails intermittently.)</p>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/kind-with-registry.sh">scripts/kind-with-registry.sh</a> handles the
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh">scripts/e2e/kind-with-registry.sh</a> handles the
 whole setup idempotently. <code>make e2e-cluster</code> invokes it; the legacy <code>kind
 load</code> flow was removed entirely (replaced rather than gated). Image tags now
 include <code>127.0.0.1:5000/&lt;name&gt;:e2e-&lt;sha&gt;</code> so kubelet's <code>IfNotPresent</code> cache
 can't serve a stale image across cluster reuse.</p>
 <h3 id="files_6">Files<a class="headerlink" href="#files_6" title="Permanent link">&para;</a></h3>
 <ul>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/kind-with-registry.sh">scripts/kind-with-registry.sh</a> (new)</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh">scripts/e2e/kind-with-registry.sh</a> (new)</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Makefile</a> — <code>e2e-cluster</code> invokes the script;
   <code>e2e-load-images</code> removed; image tags include the registry prefix</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-test.yml">.github/workflows/e2e-test.yml</a> and

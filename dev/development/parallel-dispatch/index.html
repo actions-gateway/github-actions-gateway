@@ -2734,7 +2734,7 @@ the wrong mechanism here — use chips.</p>
 <li>Each session is isolated (own worktree, own context, visible in the session
   list).</li>
 </ul>
-<p>A <code>PreToolUse</code> hook (<code>scripts/claude-no-subagent-workers-hook.sh</code>, wired in
+<p>A <code>PreToolUse</code> hook (<code>scripts/agent/claude-no-subagent-workers-hook.sh</code>, wired in
 <code>.claude/settings.json</code>) backs this up: when an <code>Agent</code>/<code>Task</code> spawn looks like a
 worker — it requests its own worktree, or its prompt carries PR-producing verbs
 (<code>gh pr create</code>, <code>git push</code>/<code>commit</code>, "open a PR", self-heal, <code>implement Q&lt;NN&gt;</code>)

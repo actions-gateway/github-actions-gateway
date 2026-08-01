@@ -2400,7 +2400,7 @@
 <tr>
 <td>Inline <code>TP=…</code> compound-throttle recipe in the Testing throttle bullet</td>
 <td>Q347 (go-throttle hook rewrites compound <code>-race</code> forms instead of blocking) has landed — the hook now auto-prefixes rewritable compound/redirected <code>-race</code> forms and only denies unparseable ones</td>
-<td>✅ <strong>Retired (Q348, 2026-07-18):</strong> recipe removed; the bullet now notes only the residual deny case (a <code>-race</code> form the hook can't parse, e.g. two <code>go</code> invocations) — rewritable compound/redirected forms are auto-prefixed by the hook. Verified against <code>scripts/claude-go-throttle-hook-test.sh</code>.</td>
+<td>✅ <strong>Retired (Q348, 2026-07-18):</strong> recipe removed; the bullet now notes only the residual deny case (a <code>-race</code> form the hook can't parse, e.g. two <code>go</code> invocations) — rewritable compound/redirected forms are auto-prefixed by the hook. Verified against <code>scripts/agent/claude-go-throttle-hook-test.sh</code>.</td>
 </tr>
 </tbody>
 </table>

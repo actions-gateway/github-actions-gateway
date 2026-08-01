@@ -2616,7 +2616,7 @@ chart yet.</p>
 </ul>
 <h2 id="install-and-day-2-operations">Install and day-2 operations<a class="headerlink" href="#install-and-day-2-operations" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="../operations/install/">Helm install</a></strong> — the OCI chart, digest pinning, healthy-install verification, and a <code>scripts/validate-cluster.sh</code> pre-flight that fails loudly on a network-policy-less CNI.</li>
+<li><strong><a href="../operations/install/">Helm install</a></strong> — the OCI chart, digest pinning, healthy-install verification, and a <code>scripts/e2e/validate-cluster.sh</code> pre-flight that fails loudly on a network-policy-less CNI.</li>
 <li><strong><a href="../operations/air-gapped-install/">Air-gapped install</a></strong> — relocate images and the OCI chart to a private registry with digests preserved, including pull Secrets for the runtime pods.</li>
 <li><strong><a href="../operations/gitops/">GitOps install</a></strong> — declarative Argo CD <code>Application</code> and Flux <code>HelmRelease</code> examples, with the CRD-pruning gotcha handled.</li>
 <li><strong><a href="../operations/upgrade/">Upgrade and rollback</a></strong> — versioned upgrade procedures and the rollback path for each release.</li>

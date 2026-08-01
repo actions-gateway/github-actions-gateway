@@ -2783,7 +2783,7 @@ restricted by machine family:</p>
 </tr>
 <tr>
 <td>Machine family</td>
-<td><strong>N2, N2D, C2, C2D</strong> support nested virtualization and are the families the shipped <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/kata-node-pool.sh"><code>scripts/kata-node-pool.sh</code></a> accepts. <strong>N1</strong> also supports nested virtualization on GKE, but the provisioning script rejects it — provision an N1 pool manually if you need it. <strong>E2 does not.</strong> The GPU families (<strong>A2, A3, G2</strong>) do not either — GPU + Kata on cloud needs bare metal or dedicated instances.</td>
+<td><strong>N2, N2D, C2, C2D</strong> support nested virtualization and are the families the shipped <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/kata-node-pool.sh"><code>scripts/dev/kata-node-pool.sh</code></a> accepts. <strong>N1</strong> also supports nested virtualization on GKE, but the provisioning script rejects it — provision an N1 pool manually if you need it. <strong>E2 does not.</strong> The GPU families (<strong>A2, A3, G2</strong>) do not either — GPU + Kata on cloud needs bare metal or dedicated instances.</td>
 </tr>
 <tr>
 <td>Node image</td>
@@ -2812,7 +2812,7 @@ restricted by machine family:</p>
 </tbody>
 </table>
 <p>The repo ships a parameterized provisioning script —
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/kata-node-pool.sh"><code>scripts/kata-node-pool.sh</code></a> — that wraps
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/kata-node-pool.sh"><code>scripts/dev/kata-node-pool.sh</code></a> — that wraps
 the <code>gcloud container node-pools create</code> call with these flags. Preview it
 with <code>DRY_RUN=1</code> before spending cloud time; see
 <a href="../kata-ci-spike-runbook/#step-1--create-a-nested-virt-cluster">runbook step 1</a>.</p>

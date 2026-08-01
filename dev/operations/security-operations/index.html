@@ -5065,9 +5065,9 @@ informer per context, so the same transition is survivable. Moving the parameter
 the cluster-scoped <code>PriorityClassAllowlist</code> CR (Q492) therefore removes the
 exposure at its root rather than mitigating it. The contrast is measured directly —
 the same empty-binding-set transition, one GVK apart — by
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/vap-param-informer-check.sh"><code>scripts/vap-param-informer-check.sh</code></a>,
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>,
 and the uninstall/reinstall cycle is now a CI gate
-(<code>scripts/chart-reinstall-check.sh</code>). Mechanism and measurements:
+(<code>scripts/e2e/chart-reinstall-check.sh</code>). Mechanism and measurements:
 <a href="../../plan/archive/q444-vap-param-resolution/"><code>q444-vap-param-resolution.md</code></a>.</p>
 <p><strong>If you are still on an affected release</strong>, upgrade in place — <code>helm upgrade</code>
 never removes the binding and is safe — and see
@@ -5113,7 +5113,7 @@ label every image already carries.</p>
 <ul>
 <li><strong>How it is kept current.</strong> <code>THIRD-PARTY-NOTICES</code> lives at the repo root and is
   <strong>generated and committed</strong> by <code>make third-party-notices</code>
-  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/gen-third-party-notices.sh"><code>scripts/gen-third-party-notices.sh</code></a>),
+  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>),
   which concatenates the <code>LICENSE</code>/<code>NOTICE</code>/<code>COPYING</code> files of every module under
   the committed, version-pinned <code>vendor/</code> tree — offline, no network or module
   cache. The CI <code>license-notices</code> workflow runs <code>make third-party-notices-check</code>

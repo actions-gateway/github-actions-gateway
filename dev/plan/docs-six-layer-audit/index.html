@@ -2499,7 +2499,7 @@ and not a restructure.</p>
 </table>
 <p><strong>All findings resolved.</strong> The Layer 3 metrics gap was closed by Q51 (see
 <a href="../archive/q51-metrics-reconcile/">q51-metrics-reconcile.md</a>). The optional Layer 2
-link-check CI gate was subsequently delivered by Q52 (<code>scripts/check-doc-links.sh</code>,
+link-check CI gate was subsequently delivered by Q52 (<code>scripts/docs/check-doc-links.sh</code>,
 slug-aware, wired into <code>make check</code>).</p>
 <hr />
 <h2 id="context-this-is-a-framework-free-docset">Context: this is a framework-free docset<a class="headerlink" href="#context-this-is-a-framework-free-docset" title="Permanent link">&para;</a></h2>
@@ -2571,7 +2571,7 @@ across the doc set.</p>
    (<code>§11.A</code> said <code>investigation</code>, heading is <code>protocol</code>), and 1 in <code>security.md</code> (the
    <code>worker-egress-proxy.md</code> "Implementation status" heading carried a volatile
    date+commit — stabilized the heading so the anchor is durable). Now 0 broken anchors.</li>
-<li><strong>Link-check CI gate — delivered (Q52).</strong> A slug-aware markdown link/anchor check (<code>scripts/check-doc-links.sh</code>, run by <code>make doc-links</code> in <code>make check</code>). Originally framed as a lightweight markdown-link-check step in
+<li><strong>Link-check CI gate — delivered (Q52).</strong> A slug-aware markdown link/anchor check (<code>scripts/docs/check-doc-links.sh</code>, run by <code>make doc-links</code> in <code>make check</code>). Originally framed as a lightweight markdown-link-check step in
    <code>unit-test.yml</code> would fit the repo's recent CI-gate culture (the lint gate just
    landed). Flagged as optional — decide separately; do not bundle.</li>
 </ol>

@@ -2587,7 +2587,7 @@ not fire on every run" — a clean pass may just be the first row.</p>
 stale allowlist with no error anywhere.</p>
 <h2 id="measurements">Measurements<a class="headerlink" href="#measurements" title="Permanent link">&para;</a></h2>
 <p>Run on a single-node kind cluster at v1.35.5 via
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/vap-param-informer-check.sh"><code>scripts/vap-param-informer-check.sh</code></a>,
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>,
 all on one apiserver process, in order:</p>
 <table>
 <thead>
@@ -2732,7 +2732,7 @@ does not depend on this landing. See
 always discoverable, and a restart <em>fixes</em> it.</p>
 <h2 id="reproducing">Reproducing<a class="headerlink" href="#reproducing" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/vap-param-informer-check.sh"><code>scripts/vap-param-informer-check.sh</code></a>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>
   — the deterministic three-arm reproducer above. Self-contained (its own CRDs,
   namespace and policies), no chart required. <strong>Run it only against a disposable
   cluster</strong>: arm 2 permanently breaks ConfigMap param resolution for that
@@ -2740,7 +2740,7 @@ always discoverable, and a restart <em>fixes</em> it.</p>
   runs on, and it pins an <em>upstream</em> defect that our own code no longer depends
   on. It is the evidence for the fix, re-runnable by hand on a new Kubernetes
   minor to confirm arm 3 still holds.</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/chart-reinstall-check.sh"><code>scripts/chart-reinstall-check.sh</code></a>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-reinstall-check.sh"><code>scripts/e2e/chart-reinstall-check.sh</code></a>
   (<code>make chart-reinstall-check</code>) — the product-level check, driving a real
   uninstall/reinstall against an installed release. <strong>Wired into CI as of Q492</strong>,
   now that the cycle it exercises is expected to pass.</li>
@@ -2785,7 +2785,7 @@ option 1 below, the <code>paramKind</code> moved off a core type.</p>
 <li><strong>Keep the binding alive across <code>helm uninstall</code></strong> with
    <code>helm.sh/resource-policy: keep</code> on the VAPB and its param ConfigMap, so the
    binding set never empties. Much cheaper — but it collides with an existing
-   invariant: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest-validate.sh"><code>scripts/manifest-validate.sh</code></a>
+   invariant: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/manifest-validate.sh"><code>scripts/manifest/manifest-validate.sh</code></a>
    asserts that <strong>no VAPB carries <code>helm.sh/resource-policy: keep</code></strong>, because a
    retained binding leaves the guard enforcing after the release is gone and makes
    <code>admissionPolicy.enabled=false</code> a silent no-op. That reason still holds and is
@@ -2810,7 +2810,7 @@ worked — is precisely the one we forbid retaining.</p>
   resolves REST mappings for the whole manifest before applying any of it, so a CR
   whose CRD is a template in the same release fails the install outright. The cost
   is that <code>helm upgrade</code> does not carry schema changes to that CRD.</li>
-<li><code>scripts/chart-reinstall-check.sh</code> is now a CI gate.</li>
+<li><code>scripts/e2e/chart-reinstall-check.sh</code> is now a CI gate.</li>
 </ul>
 <h3 id="still-open-upstream">Still open upstream<a class="headerlink" href="#still-open-upstream" title="Permanent link">&para;</a></h3>
 <p>The apiserver bug itself is unfixed.

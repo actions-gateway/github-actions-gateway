@@ -2411,7 +2411,7 @@
 <strong>Size:</strong> S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in <code>docs/plan/</code><br />
 <strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>infra</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>1.0-gate</code> (blocks the <a href="../plan/release-1.0/">Release 1.0</a> tag) <code>1.3-gate</code> (blocks the <a href="../plan/release-1.3/">Release 1.3</a> tag) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/"><code>v2.0.0</code></a> tag)<br />
 <strong>New IDs:</strong> <code>make queue-id</code> (<a href="../development/queue-id-allocation/">why there is no counter here</a>)</p>
-<p>Maintained per <a href="../development/maintaining-backlog/"><code>docs/development/maintaining-backlog.md</code></a>: done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in <a href="#deferred">Deferred</a>, and every edit is an isolated <code>docs(status):</code> commit gated by <code>scripts/lint-backlog.sh</code>.</p>
+<p>Maintained per <a href="../development/maintaining-backlog/"><code>docs/development/maintaining-backlog.md</code></a>: done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in <a href="#deferred">Deferred</a>, and every edit is an isolated <code>docs(status):</code> commit gated by <code>scripts/docs/lint-backlog.sh</code>.</p>
 <hr />
 <h2 id="progress">Progress<a class="headerlink" href="#progress" title="Permanent link">&para;</a></h2>
 <p>Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residuals live in <a href="#deferred">Deferred</a> and don't count against completion). ⚠️ = ≥1 open Queue row remains. See <a href="../development/maintaining-backlog/#-means-an-open-queue-row-remains--deferred-residuals-dont-count">maintaining-backlog.md</a>.</p>
@@ -2677,14 +2677,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>MkDocs reports an unlisted page at INFO, invisible under a green build — that is how Q562's three operator pages hid. <code>not_in_nav</code> declares every deliberate omission, so the list should be empty; fail <code>docs-preview.sh build</code> when it is not.</td>
-</tr>
-<tr>
-<td><a id="Q571"></a>Q571</td>
-<td><a href="../plan/scripts-directory-regrouping/">Group <code>scripts/</code> into blast-radius subdirectories</a></td>
-<td><code>infra</code> <code>speed</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>100 flat scripts mean no path filter can say which gate cares: <code>e2e-test.yml</code> takes <code>scripts/*</code> wholesale, so a docs PR pays ~13 min. Prefix globs replace it, settle the <code>e2e-calico.yml</code> disagreement, and delete the interim <code>nondocs</code> filter.</td>
 </tr>
 <tr>
 <td><a id="Q569"></a>Q569</td>
@@ -3176,14 +3168,14 @@
 <tbody>
 <tr>
 <td><a id="Q548"></a>Q548</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/chart-released-upgrade-check.sh">Released-upgrade check dies on tar EPIPE reading the chart's values.yaml</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-released-upgrade-check.sh">Released-upgrade check dies on tar EPIPE reading the chart's values.yaml</a></td>
 <td><code>flake</code> <code>infra</code></td>
 <td>S</td>
 <td><strong>Event:</strong> <code>tar: Cannot write: Broken pipe</code> fails <code>chart-released-upgrade-check</code> on <code>main</code> after the Q548 fix (the awk consumer reads the whole stream instead of exiting at first match). → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q516"></a>Q516</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go-lint.sh">Stale sibling-worktree lint cache fails <code>make check</code> cross-session</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh">Stale sibling-worktree lint cache fails <code>make check</code> cross-session</a></td>
 <td><code>infra</code> <code>flake</code></td>
 <td>S</td>
 <td><strong>Event:</strong> local lint reports findings citing a deleted <code>.claude/worktrees/*</code> path after the Q516 fix (go-lint.sh scopes <code>GOLANGCI_LINT_CACHE</code> per worktree under <code>tmp/</code>; CI keeps the default). → top of Queue, escalated.</td>
@@ -3204,7 +3196,7 @@
 </tr>
 <tr>
 <td><a id="Q471"></a>Q471</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/validate-cluster-test.sh"><code>validate-cluster-test</code> flakes under parallel <code>make check</code> load</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/validate-cluster-test.sh"><code>validate-cluster-test</code> flakes under parallel <code>make check</code> load</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
 <td><strong>Event:</strong> a <code>metrics</code>/<code>retry</code> assertion fails on <code>main</code> after the Q471 fix (the retry paths now read a fake clock the fake <code>sleep</code> advances, so no real elapsed time is measured and the suite never sleeps). → top of Queue, escalated.</td>

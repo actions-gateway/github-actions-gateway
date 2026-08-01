@@ -2521,7 +2521,7 @@ to track). A plan with only deferred residuals is ✅, not ⚠️ — see
 <tr>
 <td><a href="q243-egress-ip-reference-arch/">q243-egress-ip-reference-arch.md</a></td>
 <td>Per-tenant egress-IP reference architecture: how the proxy pool's per-tenant choke point is bound to a distinct, stable source IP at GitHub — Cilium Egress Gateway vs per-tenant cloud NAT — plus single-tenant-direct (dogfood) vs production multi-tenant topology, cost model, and a deferred live-validation plan</td>
-<td>ⓘ Design reference — design + full live validation done: per-range Cloud NAT gives distinct+stable per-tenant IPs (<a href="q243-q245-q230-live-validation-campaign/">campaign</a>), and a real GMC-provisioned EgressProxy pins to a single per-tenant egress IP (live PASS 2026-07-13, <code>scripts/validate-egress-ip.sh</code>). Approach-A (Cilium EG) fail-open/kill-switch/SNAT-headroom validation stays deferred</td>
+<td>ⓘ Design reference — design + full live validation done: per-range Cloud NAT gives distinct+stable per-tenant IPs (<a href="q243-q245-q230-live-validation-campaign/">campaign</a>), and a real GMC-provisioned EgressProxy pins to a single per-tenant egress IP (live PASS 2026-07-13, <code>scripts/dev/validate-egress-ip.sh</code>). Approach-A (Cilium EG) fail-open/kill-switch/SNAT-headroom validation stays deferred</td>
 </tr>
 <tr>
 <td><a href="q245-fqdn-intent-backend-split/">q245-fqdn-intent-backend-split.md</a></td>
@@ -2689,11 +2689,6 @@ markers per item.</p>
 <td>✅ Done — Phase 1 + Phase 2 complete; items 2.5/2.7b are cosmetic defers only</td>
 </tr>
 <tr>
-<td><a href="scripts-directory-regrouping/">scripts-directory-regrouping.md</a></td>
-<td>Group <code>scripts/</code>'s 100-file flat namespace into blast-radius subdirectories so every CI path filter is a prefix glob: kills <code>e2e-test.yml</code>'s <code>scripts/*</code> catch-all and the <code>!(dogfood)</code> extglob, and settles <code>e2e-test.yml</code> vs <code>e2e-calico.yml</code> disagreeing ~60× about the scripts behind the <code>e2e-reusable.yml</code> they share</td>
-<td>❌ Not started — filed 2026-08-01 from Q561, where a MkDocs hook's unit test pulled two docs-only PRs into a ~13 min e2e run and one of them failed an unrelated migration spec (<a href="../STATUS/#Q571">Q571</a>). The interim <code>nondocs</code> filter ships first and this plan deletes it</td>
-</tr>
-<tr>
 <td><a href="go-to-market/">go-to-market.md</a></td>
 <td>Adoption plan (OSS, non-commercial): ICP, demand evidence vs ARC, messaging priority, channels, AI discoverability, donation posture</td>
 <td>ⓘ Strategy — follow-ups (ARC→GAG migration guide, README problem-first) on the STATUS Queue</td>
@@ -2767,6 +2762,11 @@ markers per item.</p>
 </thead>
 <tbody>
 <tr>
+<td><a href="archive/scripts-directory-regrouping/">archive/scripts-directory-regrouping.md</a></td>
+<td>Group <code>scripts/</code>'s 100-file flat namespace into blast-radius subdirectories so every CI path filter is a prefix glob: kills <code>e2e-test.yml</code>'s <code>scripts/*</code> catch-all and the <code>!(dogfood)</code> extglob, and settles <code>e2e-test.yml</code> vs <code>e2e-calico.yml</code> disagreeing ~60× about the scripts behind the <code>e2e-reusable.yml</code> they share</td>
+<td>2026-08-01 — Q571. Filed and closed the same day, from Q561 where a MkDocs hook's unit test pulled two docs-only PRs into a ~13 min e2e run and one of them failed an unrelated migration spec. 99 files moved into ten groups, 762 references rewritten across 190 files, the interim <code>nondocs</code> filter deleted. The plan's seven-group table needed three more: <code>fetch/</code> for the download/retry family that five separate gates call (filing it under <code>e2e/</code> would have hidden it from the rest — the Q400 narrowing in a new shape), <code>manifest/</code> for a gate the table omitted, <code>dev/</code> for developer-only tooling that is not agent tooling. The stated narrowing risk landed backwards: only the e2e filter narrowed, every enumerated filter <em>widened</em> to a prefix glob, and <code>autoscaler-drift.yml</code> gained the <code>download-verified.sh</code> it had always run but never listed. A new <code>check-path-filters.sh</code> assertion pins the two e2e lanes to one script set</td>
+</tr>
+<tr>
 <td><a href="archive/q291-e2e-calico-egress-github-flake/">archive/q291-e2e-calico-egress-github-flake.md</a></td>
 <td>Three real-GitHub egress specs (2 proxy-connect + direct-egress) red the <code>e2e-calico</code> leg together when the Felix ipBlock-programming / GitHub-dial window outlasts the curl retry budget under CI load; widen the bounded retry budget without weakening assertions</td>
 <td>2026-08-01 — Q291. Closed by the soak the row was waiting on: 144 green <code>e2e-calico</code> runs on <code>main</code> since the mitigation merged (#593, 2026-07-11), against a ≥25-run infra bar, with no recurrence — the two pre-fix recurrences (07-04, 07-11) were the last. Retired from Flake watch to the <a href="../development/flake-watch-retired/">retired-flake ledger</a>, which keeps the "a fix was already attempted here" memory greppable should it ever return</td>
@@ -2779,7 +2779,7 @@ markers per item.</p>
 <tr>
 <td><a href="archive/release-decision-support/">archive/release-decision-support.md</a></td>
 <td>Make release timing answerable from recorded data rather than from narrative: a delta report off the last stable tag, standing "when to cut" triggers, and a scope-ledger convention for release plan docs — planned vs delivered at a glance, punt = delabel, delay = keep the gate</td>
-<td>2026-07-31 — Q556. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release-delta.sh"><code>release-delta.sh</code></a> derives the whole report from disciplines already enforced (Conventional Commits, the delete-on-done Queue's history), so there is no recording step. Two plan decisions changed under implementation: completed Q-IDs come from diffing STATUS.md's Queue section across revisions, not from <code>docs(status)</code> subject verbs (squash-merge puts the row deletion in the <em>work</em> commit, and set-diffing also tells a parked row from a delivered one), and a <code>!</code> commit does not auto-promote the bump to major, since most breaking markers here land on a pre-GA CRD version. <a href="release-1.3/#scope-ledger">release-1.3.md</a> carries the first ledger</td>
+<td>2026-07-31 — Q556. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/release-delta.sh"><code>release-delta.sh</code></a> derives the whole report from disciplines already enforced (Conventional Commits, the delete-on-done Queue's history), so there is no recording step. Two plan decisions changed under implementation: completed Q-IDs come from diffing STATUS.md's Queue section across revisions, not from <code>docs(status)</code> subject verbs (squash-merge puts the row deletion in the <em>work</em> commit, and set-diffing also tells a parked row from a delivered one), and a <code>!</code> commit does not auto-promote the bump to major, since most breaking markers here land on a pre-GA CRD version. <a href="release-1.3/#scope-ledger">release-1.3.md</a> carries the first ledger</td>
 </tr>
 <tr>
 <td><a href="archive/backlog-dev-site-page/">archive/backlog-dev-site-page.md</a></td>
@@ -2809,7 +2809,7 @@ markers per item.</p>
 <tr>
 <td><a href="archive/q507-released-tag-upgrade-gate/">archive/q507-released-tag-upgrade-gate.md</a></td>
 <td>Why no CI gate answered "does the chart an operator is actually running upgrade to HEAD?", the Q492 defect that gap let reach a green review-ready PR, and the design question of how CI resolves "the last released chart"</td>
-<td>2026-07-30 — Q507; <code>scripts/chart-released-upgrade-check.sh</code> pulls the published OCI chart at the highest stable <code>v*</code> tag on origin, installs it, and upgrades to HEAD along the documented path, asserting upgrade-blocking failures are the render-time documented kind (never Helm's bare <code>ensure CRDs are installed first</code>), every chart-root <code>crds/</code> CRD lands, and admission works afterwards. Runs last among the chart checks in <code>e2e-reusable.yml</code>, kindnet leg only. Contract: <a href="../development/testing/#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a></td>
+<td>2026-07-30 — Q507; <code>scripts/e2e/chart-released-upgrade-check.sh</code> pulls the published OCI chart at the highest stable <code>v*</code> tag on origin, installs it, and upgrades to HEAD along the documented path, asserting upgrade-blocking failures are the render-time documented kind (never Helm's bare <code>ensure CRDs are installed first</code>), every chart-root <code>crds/</code> CRD lands, and admission works afterwards. Runs last among the chart checks in <code>e2e-reusable.yml</code>, kindnet leg only. Contract: <a href="../development/testing/#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a></td>
 </tr>
 <tr>
 <td><a href="archive/q497-preemption-recovery/">archive/q497-preemption-recovery.md</a></td>
@@ -2874,7 +2874,7 @@ markers per item.</p>
 <tr>
 <td><a href="archive/unit-tests-speed/">archive/unit-tests-speed.md</a></td>
 <td>Unit-test latency: four targeted cuts (fake-clock steps, injectable restart delay, shared RSA test keys, <code>t.Parallel()</code>) + the 2026-07-20 CI re-baseline that made <code>go test</code> a single multi-module invocation</td>
-<td>2026-07-20 — Q17; items 1–4 shipped in <code>c4660ea</code> (2026-05-23); the revival PR collapsed <code>scripts/go-test.sh</code>'s per-module-serial loop into one workspace-wide <code>go test</code> (CI <code>-race</code> gate 189s → 163s measured). Remaining CI-latency levers (lint critical path, coverage loop) parked as <a href="../STATUS/#Q361">Q361</a></td>
+<td>2026-07-20 — Q17; items 1–4 shipped in <code>c4660ea</code> (2026-05-23); the revival PR collapsed <code>scripts/go/go-test.sh</code>'s per-module-serial loop into one workspace-wide <code>go test</code> (CI <code>-race</code> gate 189s → 163s measured). Remaining CI-latency levers (lint critical path, coverage loop) parked as <a href="../STATUS/#Q361">Q361</a></td>
 </tr>
 <tr>
 <td><a href="archive/q264-scale-set-protocol-phases/">archive/q264-scale-set-protocol-phases.md</a></td>

@@ -2789,7 +2789,7 @@ new ones from slipping through. The recurrence guard — linting the filters
 against <code>go.work</code> rather than maintaining them by hand — was Q429, deliberately
 left out of the gate because it is new tooling rather than a correctness fix.</p>
 <p>Q429 closed 2026-07-26 anyway, inside the release: <code>make path-filters-check</code>
-(<code>scripts/check-path-filters.sh</code>, also CI's <code>path-filters</code> job) now fails when a
+(<code>scripts/ci/check-path-filters.sh</code>, also CI's <code>path-filters</code> job) now fails when a
 <code>go.work</code> module is missing from a filter whose jobs exercise the whole
 workspace, when a <code>filters:</code> block declares a filter the gate has not been told
 to treat as workspace-covering or narrow-by-design, or when a pattern names a
@@ -2805,7 +2805,7 @@ the Q400 residual risk above is unaffected. Detail:
 release that motivated it: Q476 renamed <code>capacityGate.mode: On</code> to <code>Observe</code>
 days before this tag would have published it, caught by an unrelated
 conversation rather than by any step.</p>
-<p><strong>Reviewed:</strong> the surface <code>scripts/api-surface-since.sh v1.2.0</code> reports — the
+<p><strong>Reviewed:</strong> the surface <code>scripts/release/api-surface-since.sh v1.2.0</code> reports — the
 <code>RunnerSet</code> additions (<code>spec.sizing</code>, <code>spec.capacityGate</code>,
 <code>spec.maxWorkerLifetime</code>, <code>status.sizingRecommendation</code>,
 <code>status.sizingProfileState</code>), the <code>ActionsGateway</code> additions

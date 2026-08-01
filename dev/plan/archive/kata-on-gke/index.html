@@ -2999,7 +2999,7 @@ into the container mount namespace — <code>join container mntns: setns: operat
   <code>ZONE_RESOURCE_POOL_EXHAUSTED</code> in <code>us-central1-a</code> while <code>N2_CPUS</code> quota sat at 0/200.
   A plain non-nested-virt <code>n2</code> also failed, so nested virt does <strong>not</strong> narrow the capacity
   pool, and <code>n2d</code> is not rejected for lacking AMD SVM — the <code>n2/n2d/c2/c2d</code> allowlist in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/kata-node-pool.sh"><code>scripts/kata-node-pool.sh</code></a> is correct.
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/kata-node-pool.sh"><code>scripts/dev/kata-node-pool.sh</code></a> is correct.
   <code>c2-standard-4</code> and <code>c2d-standard-4</code> both worked. Watch the per-family regional quota:
   <code>C2_CPUS</code> defaulted to <strong>8</strong> on a fresh project.</li>
 <li><strong>A stockout wedges the cluster.</strong> A failing <code>CREATE_NODE_POOL</code> op holds a cluster-level

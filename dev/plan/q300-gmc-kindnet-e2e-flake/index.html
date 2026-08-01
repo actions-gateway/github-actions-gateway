@@ -2461,7 +2461,7 @@ kube-network-policies snapshot) carries the #171 short-lived-pod and #283
 same-node fixes above. Verified against the image itself: the bundled kindnet
 DaemonSet still ships <code>limits: cpu=100m</code> on the <code>kindnet-cni</code> container, so
 the #612 unthrottle patch (<code>tune_kindnet_limits</code> in
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/kind-with-registry.sh"><code>kind-with-registry.sh</code></a>) still applies
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh"><code>kind-with-registry.sh</code></a>) still applies
 unchanged and is still needed.</p>
 <h2 id="symptom">Symptom<a class="headerlink" href="#symptom" title="Permanent link">&para;</a></h2>
 <p>The GMC kindnet e2e leg (job <code>e2e / e2e</code> in
@@ -2593,7 +2593,7 @@ contention. The 100m limit is absolute, so throttling reproduces locally on a
 larger host as well.</p>
 <h3 id="fix">Fix<a class="headerlink" href="#fix" title="Permanent link">&para;</a></h3>
 <p>Remove the kindnetd <strong>CPU limit</strong> at cluster bring-up
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/kind-with-registry.sh"><code>scripts/kind-with-registry.sh</code></a>,
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/kind-with-registry.sh"><code>scripts/e2e/kind-with-registry.sh</code></a>,
 kindnet lane only) — the 100m CPU <em>request</em> keeps scheduling unchanged and the
 memory limit stays (no OOM was ever observed). Idempotent strategic-merge
 patch; re-running bring-up against an existing cluster is a no-op.</p>

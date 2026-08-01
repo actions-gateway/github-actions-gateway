@@ -2621,7 +2621,7 @@ runs, without weakening any gate and without regressing the desktop-safety
 properties the throttle exists to protect.</p>
 <h2 id="baseline-measurement-2026-07-26">Baseline measurement (2026-07-26)<a class="headerlink" href="#baseline-measurement-2026-07-26" title="Permanent link">&para;</a></h2>
 <p>Machine: MacBook Pro, Intel i7-1068NG7, <strong>4 physical / 8 logical cores</strong>, 32 GB.
-<code>scripts/local-throttle.sh</code> sizes parallelism at <code>physical - 2 = 2</code>, so one run
+<code>scripts/agent/local-throttle.sh</code> sizes parallelism at <code>physical - 2 = 2</code>, so one run
 uses ~2 of 8 hardware threads at <code>utility</code> QoS while holding the exclusive lock.</p>
 <p>Every <code>make check</code> prerequisite, timed individually, in a worktree checked out at
 <code>origin/main</code> with no local diff:</p>
@@ -2713,13 +2713,13 @@ re-runs the suite; with it, B prints <code>(cached)</code> on its first invocati
 targets): <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go"><code>cmd/gmc/test/e2e/e2e_suite_test.go</code></a>
 resolves the v2 CRD chart directory from <code>runtime.Caller(0)</code>, which returns a
 trimmed, non-existent path under the flag. It is applied in the unit-tier
-scripts only (<code>scripts/go-test.sh</code>, <code>scripts/coverage.sh</code>), which the e2e and
+scripts only (<code>scripts/go/go-test.sh</code>, <code>scripts/go/coverage.sh</code>), which the e2e and
 integration tiers do not use. The release images already build with <code>-trimpath</code>
 (<code>cmd/*/Dockerfile</code>), so the flag is not new to the repo.</p>
 <h2 id="changes">Changes<a class="headerlink" href="#changes" title="Permanent link">&para;</a></h2>
 <h3 id="1--trimpath-in-the-unit-tier-">1. <code>-trimpath</code> in the unit tier ✓<a class="headerlink" href="#1--trimpath-in-the-unit-tier-" title="Permanent link">&para;</a></h3>
-<p><code>scripts/go-test.sh</code> (backing <code>make test</code> and <code>make test-race</code>) and
-<code>scripts/coverage.sh</code> (backing <code>make cover*</code>) pass <code>-trimpath</code>. A fresh worktree
+<p><code>scripts/go/go-test.sh</code> (backing <code>make test</code> and <code>make test-race</code>) and
+<code>scripts/go/coverage.sh</code> (backing <code>make cover*</code>) pass <code>-trimpath</code>. A fresh worktree
 at an already-tested commit pays ~0 for the unit suite instead of ~19 min; only
 the packages whose content actually changed re-run.</p>
 <p>This retires Q377's <em>original</em> framing (change-scope <code>make test</code>/coverage to
@@ -2741,7 +2741,7 @@ machine running several sessions, and the env override exists for anyone who
 wants the old strict serialization (<code>GAG_HEAVY_BUILD_SLOTS=1</code>).</p>
 <h3 id="3-the-cheap-gates-run-in-parallel-">3. The cheap gates run in parallel ✓<a class="headerlink" href="#3-the-cheap-gates-run-in-parallel-" title="Permanent link">&para;</a></h3>
 <p>The 14 non-heavy <code>check</code> gates took no lock and ran strictly serially (~50 s).
-They now run through <code>scripts/run-parallel.sh</code> (labeled, attributable output —
+They now run through <code>scripts/ci/run-parallel.sh</code> (labeled, attributable output —
 GNU make 3.81 ships on macOS and has no <code>-O</code> output sync, so <code>make -j</code> would
 interleave failures unreadably). <code>scripts-test</code>'s 11 assertion scripts are
 parallelized the same way.</p>
@@ -2753,7 +2753,7 @@ at its hardcoded default of 2.</p>
 <p>The question was how far to raise those two numbers. Neither is the binding
 constraint.</p>
 <h3 id="step-1--what-each-prefix-can-reach">Step 1 — what each prefix can reach<a class="headerlink" href="#step-1--what-each-prefix-can-reach" title="Permanent link">&para;</a></h3>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/qos-cluster-probe.sh"><code>scripts/qos-cluster-probe.sh</code></a> saturates one
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/qos-cluster-probe.sh"><code>scripts/agent/qos-cluster-probe.sh</code></a> saturates one
 thread per logical CPU under a candidate prefix and samples per-cluster HW active
 residency and clock with <code>powermetrics</code>, reporting effective compute as
 <code>sum(residency × cores × clock)</code>:</p>
@@ -2816,8 +2816,8 @@ pure-CPU synthetic load, not as the ceiling for real builds.</p>
 <p>Spin threads generate no I/O, no memory pressure, and no process churn, so the
 sweep cannot show whether a faster prefix keeps the desktop responsive — and
 <code>-d throttle</code> gives up CPU priority, which is the protection being traded.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/validate-throttle.sh"><code>scripts/validate-throttle.sh</code></a> runs a real
-gate phase under each candidate while <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/uijitter.c"><code>scripts/uijitter.c</code></a>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/validate-throttle.sh"><code>scripts/agent/validate-throttle.sh</code></a> runs a real
+gate phase under each candidate while <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/uijitter.c"><code>scripts/agent/uijitter.c</code></a>
 samples scheduling latency at <code>QOS_CLASS_USER_INTERACTIVE</code>, where the compositor
 runs. Idle floor on this machine: p50 2.9 ms, p99 4.1 ms.</p>
 <p><strong>Picking a workload that can discriminate took three attempts, and the two
@@ -2901,18 +2901,18 @@ variant that keeps a CPU-priority demotion is also the quicker one.</p>
 that then exists. Done below.</p>
 <h2 id="change-4-the-prefix-switches-and-the-two-knobs-are-re-derived-">Change 4: the prefix switches, and the two knobs are re-derived ✓<a class="headerlink" href="#change-4-the-prefix-switches-and-the-two-knobs-are-re-derived-" title="Permanent link">&para;</a></h2>
 <p>The macOS prefix is now <code>nice -n 10 taskpolicy -d throttle</code>
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/local-throttle.sh"><code>scripts/local-throttle.sh</code></a>), on the evidence
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/local-throttle.sh"><code>scripts/agent/local-throttle.sh</code></a>), on the evidence
 above. Linux is untouched — <code>nice -n 19</code> + <code>ionice -c 3</code> already expresses the
 two demotions separately, which is exactly what macOS was missing.</p>
 <p>With the ceiling lifted, both parallelism knobs were re-measured against it.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/validate-throttle.sh"><code>scripts/validate-throttle.sh</code></a> grew the two
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/validate-throttle.sh"><code>scripts/agent/validate-throttle.sh</code></a> grew the two
 axes needed for that: <code>GAG_THROTTLE_CANDIDATES</code> entries take <code>|jobs=N</code> (so a
 parallelism sweep interleaves within a trial, and thermal drift hits every level
 equally) and <code>|holders=M</code> (M copies run concurrently, as M sessions holding M
 semaphore slots would). A <code>test</code> workload was added alongside <code>lint</code>, because
 <code>jobs</code> is spent in two different places — <code>golangci-lint -j</code> in
-<code>scripts/go-lint.sh</code>, <code>go test -p</code> plus <code>GOMAXPROCS</code> in <code>scripts/go-test.sh</code> and
-<code>scripts/coverage.sh</code> — and a lint-only sweep cannot speak for the other.</p>
+<code>scripts/go/go-lint.sh</code>, <code>go test -p</code> plus <code>GOMAXPROCS</code> in <code>scripts/go/go-test.sh</code> and
+<code>scripts/go/coverage.sh</code> — and a lint-only sweep cannot speak for the other.</p>
 <h3 id="jobs-not-a-lever-for-lint-at-any-level-from-8-to-24"><code>jobs</code>: not a lever for lint at any level from 8 to 24<a class="headerlink" href="#jobs-not-a-lever-for-lint-at-any-level-from-8-to-24" title="Permanent link">&para;</a></h3>
 <p>Cold-cache <code>golangci-lint</code> on <code>cmd/agc</code> under the new prefix, 3 interleaved
 trials (wall seconds per trial, then the jitter range across all three):</p>
@@ -3223,7 +3223,7 @@ change is stderr-only: lock paths, slot count, and the acquire protocol are
 untouched, so worktrees still on older code contend on the same files exactly as
 before.</p>
 <h2 id="change-6-the-coverage-loop-adopts-make-tests-shape--q377">Change 6: the coverage loop adopts <code>make test</code>'s shape ✓ (Q377)<a class="headerlink" href="#change-6-the-coverage-loop-adopts-make-tests-shape--q377" title="Permanent link">&para;</a></h2>
-<p><code>scripts/coverage.sh</code> ran its 10 modules one at a time, where <code>make test</code> issues
+<p><code>scripts/go/coverage.sh</code> ran its 10 modules one at a time, where <code>make test</code> issues
 a single workspace-wide invocation. It now issues the same single invocation —
 one <code>./&lt;module&gt;/...</code> pattern per go.work module — and <strong>splits the merged
 profile back per module by import path</strong> to recover the per-module numbers the
@@ -3348,7 +3348,7 @@ knowing that a few floors carry ±0.2 pp of load-dependent noise rather than
 being exact.</p>
 <p>The split rule (longest module import path, <code>/</code>-bounded, then the same
 <code>EXCLUDE_RE</code> filter) is asserted by
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/coverage-test.sh"><code>scripts/coverage-test.sh</code></a> under <code>make
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage-test.sh"><code>scripts/go/coverage-test.sh</code></a> under <code>make
 scripts-test</code>: the per-module invocation could not get attribution wrong by
 construction, and the split can, so the boundary and exclusion cases are pinned
 rather than left to a full coverage run to notice.</p>

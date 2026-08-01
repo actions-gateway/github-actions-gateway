@@ -2496,7 +2496,7 @@ would be indirection without drift protection.</p>
 <h2 id="changes">Changes<a class="headerlink" href="#changes" title="Permanent link">&para;</a></h2>
 <h3 id="a-webhook--full-file-generator--drift-gate-the-crd-precedent">A. Webhook — full-file generator + drift gate (the CRD precedent)<a class="headerlink" href="#a-webhook--full-file-generator--drift-gate-the-crd-precedent" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>scripts/sync-chart-webhook.sh</code> transforms <code>cmd/gmc/config/webhook/manifests.yaml</code>
+<li><code>scripts/manifest/sync-chart-webhook.sh</code> transforms <code>cmd/gmc/config/webhook/manifests.yaml</code>
   into <code>charts/actions-gateway/templates/webhook.yaml</code>, re-injecting the chart's
   Helm templating (name prefix + labels, the <code>certManager.enabled</code> CA-inject
   annotation, <code>namespace: {{ .Release.Namespace }}</code>, and the non-cert-manager

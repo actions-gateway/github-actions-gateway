@@ -2683,7 +2683,7 @@ without building the site:</p>
 </code></pre></div>
 <p>The tag-selection rules (numeric ordering, prerelease exclusion, the
 <code>$GAG_DOCS_RELEASE</code> override, degrading to <code>""</code> outside a repository) are asserted
-by <code>scripts/release-version-hook-test.sh</code>, which <code>make check</code> runs via
+by <code>scripts/docs/release-version-hook-test.sh</code>, which <code>make check</code> runs via
 <code>make scripts-test</code>.</p>
 <h2 id="versioned-deploy-mike">Versioned deploy (mike)<a class="headerlink" href="#versioned-deploy-mike" title="Permanent link">&para;</a></h2>
 <p>The published site is a <strong>versioned tree</strong> managed by
@@ -2944,7 +2944,7 @@ above the fold, preload it too, or it may briefly render in the fallback.</p>
 <p>Both targets provision an <strong>isolated venv</strong> (<code>.venv-docs/</code>, gitignored) from the
 pinned <code>requirements-docs.txt</code> and reuse it across runs, so the docs toolchain
 never touches the host Python — <code>python3</code> is the only host prerequisite
-(<code>scripts/check-tools.sh</code>, extended tier). On Debian/Ubuntu the stdlib venv
+(<code>scripts/ci/check-tools.sh</code>, extended tier). On Debian/Ubuntu the stdlib venv
 module ships separately: <code>apt-get install python3-venv</code> if <code>python3 -m venv</code>
 fails.</p>
 <p>The toolchain is pinned <strong>exactly</strong> — MkDocs 2.0 is incompatible with Material 9.x,
@@ -2962,7 +2962,7 @@ cannot cover both</strong> (Q560):</p>
 </thead>
 <tbody>
 <tr>
-<td><code>make doc-links</code> (<code>scripts/check-doc-links.sh</code>)</td>
+<td><code>make doc-links</code> (<code>scripts/docs/check-doc-links.sh</code>)</td>
 <td>github.com — GitHub's heading slugger, directory listings</td>
 <td><code>doc-links.yml</code>, <code>make check</code></td>
 </tr>
@@ -3174,7 +3174,7 @@ link, so covering only the first would leave the rarer form silently dead.</p>
 <p>This was already needed before the backlog page: <code>design/</code> and <code>operations/</code>
 shipped such links dead. Publishing the repo-internal docs made it load-bearing
 — 724 links across the tree, 34 on <code>STATUS.md</code> alone.
-<code>scripts/source-links-hook-test.sh</code> asserts the rewrite in both directions under
+<code>scripts/docs/source-links-hook-test.sh</code> asserts the rewrite in both directions under
 <code>make check</code>.</p>
 <h3 id="unpublished-is-per-build-not-per-path-q561">Unpublished is per build, not per path (Q561)<a class="headerlink" href="#unpublished-is-per-build-not-per-path-q561" title="Permanent link">&para;</a></h3>
 <p>"Does not publish" is decided <strong>per build, from its own file set</strong> — <code>on_files</code>

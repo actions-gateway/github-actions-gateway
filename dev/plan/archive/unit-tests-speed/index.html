@@ -2895,22 +2895,22 @@
 <tr>
 <td>lint</td>
 <td>233 s</td>
-<td><strong>critical path</strong> — gofmt + per-module <code>golangci-lint</code> loop (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go-lint.sh">go-lint.sh</a>)</td>
+<td><strong>critical path</strong> — gofmt + per-module <code>golangci-lint</code> loop (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh">go-lint.sh</a>)</td>
 </tr>
 <tr>
 <td>unit-test (<code>-race</code>)</td>
 <td>189 s</td>
-<td>was per-module-serial <code>go test</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go-test.sh">go-test.sh</a>)</td>
+<td>was per-module-serial <code>go test</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh">go-test.sh</a>)</td>
 </tr>
 <tr>
 <td>coverage</td>
 <td>139 s</td>
-<td>per-module <code>-cover</code> loop (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/coverage.sh">coverage.sh</a>) — per-module profiles are load-bearing for the ratchet's per-module floors</td>
+<td>per-module <code>-cover</code> loop (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/coverage.sh">coverage.sh</a>) — per-module profiles are load-bearing for the ratchet's per-module floors</td>
 </tr>
 </tbody>
 </table>
 <p>Inside the 189 s unit-test job, <strong>compilation dominates, not test execution</strong>: the sequential per-module loop spent ~39 s on <code>./api</code>, ~93 s on <code>./cmd/agc</code>, and ~35 s on <code>./cmd/gmc</code>, and within <code>cmd/agc</code> only ~20 s was actual test packages running — the rest was the <code>-race</code> compile of the controller-runtime/k8s dependency graph, serialized behind the smaller modules.</p>
-<p><strong>Change shipped by the Q17 revival PR:</strong> <code>scripts/go-test.sh</code> now issues <strong>one</strong> <code>go test</code> invocation over every <code>./&lt;module&gt;/...</code> pattern (a repo-root <code>./...</code> still does not work in a workspace, but explicit multi-module patterns do). Go then schedules the whole workspace as a single parallel build graph — small modules overlap the big <code>cmd/agc</code>/<code>cmd/gmc</code> compiles instead of queueing behind them. Unit-only selection is preserved because the integration (envtest) and e2e packages are build-tagged. Applies to both <code>make test</code> and the CI <code>-race</code> gate (<code>make test-race</code>).</p>
+<p><strong>Change shipped by the Q17 revival PR:</strong> <code>scripts/go/go-test.sh</code> now issues <strong>one</strong> <code>go test</code> invocation over every <code>./&lt;module&gt;/...</code> pattern (a repo-root <code>./...</code> still does not work in a workspace, but explicit multi-module patterns do). Go then schedules the whole workspace as a single parallel build graph — small modules overlap the big <code>cmd/agc</code>/<code>cmd/gmc</code> compiles instead of queueing behind them. Unit-only selection is preserved because the integration (envtest) and e2e packages are build-tagged. Applies to both <code>make test</code> and the CI <code>-race</code> gate (<code>make test-race</code>).</p>
 <p><strong>Measured outcome (first PR run):</strong> the <code>-race</code> unit gate dropped 189s → 163s (−14%). Smaller than the compile-serialization arithmetic suggests because the 4-vCPU CI runner was already near CPU-bound during the <code>cmd/agc</code>/<code>cmd/gmc</code> compiles — the win is the removal of the inter-module barriers (small-module idle time), not extra parallelism during the big compiles.</p>
 <p><strong>Remaining levers (parked as <a href="../../../STATUS/#Q361">Q361</a>):</strong></p>
 <ul>

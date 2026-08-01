@@ -2559,7 +2559,7 @@ unimplemented at the authorization layer.</p>
 <tr>
 <td><code>make verify-release</code> accepts <code>refs/heads/.*</code> signing identities</td>
 <td>Medium</td>
-<td><strong>Resolved (Q124)</strong> — identity regexp anchored tags-only (<code>@refs/tags/v.*$</code>); publish.yml refuses non-tag refs; regexp guarded by <code>scripts/verify-release-test.sh</code></td>
+<td><strong>Resolved (Q124)</strong> — identity regexp anchored tags-only (<code>@refs/tags/v.*$</code>); publish.yml refuses non-tag refs; regexp guarded by <code>scripts/release/verify-release-test.sh</code></td>
 </tr>
 <tr>
 <td>GMC teardown fail-open (<code>deleteIfExists</code> swallows errors, finalizer removed)</td>
@@ -2735,7 +2735,7 @@ bumps SHA pins and their <code># vX.Y.Z</code> comments, so the pins don't rot. 
 <a href="../../operations/release/#supply-chain-integrity-of-the-pipeline-itself">release.md § Supply-chain integrity of the pipeline</a>;
 <code>actionlint</code> (CI <code>lint</code>) keeps SHA-pinned <code>uses:</code> lint-clean.</p>
 <h3 id="q124--make-verify-release-accepts-branch-identities-medium--resolved">Q124 — <code>make verify-release</code> accepts branch identities (Medium) — RESOLVED<a class="headerlink" href="#q124--make-verify-release-accepts-branch-identities-medium--resolved" title="Permanent link">&para;</a></h3>
-<p><code>scripts/verify-release.sh</code> (post-#209 home of the recipe; was <code>Makefile:511</code>)
+<p><code>scripts/release/verify-release.sh</code> (post-#209 home of the recipe; was <code>Makefile:511</code>)
 matched <code>publish\.yml@refs/(tags|heads)/.*$</code>; the documented identity
 (<code>security-operations.md</code>, <code>release.md</code>) is tags-only. <code>publish.yml</code> is
 <code>workflow_dispatch</code>-able from any ref with an arbitrary <code>tag</code> input and runs
@@ -2746,7 +2746,7 @@ branch, overwrite a released GHCR version tag, and still pass verification.</p>
 <code>scripts/lib/common.sh</code> so it has a single source of truth. Defense in
 depth: both <code>publish.yml</code> jobs' "Resolve publish tag" step now refuse any
 <code>GITHUB_REF</code> that isn't <code>refs/tags/…</code>, so a branch <code>workflow_dispatch</code> can't
-even reach the sign step. <code>scripts/verify-release-test.sh</code> (run by <code>make
+even reach the sign step. <code>scripts/release/verify-release-test.sh</code> (run by <code>make
 check</code> and the CI shellcheck job) asserts the regexp accepts
 <code>refs/tags/vX.Y.Z</code> and rejects <code>refs/heads/…</code>.</p>
 <h3 id="q125--gmc-teardown-fail-open-medium--resolved">Q125 — GMC teardown fail-open (Medium) — RESOLVED<a class="headerlink" href="#q125--gmc-teardown-fail-open-medium--resolved" title="Permanent link">&para;</a></h3>
@@ -2773,7 +2773,7 @@ tenant offboarding, with no retry and only a log line.
 finalizer until every delete succeeds or is NotFound.</p>
 <h3 id="q126--ci-gate-vendor-contents-vs-gosum-medium--resolved">Q126 — CI gate: vendor contents vs go.sum (Medium) — RESOLVED<a class="headerlink" href="#q126--ci-gate-vendor-contents-vs-gosum-medium--resolved" title="Permanent link">&para;</a></h3>
 <p><strong>Resolution.</strong> New <code>vendor-check</code> job in <code>unit-test.yml</code> (single source of
-truth <code>make vendor-check</code> → <code>scripts/vendor-check.sh</code>) re-runs the
+truth <code>make vendor-check</code> → <code>scripts/go/vendor-check.sh</code>) re-runs the
 workspace-vendor flow — <code>go work vendor</code> plus <code>cd tools &amp;&amp; GOWORK=off go mod
 vendor</code>, both of which re-fetch every module verified against <code>go.sum</code> — and
 fails on <code>git diff --exit-code vendor/ tools/vendor/</code>. Gated on a dedicated
@@ -2781,7 +2781,7 @@ fails on <code>git diff --exit-code vendor/ tools/vendor/</code>. Gated on a ded
 <code>code</code> so a pure-<code>.go</code> edit doesn't trigger the network re-vendor. A Dependabot
 <code>go.mod</code> bump fails the gate until a follow-up vendor sync lands — the intended
 signal (the gate asserts the committed tree is self-consistent), documented in
-<code>scripts/vendor-check.sh</code> and <code>docs/development/go-workspaces.md</code>. Sibling of
+<code>scripts/go/vendor-check.sh</code> and <code>docs/development/go-workspaces.md</code>. Sibling of
 the license-notices drift gate and of Q94/Q111.</p>
 <p>Original finding:</p>
 <p>With <code>-mod=vendor</code>, the Go toolchain checks only <code>vendor/modules.txt</code>
@@ -2800,7 +2800,7 @@ RESOLVED in the Q127 PR</strong> except the one optional sub-item carved out bel
    Helm chart is the sole install path (Q142) and both admission-policy templates
    already parameterize the username from <code>.Release.Namespace</code> + the
    <code>serviceAccountName</code> helper, so a GMC installed anywhere is covered. Added a
-   render-level drift guard in <code>scripts/manifest-validate.sh</code> (renders under a
+   render-level drift guard in <code>scripts/manifest/manifest-validate.sh</code> (renders under a
    non-default <code>--namespace</code> and asserts the policy matchConditions bind to the
    rendered GMC ServiceAccount, never a hardcoded <code>gmc-system</code> identity), and
    clarified that the raw <code>config/admission-policy/*.yaml</code> is the codegen/envtest
@@ -2824,7 +2824,7 @@ RESOLVED in the Q127 PR</strong> except the one optional sub-item carved out bel
    listener's <code>tls.Config</code> now pins <code>MinVersion: tls.VersionTLS12</code> (matching the
    metrics listener). Guarded by <code>TestProxy_TLS_RejectsBelowTLS12</code>.</li>
 <li><strong>Tool downloads not checksum-verified</strong> — <strong>RESOLVED.</strong></li>
-<li><strong>cosign</strong> (done earlier, Q126 PR): <code>scripts/download-cosign.sh</code> pins the
+<li><strong>cosign</strong> (done earlier, Q126 PR): <code>scripts/release/download-cosign.sh</code> pins the
      SHA256 per (version, platform) and fails closed.</li>
 <li><strong>kubeconform / shellcheck / polaris</strong> (this PR): each CI install step now
      verifies the downloaded tarball against a pinned in-repo SHA256

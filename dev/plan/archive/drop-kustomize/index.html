@@ -2460,7 +2460,7 @@ under k8s.io/api skew — the exact Q73 hazard.</p>
 <li><strong>Authoritative sources</strong> (owned by each module's controller-gen):</li>
 <li><code>cmd/gmc/config/crd/bases/...actionsgateways.yaml</code> (GMC owns <code>ActionsGateway</code>)</li>
 <li><code>cmd/agc/config/crd/...runnergroups.yaml</code> (AGC owns <code>RunnerGroup</code>)</li>
-<li><strong><code>scripts/sync-chart-crds.sh</code></strong> generates the two chart CRD templates from
+<li><strong><code>scripts/manifest/sync-chart-crds.sh</code></strong> generates the two chart CRD templates from
   those sources, injecting the per-CRD <code>helm.sh/resource-policy: keep</code> annotation
   block. <code>make chart-crds</code> writes them.</li>
 <li><strong><code>make chart-crds-check</code></strong> (vendor-check pattern) re-runs the sync and
@@ -2492,7 +2492,7 @@ install vehicle: the controller-gen CRD/RBAC/webhook outputs (also the
 single-source inputs to the chart generators, and what <code>rbac_test.go</code> + envtest
 load) and the two <code>admission-policy</code> ValidatingAdmissionPolicies the GMC
 integration suite applies in envtest. <code>make manifests</code> reproduces them.</p>
-<p><strong>RBAC seam — single-sourced now</strong> (user decision, this PR). <code>scripts/sync-chart-rbac.sh</code>
+<p><strong>RBAC seam — single-sourced now</strong> (user decision, this PR). <code>scripts/manifest/sync-chart-rbac.sh</code>
 generates <code>charts/actions-gateway/files/manager-role-rules.yaml</code> from
 <code>cmd/gmc/config/rbac/role.yaml</code>; the chart's <code>manager-role</code> template embeds it
 via <code>.Files.Get</code>, and <code>make chart-rbac-check</code> gates drift (wired into <code>make check</code>

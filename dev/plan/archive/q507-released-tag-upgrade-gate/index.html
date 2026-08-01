@@ -2399,7 +2399,7 @@
 
 
 <h1 id="q507--no-gate-upgrades-from-the-last-released-chart-tag">Q507 — No gate upgrades from the last released chart tag<a class="headerlink" href="#q507--no-gate-upgrades-from-the-last-released-chart-tag" title="Permanent link">&para;</a></h1>
-<p><strong>Status: SHIPPED.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/chart-released-upgrade-check.sh"><code>scripts/chart-released-upgrade-check.sh</code></a>
+<p><strong>Status: SHIPPED.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-released-upgrade-check.sh"><code>scripts/e2e/chart-released-upgrade-check.sh</code></a>
 (<code>make chart-released-upgrade-check</code>) runs last among the chart checks in
 <code>e2e-reusable.yml</code> (kindnet leg only). The design question below resolved to
 option (2) — <code>helm pull</code> of the published OCI artifact — with the tag discovered
@@ -2429,12 +2429,12 @@ rules: <a href="../../../development/testing/#the-released-chart-upgrade-gate-q5
 <td>nothing — always a first install</td>
 </tr>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/chart-upgrade-check.sh"><code>chart-upgrade-check.sh</code></a> (Q475)</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-upgrade-check.sh"><code>chart-upgrade-check.sh</code></a> (Q475)</td>
 <td>HEAD's chart</td>
 <td>HEAD's chart with two markers injected</td>
 </tr>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/chart-reinstall-check.sh"><code>chart-reinstall-check.sh</code></a> (Q444/Q492)</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-reinstall-check.sh"><code>chart-reinstall-check.sh</code></a> (Q444/Q492)</td>
 <td>HEAD's chart</td>
 <td>uninstall → reinstall, same chart</td>
 </tr>
@@ -2499,7 +2499,7 @@ change. Both argue for resolving the tag dynamically rather than hardcoding.</p>
 existing release can upgrade to, because none of them has an older release to
 upgrade <em>from</em>. A reviewer would have to know Helm's <code>crds/</code> rule and think to ask.
 That is exactly the shape that belongs in CI rather than in a human's memory.</p>
-<p>Prior art for the harness: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/chart-upgrade-check.sh"><code>chart-upgrade-check.sh</code></a>
+<p>Prior art for the harness: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-upgrade-check.sh"><code>chart-upgrade-check.sh</code></a>
 already captures a live release's values, mutates the chart, upgrades, and
 restores — most of the scaffolding this needs exists there.</p>
 

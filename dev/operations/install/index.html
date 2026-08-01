@@ -3214,9 +3214,9 @@ restarting kube-apiserver, which EKS/GKE/AKS do not offer. It could also fail
 <em>open</em>, silently enforcing a stale allowlist from a frozen cache.</p>
 <p>For a CRD <code>paramKind</code> the apiserver allocates a fresh dynamic informer per
 context, so the same uninstall/reinstall cycle is survivable. This is measured
-rather than inferred: <code>scripts/vap-param-informer-check.sh</code> runs the identical
+rather than inferred: <code>scripts/e2e/vap-param-informer-check.sh</code> runs the identical
 empty-binding-set transition against both kinds on one apiserver, and
-<code>scripts/chart-reinstall-check.sh</code> drives a real uninstall/reinstall in CI.</p>
+<code>scripts/e2e/chart-reinstall-check.sh</code> drives a real uninstall/reinstall in CI.</p>
 <p><strong>One consequence, and it is not install-time.</strong> This CRD ships in the chart-root
 <code>crds/</code> directory rather than <code>templates/crds/</code> like the others, because the same
 release also creates a <code>PriorityClassAllowlist</code> object and Helm resolves REST
@@ -3300,7 +3300,7 @@ Removing the binding used to be the trigger for a cluster-wide outage (Q444) whe
 the parameter was a ConfigMap — a reinstall could not repair it. It is safe now
 that the parameter is a CRD, which is
 <a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492">why it is one</a>; the
-uninstall/reinstall cycle is covered by <code>scripts/chart-reinstall-check.sh</code> in CI.
+uninstall/reinstall cycle is covered by <code>scripts/e2e/chart-reinstall-check.sh</code> in CI.
 Symptoms of the old failure, if you meet it on a pre-Q492 release:
 <a href="../troubleshooting/#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding">troubleshooting.md</a>.</p>
 <p>The install namespace (<code>gmc-system</code>) is left in place if you created it with

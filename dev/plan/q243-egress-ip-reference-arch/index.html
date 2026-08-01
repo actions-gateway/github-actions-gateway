@@ -3276,7 +3276,7 @@ is only asserted in envtest; envtest has no scheduler, so it can prove the emitt
 pod spec but not the placement + the NAT source IP end-to-end. That needs a cloud
 run, and per the repo rule ("treat ✅ findings as unverified until confirmed
 end-to-end — actually exec the thing") it is the honest close for Q243.</p>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/validate-egress-ip.sh"><code>scripts/validate-egress-ip.sh</code></a> automates it,
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/validate-egress-ip.sh"><code>scripts/dev/validate-egress-ip.sh</code></a> automates it,
 teardown-safe, so the run is one authorized command rather than a bespoke sequence
 (and re-runnable at future egress-path changes — this class of regression is exactly
 what unit/envtest can miss):</p>
@@ -3339,7 +3339,7 @@ tolerations + <code>affinity.podAntiAffinity: {}</code>), a real GMC-provisioned
 <code>EgressProxy</code> lands <strong>both</strong> replicas on the one tenant node pool, so the pool
 egresses from a <strong>single</strong> Cloud NAT IP — the 2026-07-07 two-IP spread is gone.</p>
 <p><strong>Per the repo rule ("treat ✅ findings as unverified until confirmed
-end-to-end"), the first real run mattered:</strong> the harness (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/validate-egress-ip.sh"><code>scripts/validate-egress-ip.sh</code></a>)
+end-to-end"), the first real run mattered:</strong> the harness (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/validate-egress-ip.sh"><code>scripts/dev/validate-egress-ip.sh</code></a>)
 had never been executed against live GKE, and seven distinct defects surfaced
 only on contact — each gating a step deeper: private-nodes control-plane access
 (authorize the operator IP), the <code>--disable-default-snat</code>/<code>--enable-private-nodes</code>

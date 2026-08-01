@@ -2877,7 +2877,7 @@ budget.</p>
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml">security-scan.yml</a>,
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dockerfile-lint.yml">dockerfile-lint.yml</a> — matrices
   select a stage instead of a file</li>
-<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/trivy-scan.sh">scripts/trivy-scan.sh</a> — <code>--target</code>; also gained
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/security/trivy-scan.sh">scripts/security/trivy-scan.sh</a> — <code>--target</code>; also gained
   the <code>wrapper</code> leg it was missing relative to the CI matrix</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/runner_version_test.go">cmd/agc/names/runner_version_test.go</a>
   — the runner-version lockstep guard reads the root Dockerfile</li>
@@ -2893,7 +2893,7 @@ budget.</p>
 toolchains and was pure serial critical path before any other step. Nothing
 until the bake needs that headroom.</p>
 <h3 id="approach-shipped_1">Approach (shipped)<a class="headerlink" href="#approach-shipped_1" title="Permanent link">&para;</a></h3>
-<p>The deletions moved into <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/free-runner-disk.sh">scripts/free-runner-disk.sh</a>
+<p>The deletions moved into <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/free-runner-disk.sh">scripts/e2e/free-runner-disk.sh</a>
 and now run in two workflow steps:</p>
 <ul>
 <li><strong>Start freeing runner disk space</strong>, at the top of the job, launches the

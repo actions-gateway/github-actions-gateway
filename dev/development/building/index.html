@@ -2519,7 +2519,7 @@ Red Hat/OpenShift container-certification convention, paired with the
 </ul>
 <p><code>THIRD-PARTY-NOTICES</code> is a <strong>generated, committed</strong> file at the repo root. It is
 assembled from the committed, version-pinned <code>vendor/</code> tree (offline — no network
-or module cache) by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/gen-third-party-notices.sh"><code>scripts/gen-third-party-notices.sh</code></a>:</p>
+or module cache) by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>third-party-notices<span class="w">         </span><span class="c1"># regenerate THIRD-PARTY-NOTICES from vendor/</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>make<span class="w"> </span>third-party-notices-check<span class="w">   </span><span class="c1"># fail if it is stale (the CI drift gate)</span>
 </code></pre></div>

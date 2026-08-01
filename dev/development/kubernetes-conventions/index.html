@@ -2957,11 +2957,11 @@ outcomes, both bad:</p>
 </table>
 <p>The only recovery is restarting kube-apiserver, which managed control planes
 (GKE/EKS/AKS) do not offer.</p>
-<p>Measured, not inferred: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/vap-param-informer-check.sh"><code>scripts/vap-param-informer-check.sh</code></a>
+<p>Measured, not inferred: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>
 runs the identical empty-binding-set transition against a ConfigMap <code>paramKind</code>
 and a CRD one on a single apiserver — the ConfigMap arm breaks, the CRD arm stays
 fresh. Upstream: <a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a>
-(unfixed; do not wait for it). <code>scripts/chart-reinstall-check.sh</code> gates the
+(unfixed; do not wait for it). <code>scripts/e2e/chart-reinstall-check.sh</code> gates the
 product-level cycle in CI.</p>
 <p><strong>CRD schema/CEL validation runs before a policy sees the request.</strong> An update
 that trips an <code>x-kubernetes-validations</code> rule is rejected with the CEL message
@@ -2977,7 +2977,7 @@ exercised the policy).</p>
 <li>Keep <code>parameterNotFoundAction: Deny</code>. It is the fail-closed default and the
   reason a broken <code>paramKind</code> is so loud; the fix is the CRD, not weakening this.</li>
 <li>Do <strong>not</strong> try to fix it by retaining the binding across uninstall
-  (<code>helm.sh/resource-policy: keep</code>). <code>scripts/manifest-validate.sh</code> forbids that
+  (<code>helm.sh/resource-policy: keep</code>). <code>scripts/manifest/manifest-validate.sh</code> forbids that
   on a VAPB, because a retained binding keeps enforcing after the release is gone
   and makes <code>admissionPolicy.enabled=false</code> a silent no-op.</li>
 <li>A chart that renders both a CRD and a CR of it must ship that CRD in the

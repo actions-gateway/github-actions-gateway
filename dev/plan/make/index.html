@@ -2725,7 +2725,7 @@
 <h3 id="27-minor">2.7 Minor<a class="headerlink" href="#27-minor" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>e2e-clean</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile#L102">Makefile:102</a>) is a one-line alias for <code>e2e-cluster-delete</code>. Either drop it or make it actually clean — delete the kind cluster <em>and</em> remove the built images and <code>.build/</code> artifacts (which is what <code>clean</code> usually means in a Makefile).</li>
-<li><code>make tools</code> is silent. Borrow the <code>==&gt; building controller-gen</code> style from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/setup.sh">scripts/setup.sh</a> so users can see which tool is being built when it takes 30 seconds.</li>
+<li><code>make tools</code> is silent. Borrow the <code>==&gt; building controller-gen</code> style from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/setup.sh">scripts/dev/setup.sh</a> so users can see which tool is being built when it takes 30 seconds.</li>
 </ul>
 <hr />
 <h2 id="out-of-scope">Out of scope<a class="headerlink" href="#out-of-scope" title="Permanent link">&para;</a></h2>

@@ -2945,7 +2945,7 @@ see <a href="../install/#pin-images-by-digest">install.md § Pin images by diges
   <code>contents: write</code>).</li>
 <li>The <strong><code>gag-migrate</code> CLI binaries</strong> (Q306), cross-compiled by <code>chart-publish</code> for
   the operator platform matrix (<code>linux/amd64</code>, <code>linux/arm64</code>, <code>darwin/amd64</code>,
-  <code>darwin/arm64</code>, <code>windows/amd64</code>) via <code>scripts/build-migrate-binaries.sh</code> and
+  <code>darwin/arm64</code>, <code>windows/amd64</code>) via <code>scripts/release/build-migrate-binaries.sh</code> and
   attached to the <strong>GitHub Release</strong> as <code>gag-migrate-&lt;tag&gt;-&lt;os&gt;-&lt;arch&gt;</code> assets. A
   single <code>SHA256SUMS</code> manifest is keyless <strong>cosign <code>sign-blob</code></strong>-signed
   (<code>SHA256SUMS.cosign.bundle</code>) — the same no-secret Fulcio/Rekor path as the v2 CRD
@@ -2993,7 +2993,7 @@ to — the question the rest of the page assumes has already been answered.</p>
 <p>Start from the record, not from memory. The delete-on-done Queue erases delivered
 work from <code>STATUS.md</code> by design, so nothing in the backlog shows what has piled up
 since the last tag:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scripts/release-delta.sh
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scripts/release/release-delta.sh
 </code></pre></div>
 <p>It reports, for <code>&lt;last stable tag&gt;..origin/main</code>, the commits by Conventional
 Commit type (breaking ones called out), the Queue rows closed in that window, the
@@ -3038,7 +3038,7 @@ and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.
   the cheap window closes. Nothing lints this — it is judgement, not a gate that
   can pass or fail mechanically.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/api-surface-since.sh
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/release/api-surface-since.sh
 </code></pre></div>
 <p>Apply the checklist in
   <a href="../../development/api-review/#step-2--ask-these-of-each-addition">api-review.md</a>
@@ -3056,7 +3056,7 @@ and let the ledger's <code>-gate</code> rows answer "is it done?" until the tag.
   opt-in and must be created <em>before</em> you push the tag (<a href="#5-cut-the-github-release">§ 5</a>),
   so the decision belongs here, not after.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/operator-caveats-since.sh
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/release/operator-caveats-since.sh
 </code></pre></div>
 <p>It needs no bookkeeping to stay current: the
   <a href="../../development/doc-update-matrix/">doc-update matrix</a> already requires an
@@ -3535,7 +3535,7 @@ enforce that a signature can only ever be a tag signature:</p>
   (sourced from <code>release_identity_regexp</code> in
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/common.sh"><code>scripts/lib/common.sh</code></a>), so a signature minted
   from <code>refs/heads/…</code> is rejected even if one were somehow produced. The
-  <code>scripts/verify-release-test.sh</code> assertions (run by <code>make check</code> and CI) guard
+  <code>scripts/release/verify-release-test.sh</code> assertions (run by <code>make check</code> and CI) guard
   that the regexp stays tags-only.</li>
 </ul>
 <p>Together these close the hole where repo-write could dispatch <code>publish.yml</code> from a
@@ -3552,7 +3552,7 @@ that verifies them</em>.</p>
   in <code>go.sum</code>. A malicious or accidental edit under <code>vendor/</code> (or <code>tools/vendor/</code>)
   would otherwise compile straight into the signed release images. The
   <code>vendor-check</code> job (in <code>unit-test.yml</code>, single source of truth <code>make
-  vendor-check</code> → <code>scripts/vendor-check.sh</code>) re-runs the workspace-vendor flow —
+  vendor-check</code> → <code>scripts/go/vendor-check.sh</code>) re-runs the workspace-vendor flow —
   which re-fetches every module verified against <code>go.sum</code> — and fails on any diff
   against the committed trees. A Dependabot <code>go.mod</code> bump legitimately fails this
   gate until a follow-up vendor sync lands; that is the intended signal (see
@@ -3562,7 +3562,7 @@ that verifies them</em>.</p>
   on its own. The publish pipeline obtains cosign via the SHA-pinned
   <code>sigstore/cosign-installer</code> action (which performs its own signature
   verification); the <em>local</em> verify path (<code>make verify-release</code> →
-  <code>scripts/download-cosign.sh</code>) pins the expected SHA256 per platform in-repo and
+  <code>scripts/release/download-cosign.sh</code>) pins the expected SHA256 per platform in-repo and
   refuses to install a binary whose bytes don't match. Bumping <code>COSIGN_VERSION</code>
   must add the new digests to that script (it fails closed on an unpinned
   version) — the same deliberate-pin discipline as <code>KIND_BINARY_SHA256</code> in

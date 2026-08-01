@@ -2522,7 +2522,7 @@ try: it prints what it found and names both remedies. The <code>kill -9</code> r
 holding them. The two filters have to agree — a cleanup narrower than the
 preflight would report success and leave the next run still blocked — so the
 runner-name rule is stated in both places with a cross-reference, and
-<code>scripts/e2e-github-cleanup-test.sh</code> pins it from the shell side against the
+<code>scripts/e2e/e2e-github-cleanup-test.sh</code> pins it from the shell side against the
 actual name observed on 2026-07-29.</p>
 <h2 id="acceptance-criteria">Acceptance criteria<a class="headerlink" href="#acceptance-criteria" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2545,7 +2545,7 @@ repo idle, which it was.</p>
 in-flight run when this was written, so nothing exercised a real DELETE, a real
 cancel, or the 422 wait that follows one. The runner filter is asserted at the
 unit level against the name observed on 2026-07-29
-(<code>scripts/e2e-github-cleanup-test.sh</code>), and the preflight's failure path has not
+(<code>scripts/e2e/e2e-github-cleanup-test.sh</code>), and the preflight's failure path has not
 been observed against real GitHub state at all. The next <code>kill -9</code> is the
 opportunity — take it rather than assuming the second acceptance criterion above.</p>
 

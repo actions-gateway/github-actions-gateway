@@ -2483,18 +2483,18 @@ is automated, by what, and where the manual edges are.</p>
 </tr>
 <tr>
 <td>cluster-autoscaler <strong>patch</strong> (drift harness)</td>
-<td><code>CA_VERSION</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/autoscaler-cluster.sh"><code>scripts/autoscaler-cluster.sh</code></a></td>
-<td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cluster-autoscaler.yaml"><code>updatecli.d/cluster-autoscaler.yaml</code></a>, weekly — moves the patch <em>within</em> the pinned minor only, resolved from the registry's own tag list. <strong>No auto-merge</strong>: the PR edits <code>scripts/autoscaler-cluster.sh</code>, which is the <a href="../testing/#its-cadence-the-version-bump-not-a-clock">live-autoscaler drift gate's</a> path filter, so it exists to run that gate against the new release)</td>
+<td><code>CA_VERSION</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/autoscaler-cluster.sh"><code>scripts/e2e/autoscaler-cluster.sh</code></a></td>
+<td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cluster-autoscaler.yaml"><code>updatecli.d/cluster-autoscaler.yaml</code></a>, weekly — moves the patch <em>within</em> the pinned minor only, resolved from the registry's own tag list. <strong>No auto-merge</strong>: the PR edits <code>scripts/e2e/autoscaler-cluster.sh</code>, which is the <a href="../testing/#its-cadence-the-version-bump-not-a-clock">live-autoscaler drift gate's</a> path filter, so it exists to run that gate against the new release)</td>
 </tr>
 <tr>
 <td>cluster-autoscaler <strong>minor</strong> + kwok (drift harness)</td>
-<td><code>CA_VERSION</code>'s minor / <code>KWOK_VERSION</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/autoscaler-cluster.sh"><code>scripts/autoscaler-cluster.sh</code></a></td>
+<td><code>CA_VERSION</code>'s minor / <code>KWOK_VERSION</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/autoscaler-cluster.sh"><code>scripts/e2e/autoscaler-cluster.sh</code></a></td>
 <td><strong>manual, prompted by the kind bump</strong> — cluster-autoscaler is released per Kubernetes minor and the harness runs kind's <em>default</em> node image, so <code>CA_VERSION</code>'s minor is whatever kind ships. A kind bump that moves that minor fails the drift gate on skew; bump <code>CA_VERSION</code> to the matching CA minor in the same PR. See <a href="../testing/#its-cadence-the-version-bump-not-a-clock">testing.md</a></td>
 </tr>
 <tr>
 <td>Karpenter (drift harness)</td>
-<td><code>KARPENTER_VERSION</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/karpenter-cluster.sh"><code>scripts/karpenter-cluster.sh</code></a></td>
-<td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/karpenter.yaml"><code>updatecli.d/karpenter.yaml</code></a>, weekly — the <strong>latest</strong> upstream release, minor or patch: Karpenter is not released per Kubernetes minor, so there is no minor for the kind bump to own. <strong>No auto-merge</strong>: the PR edits <code>scripts/karpenter-cluster.sh</code>, which is the <a href="../testing/#its-cadence-the-version-bump-not-a-clock">drift gate's</a> path filter, so it exists to run that gate against the new release)</td>
+<td><code>KARPENTER_VERSION</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/karpenter-cluster.sh"><code>scripts/e2e/karpenter-cluster.sh</code></a></td>
+<td><strong>updatecli</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/karpenter.yaml"><code>updatecli.d/karpenter.yaml</code></a>, weekly — the <strong>latest</strong> upstream release, minor or patch: Karpenter is not released per Kubernetes minor, so there is no minor for the kind bump to own. <strong>No auto-merge</strong>: the PR edits <code>scripts/e2e/karpenter-cluster.sh</code>, which is the <a href="../testing/#its-cadence-the-version-bump-not-a-clock">drift gate's</a> path filter, so it exists to run that gate against the new release)</td>
 </tr>
 </tbody>
 </table>
@@ -2545,7 +2545,7 @@ rewrites <code>ENVTEST_K8S_VERSION</code> across the workflow and both controlle
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cluster-autoscaler.yaml"><code>cluster-autoscaler.yaml</code></a> is the
 third, and the only manifest that resolves a version <strong>relative to the pin it is
 replacing</strong>. It reads the current <code>CA_VERSION</code> out of
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/autoscaler-cluster.sh"><code>scripts/autoscaler-cluster.sh</code></a> with a
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/autoscaler-cluster.sh"><code>scripts/e2e/autoscaler-cluster.sh</code></a> with a
 <code>file</code> source, then hands it to
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/updatecli/latest-cluster-autoscaler-patch.sh"><code>scripts/updatecli/latest-cluster-autoscaler-patch.sh</code></a>,
 which returns the newest patch published <strong>inside that same Kubernetes minor</strong> —
@@ -2599,12 +2599,12 @@ a git tag exists before its image is published, and the release tags
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/cluster-autoscaler.yaml"><code>cluster-autoscaler.yaml</code></a></td>
-<td><code>CA_VERSION</code> patch in <code>scripts/autoscaler-cluster.sh</code></td>
+<td><code>CA_VERSION</code> patch in <code>scripts/e2e/autoscaler-cluster.sh</code></td>
 <td>none (version-only; <code>file</code> source reads the current pin, <code>shell</code> source resolves the newest patch in its minor from the registry tag list)</td>
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/karpenter.yaml"><code>karpenter.yaml</code></a></td>
-<td><code>KARPENTER_VERSION</code> in <code>scripts/karpenter-cluster.sh</code></td>
+<td><code>KARPENTER_VERSION</code> in <code>scripts/e2e/karpenter-cluster.sh</code></td>
 <td>none (version-only; <code>githubrelease</code> — the harness builds from the git tag, so the repo's releases are the datasource)</td>
 </tr>
 </tbody>
@@ -2670,9 +2670,9 @@ rather than because automation is missing:</p>
   Kubernetes version (and the Calico compatibility window). Review and bump it by
   hand in the kind updatecli PR when the Kubernetes version should move.</li>
 <li><strong><code>CA_VERSION</code>'s Kubernetes minor, and <code>KWOK_VERSION</code></strong> (both copies — its
-  twin in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/karpenter-cluster.sh"><code>scripts/karpenter-cluster.sh</code></a>
+  twin in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/karpenter-cluster.sh"><code>scripts/e2e/karpenter-cluster.sh</code></a>
   is kept the same), in
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/autoscaler-cluster.sh"><code>scripts/autoscaler-cluster.sh</code></a> — the
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/autoscaler-cluster.sh"><code>scripts/e2e/autoscaler-cluster.sh</code></a> — the
   cluster-autoscaler and kwok releases behind the
   <a href="../testing/#the-live-autoscaler-drift-gate">live-autoscaler drift gate</a>.
   cluster-autoscaler ships one release series per Kubernetes minor and the

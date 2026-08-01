@@ -2531,7 +2531,7 @@ could have told you.</p>
 </tr>
 </tbody>
 </table>
-<p>Installation: <code>make hooks</code> (or <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/setup.sh"><code>scripts/setup.sh</code></a>, which
+<p>Installation: <code>make hooks</code> (or <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/setup.sh"><code>scripts/dev/setup.sh</code></a>, which
 runs it for you) points <code>core.hooksPath</code> at the in-repo <code>.githooks/</code> directory.
 The path is relative, so it resolves correctly in the main checkout and every
 linked worktree. Bypass the hook for a single commit with <code>git commit --no-verify</code>.</p>
@@ -2577,7 +2577,7 @@ linked worktree. Bypass the hook for a single commit with <code>git commit --no-
 </tr>
 <tr>
 <td>Structural rules</td>
-<td><code>scripts/lint-backlog.sh</code> — <code>docs/STATUS.md</code> format: no <code>**Next ID:**</code> counter (IDs come from <code>make queue-id</code>), unique IDs + anchors, 🔲/🚫-only states, Notes/trigger caps with the doc-link rule</td>
+<td><code>scripts/docs/lint-backlog.sh</code> — <code>docs/STATUS.md</code> format: no <code>**Next ID:**</code> counter (IDs come from <code>make queue-id</code>), unique IDs + anchors, 🔲/🚫-only states, Notes/trigger caps with the doc-link rule</td>
 <td><code>.githooks/pre-commit</code> (also enforces isolated STATUS.md commits); <code>make check</code>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/status-lint.yml"><code>status-lint.yml</code></a></td>
 </tr>
 <tr>
@@ -2612,7 +2612,7 @@ streams as it is produced. See <a href="../testing/#the-make-check-pre-review-ga
 formatting and linting (<code>gofmt -s</code>, <code>golangci-lint</code> with govet/staticcheck/
 ineffassign/unused per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.golangci.yml"><code>.golangci.yml</code></a>), supply-chain
 scanning (<code>govulncheck</code>, <code>trivy</code>), and custom structural eval scripts
-(<code>scripts/lint-backlog.sh</code>, <code>scripts/queue-unblock.sh</code>). Browser/screenshot
+(<code>scripts/docs/lint-backlog.sh</code>, <code>scripts/docs/queue-unblock.sh</code>). Browser/screenshot
 sensors are correctly absent — there is no user interface.</p>
 <h3 id="layer-by-speed--a">Layer by speed — A<a class="headerlink" href="#layer-by-speed--a" title="Permanent link">&para;</a></h3>
 <p>A clean three-rung ladder, fastest first: pre-commit hook (~0.5s) →
@@ -2636,14 +2636,14 @@ the one command rather than a single consolidated checklist.</p>
 <h3 id="self-reinforcing-correct-twice--automate--a">Self-reinforcing (correct twice → automate) — A<a class="headerlink" href="#self-reinforcing-correct-twice--automate--a" title="Permanent link">&para;</a></h3>
 <p>The article's core principle is visibly practiced. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.golangci.yml"><code>.golangci.yml</code></a>
 states its scope is to "catch regressions of the bugs and idiom violations
-tracked in Queue items 38–41." <code>scripts/lint-backlog.sh</code> exists solely because
+tracked in Queue items 38–41." <code>scripts/docs/lint-backlog.sh</code> exists solely because
 the <code>docs/STATUS.md</code> format (e.g. the 250-char Notes cap) kept getting violated.
 The workspace-guard PreToolUse hook is real-time backpressure on file
 operations, and branch-guard is the same on git operations — prompting
 before commits, pushes, or destructive commands on a protected branch. (These
 two guards are harness/<code>CLAUDE.md</code>-level, not repo-tracked hook scripts; the
-repo does track two PreToolUse hooks of its own, <code>scripts/claude-go-throttle-hook.sh</code>
-and <code>scripts/claude-no-subagent-workers-hook.sh</code>.) Each is a repeated correction
+repo does track two PreToolUse hooks of its own, <code>scripts/agent/claude-go-throttle-hook.sh</code>
+and <code>scripts/agent/claude-no-subagent-workers-hook.sh</code>.) Each is a repeated correction
 turned into an automated gate.</p>
 <h3 id="compress-success-expand-failure--a">Compress success, expand failure — A−<a class="headerlink" href="#compress-success-expand-failure--a" title="Permanent link">&para;</a></h3>
 <p>The agent-loop path is non-verbose by default (native compress-success /
@@ -2656,11 +2656,11 @@ helps).</p>
 <p>Backpressure now fires at commit latency, not only CI latency: a tracked,
 auto-installable, sub-second pre-commit hook plus the <code>make check</code> aggregate
 gate. The only deduction is that git cannot set <code>core.hooksPath</code> automatically
-on clone, so installation is a one-time <code>make hooks</code> / <code>scripts/setup.sh</code> step
+on clone, so installation is a one-time <code>make hooks</code> / <code>scripts/dev/setup.sh</code> step
 rather than truly automatic.</p>
 <h2 id="remaining-nits">Remaining nits<a class="headerlink" href="#remaining-nits" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Hook install is one-time, not automatic on clone</strong> — a git limitation; <code>make hooks</code> / <code>scripts/setup.sh</code> is the workaround.</li>
+<li><strong>Hook install is one-time, not automatic on clone</strong> — a git limitation; <code>make hooks</code> / <code>scripts/dev/setup.sh</code> is the workaround.</li>
 <li><strong><code>integration-test.yml</code> hard-codes <code>-v</code></strong> — noisy on green, but CI-only and useful for opaque envtest failures (deliberate).</li>
 <li><strong>The pre-commit hook covers <code>gofmt</code> + <code>STATUS.md</code> only, not <code>golangci-lint</code></strong> — deliberate, to stay sub-second; <code>golangci-lint</code> runs in <code>make check</code> and CI.</li>
 </ul>

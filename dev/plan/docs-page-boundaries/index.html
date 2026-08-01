@@ -2470,7 +2470,7 @@ that already existed twice: as <code>index.md</code>'s nine pillar cards and as
   existed — <code>why-gag.md</code>'s table links every one of them — so the cause was not a
   documentation gap. A bullet with nowhere to point keeps explaining itself
   inline until it is a paragraph.</li>
-<li><strong>The staleness had nowhere else to go.</strong> <code>scripts/check-roadmap.sh</code> already
+<li><strong>The staleness had nowhere else to go.</strong> <code>scripts/docs/check-roadmap.sh</code> already
   ties both forward-looking sections to <code>STATUS.md</code> through <code>&lt;!-- q:QN --&gt;</code>
   annotations, and all 15 markers resolved correctly. Its header records why
   "Available now" is exempt: shipped capability has no Queue row left to point
@@ -2535,7 +2535,7 @@ Folding them in would blunt the comparison, and the page is already ~3,000 words
 structural: <strong>every capability line in <code>features.md</code> carries a link.</strong> One line,
 one capability, one link to the doc that explains it. A capability with no doc to
 link is a documentation gap to file, not a longer bullet.</p>
-<p><code>scripts/check-roadmap.sh</code> enforces it (rule 5), alongside the four rules that
+<p><code>scripts/docs/check-roadmap.sh</code> enforces it (rule 5), alongside the four rules that
 already gate the roadmap's <code>&lt;!-- q: --&gt;</code> annotations. That makes the failure mode
 that produced the wall of text mechanically impossible rather than a matter of
 review attention.</p>
@@ -2574,7 +2574,7 @@ cost; this applies the same move to the rest of the parked register.</p>
 <ul>
 <li><code>check-roadmap.sh</code> reads both <code>## Queue</code> and <code>## Deferred</code> out of one file to
   classify a bullet; it needs the second path.</li>
-<li><code>scripts/lint-backlog.sh</code> rules span both tables (rule 8 moves a <code>flake</code> row
+<li><code>scripts/docs/lint-backlog.sh</code> rules span both tables (rule 8 moves a <code>flake</code> row
   from Queue to Flake watch).</li>
 <li><code>#QNNN</code> deep links from other docs resolve against <code>STATUS.md</code> today and would
   need retargeting.</li>
