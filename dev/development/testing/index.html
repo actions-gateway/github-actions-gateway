@@ -2795,6 +2795,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#pin-the-process-when-the-signal-comes-out-of-its-memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pin the process when the signal comes out of its memory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#script-tests-neutralize-the-clock-never-measure-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3800,6 +3811,10 @@ that outlives the object that made it — the fake is the first thing to fix, be
 <li><strong>Wait on the client the code under test reads</strong>, not the one that is convenient. Where an object has both, the cached one is the later observer.</li>
 <li><strong>A one-shot stimulus needs the stronger barrier.</strong> The same file's scale-set test may wait on <code>k8sClient</code>: it asserts a per-poll advertisement that re-reads on every poll, so a stale read self-corrects. A single delivered job has no such recovery — which is why <code>waitForCapacityDeclined</code> takes its reader as an explicit parameter, making the choice visible at each call site.</li>
 </ul>
+<h3 id="pin-the-process-when-the-signal-comes-out-of-its-memory">Pin the process when the signal comes out of its memory<a class="headerlink" href="#pin-the-process-when-the-signal-comes-out-of-its-memory" title="Permanent link">&para;</a></h3>
+<p>Synchronizing on the right signal is not enough when the controller produces that signal from state it holds <strong>in memory</strong>, downstream of something durable it has already written. The outcome then depends on one process surviving a window, and a process replaced inside that window forecloses the outcome permanently — so the wait expires on a decision already made, no timeout reaches it, and the failure reads as exactly the defect the test was written to catch.</p>
+<p>Q549 is the worked case. <code>RecoverEvictedScaleSetWorkers</code> claims a disrupted scale-set worker by stamping <code>actions-gateway.com/eviction-handled-at</code> on the pod, and only then hands off to <code>handleEviction</code>, which waits out <code>evictionRetryDelay</code> on a goroutine before calling GitHub. The claim is durable and at-most-once — every later scan skips an annotated pod, deliberately, because the deletion arm's evidence <em>is</em> the pod and the deletion removes it. The re-run is neither durable nor replayable. On run 30658951388 the GMC rolled the tenant's AGC Deployment mid-window: the outgoing pod won the claim at 20:00:19Z, the incoming pod's only claim attempt lost the optimistic lock a second later and skipped, and the e2e re-run wait spent its 90 s on an outcome already decided. What rules out the alternative reading — a re-run attempted and refused — is the absence of any <code>EvictionRerunFailed</code> event, which <code>rerunUntilAccepted</code> records on every terminal failure.</p>
+<p>So: <strong>name the process the assertion depends on, pin its identity before the window, and re-read that pin before believing a negative.</strong> <code>agcPodIdentity</code> (the AGC Deployment's sorted pod UIDs) is the pin the scale-set recovery spec uses. An unchanged pin turns "no re-run" into a real failure worth reporting; a changed one says the attempt measured nothing, and the spec re-stages rather than asserting on it.</p>
 <h3 id="script-tests-neutralize-the-clock-never-measure-it">Script tests: neutralize the clock, never measure it<a class="headerlink" href="#script-tests-neutralize-the-clock-never-measure-it" title="Permanent link">&para;</a></h3>
 <p>The rules above are written for the Go tiers, but the <code>scripts/</code> tier needs its own statement of them, because it is the <strong>most load-contended tier in the repo</strong> and the one most likely to be written with a real-clock assertion. <code>make scripts-test</code> runs all 34 suites concurrently through <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh"><code>scripts/ci/run-parallel.sh</code></a>, inside a <code>make check</code> that is already saturating the machine with the Go tests. A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.</p>
 <p><strong>So a script test must never assert on wall-clock time it actually spent.</strong> Stub <code>sleep</code> — it is a plain command, so a shell function shadows it — and assert on what the stub recorded. Two established shapes, both in-tree:</p>
