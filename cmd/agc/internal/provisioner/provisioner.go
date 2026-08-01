@@ -820,10 +820,15 @@ func scaleSetPodName(ownerName, jobID string) string {
 //
 // It is safe to call for a job whose pod is still terminating: the kubelet has long
 // since materialized the mounted volume and does not tear a running pod down when its
-// Secret disappears. It is also safe — and deliberate — for a job completed before its
-// pod ever started (a cancellation): that pod can no longer mount the Secret, so it
-// stalls Pending and the reconciler's pending-deadline reaper collects it, which is the
-// right outcome for a job that will never run.
+// Secret disappears.
+//
+// A job completed before its pod ever started (a cancellation, or a replayed queue) is
+// the case the listener works to avoid reaching: it handles a batch's completions before
+// its assignments and refuses to provision a job already known completed, so no pod is
+// built for a job whose Secret is already reclaimed (Q575). When the completion arrives
+// after the pod exists anyway, the pod can no longer mount the Secret — markJobCompleted
+// stamps it below, and the reaper collects it on completedJobPendingGrace rather than
+// leaving it to sit out the unrelated pendingPodDeadline.
 //
 // It is idempotent (a NotFound is success), so a replayed completion message, or a
 // completion for a job whose Secret a failure path already unstaged, is a no-op.
@@ -854,8 +859,12 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 //
 // It is set-once: a replayed completion (a re-created session polls from cursor 0) must
 // not push the deadline back, so an already-stamped pod is left alone. A pod that does
-// not exist yet — a job cancelled before its worker was created — is not an error: that
-// pod stalls Pending on the deleted Secret and the pending-deadline reaper collects it.
+// not exist is not an error — a job cancelled before its worker was created has nothing
+// to stamp, and the listener will not build one for it afterwards (Q575).
+//
+// A Pending pod is stamped as well as a Running one, and the reaper reads the stamp in
+// both arms: Pending means the pod never mounted its now-reclaimed Secret and can only
+// be collected, Running means the runner is shutting down (Q420).
 //
 // A pod that has already reached a terminal phase — the ordinary case, where the runner
 // ran the job and exited — is left unstamped: completedPodTTL already owns it, so the

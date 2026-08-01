@@ -24,6 +24,12 @@ const (
 	// split out from completed_ttl so an operator debugging a killed long job sees
 	// the lifetime cap as the cause rather than a mystery termination (Q438).
 	reapReasonLifetimeExceeded = "lifetime_exceeded"
+	// reapReasonCompletedPending labels a pod deleted because it was still Pending
+	// after its job went terminal at GitHub — a worker that can no longer start,
+	// because the completion reclaimed the JIT-config Secret it mounts. It is split
+	// out from pending_deadline so an operator is not sent after a scheduling problem
+	// that does not exist (Q575).
+	reapReasonCompletedPending = "completed_pending"
 )
 
 // podReasonDeadlineExceeded is the Pod.Status.Reason the kubelet sets when it kills
@@ -43,6 +49,11 @@ const podReasonDeadlineExceeded = "DeadlineExceeded"
 //     Deleting it resolves the waiting session goroutine (the
 //     InformerPodWaiter treats deletion as completion), which releases the
 //     listener and the slot; that goroutine's cleanup deletes the job Secret;
+//   - Pending pods completedJobPendingGrace after their job went terminal at
+//     GitHub, well before that deadline: such a pod never mounted the Secret its
+//     job's completion reclaimed, so it cannot start and has nothing to run
+//     (Q575). Like the Running arm below, this reads a stamp only the scale-set
+//     tier writes;
 //   - Running pods still alive completedJobRunningGrace after their job went
 //     terminal at GitHub. Classic pods are never stamped with the completion
 //     annotation this arm reads (provision() owns them through to a terminal
@@ -75,6 +86,13 @@ func (r *RunnerGroupReconciler) reapWorkerPods(ctx context.Context, log *slog.Lo
 				r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodOrphanedRunning", "ReapWorkerPods",
 					"worker pod %s was still Running %s after its job completed and has been deleted; "+
 						"the runner never received its job, or a container in the pod outlived it", podName, grace)
+			},
+			emitCompletedPending: func(podName string, grace time.Duration) {
+				// Operator-visible, and deliberately not WorkerPodStuckPending: the
+				// scheduler is not the problem, the job simply ended first (Q575).
+				r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodCompletedPending", "ReapWorkerPods",
+					"worker pod %s was still Pending %s after its job completed and has been deleted; "+
+						"the job ended before the pod could start, so the pod had nothing to run", podName, grace)
 			},
 			emitLifetimeExceeded: func(podName string) {
 				// Operator-visible: say plainly that the lifetime cap killed the pod and

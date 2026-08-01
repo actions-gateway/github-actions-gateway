@@ -220,6 +220,16 @@ type workerPodCounts struct {
 // minutes is far above observed runner shutdown and still bounds the leak.
 const completedJobRunningGrace = 5 * time.Minute
 
+// completedJobPendingGrace is how long a worker pod may still be Pending after GitHub
+// declared its job terminal before the reaper deletes it. Such a pod cannot run — its
+// job is over — and usually cannot even start, because the completion reclaimed the
+// JIT-config Secret it mounts (Q575).
+//
+// It is far shorter than completedJobRunningGrace because there is no runner shutdown to
+// wait out: the only thing the grace buys is letting a pod that was already mid-start
+// reach Running, so the Running arm and its own grace own it instead of this one.
+const completedJobPendingGrace = 30 * time.Second
+
 // reapHooks are the owner-bound side effects the shared reaper calls out to. Every
 // field is optional; a nil hook is skipped. They are grouped rather than passed
 // positionally because both reconcilers wire several and the list only grows.
@@ -230,6 +240,9 @@ type reapHooks struct {
 	emitStuckPending     func(podName string, deadline time.Duration)
 	emitOrphanedRunning  func(podName string, grace time.Duration)
 	emitLifetimeExceeded func(podName string)
+	// emitCompletedPending records the Event for a pod reaped while still Pending
+	// because its job had already completed (Q575).
+	emitCompletedPending func(podName string, grace time.Duration)
 	// deregisterRunner removes the GitHub runner record a scale-set worker registered,
 	// called with the name from provisioner.AnnotationRunnerName just before the pod is
 	// deleted (Q550). Only the scale-set tier wires it, and only a pod carrying the
@@ -240,11 +253,11 @@ type reapHooks struct {
 
 // reapWorkerPodsByLabel deletes worker pods (selected by labelKey == name in
 // namespace) that the owning CR no longer needs: terminal pods older than ttl,
-// Pending pods older than deadline, and Running pods still alive more than
-// completedJobRunningGrace after their job completed. It returns the time until the
-// earliest retained pod becomes due (0 = none), pod counts by phase (for status), and
-// any error. metrics may be nil. Shared by both reconcilers' reapers so the reap logic
-// is defined once.
+// Pending pods older than deadline, and pods still Pending or Running more than
+// completedJobPendingGrace / completedJobRunningGrace after their job completed at
+// GitHub. It returns the time until the earliest retained pod becomes due (0 = none),
+// pod counts by phase (for status), and any error. metrics may be nil. Shared by both
+// reconcilers' reapers so the reap logic is defined once.
 func reapWorkerPodsByLabel(
 	ctx context.Context,
 	c client.Client,
@@ -307,8 +320,19 @@ func reapWorkerPodsByLabel(
 			}
 		case corev1.PodPending:
 			counts.pending++
-			due = pod.CreationTimestamp.Add(deadline)
-			reason = reapReasonPendingDeadline
+			// A Pending pod whose job is already over at GitHub will never start: its
+			// JIT-config Secret is reclaimed on that completion, and a pod that has not
+			// mounted yet cannot mount a Secret that is gone. Waiting out
+			// pendingPodDeadline (10m by default) held a concurrency slot and a node for
+			// a pod that had nothing to run, and reported it as a scheduling stall
+			// (Q575). The stamp is the same one the Running arm reads.
+			if completedAt, ok := jobCompletedAt(pod); ok {
+				due = completedAt.Add(completedJobPendingGrace)
+				reason = reapReasonCompletedPending
+			} else {
+				due = pod.CreationTimestamp.Add(deadline)
+				reason = reapReasonPendingDeadline
+			}
 		default:
 			continue
 		}
@@ -360,6 +384,9 @@ func reapWorkerPodsByLabel(
 		}
 		if reason == reapReasonLifetimeExceeded && hooks.emitLifetimeExceeded != nil {
 			hooks.emitLifetimeExceeded(pod.Name)
+		}
+		if reason == reapReasonCompletedPending && hooks.emitCompletedPending != nil {
+			hooks.emitCompletedPending(pod.Name, completedJobPendingGrace)
 		}
 	}
 	return next, counts, nil
