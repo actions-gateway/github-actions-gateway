@@ -14,7 +14,7 @@ hide:
 
 <p class="gag-eyebrow">Multi-tenant runner platform for Kubernetes</p>
 
-# Self-hosted GitHub Actions with zero idle compute
+# <span class="gag-hero__phrase">Self-hosted GitHub Actions</span> with <span class="gag-hero__phrase">zero idle compute</span>
 
 </div>
 
