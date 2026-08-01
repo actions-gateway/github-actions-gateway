@@ -2631,14 +2631,6 @@
 <td>The AGC is the sole reaper; GMC deletes it on gateway delete and leaves worker pods behind — do-not-disrupt annotations then pin billable nodes forever (2026-07-31 dogfood). Cascade-reap tenant workers on gateway deletion, or add pod ownerRefs/TTL.</td>
 </tr>
 <tr>
-<td><a id="Q582"></a>Q582</td>
-<td><a href="../operations/migration-v1-to-v2/#step-3--coexistence-validation-and-rollback">The v1 and v2 proxy pools collide throughout migration coexistence</a></td>
-<td><code>bug</code> <code>infra</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Both stamp <code>app: actions-gateway-proxy</code>, so post-<code>gag-migrate</code> each pool's pods match the other's PDB, both HPAs wedge on <code>AmbiguousSelector</code> (neither autoscales), and hostname anti-affinity makes coexistence cost v1+v2 nodes. Found via Q570.</td>
-</tr>
-<tr>
 <td><a id="Q585"></a>Q585</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go">The migration spec's teardown deletes the namespace without deleting the gateway first</a></td>
 <td><code>tests</code> <code>bug</code></td>

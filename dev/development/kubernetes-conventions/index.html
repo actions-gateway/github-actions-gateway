@@ -2386,6 +2386,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-selector-a-coexisting-controller-also-matches-is-a-cross-wire-q582" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A selector a coexisting controller also matches is a cross-wire (Q582)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#derive-every-name-through-apiapinames-q467-q473" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2668,6 +2679,11 @@ package. Controller-set v2 labels:</p>
   controller's Pod watch, reaper, and agent pool filter on it. Distinct from the v1
   <code>actions-gateway/runner-group</code> key so the v1 and v2 controllers never cross-wire
   during coexistence.</li>
+<li><code>actions-gateway.com/egress-proxy: &lt;name&gt;</code> — stamped on every <code>EgressProxy</code> child and
+  pool pod, and the <strong>sole</strong> key of that pool's <code>Deployment</code>/<code>Service</code>/PDB/<code>NetworkPolicy</code>
+  selectors and its hostname anti-affinity term. Distinct from v1's bare
+  <code>app: actions-gateway-proxy</code> for the same coexistence reason, and it is the <em>selector</em>
+  that matters here, not just the name — see <a href="#a-selector-a-coexisting-controller-also-matches-is-a-cross-wire-q582">below</a>.</li>
 </ul>
 <h3 id="derive-a-per-owner-name-from-the-owners-kind-not-just-its-name-q466">Derive a per-owner name from the owner's <em>kind</em>, not just its name (Q466)<a class="headerlink" href="#derive-a-per-owner-name-from-the-owners-kind-not-just-its-name-q466" title="Permanent link">&para;</a></h3>
 <p>A v1 <code>RunnerGroup</code> and a v2 <code>RunnerSet</code> of the same name share one namespace for the
@@ -2714,6 +2730,35 @@ across, not orphan them. <code>agentpool.AdoptLegacyRunnerSetSecrets</code> is t
 first reconcile after the rename, copy each old-named object to its new name (preserving
 the payload, so no external registration is re-issued) and delete the original, gated on
 a check that the old name is not in use by the <em>other</em> kind.</p>
+<h3 id="a-selector-a-coexisting-controller-also-matches-is-a-cross-wire-q582">A selector a coexisting controller also matches is a cross-wire (Q582)<a class="headerlink" href="#a-selector-a-coexisting-controller-also-matches-is-a-cross-wire-q582" title="Permanent link">&para;</a></h3>
+<p>Q466 above splits derived <em>names</em>. The same coexistence window breaks a <em>selector</em> that
+two controllers both match, and it breaks it in places that carry no name at all. The v2
+<code>EgressProxy</code> pool used to stamp v1's <code>app: actions-gateway-proxy</code> alongside its own
+identity label, purely so generic tooling could find proxy pods. Names were already
+split — the pools are <code>actions-gateway-proxy</code> and <code>&lt;proxy&gt;-proxy</code> — but v1 keys its PDB
+selector, its <code>Deployment</code> selector, and its hostname anti-affinity term on that one bare
+label, because v1 has a single pool per namespace and never had to distinguish it. So
+every one of those reached into the v2 pool: each pool's pods fell under both PDBs (a pod
+covered by two is one the eviction API refuses to evict), both <code>HorizontalPodAutoscaler</code>s
+wedged on <code>AmbiguousSelector</code>, and the pools repelled each other off every node.</p>
+<p>Three things to carry forward when adding a label to a v2 object:</p>
+<ul>
+<li><strong>A shared label is a shared selector until proven otherwise.</strong> Trace every consumer
+  before stamping one: PDBs, <code>Service</code>s, <code>NetworkPolicy</code> pod selectors <em>and peers</em>, pod
+  (anti-)affinity terms, and CNI-native policy selectors. An HPA is the trap — it has no
+  selector of its own, so it never appears in a grep for the label, yet it inherits its
+  scale target's and wedges on an overlap.</li>
+<li><strong><code>Deployment.spec.selector</code> is immutable</strong>, so narrowing one is a delete-and-recreate
+  of a live workload, not a patch. Prefer the fix that lands on the <em>newer</em> side: v2's
+  pools are alpha and a migration creates them after the upgrade, whereas every install
+  has a running v1 pool. <code>EgressProxyReconciler.applyDeployment</code> carries the recreate for
+  pools that predate the narrowing, mirroring <code>applyRoleBinding</code>'s immutable-<code>roleRef</code>
+  path.</li>
+<li><strong>Generic identity belongs in the recommended labels</strong>, which nothing selects on.
+  <code>app.kubernetes.io/name=actions-gateway-proxy</code> is on both pools' pods and is the
+  version-agnostic way to list every proxy pod; a functional selector must key on the
+  owning object's identity label instead.</li>
+</ul>
 <h3 id="derive-every-name-through-apiapinames-q467-q473">Derive every name through <code>api/apinames</code> (Q467, Q473)<a class="headerlink" href="#derive-every-name-through-apiapinames-q467-q473" title="Permanent link">&para;</a></h3>
 <p><strong>All name derivation goes through <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apinames/names.go"><code>api/apinames</code></a>.</strong> It
 lives in the neutral <code>api</code> module because the GMC derives the v1 RunnerGroup name,

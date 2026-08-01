@@ -4089,11 +4089,15 @@ must never over-gate.</p>
   metrics-mTLS bundle below, reconciled by the GMC). Nothing owns the <code>EgressProxy</code>.
   Each child is derived as <code>&lt;ep&gt;-proxy</code> (the TLS Secret as <code>&lt;ep&gt;-proxy-tls</code>) and
   carries the per-<code>EgressProxy</code> identity label <code>actions-gateway.com/egress-proxy:
-  &lt;name&gt;</code>; every Deployment / Service / PDB / HPA / NetworkPolicy selector and the pod
-  anti-affinity key on that label. This is load-bearing twice: it keeps multiple proxy
-  pools in one namespace selector-isolated (v1 could assume one proxy per namespace),
-  and because each pool is now its own Deployment, proxy metrics carry the proxy
-  identity automatically. Same-namespace only at M2; cross-namespace sharing is M4.</li>
+  &lt;name&gt;</code>; it is the <strong>sole</strong> key of every Deployment / Service / PDB / NetworkPolicy
+  selector and of the pod anti-affinity term. This is load-bearing three times over: it
+  keeps multiple proxy pools in one namespace selector-isolated (v1 could assume one
+  proxy per namespace); it keeps a pool clear of a coexisting <em>v1</em> pool, which selects
+  on the bare <code>app: actions-gateway-proxy</code> a v2 pod deliberately does not carry (Q582 —
+  sharing it put each pool's pods under the other's PDB, wedged both HPAs on
+  <code>AmbiguousSelector</code>, and made the pools repel each other off every node); and because
+  each pool is now its own Deployment, proxy metrics carry the proxy identity
+  automatically. Same-namespace only at M2; cross-namespace sharing is M4.</li>
 <li><strong>Proxy metrics-mTLS + ServiceMonitor (Q324, at classic parity).</strong> The proxy
     serves <code>/metrics</code> over mutual TLS on <code>:8443</code>, requiring a scraper client cert
     signed by this <code>EgressProxy</code>'s <em>own</em> metrics CA (never shared with the AGC or
