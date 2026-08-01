@@ -2408,6 +2408,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#tolerate-kubectlkubernetesiorestartedat-on-a-managed-pod-template-q552" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tolerate kubectl.kubernetes.io/restartedAt on a managed pod template (Q552)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#recommended-appkubernetesio-labels-q205" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2777,6 +2788,24 @@ finalizers under the <code>OwnerReferencesPermissionEnforcement</code> admission
 <p>The shared <code>actions-gateway/component: workload</code> selector label is carried by both
 v1 and v2 worker/AGC pods (it backs the workload NetworkPolicy selector), so the
 egress-lockdown posture is identical across the two APIs.</p>
+<h3 id="tolerate-kubectlkubernetesiorestartedat-on-a-managed-pod-template-q552">Tolerate <code>kubectl.kubernetes.io/restartedAt</code> on a managed pod template (Q552)<a class="headerlink" href="#tolerate-kubectlkubernetesiorestartedat-on-a-managed-pod-template-q552" title="Permanent link">&para;</a></h3>
+<p>A GMC-managed Deployment's pod template is rebuilt from the CR on every reconcile, so
+anything an operator hand-edits onto it is reverted. That is the intended contract for
+config drift — the CR is the source of truth — but it also reverted the annotation
+<code>kubectl rollout restart</code> patches in, making the restart a silent no-op: kubectl reports
+the <em>old</em>, trivially-complete ReplicaSet as successfully rolled out. Every runbook that
+prescribed a restart was therefore prescribing nothing.</p>
+<p><code>assignManagedPodTemplate</code>
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/deployment_restart_annotation.go"><code>cmd/gmc/internal/controller/deployment_restart_annotation.go</code></a>)
+carries the keys in <code>toleratedTemplateAnnotations</code> over from the live template instead
+of reverting them; every GMC Deployment apply path routes its template assignment
+through it.</p>
+<p>That list is deliberately one well-known key rather than a preserve-anything-unmanaged
+rule. Preserving unmanaged keys wholesale would mean the GMC could never <em>remove</em> an
+annotation it had stopped setting, and would quietly turn the pod template into a
+partially-unowned surface. Adding a key here is a decision to give up reconciliation of
+that key — take it one key at a time, and pin it with a test that the <em>unlisted</em> keys
+are still reverted.</p>
 <h3 id="recommended-appkubernetesio-labels-q205">Recommended <code>app.kubernetes.io/*</code> labels (Q205)<a class="headerlink" href="#recommended-appkubernetesio-labels-q205" title="Permanent link">&para;</a></h3>
 <p>Every object the GMC or AGC creates also carries the Kubernetes
 <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/">recommended labels</a>

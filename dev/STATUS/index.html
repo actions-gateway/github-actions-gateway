@@ -2655,14 +2655,6 @@
 <td><code>BuildProxyTrustPool</code> builds system roots + the proxy CA, so a private-CA appliance fails the TLS handshake. Named as out of scope by Q506's audit, "needs its own item if the project commits to GHES" — Q506 shipping Option A is that commitment.</td>
 </tr>
 <tr>
-<td><a id="Q552"></a>Q552</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/gmc/internal/controller">GMC reverts a <code>kubectl rollout restart</code> of a managed AGC Deployment</a></td>
-<td><code>bug</code> <code>infra</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>agc-bounce</code> printed "rolled out" but the old pod survived (2026-07-31): the GMC reconcile stomps the <code>restartedAt</code> template annotation. troubleshooting.md prescribes this restart in three runbooks — all silent no-ops. Tolerate the annotation.</td>
-</tr>
-<tr>
 <td><a id="Q580"></a>Q580</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/stop.sh"><code>stop.sh</code> sends a failed drain to an escape hatch Q552 says is a no-op</a></td>
 <td><code>infra</code> <code>docs</code> <code>retro</code></td>
