@@ -25,3 +25,10 @@ for dir in $(workspace_modules); do
 	echo "==> govulncheck $dir"
 	(cd "$dir" && "$GOVULNCHECK" ./...)
 done
+
+# Modules outside go.work are invisible to the workspace build list, so they get
+# their own GOWORK=off pass.
+for dir in $(firstparty_nonworkspace_modules); do
+	echo "==> govulncheck $dir (GOWORK=off)"
+	(cd "$dir" && GOWORK=off "$GOVULNCHECK" ./...)
+done

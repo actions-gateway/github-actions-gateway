@@ -210,10 +210,32 @@ compute_scope() {
 
 # --- lint --------------------------------------------------------------------
 
+# lint_module DIR J_FLAG GOWORK — run golangci-lint in DIR. GOWORK is "off" for a
+# module outside go.work, empty otherwise.
+lint_module() {
+	local dir="$1" j_flag="$2" gowork="$3"
+	echo "==> golangci-lint $dir${gowork:+ (GOWORK=$gowork)}"
+	(
+		cd "$dir"
+		[[ -n "$THROTTLE_JOBS" ]] && export GOMAXPROCS="$THROTTLE_JOBS"
+		[[ -n "$gowork" ]] && export GOWORK="$gowork"
+		# shellcheck disable=SC2086  # flag string and the throttle prefix word-split intentionally
+		$THROTTLE_PREFIX "$GOLANGCI_LINT" run $j_flag --config "$REPO_ROOT/.golangci.yml" ./...
+	)
+}
+
 main() {
-	local unformatted
-	# shellcheck disable=SC2046  # module paths word-split intentionally (no spaces in go.work paths)
-	unformatted="$(gofmt -l $(workspace_modules))"
+	local unformatted gofmt_dirs dir
+	gofmt_dirs="$(workspace_modules)"
+	# A non-workspace module vendors inside its own tree, and vendored
+	# third-party source is not gofmt-clean. `go list` yields the module's own
+	# package dirs and nothing under vendor/. Workspace modules need no such
+	# filter: their vendor tree is the shared one at the repo root.
+	for dir in $(firstparty_nonworkspace_modules); do
+		gofmt_dirs+=" $(cd "$dir" && GOWORK=off go list -f '{{.Dir}}' ./...)"
+	done
+	# shellcheck disable=SC2086  # module paths word-split intentionally (no spaces in go.work paths)
+	unformatted="$(gofmt -l $gofmt_dirs)"
 	if [[ -n "$unformatted" ]]; then
 		echo "gofmt: the following files are not formatted:"
 		echo "$unformatted"
@@ -267,13 +289,14 @@ main() {
 	local dir
 	# shellcheck disable=SC2086  # lint_dirs word-splits intentionally (no spaces in go.work paths)
 	for dir in $lint_dirs; do
-		echo "==> golangci-lint $dir"
-		(
-			cd "$dir"
-			[[ -n "$THROTTLE_JOBS" ]] && export GOMAXPROCS="$THROTTLE_JOBS"
-			# shellcheck disable=SC2086  # flag string and the throttle prefix word-split intentionally
-			$THROTTLE_PREFIX "$GOLANGCI_LINT" run $j_flag --config "$REPO_ROOT/.golangci.yml" ./...
-		)
+		lint_module "$dir" "$j_flag" ""
+	done
+
+	# Modules outside go.work carry no replace edges, so the scoping above cannot
+	# see them. They are small and always linted rather than plumbed into
+	# compute_scope, which derives its graph from the workspace.
+	for dir in $(firstparty_nonworkspace_modules); do
+		lint_module "$dir" "$j_flag" off
 	done
 }
 

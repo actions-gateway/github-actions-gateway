@@ -7,8 +7,9 @@
 #   1. scripts/go/go-work-tidy.sh    - tidy every workspace module leaf-first
 #   2. go work sync               - push the resolved build list into each module
 #   3. go work vendor             - rebuild the shared repo-root vendor/ from go.sum
-#   4. (cd tools; go mod vendor)  - rebuild the tools module's own vendor/ (GOWORK=off)
-#   5. gen-third-party-notices.sh - regenerate THIRD-PARTY-NOTICES from vendor/
+#   4. (cd tools; go mod vendor)    - rebuild the tools module's own vendor/ (GOWORK=off)
+#   5. (cd devtools; go mod vendor) - same, for the first-party tooling module
+#   6. gen-third-party-notices.sh   - regenerate THIRD-PARTY-NOTICES from vendor/
 #
 # This is the single command that clears all three drift gates at once —
 # tidy-check (Q94), vendor-check (Q126), and license-notices. It is the remedy a
@@ -34,6 +35,8 @@ echo "re-vendoring workspace (go work vendor)..."
 go work vendor
 echo "re-vendoring tools module (cd tools && go mod vendor)..."
 (cd tools && GOWORK=off go mod vendor)
+echo "re-vendoring devtools module (cd devtools && go mod vendor)..."
+(cd devtools && GOWORK=off go mod vendor)
 echo "regenerating THIRD-PARTY-NOTICES (scripts/release/gen-third-party-notices.sh)..."
 scripts/release/gen-third-party-notices.sh
 echo "vendor sync complete — review 'git status' for any updated files."

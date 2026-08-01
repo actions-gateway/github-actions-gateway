@@ -105,6 +105,12 @@ jobs:
               # runs in this job. Without this the announce-bar hook could change
               # with its own test never running.
               - 'hooks/**'
+              # devtools/ is the first-party Go tooling module (Q584). It backs
+              # gates this job runs — check-path-filters.sh builds and execs
+              # devtools/ci/pathfilters — so a change there must re-run them.
+              # Deliberately narrow: it is outside go.work precisely so tooling
+              # edits never reach the e2e or security lanes.
+              - 'devtools/**'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
             # Vendor-integrity gate scope: anything that determines what the
@@ -114,6 +120,7 @@ jobs:
             vendor:
               - 'vendor/**'
               - 'tools/vendor/**'
+              - 'devtools/vendor/**'
               - '**/go.mod'
               - '**/go.sum'
               - 'go.work'
