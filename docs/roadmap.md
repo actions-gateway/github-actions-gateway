@@ -157,6 +157,22 @@ last gaps an outside operator hits.
   phases are measurement, the mirror deployment, and live-validated
   enforcement on our own end-to-end CI.
 
+- **A curated runner template library.** <!-- q:Q554 --> Every tenant writes its
+  own worker pod template from scratch today, including the fiddly parts: the
+  Docker-in-Docker sidecar, the Kata `runtimeClassName`, the volume and
+  security-context wiring. The templates our own end-to-end CI exercises on every
+  run — Kata DinD, privileged DinD, and a plain baseline — become a shipped
+  kustomize base you patch, rather than a snippet you copy out of the docs. No
+  new API surface, and the bar for publishing a template is that CI actually runs
+  it, so a shipped template is one that demonstrably works.
+- **Opt-in auto-retry for flaky jobs.** <!-- q:Q555 --> A job the cluster
+  disrupts — evicted, preempted, drained — already re-runs automatically. A job
+  that simply failed flakily does not, so today that is someone re-running it by
+  hand. The same machinery can cover it, opted in per runner set and given its
+  own retry budget so a genuinely broken test cannot loop. Detection comes first:
+  the gateway has to measure re-run-then-pass rates before acting on them is
+  honest, and that measurement is the next step rather than the API shape.
+
 Everything else on this roadmap has either shipped (above) or is waiting on a
 gate rather than on engineering time (below); the active backlog also carries
 bug-fix, measurement, and test work behind capability that already exists.
