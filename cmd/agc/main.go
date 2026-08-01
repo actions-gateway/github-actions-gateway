@@ -236,7 +236,7 @@ func run() error {
 	// MUST run before any proxy-traversing client is built (the token provider,
 	// the provisioner's GitHub client), so those clients pick up the proxy CA — an
 	// ordering dependency that is invisible until it breaks.
-	if err := configureProxyTrust(); err != nil {
+	if err := configureProxyTrust(proxyCACertDir, ctrl.Log.WithName("proxy-trust")); err != nil {
 		return err
 	}
 
@@ -580,7 +580,7 @@ func registerReconcilers(mgr ctrl.Manager, deps reconcilerDeps) error {
 
 // configureProxyTrust installs the per-tenant egress proxy's self-signed CA into
 // the process-wide http.DefaultTransport trust pool, when the GMC has mounted it
-// at proxyCACertDir/tls.crt.
+// at certDir/tls.crt.
 //
 // The GMC mounts the proxy's self-signed TLS cert (public part only) there.
 // Adding it to the trust pool — alongside the system roots — lets the AGC
@@ -596,20 +596,33 @@ func registerReconcilers(mgr ctrl.Manager, deps reconcilerDeps) error {
 // validate for the proxy hostname.
 //
 // If the file is absent (local dev, no TLS proxy) this is a no-op and the standard
-// transport uses HTTP proxy as before. It mutates the global transport, so it must
-// run before any proxy-traversing client is constructed (AGC proxy-client init
-// order, see the project memory).
-func configureProxyTrust() error {
-	proxyCACert := filepath.Join(proxyCACertDir, "tls.crt")
+// transport uses HTTP proxy as before. Any other read error — a permission-denied
+// mount above all — is fatal rather than a no-op, mirroring buildMetricsOptions:
+// a mounted-but-unreadable CA is a misconfiguration, and silently continuing
+// without proxy trust hides it behind unrelated x509 failures later (Q520).
+//
+// It mutates the global transport, so it must run before any proxy-traversing
+// client is constructed (AGC proxy-client init order, see the project memory).
+func configureProxyTrust(certDir string, log logr.Logger) error {
+	proxyCACert := filepath.Join(certDir, "tls.crt")
 	certPEM, err := os.ReadFile(proxyCACert)
 	if err != nil {
-		// Absent or unreadable file: treated as no TLS proxy configured; the
-		// default transport is left unchanged.
-		return nil
+		if os.IsNotExist(err) {
+			log.Info("proxy CA cert absent; leaving the default transport unchanged (no TLS egress proxy)", "path", proxyCACert)
+			return nil
+		}
+		return fmt.Errorf("read proxy CA %s: %w", proxyCACert, err)
 	}
 	pool, err := transport.BuildProxyTrustPool(certPEM)
 	if err != nil {
 		return fmt.Errorf("build proxy trust pool from %s: %w", proxyCACert, err)
+	}
+	if pool == nil {
+		// Empty file: tolerated as a no-op, matching the worker entrypoint
+		// wrapper. Logged so the mounted-but-empty case is distinguishable from
+		// the unmounted one.
+		log.Info("proxy CA cert is empty; leaving the default transport unchanged", "path", proxyCACert)
+		return nil
 	}
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.TLSClientConfig = &tls.Config{RootCAs: pool}
