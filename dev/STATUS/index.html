@@ -2663,6 +2663,14 @@
 <td><code>agc-bounce</code> printed "rolled out" but the old pod survived (2026-07-31): the GMC reconcile stomps the <code>restartedAt</code> template annotation. troubleshooting.md prescribes this restart in three runbooks — all silent no-ops. Tolerate the annotation.</td>
 </tr>
 <tr>
+<td><a id="Q580"></a>Q580</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/stop.sh"><code>stop.sh</code> sends a failed drain to an escape hatch Q552 says is a no-op</a></td>
+<td><code>infra</code> <code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The drain-failure message prescribes <code>agc-bounce</code>; Q552 says the GMC stomps <code>restartedAt</code>, making it a no-op. A 2026-08-01 bounce reported success and cleared nothing. Verify, then fix or drop the advice.</td>
+</tr>
+<tr>
 <td><a id="Q547"></a>Q547</td>
 <td><a href="../plan/gke-dogfood/#f3-e2e-operations--on-demand">Deleting an ActionsGateway orphans its in-flight worker pods</a></td>
 <td><code>bug</code> <code>infra</code></td>
