@@ -2768,9 +2768,32 @@ preference order:</p>
 plugin the operator installs per that repo's README. After a <code>gh pr create</code> or a
 PR-branch <code>git push</code>, its <code>PostToolUse</code> hook nudges the session to launch a tiny
 <code>bash</code> watcher as a <strong>background task</strong> (<code>run_in_background</code>) — the exact command
-the nudge names:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>bash &quot;${CLAUDE_PLUGIN_ROOT}/scripts/pr-sentinel-watch.sh&quot; &lt;PR&gt;
+the nudge names, which is always three tokens:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>bash &quot;&lt;the absolute path the nudge printed&gt;&quot; &lt;PR&gt;
 </code></pre></div>
+<p>There is no path to copy from this page on purpose: the nudge prints the real
+one, resolved for the installed plugin version, every time it fires.</p>
+<p><strong>Copy the path out of the nudge verbatim.</strong> Do not substitute
+<code>"${CLAUDE_PLUGIN_ROOT}/scripts/pr-sentinel-watch.sh"</code>, a <code>$(…)</code> lookup, or any
+other indirection for it — two independent things break, and the second is the
+one that bites:</p>
+<ul>
+<li>The variable is not set in the shell the Bash tool runs (measured 2026-08-01 —
+  the other <code>CLAUDE_*</code> variables are present, this one is not), so the form
+  expands to <code>/scripts/pr-sentinel-watch.sh</code> and exits 127. Loud, and one retry
+  against the nudge's path recovers it.</li>
+<li>pr-sentinel's own <code>PreToolUse</code> guard auto-approves the launch only when
+  <code>argv[1]</code> <strong>realpath-equals</strong> its watcher script, and it tokenizes with
+  <code>shlex.split</code>, which expands nothing. A variable or <code>$(…)</code> is compared as
+  literal text, so it can never match, and the launch falls through to a prompt.
+  <strong>Setting <code>CLAUDE_PLUGIN_ROOT</code> somewhere would therefore trade the loud 127 for
+  a silent stall</strong> — an unattended worker waits at that prompt and its PR spends
+  the rest of its life unwatched.</li>
+</ul>
+<p>Copying the resolved path is not a workaround, then, but the only shape that
+auto-approves; the guard refuses to resolve indirection precisely so it cannot be
+tricked into auto-approving some other script. The nudge re-resolves the path on
+every push, so it stays correct across plugin version bumps.</p>
 <p><strong>Launch it bare — never with an inline <code>VAR=…</code> prefix.</strong> pr-sentinel
 auto-approves its own watcher launch only for that exact three-token shape; an
 inline env assignment makes it four tokens, so the launch falls through to the
