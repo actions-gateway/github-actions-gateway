@@ -179,4 +179,4 @@ main() {
 	echo "Recreate with:  scripts/dogfood/setup.sh   (then e2e-setup.sh for the e2e tenant)"
 }
 
-main "$@"
+[[ -n "${DELETE_LIB_ONLY:-}" ]] || main "$@"

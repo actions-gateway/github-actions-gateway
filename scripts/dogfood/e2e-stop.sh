@@ -139,4 +139,4 @@ main() {
 	echo "e2e pool nodes autoscale to 0 once in-flight jobs finish (~10 min)."
 }
 
-main "$@"
+[[ -n "${E2E_STOP_LIB_ONLY:-}" ]] || main "$@"
