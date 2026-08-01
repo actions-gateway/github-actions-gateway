@@ -9,7 +9,22 @@ implementing session doesn't re-litigate them.
 
 ## Status
 
-Not started. Tracked as [Q558](../STATUS.md#Q558).
+**Complete** — shipped 2026-07-31. All five acceptance criteria met; the durable
+how-to-maintain content is now
+[website.md § Publication scope](../../development/website.md#publication-scope) and
+[§ Links into the source tree](../../development/website.md#links-into-the-source-tree).
+
+One thing this doc did not anticipate. Publishing the repo-internal tree turned
+**724 relative links into source files** — `../cmd/agc/main.go` and friends,
+which resolve on github.com and 404 on the site — into published dead links, 34
+of them on `STATUS.md` itself. Criterion 1 ("working links") could not be met
+without a fix, so the change also adds
+[`hooks/source_links.py`](../../../hooks/source_links.py), which absolutizes any
+relative target escaping `docs/` against `repo_url`. That was not scope growth
+for its own sake: `design/` and `operations/` had been shipping the same links
+dead on the public site all along, and the rewrite is one rule for the whole
+tree. Remaining after it: 9 pre-existing INFO-level directory links, none
+broken.
 
 ## Decisions
 
@@ -29,9 +44,18 @@ from tag day, stale by construction. The site's mike versioning already
 diverges content per version (each version builds from its ref;
 `dev` redeploys on every push to `main`), so dev-only is one conditional:
 MkDocs `!ENV` tags make the repo-internal `exclude_docs` entries conditional
-on an env var (e.g. `PUBLISH_INTERNAL_DOCS`) that only the dev deploy path in
-[pages.yml](../../.github/workflows/pages.yml) sets. Release deploys never
+on an env var (`MKDOCS_EXCLUDE_DOCS`) that only the dev deploy path in
+[pages.yml](../../../.github/workflows/pages.yml) sets. Release deploys never
 set it, including future tags, so no release version ever carries the page.
+
+As implemented, the env var holds the exclusion *list* and the `!ENV` default
+is the full repo-internal set, so the two lists never duplicate. `!ENV`
+resolves an env value as a scalar node verbatim (measured against
+`yaml_env_tag`), not by re-parsing it as YAML, so a multi-line default keeps
+its newlines. The trap is that the default applies only when the variable is
+**absent**: a step-level `env:` with a falling-through `|| ''` would publish
+the internal docs on every release. `pages.yml` `export`s it inside a
+conditional instead.
 
 Bonus: `extra.version.default: stable` means Material already banners `dev`
 as "a different version" — visitors get the not-canonical framing for free.
@@ -49,25 +73,31 @@ repo-internal `exclude_docs` entries together.
 
 `docs/javascripts/extra.js` already implements persona filter chips over the
 `docs/operations/README.md` table ([website.md § Progressive
-enhancement](../development/website.md#progressive-enhancement-docsjavascriptsextrajs)).
+enhancement](../../development/website.md#progressive-enhancement-docsjavascriptsextrajs)).
 Apply the same pattern to the Queue and Deferred tables: chips for label,
 status, and size, parsing the rendered cells (backticked labels, the St/Sz
 columns). Degrades to the plain table on github.com and without JS. The
 website.md enhancement table gains a row naming the source markers it
 depends on.
 
+As implemented the trigger is table *shape* — a `Labels` column plus an
+`ID`/`Item` first column — which picks up Flake watch and Progress for free.
+The first-column half is load-bearing: the metric tables in
+`design/02-architecture.md` and `operations/observability-metrics.md` also head
+a column `Labels`, and would otherwise have sprouted chips.
+
 ### `feature` label
 
 The vocabulary covers most work types (`bug` ≈ fix, `docs`, `tests`,
 `speed` ≈ perf, `infra` ≈ chore) but has no way to mark a feature — under a
 filterable view that's the first chip someone reaches for. Add `feature` to
-the legend and retag the rows that warrant it (e.g. [Q554](../STATUS.md#Q554)).
+the legend and retag the rows that warrant it (e.g. [Q554](../../STATUS.md#Q554)).
 Stop there: importing the Conventional Commit taxonomy wholesale would
 create synonym pairs (`bug`/`fix`) with no query behind them.
 
 ### Reachability
 
-[roadmap.md](../roadmap.md) (published on all versions) links to the backlog
+[roadmap.md](../../roadmap.md) (published on all versions) links to the backlog
 with a version-pinned URL (`/dev/STATUS/`), labeled as the working backlog —
 honest from `stable`, where the page does not exist.
 

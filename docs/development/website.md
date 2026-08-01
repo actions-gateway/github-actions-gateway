@@ -316,10 +316,86 @@ so don't float the versions in `requirements-docs.txt`.
 
 ## Publication scope
 
-`mkdocs.yml`'s `exclude_docs` keeps repo-internal trees off the public site:
-`docs/plan/`, `docs/STATUS.md`, and `docs/development/` (this file included) are
-GitHub-only. Published: `docs/design/`, `docs/operations/`, the landing page
-(`docs/index.md`), and the `why-gag.md` comparison.
+Scope is **per version**, not per site (Q558):
+
+| Version | Publishes |
+|---|---|
+| `stable` and every numbered release | Operator docs only: `docs/design/`, `docs/operations/`, `docs/index.md`, `why-gag.md`, `roadmap.md` |
+| `dev` | The above **plus** the repo-internal docs: `docs/STATUS.md` (the [backlog](#the-backlog-page)), `docs/plan/`, `docs/development/` (this file included), `docs/assets/`'s READMEs |
+
+A release is a frozen build, so a backlog published in one would be a snapshot
+stale from tag day. `dev` redeploys on every push to `main`, which is the only
+place a live backlog is honest.
+
+One env var carries the difference. `mkdocs.yml`'s `exclude_docs` is an
+[`!ENV` tag](https://www.mkdocs.org/user-guide/configuration/#environment-variables)
+whose **default** is the full repo-internal exclusion list; the `dev` deploy step
+in `pages.yml` overrides `MKDOCS_EXCLUDE_DOCS` with a shorter one. Release
+deploys never set it, so no release version — existing or future — can gain a
+repo-internal page.
+
+Two traps worth keeping in mind when editing that wiring:
+
+- **Unset and empty mean opposite things.** The `!ENV` default applies only when
+  the variable is *absent*. `pages.yml` therefore `export`s it inside a
+  conditional rather than using a step-level `env:` with a
+  `${{ … && … || '' }}` expression, which would set it to `''` on every release
+  and publish the internal docs everywhere.
+- **`docs/README.md` stays excluded on every version**, including `dev`. MkDocs
+  drops it anyway as a conflict with the `index.md` landing page; leaving it in
+  the list keeps that from surfacing as a build warning.
+
+The repo-internal pages are deliberately **not** in the `nav` — that stays the
+operator-facing table of contents on every version — so they are reachable by
+URL, by search, and from the roadmap's backlog link. `not_in_nav` in
+`mkdocs.yml` declares this so the build doesn't report them as an oversight.
+
+PR builds validate **both** scopes (`pages.yml`'s `build` job runs `mkdocs build`
+twice), so a PR that breaks a plan or development page fails there rather than on
+`main`.
+
+### The backlog page
+
+`docs/STATUS.md` renders at
+[`/dev/STATUS/`](https://actions-gateway.com/dev/STATUS/) with filter chips over
+its tables — see [§ Progressive enhancement](#progressive-enhancement-docsjavascriptsextrajs).
+The markdown file stays the single source of truth: the lint gate, the
+isolated-commit merge discipline, the `<a id="QN">` anchors, and the
+[backlog workflow](maintaining-backlog.md) all operate on the table, and the site
+is a read-only view of it. `roadmap.md` links to it from
+[§ How priorities are set](../roadmap.md#how-priorities-are-set), version-pinned
+so the link is honest from `stable`, where the page does not exist.
+
+**Accepted wart:** mike's version switcher keeps the current path, so switching
+from the backlog page to `stable` lands on a 404. That is inherent to any
+per-version page.
+
+## Links into the source tree
+
+`docs/` doubles as in-repo documentation browsed on github.com, where a relative
+link like `../cmd/agc/main.go` resolves to the source file. MkDocs has no such
+file to serve, so it leaves the link alone and the published page 404s.
+[`hooks/source_links.py`](../../hooks/source_links.py) rewrites every relative
+target that escapes `docs/` into an absolute URL under `repo_url`, so one
+markdown link works in both places:
+
+| Written in markdown | Published as |
+|---|---|
+| `../cmd/agc/main.go` | `{repo_url}/blob/{ref}/cmd/agc/main.go` |
+| `../cmd/agc/main.go:91` | `{repo_url}/blob/{ref}/cmd/agc/main.go#L91` |
+| `../cmd/gmc/internal/` | `{repo_url}/tree/{ref}/cmd/gmc/internal` |
+
+`{ref}` is `$GAG_DOCS_SOURCE_REF`, defaulting to `main`; `pages.yml` sets it to
+the tag when deploying a release, so each version links to the source it
+documents. A target that **doesn't exist in the working tree is left alone** —
+a typo should keep failing MkDocs' link check rather than become a
+plausible-looking 404.
+
+This was already needed before the backlog page: `design/` and `operations/`
+shipped such links dead. Publishing the repo-internal docs made it load-bearing
+— 724 links across the tree, 34 on `STATUS.md` alone.
+`scripts/source-links-hook-test.sh` asserts the rewrite in both directions under
+`make check`.
 
 ## Brand assets
 
@@ -342,10 +418,28 @@ github.com, so they must degrade to readable content without JS:
 | Persona filter chips + per-row pills (clicking a row pill selects its chip) | the `Personas` column of the table in `docs/operations/README.md` |
 | Per-doc audience pills | the `> **Audience:** …` blockquote under each operations doc's title |
 | Reading-path role chips | the bold role leads (`**Architect**`, …) in `docs/design/README.md` § Reading Paths by Role |
+| Backlog label / status / size chips + per-row label clicks | the `Labels`, `St` and `Sz` columns of `docs/STATUS.md`'s Queue, Deferred, Flake watch and Progress tables |
 | Scroll reveals | landing + `why-gag` pages only (skipped for `prefers-reduced-motion` / no-JS) |
 
 **Keep those source markers intact** when editing — deleting the table column, a
 blockquote, or a bold role lead silently breaks the matching site feature.
+
+The backlog chips read the **rendered cells**, so they follow the backlog format
+rather than duplicating it: labels are the backticked values in the `Labels`
+column (each renders as its own `<code>`), status comes from the `St` emoji
+(🔲 → Ready, 🚫 → Blocked; the Progress table's ✅/⚠️ → Done/Open), and size from
+`Sz`. Adding a label to the
+[legend](maintaining-backlog.md) needs no site change — a new value simply gets
+its own chip. The tables are matched **by shape**: a `Labels` column *and* an
+`ID`/`Item` first column. Both halves matter — the metric tables in
+`design/02-architecture.md` and `operations/observability-metrics.md` also head a
+column `Labels`, and the first-column test is what keeps chips off them.
+
+A dimension every row shares is dropped rather than rendered, since selecting it
+could only ever show the whole table: the Progress table's `Status` column is all
+✅ today, so it gets no Status bar — and grows one automatically the moment a plan
+goes ⚠️. The same rule means Deferred and Flake watch, which have no `St` column
+at all, show only Label and Size.
 
 ## Persona / audience tags live in two places
 
