@@ -2948,7 +2948,7 @@
 <td><code>infra</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Two awk parsers read workflow YAML positionally by indentation; a valid reformat can mis-read as full coverage, failing green the one gate that exists to stop false greens. First user of the <code>devtools/</code> rule and its wiring checklist.</td>
+<td>Measured 2026-08-01: the awk parsers accept only <code>filters: \|</code> exactly, so a valid reformat (<code>\|-</code>) emits 12 errors naming patterns already present. False red, not the false green first claimed — assertion 2 is registry-driven and fails closed.</td>
 </tr>
 <tr>
 <td><a id="Q534"></a>Q534</td>
