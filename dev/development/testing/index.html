@@ -2635,6 +2635,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#the-status-you-report-is-a-claim-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The status you report is a claim too
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#check-for-a-committed-capture-before-booking-a-live-measurement" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3472,6 +3483,14 @@
 <li><strong>Symptom-matching a prior issue.</strong> When a failure looks like a known issue — a flake row on the <a href="../../STATUS/">backlog</a>, a previously fixed bug, a memory of "this is always X" — that match is a <strong>hypothesis, not a diagnosis</strong>. The same surface symptom (a scheduling timeout, an egress blip, a wedged run) can have a different cause each time. Before acting on the remembered cause — and above all before spending a billable re-run, a fix PR, or a state-changing command on it — take a direct measurement from the failing system: read the actual events, describe the actual pod, pull the actual log line. If the environment tears down evidence on failure, capturing diagnostics <em>before</em> teardown is part of the fix, not optional (filed from the v1.2.0 release retro, where gate failures had to be re-run just to observe them).</li>
 <li><strong>Trusting source inspection.</strong> Reading code — or a plan doc's ✅ investigation findings, which usually derive from source-reading — tells you what <em>should</em> happen, not what does. Treat such findings as unverified until confirmed end-to-end: actually exec the thing. Source-reading alone has produced wrong conclusions before (PR #59).</li>
 </ul>
+<h3 id="the-status-you-report-is-a-claim-too">The status you report is a claim too<a class="headerlink" href="#the-status-you-report-is-a-claim-too" title="Permanent link">&para;</a></h3>
+<p>The rules above govern <em>why</em> something failed. The same discipline applies to the plainer statements that carry a decision — "the gate is green", "the pods are stuck", "the drain is converging". Each is a claim about state, and each has a cheap way of being wrong:</p>
+<ul>
+<li><strong>An exit code read through a pipe is the pipe's.</strong> <code>make check | tail -40</code> reports <code>tail</code>'s status, so a failing gate reads as <code>0</code>. Redirect to a file and read <code>$?</code> from the command itself — then reconcile it against the output, because a gate that exits 0 while its own log carries a <code>FAIL</code> line is the other half of the same trap.</li>
+<li><strong>A tool that exits 0 having printed nothing may have checked nothing.</strong> <code>gh attestation verify</code> writes its summary only to a TTY; captured or redirected it is silent, and silence is indistinguishable from a no-op. When a verification's whole value is that it ran, make it emit something assertable (<code>--format json</code>, then read the predicate) rather than trusting the status alone.</li>
+<li><strong>A state observed once is not a steady state.</strong> Pods wedged now may clear in ten minutes; a set that looks static may be churning underneath a stable count. Before calling a condition permanent, take a second reading far enough apart to tell the difference, and compare <em>identities</em> rather than counts.</li>
+</ul>
+<p>The failure mode these share is reporting a conclusion from a signal that does not carry it. The fix is the same each time: name the signal the claim actually depends on, and read that one.</p>
 <h3 id="check-for-a-committed-capture-before-booking-a-live-measurement">Check for a committed capture before booking a live measurement<a class="headerlink" href="#check-for-a-committed-capture-before-booking-a-live-measurement" title="Permanent link">&para;</a></h3>
 <p>"Measure it" does not always mean "run it". Before scheduling a Tier C run, a dogfood
 dispatch, or anything else that costs a credential and a wall-clock hour, check whether
