@@ -2879,6 +2879,14 @@
 <td><code>ActiveSessions</code> is never written or read; <code>SecretReference.Namespace</code> is "reserved" but the webhook rejects non-empty. Served-API compat: decide deprecate/document vs drop at v2.</td>
 </tr>
 <tr>
+<td><a id="Q573"></a>Q573</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/api">Detect served API fields nothing reads</a></td>
+<td><code>infra</code> <code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>sharing.allowedNamespaces</code> shipped served-but-unenforced in v2beta1; only a manual docs sweep caught it (Q166 schedules the impl). Gate on spec fields with no reference outside generated/conversion code; complements <a href="#Q526">Q526</a>.</td>
+</tr>
+<tr>
 <td><a id="Q541"></a>Q541</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/suite_integration_test.go">Test helper claims to isolate a watch trigger and does not</a></td>
 <td><code>tests</code> <code>retro</code></td>
