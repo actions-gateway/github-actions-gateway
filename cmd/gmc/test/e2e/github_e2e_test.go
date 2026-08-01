@@ -666,6 +666,23 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 	// the pod (Q501). That is why this wait is budgeted past the sleep rather than
 	// past GitHub's ~5-minute cancellation grace.
 	//
+	// # The second measurement it now carries (Q501 candidate A)
+	//
+	// The cheapest candidate trigger for relaying a cancellation is the renew loop the
+	// AGC already runs every 60s: if the run service stops honouring renewjob once
+	// GitHub concludes a cancelled job, Q254's teardown fires on its own and Q501's
+	// actuator reclaims the worker, and no new mechanism is needed. The 2026-07-29 run
+	// cannot answer that — the actuator did not exist yet, so a renew-loop teardown at
+	// ~5 minutes and no teardown at all looked identical from outside. This spec now
+	// records the renew loop's own lines across the cancel window, and the pod carries
+	// the corroborating half: a reclaim stamps the worker job_abandoned before deleting
+	// it, so the answer is positive either way rather than an absent log line.
+	//
+	// That is also why the deletion assertion is about an *unaccounted* mark rather
+	// than about no mark at all. Once the actuator can delete this worker, "terminal
+	// with no deletionTimestamp" stops being the only safe shape, and demanding it
+	// would fail the spec for the gateway working.
+	//
 	// It was pending until 2026-07-29 for a reason that has since been removed: it
 	// could not tell its own worker from the one the spec above leaves behind, since
 	// that spec triggers a re-run whose worker occupies the tenant for the fixture's
@@ -699,27 +716,46 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q459 cancelled worker pod", podName)
 
-		By("sampling the pod's phase and deletionTimestamp across the cancellation")
-		// Both fields together, sampled as it happens: the claim is about what is
+		By("sampling the pod's phase, deletionTimestamp and deletion-reason across the cancellation")
+		// All four fields together, sampled as it happens: the claim is about what is
 		// true of the pod at the moment its terminal phase publishes, which is a
-		// state that exists only briefly and cannot be read afterwards.
+		// state that exists only briefly and cannot be read afterwards. The
+		// deletion-reason stamp joins the other three because a deletion mark alone no
+		// longer says "disruption" — the AGC issues its own deletes on this path since
+		// Q501's actuator, and only the stamp tells the two apart.
 		observed := newFieldRecorder(tenantNS, podName,
-			"{.status.phase}/{.status.reason}/deleting={.metadata.deletionTimestamp}")
+			"{.status.phase}/{.status.reason}"+
+				"/deleting={.metadata.deletionTimestamp}"+
+				"/by={.metadata.annotations['"+annotationDeletionReason+"']}")
 		stopSampling := observed.start(200 * time.Millisecond)
+
+		By("baselining the renew loop's failure lines before the cancel")
+		// Q501 candidate A. The AGC's log is cumulative across every spec in this
+		// container, so the window this spec is accountable for is the suffix past
+		// these counts. Renewal SUCCESS is silent, so there is no pre-cancel control
+		// line to read — what makes the outcome positive either way is the pod, below.
+		renewWarnBase := len(agcLogLines(tenantNS, renewNonFatalLine))
+		renewTeardownBase := len(agcLogLines(tenantNS, renewTeardownLine))
 
 		By("cancelling the run in GitHub, the way a human would")
 		cancelledAt := time.Now()
 		_, err := utils.Run(exec.Command("gh", "run", "cancel", runID, "--repo", repoSlug))
 		Expect(err).NotTo(HaveOccurred(), "cancel run %s", runID)
 
-		By("waiting for the worker pod to reach a terminal phase")
-		// Budgeted past the fixture's own 600s sleep, deliberately. A cancel does not
-		// reach this worker: the AGC owns the broker session and relays nothing to the
-		// pod, so the runner keeps executing and GitHub force-concludes the job at its
-		// own ~5-minute cancellation grace while the container is still going. Measured
-		// 2026-07-29 with a 5-minute budget, this wait expired one second before the pod
-		// would have been observable at all — so anything shorter than the sleep measures
-		// the timeout rather than the pod.
+		By("waiting for the worker pod to reach a terminal phase or be reclaimed")
+		// Budgeted past the fixture's own 600s sleep, deliberately. On the measured
+		// outcome a cancel does not reach this worker: the AGC owns the broker session
+		// and relays nothing to the pod, so the runner keeps executing and GitHub
+		// force-concludes the job at its own ~5-minute cancellation grace while the
+		// container is still going. Measured 2026-07-29 with a 5-minute budget, this
+		// wait expired one second before the pod would have been observable at all — so
+		// anything shorter than the sleep measures the timeout rather than the pod.
+		//
+		// The empty phase is the other outcome, and the one Q501 candidate A predicts:
+		// if renewjob starts failing definitively once GitHub concludes the cancelled
+		// job, the renew loop abandons it and the actuator deletes the worker, so the
+		// pod is gone rather than terminal. Both end this wait; which one happened is
+		// read off the sampled sequence below.
 		Eventually(func(g Gomega) {
 			out, err := utils.Run(exec.Command("kubectl", "get", "pod", podName,
 				"-n", tenantNS, "--ignore-not-found", "-o", "jsonpath={.status.phase}"))
@@ -734,23 +770,62 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		AddReportEntry("Q459 cancel to worker terminal phase",
 			time.Since(cancelledAt).Round(time.Second).String())
 
-		By("asserting the cancelled worker reached a terminal phase without a deletion mark")
-		// The discriminator. A terminal phase observed with deleting= empty is a job
-		// that ended by itself; the spec above recorded the disrupted worker carrying
-		// a deletionTimestamp instead. If this ever fails, the two cases have become
-		// indistinguishable and automatic recovery of the disruption path would start
-		// re-running deliberate cancellations.
-		var terminalWithoutDeletion bool
+		By("recording what the renew loop did across the cancel window (Q501 candidate A)")
+		renewWarns := sinceBaseline(agcLogLines(tenantNS, renewNonFatalLine), renewWarnBase)
+		renewTeardowns := sinceBaseline(agcLogLines(tenantNS, renewTeardownLine), renewTeardownBase)
+		AddReportEntry("Q501 renewjob failures in the cancel window", strings.Join(renewWarns, "\n"))
+		AddReportEntry("Q501 renewjob definitive losses in the cancel window", strings.Join(renewTeardowns, "\n"))
+
+		By("asserting the cancelled worker published no deletion mark the gateway cannot account for")
+		// The discriminator, and the property that must hold whichever way the
+		// measurement above goes. Q502 re-runs a worker it finds terminal carrying a
+		// deletionTimestamp that no AGC delete stamped; a cancelled run whose worker
+		// published that shape would be re-run against an operator's explicit stop.
+		//
+		// Two shapes are safe, and both are real outcomes on this path. A terminal
+		// phase with no deletion mark is the 2026-07-29 result — nothing reached the
+		// worker and the runner ran the fixture's sleep out. A mark stamped
+		// job_abandoned is the renew loop giving up on the job (Q254) and Q501's
+		// actuator reclaiming its pod, which is candidate A answering yes; the pod may
+		// then be gone before any terminal phase publishes, so that shape counts
+		// wherever in the sequence it appears.
+		var unstampedTerminal []string
+		var endedByItself, reclaimed bool
 		for _, s := range seq {
-			if (strings.HasPrefix(s, "Succeeded/") || strings.HasPrefix(s, "Failed/")) &&
-				strings.HasSuffix(s, "deleting=") {
-				terminalWithoutDeletion = true
+			terminal, deletedAt, by := deletionMark(s)
+			if by == reapReasonJobAbandoned {
+				reclaimed = true
+			}
+			if !terminal {
+				continue
+			}
+			switch {
+			case deletedAt == "":
+				endedByItself = true
+			case by == "":
+				unstampedTerminal = append(unstampedTerminal, s)
 			}
 		}
 		Expect(seq).NotTo(BeEmpty(), "the sampler saw nothing; the measurement did not run")
-		Expect(terminalWithoutDeletion).To(BeTrue(),
-			"a cancelled run's worker never published a terminal phase free of a deletionTimestamp, "+
-				"so a human cancel is NOT distinguishable from a drain at the pod. Observed: %v", seq)
+		Expect(unstampedTerminal).To(BeEmpty(),
+			"a cancelled run's worker published a terminal phase carrying a deletionTimestamp that no AGC "+
+				"delete stamped — the exact shape Q502 recovers — so a human cancel is NOT distinguishable "+
+				"from a drain at the pod. Observed: %v", seq)
+		Expect(endedByItself || reclaimed).To(BeTrue(),
+			"the sampler recorded neither a terminal phase nor a gateway reclaim, so nothing here says how "+
+				"the cancelled worker ended. Observed: %v", seq)
+
+		candidateA := "renewjob did NOT report the loss — the worker ran on and ended by itself, " +
+			"so candidate B (a REST run-status poll) is the remaining trigger"
+		switch {
+		case reclaimed:
+			candidateA = "renewjob DID report the loss — the renew loop abandoned the job and the actuator " +
+				"reclaimed the worker, so no new trigger is needed"
+		case len(renewTeardowns) > 0:
+			candidateA = "renewjob reported the loss, but not before the worker was already gone — " +
+				"read the teardown lines against the terminal time above"
+		}
+		AddReportEntry("Q501 candidate A outcome", candidateA)
 
 		_, conclusion := firstJobState(Default, repoSlug, runID)
 		AddReportEntry("Q459 cancel-path job conclusion", conclusion)
@@ -1059,6 +1134,41 @@ const (
 	quotaRetryLine        = "pod creation blocked by namespace quota"
 )
 
+// The renew loop's two failure lines (listener/renew.go). The cancel-path spec reads
+// them as Q501's candidate-A measurement: whether the run service stops honouring
+// renewjob once GitHub has concluded a cancelled job. renewNonFatalLine is any single
+// failure; renewTeardownLine is the definitive loss that cancels the job context and,
+// since Q501's actuator, reclaims the worker pod.
+const (
+	renewNonFatalLine = "RenewJob error (non-fatal)"
+	renewTeardownLine = "RenewJob: job lock definitively lost"
+)
+
+// annotationDeletionReason is provisioner.AnnotationDeletionReason with its dots
+// escaped for a jsonpath key selector, restated as a literal because this module cannot
+// import the AGC's internal packages. The annotation is stamped before every AGC-issued
+// worker delete and is what separates the gateway's own reclaim from a disruption.
+const annotationDeletionReason = `actions-gateway\.com/deletion-reason`
+
+// reapReasonJobAbandoned is the stamp value the AGC writes before deleting the worker
+// of a job its listener gave up on (Q501).
+const reapReasonJobAbandoned = "job_abandoned"
+
+// deletionMark splits a `<phase>/<reason>/deleting=<ts>/by=<stamp>` sample from the
+// cancel-path recorder into the two deletion fields, and reports whether the phase is
+// terminal. A sample the recorder produced always carries both markers; one that does
+// not yields empty fields rather than a parse error, since a dropped sample must not
+// read as a mark that was never there.
+func deletionMark(sample string) (terminal bool, deletedAt, stamp string) {
+	terminal = strings.HasPrefix(sample, "Succeeded/") || strings.HasPrefix(sample, "Failed/")
+	_, rest, ok := strings.Cut(sample, "/deleting=")
+	if !ok {
+		return terminal, "", ""
+	}
+	deletedAt, stamp, _ = strings.Cut(rest, "/by=")
+	return terminal, deletedAt, stamp
+}
+
 // fillPodQuota puts a `pods` ResourceQuota on a namespace whose ceiling is its
 // current occupancy, leaving headroom for exactly zero more pods.
 func fillPodQuota(ns, name string, hard int) {
@@ -1130,6 +1240,31 @@ func agcAdmissionLog(ns string) string {
 func countAGCLogLines(ns, substr string) int {
 	GinkgoHelper()
 	return strings.Count(agcLog(ns), substr)
+}
+
+// agcLogLines returns the AGC log lines containing substr, in order — one entry per
+// matching line, where countAGCLogLines counts occurrences and so counts a line twice
+// if substr appears in it twice. Like that helper it reads a cumulative log, so a
+// caller measuring one window takes the suffix past a baseline count.
+func agcLogLines(ns, substr string) []string {
+	GinkgoHelper()
+	var out []string
+	for _, line := range strings.Split(agcLog(ns), "\n") {
+		if strings.Contains(line, substr) {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// sinceBaseline returns the entries lines gained past a baseline length, tolerating a
+// shrunk log: the AGC's container can restart or its log rotate mid-window, and a
+// negative delta means the baseline no longer indexes into this log at all.
+func sinceBaseline(lines []string, baseline int) []string {
+	if baseline > len(lines) {
+		return lines
+	}
+	return lines[baseline:]
 }
 
 // agcLog reads the tenant AGC's full log.

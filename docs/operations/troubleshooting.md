@@ -2855,7 +2855,9 @@ kubectl get pods -n <namespace> -l app.kubernetes.io/name=actions-gateway-contro
 
 ## Cancelling a Run Does Not Stop Its Worker Pod
 
-> **Applies to both acquisition tiers.** Cancelling a job reclaims nothing.
+> **Applies to the Classic acquisition tier.** On **ScaleSet** (the default) a cancel
+> does not stop the worker promptly either, but it *is* reclaimed — see
+> [How the two tiers differ](#how-the-two-tiers-differ) below.
 
 **Symptoms.** You cancel a workflow run in the GitHub UI (or with `gh run cancel`).
 GitHub shows the job `cancelled` a few minutes later, but the worker pod stays
@@ -2878,6 +2880,28 @@ This is also why the SIGTERM relay does not help here. The relay fires when the 
 is terminated — an eviction, a drain, a delete — and on this path nothing terminates
 the pod.
 
+### How the two tiers differ
+
+The Classic tier has no channel from GitHub to the AGC once the job is acquired, so
+nothing downstream of the cancel reaches the gateway at all and the pod is bounded only
+by `maxWorkerLifetime` (12 hours by default).
+
+The **ScaleSet** tier keeps a message queue open for the whole job, and a cancelled run
+puts a terminal `JobCompleted` on it. That completion stamps
+`actions-gateway.com/job-completed-at` on the worker, and the reaper deletes a pod still
+`Running` five minutes later
+([WorkerPodOrphanedRunning](#worker-pod-reaped-while-running-workerpodorphanedrunning)).
+So the worst case there is GitHub's cancellation grace plus the reap grace — roughly ten
+minutes — rather than the job's whole remaining runtime. Expect
+`actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}` to move when this
+happens.
+
+Two caveats on that figure. The `JobCompleted`-on-cancel was measured against real
+GitHub for a job with **no runner attached** (the queue message appeared ~0.2 s after
+the cancel); the stamp-and-reap half is proven against a real apiserver. The composed
+chain has not been observed end to end for a job with a live worker, so treat ten
+minutes as the shape of the bound rather than a measured latency.
+
 **Diagnostics.**
 
 ```sh
@@ -2896,6 +2920,12 @@ kubectl logs -n <namespace> <worker-pod> --tail=50
 - **To reclaim the capacity now, delete the worker pod.** `kubectl delete pod -n
   <namespace> <worker-pod>` terminates it gracefully: the wrapper relays SIGTERM and
   the runner stops. The run is already cancelled, so nothing is lost.
+
+  > A hand-deleted worker is the shape graceful-deletion recovery acts on (an external
+  > delete ordered before the container's exit), so the AGC asks GitHub to re-run the
+  > run's failed jobs. Whether GitHub honours that for a run concluded `cancelled` is
+  > unmeasured — see [Q595](../STATUS.md#Q595). If you are cancelling to *stop* the work
+  > rather than to free a slot, prefer waiting the pod out.
 - **Bound the worst case with `maxWorkerLifetime`** on the runner group, which caps how
   long any worker — cancelled or not — can hold its slot.
 - Do **not** expect a lower `completedPodTTL` or `pendingPodDeadline` to help: both act
