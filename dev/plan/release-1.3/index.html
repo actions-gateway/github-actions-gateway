@@ -2667,16 +2667,16 @@ The prose below carries the <em>why</em> of each; this table is the state.</p>
 <td>✅ shipped 2026-08-01</td>
 </tr>
 <tr>
-<td><a href="../../STATUS/#Q575">Q575</a></td>
+<td>Q575</td>
 <td>A worker whose <code>job-payload</code> secret is absent stalls</td>
 <td><code>1.3-gate</code></td>
-<td>🔲 in flight (#1119)</td>
+<td>✅ shipped 2026-08-01</td>
 </tr>
 <tr>
 <td><a href="../../STATUS/#Q577">Q577</a></td>
 <td><code>stop.sh</code> leaves the pool up when its drain cannot converge</td>
 <td><code>1.3-gate</code></td>
-<td>🚫 blocked by Q575 — re-verify when it lands</td>
+<td>🔲 unblocked — re-measure at the gate, it may no longer be real</td>
 </tr>
 <tr>
 <td><a href="../../STATUS/#Q583">Q583</a></td>
@@ -2719,8 +2719,9 @@ diagnosed on its own, which is how three consecutive misses went unremarked — 
 row exists so the fourth does not.</p>
 <h3 id="what-rc4-carries-and-the-two-scope-calls-behind-it">What rc.4 carries, and the two scope calls behind it<a class="headerlink" href="#what-rc4-carries-and-the-two-scope-calls-behind-it" title="Permanent link">&para;</a></h3>
 <p>rc.3's validation window produced five defects (Q575–Q578, Q580) plus a revive
-trigger on Q553. Q576, Q578, and Q580 have shipped; Q575 is in flight and Q577 is
-blocked behind it. <strong>Q576, Q552, and Q553 gate rather than ride</strong> for the same
+trigger on Q553. Q575, Q576, Q578, and Q580 have shipped; Q577 is unblocked by
+Q575 landing, but both stalls its row named are now fixed, so the gate should
+re-measure it rather than assume it is still real. <strong>Q576, Q552, and Q553 gate rather than ride</strong> for the same
 reason Q550 and Q551 did: each is an availability bug an ordinary tenant reaches,
 not a dogfood-harness artifact. Q576 in particular spun a saturated scale set at
 ~0.8 provisioning attempts/s for 14 minutes, issuing 704 GitHub deregister calls

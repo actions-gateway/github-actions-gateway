@@ -2553,6 +2553,11 @@
 <td>Worker pod stuck Pending past the deadline — fix the image/scheduling cause; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">runbook</a></td>
 </tr>
 <tr>
+<td>Jobs ending before their worker can start</td>
+<td><code>worker_pods_reaped_total{reason="completed_pending"}</code></td>
+<td>Worker pod still Pending when GitHub reported its job terminal — cancellations outrunning pod startup, or an AGC replaying a queue after a restart; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending">runbook</a></td>
+</tr>
+<tr>
 <td>Workers idling after their job is over</td>
 <td><code>worker_pods_reaped_total{reason="orphaned_running"}</code></td>
 <td>ScaleSet worker still Running five minutes after GitHub reported its job terminal — it never received the job, or a sidecar outlived the runner; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a></td>

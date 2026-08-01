@@ -2575,20 +2575,12 @@
 <td>Run 30658951388: <code>ssrec-agc</code>'s pod template changed 2m40s after Ready, ~12s after the GMC container restarted; nothing in the tenant changed. If real, a GMC upgrade rolls every tenant's AGC.</td>
 </tr>
 <tr>
-<td><a id="Q575"></a>Q575</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">A worker pod whose <code>job-payload</code> secret is absent stalls until something else clears it</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Live on the rc.3 gate (2026-08-01): 8 worker pods sat Pending ~10 min mounting a <code>job-ss-&lt;jobID&gt;</code> secret that did not exist, then recovered unaided. Find what deletes it, or what creates the pod first.</td>
-</tr>
-<tr>
 <td><a id="Q577"></a>Q577</td>
 <td><a href="../plan/gke-dogfood/#reading-a-timed-out-drain"><code>stop.sh</code> leaves the pool up when its drain cannot converge</a></td>
 <td><code>infra</code> <code>bug</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>S</td>
-<td>Blocked by <a href="#Q575">Q575</a>. Not a namespace-scope bug — the drain is cluster-wide because the resize evicts every tenant's AGC. Q553's wedge is closed; re-verify on rc.4 whether Q575 alone still stalls it.</td>
+<td>Unblocked: both named stalls are fixed (Q553's wedge, Q575's Pending worker). Not a namespace-scope bug — the drain is cluster-wide because the resize evicts every tenant's AGC. Re-measure on rc.4 before building: the row may no longer be real.</td>
 </tr>
 <tr>
 <td><a id="Q583"></a>Q583</td>
