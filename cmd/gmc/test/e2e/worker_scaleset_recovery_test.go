@@ -82,13 +82,21 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 		setName    = "set-ssrec"
 		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 
-		// runID scopes the rerun assertion to this spec: /control/reruns is
-		// process-wide, and another spec's rerun must not be readable as ours.
-		runID     = "5190519"
+		// runIDBase scopes the rerun assertion to this spec: /control/reruns is
+		// process-wide, and another spec's rerun must not be readable as ours. Each
+		// attempt appends its number, so a re-staged attempt (see below) reads a run
+		// the abandoned one never touched.
+		runIDBase = "5190519"
 		repoOwner = "ssrecorg"
 		repoName  = "ssrecrepo"
 
-		probePod = "ssrec-drain-probe"
+		probePodBase = "ssrec-drain-probe"
+
+		// A disruption whose claim was won by an AGC that then went away is not
+		// recoverable by any later AGC, so the spec re-stages instead of asserting on
+		// it. Bounded: two control-plane replacements in two consecutive claim windows
+		// is not churn, it is a defect worth failing on.
+		maxAttempts = 3
 
 		// The recovery-relevant shape ProvisionScaleSetWorker stamps, restated as
 		// literals because this module cannot import the AGC's internal provisioner
@@ -169,10 +177,6 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 		Expect(agcEnvValue(tenantNS, agcDeploy, "GITHUB_API_BASE_URL")).To(ContainSubstring(fakegithubServiceName),
 			"the AGC must address fakegithub for REST calls, or the rerun assertion proves nothing")
 
-		By("recording the pre-existing rerun count for this run")
-		Expect(rerunCountForRun(runID)).To(Equal(0),
-			"no rerun may exist for this spec's run before the spec has done anything")
-
 		By("waiting for the RunnerSet reconciler to be live on this set")
 		// The listener bootstrap fails by design (see the package comment); the Ready
 		// condition carrying that failure proves references resolved and the reconcile
@@ -188,63 +192,106 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 				"RunnerSet Ready condition is %q; the reconciler has not yet attempted (and failed) the listener bootstrap", out)
 		}, 4*time.Minute, 2*time.Second).Should(Succeed())
 
-		By("staging a running scale-set worker carrying the run identity")
-		Expect(utils.ApplyManifest(scaleSetWorkerProbeManifest(
-			tenantNS, probePod, setName, runID, repoOwner+"/"+repoName, curlImage,
-		))).To(Succeed())
-		DeferCleanup(func() {
-			_, _ = utils.Run(exec.Command("kubectl", "delete", "pod", probePod,
-				"-n", tenantNS, "--ignore-not-found", "--wait=false"))
-		})
-		Eventually(func(g Gomega) {
-			g.Expect(podPhase(tenantNS, probePod)).To(Equal("Running"))
-		}, 3*time.Minute, time.Second).Should(Succeed(),
-			"the worker must be Running before the delete, or the deletion arm's "+
-				"mark-before-exit ordering cannot be produced")
+		// One AGC process has to both claim the disruption and re-run it, and the two
+		// halves are not equally durable: claimEvictionRecovery stamps
+		// AnnotationEvictionHandledAt BEFORE handleEviction's delayed GitHub call, and
+		// disruptionAwaitingRecovery skips an already-stamped pod forever after. An AGC
+		// replaced inside that window takes the recovery with it, and no later AGC can
+		// produce the re-run — the deletion arm is deliberately not restart-safe
+		// (provisioner/eviction_scaleset.go). The window is not the spec's to control:
+		// the GMC owns the AGC Deployment and rolls it when its rendered pod template
+		// changes (Q549, measured on run 30658951388). So each attempt pins the control
+		// plane it is testing, and a broken pin means the attempt measured nothing.
+		// Reasoning: testing.md § Pin the process when the signal comes out of its memory.
+		var runID string
+		for attempt := 1; attempt <= maxAttempts; attempt++ {
+			probePod := fmt.Sprintf("%s-%d", probePodBase, attempt)
+			runID = fmt.Sprintf("%s%d", runIDBase, attempt)
 
-		By("sampling the pod's phase, deletion mark, and claim annotation across the teardown")
-		// Diagnostics, not evidence: a sampler bounds what was observed, never what
-		// happened (testing.md § negative assertions), so nothing below asserts on
-		// this sequence beyond it being non-empty. The claim's proof is the rerun —
-		// the reconciler calls GitHub only after the claim patch succeeds, so a rerun
-		// landing IS the claim landing.
-		observed := newFieldRecorder(tenantNS, probePod,
-			`{.status.phase}/{.metadata.deletionTimestamp}/`+
-				`{.metadata.annotations['actions-gateway\.com/eviction-handled-at']}`)
-		stopSampling := observed.start(100 * time.Millisecond)
+			By("waiting for the AGC control plane to settle, and pinning it")
+			_, err := utils.Run(exec.Command("kubectl", "rollout", "status",
+				"deployment/"+agcDeploy, "-n", tenantNS, "--timeout=4m"))
+			Expect(err).NotTo(HaveOccurred())
+			pinnedAGC := agcPodIdentity(tenantNS, agcDeploy)
+			Expect(pinnedAGC).NotTo(BeEmpty(), "no AGC pod to run the disruption against")
 
-		By("deleting the worker pod gracefully, as a drain would")
-		_, err := utils.Run(exec.Command("kubectl", "delete", "pod", probePod,
-			"-n", tenantNS, "--wait=false"))
-		Expect(err).NotTo(HaveOccurred())
+			By("recording the pre-existing rerun count for this run")
+			Expect(rerunCountForRun(runID)).To(Equal(0),
+				"no rerun may exist for this attempt's run before the attempt has done anything")
 
-		By("waiting for the worker pod to be gone")
-		Eventually(func(g Gomega) {
-			out, err := utils.Run(exec.Command("kubectl", "get", "pod", probePod,
-				"-n", tenantNS, "--ignore-not-found", "-o", "name"))
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(strings.TrimSpace(out)).To(BeEmpty(), "worker pod %s still exists", probePod)
-		}, 2*time.Minute, time.Second).Should(Succeed())
+			By("staging a running scale-set worker carrying the run identity")
+			Expect(utils.ApplyManifest(scaleSetWorkerProbeManifest(
+				tenantNS, probePod, setName, runID, repoOwner+"/"+repoName, curlImage,
+			))).To(Succeed())
+			DeferCleanup(func() {
+				_, _ = utils.Run(exec.Command("kubectl", "delete", "pod", probePod,
+					"-n", tenantNS, "--ignore-not-found", "--wait=false"))
+			})
+			Eventually(func(g Gomega) {
+				g.Expect(podPhase(tenantNS, probePod)).To(Equal("Running"))
+			}, 3*time.Minute, time.Second).Should(Succeed(),
+				"the worker must be Running before the delete, or the deletion arm's "+
+					"mark-before-exit ordering cannot be produced")
 
-		stopSampling()
-		seq := observed.sequence()
-		AddReportEntry("Q519 observed phase/deletionTimestamp/"+annotationClaim, strings.Join(seq, " -> "))
-		Expect(seq).NotTo(BeEmpty(), "the sampler saw nothing; the pod was never observed")
+			By("sampling the pod's phase, deletion mark, and claim annotation across the teardown")
+			// Diagnostics, not evidence: a sampler bounds what was observed, never what
+			// happened (testing.md § negative assertions), so nothing below asserts on
+			// this sequence beyond it being non-empty. The claim's proof is the rerun —
+			// the reconciler calls GitHub only after the claim patch succeeds, so a rerun
+			// landing IS the claim landing.
+			observed := newFieldRecorder(tenantNS, probePod,
+				`{.status.phase}/{.metadata.deletionTimestamp}/`+
+					`{.metadata.annotations['actions-gateway\.com/eviction-handled-at']}`)
+			stopSampling := observed.start(100 * time.Millisecond)
 
-		By("asserting the disrupted run was re-run automatically")
-		// The whole point. If the chart role were missing a verb the recovery path
-		// needs — the pods patch behind the claim above all — the claim is refused
-		// with a Forbidden the reconciler logs as 'could not claim scale-set worker
-		// disruption for recovery' and no rerun ever fires, which is exactly the
-		// 403-broken shipping mode Q502 found and this spec exists to catch.
-		// handleEviction waits out evictionRetryDelay (5s here) before calling
-		// GitHub, so the rerun needs room to appear.
-		Eventually(func(g Gomega) {
-			g.Expect(rerunCountForRun(runID)).To(BeNumerically(">=", 1),
-				"a deleted scale-set worker's run was never re-run under the chart role; either the "+
-					"role lost a verb the recovery path needs (check the AGC logs for 'could not claim "+
-					"scale-set worker disruption') or the deletion-mark discriminator regressed")
-		}, 90*time.Second, 2*time.Second).Should(Succeed())
+			By("deleting the worker pod gracefully, as a drain would")
+			_, err = utils.Run(exec.Command("kubectl", "delete", "pod", probePod,
+				"-n", tenantNS, "--wait=false"))
+			Expect(err).NotTo(HaveOccurred())
+
+			By("waiting for the worker pod to be gone")
+			Eventually(func(g Gomega) {
+				out, err := utils.Run(exec.Command("kubectl", "get", "pod", probePod,
+					"-n", tenantNS, "--ignore-not-found", "-o", "name"))
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(strings.TrimSpace(out)).To(BeEmpty(), "worker pod %s still exists", probePod)
+			}, 2*time.Minute, time.Second).Should(Succeed())
+
+			stopSampling()
+			seq := observed.sequence()
+			AddReportEntry(fmt.Sprintf("Q519 attempt %d observed phase/deletionTimestamp/%s", attempt, annotationClaim),
+				strings.Join(seq, " -> "))
+			Expect(seq).NotTo(BeEmpty(), "the sampler saw nothing; the pod was never observed")
+
+			By("waiting for the disrupted run to be re-run automatically")
+			// The whole point. If the chart role were missing a verb the recovery path
+			// needs — the pods patch behind the claim above all — the claim is refused
+			// with a Forbidden and no rerun ever fires, which is exactly the 403-broken
+			// shipping mode Q502 found and this spec exists to catch. handleEviction
+			// waits out evictionRetryDelay (5s here) before calling GitHub, so the rerun
+			// needs room to appear.
+			if waitForRerun(runID, 90*time.Second, 2*time.Second) {
+				break
+			}
+
+			// No re-run. Whether that is the defect this spec exists to catch depends
+			// entirely on whether the AGC that could have produced it is still the one
+			// the attempt was pinned to.
+			if agcPodIdentity(tenantNS, agcDeploy) == pinnedAGC {
+				Fail("a deleted scale-set worker's run was never re-run under the chart role, and the AGC " +
+					"that observed the disruption is still running; either the role lost a verb the recovery " +
+					"path needs (check the AGC logs for 'could not claim scale-set worker disruption') or the " +
+					"deletion-mark discriminator regressed")
+			}
+			AddReportEntry("Q549 re-staging", fmt.Sprintf(
+				"attempt %d: the AGC control plane was replaced inside the claim window (pinned %q, now %q); "+
+					"the claim is durable and the re-run is not, so this disruption is unrecoverable by any "+
+					"later AGC and proves nothing either way",
+				attempt, pinnedAGC, agcPodIdentity(tenantNS, agcDeploy)))
+			Expect(attempt).To(BeNumerically("<", maxAttempts),
+				"the AGC control plane was replaced inside the claim window on every one of %d attempts; "+
+					"the spec never got an undisturbed window to test in", maxAttempts)
+		}
 
 		By("asserting the run was re-run exactly once")
 		// The claim annotation is what makes recovery at-most-once per disrupted pod,
