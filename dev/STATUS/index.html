@@ -2567,14 +2567,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q570"></a>Q570</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go"><code>E2E_Migration_MigratedTenantReconcilesIntoAWorkingControlPlane</code> flaked on a docs-only PR</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Timed out after 240s on #1071 (run 30696112662, 2026-08-01); 61 of 62 specs passed and <code>main</code> was green across the 8 prior runs. The PR carries no Go — a MkDocs hook, its test, a doc page. Diagnose the timed-out wait.</td>
-</tr>
-<tr>
 <td><a id="Q559"></a>Q559</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2_runnerset_capacity_gate_test.go"><code>TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire</code> flaked on a docs-only PR</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -2645,6 +2637,14 @@
 <td>🔲</td>
 <td>M</td>
 <td>The AGC is the sole reaper; GMC deletes it on gateway delete and leaves worker pods behind — do-not-disrupt annotations then pin billable nodes forever (2026-07-31 dogfood). Cascade-reap tenant workers on gateway deletion, or add pod ownerRefs/TTL.</td>
+</tr>
+<tr>
+<td><a id="Q582"></a>Q582</td>
+<td><a href="../operations/migration-v1-to-v2/#step-3--coexistence-validation-and-rollback">The v1 and v2 proxy pools collide throughout migration coexistence</a></td>
+<td><code>bug</code> <code>infra</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Both stamp <code>app: actions-gateway-proxy</code>, so post-<code>gag-migrate</code> each pool's pods match the other's PDB, both HPAs wedge on <code>AmbiguousSelector</code> (neither autoscales), and hostname anti-affinity makes coexistence cost v1+v2 nodes. Found via Q570.</td>
 </tr>
 <tr>
 <td><a id="Q501"></a>Q501</td>
@@ -3200,6 +3200,13 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a id="Q570"></a>Q570</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go"><code>E2E_Migration_MigratedTenantReconcilesIntoAWorkingControlPlane</code> times out when the v1 proxy pool takes both workers</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>S</td>
+<td><strong>Event:</strong> the migrated proxy-pool wait times out on <code>main</code> after the Q570 fix (the tenant pins its inline pool with <code>WithProxyReplicas(1, 1)</code>, so its HPA cannot take the worker the migrated pool needs). → top of Queue, escalated.</td>
+</tr>
 <tr>
 <td><a id="Q548"></a>Q548</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-released-upgrade-check.sh">Released-upgrade check dies on tar EPIPE reading the chart's values.yaml</a></td>
