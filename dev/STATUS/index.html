@@ -2521,6 +2521,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q570"></a>Q570</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go"><code>E2E_Migration_MigratedTenantReconcilesIntoAWorkingControlPlane</code> flaked on a docs-only PR</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Timed out after 240s on #1071 (run 30696112662, 2026-08-01); 61 of 62 specs passed and <code>main</code> was green across the 8 prior runs. The PR carries no Go — a MkDocs hook, its test, a doc page. Diagnose the timed-out wait.</td>
+</tr>
+<tr>
 <td><a id="Q559"></a>Q559</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2_runnerset_capacity_gate_test.go"><code>TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire</code> flaked on a docs-only PR</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -2623,6 +2631,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>MkDocs reports an unlisted page at INFO, invisible under a green build — that is how Q562's three operator pages hid. <code>not_in_nav</code> declares every deliberate omission, so the list should be empty; fail <code>docs-preview.sh build</code> when it is not.</td>
+</tr>
+<tr>
+<td><a id="Q571"></a>Q571</td>
+<td><a href="../plan/scripts-directory-regrouping/">Group <code>scripts/</code> into blast-radius subdirectories</a></td>
+<td><code>infra</code> <code>speed</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>100 flat scripts mean no path filter can say which gate cares: <code>e2e-test.yml</code> takes <code>scripts/*</code> wholesale, so a docs PR pays ~13 min. Prefix globs replace it, settle the <code>e2e-calico.yml</code> disagreement, and delete the interim <code>nondocs</code> filter.</td>
 </tr>
 <tr>
 <td><a id="Q520"></a>Q520</td>

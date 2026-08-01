@@ -2643,6 +2643,11 @@ markers per item.</p>
 <td>✅ Done — Phase 1 + Phase 2 complete; items 2.5/2.7b are cosmetic defers only</td>
 </tr>
 <tr>
+<td><a href="scripts-directory-regrouping/">scripts-directory-regrouping.md</a></td>
+<td>Group <code>scripts/</code>'s 100-file flat namespace into blast-radius subdirectories so every CI path filter is a prefix glob: kills <code>e2e-test.yml</code>'s <code>scripts/*</code> catch-all and the <code>!(dogfood)</code> extglob, and settles <code>e2e-test.yml</code> vs <code>e2e-calico.yml</code> disagreeing ~60× about the scripts behind the <code>e2e-reusable.yml</code> they share</td>
+<td>❌ Not started — filed 2026-08-01 from Q561, where a MkDocs hook's unit test pulled two docs-only PRs into a ~13 min e2e run and one of them failed an unrelated migration spec (<a href="../STATUS/#Q571">Q571</a>). The interim <code>nondocs</code> filter ships first and this plan deletes it</td>
+</tr>
+<tr>
 <td><a href="go-to-market/">go-to-market.md</a></td>
 <td>Adoption plan (OSS, non-commercial): ICP, demand evidence vs ARC, messaging priority, channels, AI discoverability, donation posture</td>
 <td>ⓘ Strategy — follow-ups (ARC→GAG migration guide, README problem-first) on the STATUS Queue</td>
