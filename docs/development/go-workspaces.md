@@ -52,13 +52,47 @@ All runtime modules share a single `vendor/` at the repo root, produced by `go w
 
 `test/fakegithub` is an HTTP stub used by fake-GitHub e2e tests, listed in `go.work` so its packages are covered by `go work vendor`. It imports one internal package — `broker/brokerstub`, the shared session/credential mechanics every in-repo broker double now builds on (Q368) — which is deliberately standard-library-only, so the fakegithub binary links no third-party code and its distroless, Trivy-scanned image stays lean. Keep `broker/brokerstub` dependency-free for that reason: an import of the `broker` client (githubapp/JWT/Prometheus) would enlarge the scanned surface.
 
-`tools/` has its own separate `vendor/` (`tools/vendor/`) for the kubebuilder/controller-gen toolchain. That's independent and managed by `make tools`. Do not merge it into the workspace vendor.
+`tools/` has its own separate `vendor/` (`tools/vendor/`) for the kubebuilder/controller-gen toolchain. That's independent and managed by `make tools`. Do not merge it into the workspace vendor. It holds pinned third-party tools only — first-party Go tooling gets its own module, per [First-party Go tooling stays outside the workspace](#first-party-go-tooling-stays-outside-the-workspace).
 
 When you need to *read* a dependency's source, read the committed `vendor/` (or `tools/vendor/`) tree, not the module cache — `~/go/pkg/mod` sits outside the worktree (so workspace-guard prompts on it) *and* may hold a different version than the `-mod=vendor` build actually uses.
 
 ### Why replace directives are still present
 
 `broker`, `githubapp`, and the `cmd/*` modules depend on each other using `replace` directives in their individual `go.mod` files, even though the workspace `use` directives already provide local overrides at build time. This is necessary because `go mod tidy` and `go work sync` validate that required versions are resolvable; the zero pseudo-version placeholder (`v0.0.0-00010101000000-000000000000`) is only valid alongside a `replace` directive. Do not remove those `replace` lines — they are load-bearing for tidy.
+
+## First-party Go tooling stays outside the workspace
+
+Repo tooling written in Go — gate implementations, linters, report generators — goes in a module that is deliberately **not** listed in `go.work`. No such module exists yet; `devtools/` is the reserved name, and this section is the standing rule for whoever adds the first one.
+
+| Directory | Holds | In `go.work`? |
+|---|---|---|
+| `tools/` | pinned **third-party** build tools (`tools.go` blank imports, built by `make tools` into `.build/`) | no |
+| `devtools/` *(planned)* | **first-party** Go programs backing `make` targets | no |
+
+Packages inside `devtools/` are grouped by the gate that runs them, mirroring `scripts/`: `devtools/ci/pathfilters/` would be the Go implementation of a `ci/` gate the same way [`scripts/ci/check-path-filters.sh`](../../scripts/ci/check-path-filters.sh) is the shell one. That keeps "which gate runs this?" answerable from the path, which is what the CI path filters need — they are plain prefix globs.
+
+Run these with `go run`; a gate needs no separate compile step. `go run` caches its build, so a small program importing `gopkg.in/yaml.v3` costs ~0.2s warm against ~1.6s on a completely cold build cache. Invoke it from its own directory, like the `tools/` module:
+
+```bash
+(cd devtools && go run ./ci/pathfilters)
+```
+
+### Why it stays out of the workspace, and out of `scripts/`
+
+[`scripts/ci/check-path-filters.sh`](../../scripts/ci/check-path-filters.sh) fails any workspace-covering filter that does not match every `go.work` module, and that set includes `e2e-test.yml:e2e` and `security-scan.yml:code`. A module in the workspace therefore drags every change to it through an image bake and an e2e cluster — an unbounded per-PR cost to pay for a docs linter.
+
+It cannot live under `scripts/` either. A Go module brings a `vendor/` tree, and vendored dependencies ship shell scripts (41 across the current `vendor/` and `tools/vendor/` — `zap/checklicense.sh`, `kubebuilder/test_e2e.sh`, and others). [`scripts/ci/shellcheck-scripts.sh`](../../scripts/ci/shellcheck-scripts.sh) lints `scripts/**/*.sh` recursively, so third-party shell would land in the shellcheck gate.
+
+### Wiring a new first-party module
+
+Outside `go.work` the Go gates do not see the module: `go-test.sh`, `go-lint.sh`, `coverage.sh` and `go-vulncheck.sh` all iterate `workspace_modules()` (`go work edit -json`). Wire it up explicitly or the code is never linted, tested, or scanned:
+
+1. Vendor it in [`scripts/go/vendor-sync.sh`](../../scripts/go/vendor-sync.sh), beside the existing `tools/` line: `(cd devtools && GOWORK=off go mod vendor)`.
+2. Extend those four gate scripts to cover it. [`scripts/lib/common.sh`](../../scripts/lib/common.sh) is the home for a `first_party_modules()` helper returning the workspace modules plus `devtools`.
+3. Classify `devtools/**` in a **narrow** CI path filter — the lint/scripts jobs, never e2e — so `check-path-filters.sh` assertion 1 passes.
+4. Add a pointer from [`scripts/README.md`](../../scripts/README.md) so the gate map stays in one place.
+
+`scripts/go/check-go-version.sh` needs no change: it already asserts a single `go` directive across every `go.mod`, so a new module inherits the check.
 
 ## Changing dependencies
 
