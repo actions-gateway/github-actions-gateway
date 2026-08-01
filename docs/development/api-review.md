@@ -304,6 +304,38 @@ reason `Observe` is named the way it is.
 "Breaking" here means the wire contract, which is what a tag freezes. Go-symbol
 breaks affect `api` module consumers only and do not need to beat a tag.
 
+### Ask it in this order, at PR review
+
+Two questions come before the table, and both are cheap only while the PR is
+open. Asking them at release pre-flight is already late: by then the answer costs
+a rebase of merged work instead of an edit to a draft.
+
+**1. Has this element shipped in a stable tag?** Everything below assumes it has
+— that premise is what turns a rename into a conversion shim plus a deprecation
+window. It is false more often than the `!` markers suggest. All three
+`!`-marked commits between `v1.2.0` and 2026-07-31 changed surface no stable tag
+had ever published: `windowStart` and `capacityGate` are both absent from every
+API tree at `v1.2.0`, so renaming and reshaping them broke nothing. Each sat at
+the *merged, before the tag* row of [the cost curve](#the-cost-curve) — an edit.
+
+```bash
+git grep -l '<field>' "$(git tag --list 'v*' --sort=-v:refname | grep -v -- '-' | head -1)" -- api cmd/agc/api cmd/gmc/api
+```
+
+No hit means no cluster can be holding it and no manifest can name it: not
+breaking. `scripts/api-surface-since.sh <tag>` lists everything a tag cut now
+would publish for the first time, which is the same question asked over the whole
+surface at once. If you still mark the commit `!` for a Go-symbol break, say so
+in the body — nothing downstream can tell the two kinds of break apart, and only
+the wire kind bears on the tag.
+
+**2. If it did ship, does the change have to break?** A breaking shape is
+sometimes the *first* shape reached rather than the one required. Adding a field
+beside the old one, widening a validation instead of tightening it, or accepting
+both spellings for a version reaches the same end state without the shim. Ask
+before the PR lands, while the alternative is still a design choice; afterwards
+it is a migration.
+
 | Change | Wire-breaking? | Notes |
 |---|---|---|
 | Add an optional field with a safe default | No | The ordinary case. |

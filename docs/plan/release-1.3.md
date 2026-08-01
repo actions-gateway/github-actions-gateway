@@ -69,6 +69,33 @@ Cutting mechanics (pre-flight, tagging, verification, the dogfood release-candid
 gate) live in [operations/release.md](../operations/release.md) and are not repeated
 here.
 
+## Scope ledger
+
+Planned vs delivered, per the
+[scope-ledger convention](../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
+The prose below carries the *why* of each; this table is the state.
+
+| Q-ID | Item | Gates? | Status |
+|---|---|---|---|
+| Q359 | Worker right-sizing live-validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | `1.3-gate` | ✅ shipped 2026-07-25 |
+| Q411 | `v2alpha1` deprecation reaches the apiserver ([§ B](#b-deprecation-notice-satisfied)) | `1.3-gate` | ✅ shipped 2026-07-26 |
+| Q412 | `v2.0.0` named as the removal release ([§ B](#b-deprecation-notice-satisfied)) | `1.3-gate` | ✅ shipped 2026-07-26 |
+| Q393 | Announce bar derived from the git tags ([§ C](#c-release-mechanics-satisfied)) | `1.3-gate` | ✅ shipped 2026-07-26 |
+| Q400 | Heavy path gates cover `api/` and `scaleset/` ([§ D](#d-gate-integrity-satisfied)) | `1.3-gate` | ✅ shipped 2026-07-26 |
+| Q404 | Build-tagged Go files compiled and vetted in `make check` ([§ D](#d-gate-integrity-satisfied)) | `1.3-gate` | ✅ shipped 2026-07-26 |
+| Q481 | `spec.sizing` shape ([§ E](#e-api-review-satisfied)) | `1.3-gate` | ✅ ship as-is, deliberately (2026-07-28) |
+| Q484 | `nodeShare.allocatable` must declare cpu, memory, or both ([§ E](#e-api-review-satisfied)) | `1.3-gate` | ✅ shipped 2026-07-28 |
+| Q485 | `windowStart` → `windowStartTime` rename ([§ E](#e-api-review-satisfied)) | `1.3-gate` | ✅ shipped 2026-07-28 |
+| Q486 | The two managed-autoscaler opt-ins keep their different shapes ([§ E](#e-api-review-satisfied)) | `1.3-gate` | ✅ no API change, deliberately (2026-07-28) |
+| Q550 | Scale-set runner registrations leak at GitHub | `1.3-gate` | ✅ shipped 2026-07-31 |
+| Q551 | A job the listener cannot provision is skipped permanently | `1.3-gate` | ✅ shipped 2026-07-31 |
+| Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
+| [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
+
+**Cut condition: zero open `1.3-gate` rows** (`grep '1.3-gate' docs/STATUS.md` —
+currently none) **plus the release-candidate dogfood validation**, which is
+deliberately not a Queue row because it can only run against a published RC.
+
 ## What 1.3 means
 
 Two things, one of which only a release can deliver.

@@ -9,11 +9,39 @@ doesn't re-litigate them.
 
 ## Status
 
-Not started. Tracked as [Q556](../STATUS.md#Q556).
+**Complete.** All three deliverables shipped 2026-07-31:
+[`scripts/release-delta.sh`](../../../scripts/release-delta.sh) with
+`release-delta-test.sh` under `make scripts-test`, the *When to cut* section in
+[operations/release.md](../../operations/release.md#when-to-cut), and the
+scope-ledger convention in
+[maintaining-backlog.md](../../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
+
+The fourth acceptance criterion — a release plan doc that opens with a ledger —
+is satisfied by [release-1.3.md](../release-1.3.md#scope-ledger) rather than deferred
+to 1.4: 1.3 was mid-flight with the prose status banner the gap section names, so
+it is both the worked example and the first beneficiary.
+
+Two decisions the implementation changed from the plan above:
+
+- **The completed-Q-ID list is derived from STATUS.md's revisions, not from
+  `docs(status)` subject verbs.** PRs squash-merge, so a Queue row's deletion
+  reaches `main` inside the *work* commit — `fix(agc): … (Q550)`, not
+  `docs(status): … complete Q550`. Reading each revision's Queue section and
+  diffing the sets is immune to that, and it distinguishes a row *parked* in
+  Deferred from one delivered, which a subject verb cannot. The removing commit's
+  subject then labels the row, which is more useful than the verb would have been.
+- **A `!` commit does not auto-promote the suggested bump to major.** The
+  operative question is not which API version the change landed on but whether
+  the last stable tag ever *published* the surface it changed: all three
+  `!`-marked commits between `v1.2.0` and 2026-07-31 renamed or reshaped fields
+  absent from every API tree at `v1.2.0`, so none of them broke a contract. The
+  report prints the breaking subjects and asks for that judgement, and
+  [api-review.md](../../development/api-review.md#ask-it-in-this-order-at-pr-review)
+  moves the question to PR review, where the answer is still an edit.
 
 ## The gap
 
-[operations/release.md](../operations/release.md) covers *how* to cut a
+[operations/release.md](../../operations/release.md) covers *how* to cut a
 release (mechanics, verification, the RC dogfood gate) but says nothing about
 *when*. The gate-label machinery answers "can we cut the scoped release?"
 crisply, but two questions have no canonical answer today:
@@ -22,7 +50,7 @@ crisply, but two questions have no canonical answer today:
   erases delivered work from STATUS.md by design, so nothing shows the
   unreleased delta.
 - **"What was planned vs delivered?"** — release plan docs narrate this in a
-  prose status banner ([release-1.3.md](release-1.3.md)), faithful but not
+  prose status banner ([release-1.3.md](../release-1.3.md)), faithful but not
   measurable at a glance.
 
 Both are *derivable* because two disciplines are already enforced:
