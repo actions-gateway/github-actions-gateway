@@ -174,6 +174,16 @@ last gaps an outside operator hits.
   the gateway has to measure re-run-then-pass rates before acting on them is
   honest, and that measurement is the next step rather than the API shape.
 
+- **Richer egress proxy.** <!-- q:Q564,Q565,Q566,Q567 --> Four additions to the per-tenant
+  proxy, each opt-in: a per-connection audit trail of which tenant reached which
+  destination, per-tenant rate limiting so one looping workflow can be slowed
+  before it exhausts a shared GitHub quota, TLS on the in-cluster hop so the
+  CONNECT target is not readable by a cluster-wide network tap, and dedicated
+  proxy pools so a bandwidth-heavy runner group cannot crowd out a quieter one.
+  Destination allow-listing is deliberately absent from this list: it shipped
+  earlier, and the proxy already refuses a CONNECT to any destination outside
+  the configured allowlist.
+
 Everything else on this roadmap has either shipped (above) or is waiting on a
 gate rather than on engineering time (below); the active backlog also carries
 bug-fix, measurement, and test work behind capability that already exists.
@@ -201,8 +211,6 @@ release that carries it.
 - **Controller horizontal scaling / high availability.** <!-- q:Q169 --> The per-tenant
   controller is single-replica by design today; distributed session state would
   enable multi-replica HA if a single controller becomes a measured bottleneck.
-- **Richer egress proxy.** <!-- q:Q19 --> Optional allow-listing, rate-limiting, audit logging,
-  and per-runner-group proxy pools.
 - **Bring-your-own proxy TLS certificate.** <!-- q:Q174 --> Supply the proxy's
   certificate from your managed PKI or Vault instead of the GMC's self-signed
   default. (The autoscaler half of "bring your own proxy infrastructure" has
