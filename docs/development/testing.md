@@ -769,7 +769,7 @@ To prove a window like this rather than guess at it, widen it: drop a `time.Slee
 
 ### Script tests: neutralize the clock, never measure it
 
-The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion. `make scripts-test` runs all 32 suites concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh), inside a `make check` that is already saturating the machine with the Go tests. A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.
+The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion. `make scripts-test` runs all 34 suites concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh), inside a `make check` that is already saturating the machine with the Go tests. A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.
 
 **So a script test must never assert on wall-clock time it actually spent.** Stub `sleep` — it is a plain command, so a shell function shadows it — and assert on what the stub recorded. Two established shapes, both in-tree:
 
@@ -782,7 +782,9 @@ Q471 is the worked example, and it shows the cost of getting this wrong is not j
 
 ### Testing a `main`-shaped script: the entry-point seam, and the errexit trap
 
-A script whose logic lives in `main()` needs a seam before it can be sourced at all. The dogfood scripts use an env guard on the last line — `[[ -n "${START_LIB_ONLY:-}" ]] || main "$@"` in [`start.sh`](../../scripts/dogfood/start.sh), and the same shape in [`e2e-start.sh`](../../scripts/dogfood/e2e-start.sh) and [`validate-release.sh`](../../scripts/dogfood/validate-release.sh) — so a test sources the file for its functions without running it. It is the `BASH_SOURCE`-guard idea applied to an entry point; **keep the guard when editing these scripts**, or their suites stop being able to load them.
+A script whose logic lives in `main()` needs a seam before it can be sourced at all. The dogfood scripts use an env guard on the last line — `[[ -n "${START_LIB_ONLY:-}" ]] || main "$@"` in [`start.sh`](../../scripts/dogfood/start.sh), and the same shape in [`e2e-start.sh`](../../scripts/dogfood/e2e-start.sh), [`e2e-stop.sh`](../../scripts/dogfood/e2e-stop.sh), [`delete.sh`](../../scripts/dogfood/delete.sh) and [`validate-release.sh`](../../scripts/dogfood/validate-release.sh) — so a test sources the file for its functions without running it. It is the `BASH_SOURCE`-guard idea applied to an entry point; **keep the guard when editing these scripts**, or their suites stop being able to load them.
+
+The guard earns most on a script that is destructive at rest. [`delete.sh`](../../scripts/dogfood/delete.sh) tears down the whole dogfood cluster, so its suite must never be one stray invocation away from running it; sourcing under `DELETE_LIB_ONLY=1` with `gcloud`/`kubectl`/`gh` stubbed is what makes the confirmation, the occupancy probes it quotes, and the delete ordering assertable at all. Teardown is the half worth asserting hardest: a drain that reports convergence it did not reach deletes an AGC out from under live work, and worker pods outlive their AGC with do-not-disrupt annotations pinning billable nodes (Q581, and the 82 stranded spot node-hours behind Q434).
 
 **Then: never call `main` as an operand of `||` or `if`.** Bash suppresses `errexit` inside a subshell in a condition context, and re-running `set -e` inside that subshell does *not* re-arm it — measured on bash 5.3:
 
