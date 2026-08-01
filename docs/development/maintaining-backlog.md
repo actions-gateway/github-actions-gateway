@@ -191,6 +191,22 @@ Deleting a row has a documented cascade — the Progress flip, plan archival, th
 
 Only the first two were written down before. A 2026-07-30 groom that deferred [Q273](../STATUS.md#Q273) found the other three the expensive way — two by opening a red PR, the third by re-reading the page.
 
+## A label earns its place by discriminating
+
+A label that lands on most rows costs a column and answers nothing. `infra` reached 69 of 160 table rows before it was retired — it had become "engineering work that isn't docs, tests, or security", covering controller bugs, API graduation, GPU support, and CI gates alike. The rows it marked already carried `bug`/`feature`/`security`; the label added no cut.
+
+Three narrower labels replaced it, each answering a question someone actually asks:
+
+| Label | Scope | The question it answers |
+|---|---|---|
+| `ci` | The build/test gates themselves — `.github/workflows/**`, `make check` and its scripts, lint and coverage plumbing | *What's wrong with the gates?* |
+| `dogfood` | The GKE dogfood cluster and its bootstrap/teardown scripts under `scripts/dogfood/` | *What bites me on the next cluster recreate?* |
+| `debt` | Refactors, dedup, and dead-surface removal with no behavior change | *What can I clean up without a design decision?* |
+
+Deliberately **not** added: an `e2e` label. `tests` already covers those rows and the item title names the suite, so `e2e` would double-label rather than split. A product change to the AGC or GMC takes no area label at all — `bug`/`feature`/`security` carries it, and the linked path says where it lives.
+
+Apply the same bar to any new label: if you can't name the question it answers, or it would land on more than a third of rows, it belongs in the item title instead.
+
 ## Don't pre-assign release versions to backlog items
 
 Do **not** tag Queue rows with speculative future release versions (`1.1`, `2.0`). Introduce a release label only once that release is *concretely scoped* — a plan doc defining its Definition of Done exists — at which point the label answers a real yes/no question ("does this block that tag?"). Post-release estimates are guesses that move (churn without signal), position already encodes priority, and an undefined version anchors nothing. The right pattern is the one `1.0-gate` followed: scope the release in a plan doc first, then add the label.
