@@ -225,6 +225,28 @@ The shared `actions-gateway/component: workload` selector label is carried by bo
 v1 and v2 worker/AGC pods (it backs the workload NetworkPolicy selector), so the
 egress-lockdown posture is identical across the two APIs.
 
+### Tolerate `kubectl.kubernetes.io/restartedAt` on a managed pod template (Q552)
+
+A GMC-managed Deployment's pod template is rebuilt from the CR on every reconcile, so
+anything an operator hand-edits onto it is reverted. That is the intended contract for
+config drift — the CR is the source of truth — but it also reverted the annotation
+`kubectl rollout restart` patches in, making the restart a silent no-op: kubectl reports
+the *old*, trivially-complete ReplicaSet as successfully rolled out. Every runbook that
+prescribed a restart was therefore prescribing nothing.
+
+`assignManagedPodTemplate`
+([`cmd/gmc/internal/controller/deployment_restart_annotation.go`](../../cmd/gmc/internal/controller/deployment_restart_annotation.go))
+carries the keys in `toleratedTemplateAnnotations` over from the live template instead
+of reverting them; every GMC Deployment apply path routes its template assignment
+through it.
+
+That list is deliberately one well-known key rather than a preserve-anything-unmanaged
+rule. Preserving unmanaged keys wholesale would mean the GMC could never *remove* an
+annotation it had stopped setting, and would quietly turn the pod template into a
+partially-unowned surface. Adding a key here is a decision to give up reconciliation of
+that key — take it one key at a time, and pin it with a test that the *unlisted* keys
+are still reverted.
+
 ### Recommended `app.kubernetes.io/*` labels (Q205)
 
 Every object the GMC or AGC creates also carries the Kubernetes
