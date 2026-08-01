@@ -20,9 +20,9 @@ is automated, by what, and where the manual edges are.
 | buildkit builder image digest (3 files) | `BUILDKIT_IMAGE` in `e2e-reusable.yml`, `security-scan.yml` **and** `publish.yml` | **updatecli** ([`updatecli.d/buildkit.yaml`](../../updatecli.d/buildkit.yaml), weekly — rewrites all three, so they can't drift) |
 | envtest Kubernetes version (3 files) | `ENVTEST_K8S_VERSION` in [`integration-test.yml`](../../.github/workflows/integration-test.yml) **and** `cmd/gmc/Makefile` + `cmd/agc/Makefile` | **updatecli** ([`updatecli.d/envtest.yaml`](../../updatecli.d/envtest.yaml), weekly — rewrites all three, so they can't drift; resolved from controller-tools' `envtest-releases.yaml`, **no auto-merge** since it moves the tested Kubernetes version — keep it on the same minor as `KIND_NODE_IMAGE`. The review-gated PR doubles as a **latest-Kubernetes compatibility canary**: it runs the integration tier against the newest envtest release, so a green PR confirms the project still works on the latest version) |
 | kind node image | `KIND_NODE_IMAGE` in `e2e-reusable.yml` | **manual** (changes the tested Kubernetes version — a deliberate choice; keep the envtest version above on the same Kubernetes minor) |
-| cluster-autoscaler **patch** (drift harness) | `CA_VERSION` in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) | **updatecli** ([`updatecli.d/cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml), weekly — moves the patch *within* the pinned minor only, resolved from the registry's own tag list. **No auto-merge**: the PR edits `scripts/autoscaler-cluster.sh`, which is the [live-autoscaler drift gate's](testing.md#its-cadence-the-version-bump-not-a-clock) path filter, so it exists to run that gate against the new release) |
-| cluster-autoscaler **minor** + kwok (drift harness) | `CA_VERSION`'s minor / `KWOK_VERSION` in [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) | **manual, prompted by the kind bump** — cluster-autoscaler is released per Kubernetes minor and the harness runs kind's *default* node image, so `CA_VERSION`'s minor is whatever kind ships. A kind bump that moves that minor fails the drift gate on skew; bump `CA_VERSION` to the matching CA minor in the same PR. See [testing.md](testing.md#its-cadence-the-version-bump-not-a-clock) |
-| Karpenter (drift harness) | `KARPENTER_VERSION` in [`scripts/karpenter-cluster.sh`](../../scripts/karpenter-cluster.sh) | **updatecli** ([`updatecli.d/karpenter.yaml`](../../updatecli.d/karpenter.yaml), weekly — the **latest** upstream release, minor or patch: Karpenter is not released per Kubernetes minor, so there is no minor for the kind bump to own. **No auto-merge**: the PR edits `scripts/karpenter-cluster.sh`, which is the [drift gate's](testing.md#its-cadence-the-version-bump-not-a-clock) path filter, so it exists to run that gate against the new release) |
+| cluster-autoscaler **patch** (drift harness) | `CA_VERSION` in [`scripts/e2e/autoscaler-cluster.sh`](../../scripts/e2e/autoscaler-cluster.sh) | **updatecli** ([`updatecli.d/cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml), weekly — moves the patch *within* the pinned minor only, resolved from the registry's own tag list. **No auto-merge**: the PR edits `scripts/e2e/autoscaler-cluster.sh`, which is the [live-autoscaler drift gate's](testing.md#its-cadence-the-version-bump-not-a-clock) path filter, so it exists to run that gate against the new release) |
+| cluster-autoscaler **minor** + kwok (drift harness) | `CA_VERSION`'s minor / `KWOK_VERSION` in [`scripts/e2e/autoscaler-cluster.sh`](../../scripts/e2e/autoscaler-cluster.sh) | **manual, prompted by the kind bump** — cluster-autoscaler is released per Kubernetes minor and the harness runs kind's *default* node image, so `CA_VERSION`'s minor is whatever kind ships. A kind bump that moves that minor fails the drift gate on skew; bump `CA_VERSION` to the matching CA minor in the same PR. See [testing.md](testing.md#its-cadence-the-version-bump-not-a-clock) |
+| Karpenter (drift harness) | `KARPENTER_VERSION` in [`scripts/e2e/karpenter-cluster.sh`](../../scripts/e2e/karpenter-cluster.sh) | **updatecli** ([`updatecli.d/karpenter.yaml`](../../updatecli.d/karpenter.yaml), weekly — the **latest** upstream release, minor or patch: Karpenter is not released per Kubernetes minor, so there is no minor for the kind bump to own. **No auto-merge**: the PR edits `scripts/e2e/karpenter-cluster.sh`, which is the [drift gate's](testing.md#its-cadence-the-version-bump-not-a-clock) path filter, so it exists to run that gate against the new release) |
 
 Dependabot config: [`.github/dependabot.yml`](../../.github/dependabot.yml). The
 supply-chain gates that catch drift on any of these (`vendor-check`,
@@ -77,7 +77,7 @@ rewrites `ENVTEST_K8S_VERSION` across the workflow and both controller Makefiles
 [`cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml) is the
 third, and the only manifest that resolves a version **relative to the pin it is
 replacing**. It reads the current `CA_VERSION` out of
-[`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) with a
+[`scripts/e2e/autoscaler-cluster.sh`](../../scripts/e2e/autoscaler-cluster.sh) with a
 `file` source, then hands it to
 [`scripts/updatecli/latest-cluster-autoscaler-patch.sh`](../../scripts/updatecli/latest-cluster-autoscaler-patch.sh),
 which returns the newest patch published **inside that same Kubernetes minor** —
@@ -99,8 +99,8 @@ a git tag exists before its image is published, and the release tags
 | [`polaris.yaml`](../../updatecli.d/polaris.yaml) | `POLARIS_VERSION` + `POLARIS_SHA256` | published `checksums.txt` line |
 | [`buildkit.yaml`](../../updatecli.d/buildkit.yaml) | `BUILDKIT_IMAGE` digest in three files | none (`dockerdigest` resolves the digest directly) |
 | [`envtest.yaml`](../../updatecli.d/envtest.yaml) | `ENVTEST_K8S_VERSION` in three files | none (version-only; `shell` source from the envtest-releases index) |
-| [`cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml) | `CA_VERSION` patch in `scripts/autoscaler-cluster.sh` | none (version-only; `file` source reads the current pin, `shell` source resolves the newest patch in its minor from the registry tag list) |
-| [`karpenter.yaml`](../../updatecli.d/karpenter.yaml) | `KARPENTER_VERSION` in `scripts/karpenter-cluster.sh` | none (version-only; `githubrelease` — the harness builds from the git tag, so the repo's releases are the datasource) |
+| [`cluster-autoscaler.yaml`](../../updatecli.d/cluster-autoscaler.yaml) | `CA_VERSION` patch in `scripts/e2e/autoscaler-cluster.sh` | none (version-only; `file` source reads the current pin, `shell` source resolves the newest patch in its minor from the registry tag list) |
+| [`karpenter.yaml`](../../updatecli.d/karpenter.yaml) | `KARPENTER_VERSION` in `scripts/e2e/karpenter-cluster.sh` | none (version-only; `githubrelease` — the harness builds from the git tag, so the repo's releases are the datasource) |
 
 **Gate tools open PRs that may go red.** shellcheck and polaris are lint/scan
 gates: a new release can add findings. The bump PR running CI is
@@ -170,9 +170,9 @@ rather than because automation is missing:
   Kubernetes version (and the Calico compatibility window). Review and bump it by
   hand in the kind updatecli PR when the Kubernetes version should move.
 - **`CA_VERSION`'s Kubernetes minor, and `KWOK_VERSION`** (both copies — its
-  twin in [`scripts/karpenter-cluster.sh`](../../scripts/karpenter-cluster.sh)
+  twin in [`scripts/e2e/karpenter-cluster.sh`](../../scripts/e2e/karpenter-cluster.sh)
   is kept the same), in
-  [`scripts/autoscaler-cluster.sh`](../../scripts/autoscaler-cluster.sh) — the
+  [`scripts/e2e/autoscaler-cluster.sh`](../../scripts/e2e/autoscaler-cluster.sh) — the
   cluster-autoscaler and kwok releases behind the
   [live-autoscaler drift gate](testing.md#the-live-autoscaler-drift-gate).
   cluster-autoscaler ships one release series per Kubernetes minor and the

@@ -40,7 +40,7 @@ under k8s.io/api skew — the exact Q73 hazard.
 - **Authoritative sources** (owned by each module's controller-gen):
   - `cmd/gmc/config/crd/bases/...actionsgateways.yaml` (GMC owns `ActionsGateway`)
   - `cmd/agc/config/crd/...runnergroups.yaml` (AGC owns `RunnerGroup`)
-- **`scripts/sync-chart-crds.sh`** generates the two chart CRD templates from
+- **`scripts/manifest/sync-chart-crds.sh`** generates the two chart CRD templates from
   those sources, injecting the per-CRD `helm.sh/resource-policy: keep` annotation
   block. `make chart-crds` writes them.
 - **`make chart-crds-check`** (vendor-check pattern) re-runs the sync and
@@ -78,7 +78,7 @@ single-source inputs to the chart generators, and what `rbac_test.go` + envtest
 load) and the two `admission-policy` ValidatingAdmissionPolicies the GMC
 integration suite applies in envtest. `make manifests` reproduces them.
 
-**RBAC seam — single-sourced now** (user decision, this PR). `scripts/sync-chart-rbac.sh`
+**RBAC seam — single-sourced now** (user decision, this PR). `scripts/manifest/sync-chart-rbac.sh`
 generates `charts/actions-gateway/files/manager-role-rules.yaml` from
 `cmd/gmc/config/rbac/role.yaml`; the chart's `manager-role` template embeds it
 via `.Files.Get`, and `make chart-rbac-check` gates drift (wired into `make check`

@@ -46,7 +46,7 @@ spec:
     # (charts/actions-gateway/templates/namespace-psa-guard.yaml) parameterizes
     # this username from .Release.Namespace + the serviceAccountName helper, so a
     # GMC installed under any namespace/name is covered automatically (asserted by
-    # scripts/manifest-validate.sh). The literal below matches the envtest install
+    # scripts/manifest/manifest-validate.sh). The literal below matches the envtest install
     # identity; a hand-applied copy of THIS file under a different namespace/name
     # must update this single string — prefer the chart.
     - name: only-gmc-service-account

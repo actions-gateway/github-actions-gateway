@@ -22,7 +22,7 @@ the measured results live in
 
 | File | Purpose |
 |---|---|
-| [`../../scripts/kata-node-pool.sh`](../../scripts/kata-node-pool.sh) | Provision (or `DRY_RUN=1` print) a GKE node pool with nested virtualization on a supported machine family (n2/n2d/c2/c2d). |
+| [`../../scripts/dev/kata-node-pool.sh`](../../scripts/dev/kata-node-pool.sh) | Provision (or `DRY_RUN=1` print) a GKE node pool with nested virtualization on a supported machine family (n2/n2d/c2/c2d). |
 | [`kata-values.yaml`](kata-values.yaml) | Helm values for upstream's `kata-deploy` **OCI chart** — the canonical installer. (Kata no longer ships raw `kata-deploy.yaml`/`kata-rbac.yaml`; those release-asset URLs 404.) |
 | [`runtimeclass.yaml`](runtimeclass.yaml) | The `kata` alias RuntimeClass. The chart owns `kata-qemu`; we do not redeclare it. |
 | [`runner-pod.yaml`](runner-pod.yaml) | The unprivileged runner: `runtimeClassName: kata`, `privileged: false`, `drop: [ALL]`, dockerd + kind inside the guest VM. The security crux. Its `args:` block is the reference implementation of the six setup steps an unprivileged dockerd needs. |
@@ -43,7 +43,7 @@ exist yet.
 - `make manifest-validate` — yamllint over `deploy/kata-ci/` plus kubeconform
   schema-check of `runtimeclass.yaml` and `runner-pod.yaml`. `kata-values.yaml`
   is a Helm *values* file, not a manifest, so it is linted but not schema-checked.
-- `make shellcheck` (part of `make check`) — lints `scripts/kata-node-pool.sh`.
+- `make shellcheck` (part of `make check`) — lints `scripts/dev/kata-node-pool.sh`.
 
 ## Apply order (live — needs a nested-virt cluster)
 

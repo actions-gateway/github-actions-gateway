@@ -504,7 +504,7 @@ pod spec but not the placement + the NAT source IP end-to-end. That needs a clou
 run, and per the repo rule ("treat ✅ findings as unverified until confirmed
 end-to-end — actually exec the thing") it is the honest close for Q243.
 
-[`scripts/validate-egress-ip.sh`](../../scripts/validate-egress-ip.sh) automates it,
+[`scripts/dev/validate-egress-ip.sh`](../../scripts/dev/validate-egress-ip.sh) automates it,
 teardown-safe, so the run is one authorized command rather than a bespoke sequence
 (and re-runnable at future egress-path changes — this class of regression is exactly
 what unit/envtest can miss):
@@ -552,7 +552,7 @@ tolerations + `affinity.podAntiAffinity: {}`), a real GMC-provisioned
 egresses from a **single** Cloud NAT IP — the 2026-07-07 two-IP spread is gone.
 
 **Per the repo rule ("treat ✅ findings as unverified until confirmed
-end-to-end"), the first real run mattered:** the harness ([`scripts/validate-egress-ip.sh`](../../scripts/validate-egress-ip.sh))
+end-to-end"), the first real run mattered:** the harness ([`scripts/dev/validate-egress-ip.sh`](../../scripts/dev/validate-egress-ip.sh))
 had never been executed against live GKE, and seven distinct defects surfaced
 only on contact — each gating a step deeper: private-nodes control-plane access
 (authorize the operator IP), the `--disable-default-snat`/`--enable-private-nodes`

@@ -42,7 +42,7 @@ unimplemented at the authorization layer.
 | GMC workload writes cluster-wide; docs claim CR-namespace confinement | High | **Resolved (Q122):** all workload `create`/`update`/`delete` confined to tenant-marked namespaces by the `gmc-tenant-resource-guard` VAP; `05-security.md` / `02-architecture.md` updated to match. |
 | Worker pods have no ingress NetworkPolicy (default-allow ingress) | High | **Resolved (Q128)** — workload NP now declares `policyTypes: [Ingress, Egress]` with an empty ingress rule set (default-deny) |
 | No GitHub Actions SHA-pinned; publish.yml runs tag-pinned actions with `id-token: write` | High | **Resolved (Q123)** — every `uses:` SHA-pinned, syft version-pinned, Dependabot `github-actions` ecosystem bumps the pins |
-| `make verify-release` accepts `refs/heads/.*` signing identities | Medium | **Resolved (Q124)** — identity regexp anchored tags-only (`@refs/tags/v.*$`); publish.yml refuses non-tag refs; regexp guarded by `scripts/verify-release-test.sh` |
+| `make verify-release` accepts `refs/heads/.*` signing identities | Medium | **Resolved (Q124)** — identity regexp anchored tags-only (`@refs/tags/v.*$`); publish.yml refuses non-tag refs; regexp guarded by `scripts/release/verify-release-test.sh` |
 | GMC teardown fail-open (`deleteIfExists` swallows errors, finalizer removed) | Medium | **Resolved (Q125):** `deleteIfExists` returns its error (NotFound = success); `reconcileDelete` collects delete errors, emits a `TeardownIncomplete` event, and requeues without removing the finalizer until every delete is confirmed gone. Fail-closed and idempotent. |
 | Vendored deps never integrity-checked against go.sum in CI | Medium | **New → Q126** |
 | 8 smaller hardening items (see below) | Low | **Resolved (Q127):** all eight addressed (item 5's cosign leg landed earlier via Q126); the single optional sub-item of #8 (non-HTTPS `GITHUB_API_BASE_URL` guard) is carved out to its own Queue item. See [Q127 batch detail](#q127-hardening-batch-items). |
@@ -178,7 +178,7 @@ bumps SHA pins and their `# vX.Y.Z` comments, so the pins don't rot. Policy
 
 ### Q124 — `make verify-release` accepts branch identities (Medium) — RESOLVED
 
-`scripts/verify-release.sh` (post-#209 home of the recipe; was `Makefile:511`)
+`scripts/release/verify-release.sh` (post-#209 home of the recipe; was `Makefile:511`)
 matched `publish\.yml@refs/(tags|heads)/.*$`; the documented identity
 (`security-operations.md`, `release.md`) is tags-only. `publish.yml` is
 `workflow_dispatch`-able from any ref with an arbitrary `tag` input and runs
@@ -190,7 +190,7 @@ branch, overwrite a released GHCR version tag, and still pass verification.
 `scripts/lib/common.sh` so it has a single source of truth. Defense in
 depth: both `publish.yml` jobs' "Resolve publish tag" step now refuse any
 `GITHUB_REF` that isn't `refs/tags/…`, so a branch `workflow_dispatch` can't
-even reach the sign step. `scripts/verify-release-test.sh` (run by `make
+even reach the sign step. `scripts/release/verify-release-test.sh` (run by `make
 check` and the CI shellcheck job) asserts the regexp accepts
 `refs/tags/vX.Y.Z` and rejects `refs/heads/…`.
 
@@ -224,7 +224,7 @@ finalizer until every delete succeeds or is NotFound.
 ### Q126 — CI gate: vendor contents vs go.sum (Medium) — RESOLVED
 
 **Resolution.** New `vendor-check` job in `unit-test.yml` (single source of
-truth `make vendor-check` → `scripts/vendor-check.sh`) re-runs the
+truth `make vendor-check` → `scripts/go/vendor-check.sh`) re-runs the
 workspace-vendor flow — `go work vendor` plus `cd tools && GOWORK=off go mod
 vendor`, both of which re-fetch every module verified against `go.sum` — and
 fails on `git diff --exit-code vendor/ tools/vendor/`. Gated on a dedicated
@@ -232,7 +232,7 @@ fails on `git diff --exit-code vendor/ tools/vendor/`. Gated on a dedicated
 `code` so a pure-`.go` edit doesn't trigger the network re-vendor. A Dependabot
 `go.mod` bump fails the gate until a follow-up vendor sync lands — the intended
 signal (the gate asserts the committed tree is self-consistent), documented in
-`scripts/vendor-check.sh` and `docs/development/go-workspaces.md`. Sibling of
+`scripts/go/vendor-check.sh` and `docs/development/go-workspaces.md`. Sibling of
 the license-notices drift gate and of Q94/Q111.
 
 Original finding:
@@ -255,7 +255,7 @@ RESOLVED in the Q127 PR** except the one optional sub-item carved out below.
    Helm chart is the sole install path (Q142) and both admission-policy templates
    already parameterize the username from `.Release.Namespace` + the
    `serviceAccountName` helper, so a GMC installed anywhere is covered. Added a
-   render-level drift guard in `scripts/manifest-validate.sh` (renders under a
+   render-level drift guard in `scripts/manifest/manifest-validate.sh` (renders under a
    non-default `--namespace` and asserts the policy matchConditions bind to the
    rendered GMC ServiceAccount, never a hardcoded `gmc-system` identity), and
    clarified that the raw `config/admission-policy/*.yaml` is the codegen/envtest
@@ -279,7 +279,7 @@ RESOLVED in the Q127 PR** except the one optional sub-item carved out below.
    listener's `tls.Config` now pins `MinVersion: tls.VersionTLS12` (matching the
    metrics listener). Guarded by `TestProxy_TLS_RejectsBelowTLS12`.
 5. **Tool downloads not checksum-verified** — **RESOLVED.**
-   - **cosign** (done earlier, Q126 PR): `scripts/download-cosign.sh` pins the
+   - **cosign** (done earlier, Q126 PR): `scripts/release/download-cosign.sh` pins the
      SHA256 per (version, platform) and fails closed.
    - **kubeconform / shellcheck / polaris** (this PR): each CI install step now
      verifies the downloaded tarball against a pinned in-repo SHA256

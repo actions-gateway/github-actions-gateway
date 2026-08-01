@@ -131,7 +131,7 @@ Root: `all: build`. [cmd/agc/Makefile:7](../../cmd/agc/Makefile:7): `all: genera
 ### 2.7 Minor
 
 - `e2e-clean` ([Makefile:102](../../Makefile:102)) is a one-line alias for `e2e-cluster-delete`. Either drop it or make it actually clean — delete the kind cluster *and* remove the built images and `.build/` artifacts (which is what `clean` usually means in a Makefile).
-- `make tools` is silent. Borrow the `==> building controller-gen` style from [scripts/setup.sh](../../scripts/setup.sh) so users can see which tool is being built when it takes 30 seconds.
+- `make tools` is silent. Borrow the `==> building controller-gen` style from [scripts/dev/setup.sh](../../scripts/dev/setup.sh) so users can see which tool is being built when it takes 30 seconds.
 
 ---
 

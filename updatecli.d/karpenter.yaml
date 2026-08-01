@@ -1,4 +1,4 @@
-# Keep KARPENTER_VERSION in scripts/karpenter-cluster.sh — the Karpenter the
+# Keep KARPENTER_VERSION in scripts/e2e/karpenter-cluster.sh — the Karpenter the
 # live-autoscaler drift gate's second arm builds and installs — on the latest
 # kubernetes-sigs/karpenter release. updatecli resolves the newest release tag
 # and opens a PR moving the pin. The pin is a shell variable default, not a
@@ -11,7 +11,7 @@
 # Kubernetes minor (one release supports a wide range), so the kind bump PR that
 # moves CA_VERSION's minor never prompts this pin — it moved by hand or not at
 # all. Each release now gets its own PR, that PR edits
-# scripts/karpenter-cluster.sh, and that path is in autoscaler-drift.yml's
+# scripts/e2e/karpenter-cluster.sh, and that path is in autoscaler-drift.yml's
 # `changes` filter — so the gate runs and says whether upstream reworded.
 #
 # Unlike updatecli.d/cluster-autoscaler.yaml, this tracks the LATEST release,
@@ -64,11 +64,11 @@ sources:
 
 targets:
   pin:
-    name: 'KARPENTER_VERSION in scripts/karpenter-cluster.sh'
+    name: 'KARPENTER_VERSION in scripts/e2e/karpenter-cluster.sh'
     kind: file
     disablesourceinput: true
     scmid: repo
     spec:
-      file: scripts/karpenter-cluster.sh
+      file: scripts/e2e/karpenter-cluster.sh
       matchpattern: '(KARPENTER_VERSION=\$\{KARPENTER_VERSION:-)v\d+\.\d+\.\d+(\})'
       replacepattern: '${1}{{ source "karpenterVersion" }}${2}'

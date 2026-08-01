@@ -93,7 +93,7 @@ kube-network-policies snapshot) carries the #171 short-lived-pod and #283
 same-node fixes above. Verified against the image itself: the bundled kindnet
 DaemonSet still ships `limits: cpu=100m` on the `kindnet-cni` container, so
 the #612 unthrottle patch (`tune_kindnet_limits` in
-[`kind-with-registry.sh`](../../scripts/kind-with-registry.sh)) still applies
+[`kind-with-registry.sh`](../../scripts/e2e/kind-with-registry.sh)) still applies
 unchanged and is still needed.
 
 ## Symptom
@@ -216,7 +216,7 @@ larger host as well.
 ### Fix
 
 Remove the kindnetd **CPU limit** at cluster bring-up
-([`scripts/kind-with-registry.sh`](../../scripts/kind-with-registry.sh),
+([`scripts/e2e/kind-with-registry.sh`](../../scripts/e2e/kind-with-registry.sh),
 kindnet lane only) — the 100m CPU *request* keeps scheduling unchanged and the
 memory limit stays (no OOM was ever observed). Idempotent strategic-merge
 patch; re-running bring-up against an existing cluster is a no-op.

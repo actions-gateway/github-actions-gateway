@@ -998,7 +998,7 @@ once ([Q397](../STATUS.md#Q397)): 150 s for a registered-but-not-yet-`Available`
 `metrics.k8s.io` APIService, and a 15 s grace for the APIService to appear at all
 before it concludes metrics-server is absent (so a cluster genuinely without it
 still warns promptly). The retry is unit-tested against faked probes in
-`scripts/validate-cluster-test.sh`; the from-zero timing itself is only
+`scripts/e2e/validate-cluster-test.sh`; the from-zero timing itself is only
 observable on a real recreate, so **the next dogfood recreate is where this gets
 confirmed** — expect a `[WAIT]` line followed by `PASS`, not a WARN.
 

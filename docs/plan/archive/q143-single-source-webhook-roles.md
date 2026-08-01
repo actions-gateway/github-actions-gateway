@@ -47,7 +47,7 @@ would be indirection without drift protection.
 
 ### A. Webhook — full-file generator + drift gate (the CRD precedent)
 
-- `scripts/sync-chart-webhook.sh` transforms `cmd/gmc/config/webhook/manifests.yaml`
+- `scripts/manifest/sync-chart-webhook.sh` transforms `cmd/gmc/config/webhook/manifests.yaml`
   into `charts/actions-gateway/templates/webhook.yaml`, re-injecting the chart's
   Helm templating (name prefix + labels, the `certManager.enabled` CA-inject
   annotation, `namespace: {{ .Release.Namespace }}`, and the non-cert-manager

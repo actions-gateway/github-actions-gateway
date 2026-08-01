@@ -431,9 +431,9 @@ restarting kube-apiserver, which EKS/GKE/AKS do not offer. It could also fail
 
 For a CRD `paramKind` the apiserver allocates a fresh dynamic informer per
 context, so the same uninstall/reinstall cycle is survivable. This is measured
-rather than inferred: `scripts/vap-param-informer-check.sh` runs the identical
+rather than inferred: `scripts/e2e/vap-param-informer-check.sh` runs the identical
 empty-binding-set transition against both kinds on one apiserver, and
-`scripts/chart-reinstall-check.sh` drives a real uninstall/reinstall in CI.
+`scripts/e2e/chart-reinstall-check.sh` drives a real uninstall/reinstall in CI.
 
 **One consequence, and it is not install-time.** This CRD ships in the chart-root
 `crds/` directory rather than `templates/crds/` like the others, because the same
@@ -539,7 +539,7 @@ Removing the binding used to be the trigger for a cluster-wide outage (Q444) whe
 the parameter was a ConfigMap — a reinstall could not repair it. It is safe now
 that the parameter is a CRD, which is
 [why it is one](#the-policy-parameter-is-a-crd-not-a-configmap-q492); the
-uninstall/reinstall cycle is covered by `scripts/chart-reinstall-check.sh` in CI.
+uninstall/reinstall cycle is covered by `scripts/e2e/chart-reinstall-check.sh` in CI.
 Symptoms of the old failure, if you meet it on a pre-Q492 release:
 [troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
 

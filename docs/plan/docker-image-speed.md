@@ -428,7 +428,7 @@ buildx pushes directly to the registry; pods pull on demand. (The host ref is
 the literal IPv4 loopback, not `localhost`: the registry is published IPv4-only,
 so a pusher that resolves `localhost` to IPv6 `[::1]` first fails intermittently.)
 
-[scripts/kind-with-registry.sh](../../scripts/kind-with-registry.sh) handles the
+[scripts/e2e/kind-with-registry.sh](../../scripts/e2e/kind-with-registry.sh) handles the
 whole setup idempotently. `make e2e-cluster` invokes it; the legacy `kind
 load` flow was removed entirely (replaced rather than gated). Image tags now
 include `127.0.0.1:5000/<name>:e2e-<sha>` so kubelet's `IfNotPresent` cache
@@ -436,7 +436,7 @@ can't serve a stale image across cluster reuse.
 
 ### Files
 
-- [scripts/kind-with-registry.sh](../../scripts/kind-with-registry.sh) (new)
+- [scripts/e2e/kind-with-registry.sh](../../scripts/e2e/kind-with-registry.sh) (new)
 - [Makefile](../../Makefile) — `e2e-cluster` invokes the script;
   `e2e-load-images` removed; image tags include the registry prefix
 - [.github/workflows/e2e-test.yml](../../.github/workflows/e2e-test.yml) and

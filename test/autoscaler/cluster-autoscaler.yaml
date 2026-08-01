@@ -3,7 +3,7 @@
 # Derived from upstream's cluster-autoscaler-autodiscover.yaml example, with the
 # RBAC additions the kwok provider needs (each marked KWOK below) and an argument
 # set tuned for a test. The image tag is substituted by
-# scripts/autoscaler-cluster.sh from CA_VERSION, so the pin lives in one place.
+# scripts/e2e/autoscaler-cluster.sh from CA_VERSION, so the pin lives in one place.
 ---
 apiVersion: v1
 kind: ServiceAccount

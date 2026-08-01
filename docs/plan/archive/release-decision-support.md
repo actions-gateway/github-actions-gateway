@@ -10,7 +10,7 @@ doesn't re-litigate them.
 ## Status
 
 **Complete.** All three deliverables shipped 2026-07-31:
-[`scripts/release-delta.sh`](../../../scripts/release-delta.sh) with
+[`scripts/release/release-delta.sh`](../../../scripts/release/release-delta.sh) with
 `release-delta-test.sh` under `make scripts-test`, the *When to cut* section in
 [operations/release.md](../../operations/release.md#when-to-cut), and the
 scope-ledger convention in
@@ -71,7 +71,7 @@ written until the tag.
 
 ## Deliverables
 
-### 1. `scripts/release-delta.sh`
+### 1. `scripts/release/release-delta.sh`
 
 Prints, for the range `<last non-RC tag>..origin/main` (tag overridable by
 argument):
@@ -125,7 +125,7 @@ in the ledger, never as labels.
 
 ## Acceptance criteria
 
-1. `scripts/release-delta.sh` ships with a test and produces the four report
+1. `scripts/release/release-delta.sh` ships with a test and produces the four report
    sections against the live repo.
 2. release.md gains "When to cut" with the triggers and the RC-cost
    counterweight, referencing the script.

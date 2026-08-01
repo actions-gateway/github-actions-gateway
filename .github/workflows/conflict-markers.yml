@@ -4,7 +4,7 @@
 # lightweight workflow (like doc-links.yml) but with NO path filter — a marker
 # can be left in any file type, so every PR runs it; the job is a checkout plus
 # one grep sweep and finishes in seconds. `make conflict-markers-check`
-# (scripts/check-conflict-markers.sh) is the single source of truth, so local
+# (scripts/ci/check-conflict-markers.sh) is the single source of truth, so local
 # and CI verdicts match.
 name: conflict-markers
 

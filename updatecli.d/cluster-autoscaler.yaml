@@ -1,4 +1,4 @@
-# Keep CA_VERSION in scripts/autoscaler-cluster.sh — the cluster-autoscaler the
+# Keep CA_VERSION in scripts/e2e/autoscaler-cluster.sh — the cluster-autoscaler the
 # live-autoscaler drift gate installs — on the newest PATCH of the minor it
 # already pins. updatecli reads the current pin out of the script, resolves the
 # newest published patch inside that minor, and opens a PR moving it. The pin is
@@ -12,7 +12,7 @@
 # minor — so every cluster-autoscaler PATCH release went untested until the next
 # minor came round. A patch is where a quiet event-vocabulary reword can land as
 # easily as anywhere else. Now each patch gets its own PR, that PR edits
-# scripts/autoscaler-cluster.sh, and that path is in autoscaler-drift.yml's
+# scripts/e2e/autoscaler-cluster.sh, and that path is in autoscaler-drift.yml's
 # `changes` filter — so the gate runs and says whether upstream reworded.
 #
 # The MINOR is deliberately NOT resolved here. cluster-autoscaler ships one
@@ -53,11 +53,11 @@ actions:
 
 sources:
   currentPin:
-    name: 'CA_VERSION currently pinned in scripts/autoscaler-cluster.sh'
+    name: 'CA_VERSION currently pinned in scripts/e2e/autoscaler-cluster.sh'
     kind: file
     scmid: repo
     spec:
-      file: scripts/autoscaler-cluster.sh
+      file: scripts/e2e/autoscaler-cluster.sh
       # The sole `CA_VERSION:-` in the file is the default assignment; anchoring
       # on it keeps the version numbers in the surrounding comments out of the
       # match. matchpattern returns the whole match, so the prefix is trimmed off.
@@ -76,11 +76,11 @@ sources:
 
 targets:
   pin:
-    name: 'CA_VERSION in scripts/autoscaler-cluster.sh'
+    name: 'CA_VERSION in scripts/e2e/autoscaler-cluster.sh'
     kind: file
     disablesourceinput: true
     scmid: repo
     spec:
-      file: scripts/autoscaler-cluster.sh
+      file: scripts/e2e/autoscaler-cluster.sh
       matchpattern: '(CA_VERSION=\$\{CA_VERSION:-)v\d+\.\d+\.\d+(\})'
       replacepattern: '${1}{{ source "caVersion" }}${2}'

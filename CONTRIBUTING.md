@@ -8,9 +8,9 @@
 - `make`
 - [`gh`](https://cli.github.com/), authenticated (`gh auth status`) — opens PRs, and allocates backlog IDs via [`make queue-id`](docs/development/queue-id-allocation.md)
 
-Verify your toolchain at any time with `scripts/check-tools.sh` (or `make doctor`). It checks the tools the project needs — grouped into `required` (the fast `make check` loop), `e2e`, and `extended` (heavier gates, dogfood) tiers — and for anything missing prints a per-OS install command or, when a tool is installed but not on your `PATH`, the exact directory to add. It exits nonzero if a required tool is missing, so it also works as a CI/setup preflight.
+Verify your toolchain at any time with `scripts/ci/check-tools.sh` (or `make doctor`). It checks the tools the project needs — grouped into `required` (the fast `make check` loop), `e2e`, and `extended` (heavier gates, dogfood) tiers — and for anything missing prints a per-OS install command or, when a tool is installed but not on your `PATH`, the exact directory to add. It exits nonzero if a required tool is missing, so it also works as a CI/setup preflight.
 
-That registry is also the project's **approved list of host CLI dependencies**. If new work needs a tool that isn't listed, raise it before relying on it — once agreed, add a row to [`scripts/check-tools.sh`](scripts/check-tools.sh) (and to the prerequisites above when it's a hard requirement) so every contributor and `make doctor` stay in sync. Go build- and codegen-time tools are handled differently: pin them in the vendored [`tools/`](tools/README.md) module rather than adding a host dependency.
+That registry is also the project's **approved list of host CLI dependencies**. If new work needs a tool that isn't listed, raise it before relying on it — once agreed, add a row to [`scripts/ci/check-tools.sh`](scripts/ci/check-tools.sh) (and to the prerequisites above when it's a hard requirement) so every contributor and `make doctor` stay in sync. Go build- and codegen-time tools are handled differently: pin them in the vendored [`tools/`](tools/README.md) module rather than adding a host dependency.
 
 **Optional — AI-assisted development (Claude Code):** Two skills from [`karlkfi/claude-skills`](https://github.com/karlkfi/claude-skills) are recommended:
 
@@ -51,9 +51,9 @@ make hooks         # installs the tracked pre-commit hook (core.hooksPath -> .gi
 make merge-driver  # installs the docs/STATUS.md merge driver (optional, recommended)
 ```
 
-`scripts/setup.sh` runs both of the last two for you. The pre-commit hook is a sub-second gate (gofmt on staged Go files, plus the `docs/STATUS.md` format lint when that file is staged); bypass a single commit with `git commit --no-verify`.
+`scripts/dev/setup.sh` runs both of the last two for you. The pre-commit hook is a sub-second gate (gofmt on staged Go files, plus the `docs/STATUS.md` format lint when that file is staged); bypass a single commit with `git commit --no-verify`.
 
-`make merge-driver` is a per-clone `git config` that makes `docs/STATUS.md` conflicts resolve by backlog row ID instead of by line position — the file is high-contention and its conflicts are usually an artifact of two rows being adjacent, not a real disagreement. Git will not let a tracked file define a merge driver's command, so this half cannot be committed. It is genuinely optional: without it, git uses its built-in three-way merge, and with it anything ambiguous still gets ordinary conflict markers. Details: [`docs/development/maintaining-backlog.md`](docs/development/maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position).
+`make merge-driver` is a per-clone `git config` that makes `docs/STATUS.md` conflicts resolve by backlog row ID instead of by line position — the file is high-contention and its conflicts are usually an artifact of two rows being adjacent, not a real disagreement. Git will not let a tracked file define a merge driver's command, so this half cannot be committed. It is genuinely optional: without it, git uses its built-in three-way merge, and with it anything ambiguous still gets ordinary conflict markers. Details: [`docs/development/maintaining-backlog.md`](docs/development/maintaining-backlog.md#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position). **The config stores the driver script's path**, so a clone that installed it before the script moved to `scripts/docs/` has a dead path — re-run `make merge-driver`.
 
 ## Design first
 
@@ -111,7 +111,7 @@ make e2e-clean  # tear down the cluster when done
 
 When you change any module's `go.mod`:
 
-1. Run `scripts/go-work-tidy.sh` to tidy all modules in dependency order.
+1. Run `scripts/go/go-work-tidy.sh` to tidy all modules in dependency order.
 2. Run `go work sync` to sync the workspace build list.
 3. Run `go work vendor` at the repo root to update the shared `vendor/`.
 4. Commit the `go.mod`, `go.sum`, and `vendor/` changes together in the same commit.

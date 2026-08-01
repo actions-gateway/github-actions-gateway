@@ -180,7 +180,7 @@ jobs:
           fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
       - name: Pre-pull buildkit builder image
-        run: scripts/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
+        run: scripts/fetch/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
         with:
           driver-opts: image=${{ env.BUILDKIT_IMAGE }}
@@ -321,19 +321,19 @@ jobs:
           set -euo pipefail
           # Keyless: cosign reads the ambient GitHub OIDC token (id-token: write),
           # obtains a short-lived Fulcio cert, and logs to Rekor. No key material.
-          # scripts/retry.sh absorbs transient GHCR push errors (HTTP/2
+          # scripts/fetch/retry.sh absorbs transient GHCR push errors (HTTP/2
           # INTERNAL_ERROR / 5xx) — sign and attest are idempotent.
           #
           # --recursive signs the index AND each per-arch child manifest, so
           # `cosign verify` succeeds against the index digest (what operators
           # pin) and against the per-arch digest a kubelet reports as imageID.
-          scripts/retry.sh cosign sign --yes --recursive "${IMAGE}@${INDEX_DIGEST}"
+          scripts/fetch/retry.sh cosign sign --yes --recursive "${IMAGE}@${INDEX_DIGEST}"
           # Each arch's SBOM is attested onto that arch's manifest digest — the
           # precise binding. Note `cosign verify-attestation` therefore targets
           # a per-arch digest, not the index (see security-operations.md).
-          scripts/retry.sh cosign attest --yes --type spdxjson \
+          scripts/fetch/retry.sh cosign attest --yes --type spdxjson \
             --predicate "sbom-${{ matrix.name }}-amd64.spdx.json" "${IMAGE}@${DIGEST_AMD64}"
-          scripts/retry.sh cosign attest --yes --type spdxjson \
+          scripts/fetch/retry.sh cosign attest --yes --type spdxjson \
             --predicate "sbom-${{ matrix.name }}-arm64.spdx.json" "${IMAGE}@${DIGEST_ARM64}"
       - name: Record published digest in the run summary
         # Surface the immutable ref@digest (the multi-arch INDEX digest) in the
@@ -467,9 +467,9 @@ jobs:
           pkg="${RUNNER_TEMP}/actions-gateway-${version}.tgz"
           # helm push prints "Digest: sha256:…" on its own line; capture it so the
           # signature binds to the exact pushed bytes, not the floating tag.
-          # scripts/retry.sh absorbs transient GHCR push errors; its stdout (the
+          # scripts/fetch/retry.sh absorbs transient GHCR push errors; its stdout (the
           # successful attempt's output) is logged and parsed for the digest.
-          scripts/retry.sh helm push "${pkg}" "${repo}" >"${RUNNER_TEMP}/push.log" 2>&1
+          scripts/fetch/retry.sh helm push "${pkg}" "${repo}" >"${RUNNER_TEMP}/push.log" 2>&1
           cat "${RUNNER_TEMP}/push.log"
           digest="$(awk '/^Digest: /{print $2}' "${RUNNER_TEMP}/push.log")"
           if [[ -z "${digest}" ]]; then
@@ -478,7 +478,7 @@ jobs:
           fi
           ref="${REGISTRY}/${OWNER}/charts/actions-gateway@${digest}"
           # Keyless: same ambient OIDC → Fulcio → Rekor path as the image signing.
-          scripts/retry.sh cosign sign --yes "${ref}"
+          scripts/fetch/retry.sh cosign sign --yes "${ref}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
       - name: Package, push, and sign the v2 CRD chart (keyless)
         id: chart_crds_v2
@@ -500,7 +500,7 @@ jobs:
             --version "${version}" --app-version "${version}" \
             --destination "${RUNNER_TEMP}"
           pkg="${RUNNER_TEMP}/actions-gateway-crds-v2-${version}.tgz"
-          scripts/retry.sh helm push "${pkg}" "${repo}" >"${RUNNER_TEMP}/push-crds-v2.log" 2>&1
+          scripts/fetch/retry.sh helm push "${pkg}" "${repo}" >"${RUNNER_TEMP}/push-crds-v2.log" 2>&1
           cat "${RUNNER_TEMP}/push-crds-v2.log"
           digest="$(awk '/^Digest: /{print $2}' "${RUNNER_TEMP}/push-crds-v2.log")"
           if [[ -z "${digest}" ]]; then
@@ -508,7 +508,7 @@ jobs:
             exit 1
           fi
           ref="${REGISTRY}/${OWNER}/charts/actions-gateway-crds-v2@${digest}"
-          scripts/retry.sh cosign sign --yes "${ref}"
+          scripts/fetch/retry.sh cosign sign --yes "${ref}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
       - name: Compose and create the GitHub Release (prerelease-aware, Q293)
         env:
@@ -592,7 +592,7 @@ jobs:
           out="${RUNNER_TEMP}/actions-gateway-crds-v2.yaml"
           helm template actions-gateway-crds-v2 charts/actions-gateway-crds-v2 \
             --namespace gmc-system > "${out}"
-          scripts/retry.sh cosign sign-blob --yes \
+          scripts/fetch/retry.sh cosign sign-blob --yes \
             --bundle "${out}.cosign.bundle" "${out}"
           # The preceding step already created the Release with full notes; this is
           # a defensive fallback (create a minimal one only if the tag somehow still
@@ -620,8 +620,8 @@ jobs:
           # secrets-as-config). Verify with `cosign verify-blob --bundle
           # SHA256SUMS.cosign.bundle SHA256SUMS`, then `sha256sum -c SHA256SUMS`.
           out="${RUNNER_TEMP}/migrate-bin"
-          scripts/build-migrate-binaries.sh "${out}" "${TAG}"
-          scripts/retry.sh cosign sign-blob --yes \
+          scripts/release/build-migrate-binaries.sh "${out}" "${TAG}"
+          scripts/fetch/retry.sh cosign sign-blob --yes \
             --bundle "${out}/SHA256SUMS.cosign.bundle" "${out}/SHA256SUMS"
           # The Release already exists (created above); attach every binary, the
           # checksum manifest, and its signature. --clobber keeps re-publish idempotent.

@@ -9,7 +9,7 @@
 //   GHA_CACHE=true docker buildx bake         # opt into GitHub Actions cache
 //
 // All targets share the repo-root context and push to the local registry
-// stood up by scripts/kind-with-registry.sh; see
+// stood up by scripts/e2e/kind-with-registry.sh; see
 // docs/plan/e2e-ci-speed-round-2.md for the current pipeline description and
 // docs/plan/docker-image-speed.md for the earlier round.
 
@@ -18,12 +18,12 @@ variable "GIT_SHA" {
 }
 
 // Use the literal IPv4 loopback, not "localhost". The registry container is
-// published IPv4-only (-p 127.0.0.1:5000:5000 in scripts/start-registry.sh), so
+// published IPv4-only (-p 127.0.0.1:5000:5000 in scripts/e2e/start-registry.sh), so
 // a pusher that resolves "localhost" to the IPv6 [::1] first hits a closed port
 // and fails intermittently ("connect: connection refused"). 127.0.0.1 is
 // unambiguous. This string is also the image-name prefix the kind nodes'
 // containerd mirror is keyed on, so it must stay in sync with the certs.d host
-// dir in scripts/kind-with-registry.sh and the *_IMG refs that pods consume.
+// dir in scripts/e2e/kind-with-registry.sh and the *_IMG refs that pods consume.
 variable "IMAGE_REGISTRY" {
   default = "127.0.0.1:5000"
 }
@@ -48,7 +48,7 @@ group "default" {
 
 // _common holds the settings every target inherits. The output `type=registry`
 // pushes the resulting image straight to IMAGE_REGISTRY; the local kind nodes
-// pull from there on demand (see scripts/kind-with-registry.sh).
+// pull from there on demand (see scripts/e2e/kind-with-registry.sh).
 //
 // ONE cache scope for all six targets, not one per image. They share the root
 // Dockerfile's `deps` stage — a ~1.1 GB warm Go build cache — and a per-image

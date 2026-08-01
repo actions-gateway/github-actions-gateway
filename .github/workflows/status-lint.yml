@@ -12,8 +12,8 @@ on:
       - 'docs/STATUS.md'
       - 'docs/roadmap.md'
       - 'docs/features.md'
-      - 'scripts/lint-backlog.sh'
-      - 'scripts/check-roadmap.sh'
+      - 'scripts/docs/lint-backlog.sh'
+      - 'scripts/docs/check-roadmap.sh'
       - '.github/workflows/status-lint.yml'
 
 # Cancel superseded runs of this workflow on the same PR; pushes to main are
@@ -50,8 +50,8 @@ jobs:
               - 'docs/STATUS.md'
               - 'docs/roadmap.md'
               - 'docs/features.md'
-              - 'scripts/lint-backlog.sh'
-              - 'scripts/check-roadmap.sh'
+              - 'scripts/docs/lint-backlog.sh'
+              - 'scripts/docs/check-roadmap.sh'
               - '.github/workflows/status-lint.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
@@ -68,13 +68,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: lint docs/STATUS.md format
-        run: scripts/lint-backlog.sh
+        run: scripts/docs/lint-backlog.sh
       # Roadmap/backlog coherence (make roadmap-check). It lives here rather
       # than in unit-test.yml because that workflow path-ignores docs, and the
       # drift this catches arrives on docs-only PRs: deleting a shipped Queue
       # row without graduating the roadmap bullet that names it.
       - name: check roadmap against the backlog
-        run: scripts/check-roadmap.sh
+        run: scripts/docs/check-roadmap.sh
 
   # Aggregate required-status gate. Mark THIS job's check context
   # (`status-lint-gate`) required in the branch ruleset — never the path-gated

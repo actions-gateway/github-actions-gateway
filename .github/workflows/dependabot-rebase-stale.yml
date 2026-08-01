@@ -12,7 +12,7 @@ name: dependabot-rebase-stale
 # with push access and rejects GitHub Apps / bots ("Sorry, only users with push
 # access can use that command", dependabot/dependabot-core#9147, still open),
 # and this repo deliberately stores no Personal Access Token. So this workflow
-# does the rebase itself: scripts/dependabot-rebase-stale.sh discards the
+# does the rebase itself: scripts/ci/dependabot-rebase-stale.sh discards the
 # conflicted tree, replays the PR's version bumps on current main with `go get`
 # (refusing any that Go reports as a downgrade), regenerates everything with
 # `make vendor-sync`, and force-pushes the result.
@@ -81,4 +81,4 @@ jobs:
           if [[ "${DRY_RUN:-false}" == "true" ]]; then
             args+=(--dry-run)
           fi
-          scripts/dependabot-rebase-stale.sh "${args[@]}"
+          scripts/ci/dependabot-rebase-stale.sh "${args[@]}"

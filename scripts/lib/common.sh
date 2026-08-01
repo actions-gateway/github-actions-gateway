@@ -99,7 +99,7 @@ workspace_modules() {
 }
 
 # init_throttle — populate THROTTLE_JOBS / THROTTLE_PREFIX from
-# scripts/local-throttle.sh: a parallelism cap (physical cores − 2) and a
+# scripts/agent/local-throttle.sh: a parallelism cap (physical cores − 2) and a
 # low-priority QoS command prefix on an interactive GUI dev shell, both empty
 # on CI/headless/SSH so heavy phases run at full speed there. See that
 # script's header for the detection rules and rationale (an unthrottled run
@@ -111,9 +111,9 @@ workspace_modules() {
 # empty it disappears entirely.
 init_throttle() {
 	# shellcheck disable=SC2034  # consumed by the sourcing scripts
-	THROTTLE_JOBS="$("$REPO_ROOT/scripts/local-throttle.sh" jobs)"
+	THROTTLE_JOBS="$("$REPO_ROOT/scripts/agent/local-throttle.sh" jobs)"
 	# shellcheck disable=SC2034  # consumed by the sourcing scripts
-	THROTTLE_PREFIX="$("$REPO_ROOT/scripts/local-throttle.sh" prefix)"
+	THROTTLE_PREFIX="$("$REPO_ROOT/scripts/agent/local-throttle.sh" prefix)"
 }
 
 # serialize_heavy_build — bound how many of the calling script's heavy phases run
@@ -128,7 +128,7 @@ init_throttle() {
 # N used to be 1 — strictly one heavy run machine-wide — which made the gate set
 # the pace for a machine running several sessions: one run used `jobs` threads
 # while every sibling blocked for its whole duration. GAG_HEAVY_BUILD_SLOTS=1
-# restores that behaviour; see scripts/local-throttle.sh and
+# restores that behaviour; see scripts/agent/local-throttle.sh and
 # docs/plan/archive/local-gate-throughput.md for why the default moved.
 #
 # It re-execs the calling script once holding an advisory lock for the script's
@@ -158,7 +158,7 @@ init_throttle() {
 # unchanged, so a worktree still on older code contends here exactly as before.
 serialize_heavy_build() {
 	[[ -n "${GAG_HEAVY_BUILD_LOCK_HELD:-}" ]] && return 0
-	local throttle="$REPO_ROOT/scripts/local-throttle.sh"
+	local throttle="$REPO_ROOT/scripts/agent/local-throttle.sh"
 	local slots i lock locks=()
 	slots="$("$throttle" slots)"
 	# Empty (CI/headless/non-GUI) or malformed: run unbounded, as before.
@@ -219,7 +219,7 @@ release_identity_regexp() {
 # and validation: production installs pin the image digests, so auditing the
 # digest-pinned form reflects the SHIPPED posture. A digest is also REQUIRED
 # to render at all — the chart fails closed when any of the four image digests
-# (gmc/agc/proxy/wrapper) is empty (Q96, Q307), and scripts/manifest-validate.sh
+# (gmc/agc/proxy/wrapper) is empty (Q96, Q307), and scripts/manifest/manifest-validate.sh
 # asserts each rejection. The value must satisfy values.schema.json's
 # sha256:[a-f0-9]{64} pattern. Shared by polaris-scan.sh and manifest-validate.sh.
 # shellcheck disable=SC2034  # consumed by the sourcing scripts

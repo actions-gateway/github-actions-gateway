@@ -14,7 +14,7 @@ import "github.com/actions-gateway/github-actions-gateway/api/apiconditions"
 //
 // Adding a condition or reason: declare it in apiconditions, then add the one-line
 // re-export HERE and in api/v2beta1/conditions.go. The two files must stay
-// byte-identical except the package clause; scripts/check-v2-api-sync.sh fails the
+// byte-identical except the package clause; scripts/go/check-v2-api-sync.sh fails the
 // build on a one-sided add (Q345, widened in Q374).
 const (
 	ConditionReady                       = apiconditions.ConditionReady

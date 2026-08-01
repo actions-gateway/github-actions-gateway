@@ -700,7 +700,7 @@ Round 1 (above) optimized the test phase. This round targets the **setup/scaffol
 
 ### 16. Overlap build with cluster bring-up
 
-The image build (`docker buildx bake`) is the long pole on a cold GHA cache (~8 min) and depends only on the local registry, not the kind cluster. The registry bring-up was split out of `scripts/kind-with-registry.sh` into `scripts/start-registry.sh` (and a `make e2e-registry` target) so CI can start the registry first, kick the bake off in the background, and create the cluster + apply cert-manager (~2 min) underneath it. A `trap` kills the background build if cluster bring-up fails; the build's exit code is surfaced via `wait`.
+The image build (`docker buildx bake`) is the long pole on a cold GHA cache (~8 min) and depends only on the local registry, not the kind cluster. The registry bring-up was split out of `scripts/e2e/kind-with-registry.sh` into `scripts/e2e/start-registry.sh` (and a `make e2e-registry` target) so CI can start the registry first, kick the bake off in the background, and create the cluster + apply cert-manager (~2 min) underneath it. A `trap` kills the background build if cluster bring-up fails; the build's exit code is surfaced via `wait`.
 
 ### 17. Pin kind to a release binary
 

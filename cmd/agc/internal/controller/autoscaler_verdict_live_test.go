@@ -11,7 +11,7 @@
 //
 // This file closes that by running the same matcher against events a REAL upstream
 // cluster-autoscaler emits, in a kind cluster whose nodes are fakes made by kwok
-// (scripts/autoscaler-cluster.sh stands it up; `make test-autoscaler` runs this).
+// (scripts/e2e/autoscaler-cluster.sh stands it up; `make test-autoscaler` runs this).
 // The autoscaler, its scheduler-framework evaluation, and its events are genuine;
 // only the machines are not, which is the whole reason the harness fits on a laptop.
 //
@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// The node groups scripts/autoscaler-cluster.sh installs, via the templates in
+// The node groups scripts/e2e/autoscaler-cluster.sh installs, via the templates in
 // test/autoscaler/kwok-provider.yaml. Kept as constants here so a rename over there
 // fails compilation-adjacent assertions rather than producing a mysterious timeout.
 const (

@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+#
+# Unit tests for scripts/ci/check-path-filters.sh (Q429). The gate exists to fail on
+# a filter that has drifted from the repo, so every case here breaks a fixture and
+# asserts it is caught — the standing form of the invert-the-fix verification
+# (docs/development/testing.md § Diagnosing failures). Fixtures rather than the
+# tracked workflows, because the tracked ones are (and must stay) correct.
+#
+# Five groups:
+#
+#   1. parse_filters reads the nested YAML string faithfully — trailing comments,
+#      comment-only lines, and the dedent that ends the block.
+#   2. pattern_covers_dir counts only patterns that match a module's WHOLE tree.
+#      Its false negatives are fixable failures; a false positive would silently
+#      reopen Q400, so the partial-cover cases are the important ones.
+#   3. literal_prefix extracts what a pattern actually pins.
+#   4. The assertions fail on a module a workspace-covering filter omits, on an
+#      unregistered filter, and on a pattern whose path no longer exists — each
+#      naming what to fix.
+#   5. Two filters gating one reusable workflow are held to the same scripts/
+#      patterns, comparing only those and ignoring order (Q571).
+#
+# Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+# Source the script under test for its helpers and assertions; the BASH_SOURCE
+# guard there keeps main() from running against the tracked tree on source.
+# shellcheck source=scripts/ci/check-path-filters.sh
+source "$REPO_ROOT/scripts/ci/check-path-filters.sh"
+
+FIXTURE_ROOT="$REPO_ROOT/tmp/check-path-filters-test.$$"
+trap 'rm -rf "$FIXTURE_ROOT"' EXIT INT TERM
+
+fails=0
+
+ok() { printf 'ok   %-42s %s\n' "$1" "$2"; }
+bad() {
+	printf 'FAIL %-42s %s\n' "$1" "$2" >&2
+	fails=$((fails + 1))
+}
+
+# expect_eq NAME WANT GOT
+expect_eq() {
+	local name="$1" want="$2" got="$3"
+	if [[ "$got" == "$want" ]]; then
+		ok "$name" "= $(printf '%q' "$got")"
+	else
+		bad "$name" "want $(printf '%q' "$want") got $(printf '%q' "$got")"
+	fi
+}
+
+# expect_covers NAME PATTERN DIR — the pattern gates DIR's whole tree.
+expect_covers() {
+	local name="$1" pattern="$2" dir="$3"
+	if pattern_covers_dir "$pattern" "$dir"; then
+		ok "$name" "'$pattern' covers $dir"
+	else
+		bad "$name" "'$pattern' should cover $dir"
+	fi
+}
+
+# expect_no_cover NAME PATTERN DIR — the pattern leaves part of DIR ungated.
+expect_no_cover() {
+	local name="$1" pattern="$2" dir="$3"
+	if pattern_covers_dir "$pattern" "$dir"; then
+		bad "$name" "'$pattern' must NOT count as covering $dir"
+	else
+		ok "$name" "'$pattern' does not cover $dir"
+	fi
+}
+
+# expect_assertion NAME WANT_FAILURES PATTERN COMMAND... — run an assertion from
+# the script under test, then check how many problems it reported and that its
+# output names PATTERN (empty to skip). Problems are counted from the report
+# rather than the script's `failures` global: the assertion runs in a command
+# substitution, so an increment there would not reach this shell, and the report
+# is the contract a developer actually reads.
+expect_assertion() {
+	local name="$1" want="$2" pattern="$3"
+	shift 3
+	local out got
+	out="$("$@" 2>&1)" || true
+	got="$(grep -c '^ERROR: ' <<<"$out" || true)"
+	if [[ "$got" != "$want" ]]; then
+		bad "$name" "want $want failure(s) got $got"$'\n'"$out"
+		return
+	fi
+	if [[ -n "$pattern" ]] && ! grep -q -- "$pattern" <<<"$out"; then
+		bad "$name" "output did not mention $(printf '%q' "$pattern")"$'\n'"$out"
+		return
+	fi
+	ok "$name" "$want failure(s)"
+}
+
+# --- 1. parsing ---------------------------------------------------------------
+
+mkdir -p "$FIXTURE_ROOT/workflows"
+
+# A block exercising every shape the real workflows use: a trailing comment after
+# a quoted pattern, a comment-only line, two filters, and a dedent back to the
+# `filters:` indentation that must end the block (the `- name:` step below it is
+# a sibling key, not a pattern).
+cat >"$FIXTURE_ROOT/workflows/parse.yml" <<'YAML'
+jobs:
+  changes:
+    steps:
+      - uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            code:
+              # A comment line is not a pattern.
+              - 'api/**'
+              - 'cmd/**'          # trailing comments are not part of the pattern
+            docs:
+              - 'docs/**'
+      - name: not a pattern
+        run: echo hi
+YAML
+
+expect_eq parse-code-patterns "api/** cmd/**" \
+	"$(parse_filters "$FIXTURE_ROOT/workflows/parse.yml" | awk -F'\t' '$1=="code"{printf "%s%s", sep, $2; sep=" "}')"
+expect_eq parse-docs-patterns "docs/**" \
+	"$(parse_filters "$FIXTURE_ROOT/workflows/parse.yml" | awk -F'\t' '$1=="docs"{print $2}')"
+# The dedented step must not leak into the last filter, or the gate would try to
+# stat a YAML key as a path.
+expect_eq parse-stops-at-dedent 3 \
+	"$(parse_filters "$FIXTURE_ROOT/workflows/parse.yml" | wc -l | tr -d ' ')"
+
+# --- 2. coverage semantics ----------------------------------------------------
+
+expect_covers covers-module-root 'api/**' 'api'
+expect_covers covers-ancestor 'cmd/**' 'cmd/agc'
+expect_covers covers-nested-module 'test/**' 'test/fakegithub'
+expect_covers covers-everything '**' 'cmd/agc'
+
+# A bare directory path matches the literal path and nothing beneath it: picomatch
+# does not expand a directory to its tree, so this is NOT coverage.
+expect_no_cover no-cover-bare-dir 'api' 'api'
+# The Q400 shape: a filter naming a subdirectory leaves the rest of the module
+# ungated. manifest-validate.yml uses exactly this pattern, deliberately.
+expect_no_cover no-cover-subdir 'api/config/**' 'api'
+# A sibling module is not covered by another's glob.
+expect_no_cover no-cover-sibling 'broker/**' 'api'
+# A prefix of the name, not of the path: 'scale/**' must not match 'scaleset'.
+expect_no_cover no-cover-name-prefix 'scale/**' 'scaleset'
+# An extglob prefix has an unknowable covered set, so it counts as no coverage
+# rather than being assumed to match. No tracked filter uses one since Q571
+# regrouped scripts/, but picomatch still accepts them.
+expect_no_cover no-cover-extglob 'scripts/!(dogfood)/**' 'scripts/dogfood'
+
+# --- 3. literal prefixes ------------------------------------------------------
+
+expect_eq prefix-recursive-glob 'api' "$(literal_prefix 'api/**')"
+expect_eq prefix-single-glob 'scripts' "$(literal_prefix 'scripts/*')"
+expect_eq prefix-extglob 'scripts' "$(literal_prefix 'scripts/!(dogfood)/**')"
+expect_eq prefix-literal-file 'go.work' "$(literal_prefix 'go.work')"
+expect_eq prefix-nested-literal 'charts/actions-gateway/templates' "$(literal_prefix 'charts/actions-gateway/templates/**')"
+# Leading-** patterns pin no path at all, so there is nothing to verify.
+expect_eq prefix-leading-glob '' "$(literal_prefix '**/go.mod')"
+expect_eq prefix-suffix-glob '' "$(literal_prefix '**.go')"
+# A glob inside a single segment pins no whole segment either.
+expect_eq prefix-partial-segment '' "$(literal_prefix 'Makefile*')"
+
+# --- 4. the assertions fail when they should ----------------------------------
+
+# Point the assertions at a fixture workflow dir and registry. Both are plain
+# globals in the script under test, so a test can substitute them without the
+# production script carrying a test-only seam.
+cat >"$FIXTURE_ROOT/workflows/gate.yml" <<'YAML'
+jobs:
+  changes:
+    steps:
+      - uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            code:
+              - 'api/**'
+              - 'go.work'
+            extra:
+              - 'scripts/definitely-not-a-real-script.sh'
+YAML
+
+WORKFLOW_DIR="$FIXTURE_ROOT/workflows"
+WORKSPACE_FILTERS=('gate.yml:code')
+NARROW_FILTERS=('gate.yml:extra')
+
+# The Q429 failure itself: a module in the workspace that a workspace-covering
+# filter does not list. One failure per uncovered module, naming the module and
+# the pattern to add.
+expect_assertion coverage-fails-on-missing-module 1 "does not cover go.work module 'broker'" \
+	assert_module_coverage api broker
+expect_assertion coverage-names-the-fix 1 "- 'broker/\*\*'" \
+	assert_module_coverage broker
+# A module the filter does list passes.
+expect_assertion coverage-passes-when-covered 0 '' assert_module_coverage api
+# Coverage is per (filter, module), so two gaps report two failures rather than
+# stopping at the first — one run lists everything to add.
+expect_assertion coverage-reports-every-gap 2 '' assert_module_coverage broker githubapp
+
+# An unregistered filter must fail: that is what stops a new workflow from
+# quietly shipping a filter nobody classified.
+expect_assertion registry-fails-on-unregistered 1 "does not know about" \
+	assert_registry_complete 'gate.yml:code' 'gate.yml:extra' 'gate.yml:surprise'
+# A stale registry entry fails too, so a renamed filter cannot leave the registry
+# asserting coverage on a filter that no longer exists.
+expect_assertion registry-fails-on-stale 1 'declares no such filter' \
+	assert_registry_complete 'gate.yml:code'
+expect_assertion registry-passes-when-exact 0 '' \
+	assert_registry_complete 'gate.yml:code' 'gate.yml:extra'
+
+# A pattern whose path is gone matches nothing, silently narrowing its gate.
+expect_assertion paths-fails-on-dead-path 1 'does not exist' assert_paths_live 'gate.yml:extra'
+# 'api/**' and 'go.work' both resolve in this repo.
+expect_assertion paths-passes-on-live-paths 0 '' assert_paths_live 'gate.yml:code'
+
+# --- 5. shared lanes must list the same scripts/ patterns ---------------------
+
+# Two lanes over one reusable workflow. `kindnet` names three script groups, and
+# each `calico-*` fixture differs from it in exactly one way.
+cat >"$FIXTURE_ROOT/workflows/lanes.yml" <<'YAML'
+jobs:
+  changes:
+    steps:
+      - uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            kindnet:
+              - 'cmd/**'
+              - 'scripts/e2e/**'
+              - 'scripts/fetch/**'
+              - 'scripts/lib/**'
+            calico-same:
+              - 'cmd/gmc/**'
+              - 'scripts/lib/**'
+              - 'scripts/e2e/**'
+              - 'scripts/fetch/**'
+            calico-short:
+              - 'cmd/gmc/**'
+              - 'scripts/e2e/**'
+YAML
+
+SHARED_LANE_FILTERS=('lanes.yml:kindnet|lanes.yml:calico-same')
+# Agreement is on the scripts/ patterns as a SET: listing order differs above,
+# and the non-scripts patterns differ deliberately — that is what makes the
+# calico lane narrower than the kindnet one everywhere but scripts/.
+expect_assertion lanes-pass-when-sets-match 0 '' assert_shared_lanes_agree
+
+# The Q571 shape: the second lane names a subset, so a scripts/fetch/ change runs
+# one lane and skips the other.
+SHARED_LANE_FILTERS=('lanes.yml:kindnet|lanes.yml:calico-short')
+expect_assertion lanes-fail-on-subset 1 'different scripts/ patterns' assert_shared_lanes_agree
+expect_assertion lanes-name-the-missing-pattern 1 'scripts/fetch/\*\*' assert_shared_lanes_agree
+# Asymmetry is a failure in both directions — an extra pattern runs a lane on a
+# change it does not exercise, which is how the two lists drift apart again.
+SHARED_LANE_FILTERS=('lanes.yml:calico-short|lanes.yml:kindnet')
+expect_assertion lanes-fail-on-superset 1 'different scripts/ patterns' assert_shared_lanes_agree
+
+# --- 6. the tracked workflows pass -------------------------------------------
+
+# End-to-end against the real tree, in a subshell so the fixture globals above
+# cannot leak into it. This is the same verdict `make path-filters-check` gives;
+# it is cheap enough to assert here too.
+if (scripts/ci/check-path-filters.sh >/dev/null 2>&1); then
+	ok tracked-workflows-pass 'make path-filters-check is green'
+else
+	bad tracked-workflows-pass 'run scripts/ci/check-path-filters.sh for the report'
+fi
+
+if ((fails > 0)); then
+	printf '\ncheck-path-filters-test: %d assertion(s) failed\n' "$fails" >&2
+	exit 1
+fi
+printf '\ncheck-path-filters-test: all assertions passed\n'

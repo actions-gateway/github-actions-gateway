@@ -1225,7 +1225,7 @@ running a real upstream Karpenter on its
 [kwok provider](https://github.com/kubernetes-sigs/karpenter/tree/main/kwok).
 One structural difference from the CA arm: upstream publishes **no image** for
 this provider (its own workflow is `ko build` from a checkout), so
-`scripts/karpenter-cluster.sh` clones the pinned `KARPENTER_VERSION` tag, builds
+`scripts/e2e/karpenter-cluster.sh` clones the pinned `KARPENTER_VERSION` tag, builds
 the binary with the repo's Go toolchain, and reproduces ko's output shape
 (static binary, empty base — `test/karpenter/Dockerfile`). `make test-karpenter`
 then drives three cases (`karpenter_verdict_live_test.go`, build tag

@@ -133,7 +133,7 @@ hooks:
   - hooks/source_links.py
   - hooks/backlog_link.py
 
-# Site-side link gate (Q560). scripts/check-doc-links.sh resolves links the way
+# Site-side link gate (Q560). scripts/docs/check-doc-links.sh resolves links the way
 # github.com does; MkDocs resolves them differently, so a link can pass that gate
 # and 404 here — heading-slug dedup suffixes (`_1` here, `-1` on GitHub), a bare
 # `dir/` target that GitHub renders as the directory's README, an `<angled>`

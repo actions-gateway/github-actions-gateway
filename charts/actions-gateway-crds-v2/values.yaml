@@ -1,6 +1,6 @@
 # This chart ships the CustomResourceDefinitions for the v2 (actions-gateway.com)
 # API. The CRD templates under templates/crds/ are generated from the controller-gen
-# sources by scripts/sync-chart-crds.sh — do not hand-edit them.
+# sources by scripts/manifest/sync-chart-crds.sh — do not hand-edit them.
 #
 # The only configurable surface is the conversion webhook below. As of Q74 the v2
 # kinds are multi-version (v2beta1 is the served + storage/hub version, v2alpha1 the

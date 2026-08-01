@@ -58,13 +58,13 @@ test-karpenter: ## Assert the autoscaler matcher against a live Karpenter (needs
 # The in-process AGC load harness (Q13, cmd/agc/test/load). It needs no cluster
 # and no real credentials — it drives the real listener-multiplexing core
 # against an in-process broker stub + fake k8s client. LOAD_THROTTLE is the
-# desktop-safety QoS prefix from scripts/local-throttle.sh (a no-op on
+# desktop-safety QoS prefix from scripts/agent/local-throttle.sh (a no-op on
 # CI/headless): a run holds ~1,000 goroutines, so on a GUI dev machine it is
 # demoted to keep the UI responsive (Q92). Tune any run via the LOAD_* env vars
 # documented in test/load/load_test.go. NOT run under -race by default: -race on
 # ~1,000 goroutines is heavy and distorts the throughput/memory numbers; add it
 # for a smaller leak hunt (LOAD_LISTENERS_PER_TENANT=10 ... go test -race).
-LOAD_THROTTLE := $(shell $(REPO_ROOT)/scripts/local-throttle.sh prefix)
+LOAD_THROTTLE := $(shell $(REPO_ROOT)/scripts/agent/local-throttle.sh prefix)
 
 .PHONY: load-test-quick
 load-test-quick: ## Load smoke: 10 tenants × 100 sessions = 1,000, short window (~1 min)

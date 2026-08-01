@@ -323,7 +323,7 @@ git grep -l '<field>' "$(git tag --list 'v*' --sort=-v:refname | grep -v -- '-' 
 ```
 
 No hit means no cluster can be holding it and no manifest can name it: not
-breaking. `scripts/api-surface-since.sh <tag>` lists everything a tag cut now
+breaking. `scripts/release/api-surface-since.sh <tag>` lists everything a tag cut now
 would publish for the first time, which is the same question asked over the whole
 surface at once. If you still mark the commit `!` for a Go-symbol break, say so
 in the body — nothing downstream can tell the two kinds of break apart, and only
@@ -389,7 +389,7 @@ tagging any release — including a prerelease that will become a stable line.
 ### Step 1 — enumerate what is new
 
 ```bash
-scripts/api-surface-since.sh
+scripts/release/api-surface-since.sh
 ```
 
 It diffs the API packages and CRD manifests between the last tag and `HEAD` and
@@ -397,7 +397,7 @@ prints what changed. Everything it lists is surface this release publishes for
 the first time; everything it does not list has already shipped and is governed
 by the compatibility rules instead.
 
-Pass an explicit ref to review a different span, e.g. `scripts/api-surface-since.sh v1.1.0`.
+Pass an explicit ref to review a different span, e.g. `scripts/release/api-surface-since.sh v1.1.0`.
 
 It reports rather than passing or failing on purpose: every question below needs
 a human, and a gate answering them mechanically would be wrong in both

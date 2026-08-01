@@ -85,17 +85,18 @@ jobs:
               - 'Dockerfile'
               - '.golangci.yml'
               - 'Makefile'
-              - 'scripts/coverage.sh'
-              - 'scripts/go-test.sh'
-              - 'scripts/go-lint.sh'
-              - 'scripts/local-throttle.sh'
-              - 'scripts/check-codegen-drift.sh'
+              # Every backend of this job's gates lives in scripts/go/ (Q571), so
+              # the group is the pattern — no enumeration to drift out of date.
+              # local-throttle.sh sits in agent/ because nothing in CI gates on
+              # it, but go-test.sh/go-lint.sh source it.
+              - 'scripts/go/**'
+              - 'scripts/agent/local-throttle.sh'
               - 'scripts/lib/**'
               - 'coverage-baseline.txt'
               - '.github/workflows/unit-test.yml'
             status:
               - 'docs/STATUS.md'
-              - 'scripts/lint-backlog.sh'
+              - 'scripts/docs/lint-backlog.sh'
               - '.github/workflows/unit-test.yml'
             scripts:
               - 'scripts/**'
@@ -117,7 +118,7 @@ jobs:
               - '**/go.sum'
               - 'go.work'
               - 'go.work.sum'
-              - 'scripts/vendor-check.sh'
+              - 'scripts/go/vendor-check.sh'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
             # Tidiness gate scope (Q94): anything that determines the tidy-canonical
@@ -129,8 +130,8 @@ jobs:
               - '**/go.sum'
               - 'go.work'
               - 'go.work.sum'
-              - 'scripts/go-tidy-check.sh'
-              - 'scripts/go-work-tidy.sh'
+              - 'scripts/go/go-tidy-check.sh'
+              - 'scripts/go/go-work-tidy.sh'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
             # Path-filter coherence gate scope (Q429): the filter lists this gate
@@ -140,7 +141,7 @@ jobs:
             workflows:
               - '.github/workflows/**'
               - 'go.work'
-              - 'scripts/check-path-filters.sh'
+              - 'scripts/ci/check-path-filters.sh'
               - 'Makefile'
             # The claude-usage/ Python module (Q437). It matched no filter in this
             # repo — it is neither Go code nor a shell script — so its unittest
@@ -148,7 +149,7 @@ jobs:
             # #841 shipped a model-mapping fix that no gate would have caught.
             claude_usage:
               - 'claude-usage/**'
-              - 'scripts/claude-usage-test.sh'
+              - 'scripts/agent/claude-usage-test.sh'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
@@ -179,7 +180,7 @@ jobs:
           key: golangci-lint-${{ runner.os }}-${{ hashFiles('tools/go.sum', '.golangci.yml', '**/go.sum') }}
           restore-keys: |
             golangci-lint-${{ runner.os }}-
-      # `make lint` (scripts/go-lint.sh) is the single source of truth for the
+      # `make lint` (scripts/go/go-lint.sh) is the single source of truth for the
       # gofmt check and the per-module golangci-lint loop, so local and CI
       # verdicts match. It builds .build/golangci-lint from the vendored tools/
       # module first; its local throttle is a no-op here (CI env var is set).
@@ -216,7 +217,7 @@ jobs:
   # Shellcheck the standalone helper scripts under scripts/. actionlint already
   # covers inline workflow `run:` blocks, but the scripts/*.sh files ship unlinted
   # otherwise. Isolated from the `lint` job so a scripts-only change does not also
-  # trigger the full Go lint. `make shellcheck` (scripts/shellcheck-scripts.sh) is
+  # trigger the full Go lint. `make shellcheck` (scripts/ci/shellcheck-scripts.sh) is
   # the single source of truth for the file set (every present scripts/*.sh,
   # recursive — tracked or untracked-and-not-gitignored).
   shellcheck:
@@ -252,7 +253,7 @@ jobs:
           set -euo pipefail
           base="shellcheck-${SHELLCHECK_VERSION}"
           url="https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${base}.linux.x86_64.tar.xz"
-          scripts/download-verified.sh "$url" "${SHELLCHECK_SHA256}" "$RUNNER_TEMP/sc.tar.xz"
+          scripts/fetch/download-verified.sh "$url" "${SHELLCHECK_SHA256}" "$RUNNER_TEMP/sc.tar.xz"
           tar -xf "$RUNNER_TEMP/sc.tar.xz" -C "$RUNNER_TEMP"
           sudo install "$RUNNER_TEMP/${base}/shellcheck" /usr/local/bin/shellcheck
           shellcheck --version
@@ -271,7 +272,7 @@ jobs:
   # and fails on any drift vs the committed trees. Isolated from unit-test so a
   # vendor/go.mod-only change doesn't also trigger the -race suite, and vice
   # versa. A Dependabot go.mod bump legitimately fails here until a follow-up
-  # vendor sync lands — that's the intended signal (see scripts/vendor-check.sh).
+  # vendor sync lands — that's the intended signal (see scripts/go/vendor-check.sh).
   vendor-check:
     needs: [changes]
     if: needs.changes.outputs.vendor == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -282,7 +283,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
-      # `make vendor-check` (scripts/vendor-check.sh) is the single source of
+      # `make vendor-check` (scripts/go/vendor-check.sh) is the single source of
       # truth so the local and CI verdicts match. It re-fetches modules from the
       # proxy (verified against go.sum) when the setup-go module cache misses,
       # else re-vendors offline from cache; either way the git diff is the gate.
@@ -290,7 +291,7 @@ jobs:
         run: make vendor-check
 
   # Tidiness gate for the workspace module files (Q94). A non-canonical committed
-  # go.sum makes the documented tidy flow (scripts/go-work-tidy.sh + go work sync)
+  # go.sum makes the documented tidy flow (scripts/go/go-work-tidy.sh + go work sync)
   # re-add the /go.mod hash rows to broker/probe/proxy/githubapp and re-resolve
   # cmd/gmc's stale indirect requires, so contributors keep reverting spurious
   # diffs. `make tidy-check` re-runs that flow and fails on any go.mod/go.sum/
@@ -309,7 +310,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
-      # `make tidy-check` (scripts/go-tidy-check.sh) is the single source of truth
+      # `make tidy-check` (scripts/go/go-tidy-check.sh) is the single source of truth
       # so the local and CI verdicts match. It re-runs the documented tidy flow;
       # on a cold module cache `go mod tidy` re-fetches the build-graph go.mod
       # files (verified against go.sum), else tidies offline. The git diff is the
@@ -404,7 +405,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.x'
-      # `make claude-usage-test` (scripts/claude-usage-test.sh) is the single
+      # `make claude-usage-test` (scripts/agent/claude-usage-test.sh) is the single
       # source of truth so the local and CI verdicts match. The suite is
       # stdlib-only, so there is nothing to pip install here.
       - name: claude-usage unit tests (make claude-usage-test)

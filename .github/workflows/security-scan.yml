@@ -52,7 +52,7 @@ jobs:
         with:
           filters: |
             code:
-              # api/** and scaleset/** are go.work modules, so scripts/go-vulncheck.sh
+              # api/** and scaleset/** are go.work modules, so scripts/security/go-vulncheck.sh
               # (which loops `workspace_modules`) scans them and the baked images
               # link them in via cmd/{agc,gmc}. Both were missing until Q400, so a
               # change confined to either module skipped govulncheck and trivy.
@@ -70,13 +70,17 @@ jobs:
               # The root Dockerfile builds every image the trivy matrix scans.
               - 'Dockerfile'
               - 'Makefile'
-              - 'scripts/go-vulncheck.sh'
+              # This job's scan backends are scripts/security/ (Q571); fetch/ is
+              # the pinned-binary download and buildkit pre-pull it runs first.
+              - 'scripts/security/**'
+              - 'scripts/fetch/**'
               - 'scripts/lib/**'
               - '.github/workflows/security-scan.yml'
             chart:
               - 'charts/**'
               - 'Makefile'
-              - 'scripts/polaris-scan.sh'
+              - 'scripts/security/**'
+              - 'scripts/fetch/**'
               - 'scripts/lib/**'
               - '.github/workflows/security-scan.yml'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
@@ -99,7 +103,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
-      # `make vulncheck` (scripts/go-vulncheck.sh) is the single source of truth
+      # `make vulncheck` (scripts/security/go-vulncheck.sh) is the single source of truth
       # for the per-module loop, so local and CI verdicts match. It builds
       # .build/govulncheck from the vendored tools/ module first.
       - name: run govulncheck across workspace modules
@@ -140,7 +144,7 @@ jobs:
       # Local-only tag the cached builder image is restored under, and what the
       # buildx driver below boots from. `docker load` cannot restore a manifest
       # digest, so ${BUILDKIT_IMAGE} itself would never resolve from the cache
-      # (Q460 — see scripts/prepull-image-cached.sh). The pin is not weakened:
+      # (Q460 — see scripts/fetch/prepull-image-cached.sh). The pin is not weakened:
       # the cold-path pull is still digest-verified against ${BUILDKIT_IMAGE} and
       # the cache key below carries that digest, so this tag can only ever name
       # the bytes that pin selected. Keep BUILDKIT_IMAGE as the source of truth —
@@ -189,7 +193,7 @@ jobs:
         # above (or pull it once, with retries, on a miss) and expose it under
         # ${BUILDKIT_LOCAL_IMAGE} so the boot is a local hit and never touches Hub.
         run: |
-          scripts/prepull-image-cached.sh \
+          scripts/fetch/prepull-image-cached.sh \
             "${BUILDKIT_IMAGE}" /tmp/buildkit-image "${BUILDKIT_LOCAL_IMAGE}"
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
         with:
@@ -290,7 +294,7 @@ jobs:
           # tag v10.2.0 -> polaris_10.2.0_linux_amd64.tar.gz. Strip the "v" to
           # build the asset filename from the tag.
           asset="polaris_${POLARIS_VERSION#v}_linux_amd64.tar.gz"
-          scripts/download-verified.sh \
+          scripts/fetch/download-verified.sh \
             "https://github.com/FairwindsOps/polaris/releases/download/${POLARIS_VERSION}/${asset}" \
             "${POLARIS_SHA256}" "${RUNNER_TEMP}/polaris.tar.gz"
           tar -xzf "${RUNNER_TEMP}/polaris.tar.gz" -C "${RUNNER_TEMP}" polaris

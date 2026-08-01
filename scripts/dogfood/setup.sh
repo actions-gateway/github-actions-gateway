@@ -223,7 +223,7 @@ get_credentials() {
 
 preflight() {
 	echo "Running cluster preflight (validate-cluster)..."
-	"${REPO_ROOT}/scripts/validate-cluster.sh"
+	"${REPO_ROOT}/scripts/e2e/validate-cluster.sh"
 }
 
 # ---------------------------------------------------------------------------

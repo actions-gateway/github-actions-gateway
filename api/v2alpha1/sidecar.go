@@ -11,7 +11,7 @@ import "github.com/actions-gateway/github-actions-gateway/api/apisidecar"
 //
 // Read apisidecar for what the annotation means and why the heuristic only ever
 // warns. The two files must stay byte-identical except the package clause;
-// scripts/check-v2-api-sync.sh fails the build on a one-sided edit (Q374).
+// scripts/go/check-v2-api-sync.sh fails the build on a one-sided edit (Q374).
 const (
 	RunnerContainerName           = apisidecar.RunnerContainerName
 	SelfExitingSidecarsAnnotation = apisidecar.SelfExitingSidecarsAnnotation

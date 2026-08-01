@@ -120,7 +120,7 @@ Red Hat/OpenShift container-certification convention, paired with the
 
 `THIRD-PARTY-NOTICES` is a **generated, committed** file at the repo root. It is
 assembled from the committed, version-pinned `vendor/` tree (offline — no network
-or module cache) by [`scripts/gen-third-party-notices.sh`](../../scripts/gen-third-party-notices.sh):
+or module cache) by [`scripts/release/gen-third-party-notices.sh`](../../scripts/release/gen-third-party-notices.sh):
 
 ```bash
 make third-party-notices         # regenerate THIRD-PARTY-NOTICES from vendor/
