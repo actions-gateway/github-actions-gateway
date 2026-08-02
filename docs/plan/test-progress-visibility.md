@@ -44,7 +44,7 @@ formats and three polling loops.
 |---|---|---|
 | 0 | The e2e suite reports itself: heartbeat + JUnit summary + annotations | ✅ Shipped — [#1152](https://github.com/actions-gateway/github-actions-gateway/pull/1152), detail in [archive/e2e-progress-visibility.md](archive/e2e-progress-visibility.md) |
 | 1 | `validate-release.sh` reports phase and spec progress in the terminal | ✅ Shipped — Q615 |
-| 2 | Background-task mode + status file + sentinel; documented as the default | ❌ Open — [Q616](../STATUS.md#Q616), [Q617](../STATUS.md#Q617) |
+| 2 | Background-task mode + status file + sentinel; documented as the default | ⚠️ Status file + sentinel shipped (Q616); documenting it as the default is open — [Q617](../STATUS.md#Q617) |
 | 3 | Unit `-race` progress via `go test -json` | ❌ Open — [Q618](../STATUS.md#Q618) |
 | — | Migrating other suites to Ginkgo | ⛔ Rejected on measurement — [see below](#evaluated-and-rejected-migrating-other-suites-to-ginkgo) |
 | — | Integration-tier progress | ⛔ Not needed on measurement — 30–64 % output density, already self-narrating |
@@ -119,18 +119,44 @@ the natural sibling.
 
 Three deliverables:
 
-- **A status file** (`tmp/release-validation-status.json`) holding current
+- ✅ **A status file** (`tmp/release-validation-status.json`) holding current
   phase, elapsed, the latest e2e heartbeat, and any failure — a single read
   that answers "where is it" without replaying the whole stream. This is the
   agent-facing renderer; the human-facing one is the terminal stream from
-  Phase 1.
-- **`release-sentinel`**, modeled on pr-sentinel: sleeps, wakes the session on
+  Phase 1. Shipped in Q616 as `progress_status_json` in
+  [`lib/progress.sh`](../../scripts/dogfood/lib/progress.sh), rewritten
+  atomically after every event and also available as
+  [`release-status.sh`](../../scripts/dogfood/release-status.sh).
+- ✅ **`release-sentinel`**, modeled on pr-sentinel: sleeps, wakes the session on
   phase transition, failure, or completion, and prints a status block on wake.
-- **[`docs/operations/release.md` § Validate the release candidate on
+  Shipped in Q616 as
+  [`release-sentinel.sh`](../../scripts/dogfood/release-sentinel.sh).
+- ❌ **[`docs/operations/release.md` § Validate the release candidate on
   dogfood](../operations/release.md)** rewritten so the background-task flow is
   the documented default path, with the manual terminal invocation kept as the
   alternative. Per the [doc-update matrix](../development/doc-update-matrix.md)
-  this is an operator-facing change and the docs move with it, not after.
+  this is an operator-facing change and the docs move with it, not after — Q616
+  documented the two new commands where the gate's other knobs already live;
+  [Q617](../STATUS.md#Q617) is the restructure that makes the flow the default.
+
+**Three things the build settled that the plan did not anticipate.**
+
+1. **The e2e heartbeat had to enter the stream, not just the terminal.** The e2e
+   leg is one ~25-minute phase, so a status object built from phase events alone
+   reports "e2e, 18 minutes" for the whole of it — the phase is the only thing
+   that does not change. `e2e-run-watch.sh` now folds the newest relayed line
+   into the stream as a `heartbeat` record, which is also what keeps the stall
+   detector honest through the longest phase.
+2. **A gate's failure is reported by its first failing phase, not its last.**
+   The teardown trap records `gate fail` after the phase that actually broke
+   records its own, so taking the newest failure would answer every failed run
+   with "the gate exited 1".
+3. **A wedge is the absence of events, so the sentinel needs a stall event.**
+   Waking only on transitions cannot report a gate that stops transitioning —
+   which is exactly the failure a walk-away command hides. `idle` (age of the
+   newest event) crossing `RELEASE_SENTINEL_STALL` is a wake in its own right,
+   and only for a `running` gate: preflight has no stream to be quiet on and a
+   finished gate is expected to be silent.
 
 ## Phase 3 — the remaining tiers, by measurement
 
@@ -233,4 +259,4 @@ phases.
 | 1 | ~~Does `gh run watch` emit ANSI when not a TTY?~~ | **Settled 2026-08-02: no.** Piped output is plain append-only text; nothing was garbled. Phase 1 replaced it anyway, because gh's watch blocks and the relay needs the foreground |
 | 2 | Denominator for `go test -json` tiers | A `go test -list '.*'` pre-pass buys "37/412" for the cost of a second (cache-warm) invocation on the slowest tier. Alternative: ship without a denominator |
 | 3 | Rename `E2E_PROGRESS_INTERVAL` | If Phase 3 lands, the `E2E_` prefix is wrong. Rename with the generalization, not before |
-| 4 | Does the release sentinel belong in-repo or as a plugin? | pr-sentinel is a plugin outside this repo; a release sentinel is repo-specific and probably belongs in `scripts/dogfood/` |
+| 4 | ~~Does the release sentinel belong in-repo or as a plugin?~~ | **Settled with Q616: in-repo.** It reads this gate's own event stream and renders this gate's phases; there is nothing in it a second repo could use. `scripts/dogfood/release-sentinel.sh` |
