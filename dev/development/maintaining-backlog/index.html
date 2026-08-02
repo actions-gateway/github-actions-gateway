@@ -2660,6 +2660,13 @@
 <li><strong>Recurs</strong> → back to Queue top, escalated.</li>
 <li><strong>Soaked or obsolete</strong> → retire to the ledger (below).</li>
 </ul>
+<p>A sighting on a <strong>PR branch</strong> does not meet the trigger, so the row stays in
+Flake watch — but it is still evidence the mitigation is incomplete: record it
+(on the row, or in the doc the row links) and count the soak from that date
+rather than from the fix. Record <em>which mode</em> failed, too, where the row's fix
+addressed a specific one: <a href="../../STATUS/#Q549">Q549</a>'s second sighting was a
+mode its fix never covered, and a row naming only the fixed mode would have
+sent the next session to re-diagnose the wrong thing.</p>
 <p>This is the one place the general "done rows are deleted" rule does <strong>not</strong> apply, which makes it easy to miss when a flake fix otherwise looks like a routine change. <code>scripts/docs/lint-backlog.sh</code> enforces it (rule 8): a <code>flake</code>-labelled Queue row that disappears entirely — measured against <code>origin/main</code>, or the pre-commit state under <code>--staged</code> — fails the lint, naming the row and pointing here. Retiring a row per the ledger rules below is the deliberate exception: <code>BACKLOG_ALLOW_FLAKE_DELETE="Q123"</code> lets specific IDs through.</p>
 <h3 id="retiring-a-flake-watch-row">Retiring a flake-watch row<a class="headerlink" href="#retiring-a-flake-watch-row" title="Permanent link">&para;</a></h3>
 <p>Flake watch must not grow without bound — a row whose recurrence-memory has decayed to ~zero still costs a live-table scan every grooming pass and a slice of context budget, for no signal. During a grooming pass (never automatically), retire a row when <strong>either</strong> holds:</p>

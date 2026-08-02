@@ -3217,10 +3217,10 @@
 <tbody>
 <tr>
 <td><a id="Q549"></a>Q549</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/worker_scaleset_recovery_test.go"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out when the AGC is replaced inside the claim window</a></td>
+<td><a href="../plan/q549-scaleset-rerun-flake/"><code>E2E_AGC_ScaleSetDrainedWorkerClaimAndRerunLandUnderChartRBAC</code> times out waiting for the disrupted run's re-run</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>S</td>
-<td><strong>Event:</strong> the re-run wait fails on <code>main</code> after the Q549 fix (the spec pins the AGC pod UIDs and re-stages when the AGC is replaced mid-window). → top of Queue, escalated.</td>
+<td><strong>Event:</strong> the re-run wait fails on <code>main</code> post-fix. Two modes (<a href="../plan/q549-scaleset-rerun-flake/">triage</a>): A, AGC replaced mid-window (pinned); B, undisturbed window, no re-run, undiagnosed (2026-08-01, PR branch). → top of Queue, escalated.</td>
 </tr>
 <tr>
 <td><a id="Q570"></a>Q570</td>
