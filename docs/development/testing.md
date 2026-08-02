@@ -662,6 +662,18 @@ Two checks, both cheap, and the first is the one that actually catches this:
 
 Then run the leftover query — as a third check, not the only one. The same applies to the tool doing the work: prefer a script that *reports what it changed* per file over one that edits silently, so the count is available without a second pass.
 
+### A throwaway probe needs a positive control before its silence means anything
+
+The rule above puts a positive control on the *query*. It belongs on the *harness* too, and for a sharper reason: an ad-hoc probe written to answer "does this still fire?" usually reports a finding when it fires and nothing when it does not — so a broken harness and a clean result are the same output. The probe is code you wrote minutes ago and have never seen work.
+
+Q616 registered two script paths in the foreground-guard slow-command registry as bare patterns, which made every command that merely *named* those files ask for a two-hour timeout. Verifying the fix meant driving the hook with hand-built payloads. All twelve cases came back "no match", including the five that had to match — and the harness was the problem: the payload was missing a field the hook needs, so it exited before reaching any decision. Nothing distinguished that from a fix that worked.
+
+- **Include one case you know must fire**, ideally one that predates your change — here, a pattern that had been in the registry for months. If the control does not fire, you have learned about your harness, not about the subject.
+- **Print the raw output once**, not just your pass/fail verdict. Empty output where a decision was expected names the failure immediately; a verdict derived from it hides the failure as a pass.
+- **When the harness cannot be made to work, verify the layer you actually changed.** The hook applies each pattern as `re.search(pattern, command)`; asserting that step directly is honest and sufficient, as long as you say which layer the evidence covers — and then confirm end-to-end in the smallest possible way (re-running the exact command that had been denied).
+
+`scripts/agent/foreground-guard-patterns-test.sh` is the durable form of that probe, controls included.
+
 ### Verify a causation claim by deleting the mechanism
 
 The rules above are read-and-reason checks — ask what else could produce this green.
