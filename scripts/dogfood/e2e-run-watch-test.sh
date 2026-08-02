@@ -4,10 +4,10 @@
 #
 # This watcher decides whether an hour-long billable release gate passes, and it
 # is the operator's only live view of a run happening on someone else's machine.
-# The three helpers below are where that can go quietly wrong: a conclusion
-# mapped to the wrong exit status passes a red release, and a broken
-# already-seen calculation either replays the whole heartbeat every poll or
-# stops relaying it entirely.
+# The helpers below are where that can go quietly wrong: a conclusion mapped to
+# the wrong exit status passes a red release, a broken already-seen calculation
+# either replays the whole heartbeat every poll or stops relaying it entirely,
+# and a log fetch that propagates its exit status kills the gate outright.
 #
 # The log fixture is real: lines copied verbatim from run 30751971883, timestamp
 # prefixes and all, so the filter is asserted against what GitHub actually
@@ -88,6 +88,48 @@ want_eq 'startup_failure fails' 1 "$(conclusion_rc startup_failure)"
 # default to passing a release.
 want_eq 'an unrecognized conclusion fails' 1 "$(conclusion_rc some_future_state)"
 want_eq 'an empty conclusion fails' 1 "$(conclusion_rc '')"
+
+echo
+echo '== a failed log fetch cannot kill the gate =='
+# The logs endpoint 404s for a job that is queued — the normal state for the
+# minutes between the job appearing and a runner picking it up. Under pipefail
+# that status escapes the pipe, escapes the assignment that captures it, and
+# reaches `set -e`, killing the gate one poll into a ~25-minute leg and
+# reporting the still-queued run as failed. Measured on run 30762026452 while
+# validating v1.3.0-rc.5.
+REPO=owner/repo
+
+gh() { return 1; }
+rc=0
+got="$(collect_heartbeats '1 2')" || rc=$?
+want_eq 'a failing fetch yields no heartbeats' '' "$got"
+want_eq 'a failing fetch does not fail the watcher' 0 "$rc"
+
+# Positive control. Without it, a stub that never ran would satisfy the two
+# assertions above exactly as well as the fix does.
+gh() { printf '%s\n' "$FIXTURE_LOG"; }
+rc=0
+got="$(collect_heartbeats '1')" || rc=$?
+want_eq 'a succeeding fetch relays its heartbeats' 3 "$(printf '%s\n' "$got" | grep -c .)"
+want_eq 'a succeeding fetch exits clean' 0 "$rc"
+
+# The gate job and the e2e job are fetched in one sweep; whichever 404s must not
+# discard the other's heartbeats. The failing job goes LAST on purpose: a loop
+# whose final iteration succeeds returns 0 whether or not the fetch status is
+# neutralized, so ordering it the other way asserts nothing.
+gh() {
+	if [[ "$*" == *"/jobs/1/logs" ]]; then
+		return 1
+	fi
+	printf '%s\n' "$FIXTURE_LOG"
+}
+rc=0
+got="$(collect_heartbeats '2 1')" || rc=$?
+want_eq 'one job 404ing keeps the other job'\''s heartbeats' 3 \
+	"$(printf '%s\n' "$got" | grep -c .)"
+want_eq 'a partial failure exits clean' 0 "$rc"
+
+unset -f gh
 
 echo
 if ((fails > 0)); then
