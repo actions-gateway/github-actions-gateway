@@ -2599,6 +2599,14 @@
 <td>Demand fired 2026-07-31; plan written. Athens pattern (Q244) applied to images: per-upstream pull-through mirrors, then swap <code>e2e-open-egress</code> for a mirror-scoped NP. Next: Phase 0 egress inventory.</td>
 </tr>
 <tr>
+<td><a id="Q603"></a>Q603</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">An AGC stopped between abandoning a job and its next delete cycle re-provisions it on restart</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Measured via Q602's flake: <code>settle</code> concludes a job in memory; <code>flushDeletes</code> deletes a cycle later. A stop in that gap replays the assignment, and the restart (abandoned set empty) provisions for a job GitHub dropped. Q583 narrows it, not closes it.</td>
+</tr>
+<tr>
 <td><a id="Q601"></a>Q601</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer_test.go">The Q260 burst test's dedup predicate counts deliveries, not distinct siblings</a></td>
 <td><code>tests</code></td>
@@ -3223,6 +3231,20 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a id="Q604"></a>Q604</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/scalesetstub/stub.go"><code>stallJob</code> installs its runner-name conflict after the job is already pollable</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>S</td>
+<td><strong>Event:</strong> a <code>stallJob</code> caller fails <code>must be held for a re-offer</code> on <code>main</code> after the Q604 fix (<code>EnqueueStalledJob</code> registers the conflict in the same locked section that makes the job pollable). → top of Queue, escalated.</td>
+</tr>
+<tr>
+<td><a id="Q602"></a>Q602</td>
+<td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestListener_AbandonedJobDoesNotSurviveARestart</code> stops the listener before the abandon's message delete is issued</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>S</td>
+<td><strong>Event:</strong> it fails <code>Condition satisfied</code> on <code>main</code> after the Q602 fix (the test now waits for <code>deleteAttempts &gt; 0</code>, the delete the invariant rests on, not only the abandoned counter, which rises at in-memory settle). → top of Queue, escalated.</td>
+</tr>
 <tr>
 <td><a id="Q600"></a>Q600</td>
 <td><a href="../development/testing/#synchronize-on-the-signal-you-assert-on"><code>TestMultiplexer_DuplicateJobDeliveryProvisionsOnce</code> reads its peak-provisioner count before the winner reaches the handler</a></td>

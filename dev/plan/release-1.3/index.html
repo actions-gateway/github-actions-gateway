@@ -2714,6 +2714,24 @@ The prose below carries the <em>why</em> of each; this table is the state.</p>
 <td>✅ shipped 2026-08-01 — it reddened <code>main</code>, which pre-flight requires green</td>
 </tr>
 <tr>
+<td>Q602</td>
+<td>The Q583 restart test stops the listener before the abandon's message delete is issued</td>
+<td>gates</td>
+<td>✅ shipped 2026-08-02 — same reason: it reddened <code>main</code></td>
+</tr>
+<tr>
+<td>Q603</td>
+<td>An AGC stopped between abandoning a job and its next delete cycle re-provisions it on restart</td>
+<td>rides</td>
+<td>🔲 filed — the residual Q583 narrows but does not close</td>
+</tr>
+<tr>
+<td>Q604</td>
+<td><code>stallJob</code> installs its runner-name conflict after the job is already pollable</td>
+<td>gates</td>
+<td>✅ shipped 2026-08-02 — same reason: it reddened <code>main</code></td>
+</tr>
+<tr>
 <td>Q406</td>
 <td>Capacity gate <code>AutoscalerVerdict</code> mode</td>
 <td>rides</td>
@@ -2806,6 +2824,46 @@ from 0 failures in 400 local runs to 5 of 5), fixed by waiting on the counter th
 invariant reads, and confirmed still able to catch the Q260 regression by deleting
 the claim gate and requiring red. Filed to <a href="../../STATUS/#Q600">flake watch</a>; the
 weaker dedup predicate the measurement exposed is <a href="../../STATUS/#Q601">Q601</a>.</p>
+<p><strong>Q602 gates for the same mechanical reason, and is worth more than its fix.</strong> The
+next <code>main</code> run went red on a <em>different</em> <code>-race</code> test —
+<code>TestListener_AbandonedJobDoesNotSurviveARestart</code>, the Q583 fix's own — with
+<code>assert.Never</code> reporting that a restarted listener had provisioned a worker for a job
+the previous one gave up on. It reproduced locally at 1 in 40.</p>
+<p>The reason it matters is that <strong>the test was not wrong about the product.</strong> Its
+barrier was: <code>abandonDeferredBefore</code> calls <code>settle</code> and then increments the abandoned
+counter, so the counter is published last and looks like a valid gate. But <code>settle</code>
+only marks the job concluded <em>in memory</em>; the wire delete that releases the message
+is issued by the next <code>flushDeletes</code> cycle, deliberately ("runs per cycle rather than
+only at settle time"). Stopping the listener inside that gap leaves the message
+unreleased, so it replays — and the restarted process, its abandoned set empty,
+provisions for a job GitHub has dropped. That is Q553's own failure, reached through
+a window Q583 narrows rather than closes.</p>
+<p>So the flake was a faithful, non-deterministic reproduction of a real (narrow)
+restart window. The fix pins the test to the path Q583 actually repairs — wait for
+the stub's <code>delete-message</code> call, not the counter — and the residual window is filed
+as <a href="../../STATUS/#Q603">Q603</a> rather than absorbed into a green test. Deleting the
+<code>settle</code> call still turns the test red, now naming the missing release directly.</p>
+<p><strong>Q604 is the third gate, and the one that says something about the suite.</strong> The Q602
+fix's own CI run went red again in the same test, but at a different point — its
+<em>setup</em>, <code>stallJob</code>, timing out on "the job that cannot register a runner name must be
+held for a re-offer". The helper enqueues the job and only then installs the
+runner-name conflict meant to stall it, so a poll (20 ms) can assign and successfully
+provision it in between; it never defers, and the wait times out. Widening that gap by
+60 ms took it from 0 failures in 80 runs to 3 of 3, with CI's exact message.</p>
+<p>What makes it worth recording is that <strong>the codebase already knew.</strong> <code>deferred_test.go</code>
+holds advertised capacity at zero until the conflict is staged, commenting that "the
+fake assigns a queued job as soon as a poll advertises a slot, so staging afterwards
+races the poll loop"; <code>conditions_test.go</code> stages the conflict before the listener
+starts; <code>ceiling_q576_test.go</code> and <code>listener_test.go</code> gate on capacity the same way.
+Every site that meets this hazard mitigates it — except <code>stallJob</code>, which eight tests
+call. The fix removes the hazard structurally instead of adding a fifth
+capacity dance: <code>scalesetstub.EnqueueStalledJob</code> registers the conflict inside the same
+locked section that makes the job pollable, so no window exists to lose.</p>
+<p><strong>Three gates, one root shape.</strong> Q600, Q602 and Q604 were all "the test synchronized on
+something adjacent to what it asserts", and all three surfaced in AGC listener tests
+within two <code>main</code> runs. They were fixed individually because each had a distinct
+mechanism, but the pattern is worth watching: <a href="../../STATUS/#Q601">Q601</a> records a fourth
+weak barrier in the same family, still unfixed.</p>
 <p><strong>API review verdict — ship as-is.</strong> <code>scripts/release/api-surface-since.sh
 v1.3.0-rc.3</code> reports one field pair (<code>githubCABundleRef</code>, and the
 <code>LocalConfigMapReference.Name</code> it introduces) and four condition reasons
