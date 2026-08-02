@@ -2377,6 +2377,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="License attribution (/licenses/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-it-covers--and-why-build-time-tooling-does-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it covers — and why build-time tooling does not
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -2532,6 +2549,53 @@ what ships at <code>/licenses/</code> is in
 <a href="../../operations/security-operations/#license-attribution-in-images">security-operations.md</a>.</p>
 <p>The test-only <code>test/fakegithub</code> image is not published as a product artifact and
 does not carry <code>/licenses/</code>.</p>
+<h4 id="what-it-covers--and-why-build-time-tooling-does-not">What it covers — and why build-time tooling does not<a class="headerlink" href="#what-it-covers--and-why-build-time-tooling-does-not" title="Permanent link">&para;</a></h4>
+<p>The obligation is triggered by <strong>distribution, not by use</strong>. MIT ("in all copies
+or substantial portions"), BSD-3 ("redistributions in binary form must reproduce
+…"), and Apache-2.0 §4(d) all attach to conveying the work to someone else. Code
+that only ever runs on a developer's machine or in CI is never conveyed, so it
+owes no attribution.</p>
+<p>So the file is assembled from the repo-root <code>vendor/</code> tree <strong>only</strong> — the modules
+statically linked into the shipped binaries. The other two vendored trees are
+deliberately excluded:</p>
+<table>
+<thead>
+<tr>
+<th>Tree</th>
+<th>In <code>THIRD-PARTY-NOTICES</code>?</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vendor/</code></td>
+<td>yes</td>
+<td>statically linked into the published images</td>
+</tr>
+<tr>
+<td><code>tools/vendor/</code></td>
+<td>no</td>
+<td>pinned third-party build tools (<code>make tools</code>); never in an artifact</td>
+</tr>
+<tr>
+<td><code>devtools/vendor/</code></td>
+<td>no</td>
+<td>first-party programs backing <code>make</code> gates; never shipped or signed</td>
+</tr>
+</tbody>
+</table>
+<p>Adding a dependency to <code>tools/</code> or <code>devtools/</code> therefore owes no notices regen.
+Adding one to a workspace module does.</p>
+<p><strong>The source tree is its own distribution, and it is already satisfied.</strong>
+<code>vendor/</code> is committed and this repo is public, so the third-party <em>source</em> is
+redistributed too — but each vendored module keeps its own <code>LICENSE</code> beside its
+code, which is exactly what the reproduce-the-notice clauses ask for. The
+roll-up file exists because a <strong>binary</strong> strips that: the image carries no
+<code>vendor/</code> tree, so the texts have to travel separately at <code>/licenses/</code>.</p>
+<p><strong>Notices scope is not SBOM scope.</strong> The SBOM answers "what touched this build"
+for vulnerability tracking, and may legitimately inventory build-time tooling.
+<code>THIRD-PARTY-NOTICES</code> answers "what did we distribute" and is a legal artifact.
+Keep the two scoped separately — widening one does not widen the other.</p>
 <h3 id="image-hardening">Image hardening<a class="headerlink" href="#image-hardening" title="Permanent link">&para;</a></h3>
 <p>A few build-time hardening conventions are shared by every Dockerfile and gated
 by the <a href="../testing/#the-dockerfile-lint-gate"><code>dockerfile-lint</code> CI workflow</a>

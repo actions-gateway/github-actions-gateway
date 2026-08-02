@@ -2549,6 +2549,11 @@
 <td><code>feature</code></td>
 <td>✅</td>
 </tr>
+<tr>
+<td><a href="../plan/markdown-gates-parser/">Markdown gates on a real parser</a></td>
+<td><code>milestone</code> <code>ci</code> <code>debt</code></td>
+<td>⚠️</td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -2661,6 +2666,30 @@
 <td>🔲</td>
 <td>S</td>
 <td>A test asserting on uid, installed tooling, or filesystem semantics must gate on the observed capability — <code>runs-on</code> can resolve to the self-hosted dogfood runner. Learned for Go only (Q482); Q596 caught a <code>chmod 000</code> assertion root ignores.</td>
+</tr>
+<tr>
+<td><a id="Q612"></a>Q612</td>
+<td><a href="../plan/markdown-gates-parser/"><code>check-doc-links</code> never checks a badge-wrapped link's target</a></td>
+<td><code>bug</code> <code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Measured: the collect regex matches the inner image, so <code>[![x](img)](target)</code> leaves <code>target</code> unchecked — 3 live in README, one relative (<code>LICENSE</code>). Lands <code>devtools/docs/markdown</code> + goldmark; the 190-line awk parser has no test file.</td>
+</tr>
+<tr>
+<td><a id="Q613"></a>Q613</td>
+<td><a href="../plan/markdown-gates-parser/"><code>lint-backlog</code> splits Queue rows positionally</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🚫</td>
+<td>M</td>
+<td>Blocked by <a href="#Q612">Q612</a>. One escaped pipe shifts every field, so <code>St</code> reads the label cell and <code>Notes</code> the size and the rules pass on the wrong ones. Separately <code>awk</code>'s <code>length()</code> is bytes here, runes under gawk; Q594 sits at 250/248.</td>
+</tr>
+<tr>
+<td><a id="Q614"></a>Q614</td>
+<td><a href="../plan/markdown-gates-parser/"><code>check-roadmap</code> and <code>backlog-metrics</code> parse markdown by regex</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🚫</td>
+<td>S</td>
+<td>Blocked by <a href="#Q612">Q612</a>. The last two consumers move onto the shared parse layer: roadmap bullets with their <code>&lt;!-- q:QN --&gt;</code> annotations, and the metrics replay's table rows. No new dependency and no new gate wiring.</td>
 </tr>
 <tr>
 <td><a id="Q594"></a>Q594</td>
