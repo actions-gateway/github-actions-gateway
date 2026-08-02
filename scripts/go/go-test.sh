@@ -16,14 +16,25 @@
 #            memory/I/O amplifier, so the timeout is bumped from 2m to 5m.
 #
 # Env:
-#   V / VERBOSE  Non-empty streams test output live (-v). Off by default so
-#                the green path stays compressed — go test already prints one
-#                `ok pkg` line per passing package and the full output of any
-#                package that fails. Turn it on when debugging a slow or
-#                hanging test: without -v, go test buffers each package's
-#                output until the package completes, so a hung test shows
-#                nothing (not even its t.Log lines) until it finishes or hits
-#                -timeout; with -v the output streams as it is produced.
+#   V / VERBOSE  Non-empty streams test output live (-v), bypassing the
+#                heartbeat renderer below — the two want opposite things, one
+#                showing every line as it is produced and the other showing
+#                only what failed. Turn it on when you want a specific test's
+#                own output as it runs.
+#   TEST_PROGRESS_INTERVAL
+#                Seconds between heartbeat lines (default 30); 0 runs plain
+#                `go test` with no renderer at all. The same knob paces the
+#                e2e watcher (scripts/e2e/progress-watch.sh).
+#
+# Progress. The run streams through devtools/gotest/progress, which turns
+# `go test -json` back into an ordinary test log and interleaves one heartbeat
+# line per interval naming what is still running. The measured problem is the
+# -race gate: 200 s at 8 % output density, 58 s between lines, and a deadlocked
+# test that says nothing whatsoever until -timeout fires. -json is what makes
+# the fix possible — plain `go test` both buffers a package until it ends and
+# releases packages in command-line order, so nothing can be reported live.
+# Rendering from the -json stream also means no test changed. Details:
+# docs/development/testing.md § Watching a unit run in progress.
 #
 # Applies the local throttle (GOMAXPROCS + `go test -p` cap and a low-priority
 # QoS prefix) on a GUI dev shell; a no-op on CI/headless — see
@@ -74,9 +85,47 @@ for dir in $(workspace_modules); do
 done
 
 [[ -n "$THROTTLE_JOBS" ]] && export GOMAXPROCS="$THROTTLE_JOBS"
+
+PROGRESS_INTERVAL="${TEST_PROGRESS_INTERVAL:-30}"
+PROGRESS_BIN="$REPO_ROOT/.build/gotest-progress"
+# Trimmed from package names in the heartbeat, so a running test reads
+# `broker.TestLeaseExpiry` rather than a 55-character import path. Every module
+# in go.work and devtools/ sits under it; a stale value costs line width only.
+PROGRESS_STRIP="github.com/actions-gateway/github-actions-gateway/"
+
+progress_args=()
+if [[ -z "$verbose_flag" && "$PROGRESS_INTERVAL" != 0 ]]; then
+	mkdir -p "$REPO_ROOT/.build"
+	if (cd "$REPO_ROOT/devtools" && GOWORK=off go build -o "$PROGRESS_BIN" ./gotest/progress); then
+		progress_args=(-label unit -interval "${PROGRESS_INTERVAL}s" -strip "$PROGRESS_STRIP")
+	else
+		echo "==> heartbeat renderer failed to build; running without progress" >&2
+	fi
+fi
+
+# run_tests PATTERN... — one `go test` invocation, piped through the heartbeat
+# renderer unless progress is off. The renderer always exits 0, so pipefail
+# makes the run's verdict `go test`'s own status: progress reporting is never
+# what fails, or passes, the gate.
+run_tests() {
+	local total
+	if ((${#progress_args[@]} == 0)); then
+		# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
+		$THROTTLE_PREFIX go test -trimpath $race_flag -timeout "$timeout" $p_flag $verbose_flag "$@"
+		return
+	fi
+	# The denominator, for ~0.3 s and no compilation. A `go test -list` pre-pass
+	# would buy a test-level one too, but it costs a full build of every test
+	# binary ahead of the run — measured at 22 s wall / 131 s CPU with a warm
+	# cache — and serializes the compile the single invocation exists to overlap.
+	total=$(go list -e "$@" 2>/dev/null | grep -c . || true)
+	# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
+	$THROTTLE_PREFIX go test -trimpath $race_flag -timeout "$timeout" $p_flag -json "$@" \
+		| "$PROGRESS_BIN" "${progress_args[@]}" -packages "$total"
+}
+
 echo "==> go test ${race_flag:+$race_flag }${patterns[*]}"
-# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
-$THROTTLE_PREFIX go test -trimpath $race_flag -timeout "$timeout" $p_flag $verbose_flag "${patterns[@]}"
+run_tests "${patterns[@]}"
 
 # The single invocation above resolves against go.work, which cannot reach a
 # module the workspace does not list, so those run separately with GOWORK=off.
@@ -85,7 +134,6 @@ for dir in $(firstparty_nonworkspace_modules); do
 	(
 		cd "$dir"
 		export GOWORK=off
-		# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
-		$THROTTLE_PREFIX go test -trimpath $race_flag -timeout "$timeout" $p_flag $verbose_flag ./...
+		run_tests ./...
 	)
 done

@@ -154,6 +154,29 @@ make test-race        # one multi-module `go test -race` across the whole worksp
 
 It is deliberately a separate target from `make test`/`make check` so the fast local loop stays fast and never silently becomes a `-race` run; treat it like `make vulncheck` — a heavier gate you run when a change warrants it (anything touching the concurrency core) or before a final pre-PR pass.
 
+### Watching a unit run in progress
+
+Measured on the CI `-race` gate: 200 s of wall clock at 8 % output density, 58 s between any two lines — and a *deadlocked* test prints nothing whatsoever until `-timeout` fires five minutes later, leaving you to infer which test hung from a goroutine dump. `make test` and `make test-race` therefore stream through [`devtools/gotest/progress`](../../devtools/gotest/progress/main.go), which prints one line per 30 s:
+
+```
+[unit t+2:14] 37/48 pkgs | 1204 ok, 0 failed, 3 skipped | running: broker.TestLeaseExpiry (58s), cmd/agc/controller.TestReconcile/case-3 (12s)
+```
+
+Knobs: `TEST_PROGRESS_INTERVAL` (seconds between lines; `0` runs plain `go test` with no renderer at all) and `V=1`, which streams `go test -v` live and bypasses the renderer — the two want opposite things.
+
+**No test changed**, because `go test -json` already carries a run/pass/fail event per test. That is the opposite of the e2e suite, whose 73 Ginkgo specs are one Go test and so needed [bespoke reporter instrumentation](#watching-an-e2e-run-in-progress). Three measured properties of the `-json` stream are what the renderer stands on:
+
+- **It streams; plain `go test` cannot.** Plain output buffers each package until that package ends *and* releases packages in command-line order, so one slow package holds back everything behind it. Under `-json` a second package's events arrive while the first is still running.
+- **A build diagnostic carries an `ImportPath` (`pkg [pkg.test]`), not a `Package`**, and it never equals the package the failure is later reported against. Those lines print as they arrive; buffering them against a package would silently swallow compile errors.
+- **A hung test never reaches a terminal event**, which is what keeps its output — including the eventual timeout goroutine dump — when its package is finally flushed.
+
+Two deliberate differences from plain `go test` output:
+
+- **Packages appear in completion order.** That is the same property that makes progress live.
+- **A failing test keeps its `=== RUN` header, with its log lines in emission order**, where plain output re-groups them under `--- FAIL`. Output from every test that passed or skipped is dropped, so a green package is still one `ok` line.
+
+**There is no test-level denominator**, and adding one is not worth its price. `go test -json` has no total, and recovering it needs a `go test -list '.*'` pre-pass — measured at 22 s wall / 131 s CPU with a warm build cache, because `-list` compiles every test binary *before* any test runs, which also serializes the compile that [`go-test.sh`](../../scripts/go/go-test.sh)'s single workspace-wide invocation exists to overlap with test execution. The package denominator comes from `go list` instead: ~0.3 s, no compilation. The test tally counts top-level tests only — subtests are created at run time, so counting them would make the number depend on which table cases happened to execute.
+
 ### Coverage measurement and the ratchet
 
 The CI `unit-test.yml` workflow has a `coverage` job that measures per-module unit-test coverage and gates it with a **no-regression ratchet**, not an absolute percentage target. [`scripts/go/coverage.sh`](../../scripts/go/coverage.sh) is the single source of truth; the Makefile exposes three targets, all of which report a floor per go.work module (a repo-root `go test ./...` does not work — see [go-workspaces.md](go-workspaces.md)):
@@ -1128,7 +1151,7 @@ At `--procs 6` Ginkgo's own output is close to silent: it suppresses spec-start 
 
 The suite appends spec start/end events to `E2E_PROGRESS_FILE` (default `tmp/e2e-progress.jsonl`) and the watcher renders them. The two halves are split that way because **Ginkgo intercepts spec stdout**: anything a spec or a `ReportAfterEach` prints is captured and replayed when the spec ends, so the suite cannot narrate its own progress — only write a file something outside it reads.
 
-Knobs: `E2E_PROGRESS_INTERVAL` (seconds between lines), `E2E_PROGRESS_SPEC_WIDTH` (chars of spec text per running spec), and `E2E_PROGRESS_FILE=` (empty) to disable both halves.
+Knobs: `TEST_PROGRESS_INTERVAL` (seconds between lines — the same knob paces [the unit tier](#watching-a-unit-run-in-progress), and `0` turns both off), `E2E_PROGRESS_SPEC_WIDTH` (chars of spec text per running spec), and `E2E_PROGRESS_FILE=` (empty) to disable both halves.
 
 Two things to know when changing the event format:
 
