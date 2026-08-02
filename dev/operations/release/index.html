@@ -3605,6 +3605,25 @@ builds each version from its tag). Tag a patch from the released line instead:</
 i.e. when it has diverged past the release with content you don't want in the
 patch. If <code>main</code> is clean and ready to ship, that's the next <strong>minor</strong> (<code>vX.(Y+1).0</code>),
 not a patch.</p>
+<blockquote>
+<p><strong>A release line carries its own validation harness.</strong> <code>validate-release.sh</code> and
+the dogfood scripts under it live in this repo, and the gate runs <em>the scripts in
+your checkout</em> against <em>the artifacts of the tag</em>. A <code>release-X.Y</code> branch cut from
+<code>vX.Y.0</code> therefore inherits whatever harness that commit had — so a fix to the
+gate only reaches a patch line if it was in the minor tag, or is cherry-picked
+like any other fix.</p>
+<p>The consequence is a rule for the <strong>minor</strong> cut, not the patch: tag <code>vX.Y.0</code> from
+a commit that carries the harness fixes you want the line to keep. Cutting it from
+an older RC's commit to make the tag byte-match the validated artifact is the trap
+— it strands every gate fix found <em>during</em> that release's validation, which is
+exactly when gate fixes tend to be found. <code>v1.3.0</code> is the worked example: rc.5's
+validation produced two harness fixes (<a href="../../STATUS/#Q627">Q627</a> and the e2e watch
+deadline), and a <code>release-1.3</code> branch cut from rc.5's commit would reproduce both
+on every future <code>v1.3.x</code>.</p>
+<p>Validating an RC whose product code matches <code>main</code> is unaffected: the images and
+CRDs come from the tag, the harness from your checkout, so the two move
+independently by design.</p>
+</blockquote>
 <p>The <strong>docs site follows automatically</strong>: <code>mike</code> builds each version from its own
 tag, so a patch tagged off the release line publishes docs with only that line's
 content — no unreleased features. And the site's <code>stable</code> alias + default root
