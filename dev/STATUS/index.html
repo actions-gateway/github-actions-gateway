@@ -2520,6 +2520,11 @@
 <td>✅</td>
 </tr>
 <tr>
+<td><a href="../plan/test-progress-visibility/">Test progress visibility</a></td>
+<td><code>tests</code> <code>ci</code> <code>dogfood</code></td>
+<td>⚠️</td>
+</tr>
+<tr>
 <td><a id="Q248"></a><a href="../plan/dogfood-runner-rightsizing/">Dogfood runner right-sizing</a></td>
 <td><code>dogfood</code></td>
 <td>✅</td>
@@ -2572,6 +2577,30 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q615"></a>Q615</td>
+<td><a href="../plan/test-progress-visibility/#phase-1--release-validation-reports-itself">Release validation reports its own progress</a></td>
+<td><code>dogfood</code> <code>tests</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Phase 1: <code>validate-release.sh</code> goes quiet behind <code>gh run watch</code> (job status only) while Phase 0's spec heartbeat sits in the dispatched run's log. Emit a phase stream, relay the remote heartbeat via the in-flight jobs/logs API, render JUnit on exit.</td>
+</tr>
+<tr>
+<td><a id="Q616"></a>Q616</td>
+<td><a href="../plan/test-progress-visibility/#phase-2--background-task-mode-becomes-the-standard">Background-task mode for release validation</a></td>
+<td><code>dogfood</code> <code>tests</code></td>
+<td>🚫</td>
+<td>M</td>
+<td>Blocked on Q615's phase stream. Status file (phase, elapsed, last heartbeat, failure) + a <code>release-sentinel</code> modeled on pr-sentinel that sleeps and wakes the session on phase transitions — event-driven, never a clock poll.</td>
+</tr>
+<tr>
+<td><a id="Q617"></a>Q617</td>
+<td><a href="../plan/test-progress-visibility/#phase-2--background-task-mode-becomes-the-standard">Make background-task validation the documented default</a></td>
+<td><code>dogfood</code> <code>docs</code></td>
+<td>🚫</td>
+<td>S</td>
+<td>Blocked on Q616. Rewrite release.md § Validate the release candidate on dogfood so the background-task flow is the default path and the manual terminal run is the alternative.</td>
+</tr>
+<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code></td>
@@ -2594,6 +2623,14 @@
 <td>🔲</td>
 <td>M</td>
 <td>Q603 closed the graceful half; a hard kill between <code>settle</code> and its <code>DELETE</code> remains, and no ordering can close it. Both candidate fixes need something first — a live measurement, or a <a href="#Q597">Q597</a> decision — and the plan doc states which.</td>
+</tr>
+<tr>
+<td><a id="Q618"></a>Q618</td>
+<td><a href="../plan/test-progress-visibility/#phase-3--the-remaining-tiers-by-measurement">Unit <code>-race</code> progress via <code>go test -json</code></a></td>
+<td><code>tests</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Phase 3: measured 8% density, 58s silences; value is the deadlock case — a hung <code>-race</code> run says nothing until timeout. Wrapper over <code>go test -json</code>, no test-code changes. Denominator needs a <code>-list</code> pre-pass; decide first.</td>
 </tr>
 <tr>
 <td><a id="Q595"></a>Q595</td>
