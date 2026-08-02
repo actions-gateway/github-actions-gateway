@@ -74,6 +74,8 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
+# shellcheck source=scripts/dogfood/lib/progress.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/progress.sh"
 
 SCRIPT_DIR="${REPO_ROOT}/scripts/dogfood"
 APP_ID_DEFAULT="3752347"
@@ -125,6 +127,10 @@ COSIGN_BIN=""
 
 # Poll interval for the in-flight waits (run settle + rerun transition).
 E2E_POLL_INTERVAL=15
+
+# The gate's phase event stream (Q615). Defaulted here rather than in
+# lib/progress.sh so a caller can point it elsewhere or empty it to opt out.
+RELEASE_PROGRESS_FILE="${RELEASE_PROGRESS_FILE-${REPO_ROOT}/tmp/release-validation-progress.jsonl}"
 
 usage() {
 	cat >&2 <<'USAGE'
@@ -271,10 +277,56 @@ e2e_leg() {
 	capture_worker_sizing &
 	local capture_pid=$!
 
+	# e2e-run-watch.sh rather than `gh run watch` (Q615): the dispatched run
+	# already prints a spec heartbeat every 30s, and gh's watch blocks without
+	# relaying it, leaving the operator on job-level status for ~25 minutes.
+	# Same exit-status contract — a non-success conclusion fails the gate.
+	local watch_rc=0
 	echo "Watching run ${run_id} to completion (runners autoscale in; may be slow)..."
-	gh run watch "${run_id}" --repo "${REPO}" --exit-status
+	REPO="${REPO}" bash "${SCRIPT_DIR}/e2e-run-watch.sh" "${run_id}" || watch_rc=$?
+
+	# Render the report before acting on the status: a red matrix is exactly
+	# when the failing spec names are worth having, and this is the last moment
+	# they are cheap to get.
+	report_e2e_run "${run_id}"
+
+	if ((watch_rc != 0)); then
+		progress_event e2e fail "run ${run_id} did not conclude success"
+		wait "${capture_pid}" || true
+		return "${watch_rc}"
+	fi
+
 	echo "  e2e matrix GREEN"
 	wait "${capture_pid}" || true
+}
+
+# report_e2e_run <run-id> — render the run's JUnit report into this terminal.
+# The dispatched run already writes it to its own job summary; this is the copy
+# for an operator who is watching from here and should not have to open a
+# browser to find out which spec failed.
+#
+# Wholly best-effort: an artifact that is missing (a run that died before the
+# suite wrote one) must not turn into a second, misleading failure on top of the
+# real one.
+report_e2e_run() {
+	local run_id="$1" dir="${WORKDIR}/e2e-report"
+	mkdir -p "${dir}" 2>/dev/null || return 0
+
+	# --pattern: the reusable workflow names the artifact per CNI lane
+	# (e2e-junit-report-kindnet / -calico), and the dispatched matrix may
+	# produce either.
+	if ! gh run download "${run_id}" --repo "${REPO}" \
+		--pattern 'e2e-junit-report-*' --dir "${dir}" >/dev/null 2>&1; then
+		echo "  (no JUnit artifact on run ${run_id} — skipping the report)"
+		return 0
+	fi
+
+	local report
+	while IFS= read -r report; do
+		echo ""
+		echo "=== e2e report: $(basename "$(dirname "${report}")") ==="
+		bash "${REPO_ROOT}/scripts/e2e/e2e-report-summary.sh" "${report}" || true
+	done < <(find "${dir}" -name '*.xml' -type f 2>/dev/null)
 }
 
 # capture_worker_sizing records the runner container's cpu request from the
@@ -485,12 +537,18 @@ teardown() {
 	local rc="$?"
 	echo ""
 	if ((rc != 0)); then
+		# Record the terminal state before the diagnostics dump: a renderer
+		# watching the stream should learn the gate died now, not after a
+		# minute of cluster snapshotting.
+		progress_event gate fail "gate exited ${rc}"
 		(dump_diagnostics) || echo "diagnostics dump failed — continuing teardown" >&2
 	fi
+	progress_phase teardown "Scaling dogfood back to 0 nodes at rest"
 	echo "=== Teardown (self-cleaning; runs on success and failure) ==="
 	bash "${SCRIPT_DIR}/e2e-stop.sh" || echo "e2e-stop failed — continuing teardown" >&2
 	bash "${SCRIPT_DIR}/stop.sh" || echo "stop failed — continuing teardown" >&2
 	[[ -n "${WORKDIR}" ]] && rm -rf "${WORKDIR}"
+	progress_event teardown "done"
 	echo "=== Teardown complete (exit ${rc}) ==="
 }
 
@@ -549,16 +607,34 @@ main() {
 	# Everything below mutates the cluster — arm the self-cleaning teardown first.
 	trap teardown EXIT
 
+	# Start the phase stream once the gate is committed to running, so a run
+	# that aborts during preflight leaves no half-stream for a renderer to
+	# mistake for an in-flight gate.
+	progress_init
+	progress_event gate start "validating ${GAG_IMAGE_TAG}"
+
 	# Child scripts run unattended past this point. DOGFOOD_RUNNER_IMAGE is
 	# intentionally left as-is (unset => setup.sh preserves the live image, Q295).
 	export GAG_IMAGE_TAG APP_ID INSTALLATION_ID
 	export ASSUME_YES=1
 
+	progress_phase deploy "Deploying the RC and routing CI to GAG"
 	deploy_leg
-	e2e_leg
-	sizing_leg
-	crd_smoke
+	progress_event deploy "done"
 
+	progress_phase e2e "Running the e2e matrix on GAG runners"
+	e2e_leg
+	progress_event e2e "done"
+
+	progress_phase sizing "Asserting the derived worker sizing profiles"
+	sizing_leg
+	progress_event sizing "done"
+
+	progress_phase crd-smoke "Verifying the signed v2 CRD artifact"
+	crd_smoke
+	progress_event crd-smoke "done"
+
+	progress_event gate "done" "validation PASSED for ${GAG_IMAGE_TAG}"
 	echo ""
 	echo "Validation gate PASSED for ${GAG_IMAGE_TAG}."
 	echo "Teardown runs next (scales dogfood back to 0 nodes at rest)."

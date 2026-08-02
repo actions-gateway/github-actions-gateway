@@ -43,7 +43,7 @@ formats and three polling loops.
 | Phase | Scope | State |
 |---|---|---|
 | 0 | The e2e suite reports itself: heartbeat + JUnit summary + annotations | ✅ Shipped — [#1152](https://github.com/actions-gateway/github-actions-gateway/pull/1152), detail in [archive/e2e-progress-visibility.md](archive/e2e-progress-visibility.md) |
-| 1 | `validate-release.sh` reports phase and spec progress in the terminal | ❌ Open — [Q615](../STATUS.md#Q615) |
+| 1 | `validate-release.sh` reports phase and spec progress in the terminal | ✅ Shipped — Q615 |
 | 2 | Background-task mode + status file + sentinel; documented as the default | ❌ Open — [Q616](../STATUS.md#Q616), [Q617](../STATUS.md#Q617) |
 | 3 | Unit `-race` progress via `go test -json` | ❌ Open — [Q618](../STATUS.md#Q618) |
 | — | Migrating other suites to Ginkgo | ⛔ Rejected on measurement — [see below](#evaluated-and-rejected-migrating-other-suites-to-ginkgo) |
@@ -89,12 +89,13 @@ Three pieces:
 
 Plus a one-liner worth taking regardless: print the run URL before the watch.
 
-**Open sub-question, to settle by measurement at build time:** whether
-`gh run watch` emits ANSI cursor control when stdout is not a TTY. If it does,
-running this gate as a background task is *already* producing garbled captured
-output today, independent of anything here — which would make replacing it with
-our own append-only poller a fix rather than a preference. The measurement was
-blocked in-session by the pr-sentinel hook; take it first.
+**Measured 2026-08-02: `gh run watch` emits no ANSI when stdout is not a TTY.**
+Piped, it degrades to plain append-only text with UTF-8 status glyphs — so
+background-task capture was **not** garbled, and there was no pre-existing bug
+to fix. Replacing it is therefore justified by the relay requirement alone: gh's
+watch *blocks*, and a heartbeat cannot be interleaved from inside it. Recorded
+because the opposite conclusion was the tempting one and would have shipped an
+overstated claim.
 
 ## Phase 2 — background-task mode becomes the standard
 
@@ -229,7 +230,7 @@ phases.
 
 | # | Decision | Notes |
 |---|---|---|
-| 1 | Does `gh run watch` emit ANSI when not a TTY? | Decides whether Phase 1 replaces it or wraps it. Measure first — it may already be garbling background runs today |
+| 1 | ~~Does `gh run watch` emit ANSI when not a TTY?~~ | **Settled 2026-08-02: no.** Piped output is plain append-only text; nothing was garbled. Phase 1 replaced it anyway, because gh's watch blocks and the relay needs the foreground |
 | 2 | Denominator for `go test -json` tiers | A `go test -list '.*'` pre-pass buys "37/412" for the cost of a second (cache-warm) invocation on the slowest tier. Alternative: ship without a denominator |
 | 3 | Rename `E2E_PROGRESS_INTERVAL` | If Phase 3 lands, the `E2E_` prefix is wrong. Rename with the generalization, not before |
 | 4 | Does the release sentinel belong in-repo or as a plugin? | pr-sentinel is a plugin outside this repo; a release sentinel is repo-specific and probably belongs in `scripts/dogfood/` |
