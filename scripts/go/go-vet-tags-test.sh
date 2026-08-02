@@ -131,11 +131,18 @@ tree_patterns=()
 while IFS= read -r module_dir; do
 	tree_patterns+=("$module_dir/...")
 done < <(workspace_modules)
-if assert_tags_cover_tree "$BUILD_TAGS" "${tree_patterns[@]}" >/dev/null 2>&1; then
+#
+# Unlike the fixtures above, this reads the live tree, so its failure need not be
+# the condition asserted. Keep the report: "re-run it yourself" is no help in CI,
+# and none at all if the cause was transient (Q596).
+tree_rc=0
+tree_out="$(assert_tags_cover_tree "$BUILD_TAGS" "${tree_patterns[@]}" 2>&1)" || tree_rc=$?
+if ((tree_rc == 0)); then
 	printf 'ok   %-34s tracked workspace, -tags %s\n' tree-fully-covered "$BUILD_TAGS"
 else
-	printf 'FAIL %-34s a tracked first-party .go file is excluded even with -tags %s; run %s\n' \
-		tree-fully-covered "$BUILD_TAGS" "$REPO_ROOT/scripts/go/go-vet-tags.sh" >&2
+	printf 'FAIL %-34s a tracked first-party .go file is excluded even with -tags %s (rc=%d); run %s\n' \
+		tree-fully-covered "$BUILD_TAGS" "$tree_rc" "$REPO_ROOT/scripts/go/go-vet-tags.sh" >&2
+	printf '%s\n' "$tree_out" >&2
 	fails=$((fails + 1))
 fi
 
