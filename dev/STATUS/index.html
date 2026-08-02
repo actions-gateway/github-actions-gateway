@@ -2522,7 +2522,7 @@
 <tr>
 <td><a href="../plan/test-progress-visibility/">Test progress visibility</a></td>
 <td><code>tests</code> <code>ci</code> <code>dogfood</code></td>
-<td>⚠️</td>
+<td>✅</td>
 </tr>
 <tr>
 <td><a id="Q248"></a><a href="../plan/dogfood-runner-rightsizing/">Dogfood runner right-sizing</a></td>
@@ -2583,14 +2583,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Three shell files already carry <code>docs/plan/archive/</code> paths — they rotted and were repaired by hand. Extending needs care, not a wider glob: workflow <code>paths:</code> filters and <code>probe-investigations-cd.sh</code> (reads a plan file as data) are legitimate.</td>
-</tr>
-<tr>
-<td><a id="Q617"></a>Q617</td>
-<td><a href="../plan/test-progress-visibility/#phase-2--background-task-mode-becomes-the-standard">Make background-task validation the documented default</a></td>
-<td><code>dogfood</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q616 shipped the status file and <code>release-sentinel.sh</code>, documented beside the gate's other knobs. Rewrite release.md § Validate the release candidate on dogfood so background-task mode is the default path and the terminal run the alternative.</td>
 </tr>
 <tr>
 <td><a id="Q166"></a>Q166</td>

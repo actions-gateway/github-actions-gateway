@@ -2510,7 +2510,7 @@ formats and three polling loops.</p>
 <tr>
 <td>2</td>
 <td>Background-task mode + status file + sentinel; documented as the default</td>
-<td>⚠️ Status file + sentinel shipped (Q616); documenting it as the default is open — <a href="../../STATUS/#Q617">Q617</a></td>
+<td>✅ Shipped — status file + sentinel (Q616), documented as the default path in <a href="../../operations/release/#run-it-detached-the-sentinel-reports-it-back">release.md</a> (Q617)</td>
 </tr>
 <tr>
 <td>3</td>
@@ -2600,13 +2600,17 @@ the natural sibling.</p>
   phase transition, failure, or completion, and prints a status block on wake.
   Shipped in Q616 as
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel.sh"><code>release-sentinel.sh</code></a>.</li>
-<li>❌ <strong><a href="../../operations/release/"><code>docs/operations/release.md</code> § Validate the release candidate on
-  dogfood</a></strong> rewritten so the background-task flow is
-  the documented default path, with the manual terminal invocation kept as the
-  alternative. Per the <a href="../../development/doc-update-matrix/">doc-update matrix</a>
-  this is an operator-facing change and the docs move with it, not after — Q616
-  documented the two new commands where the gate's other knobs already live;
-  <a href="../../STATUS/#Q617">Q617</a> is the restructure that makes the flow the default.</li>
+<li>✅ <strong><a href="../../operations/release/#validate-the-release-candidate-on-dogfood"><code>docs/operations/release.md</code> § Validate the release candidate on
+  dogfood</a></strong>
+  rewritten so the background-task flow is the documented default path, with the
+  terminal invocation kept as the alternative. Per the <a href="../../development/doc-update-matrix/">doc-update
+  matrix</a> this is an operator-facing change
+  and the docs move with it, not after — Q616 documented the two new commands
+  where the gate's other knobs already live; Q617 is the restructure that makes
+  the flow the default. It also surfaced a requirement the mechanism half had
+  not: <strong>a detached run must carry <code>ASSUME_YES=1</code></strong>, because the gate's
+  target-confirmation reads stdin and a detached run has none — measured, it
+  exits 1 before spending anything. The default path is unusable without it.</li>
 </ul>
 <p><strong>Three things the build settled that the plan did not anticipate.</strong></p>
 <ol>
