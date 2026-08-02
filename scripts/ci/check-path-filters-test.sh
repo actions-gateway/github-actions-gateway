@@ -327,10 +327,17 @@ expect_assertion push-fails-on-push-only 1 'differ from filter' assert_push_path
 # End-to-end against the real tree, in a subshell so the fixture globals above
 # cannot leak into it. This is the same verdict `make path-filters-check` gives;
 # it is cheap enough to assert here too.
-if (scripts/ci/check-path-filters.sh >/dev/null 2>&1); then
+#
+# Unlike the fixtures above, this reads live state, so its failure need not be
+# the condition asserted. Keep the report: "re-run it yourself" is no help in CI,
+# and none at all if the cause was transient (Q596).
+tracked_rc=0
+tracked_out="$( (scripts/ci/check-path-filters.sh 2>&1) )" || tracked_rc=$?
+if ((tracked_rc == 0)); then
 	ok tracked-workflows-pass 'make path-filters-check is green'
 else
-	bad tracked-workflows-pass 'run scripts/ci/check-path-filters.sh for the report'
+	bad tracked-workflows-pass "scripts/ci/check-path-filters.sh exited $tracked_rc"
+	printf '%s\n' "$tracked_out" >&2
 fi
 
 if ((fails > 0)); then

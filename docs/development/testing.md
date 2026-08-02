@@ -504,6 +504,19 @@ Q559 is the worked example. Its row read "a closed capacity gate never rejected 
 
 The general form: **a flake's two attempts are a controlled experiment CI already ran for you** — same commit, same suite, one bit different. Diff them before forming a hypothesis, not after one fails to hold up.
 
+### An assertion against live state must keep its subject's output
+
+The section above assumes the failing log says something. An assertion that runs its subject with `>/dev/null 2>&1` and prints a fixed message guarantees it does not — and a transient failure never comes back to be re-read.
+
+Distinguish the two kinds of assertion a script test makes:
+
+- **Against a fixture** — the inputs are constructed, so the failure can only be the condition asserted. A fixed message is fine.
+- **Against live, mutable state** (the tracked tree, the real workflows, the workspace) — the failure need not be the condition asserted. It can be a missing directory, an unreadable file, a mid-run abort, or something transient. Capture the subject's output and exit code, and print both on failure.
+
+The remedy `run <script> yourself for the report` is not one. In CI there is nobody at that shell, and if the cause was transient the re-run is green and the evidence is gone for good.
+
+Q596 is the worked example, and it cost a full session. `check-v2-api-sync-test`'s `tree-in-sync` — the one assertion reading the live `api/` tree — ran the gate as `>/dev/null 2>&1` and printed `packages diverge` for *any* non-zero exit. Replaying it against stubs exiting 1 (real drift), 2 (missing directory) and 3 (mid-run abort) produced three identical, evidence-free lines. The single occurrence was undiagnosable by construction, and 2,418 reproduction runs never recovered the trigger. Note the shape: in all three of the scripts that had this bug, the *fixture* helper in the same file captured output correctly and only the live-state assertion threw it away.
+
 ### Proving a flake fix: invert it
 
 Repeated passes do not validate a flake fix. A green `-count=20` is equally consistent with *"the race is closed"* and *"the race didn't fire this time"* — and on an unloaded dev machine the second is the more likely of the two, because the timing that produces the flake on a loaded CI runner often can't be reproduced locally at all. Passing-after is necessary evidence, not sufficient evidence.
