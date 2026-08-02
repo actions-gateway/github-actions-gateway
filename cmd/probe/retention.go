@@ -551,23 +551,42 @@ func (p *retentionProbe) ackMessage(ctx context.Context, sess *scaleset.RunnerSc
 // cancelRun cancels a workflow run over the REST API with the installation token.
 // This is the one call in the scenario outside the scale-set protocol, and the
 // reason the App needs actions: write.
-//
-// A 409 is success for this purpose: the run is already terminal, which is the
-// state the cancel exists to reach.
 func (p *retentionProbe) cancelRun(ctx context.Context, owner, repo string, runID int64) error {
-	token, err := p.tokens.Token(ctx)
+	return cancelWorkflowRun(ctx, cancelRunDeps{
+		log: p.log, hc: p.hc, tokens: p.tokens, apiBase: p.apiBase, tag: "INVESTIGATION-F",
+	}, owner, repo, runID)
+}
+
+// cancelRunDeps is what cancelWorkflowRun needs from a scenario: a token source, an
+// HTTP client, the REST root, and the scenario's log tag.
+type cancelRunDeps struct {
+	log     *slog.Logger
+	hc      *http.Client
+	tokens  githubapp.TokenProvider
+	apiBase string
+	tag     string
+}
+
+// cancelWorkflowRun drives a workflow run terminal with no runner involved, which is
+// how both Investigation F and Investigation G produce a JobCompleted for a job
+// nothing ever ran.
+//
+// A 409 is success for this purpose: the run is already terminal, which is the state
+// the cancel exists to reach.
+func cancelWorkflowRun(ctx context.Context, d cancelRunDeps, owner, repo string, runID int64) error {
+	token, err := d.tokens.Token(ctx)
 	if err != nil {
 		return fmt.Errorf("installation token: %w", err)
 	}
 	u := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%d/cancel",
-		strings.TrimSuffix(p.apiBase, "/"), owner, repo, runID)
+		strings.TrimSuffix(d.apiBase, "/"), owner, repo, runID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(nil))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := p.hc.Do(req)
+	resp, err := d.hc.Do(req)
 	if err != nil {
 		return err
 	}
@@ -577,7 +596,7 @@ func (p *retentionProbe) cancelRun(ctx context.Context, owner, repo string, runI
 	case resp.StatusCode >= 200 && resp.StatusCode <= 299:
 		return nil
 	case resp.StatusCode == http.StatusConflict:
-		p.log.Info("INVESTIGATION-F: run already terminal (409) — cancel is a no-op", "runId", runID)
+		d.log.Info(d.tag+": run already terminal (409) — cancel is a no-op", "runId", runID)
 		return nil
 	default:
 		return fmt.Errorf("status %d: %s", resp.StatusCode, githubapp.SanitizeBody(body, 256))

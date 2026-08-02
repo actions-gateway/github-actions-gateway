@@ -102,7 +102,7 @@ The prose below carries the *why* of each; this table is the state.
 | Q582 | v1/v2 proxy pools collide throughout migration coexistence | `1.3-gate` | ✅ shipped 2026-08-01 |
 | Q575 | A worker whose `job-payload` secret is absent stalls | `1.3-gate` | ✅ shipped 2026-08-01 |
 | [Q577](../STATUS.md#Q577) | `stop.sh` leaves the pool up when its drain cannot converge | `1.3-gate` | 🔲 unblocked — re-measure at the gate, it may no longer be real |
-| [Q583](../STATUS.md#Q583) | An AGC restart replays the queue and re-provisions jobs long gone | rides | ⤴ measure at the rc.4 gate first — see below |
+| Q583 | An AGC restart replays the queue and re-provisions jobs long gone | rides | ✅ shipped 2026-08-01 (measured, then fixed — see below) |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
 | — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | 🔲 rc.3: gate aborted at leg 1, no verdict |
@@ -142,15 +142,20 @@ the `v2.0.0` deprecation notice, so shipping it with a documented v1→v2 migrat
 path that silently disables autoscaling on both pools undercuts the release's own
 message.
 
-**Q583 rides, pending a measurement the gate itself supplies.** Q553's give-up
-guard is process-local, so a restarted AGC may poll from cursor 0 and re-provision
-jobs long gone — but the row's premise (that the queue still retains those
-messages, and the `DeleteMessage` wire shape) is unproven, and it cannot be
-confirmed below a live run. Building against an unmeasured mechanism is how a
-session repairs a working path, so the call is to **measure it during the rc.4
-gate, which restarts AGCs anyway**, and let a confirmed result gate rc.5 if it is
-real. Capture the queue's retention behaviour across an AGC restart while the gate
-is running — it is the cheapest window there is.
+**Q583 rides, and no longer waits on the gate.** Q553's give-up guard is
+process-local, so a restarted AGC polls from cursor 0 and re-provisions jobs long
+gone. That was filed as an unproven mechanism to measure at the rc.4 gate — but
+the measurement was already in the repo: the Q264 P4 clean-green re-run
+(2026-07-05) reconnected a rebuilt AGC to an existing scale set and **briefly
+provisioned 7 workers** for the previous pass's jobs, and Q468 measured the queue
+retaining an unacked message across a 13 h session gap. The premise is confirmed;
+what remains unproven is the `DeleteMessage` wire shape the *fix* would rely on,
+which [Investigation G](q583-restart-replay.md#the-answer-replayed-delete-ok-pruned-2026-08-01)
+settled on 2026-08-01 in a single probe run against the live API: the replay is
+real, `DeleteMessage` answers 204, and deleting prunes the queue. Neither
+measurement needed a dogfood cluster, so nothing here ever blocked on rc.4 — and
+Q583 still rides rather than gating, because it is a restart-time burst rather
+than a defect an ordinary tenant meets in steady state.
 
 ## What 1.3 means
 

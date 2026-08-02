@@ -100,6 +100,26 @@ func run(logger *slog.Logger) error {
 		return runRetentionProbe(ctx, logger, rCfg, provider, "https://api.github.com")
 	}
 
+	// ── Investigation G (Q583): cursor-acked replay + the DeleteMessage ack ──
+	// One run, three session generations. See replay.go.
+	if os.Getenv("PROBE_REPLAY_TEST") == "true" {
+		gCfg, err := parseReplayConfig(os.Getenv)
+		if err != nil {
+			return err
+		}
+		provider, err := githubapp.NewInstallationTokenProvider(githubapp.Credentials{
+			AppID:          gCfg.AppID,
+			PrivateKeyPEM:  gCfg.PrivateKeyPEM,
+			InstallationID: gCfg.InstallationID,
+		}, nil, false)
+		if err != nil {
+			return fmt.Errorf("create token provider: %w", err)
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		return runReplayProbe(ctx, logger, gCfg, provider, "https://api.github.com")
+	}
+
 	// ── 1. Read credentials from environment ────────────────────────────────
 	cfg, err := parseProbeConfig(os.Getenv)
 	if err != nil {

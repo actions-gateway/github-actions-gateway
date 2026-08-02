@@ -29,11 +29,15 @@
 //
 // # Recovery
 //
-// There is no in-memory acquisition registry: unacked queue messages replay to a
-// re-created session (poll from cursor 0), so a session drop or an AGC restart
-// re-reads assigned-but-unprovisioned jobs from the queue (§2b-3). Provisioning is
-// idempotent per jobID (a deterministic worker name), so a replay never double-runs a
-// job.
+// There is no in-memory acquisition registry: queue messages the Listener has not
+// deleted replay to a re-created session (poll from cursor 0), so a session drop or an
+// AGC restart re-reads assigned-but-unprovisioned jobs from the queue (§2b-3).
+// Provisioning is idempotent per jobID (a deterministic worker name), so a replay never
+// double-runs a job.
+//
+// What bounds that replay is the delete half of the ack: a message is deleted once
+// every job it names has concluded, so a restart re-reads only work still owed a worker
+// rather than the scale set's whole history (Q583).
 //
 // One job class is outside that replay: an assignment the Listener acked past because it
 // could not be provisioned — a runner name a stale registration holds (Q551), or a worker
@@ -444,7 +448,12 @@ type Listener struct {
 	// would be undone by the ordinary 404 heal: a re-created session polls from cursor 0
 	// and replays the very JobAssigned the check acted on, and a jobID is a job's UUID —
 	// one GitHub has stopped holding is not coming back under the same id.
-	abandoned     map[string]bool
+	abandoned map[string]bool
+	// pending holds every message acked by cursor but not yet deleted, keyed by message
+	// id; the value is the set of jobs it is still waiting on. An entry with an empty
+	// set is settled and awaiting its delete, which flushDeletes issues and retries
+	// (Q583).
+	pending       map[int64]map[string]bool
 	lastStats     scaleset.RunnerScaleSetStatistic
 	lastMessageID int64
 }
@@ -475,6 +484,7 @@ func New(cfg Config) (*Listener, error) {
 		provisioned:        make(map[string]bool),
 		completed:          make(map[string]bool),
 		abandoned:          make(map[string]bool),
+		pending:            make(map[int64]map[string]bool),
 		deferred:           make(map[string]*deferredJob),
 	}
 	if l.log == nil {
@@ -705,6 +715,9 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 		// is the natural cadence: each job carries its own backoff deadline, and the
 		// deadlines are minutes while the loop turns over at worst every long-poll window.
 		l.retryDeferred(ctx, ssID)
+		// Delete the messages whose jobs have all concluded (Q583). Here rather than at
+		// settle time so a failed delete is retried on the next cycle.
+		l.flushDeletes(ctx, sess)
 		capacity := l.cfg.Capacity(ctx)
 		if capacity < 0 {
 			capacity = 0
@@ -944,8 +957,11 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 	jobs, err := msg.Jobs()
 	if err != nil {
 		l.log.Warn("scaleset: decode message body", "scaleSet", l.cfg.ScaleSetName, "err", err)
-		// Advance past an undecodable message so it does not wedge the cursor.
+		// Advance past an undecodable message so it does not wedge the cursor, and
+		// delete it: it names no job, and nothing about a later delivery would make it
+		// readable.
 		l.advanceCursor(msg.MessageID)
+		l.holdForDelete(msg.MessageID, nil)
 		return
 	}
 
@@ -963,8 +979,11 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 	// Secret the completion then deletes, stranding the pod Pending on a Secret that no
 	// longer exists (Q575). Handling the completion first lets provisionAssigned ack
 	// past the assignment instead, so no pod is created for a job already over.
+	cleaned := make(map[string]bool)
 	for _, cj := range completedJobs(jobs) {
-		l.completeJob(ctx, cj)
+		if l.completeJob(ctx, cj) {
+			cleaned[cj.JobID] = true
+		}
 	}
 
 	ackable := true
@@ -987,6 +1006,9 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 	// true on the next delivery may take this path (Q576).
 	if ackable {
 		l.advanceCursor(msg.MessageID)
+		// The delete half. A message whose jobs have all concluded goes on the next
+		// flush; one still owed a worker is held, so a restart re-reads it (Q583).
+		l.holdForDelete(msg.MessageID, l.unsettledJobs(jobs, cleaned))
 	}
 }
 
@@ -1157,6 +1179,12 @@ func (l *Listener) abandonDeferredBefore(cutoff time.Time) {
 		l.abandoned[id] = true
 	}
 	l.mu.Unlock()
+	// A job GitHub has stopped holding has concluded as far as the queue goes, so it
+	// releases the message that was held for it (Q583). Without this the assignment
+	// replays to the next session and the give-up is undone by the restart.
+	for _, id := range gone {
+		l.settle(id)
+	}
 	l.log.Warn("scaleset: giving up on assigned jobs the scale set no longer holds",
 		"scaleSet", l.cfg.ScaleSetName, "jobs", strings.Join(gone, ", "), "count", len(gone))
 	l.metricsIncAbandoned(len(gone))
@@ -1506,7 +1534,11 @@ func (l *Listener) generateJITConfig(ctx context.Context, ssID int, jobID string
 // free backstop: a completion the previous process handled just before it crashed —
 // after the queue message was written but before the Secret was deleted — is reclaimed
 // when a re-created session replays that completion from cursor 0.
-func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) {
+//
+// It returns whether the job is now fully concluded — reclaim included. A false keeps
+// the completion's message in the queue (Q583), which is what preserves that backstop
+// now that a handled message is otherwise deleted.
+func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) bool {
 	l.mu.Lock()
 	first := !l.completed[cj.JobID]
 	l.completed[cj.JobID] = true
@@ -1520,7 +1552,8 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) {
 		l.cfg.Metrics.IncJobCompleted(cj.Result)
 	}
 	if l.cfg.Cleanup == nil {
-		return
+		l.settle(cj.JobID)
+		return true
 	}
 	// Best-effort: a failed reclaim leaves the Secret to the RunnerSet's cascade-GC
 	// (the pre-Q373 behaviour) rather than holding the cursor, which would redeliver
@@ -1528,28 +1561,104 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) {
 	if err := l.cfg.Cleanup(ctx, cj.JobID); err != nil {
 		l.log.Warn("scaleset: reclaim completed job's worker Secret",
 			"scaleSet", l.cfg.ScaleSetName, "jobID", cj.JobID, "err", err)
+		return false
 	}
+	l.settle(cj.JobID)
+	return true
 }
 
-// advanceCursor moves lastMessageID past a handled message. Acking is cursor-advance
-// only: within a session the cursor prevents redelivery, which is the ack semantics
-// the live probe proved (§2b-4). The listener deliberately does NOT delete-ack via
-// Client.DeleteMessage, whose wire shape is source-derived but unproven live (§2.2
-// caveat, a P2-surfaced unknown for P4). The consequence is that a re-created session
-// polls from cursor 0 and replays every message; the process-scoped provisioned/
-// completed/abandoned sets make that replay idempotent (no double-provision, no
-// double-count, no worker for a job already concluded gone).
-//
-// Because those sets are never pruned, they grow with the jobs a listener handles over
-// its lifetime — an accepted P3 cost of cursor-only acking. Once P4 confirms the
-// DeleteMessage wire shape, delete-acking prunes the queue so the sets can be bounded
-// to in-flight jobs.
+// advanceCursor moves lastMessageID past a handled message — the first half of the
+// ack. Within a session the cursor alone prevents redelivery, but it is session-scoped
+// at the backend while the queue log is not, so a cursor-only ack leaves the message to
+// replay to the next session (Q583, measured live 2026-08-01). holdForDelete carries
+// the second half.
 func (l *Listener) advanceCursor(messageID int64) {
 	l.mu.Lock()
 	if messageID > l.lastMessageID {
 		l.lastMessageID = messageID
 	}
 	l.mu.Unlock()
+}
+
+// holdForDelete registers a cursor-acked message for the delete half of the ack,
+// waiting on the jobs it names that have not concluded. A message naming none is
+// registered settled, so the next flushDeletes removes it.
+//
+// The wait is what keeps replay working where it is the recovery path rather than the
+// bug: a job provisioned but still running, and a Q551 deferred job the previous
+// process never provisioned at all, both hold their message in the queue, so a restart
+// re-reads them. Only a job that has concluded — completed with its Secret reclaimed,
+// or abandoned (Q553) — releases one.
+func (l *Listener) holdForDelete(messageID int64, unsettled map[string]bool) {
+	l.mu.Lock()
+	l.pending[messageID] = unsettled
+	l.mu.Unlock()
+}
+
+// settle marks a job concluded, releasing every held message waiting on it. A job is
+// named by two messages — its JobAssigned and its JobCompleted — so this drops it from
+// all of them rather than from one.
+func (l *Listener) settle(jobID string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, waiting := range l.pending {
+		delete(waiting, jobID)
+	}
+}
+
+// flushDeletes issues the delete half of the ack for every settled message, dropping
+// each one it deletes. A failure leaves the entry in place, so the next poll cycle
+// retries it — which is why this runs per cycle rather than only at settle time.
+//
+// Client.DeleteMessage reports a 404/410 as success: a message already gone is an ack
+// that has nothing left to do. That is only safe because the endpoint is known served —
+// Investigation G measured it answering 204 (Q583) — so a 404 here means the message
+// really is gone rather than that nothing was ever deleted.
+func (l *Listener) flushDeletes(ctx context.Context, sess *scaleset.RunnerScaleSetSession) {
+	l.mu.Lock()
+	var ready []int64
+	for messageID, waiting := range l.pending {
+		if len(waiting) == 0 {
+			ready = append(ready, messageID)
+		}
+	}
+	l.mu.Unlock()
+
+	for _, messageID := range ready {
+		if ctx.Err() != nil {
+			return
+		}
+		if err := l.cfg.Client.DeleteMessage(ctx, sess, messageID); err != nil {
+			l.log.Warn("scaleset: delete acked message; it will replay to the next session until this succeeds",
+				"scaleSet", l.cfg.ScaleSetName, "messageID", messageID, "err", err)
+			continue
+		}
+		l.mu.Lock()
+		delete(l.pending, messageID)
+		l.mu.Unlock()
+	}
+}
+
+// unsettledJobs returns the jobs in a message that have not concluded, which is what
+// holds it back from the delete half of the ack. cleaned names the jobs whose
+// completion this delivery finished handling, Secret reclaim included — a completion
+// whose reclaim failed is deliberately not settled, so the message replays and the
+// reclaim is retried (the Q373/Q575 backstop).
+func (l *Listener) unsettledJobs(jobs []scaleset.JobMessage, cleaned map[string]bool) map[string]bool {
+	unsettled := make(map[string]bool)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, j := range jobs {
+		if cleaned[j.JobID] || l.abandoned[j.JobID] {
+			continue
+		}
+		if l.completed[j.JobID] && j.MessageType != scaleset.MessageTypeJobCompleted {
+			// The assignment for a job whose completion has already been handled.
+			continue
+		}
+		unsettled[j.JobID] = true
+	}
+	return unsettled
 }
 
 // deleteSession tears the session down on loop exit, on a fresh background context so

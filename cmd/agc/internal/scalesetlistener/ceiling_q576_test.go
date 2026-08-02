@@ -82,7 +82,7 @@ func TestListener_CeilingBlockedJobRegistersNoRunner(t *testing.T) {
 	}
 	_, ssID := startListenerFunc(t, srv, fixedCapacity(5), provision, m, fastCapacityRetry,
 		func(c *scalesetlistener.Config) { c.CheckCapacity = gate.check })
-	prov.scaleSetID = ssID
+	prov.setScaleSetID(ssID)
 
 	_, jobID := srv.EnqueueJob(ssID)
 

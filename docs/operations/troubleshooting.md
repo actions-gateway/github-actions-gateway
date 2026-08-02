@@ -1476,7 +1476,7 @@ This is **not** a scheduling problem, which is why it is a separate reason from 
 
 **Likely causes.**
 - **Workflow runs cancelled shortly after being assigned** — the common one, and benign. The job ends between the assignment and the pod starting.
-- **An AGC restart replaying its message queue.** A re-created scale-set session polls from cursor 0, so a burst of these can follow an AGC restart. Expect them in a batch, correlated with the AGC pod's restart time.
+- **An AGC restart replaying its message queue — on releases before Q583.** A re-created scale-set session polls from cursor 0, and until the listener started deleting the messages it had finished with, every job the scale set had ever run was still in that queue: a restart replayed the lot and provisioned a worker for each. That produced a batch of these correlated with the AGC pod's restart time. Since Q583 the listener issues the delete half of the ack once every job in a message has concluded, so a restart re-reads only work that is genuinely unfinished. A burst still correlated with a restart on a current release is **not** the replay — see the resolution below.
 - **Pod startup slower than the job's own lifetime** — slow image pulls or node scale-up against very short jobs.
 
 **Diagnostics.**
@@ -1499,7 +1499,7 @@ kubectl get pods -n <namespace> -l app.kubernetes.io/name=actions-gateway-contro
 
 **Resolution.** A low background rate needs no action — the reap returns the slot and the node, and the workflow run was already over. Treat a *sustained* or *bursty* rate as the signal:
 
-- A burst right after an AGC restart is the queue replay. It is self-limiting; if it recurs on every restart, check the AGC's restart cause first.
+- A burst right after an AGC restart, on a release before Q583, is the queue replay; it is self-limiting. On a current release the queue is pruned as jobs conclude, so a restart burst instead means messages are **not** being deleted — check the AGC log for `delete acked message`, which names the message id and the error each failed delete returned. A delete that keeps failing leaves the queue growing and every subsequent restart worse.
 - A steady rate with no restarts means jobs are being cancelled faster than pods start. Look at pod startup time (`kubectl describe pod` → image pull duration) rather than at the AGC.
 
 The thirty-second grace is a fixed constant, not a CRD field: the pod has not started, so there is no runner shutdown to wait out — the grace exists only to let a pod that was already mid-start reach `Running`, where the longer [`orphaned_running`](#worker-pod-reaped-while-running-workerpodorphanedrunning) grace takes over.
