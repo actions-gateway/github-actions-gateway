@@ -195,7 +195,9 @@ reproducing the interleaving directly (a delay at the winner's handler entry too
 from 0 failures in 400 local runs to 5 of 5), fixed by waiting on the counter the
 invariant reads, and confirmed still able to catch the Q260 regression by deleting
 the claim gate and requiring red. Filed to [flake watch](../STATUS.md#Q600); the
-weaker dedup predicate the measurement exposed is [Q601](../STATUS.md#Q601).
+weaker dedup predicate the measurement exposed was filed as Q601 and has since been
+fixed — per-session dedup registries, so the assertion counts distinct siblings
+rather than deliveries.
 
 **Q602 gates for the same mechanical reason, and is worth more than its fix.** The
 next `main` run went red on a *different* `-race` test —
@@ -242,8 +244,8 @@ locked section that makes the job pollable, so no window exists to lose.
 **Three gates, one root shape.** Q600, Q602 and Q604 were all "the test synchronized on
 something adjacent to what it asserts", and all three surfaced in AGC listener tests
 within two `main` runs. They were fixed individually because each had a distinct
-mechanism, but the pattern is worth watching: [Q601](../STATUS.md#Q601) records a fourth
-weak barrier in the same family, still unfixed.
+mechanism, but the pattern is worth watching: Q601 was a fourth weak barrier in the same
+family — an aggregate counter standing in for a headcount — and is now fixed too.
 
 **API review verdict — ship as-is.** `scripts/release/api-surface-since.sh
 v1.3.0-rc.3` reports one field pair (`githubCABundleRef`, and the

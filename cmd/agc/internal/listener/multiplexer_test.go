@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -645,7 +646,8 @@ func TestMultiplexer_BusyListenerNotCountedAsPoller(t *testing.T) {
 // poll delivers a distinct RunnerRequestID (so the c850764 key would NOT dedup) but
 // the acquire returns a constant planID; the JobHandler stands in for the
 // provisioner and records the peak number of sessions running the job at once. The
-// invariant is that it never exceeds one, and the losing siblings are deduplicated.
+// invariant is that it never exceeds one, and that every one of the maxListeners-1
+// losing siblings is deduplicated — counted per session, not per delivery (Q601).
 func TestMultiplexer_DuplicateJobDeliveryProvisionsOnce(t *testing.T) {
 	const maxListeners = 5
 
@@ -667,16 +669,40 @@ func TestMultiplexer_DuplicateJobDeliveryProvisionsOnce(t *testing.T) {
 	// sibling (defaultAcquireJob) — the shared identity the claim must key on so that
 	// only the winner reaches the provisioner.
 
-	m := newTestMetrics()
+	// Per-session metrics: JobsDuplicateDeliveryTotal counts deliveries, so an
+	// aggregate registry cannot tell maxListeners-1 distinct siblings from one
+	// loser re-polling — and a loser here sets no RecycleAgent, so it re-polls at
+	// once and reaches the threshold alone (Q601). Giving every session its own
+	// registry makes a non-zero counter name the session that was deduped.
+	// Multiplexer.spawn assigns each goroutine a fresh monotonic index, so a key
+	// is one session for the whole test.
+	var sessionsMu sync.Mutex
+	sessionMetrics := map[int]*runnercore.Metrics{}
+	dedupedSessions := func() int {
+		sessionsMu.Lock()
+		defer sessionsMu.Unlock()
+		n := 0
+		for _, sm := range sessionMetrics {
+			if testutil.ToFloat64(sm.JobsDuplicateDeliveryTotal.WithLabelValues("default", "test-rg")) > 0 {
+				n++
+			}
+		}
+		return n
+	}
+
 	release := make(chan struct{})
 	var handlerActive, handlerMax atomic.Int32
-	factory := func(_ int) listener.Config {
+	factory := func(idx int) listener.Config {
 		agent := makeAgent(t, oauthSrv.URL)
 		bc := &broker.Client{
 			BrokerURL:  brokerSrv.URL,
 			UseV2Flow:  true,
 			HTTPClient: brokerSrv.Client(),
 		}
+		m := newTestMetrics()
+		sessionsMu.Lock()
+		sessionMetrics[idx] = m
+		sessionsMu.Unlock()
 		return listener.Config{
 			Group:         "test-rg",
 			Namespace:     "default",
@@ -715,16 +741,26 @@ func TestMultiplexer_DuplicateJobDeliveryProvisionsOnce(t *testing.T) {
 		mgr.SpawnReplacement(ctx)
 	}
 
-	// The losing siblings are deduplicated: at least maxListeners-1 duplicate
-	// deliveries must be skipped.
-	assert.Eventually(t, func() bool {
-		return testutil.ToFloat64(m.JobsDuplicateDeliveryTotal.WithLabelValues("default", "test-rg")) >= float64(maxListeners-1)
-	}, 3*time.Second, 10*time.Millisecond, "losing sibling sessions should be deduplicated")
+	// The losing siblings are deduplicated: maxListeners-1 DISTINCT sessions must
+	// each skip provisioning, which is what makes this a sibling burst rather than
+	// one session looping.
+	require.Eventually(t, func() bool {
+		return dedupedSessions() >= maxListeners-1
+	}, 3*time.Second, 10*time.Millisecond, "every losing sibling session should be deduplicated")
 
-	// The losers increment that counter, so it reaches the threshold on their
-	// progress alone — the winner still has the claim registry, SpawnReplacement and
-	// StartRenewLoop to clear before it reaches the handler. Wait on the counter the
-	// invariant below reads, or a descheduled winner reads back 0.
+	// Those sessions are concurrent, not sequential: the pool never respawned, so
+	// the deduped indices name maxListeners-1 of the maxListeners goroutines that
+	// are alive right now — the winner is the remaining one.
+	sessionsMu.Lock()
+	spawned := len(sessionMetrics)
+	sessionsMu.Unlock()
+	assert.Equal(t, maxListeners, spawned, "the burst must be served by exactly maxListeners concurrent sessions")
+	assert.Equal(t, int32(maxListeners), mgr.ActiveCount(), "all sibling sessions should still be alive")
+
+	// Only the losers increment their dedup counters, so the wait above completes on
+	// their progress alone — the winner still has the claim registry, SpawnReplacement
+	// and StartRenewLoop to clear before it reaches the handler. Wait on the counter
+	// the invariant below reads, or a descheduled winner reads back 0.
 	require.Eventually(t, func() bool {
 		return handlerMax.Load() >= 1
 	}, 3*time.Second, 10*time.Millisecond, "the winning session should reach the provisioner stand-in")
