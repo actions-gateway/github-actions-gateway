@@ -32,6 +32,11 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 VALIDATE_RELEASE_LIB_ONLY=1
 export VALIDATE_RELEASE_LIB_ONLY
+# The teardown assertions below drive real progress events. Disable the stream
+# before sourcing so this suite cannot leave a status file behind claiming a
+# failed gate — a sentinel started afterwards would read it and report one.
+RELEASE_PROGRESS_FILE=""
+export RELEASE_PROGRESS_FILE
 # shellcheck source=scripts/dogfood/validate-release.sh
 source "${REPO_ROOT}/scripts/dogfood/validate-release.sh"
 

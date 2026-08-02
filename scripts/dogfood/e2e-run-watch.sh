@@ -23,9 +23,18 @@
 #
 # Exits with the run's conclusion: 0 for success, non-zero otherwise.
 #
+# Each relayed heartbeat is also folded into the gate's event stream (Q616), so
+# the status file answers "how far into the e2e leg" rather than only "in the
+# e2e phase, 18 minutes". A standalone run writes nothing: progress_heartbeat
+# appends only to a stream the gate already started.
+#
 # Sourcing this file defines its helpers without watching anything, which is how
 # e2e-run-watch-test.sh asserts them.
 set -euo pipefail
+
+E2E_RUN_WATCH_REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/dogfood/lib/progress.sh
+source "${E2E_RUN_WATCH_REPO_ROOT}/scripts/dogfood/lib/progress.sh"
 
 # Jobs whose logs are scanned for heartbeat lines. A substring match, so it
 # survives the `e2e / e2e` vs `e2e` naming the reusable workflow produces; extra
@@ -47,6 +56,17 @@ heartbeat_lines() {
 lines_after() {
 	local seen="$1"
 	awk -v seen="$seen" 'NR > seen'
+}
+
+# relay_heartbeats LINES — print the unseen heartbeat lines for the operator and
+# record the newest one in the gate's event stream. Only the newest is recorded:
+# the status object answers "where is the run now", and the terminal above
+# already carries the whole history.
+relay_heartbeats() {
+	local lines="$1"
+	[[ -n "$lines" ]] || return 0
+	printf '%s\n' "$lines"
+	progress_heartbeat "$(printf '%s\n' "$lines" | tail -n1)"
 }
 
 # conclusion_rc CONCLUSION — the exit status a run conclusion maps to. Anything
@@ -104,7 +124,7 @@ watch_run() {
 			((total < seen)) && seen="${total}"
 			if ((total > seen)); then
 				new="$(printf '%s\n' "${all}" | lines_after "${seen}")"
-				[[ -n "${new}" ]] && printf '%s\n' "${new}"
+				relay_heartbeats "${new}"
 				seen="${total}"
 			fi
 		fi

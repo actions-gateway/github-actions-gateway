@@ -308,6 +308,41 @@ The gate also appends each phase transition as one JSON line to
 another shell (`tail -f`) without disturbing it. Set `RELEASE_PROGRESS_FILE=` to
 disable the file; the terminal output is unaffected.
 
+**Where is it right now?** Reading back an hour of terminal to answer that is
+the wrong shape, so the gate keeps the same stream rendered as one object in
+`tmp/release-validation-status.json`, rewritten atomically after every phase
+transition and every relayed e2e heartbeat:
+
+```bash
+jq . tmp/release-validation-status.json
+```
+
+`gate` is `preflight` (settling the e2e lane, nothing spent yet), `running`,
+`passed`, or `failed`; `phase`, `elapsed`, `phaseElapsed` and `idle` say where
+and for how long; `heartbeat` carries the newest relayed spec line; `failure`
+names the phase that broke — the one that broke first, not the teardown that
+followed it. `scripts/dogfood/release-status.sh [stream-file]` renders the same
+object from any stream, including one whose gate process is gone.
+`RELEASE_STATUS_FILE=` disables the file.
+
+**Running the gate from an agent session.** Launch `validate-release.sh` as a
+background task and watch it with the sentinel, also as a background task:
+
+```bash
+bash scripts/dogfood/release-sentinel.sh
+```
+
+It sleeps, and *exits* when there is something to say — a phase transition, a
+verdict, or a gate that has gone quiet for `RELEASE_SENTINEL_STALL` seconds
+(default 1200). That exit is what wakes the session, and the report it prints
+carries the phase, the clocks, the latest heartbeat, and what to do next; the
+session relays it and relaunches the watcher until a verdict arrives. Reporting
+is therefore driven by what the gate does, not by a clock — nothing is spent on
+a tick where nothing changed. Knobs: `RELEASE_SENTINEL_INTERVAL` (poll seconds,
+default 30 — it bounds how quickly a transition is *noticed*, never how often
+anything is reported), `RELEASE_SENTINEL_TIMEOUT` (watch budget, default 7200),
+`RELEASE_SENTINEL_STALL`.
+
 **If you just merged something, the gate waits before it spends anything.** The
 gate's dispatched run enters the e2e workflow's per-ref concurrency group, whose
 single pending slot the next push to main would cancel it out of — and the latest

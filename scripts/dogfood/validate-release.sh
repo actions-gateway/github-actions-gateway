@@ -128,9 +128,10 @@ COSIGN_BIN=""
 # Poll interval for the in-flight waits (run settle + rerun transition).
 E2E_POLL_INTERVAL=15
 
-# The gate's phase event stream (Q615). Defaulted here rather than in
-# lib/progress.sh so a caller can point it elsewhere or empty it to opt out.
-RELEASE_PROGRESS_FILE="${RELEASE_PROGRESS_FILE-${REPO_ROOT}/tmp/release-validation-progress.jsonl}"
+# The gate's phase event stream and its rendered status object default in
+# lib/progress.sh (empty either to opt out). Exported so the e2e relay, which
+# runs as a child process, folds its heartbeat into the same stream (Q616).
+export RELEASE_PROGRESS_FILE RELEASE_STATUS_FILE
 
 usage() {
 	cat >&2 <<'USAGE'
@@ -611,7 +612,15 @@ main() {
 	# that aborts during preflight leaves no half-stream for a renderer to
 	# mistake for an in-flight gate.
 	progress_init
-	progress_event gate start "validating ${GAG_IMAGE_TAG}"
+	# The gate-start detail is the RC tag by contract — it is what the status
+	# renderer reports as .rc (lib/progress.sh).
+	progress_event gate start "${GAG_IMAGE_TAG}"
+	if [[ -n "${RELEASE_STATUS_FILE}" ]]; then
+		echo ""
+		echo "Progress: ${RELEASE_STATUS_FILE} holds where this gate is, one JSON object,"
+		echo "  refreshed on every phase transition and e2e heartbeat. Watch it from an"
+		echo "  agent session with: bash ${SCRIPT_DIR}/release-sentinel.sh"
+	fi
 
 	# Child scripts run unattended past this point. DOGFOOD_RUNNER_IMAGE is
 	# intentionally left as-is (unset => setup.sh preserves the live image, Q295).
