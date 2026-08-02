@@ -89,7 +89,10 @@ V2_CRDS=(
 	runnertemplates.actions-gateway.com
 )
 
-# WORKDIR holds the downloaded CRD artifacts; the EXIT trap removes it.
+# WORKDIR holds every artifact the legs write — the sampled worker sizing, the
+# downloaded JUnit report, the CRD manifest. main() creates it before the first
+# leg runs, because the e2e leg writes into it long before the CRD leg does; the
+# EXIT trap removes it.
 WORKDIR=""
 
 # The on-demand e2e tenant's namespace and the label the provisioner stamps on
@@ -467,7 +470,6 @@ crd_smoke() {
 	# which child last fetched credentials.
 	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
 
-	WORKDIR="$(mktemp -d "${REPO_ROOT}/tmp/validate-release.XXXXXX")"
 	echo "Downloading the signed v2 CRD manifest for ${GAG_IMAGE_TAG}..."
 	gh release download "${GAG_IMAGE_TAG}" --repo "${REPO}" \
 		--pattern 'actions-gateway-crds-v2.yaml' \
@@ -626,6 +628,8 @@ main() {
 	# intentionally left as-is (unset => setup.sh preserves the live image, Q295).
 	export GAG_IMAGE_TAG APP_ID INSTALLATION_ID
 	export ASSUME_YES=1
+
+	WORKDIR="$(mktemp -d "${REPO_ROOT}/tmp/validate-release.XXXXXX")"
 
 	progress_phase deploy "Deploying the RC and routing CI to GAG"
 	deploy_leg

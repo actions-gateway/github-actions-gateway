@@ -90,10 +90,16 @@ e2e_job_ids() {
 # collect_heartbeats JOB_IDS — every heartbeat line currently in those jobs'
 # logs, in order. A fetch failure yields nothing rather than aborting: a
 # transient API error must not kill an hour-long gate.
+#
+# The `|| true` is what makes that true. The logs endpoint 404s for a job that
+# is queued — the normal state for the minutes between the job appearing and a
+# runner picking it up — and under `pipefail` that status propagates out of the
+# pipe, out of the `all="$(…)"` assignment, and into `set -e`. Redirecting
+# stderr hides the message, not the status.
 collect_heartbeats() {
 	local job_id
 	for job_id in $1; do
-		gh api "repos/${REPO}/actions/jobs/${job_id}/logs" 2>/dev/null | heartbeat_lines
+		{ gh api "repos/${REPO}/actions/jobs/${job_id}/logs" 2>/dev/null || true; } | heartbeat_lines
 	done
 }
 
