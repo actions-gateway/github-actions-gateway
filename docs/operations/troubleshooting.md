@@ -39,6 +39,8 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker Pod Reaped While Running (WorkerPodOrphanedRunning)](#worker-pod-reaped-while-running-workerpodorphanedrunning)
 - [Workers Left Behind by an AGC That Was Down](#workers-left-behind-by-an-agc-that-was-down)
 - [Worker Killed by the Lifetime Cap (WorkerPodLifetimeExceeded)](#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded)
+- [Worker Pods Reaped on Gateway Teardown (WorkerPodsReapedOnGatewayTeardown)](#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown)
+- [ActionsGateway Deletion Hangs on WaitingForWorkerDrain](#actionsgateway-deletion-hangs-on-waitingforworkerdrain)
 - [Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409)
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
 - [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
@@ -1608,6 +1610,53 @@ kubectl patch runnergroup <name> -n <namespace> --type=merge \
 Set it to `"0s"` to disable the cap entirely — that restores the pre-cap behaviour, including the orphan risk above, so prefer a raised value over an opt-out. A negative value is rejected at admission. An `activeDeadlineSeconds` set explicitly on the pod template takes precedence over this field and is never overwritten, which is the escape hatch for a per-template exception.
 
 Note the ceiling you cannot raise past: GitHub terminates any job on a self-hosted runner at **5 days** regardless of this setting.
+
+---
+
+## Worker Pods Reaped on Gateway Teardown (WorkerPodsReapedOnGatewayTeardown)
+
+> Applies to the `v2alpha1`/`v2beta1` (`actions-gateway.com`) API. v1 gateway teardown
+> deletes its `RunnerGroup`s, so the pods cascade off their owner reference instead.
+
+**Symptoms.** Someone deleted an `ActionsGateway`, and the jobs that were running on its tenant failed mid-run with "The runner has received a shutdown signal" or lost communication. A `Warning` Event with reason `WorkerPodsReapedOnGatewayTeardown` appears on each affected `RunnerSet`, `actions_gateway_worker_pods_reaped_total{reason="gateway_deleted"}` increments by the number of pods, and the sets sit `Ready=False`/`GatewayTerminating` until the gateway is gone.
+
+**What happened — this is deliberate.** Deleting a gateway tears down the AGC that serves it, and that AGC is the *only* thing that reaps its tenant's worker pods: the pods are owned by `RunnerSet`s, which survive gateway deletion by design so a tenant can re-apply the gateway and resume. Before this behaviour existed the pods were simply left behind, and their node-disruption-safety annotations (`karpenter.sh/do-not-disrupt`, `cluster-autoscaler.kubernetes.io/safe-to-evict: false`) kept consolidation and scale-down away from them, pinning a billable node until the kubelet's `activeDeadlineSeconds` fired up to `maxWorkerLifetime` — 12 hours by default — later.
+
+So the AGC now stops acquiring and deletes them itself while it still has the permissions to do so, and the GMC holds the gateway's teardown open until it has (see the next entry). A job running at that moment is lost; there is no way to both delete the gateway and finish the job.
+
+**Resolution.** Nothing to fix — the reap is the correct outcome of the delete. To avoid losing jobs next time, **drain before deleting the gateway**: stop routing new work to the tenant, wait for `status.activeJobs` and `status.pendingJobs` to reach zero on every bound `RunnerSet`, then delete.
+
+```sh
+kubectl get runnerset -n <namespace> \
+  -o custom-columns='NAME:.metadata.name,GATEWAY:.spec.gatewayRef.name,ACTIVE:.status.activeJobs,PENDING:.status.pendingJobs'
+```
+
+If you only meant to take the tenant offline temporarily, scaling the AGC down is not the tool either — deleting the gateway is what removes the reaper. Prefer setting `maxWorkers: 0` on the sets, which stops new jobs while leaving the control plane in place.
+
+---
+
+## ActionsGateway Deletion Hangs on WaitingForWorkerDrain
+
+> Applies to the `v2alpha1`/`v2beta1` (`actions-gateway.com`) API.
+
+**Symptoms.** `kubectl delete actionsgateway` does not return. The gateway sits `Terminating` on the `actions-gateway.com/gmc-cleanup` finalizer, and `kubectl describe` shows repeated `Normal` `WaitingForWorkerDrain` events naming the sets that still report workers.
+
+**What happened.** Teardown deliberately deletes nothing until the AGC has reaped the tenant's worker pods (previous entry) — deleting its Deployment first would strand them. The wait normally lasts a second or two: the counts fall as soon as the AGC *issues* its deletes, because a pod that already carries a deletion timestamp is finished by the kubelet with no controller involved.
+
+**Likely cause of a long wait.** The AGC is not running, so nothing is reaping and nothing is updating the counts — it is crash-looping, scaled to zero, or never became healthy.
+
+```sh
+kubectl get deploy -n <namespace> -l app.kubernetes.io/component=agc
+kubectl logs -n <namespace> deploy/<gateway>-agc --tail=50
+```
+
+**Resolution.** Teardown is bounded: after **90 seconds** it proceeds anyway and emits a `WorkerDrainTimeout` Warning naming what it is leaving behind. If you see that event, those pods now have no reaper and are bounded only by their `maxWorkerLifetime` deadline — delete them by hand to release the node:
+
+```sh
+kubectl delete pod -n <namespace> -l actions-gateway.com/runner-set=<set-name>
+```
+
+To avoid the wait entirely, fix or restore the AGC before deleting the gateway, or drain the sets first so there is nothing to wait for.
 
 ---
 
@@ -3517,6 +3566,8 @@ A `ProxyNotFound` here means a `proxyRef`/`defaultProxyRef` **names an `EgressPr
 A `ClusterRunnerTemplate` ref (`templateRef.kind: ClusterRunnerTemplate`) resolves the same way: `TemplateNotFound` means the named cluster-scoped template does not exist yet. The AGC reads it through a per-gateway `ClusterRoleBinding` to the shipped `agc-clusterrunnertemplate-reader` ClusterRole that the GMC creates with the gateway — so if every namespaced reference resolves but a `ClusterRunnerTemplate` ref stays `TemplateNotFound`, confirm a platform administrator has created that `ClusterRunnerTemplate` (it is cluster-scoped and platform-authored; tenants cannot create it).
 
 **Resolution.** Apply the missing object (`ActionsGateway`, `RunnerTemplate`/`ClusterRunnerTemplate`, or `EgressProxy`) named in the message; the set self-heals on the next watch event. Confirm the referent's name and namespace match the `*Ref` exactly (references resolve in the `RunnerSet`'s own namespace).
+
+**`GatewayTerminating` — the gateway is being deleted, not missing.** A set reports this while its `ActionsGateway` carries a deletion timestamp. It is not a resolution failure: the AGC has stopped acquiring and reaped the set's worker pods, because it is those pods' only reaper and goes away with the gateway. The set settles at `GatewayNotFound` once the gateway is gone, and recovers on its own if the gateway is re-applied. See [Worker Pods Reaped on Gateway Teardown](#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown).
 
 **`TemplateDeleted` / `ProxyDeleted` — the referent existed and vanished.** A set whose references *had* resolved reports these deletion-specific reasons instead of the generic `*NotFound` when its previously-resolved `RunnerTemplate`/`ClusterRunnerTemplate` or `EgressProxy` is deleted out from under it (the set's own `status.templateSource` / `status.proxyMode: Proxied` is the evidence of the prior resolution). Deleting a shared referent is allowed by design — deletion **degrades referrers rather than blocking** (no finalizer holds the referent), and the set fails closed exactly like `*NotFound`: no new worker pods until the referent is restored. Re-apply the deleted object (or point the set at another) and the set self-heals on the watch event. If the set's spec was *edited* to a dangling name rather than the referent being deleted, the plain `*NotFound` reason is reported instead.
 

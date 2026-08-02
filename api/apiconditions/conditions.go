@@ -176,6 +176,12 @@ const (
 const (
 	// ReasonGatewayNotFound — the referenced ActionsGateway does not exist.
 	ReasonGatewayNotFound = "GatewayNotFound"
+	// ReasonGatewayTerminating — the referenced ActionsGateway carries a deletion
+	// timestamp. The AGC stops acquiring and reaps the set's worker pods before the
+	// GMC tears its own Deployment down, because it is the only reaper those pods
+	// have (Q547). Distinct from GatewayNotFound, which is the post-teardown resting
+	// state and reaps nothing.
+	ReasonGatewayTerminating = "GatewayTerminating"
 	// ReasonTemplateNotFound — no template resolved: the referenced
 	// RunnerTemplate/ClusterRunnerTemplate does not exist, or (when templateRef and
 	// gateway.defaultTemplateRef are both unset) no cluster-default ClusterRunnerTemplate

@@ -63,6 +63,7 @@ const (
 	ReasonProvisioningFailed      = apiconditions.ReasonProvisioningFailed
 	ReasonReconcileSucceeded      = apiconditions.ReasonReconcileSucceeded
 	ReasonGatewayNotFound         = apiconditions.ReasonGatewayNotFound
+	ReasonGatewayTerminating      = apiconditions.ReasonGatewayTerminating
 	ReasonTemplateNotFound        = apiconditions.ReasonTemplateNotFound
 	ReasonAmbiguousDefault        = apiconditions.ReasonAmbiguousDefault
 	ReasonTemplateDeleted         = apiconditions.ReasonTemplateDeleted
