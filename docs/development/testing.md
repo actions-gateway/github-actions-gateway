@@ -613,6 +613,18 @@ all keep an ordered log (`Calls()` on the scale-set stub, `/control/reruns` and
 `/control/scaleset/state` on fakegithub) precisely so a spec can assert on what the
 server saw instead of inferring it from the client's logs.
 
+### An aggregate counter cannot count distinct participants
+
+A threshold on a shared counter — `deduped >= n-1`, `retries >= 3`, `errors >= workers` — reads like a claim about *how many actors* did the thing. It is not. It is a claim about *how many times* the thing happened, and one actor in a loop satisfies it alone. The two are indistinguishable in the metric, and the looping actor is usually the fast path, so the threshold clears early and the test goes green well before the shape it names has occurred.
+
+Q260's fan-out regression asserted that a job's duplicate deliveries were deduplicated, via `JobsDuplicateDeliveryTotal >= maxListeners-1` on one registry shared by all five sessions. A deduped loser sets no `RecycleAgent`, so it returns straight to the poll loop and is deduped again within microseconds. Measured (Q601): the counter had overshot to 6–24 by the time the assertion first sampled it, and a two-session pool — where only one sibling can ever lose — still cleared the five-session threshold, once from a *single* session. The claim registry's actual job, spreading the dedup across distinct siblings, was never under test.
+
+Give each actor its own counter and count the actors that moved. Each session's `Config` now carries its own `newTestMetrics()` registry, keyed by the Multiplexer's monotonic goroutine index, so a non-zero counter names one session and the assertion is `maxListeners-1` *distinct* registries non-zero.
+
+Then close the sequential loophole. N distinct identities can also be N actors one after another, so pin the population as well: the test asserts exactly `maxListeners` sessions were ever created and all are still alive, which leaves the deduped identities no reading but concurrent siblings.
+
+The negative control is the check that settles it — shrink the population below the threshold and require red. A pool of two cannot produce four deduped siblings; an assertion that still passes there is counting something else.
+
 ### A bulk mechanical change proves itself by reconciliation, not by an empty leftover query
 
 A repo-wide rename or rewrite — moving a directory, renaming a symbol, re-pointing every reference to a path — is finished when *every* site changed. The natural check is to grep for the old form and see nothing. **That check cannot distinguish "no sites remain" from "my query never matched the sites."** Both print nothing, and a rewrite and its verification query are usually written minutes apart from the same wrong mental model, so they fail together.
@@ -629,7 +641,7 @@ Then run the leftover query — as a third check, not the only one. The same app
 
 ### Verify a causation claim by deleting the mechanism
 
-The two rules above are read-and-reason checks — ask what else could produce this green.
+The rules above are read-and-reason checks — ask what else could produce this green.
 This one is mechanical, and it is the only way to *settle* the question: **delete the
 mechanism, re-run the test, and require it to go red for the reason you expect.** Restore
 it, confirm green. A test that stays green without the code it claims to exercise is
