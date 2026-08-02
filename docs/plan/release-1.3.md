@@ -45,9 +45,16 @@
 > deferred out of 1.3 are under
 > [Explicitly out of scope](#explicitly-out-of-scope).
 >
-> **Superseded 2026-08-02: `v1.3.0-rc.4` is published, verified, and its dogfood
-> validation PASSED** — the ledger's last gating row, and the first verdict any RC
-> in this line has produced. Details in
+> **Superseded 2026-08-02: `v1.3.0-rc.5` is published and verified, and its
+> validation is owed.** rc.5 carries 26 commits past rc.4 including the Q603
+> listener fix, so rc.4's pass does not transfer. Its first gate run aborted at
+> t+4m07s on two defects in the gate itself — a watcher that dies on a queued
+> job's 404, and an e2e pool whose C2 quota fits one node ([Q627](../STATUS.md#Q627))
+> — neither of which is evidence about the release. Details in
+> [The rc.5 validation attempt](#the-rc5-validation-attempt-2026-08-02).
+>
+> **2026-08-02: `v1.3.0-rc.4` is published, verified, and its dogfood validation
+> PASSED** — the first verdict any RC in this line has produced. Details in
 > [The rc.4 validation verdict](#the-rc4-validation-verdict-2026-08-02); the
 > paragraphs below record the earlier history.
 >
@@ -117,7 +124,8 @@ The prose below carries the *why* of each; this table is the state.
 | Q604 | `stallJob` installs its runner-name conflict after the job is already pollable | gates | ✅ shipped 2026-08-02 — same reason: it reddened `main` |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
-| — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | ✅ **PASSED on `v1.3.0-rc.4`, 2026-08-02** ([verdict](#the-rc4-validation-verdict-2026-08-02)) |
+| — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | 🔲 **owed on the tag that ships** — [rc.4 PASSED](#the-rc4-validation-verdict-2026-08-02); [rc.5's attempt](#the-rc5-validation-attempt-2026-08-02) aborted on gate defects, not the release |
+| <a id="Q627"></a>Q627 | The dogfood `e2e` pool's C2 quota fits one node, the pool wants two | gates | 🔲 filed — blocks the gate's e2e leg from scheduling a runner |
 
 **Cut condition: zero open gating rows in this ledger** **plus the
 release-candidate dogfood validation**, the ledger's last row. It has no Q-ID
@@ -268,6 +276,48 @@ that a core referent gets the full 253-character DNS-subdomain budget instead of
 already publishes, so this is a third instance of a settled pattern, not a new one.
 The reasons are additive condition vocabulary, which is not a freeze. Nothing
 deferred, nothing filed.
+
+### The rc.5 validation attempt (2026-08-02)
+
+**`validate-release.sh v1.3.0-rc.5` FAILED at t+4m07s, and nothing it found
+implicates the release.** The tag published clean: all seven `publish.yml` jobs
+green on `a6f168ad`, five image signatures plus both charts and the v2 CRD
+artifact verified, SLSA provenance binding `publish.yml@refs/tags/v1.3.0-rc.5` to
+that commit, and both arches on every index. The gate died in its own plumbing.
+
+**rc.5 needs a verdict of its own.** It carries 26 commits past rc.4, including
+the Q603 listener-shutdown fix — a product change — so rc.4's pass does not
+transfer. That is the decision the rc.4 verdict below said to make explicitly at
+the cut rather than inherit.
+
+| Leg | Result |
+|---|---|
+| Lane settle | settled immediately — no in-flight `e2e-test.yml` run, no open PRs |
+| Deploy rc.5 | GMC and both tenant AGCs rolled out |
+| e2e matrix on GAG runners | **aborted at t+1m13s** — the watcher exited on a queued job's 404 |
+| Sizing, CRD smoke | not reached |
+| Teardown | drained, then scaled back to 0 nodes |
+
+**Two independent defects, both in the gate, neither in the product.**
+
+`e2e-run-watch.sh` re-fetches each job's log every poll. That endpoint 404s while
+a job is queued — the normal state for the minutes before a runner picks it up —
+and `collect_heartbeats` sent the *message* to `/dev/null` without neutralizing
+the *status*, so `pipefail` carried it out of the pipe, out of the assignment
+capturing it, and into `set -e`. The gate then reported the still-queued run as
+"did not conclude success". This is a Q615 regression: rc.4 predates the watcher
+and used `gh run watch`, which is why the same leg passed a day earlier.
+
+The e2e node pool never scaled. Its kata runner pod stayed `Pending` behind
+`FailedScaleUp: GCE quota exceeded`; the pool is `c2-standard-8` against a
+regional `C2_CPUS` limit of 8 with `maxNodeCount: 2` — one node's worth of quota
+for a pool that wants two. Tracked as [Q627](../STATUS.md#Q627). **The run could
+not have been scheduled even had the watcher survived**, so this attempt is
+evidence about the gate and about nothing else.
+
+**The teardown held.** `e2e-stop.sh` waited on the queued job rather than
+deleting the AGC under it — the 2026-07-31 incident's fix doing its job — and
+completed once the unschedulable run was cancelled by hand.
 
 ### The rc.4 validation verdict (2026-08-02)
 
