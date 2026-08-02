@@ -2510,7 +2510,7 @@ formats and three polling loops.</p>
 <tr>
 <td>2</td>
 <td>Background-task mode + status file + sentinel; documented as the default</td>
-<td>❌ Open — <a href="../../STATUS/#Q616">Q616</a>, <a href="../../STATUS/#Q617">Q617</a></td>
+<td>⚠️ Status file + sentinel shipped (Q616); documenting it as the default is open — <a href="../../STATUS/#Q617">Q617</a></td>
 </tr>
 <tr>
 <td>3</td>
@@ -2588,19 +2588,45 @@ meaningful events. A <code>release-sentinel</code> doing the same for a validati
 the natural sibling.</p>
 <p>Three deliverables:</p>
 <ul>
-<li><strong>A status file</strong> (<code>tmp/release-validation-status.json</code>) holding current
+<li>✅ <strong>A status file</strong> (<code>tmp/release-validation-status.json</code>) holding current
   phase, elapsed, the latest e2e heartbeat, and any failure — a single read
   that answers "where is it" without replaying the whole stream. This is the
   agent-facing renderer; the human-facing one is the terminal stream from
-  Phase 1.</li>
-<li><strong><code>release-sentinel</code></strong>, modeled on pr-sentinel: sleeps, wakes the session on
-  phase transition, failure, or completion, and prints a status block on wake.</li>
-<li><strong><a href="../../operations/release/"><code>docs/operations/release.md</code> § Validate the release candidate on
+  Phase 1. Shipped in Q616 as <code>progress_status_json</code> in
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/progress.sh"><code>lib/progress.sh</code></a>, rewritten
+  atomically after every event and also available as
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-status.sh"><code>release-status.sh</code></a>.</li>
+<li>✅ <strong><code>release-sentinel</code></strong>, modeled on pr-sentinel: sleeps, wakes the session on
+  phase transition, failure, or completion, and prints a status block on wake.
+  Shipped in Q616 as
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel.sh"><code>release-sentinel.sh</code></a>.</li>
+<li>❌ <strong><a href="../../operations/release/"><code>docs/operations/release.md</code> § Validate the release candidate on
   dogfood</a></strong> rewritten so the background-task flow is
   the documented default path, with the manual terminal invocation kept as the
   alternative. Per the <a href="../../development/doc-update-matrix/">doc-update matrix</a>
-  this is an operator-facing change and the docs move with it, not after.</li>
+  this is an operator-facing change and the docs move with it, not after — Q616
+  documented the two new commands where the gate's other knobs already live;
+  <a href="../../STATUS/#Q617">Q617</a> is the restructure that makes the flow the default.</li>
 </ul>
+<p><strong>Three things the build settled that the plan did not anticipate.</strong></p>
+<ol>
+<li><strong>The e2e heartbeat had to enter the stream, not just the terminal.</strong> The e2e
+   leg is one ~25-minute phase, so a status object built from phase events alone
+   reports "e2e, 18 minutes" for the whole of it — the phase is the only thing
+   that does not change. <code>e2e-run-watch.sh</code> now folds the newest relayed line
+   into the stream as a <code>heartbeat</code> record, which is also what keeps the stall
+   detector honest through the longest phase.</li>
+<li><strong>A gate's failure is reported by its first failing phase, not its last.</strong>
+   The teardown trap records <code>gate fail</code> after the phase that actually broke
+   records its own, so taking the newest failure would answer every failed run
+   with "the gate exited 1".</li>
+<li><strong>A wedge is the absence of events, so the sentinel needs a stall event.</strong>
+   Waking only on transitions cannot report a gate that stops transitioning —
+   which is exactly the failure a walk-away command hides. <code>idle</code> (age of the
+   newest event) crossing <code>RELEASE_SENTINEL_STALL</code> is a wake in its own right,
+   and only for a <code>running</code> gate: preflight has no stream to be quiet on and a
+   finished gate is expected to be silent.</li>
+</ol>
 <h2 id="phase-3--the-remaining-tiers-by-measurement">Phase 3 — the remaining tiers, by measurement<a class="headerlink" href="#phase-3--the-remaining-tiers-by-measurement" title="Permanent link">&para;</a></h2>
 <p>Measured output density and longest silence, isolated to the actual test steps
 rather than whole jobs:</p>
@@ -2782,8 +2808,8 @@ phases.</p>
 </tr>
 <tr>
 <td>4</td>
-<td>Does the release sentinel belong in-repo or as a plugin?</td>
-<td>pr-sentinel is a plugin outside this repo; a release sentinel is repo-specific and probably belongs in <code>scripts/dogfood/</code></td>
+<td>~~Does the release sentinel belong in-repo or as a plugin?~~</td>
+<td><strong>Settled with Q616: in-repo.</strong> It reads this gate's own event stream and renders this gate's phases; there is nothing in it a second repo could use. <code>scripts/dogfood/release-sentinel.sh</code></td>
 </tr>
 </tbody>
 </table>

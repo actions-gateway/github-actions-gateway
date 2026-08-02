@@ -2585,20 +2585,12 @@
 <td>Three shell files already carry <code>docs/plan/archive/</code> paths — they rotted and were repaired by hand. Extending needs care, not a wider glob: workflow <code>paths:</code> filters and <code>probe-investigations-cd.sh</code> (reads a plan file as data) are legitimate.</td>
 </tr>
 <tr>
-<td><a id="Q616"></a>Q616</td>
-<td><a href="../plan/test-progress-visibility/#phase-2--background-task-mode-becomes-the-standard">Background-task mode for release validation</a></td>
-<td><code>dogfood</code> <code>tests</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Phase 1 shipped the phase stream this builds on. Status file (phase, elapsed, last heartbeat, failure) + a <code>release-sentinel</code> modeled on pr-sentinel that sleeps and wakes the session on phase transitions — event-driven, never a clock poll.</td>
-</tr>
-<tr>
 <td><a id="Q617"></a>Q617</td>
 <td><a href="../plan/test-progress-visibility/#phase-2--background-task-mode-becomes-the-standard">Make background-task validation the documented default</a></td>
 <td><code>dogfood</code> <code>docs</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>S</td>
-<td>Blocked on Q616. Rewrite release.md § Validate the release candidate on dogfood so the background-task flow is the default path and the manual terminal run is the alternative.</td>
+<td>Q616 shipped the status file and <code>release-sentinel.sh</code>, documented beside the gate's other knobs. Rewrite release.md § Validate the release candidate on dogfood so background-task mode is the default path and the terminal run the alternative.</td>
 </tr>
 <tr>
 <td><a id="Q166"></a>Q166</td>
