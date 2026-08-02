@@ -44,7 +44,7 @@ formats and three polling loops.
 |---|---|---|
 | 0 | The e2e suite reports itself: heartbeat + JUnit summary + annotations | ✅ Shipped — [#1152](https://github.com/actions-gateway/github-actions-gateway/pull/1152), detail in [archive/e2e-progress-visibility.md](archive/e2e-progress-visibility.md) |
 | 1 | `validate-release.sh` reports phase and spec progress in the terminal | ✅ Shipped — Q615 |
-| 2 | Background-task mode + status file + sentinel; documented as the default | ⚠️ Status file + sentinel shipped (Q616); documenting it as the default is open — [Q617](../STATUS.md#Q617) |
+| 2 | Background-task mode + status file + sentinel; documented as the default | ✅ Shipped — status file + sentinel (Q616), documented as the default path in [release.md](../operations/release.md#run-it-detached-the-sentinel-reports-it-back) (Q617) |
 | 3 | Unit `-race` progress via `go test -json` | ✅ Shipped — Q618 |
 | — | Migrating other suites to Ginkgo | ⛔ Rejected on measurement — [see below](#evaluated-and-rejected-migrating-other-suites-to-ginkgo) |
 | — | Integration-tier progress | ⛔ Not needed on measurement — 30–64 % output density, already self-narrating |
@@ -131,13 +131,17 @@ Three deliverables:
   phase transition, failure, or completion, and prints a status block on wake.
   Shipped in Q616 as
   [`release-sentinel.sh`](../../scripts/dogfood/release-sentinel.sh).
-- ❌ **[`docs/operations/release.md` § Validate the release candidate on
-  dogfood](../operations/release.md)** rewritten so the background-task flow is
-  the documented default path, with the manual terminal invocation kept as the
-  alternative. Per the [doc-update matrix](../development/doc-update-matrix.md)
-  this is an operator-facing change and the docs move with it, not after — Q616
-  documented the two new commands where the gate's other knobs already live;
-  [Q617](../STATUS.md#Q617) is the restructure that makes the flow the default.
+- ✅ **[`docs/operations/release.md` § Validate the release candidate on
+  dogfood](../operations/release.md#validate-the-release-candidate-on-dogfood)**
+  rewritten so the background-task flow is the documented default path, with the
+  terminal invocation kept as the alternative. Per the [doc-update
+  matrix](../development/doc-update-matrix.md) this is an operator-facing change
+  and the docs move with it, not after — Q616 documented the two new commands
+  where the gate's other knobs already live; Q617 is the restructure that makes
+  the flow the default. It also surfaced a requirement the mechanism half had
+  not: **a detached run must carry `ASSUME_YES=1`**, because the gate's
+  target-confirmation reads stdin and a detached run has none — measured, it
+  exits 1 before spending anything. The default path is unusable without it.
 
 **Three things the build settled that the plan did not anticipate.**
 
