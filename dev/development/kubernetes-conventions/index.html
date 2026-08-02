@@ -3169,6 +3169,13 @@ mid-request, as jobs GitHub waits out rather than being told about.</p>
 upstream session, an in-flight request, an unreported job result, a held lease.
 Enumerate it explicitly for each binary — the failure mode is always something
 nobody thought to enumerate.</p>
+<p>An acknowledgement the process has decided on but not yet sent counts, and it is
+easy to miss because in-process state says the work is finished. The AGC's
+scale-set listener concludes a job in memory and deletes its queue message
+separately; exiting in between left GitHub still holding a message the listener
+had already acted on, and the next process provisioned a worker for it (Q603).
+If a decision is only durable once a remote call lands, the exit path owes that
+call.</p>
 <p><strong>2. With controller-runtime, <code>mgr.Start</code> only waits for what the manager
 knows about.</strong> Goroutines you spawn yourself from <code>Reconcile</code> are invisible to
 it: <code>mgr.Start</code> returns, <code>main</code> returns, and the process exits out from under

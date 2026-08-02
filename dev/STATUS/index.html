@@ -2591,12 +2591,12 @@
 <td>Demand fired 2026-07-31; plan written. Athens pattern (Q244) applied to images: per-upstream pull-through mirrors, then swap <code>e2e-open-egress</code> for a mirror-scoped NP. Next: Phase 0 egress inventory.</td>
 </tr>
 <tr>
-<td><a id="Q603"></a>Q603</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">An AGC stopped between abandoning a job and its next delete cycle re-provisions it on restart</a></td>
+<td><a id="Q606"></a>Q606</td>
+<td><a href="../plan/q603-settle-delete-gap/#the-residual-stated-precisely">A hard-killed AGC still replays an assignment it concluded but had not yet deleted</a></td>
 <td><code>bug</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Measured via Q602's flake: <code>settle</code> concludes a job in memory; <code>flushDeletes</code> deletes a cycle later. A stop in that gap replays the assignment, and the restart (abandoned set empty) provisions for a job GitHub dropped. Q583 narrows it, not closes it.</td>
+<td>Q603 closed the graceful half; a hard kill between <code>settle</code> and its <code>DELETE</code> remains, and no ordering can close it. Both candidate fixes need something first — a live measurement, or a <a href="#Q597">Q597</a> decision — and the plan doc states which.</td>
 </tr>
 <tr>
 <td><a id="Q601"></a>Q601</td>

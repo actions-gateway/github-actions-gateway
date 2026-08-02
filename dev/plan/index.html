@@ -2684,6 +2684,11 @@ markers per item.</p>
 <td>✅ Done 2026-08-01 — the row's "measure at the rc.4 gate first" instruction was discharged without the gate: the premise was already in the repo (a 2026-07-05 dogfood reconnect that provisioned 7 workers for a previous pass's jobs, plus Q468's ≥13 h retention), and <a href="q583-restart-replay/#the-answer-replayed-delete-ok-pruned-2026-08-01">Investigation G</a> then confirmed it live — a cursor-acked <code>JobAssigned</code> replays to a new session, <code>DeleteMessage</code> answers 204, and deleting prunes the queue. That closes Q264's P4 <code>DeleteMessage</code> unknown too. Delete-acking shipped in the same change: the listener issues the delete half of its ack once every job in a message has concluded, so replay still recovers anything in flight. Residual (unpruned process-scoped sets) is <a href="../STATUS/#Q597">Q597</a></td>
 </tr>
 <tr>
+<td><a href="q603-settle-delete-gap/">q603-settle-delete-gap.md</a></td>
+<td>The seam Q583's delete-ack left: a job concludes in the listener's memory at <code>settle</code> and its message is deleted separately, so a process stopping in between leaves the assignment in the queue for the next one to replay</td>
+<td>✅ Done 2026-08-02 — the graceful half was unconditional rather than a race (<code>run</code> had no exit flush at all, so every rollout landing in the window stranded the message). Closed by flushing the outstanding deletes as the loop unwinds, before the session teardown and on a detached context, plus moving the per-cycle flush to sit directly after each of the two places a job concludes. Three regression tests, each red with the exit flush removed. Residual (a hard kill between the conclusion and a successful <code>DELETE</code>, which no ordering can close) is <a href="../STATUS/#Q606">Q606</a></td>
+</tr>
+<tr>
 <td><a href="docs/">docs.md</a></td>
 <td>Documentation roadmap across phases</td>
 <td>⚠️ Open — all Phase 1/2/3 items shipped except the Grafana dashboards half of 3.2; the alert rules, SLO recording rules and runbook links landed as <code>observability-alerting.md</code>, leaving dashboards as <a href="../STATUS/#Q568">Q568</a></td>
