@@ -131,6 +131,14 @@ Exceptions: a flake rooted in an outside service that hasn't recurred (file, don
 - **Recurs** → back to Queue top, escalated.
 - **Soaked or obsolete** → retire to the ledger (below).
 
+A sighting on a **PR branch** does not meet the trigger, so the row stays in
+Flake watch — but it is still evidence the mitigation is incomplete: record it
+(on the row, or in the doc the row links) and count the soak from that date
+rather than from the fix. Record *which mode* failed, too, where the row's fix
+addressed a specific one: [Q549](../STATUS.md#Q549)'s second sighting was a
+mode its fix never covered, and a row naming only the fixed mode would have
+sent the next session to re-diagnose the wrong thing.
+
 This is the one place the general "done rows are deleted" rule does **not** apply, which makes it easy to miss when a flake fix otherwise looks like a routine change. `scripts/docs/lint-backlog.sh` enforces it (rule 8): a `flake`-labelled Queue row that disappears entirely — measured against `origin/main`, or the pre-commit state under `--staged` — fails the lint, naming the row and pointing here. Retiring a row per the ledger rules below is the deliberate exception: `BACKLOG_ALLOW_FLAKE_DELETE="Q123"` lets specific IDs through.
 
 ### Retiring a flake-watch row
