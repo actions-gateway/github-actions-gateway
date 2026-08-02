@@ -138,6 +138,39 @@ what ships at `/licenses/` is in
 The test-only `test/fakegithub` image is not published as a product artifact and
 does not carry `/licenses/`.
 
+#### What it covers — and why build-time tooling does not
+
+The obligation is triggered by **distribution, not by use**. MIT ("in all copies
+or substantial portions"), BSD-3 ("redistributions in binary form must reproduce
+…"), and Apache-2.0 §4(d) all attach to conveying the work to someone else. Code
+that only ever runs on a developer's machine or in CI is never conveyed, so it
+owes no attribution.
+
+So the file is assembled from the repo-root `vendor/` tree **only** — the modules
+statically linked into the shipped binaries. The other two vendored trees are
+deliberately excluded:
+
+| Tree | In `THIRD-PARTY-NOTICES`? | Why |
+|---|---|---|
+| `vendor/` | yes | statically linked into the published images |
+| `tools/vendor/` | no | pinned third-party build tools (`make tools`); never in an artifact |
+| `devtools/vendor/` | no | first-party programs backing `make` gates; never shipped or signed |
+
+Adding a dependency to `tools/` or `devtools/` therefore owes no notices regen.
+Adding one to a workspace module does.
+
+**The source tree is its own distribution, and it is already satisfied.**
+`vendor/` is committed and this repo is public, so the third-party *source* is
+redistributed too — but each vendored module keeps its own `LICENSE` beside its
+code, which is exactly what the reproduce-the-notice clauses ask for. The
+roll-up file exists because a **binary** strips that: the image carries no
+`vendor/` tree, so the texts have to travel separately at `/licenses/`.
+
+**Notices scope is not SBOM scope.** The SBOM answers "what touched this build"
+for vulnerability tracking, and may legitimately inventory build-time tooling.
+`THIRD-PARTY-NOTICES` answers "what did we distribute" and is a legal artifact.
+Keep the two scoped separately — widening one does not widen the other.
+
 ### Image hardening
 
 A few build-time hardening conventions are shared by every Dockerfile and gated

@@ -91,6 +91,8 @@ Outside `go.work` the Go gates do not see the module: `go-test.sh`, `go-lint.sh`
 3. Classify `<module>/**` in a **narrow** CI path filter — the lint/scripts jobs, never e2e — so `check-path-filters.sh` assertion 1 passes.
 4. Add a pointer from [`scripts/README.md`](../../scripts/README.md) so the gate map stays in one place.
 
+**It owes no `THIRD-PARTY-NOTICES` entry.** That file is generated from the repo-root `vendor/` tree alone, because attribution is triggered by distributing a binary and these modules are never shipped — the same reason `tools/vendor/` is excluded. Adding a dependency here is therefore not a notices change. Scope rule and the source-tree/SBOM distinctions: [building.md](building.md#what-it-covers--and-why-build-time-tooling-does-not).
+
 Each gate needs its own `GOWORK=off` pass rather than a widened module list: they run a single workspace-wide invocation (`go test` over every module pattern, `gofmt -l` over every module dir), and that invocation resolves against `go.work`, which by construction does not list this module.
 
 **`coverage.sh` is a partial exception.** Its ratchet builds one profile from the workspace build list and filters it per module, so a non-workspace module carries no baseline row and no floor — widening that means merging a second profile, which has not been worth it for a module of this size. It does still *run* those tests, unmeasured, because `make check` calls `cover-check` in place of `make test`: without that pass the fast gate would never execute them, and they would only run under `make test`/`make test-race`.
