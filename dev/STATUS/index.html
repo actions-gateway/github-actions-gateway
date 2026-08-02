@@ -2599,14 +2599,6 @@
 <td>Q603 closed the graceful half; a hard kill between <code>settle</code> and its <code>DELETE</code> remains, and no ordering can close it. Both candidate fixes need something first — a live measurement, or a <a href="#Q597">Q597</a> decision — and the plan doc states which.</td>
 </tr>
 <tr>
-<td><a id="Q601"></a>Q601</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer_test.go">The Q260 burst test's dedup predicate counts deliveries, not distinct siblings</a></td>
-<td><code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured during Q600: 5 listeners serve 37–47 deliveries (dedup 33–43) — a loser sets no <code>RecycleAgent</code>, so it re-polls at once. <code>&gt;= maxListeners-1</code> is met by one looper, leaving the sibling burst unproven. Count distinct sessions.</td>
-</tr>
-<tr>
 <td><a id="Q595"></a>Q595</td>
 <td><a href="../operations/troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">The cancel runbook's manual pod delete may re-run the job GitHub cancelled</a></td>
 <td><code>bug</code> <code>docs</code></td>

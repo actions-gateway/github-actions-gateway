@@ -2823,7 +2823,9 @@ reproducing the interleaving directly (a delay at the winner's handler entry too
 from 0 failures in 400 local runs to 5 of 5), fixed by waiting on the counter the
 invariant reads, and confirmed still able to catch the Q260 regression by deleting
 the claim gate and requiring red. Filed to <a href="../../STATUS/#Q600">flake watch</a>; the
-weaker dedup predicate the measurement exposed is <a href="../../STATUS/#Q601">Q601</a>.</p>
+weaker dedup predicate the measurement exposed was filed as Q601 and has since been
+fixed — per-session dedup registries, so the assertion counts distinct siblings
+rather than deliveries.</p>
 <p><strong>Q602 gates for the same mechanical reason, and is worth more than its fix.</strong> The
 next <code>main</code> run went red on a <em>different</em> <code>-race</code> test —
 <code>TestListener_AbandonedJobDoesNotSurviveARestart</code>, the Q583 fix's own — with
@@ -2864,8 +2866,8 @@ locked section that makes the job pollable, so no window exists to lose.</p>
 <p><strong>Three gates, one root shape.</strong> Q600, Q602 and Q604 were all "the test synchronized on
 something adjacent to what it asserts", and all three surfaced in AGC listener tests
 within two <code>main</code> runs. They were fixed individually because each had a distinct
-mechanism, but the pattern is worth watching: <a href="../../STATUS/#Q601">Q601</a> records a fourth
-weak barrier in the same family, still unfixed.</p>
+mechanism, but the pattern is worth watching: Q601 was a fourth weak barrier in the same
+family — an aggregate counter standing in for a headcount — and is now fixed too.</p>
 <p><strong>API review verdict — ship as-is.</strong> <code>scripts/release/api-surface-since.sh
 v1.3.0-rc.3</code> reports one field pair (<code>githubCABundleRef</code>, and the
 <code>LocalConfigMapReference.Name</code> it introduces) and four condition reasons

@@ -2734,6 +2734,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#an-aggregate-counter-cannot-count-distinct-participants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An aggregate counter cannot count distinct participants
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3703,6 +3714,12 @@ a spec's subject is a <em>sequence of calls</em> rather than a final state: the 
 all keep an ordered log (<code>Calls()</code> on the scale-set stub, <code>/control/reruns</code> and
 <code>/control/scaleset/state</code> on fakegithub) precisely so a spec can assert on what the
 server saw instead of inferring it from the client's logs.</p>
+<h3 id="an-aggregate-counter-cannot-count-distinct-participants">An aggregate counter cannot count distinct participants<a class="headerlink" href="#an-aggregate-counter-cannot-count-distinct-participants" title="Permanent link">&para;</a></h3>
+<p>A threshold on a shared counter — <code>deduped &gt;= n-1</code>, <code>retries &gt;= 3</code>, <code>errors &gt;= workers</code> — reads like a claim about <em>how many actors</em> did the thing. It is not. It is a claim about <em>how many times</em> the thing happened, and one actor in a loop satisfies it alone. The two are indistinguishable in the metric, and the looping actor is usually the fast path, so the threshold clears early and the test goes green well before the shape it names has occurred.</p>
+<p>Q260's fan-out regression asserted that a job's duplicate deliveries were deduplicated, via <code>JobsDuplicateDeliveryTotal &gt;= maxListeners-1</code> on one registry shared by all five sessions. A deduped loser sets no <code>RecycleAgent</code>, so it returns straight to the poll loop and is deduped again within microseconds. Measured (Q601): the counter had overshot to 6–24 by the time the assertion first sampled it, and a two-session pool — where only one sibling can ever lose — still cleared the five-session threshold, once from a <em>single</em> session. The claim registry's actual job, spreading the dedup across distinct siblings, was never under test.</p>
+<p>Give each actor its own counter and count the actors that moved. Each session's <code>Config</code> now carries its own <code>newTestMetrics()</code> registry, keyed by the Multiplexer's monotonic goroutine index, so a non-zero counter names one session and the assertion is <code>maxListeners-1</code> <em>distinct</em> registries non-zero.</p>
+<p>Then close the sequential loophole. N distinct identities can also be N actors one after another, so pin the population as well: the test asserts exactly <code>maxListeners</code> sessions were ever created and all are still alive, which leaves the deduped identities no reading but concurrent siblings.</p>
+<p>The negative control is the check that settles it — shrink the population below the threshold and require red. A pool of two cannot produce four deduped siblings; an assertion that still passes there is counting something else.</p>
 <h3 id="a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query">A bulk mechanical change proves itself by reconciliation, not by an empty leftover query<a class="headerlink" href="#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query" title="Permanent link">&para;</a></h3>
 <p>A repo-wide rename or rewrite — moving a directory, renaming a symbol, re-pointing every reference to a path — is finished when <em>every</em> site changed. The natural check is to grep for the old form and see nothing. <strong>That check cannot distinguish "no sites remain" from "my query never matched the sites."</strong> Both print nothing, and a rewrite and its verification query are usually written minutes apart from the same wrong mental model, so they fail together.</p>
 <p>Q571 moved 99 scripts and rewrote their references. The rewrite's regex carried a lookbehind that excluded a preceding <code>/</code>, so every <code>"$REPO_ROOT/scripts/foo.sh"</code> was silently skipped — 62 files. The leftover grep returned empty and read as done; the misses surfaced by accident while reading an unrelated file.</p>
@@ -3714,7 +3731,7 @@ server saw instead of inferring it from the client's logs.</p>
 </ul>
 <p>Then run the leftover query — as a third check, not the only one. The same applies to the tool doing the work: prefer a script that <em>reports what it changed</em> per file over one that edits silently, so the count is available without a second pass.</p>
 <h3 id="verify-a-causation-claim-by-deleting-the-mechanism">Verify a causation claim by deleting the mechanism<a class="headerlink" href="#verify-a-causation-claim-by-deleting-the-mechanism" title="Permanent link">&para;</a></h3>
-<p>The two rules above are read-and-reason checks — ask what else could produce this green.
+<p>The rules above are read-and-reason checks — ask what else could produce this green.
 This one is mechanical, and it is the only way to <em>settle</em> the question: <strong>delete the
 mechanism, re-run the test, and require it to go red for the reason you expect.</strong> Restore
 it, confirm green. A test that stays green without the code it claims to exercise is
