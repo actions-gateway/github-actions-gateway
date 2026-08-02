@@ -2767,6 +2767,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A throwaway probe needs a positive control before its silence means anything
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#verify-a-causation-claim-by-deleting-the-mechanism" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3791,6 +3802,15 @@ server saw instead of inferring it from the client's logs.</p>
 <li><strong>Take the baseline with a query that spans every shape.</strong> Reconciliation compares two numbers, so if both come from the same too-narrow query they agree and the sweep is still half-done — the check reports success at exactly the moment it is blind. Splitting the <code>infra</code> Queue label counted rows by reading the Labels cell as the fourth <code>|</code>-field: right for the Queue and Deferred tables, wrong for the Progress table, where it is the third. The baseline read 59 rows against a true 69, and a work-list built from it would have left ten rows untouched and reconciled cleanly at 59/59. Enumerate the shapes the change spans — tables, file types, call forms — and confirm the baseline query finds each one before trusting its number.</li>
 </ul>
 <p>Then run the leftover query — as a third check, not the only one. The same applies to the tool doing the work: prefer a script that <em>reports what it changed</em> per file over one that edits silently, so the count is available without a second pass.</p>
+<h3 id="a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything">A throwaway probe needs a positive control before its silence means anything<a class="headerlink" href="#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything" title="Permanent link">&para;</a></h3>
+<p>The rule above puts a positive control on the <em>query</em>. It belongs on the <em>harness</em> too, and for a sharper reason: an ad-hoc probe written to answer "does this still fire?" usually reports a finding when it fires and nothing when it does not — so a broken harness and a clean result are the same output. The probe is code you wrote minutes ago and have never seen work.</p>
+<p>Q616 registered two script paths in the foreground-guard slow-command registry as bare patterns, which made every command that merely <em>named</em> those files ask for a two-hour timeout. Verifying the fix meant driving the hook with hand-built payloads. All twelve cases came back "no match", including the five that had to match — and the harness was the problem: the payload was missing a field the hook needs, so it exited before reaching any decision. Nothing distinguished that from a fix that worked.</p>
+<ul>
+<li><strong>Include one case you know must fire</strong>, ideally one that predates your change — here, a pattern that had been in the registry for months. If the control does not fire, you have learned about your harness, not about the subject.</li>
+<li><strong>Print the raw output once</strong>, not just your pass/fail verdict. Empty output where a decision was expected names the failure immediately; a verdict derived from it hides the failure as a pass.</li>
+<li><strong>When the harness cannot be made to work, verify the layer you actually changed.</strong> The hook applies each pattern as <code>re.search(pattern, command)</code>; asserting that step directly is honest and sufficient, as long as you say which layer the evidence covers — and then confirm end-to-end in the smallest possible way (re-running the exact command that had been denied).</li>
+</ul>
+<p><code>scripts/agent/foreground-guard-patterns-test.sh</code> is the durable form of that probe, controls included.</p>
 <h3 id="verify-a-causation-claim-by-deleting-the-mechanism">Verify a causation claim by deleting the mechanism<a class="headerlink" href="#verify-a-causation-claim-by-deleting-the-mechanism" title="Permanent link">&para;</a></h3>
 <p>The rules above are read-and-reason checks — ask what else could produce this green.
 This one is mechanical, and it is the only way to <em>settle</em> the question: <strong>delete the
