@@ -268,25 +268,109 @@ The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which reso
 both as an image tag (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>`) and as
 a git ref (for the matching CRDs) — an RC tag satisfies both by construction.
 
-**One command runs the whole gate.** From a checkout of any post-Q74 ref with
-`PROJECT`/`CLUSTER`/`ZONE`/`REPO` exported (App IDs auto-resolved; the one-time
-`scripts/dogfood/e2e-setup.sh` must have run once):
-
-```bash
-PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh vX.Y.Z-rc.N
-```
-
-`validate-release.sh` bakes in all the env and ordering below — deploy → route CI →
-on-demand e2e → dispatch the e2e matrix (run-scoped routing) → CRD smoke →
-teardown — is idempotent, and
+**One command runs the whole gate**, and it runs for the better part of an hour
+— a green `v1.3.0-rc.4` run took 39 minutes end to end — with nothing to type at
+it after the first confirmation. `validate-release.sh` bakes in all the
+env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e
+matrix (run-scoped routing) → CRD smoke → teardown — is idempotent, and
 self-cleans back to 0 nodes on exit (success or failure). On failure it first
 dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the
 gate's output, because the teardown's scale-to-0 evicts every pod and destroys
 the evidence — read the `Failure diagnostics` section of a failed run's log
 (e.g. the `FailedScheduling` events) instead of re-running the gate to watch
-it fail again. The manual steps that
-follow document what it does (and the recovery path if a leg needs re-running by
-hand). From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
+it fail again. The [legs it runs](#the-legs-the-gate-runs) are documented at the
+end of this section, and are the recovery path if one needs re-running by hand.
+
+**If you just merged something, the gate waits before it spends anything.** The
+gate's dispatched run enters the e2e workflow's per-ref concurrency group, whose
+single pending slot the next push to main would cancel it out of — and the latest
+`e2e-test.yml` run is usually the still-running push-run of the merge you just
+made. The gate settles the lane up front — before the node scale-up, the deploy,
+and the e2e AGC — so a collision costs a wait, not a cluster cycle. It polls for
+up to `E2E_WAIT_TIMEOUT` seconds (default 1800), then fails with the run id;
+`E2E_WAIT_TIMEOUT=0` fails immediately instead of waiting.
+
+The gate also checks every local tool it needs up front — including the pinned
+`cosign` the final CRD-smoke leg verifies with (`make cosign` downloads it to
+`.build/cosign`; `COSIGN=<path>` overrides) — so a missing binary fails the run
+before it spends anything, not 25 minutes in.
+
+##### Run it detached; the sentinel reports it back
+
+**This is the default path.** Nobody should spend an hour watching a terminal
+for a gate built to be walked away from. Launch it as a background task — an
+agent session's background task, or `nohup … &` by hand — from a checkout of any
+post-Q74 ref, with `PROJECT`/`CLUSTER`/`ZONE`/`REPO` exported (App IDs
+auto-resolved; the one-time `scripts/dogfood/e2e-setup.sh` must have run once):
+
+```bash
+ASSUME_YES=1 PROJECT=… CLUSTER=… ZONE=… REPO=… \
+  nohup scripts/dogfood/validate-release.sh vX.Y.Z-rc.N >tmp/validate-release.log 2>&1 &
+```
+
+**`ASSUME_YES=1` is required when detaching.** The gate confirms the resolved
+target once before it spends anything, and a detached run has no stdin to answer
+with — without it the gate exits 1 immediately, having done nothing. Leave it
+off when you run the gate in your own terminal, so the confirmation still gates
+a fat-finger.
+
+Then launch the sentinel as a second background task. It is what turns a silent
+hour into a report:
+
+```bash
+bash scripts/dogfood/release-sentinel.sh
+```
+
+It sleeps, and *exits* when there is something to say — a phase transition, a
+verdict, or a gate that has gone quiet for `RELEASE_SENTINEL_STALL` seconds
+(default 1200). That exit is the report: it carries the phase, both clocks, the
+latest e2e heartbeat, and what to do next. Relaunch it after each report until a
+verdict arrives — in an agent session, the exit is what wakes the session, and
+the relay-and-relaunch loop is the session's job. Reporting is therefore driven
+by what the gate does, not by a clock: nothing is spent on an interval where
+nothing changed. Knobs: `RELEASE_SENTINEL_INTERVAL` (poll seconds, default 30 —
+it bounds how quickly a transition is *noticed*, never how often anything is
+reported), `RELEASE_SENTINEL_TIMEOUT` (watch budget, default 7200),
+`RELEASE_SENTINEL_STALL`.
+
+**The sentinel's exit is a wake, never a verdict** — every event exits 0. The
+verdict is the gate's own exit status, and the failure diagnostics are in the
+gate's log, not in the report.
+
+##### Where is it right now?
+
+Reading back an hour of log to answer that is the wrong shape, so the gate keeps
+its event stream rendered as one object in `tmp/release-validation-status.json`,
+rewritten atomically after every phase transition and every relayed e2e
+heartbeat. This is what the sentinel reads, and it answers the same question
+directly for a human:
+
+```bash
+jq . tmp/release-validation-status.json
+```
+
+`gate` is `preflight` (settling the e2e lane, nothing spent yet), `running`,
+`passed`, or `failed`; `phase`, `elapsed`, `phaseElapsed` and `idle` say where
+and for how long; `heartbeat` carries the newest relayed spec line; `failure`
+names the phase that broke — the one that broke first, not the teardown that
+followed it. `scripts/dogfood/release-status.sh [stream-file]` renders the same
+object from any stream, including one whose gate process is gone.
+`RELEASE_STATUS_FILE=` disables the file.
+
+Underneath it, each phase transition is appended as one JSON line to
+`tmp/release-validation-progress.jsonl` — the stream both renderers read, and
+inspectable directly (`tail -f`) without disturbing the run. Set
+`RELEASE_PROGRESS_FILE=` to disable both files; the gate's own output is
+unaffected.
+
+##### Running it in your own terminal instead
+
+Equally supported, and equally legible — drop the `nohup`/`&`/`ASSUME_YES=1` and
+answer the confirmation:
+
+```bash
+PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh vX.Y.Z-rc.N
+```
 
 **The gate narrates itself while it runs.** Each phase is announced as it starts
 (`==> [e2e] Running the e2e matrix on GAG runners`), and the e2e leg — the long
@@ -303,59 +387,17 @@ is rendered into your terminal: counts, every failing spec with its message, and
 the ten slowest specs. A red gate names the specs that failed without you having
 to open the run.
 
-The gate also appends each phase transition as one JSON line to
-`tmp/release-validation-progress.jsonl`, so a long run can be inspected from
-another shell (`tail -f`) without disturbing it. Set `RELEASE_PROGRESS_FILE=` to
-disable the file; the terminal output is unaffected.
+None of that narration is a terminal redraw. The gate's progress output is
+append-only with no cursor control, by design — which is why a detached run's
+captured log carries the same phase lines and heartbeats rather than a screenful
+of escape sequences, and why three identical heartbeat counts in a row are
+readable as a stall.
 
-**Where is it right now?** Reading back an hour of terminal to answer that is
-the wrong shape, so the gate keeps the same stream rendered as one object in
-`tmp/release-validation-status.json`, rewritten atomically after every phase
-transition and every relayed e2e heartbeat:
+##### The legs the gate runs
 
-```bash
-jq . tmp/release-validation-status.json
-```
-
-`gate` is `preflight` (settling the e2e lane, nothing spent yet), `running`,
-`passed`, or `failed`; `phase`, `elapsed`, `phaseElapsed` and `idle` say where
-and for how long; `heartbeat` carries the newest relayed spec line; `failure`
-names the phase that broke — the one that broke first, not the teardown that
-followed it. `scripts/dogfood/release-status.sh [stream-file]` renders the same
-object from any stream, including one whose gate process is gone.
-`RELEASE_STATUS_FILE=` disables the file.
-
-**Running the gate from an agent session.** Launch `validate-release.sh` as a
-background task and watch it with the sentinel, also as a background task:
-
-```bash
-bash scripts/dogfood/release-sentinel.sh
-```
-
-It sleeps, and *exits* when there is something to say — a phase transition, a
-verdict, or a gate that has gone quiet for `RELEASE_SENTINEL_STALL` seconds
-(default 1200). That exit is what wakes the session, and the report it prints
-carries the phase, the clocks, the latest heartbeat, and what to do next; the
-session relays it and relaunches the watcher until a verdict arrives. Reporting
-is therefore driven by what the gate does, not by a clock — nothing is spent on
-a tick where nothing changed. Knobs: `RELEASE_SENTINEL_INTERVAL` (poll seconds,
-default 30 — it bounds how quickly a transition is *noticed*, never how often
-anything is reported), `RELEASE_SENTINEL_TIMEOUT` (watch budget, default 7200),
-`RELEASE_SENTINEL_STALL`.
-
-**If you just merged something, the gate waits before it spends anything.** The
-gate's dispatched run enters the e2e workflow's per-ref concurrency group, whose
-single pending slot the next push to main would cancel it out of — and the latest
-`e2e-test.yml` run is usually the still-running push-run of the merge you just
-made. The gate settles the lane up front — before the node scale-up, the deploy,
-and the e2e AGC — so a collision costs a wait, not a cluster cycle. It polls for
-up to `E2E_WAIT_TIMEOUT` seconds (default 1800), then fails with the run id;
-`E2E_WAIT_TIMEOUT=0` fails immediately instead of waiting.
-
-The gate also checks every local tool it needs up front — including the pinned
-`cosign` the final CRD-smoke leg verifies with (`make cosign` downloads it to
-`.build/cosign`; `COSIGN=<path>` overrides) — so a missing binary fails the run
-before it spends anything, not 25 minutes in.
+What follows documents what `validate-release.sh` does, and is the recovery path
+if a leg needs re-running by hand. From a detached checkout of the RC tag
+(`git switch --detach vX.Y.Z-rc.N`):
 
 1. **Deploy the RC to dogfood.** `setup.sh` needs `APP_ID`, `INSTALLATION_ID`, and
    `ASSUME_YES=1` exported alongside `GAG_IMAGE_TAG` — it reads the GitHub App private
