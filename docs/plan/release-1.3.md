@@ -48,9 +48,11 @@
 > **Superseded 2026-08-02: `v1.3.0-rc.5` is published and verified, and its
 > validation is owed.** rc.5 carries 26 commits past rc.4 including the Q603
 > listener fix, so rc.4's pass does not transfer. Its first gate run aborted at
-> t+4m07s on two defects in the gate itself — a watcher that dies on a queued
-> job's 404, and an e2e pool whose C2 quota fits one node ([Q627](../STATUS.md#Q627))
-> — neither of which is evidence about the release. Details in
+> t+4m07s on a defect in the gate itself: a watcher that dies on a queued job's
+> 404, killing the run inside the autoscaler's backoff window before a transient
+> node scale-up refusal could retry ([Q627](../STATUS.md#Q627) covers the thin
+> headroom that made the blip matter). Neither is evidence about the release.
+> Details in
 > [The rc.5 validation attempt](#the-rc5-validation-attempt-2026-08-02).
 >
 > **2026-08-02: `v1.3.0-rc.4` is published, verified, and its dogfood validation
@@ -125,7 +127,7 @@ The prose below carries the *why* of each; this table is the state.
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
 | — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | 🔲 **owed on the tag that ships** — [rc.4 PASSED](#the-rc4-validation-verdict-2026-08-02); [rc.5's attempt](#the-rc5-validation-attempt-2026-08-02) aborted on gate defects, not the release |
-| <a id="Q627"></a>Q627 | The dogfood `e2e` pool's C2 quota fits one node, the pool wants two | gates | 🔲 filed — blocks the gate's e2e leg from scheduling a runner |
+| <a id="Q627"></a>Q627 | The dogfood `e2e` pool has one node of C2 headroom | rides | 🔲 filed — measured schedulable; zero headroom leaves a transient refusal nowhere to retry |
 
 **Cut condition: zero open gating rows in this ledger** **plus the
 release-candidate dogfood validation**, the ledger's last row. It has no Q-ID
@@ -298,7 +300,7 @@ the cut rather than inherit.
 | Sizing, CRD smoke | not reached |
 | Teardown | drained, then scaled back to 0 nodes |
 
-**Two independent defects, both in the gate, neither in the product.**
+**Two defects, both in the gate, neither in the product — and they compound.**
 
 `e2e-run-watch.sh` re-fetches each job's log every poll. That endpoint 404s while
 a job is queued — the normal state for the minutes before a runner picks it up —
@@ -309,11 +311,22 @@ capturing it, and into `set -e`. The gate then reported the still-queued run as
 and used `gh run watch`, which is why the same leg passed a day earlier.
 
 The e2e node pool never scaled. Its kata runner pod stayed `Pending` behind
-`FailedScaleUp: GCE quota exceeded`; the pool is `c2-standard-8` against a
-regional `C2_CPUS` limit of 8 with `maxNodeCount: 2` — one node's worth of quota
-for a pool that wants two. Tracked as [Q627](../STATUS.md#Q627). **The run could
-not have been scheduled even had the watcher survived**, so this attempt is
-evidence about the gate and about nothing else.
+`FailedScaleUp: GCE quota exceeded`, and the autoscaler went into backoff
+(`2 in backoff after failed scale-up`).
+
+**That refusal was transient, and the watcher bug is what made it fatal.** A
+direct probe afterwards — scaling the pool 0→1 by hand — brought up a
+`c2-standard-8` node carrying `katacontainers.io/kata-runtime=true`, satisfying
+the pending pod's selector exactly, at `C2_CPUS` 8/8. So the capacity the gate
+needed was available; what it did not have was time. The watcher tore the gate
+down at t+4m07s, well inside the autoscaler's backoff, so the retry that would
+have landed never got the chance. A gate that waited its normal ~25 minutes
+would most likely have recovered on its own.
+
+What remains true is the headroom, not a ceiling: `c2-standard-8` against
+`C2_CPUS` 8 is exactly one node, `maxNodeCount: 2` is unreachable, and a pool
+with zero headroom gives a transient refusal nowhere to retry into. Tracked as
+[Q627](../STATUS.md#Q627).
 
 **The teardown held.** `e2e-stop.sh` waited on the queued job rather than
 deleting the AGC under it — the 2026-07-31 incident's fix doing its job — and
