@@ -52,26 +52,32 @@ create_node_pool() {
 	fi
 	echo "Creating e2e node pool with nested virtualization..."
 	# --enable-nested-virtualization exposes /dev/kvm on the node, which Kata uses
-	# to spin up a microVM per pod. It requires an n2/n2d/c2/c2d machine family AND
-	# --image-type=UBUNTU_CONTAINERD (or COS_CONTAINERD at 1.28.4-gke.1083000+) —
-	# without the explicit image type GKE defaults to COS, and kata-deploy cannot
-	# install onto it. Verified under Q226.
+	# to spin up a microVM per pod. GCP rejects the create outright for a family
+	# that cannot do it, naming the ones that can:
+	#
+	#   A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3, M4
+	#
+	# Intel-only in practice — the AMD families (C2D, N2D) are NOT on it, whatever
+	# older notes here said. It also needs --image-type=UBUNTU_CONTAINERD (or
+	# COS_CONTAINERD at 1.28.4-gke.1083000+); without the explicit image type GKE
+	# defaults to COS and kata-deploy cannot install onto it. Verified under Q226.
 	#
 	# --workload-metadata=GKE_METADATA is a SECURITY PREREQUISITE, not a nicety:
 	# Kata isolates the kernel, not the pod network, so without Workload Identity
 	# the runner can still mint the node's service-account token from the metadata
 	# server. Requires --workload-pool on the cluster.
 	#
-	# c2d rather than c2 for quota headroom, not performance (Q627). The regional
+	# n2 rather than c2 for quota headroom, not performance (Q627). The regional
 	# C2_CPUS default is 8 — one node of the 8-vCPU shape this pool needs, so a
-	# scale-up has nowhere to retry — and a request to raise it was denied
-	# 2026-07-31. C2D_CPUS defaults to 100 in every region checked, and c2d is
-	# compute-optimized and nested-virt capable like c2, at the same 8 vCPU/32 GB.
+	# refused scale-up has nowhere to retry — and a request to raise it was denied
+	# 2026-07-31. N2_CPUS defaults to 200, and n2 is on the nested-virt list above
+	# at the same 8 vCPU/32 GB. It is also this pool's original family, so it is
+	# already proven here.
 	gcloud container node-pools create e2e \
 		--project="${PROJECT}" \
 		--cluster="${CLUSTER}" \
 		--zone="${ZONE}" \
-		--machine-type=c2d-standard-8 \
+		--machine-type=n2-standard-8 \
 		--image-type=UBUNTU_CONTAINERD \
 		--enable-nested-virtualization \
 		--workload-metadata=GKE_METADATA \

@@ -430,7 +430,14 @@ egress to `169.254.169.254/32`. Kata alone is not the control.
   while CPU quota sat at 0/200 — a stockout, not a quota problem (a plain
   non-nested-virt `n2` failed too, so nested virt itself does not narrow the
   pool). `c2`/`c2d` worked. Check the **per-family** regional quota:
-  `C2_CPUS` defaults to 8 on a fresh project.
+  `C2_CPUS` defaults to 8 on a fresh project, which is one node of an 8-vCPU
+  shape; `N2_CPUS` defaults to 200.
+
+  **`c2d` no longer takes `--enable-nested-virtualization`.** As of 2026-08-02
+  GCP rejects the create and names the families that can: A2, A3, C2, C3, C4,
+  C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3, M4 — no `C2D`, no `N2D`. Whether
+  support was withdrawn or the observation above was of a pool created without
+  the flag is unresolved; take the API's rejection as current.
 - **A node-pool stockout wedges the cluster.** A failing `CREATE_NODE_POOL`
   operation holds a cluster-level lock (`Cluster is running incompatible
   operation`) that blocks even deleting the pool, for tens of minutes. Prefer

@@ -51,10 +51,16 @@ gcloud container clusters create "$CLUSTER" \
 
 `--enable-nested-virtualization` requires `UBUNTU_CONTAINERD` (or
 `COS_CONTAINERD` ≥ `1.28.4-gke.1083000`) and GKE **Standard** — Autopilot cannot
-do it. Machine family must be `n2`/`n2d`/`c2`/`c2d`; `e2` and the GPU families
-(`a2`/`a3`/`g2`) cannot. If you hit `ZONE_RESOURCE_POOL_EXHAUSTED`, that is a
-capacity stockout, not a quota error — try another family or zone. Check the
-**per-family** quota too (`C2_CPUS` defaults to 8 on a fresh project).
+do it. The machine family must be one GCP supports for nested virt; it names the
+list when it rejects a create (measured 2026-08-02):
+
+> A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3 and M4
+
+**`C2D` and `N2D` are not on it**, nor is `e2`. If you hit
+`ZONE_RESOURCE_POOL_EXHAUSTED`, that is a capacity stockout, not a quota error —
+try another family or zone. Check the **per-family** quota too: `C2_CPUS`
+defaults to 8 on a fresh project, which is one node of an 8-vCPU shape, while
+`N2_CPUS` defaults to 200.
 
 Harden the metadata server — Kata does **not** do this for you:
 
