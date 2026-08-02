@@ -334,6 +334,16 @@ against `C2_CPUS` 8 is exactly one node and `maxNodeCount: 2` is unreachable, so
 a refused scale-up has nowhere to retry into. Tracked as
 [Q627](../STATUS.md#Q627).
 
+**Resolved by re-shaping the pool, not by a quota grant.** A request to raise
+`C2_CPUS` 8→16 was **denied** on 2026-07-31 — while an identical 8→16 ask for
+`IN_USE_ADDRESSES` was approved 33 minutes earlier on the same project and
+region, so the size of the ask was not the discriminator. Nor would a region
+move help: `C2_CPUS` is 8 in every region checked, a project default applied
+per-region rather than regional capacity. The pool is now `c2d-standard-8` —
+same 8 vCPU / 32 GB, same compute-optimized and nested-virt-capable class,
+against a `C2D_CPUS` default of 100. Twelve nodes of headroom for a pool whose
+max is 2.
+
 **The teardown held.** `e2e-stop.sh` waited on the queued job rather than
 deleting the AGC under it — the 2026-07-31 incident's fix doing its job — and
 completed once the unschedulable run was cancelled by hand.

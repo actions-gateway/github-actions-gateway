@@ -219,7 +219,8 @@ a bad derivation away from starving or over-asking on a real CI tenant.
 workersPerNode: 1` sits below both variants' static runner request (kata 2, dind
 3), so actuation can only ever *reduce* a worker's ask — a wrong guess cannot
 make the release's own e2e gate unschedulable. It is CPU-only for the same
-reason. The true c2-standard-8 allocatable has not been measured, and NodeShare
+reason. The true e2e-node allocatable has not been measured (the pool is
+`c2d-standard-8` since Q627, the same 8 vCPU / 32 GB shape), and NodeShare
 divides into the runner container only, leaving the dind sidecar and Kata's
 250m RuntimeClass overhead as the operator's accounting; the honest envelope
 therefore needs one `kubectl get node` reading first ([Q448](../STATUS.md#Q448)).
