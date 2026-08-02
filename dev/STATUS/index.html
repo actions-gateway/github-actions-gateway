@@ -2567,6 +2567,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q596"></a>Q596</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-v2-api-sync-test.sh"><code>check-v2-api-sync-test</code>'s <code>tree-in-sync</code> fails under <code>make check</code>, passes standalone</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Seen once 2026-08-01: <code>FAIL tree-in-sync … packages diverge</code> under <code>run-parallel</code>; the checker passed directly seconds later, rerun green, no code change. Mechanism unverified — it is the one assertion reading the live tree.</td>
+</tr>
+<tr>
 <td><a id="Q577"></a>Q577</td>
 <td><a href="../plan/gke-dogfood/#reading-a-timed-out-drain"><code>stop.sh</code> leaves the pool up when its drain cannot converge</a></td>
 <td><code>dogfood</code> <code>bug</code></td>
@@ -2589,14 +2597,6 @@
 <td>🔲</td>
 <td>L</td>
 <td>Demand fired 2026-07-31; plan written. Athens pattern (Q244) applied to images: per-upstream pull-through mirrors, then swap <code>e2e-open-egress</code> for a mirror-scoped NP. Next: Phase 0 egress inventory.</td>
-</tr>
-<tr>
-<td><a id="Q536"></a>Q536</td>
-<td><a href="../plan/archive/q506-ghes-endpoint-audit/#6-legitimately-githubcom">A GHES appliance behind a private CA is not trusted by the AGC</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>BuildProxyTrustPool</code> builds system roots + the proxy CA, so a private-CA appliance fails the TLS handshake. Named as out of scope by Q506's audit, "needs its own item if the project commits to GHES" — Q506 shipping Option A is that commitment.</td>
 </tr>
 <tr>
 <td><a id="Q595"></a>Q595</td>

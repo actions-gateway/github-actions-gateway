@@ -2729,11 +2729,11 @@ carrying it forward.</p>
 <li><strong>Test fixtures and specs</strong> — <code>test/fakegithub</code> and the <code>cmd/gmc/test/e2e</code> suite.</li>
 <li><strong>CRD field docs and godoc examples</strong> (<code>https://github.com/my-org</code>) — documentation,
   and each already names the GHES form alongside.</li>
-<li><strong>Comments</strong> in <code>cmd/agc/main.go:525</code> and <code>transport/proxytrust.go:31</code>.</li>
+<li><strong>Comments</strong> in <code>cmd/agc/main.go:525</code> and <code>transport/trustpool.go:31</code>.</li>
 </ul>
 <p>One adjacent gap worth naming so it is not rediscovered as part of this class:
 <code>BuildProxyTrustPool</code> builds system roots plus the proxy CA
-(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/transport/proxytrust.go"><code>proxytrust.go</code></a>). A GHES
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/transport/trustpool.go"><code>trustpool.go</code></a>). A GHES
 appliance fronted by a private CA is not trusted by that pool. That is a
 certificate-trust gap, not a hardcoded endpoint, and needs its own item if the
 project commits to GHES.</p>
