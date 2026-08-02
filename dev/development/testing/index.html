@@ -3045,6 +3045,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#ordered-containers-run-whole-in-one-process--which-is-why-a-suite-can-hold-package-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ordered containers run whole, in one process — which is why a suite can hold package state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#watching-an-e2e-run-in-progress" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4104,6 +4115,41 @@ the invariant itself reads.</p>
 <a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>make<span class="w"> </span>e2e-clean<span class="w">          </span><span class="c1"># tear down when done</span>
 </code></pre></div>
 <p>For iterating against a single spec without re-creating the cluster, see <a href="../kind-iteration/">kind-iteration.md</a>. It also covers pointing AGC at fakegithub vs. real GitHub via the <code>AGC_EXTRA_*</code> env vars and using <code>E2E_SKIP_TEARDOWN=true</code> to keep state between runs.</p>
+<h3 id="ordered-containers-run-whole-in-one-process--which-is-why-a-suite-can-hold-package-state"><code>Ordered</code> containers run whole, in one process — which is why a suite can hold package state<a class="headerlink" href="#ordered-containers-run-whole-in-one-process--which-is-why-a-suite-can-hold-package-state" title="Permanent link">&para;</a></h3>
+<p>Every e2e suite is an <code>Ordered</code> container, and several assign the package-level
+<code>fakegithubLocalPort</code> from their own base port in their own <code>BeforeAll</code> without
+being <code>Serial</code>. That is safe, and it is worth knowing <em>why</em> before writing a
+suite that relies on it — or one that assumes more than it grants.</p>
+<p>Two independent guarantees hold it up, both verifiable in the vendored source:</p>
+<ol>
+<li><strong>Parallel processes are separate OS processes.</strong> <code>ginkgo --procs N</code> execs the
+   compiled test binary N times
+   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/vendor/github.com/onsi/ginkgo/v2/ginkgo/internal/run.go"><code>ginkgo/internal/run.go:44</code></a>)
+   and coordinates them over an RPC/HTTP server (<code>internal/parallel_support/</code>).
+   Package-level variables are therefore <strong>per process</strong> — never shared across
+   them, so two processes cannot race on one.</li>
+<li><strong>An <code>Ordered</code> container is one scheduling unit.</strong> Ginkgo groups specs for
+   execution and "ordered containers must be preserved as a single group"
+   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/vendor/github.com/onsi/ginkgo/v2/internal/ordering.go"><code>internal/ordering.go:96</code></a>).
+   The parallel counter hands out an index into <em>groups</em>, not specs, and each is
+   run whole by <code>newGroup(suite).run(...)</code>
+   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/vendor/github.com/onsi/ginkgo/v2/internal/suite.go"><code>internal/suite.go:499-519</code></a>).
+   So no other container can interleave between a suite's specs and reassign
+   what its <code>BeforeAll</code> set.</li>
+</ol>
+<p><strong>What this does not grant: mutual exclusion.</strong> Two different <code>Ordered</code>
+containers still run <em>concurrently</em> in different processes. The package var is
+safe because each process has its own copy and each suite writes a distinct base
+port before use — not because Ginkgo serialises anything. <code>Ordered</code> orders specs
+within a container; it does not order containers against each other. A resource
+that is genuinely shared <em>outside</em> the process — a cluster object, a fixed host
+port, a GitHub session — gets no protection from <code>Ordered</code> and needs <code>Serial</code>,
+an owner-scoped filter, or a per-process derivation such as
+<code>GinkgoParallelProcess()</code>.</p>
+<p>Dropping <code>Serial</code> from a suite is therefore a claim about <em>external</em> isolation,
+never about package state. Worked example, including the owner-prefix filter
+that made one such drop safe:
+<a href="../../plan/e2e-ci-speed-round-2/#5-de-serialize-e2e_agc_workerpodlifecycle-">e2e-ci-speed-round-2.md</a>.</p>
 <h3 id="watching-an-e2e-run-in-progress">Watching an e2e run in progress<a class="headerlink" href="#watching-an-e2e-run-in-progress" title="Permanent link">&para;</a></h3>
 <p>At <code>--procs 6</code> Ginkgo's own output is close to silent: it suppresses spec-start entirely in parallel mode, prints a passing spec as a bare <code>•</code>, and two measured CI runs went 98 s and 78 s between any output. <code>make e2e</code> therefore runs <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/progress-watch.sh"><code>scripts/e2e/progress-watch.sh</code></a> alongside the suite, which prints one line per 30 s:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>[e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_GMC_Isolation cross... (3m58s), E2E_AGC_WorkerDrain a dr... (2m01s)

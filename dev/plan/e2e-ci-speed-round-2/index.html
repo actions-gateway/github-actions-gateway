@@ -2937,6 +2937,9 @@ var. Six sibling suites (<code>job_lifecycle</code>, <code>acquire_admission</co
 <code>BeforeAll</code> without being <code>Serial</code>: Ginkgo runs an <code>Ordered</code> container's specs
 contiguously within one process, so no other container can reassign it
 mid-suite. This suite keeps its own base port (19300).</p>
+<p>The general rule behind that — the two guarantees, and the mutual exclusion it
+does <em>not</em> grant — is in
+<a href="../../development/testing/#ordered-containers-run-whole-in-one-process--which-is-why-a-suite-can-hold-package-state">testing.md</a>.</p>
 <h2 id="6-trim-the-hpa-specs-fixed-waits-">6. Trim the HPA spec's fixed waits ✓<a class="headerlink" href="#6-trim-the-hpa-specs-fixed-waits-" title="Permanent link">&para;</a></h2>
 <p><strong>Saving: ~15 s off the serial tail, plus part of the ScalingActive wait</strong></p>
 <p><code>E2E_GMC_HPADrivesScaleUp</code> is 78 s, of which 30 s was a fixed
