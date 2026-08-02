@@ -2737,14 +2737,6 @@
 <td>picomatch (dorny/paths-filter) degrades a <code>**</code> beside non-<code>/</code> chars into <code>*</code>, so <code>**.go</code> matches no Go file — none sit at the repo root. The no-plan-refs gate then runs only via its other paths. The <code>on.push.paths</code> twin is correct (GitHub matcher).</td>
 </tr>
 <tr>
-<td><a id="Q589"></a>Q589</td>
-<td><a href="../development/testing/#never-foreground-poll-ci-logs-or-files">foreground-guard cannot see a scheduled-poll background task</a></td>
-<td><code>tests</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>testing.md already names <code>sleep N; tail &lt;log&gt;</code> launched as a second background task as an evasion of the hook. Q559's session ran it ~6 times and misread stale output as a stalled run. File upstream against the plugin.</td>
-</tr>
-<tr>
 <td><a id="Q563"></a>Q563</td>
 <td><a href="../development/website/#what-belongs-in-nav">Nothing gates a published page that lands in no nav section</a></td>
 <td><code>docs</code> <code>ci</code> <code>retro</code></td>
@@ -3055,14 +3047,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Matrix row 17 says a new script gets a row in its group's table; <code>dogfood/</code> is a bare directory link with no table, so #1106 and Q581 each added a test script and silently added none. Give the group a table, or name the exception.</td>
-</tr>
-<tr>
-<td><a id="Q610"></a>Q610</td>
-<td><a href="../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">pr-sentinel reports <code>ready</code> while the heavy gates are still pending</a></td>
-<td><code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>On #1138 it emitted "All checks are green" with <code>mergeStateStatus: BLOCKED</code> and unit-test, integration-test, coverage and e2e-calico-gate all pending. A watcher that signals early defeats its purpose. File upstream against the plugin.</td>
 </tr>
 <tr>
 <td><a id="Q611"></a>Q611</td>
