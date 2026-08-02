@@ -641,7 +641,7 @@ Then run the leftover query — as a third check, not the only one. The same app
 
 ### Verify a causation claim by deleting the mechanism
 
-The two rules above are read-and-reason checks — ask what else could produce this green.
+The rules above are read-and-reason checks — ask what else could produce this green.
 This one is mechanical, and it is the only way to *settle* the question: **delete the
 mechanism, re-run the test, and require it to go red for the reason you expect.** Restore
 it, confirm green. A test that stays green without the code it claims to exercise is
