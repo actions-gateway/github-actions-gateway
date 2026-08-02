@@ -38,7 +38,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [v2 API decomposition](plan/v2-api.md) | `feature` | ✅ |
 | [Per-module coverage ≥75%](plan/coverage-to-75-per-module.md) | `tests` | ✅ |
 | [GKE dogfood](plan/gke-dogfood.md) | `dogfood` `docs` | ✅ |
-| [Test progress visibility](plan/test-progress-visibility.md) | `tests` `ci` `dogfood` | ⚠️ |
+| [Test progress visibility](plan/test-progress-visibility.md) | `tests` `ci` `dogfood` | ✅ |
 | <a id="Q248"></a>[Dogfood runner right-sizing](plan/dogfood-runner-rightsizing.md) | `dogfood` | ✅ |
 | [Release 1.3](plan/release-1.3.md) | `milestone` | ✅ |
 | [v2 GA graduation](plan/v2-ga.md) | `milestone` | ✅ |
