@@ -114,14 +114,20 @@ this work.
   line numbers, and the gates report `file:line:`. Roughly three lines of Go; called
   out because it is friction the `awk` does not have.
 
-### The one open question this plan does not close
+### `THIRD-PARTY-NOTICES` owes nothing — settled
 
 `THIRD-PARTY-NOTICES` is generated from the **root** `vendor/modules.txt` only
 ([`gen-third-party-notices.sh`](../../scripts/release/gen-third-party-notices.sh)), so
-`devtools/` dependencies are not covered. That is defensible — these binaries are never
-shipped or signed, and the script scopes itself to statically-linked release binaries —
-but adding a real third-party library makes it an explicit call rather than a vacuous
-one. **Decide in Q612**; do not let it block the phase.
+`devtools/` dependencies are not covered — and should not be. Attribution is triggered
+by *distributing* a binary, and these gate binaries are never shipped or signed, which
+is the same reason `tools/vendor/` is already excluded. Vendoring goldmark is therefore
+not a notices change.
+
+Recorded durably in
+[building.md](../development/building.md#what-it-covers--and-why-build-time-tooling-does-not)
+(with the source-tree and SBOM distinctions) and cross-referenced from
+[go-workspaces.md](../development/go-workspaces.md#wiring-a-new-first-party-module), so
+the rule outlives this plan's archival. No decision left for Q612.
 
 ## Scope
 
