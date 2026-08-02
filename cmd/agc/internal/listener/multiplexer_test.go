@@ -721,6 +721,14 @@ func TestMultiplexer_DuplicateJobDeliveryProvisionsOnce(t *testing.T) {
 		return testutil.ToFloat64(m.JobsDuplicateDeliveryTotal.WithLabelValues("default", "test-rg")) >= float64(maxListeners-1)
 	}, 3*time.Second, 10*time.Millisecond, "losing sibling sessions should be deduplicated")
 
+	// The losers increment that counter, so it reaches the threshold on their
+	// progress alone — the winner still has the claim registry, SpawnReplacement and
+	// StartRenewLoop to clear before it reaches the handler. Wait on the counter the
+	// invariant below reads, or a descheduled winner reads back 0.
+	require.Eventually(t, func() bool {
+		return handlerMax.Load() >= 1
+	}, 3*time.Second, 10*time.Millisecond, "the winning session should reach the provisioner stand-in")
+
 	// The core invariant: never more than one session provisions the job at once.
 	// Without the claim, all maxListeners sessions would run the handler together.
 	assert.Equal(t, int32(1), handlerMax.Load(),

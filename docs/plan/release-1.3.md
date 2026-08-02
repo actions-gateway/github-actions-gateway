@@ -103,6 +103,9 @@ The prose below carries the *why* of each; this table is the state.
 | Q575 | A worker whose `job-payload` secret is absent stalls | `1.3-gate` | ✅ shipped 2026-08-01 |
 | [Q577](../STATUS.md#Q577) | `stop.sh` leaves the pool up when its drain cannot converge | `1.3-gate` | 🔲 unblocked — re-measure at the gate, it may no longer be real |
 | Q583 | An AGC restart replays the queue and re-provisions jobs long gone | rides | ✅ shipped 2026-08-01 (measured, then fixed — see below) |
+| Q547 | Deleting a v2 gateway orphans its in-flight worker pods, pinning a billable node | `1.3-gate` | ✅ shipped 2026-08-01 |
+| Q536 | A GHES appliance behind a private CA cannot be reached | rides | ✅ shipped 2026-08-01 |
+| Q600 | The Q260 burst test reads its peak-provisioner count before the winner reaches the handler | gates | ✅ shipped 2026-08-01 — it reddened `main`, which pre-flight requires green |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
 | — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | 🔲 rc.3: gate aborted at leg 1, no verdict |
@@ -156,6 +159,55 @@ real, `DeleteMessage` answers 204, and deleting prunes the queue. Neither
 measurement needed a dogfood cluster, so nothing here ever blocked on rc.4 — and
 Q583 still rides rather than gating, because it is a restart-time burst rather
 than a defect an ordinary tenant meets in steady state.
+
+### What landed after that note, and the API surface rc.4 adds
+
+Three things reached `main` after the paragraph above was written, and one of them
+moves the API surface, so the [API review](#e-api-review-satisfied) is re-run against
+`v1.3.0-rc.3..HEAD` rather than only against `v1.2.0`.
+
+**Q547 gates, on the rc.1 incident's own terms.** Deleting a v2 `ActionsGateway`
+removed the AGC that is the tenant's only worker-pod reaper without removing its
+pods, whose node-disruption-safety annotations then held a billable node up to
+`maxWorkerLifetime` (12 h) later. It is the product defect the rc.1 validation
+abort exposed, filed then and fixed now; v1 is unaffected, since its teardown
+cascades the pods off their owner reference. Same test as Q550/Q551/Q576 — an
+availability and cost bug an ordinary tenant reaches, not a harness artifact.
+
+**Q536 rides.** `ActionsGateway.spec.githubCABundleRef` names a ConfigMap holding a
+PEM bundle to trust when reaching a GitHub Enterprise Server appliance fronted by a
+private certificate authority. It is additive in every sense that matters to a cut:
+a gateway with no ref renders a byte-identical Deployment, and an unresolvable ref
+fails closed (`Degraded`, `CABundleNotFound`/`CABundleInvalid`) rather than starting
+an AGC that would hang on the handshake. Nothing already deployed changes behaviour,
+so it does not need to beat this tag — it simply arrived before it.
+
+**Q600 gates, mechanically rather than on severity.** `main`'s `unit-test` leg went
+red on `7fec2ff8` — `TestMultiplexer_DuplicateJobDeliveryProvisionsOnce` under
+`-race`, `expected 1, actual 0` — and pre-flight requires a green `main` to tag. It
+is a test-synchronization defect, not a product one: the test waited on the
+duplicate-delivery metric, which only the *losing* siblings increment, and then read
+the peak-provisioner count the *winner* produces several steps later. Diagnosed by
+reproducing the interleaving directly (a delay at the winner's handler entry took it
+from 0 failures in 400 local runs to 5 of 5), fixed by waiting on the counter the
+invariant reads, and confirmed still able to catch the Q260 regression by deleting
+the claim gate and requiring red. Filed to [flake watch](../STATUS.md#Q600); the
+weaker dedup predicate the measurement exposed is [Q601](../STATUS.md#Q601).
+
+**API review verdict — ship as-is.** `scripts/release/api-surface-since.sh
+v1.3.0-rc.3` reports one field pair (`githubCABundleRef`, and the
+`LocalConfigMapReference.Name` it introduces) and four condition reasons
+(`CABundleInvalid`, `CABundleNotFound`, `GatewayTerminating`,
+`WorkerCeilingReached`); no enum, default, label, or annotation moved. Applying the
+[checklist](../development/api-review.md#step-2--ask-these-of-each-addition):
+the field is optional with an unset meaning that is today's behaviour; it is a
+name-only local reference, the shape every other v2 reference already uses; and it
+carries its **own** type rather than reusing `LocalObjectRef` for the stated reason
+that a core referent gets the full 253-character DNS-subdomain budget instead of the
+52-character v2 object budget (§H.6). That is the distinction `LocalSecretReference`
+already publishes, so this is a third instance of a settled pattern, not a new one.
+The reasons are additive condition vocabulary, which is not a freeze. Nothing
+deferred, nothing filed.
 
 ## What 1.3 means
 

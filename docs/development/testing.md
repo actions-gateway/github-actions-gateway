@@ -786,6 +786,23 @@ The gap can also sit **inside a single stub handler**, which is harder to see be
 
 To prove a window like this rather than guess at it, widen it: drop a `time.Sleep` between the two effects and confirm the test fails every time. Q490's probe took the flake from unreproducible in 200 local runs to 5 failures out of 5, and re-running it against the fix — still 8/8 green with the sleep in place — is the [negative control](#proving-a-flake-fix-invert-it) that shows the ordering, not luck, is what closed it.
 
+#### The two effects can belong to two different participants
+
+The gap need not be two effects of one operation. It can be one effect each from two
+*participants*, where the test waits on the one that is cheap to reach and asserts on
+the one that is not. Q600's `TestMultiplexer_DuplicateJobDeliveryProvisionsOnce`
+waited for the duplicate-delivery metric to reach `maxListeners-1` and then read the
+peak provisioner count. Only the **losing** siblings increment that metric, and a
+loser's work ends at the claim gate; the **winner** still has the claim registry,
+`SpawnReplacement`, and `StartRenewLoop` to clear before it enters the handler the
+count comes from. The losers can therefore satisfy the wait entirely on their own
+progress, and the assertion reads `0` — which is exactly the shape CI reported.
+
+So when picking the signal, ask **who produces it**, not just when. A counter fed by
+the actors you are *not* asserting about gates nothing about the one you are. The fix
+is the same as everywhere else in this section: wait on `handlerMax >= 1`, the counter
+the invariant itself reads.
+
 #### The two effects can be one object read through two clients
 
 There need not be a stub involved at all. A controller-runtime manager serves reads from its informer cache while an envtest suite's `k8sClient` reads the apiserver directly, so one status condition has **two observers that never update together**: the apiserver first, the cache a watch-delivery later. A test that waits on `k8sClient` and then does something the *controller* must judge has synchronized on the earlier of the two.
