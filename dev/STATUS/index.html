@@ -2578,11 +2578,11 @@
 <tbody>
 <tr>
 <td><a id="Q627"></a>Q627</td>
-<td><a href="../operations/release/#validate-the-release-candidate-on-dogfood">The dogfood <code>e2e</code> pool cannot scale: C2 quota fits one node, the pool wants two</a></td>
-<td><code>dogfood</code> <code>bug</code></td>
+<td><a href="../operations/release/#validate-the-release-candidate-on-dogfood">The dogfood <code>e2e</code> pool has one node of C2 headroom, and a scale-up blip costs a gate run</a></td>
+<td><code>dogfood</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Pool is <code>c2-standard-8</code> (8 vCPUs/node) against a regional <code>C2_CPUS</code> limit of 8 with <code>maxNodeCount: 2</code> — zero headroom. The rc.5 gate's kata runner never scheduled; autoscaler returns <code>GCE quota exceeded</code>. Raise the quota or re-shape the pool.</td>
+<td><code>c2-standard-8</code> against <code>C2_CPUS</code> 8 = one node; <code>maxNodeCount: 2</code> is unreachable. One node measured schedulable, so rc.5's <code>GCE quota exceeded</code> was transient — but zero headroom leaves a retry nowhere to land. Raise C2_CPUS to 16.</td>
 </tr>
 <tr>
 <td><a id="Q623"></a>Q623</td>
