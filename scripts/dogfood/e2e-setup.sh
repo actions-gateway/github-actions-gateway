@@ -61,11 +61,17 @@ create_node_pool() {
 	# Kata isolates the kernel, not the pod network, so without Workload Identity
 	# the runner can still mint the node's service-account token from the metadata
 	# server. Requires --workload-pool on the cluster.
+	#
+	# c2d rather than c2 for quota headroom, not performance (Q627). The regional
+	# C2_CPUS default is 8 — one node of the 8-vCPU shape this pool needs, so a
+	# scale-up has nowhere to retry — and a request to raise it was denied
+	# 2026-07-31. C2D_CPUS defaults to 100 in every region checked, and c2d is
+	# compute-optimized and nested-virt capable like c2, at the same 8 vCPU/32 GB.
 	gcloud container node-pools create e2e \
 		--project="${PROJECT}" \
 		--cluster="${CLUSTER}" \
 		--zone="${ZONE}" \
-		--machine-type=c2-standard-8 \
+		--machine-type=c2d-standard-8 \
 		--image-type=UBUNTU_CONTAINERD \
 		--enable-nested-virtualization \
 		--workload-metadata=GKE_METADATA \
