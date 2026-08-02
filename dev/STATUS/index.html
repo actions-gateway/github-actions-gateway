@@ -2567,14 +2567,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q596"></a>Q596</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-v2-api-sync-test.sh"><code>check-v2-api-sync-test</code>'s <code>tree-in-sync</code> fails under <code>make check</code>, passes standalone</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Seen once 2026-08-01: <code>FAIL tree-in-sync … packages diverge</code> under <code>run-parallel</code>; the checker passed directly seconds later, rerun green, no code change. Mechanism unverified — it is the one assertion reading the live tree.</td>
-</tr>
-<tr>
 <td><a id="Q577"></a>Q577</td>
 <td><a href="../plan/gke-dogfood/#reading-a-timed-out-drain"><code>stop.sh</code> leaves the pool up when its drain cannot converge</a></td>
 <td><code>dogfood</code> <code>bug</code></td>
@@ -3239,6 +3231,13 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a id="Q596"></a>Q596</td>
+<td><a href="../development/testing/#the-v2-api-sync-gate"><code>check-v2-api-sync-test</code>'s <code>tree-in-sync</code> fails under <code>make check</code>, passes standalone</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>S</td>
+<td><strong>Event:</strong> <code>tree-in-sync</code> fails on <code>main</code> after the Q596 fix. Trigger unreproduced (2418 runs under load); what shipped is evidence — a failed read reads as trouble, not drift, and the assertion prints the gate rc and output. → top of Queue.</td>
+</tr>
 <tr>
 <td><a id="Q604"></a>Q604</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/scalesetstub/stub.go"><code>stallJob</code> installs its runner-name conflict after the job is already pollable</a></td>
