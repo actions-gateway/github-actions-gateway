@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # Verify the keyless cosign signatures of a published release: the five images
-# (gmc, agc, proxy, worker, wrapper) at the version tag plus the Helm chart OCI
-# artifact. Backs `make verify-release VERSION=vX.Y.Z`; the identity/issuer
+# (gmc, agc, proxy, worker, wrapper) at the version tag plus both Helm chart OCI
+# artifacts. Backs `make verify-release VERSION=vX.Y.Z`; the identity/issuer
 # constraints match what .github/workflows/publish.yml signs with. See
 # docs/operations/release.md.
 #

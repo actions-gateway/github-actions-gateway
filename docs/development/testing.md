@@ -830,7 +830,7 @@ So: **name the process the assertion depends on, pin its identity before the win
 
 ### Script tests: neutralize the clock, never measure it
 
-The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion. `make scripts-test` runs all 34 suites concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh), inside a `make check` that is already saturating the machine with the Go tests. A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.
+The rules above are written for the Go tiers, but the `scripts/` tier needs its own statement of them, because it is the **most load-contended tier in the repo** and the one most likely to be written with a real-clock assertion. `make scripts-test` runs all 35 suites concurrently through [`scripts/ci/run-parallel.sh`](../../scripts/ci/run-parallel.sh), inside a `make check` that is already saturating the machine with the Go tests. A bound on real elapsed seconds is least reliable exactly where it is cheapest to write.
 
 **So a script test must never assert on wall-clock time it actually spent.** Stub `sleep` — it is a plain command, so a shell function shadows it — and assert on what the stub recorded. Two established shapes, both in-tree:
 
@@ -856,6 +856,14 @@ set +e; ( set -e; f ); rc=$?; set -e   # rc=1 — errexit actually armed
 ```
 
 This matters because the interesting assertion about a bring-up script is usually that a failure *aborts* it: that a failed readiness wait stops the run before it flips routing at a tenant that never came up. Written the first way, that test passes no matter what the script does — a false green in the same family as Q404 and Q432. Use the second form, and mutation-check it: break the abort (append `|| true` to the wait), confirm the assertion goes red, restore.
+
+### A path assembled at runtime is only checked by running the script
+
+shellcheck resolves nothing: `"$(dirname "$0")/../fetch/download-verified.sh"` is a string to it, correct or not. So a suite that asserts only the *pure* half of a script — a regexp, a parser, a mapping — leaves the script itself unexecuted, and its runtime paths uncovered by every gate. Q605 is the case: `verify-release-test.sh` asserted the signing-identity regexp and nothing else, so when Q571 moved `download-verified.sh` into `scripts/fetch/`, `download-cosign.sh` kept pointing at its old directory and `make verify-release` died at `No such file or directory`. Nothing in `make check` or CI noticed; the v1.3.0-rc.4 cut did, and only because a release happened to follow the refactor closely — the same break sitting between two releases would have gone unseen for as long as that gap.
+
+**So execute the script, even when its real work needs the network.** Stub the one command that reaches out (`curl`, `cosign`, `gcloud`) on `PATH` and assert on a message only the far side of the path can emit. [`download-cosign-test.sh`](../../scripts/release/download-cosign-test.sh) serves a fixture from a stub `curl` and asserts the run reaches `download-verified.sh`'s **digest-mismatch** error — the download cannot succeed (a pinned binary has no preimage to serve), but reaching a failure that only the helper reports proves the helper resolved and ran. A moved helper exits 127 instead, with no such message. Two further properties came free from running it: the pin table must carry a digest for the test host's platform, so a `COSIGN_VERSION` bump missing its digests now fails `make check` rather than a release cut; and the URL the stub recorded pins the platform mapping.
+
+The same reasoning covers the caller: [`verify-release-test.sh`](../../scripts/release/verify-release-test.sh) runs `verify-release.sh` against a stub `cosign` that logs its arguments, which is what makes the artifact list, the identity/issuer constraints on every check, and "one bad signature fails the run" assertable without a published release.
 
 ## Where each tier can physically run (and what it costs)
 
