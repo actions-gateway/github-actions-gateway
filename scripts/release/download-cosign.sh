@@ -68,7 +68,7 @@ echo "downloading cosign $version ($platform)"
 # releases-CDN denial (including a 403, which curl's plain --retry does not
 # cover — Q433), and only writes $out once the bytes match $want, so a failed
 # integrity check never leaves an unverified binary at the output path.
-"$(dirname "$0")/download-verified.sh" "$url" "$want" "$out"
+"$(dirname "$0")/../fetch/download-verified.sh" "$url" "$want" "$out"
 
 chmod +x "$out"
 echo "verified cosign $version ($platform) against pinned SHA256"
