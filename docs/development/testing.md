@@ -1058,6 +1058,25 @@ make e2e-clean          # tear down when done
 
 For iterating against a single spec without re-creating the cluster, see [kind-iteration.md](kind-iteration.md). It also covers pointing AGC at fakegithub vs. real GitHub via the `AGC_EXTRA_*` env vars and using `E2E_SKIP_TEARDOWN=true` to keep state between runs.
 
+### Watching an e2e run in progress
+
+At `--procs 6` Ginkgo's own output is close to silent: it suppresses spec-start entirely in parallel mode, prints a passing spec as a bare `•`, and two measured CI runs went 98 s and 78 s between any output. `make e2e` therefore runs [`scripts/e2e/progress-watch.sh`](../../scripts/e2e/progress-watch.sh) alongside the suite, which prints one line per 30 s:
+
+```
+[e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_GMC_Isolation cross... (3m58s), E2E_AGC_WorkerDrain a dr... (2m01s)
+```
+
+The suite appends spec start/end events to `E2E_PROGRESS_FILE` (default `tmp/e2e-progress.jsonl`) and the watcher renders them. The two halves are split that way because **Ginkgo intercepts spec stdout**: anything a spec or a `ReportAfterEach` prints is captured and replayed when the spec ends, so the suite cannot narrate its own progress — only write a file something outside it reads.
+
+Knobs: `E2E_PROGRESS_INTERVAL` (seconds between lines), `E2E_PROGRESS_SPEC_WIDTH` (chars of spec text per running spec), and `E2E_PROGRESS_FILE=` (empty) to disable both halves.
+
+Two things to know when changing the event format:
+
+- **Event lines must stay under `PIPE_BUF` (4 KiB).** All six processes append to one file with no lock; below that size an `O_APPEND` write lands atomically, above it two processes interleave bytes and corrupt both records silently. `TestProgressEventFitsPipeBuf` guards the budget — spec text is truncated to keep it.
+- **Render from the event stream, never from Ginkgo's log.** Reporter output is not a stable contract, so a regex scraper over it drifts silently — the same failure mode [the live-autoscaler drift gate](#the-live-autoscaler-drift-gate) exists to catch.
+
+After the run, [`scripts/e2e/e2e-report-summary.sh`](../../scripts/e2e/e2e-report-summary.sh) renders `tmp/e2e-report.xml` into the job summary — counts, every failure with its message, and the ten slowest specs — and emits one `::error::` annotation per failed spec. It runs `if: always()` in `e2e-reusable.yml` and never exits non-zero, because it runs on the path where the suite may have died before writing a report. Run it locally against any report to get the same table.
+
 **Egress-enforcing CNI profile.** `make e2e-cluster KIND_CNI=calico` builds the cluster with Calico instead of kindnet (see [kind-iteration.md § CNI selection](kind-iteration.md#cni-selection-kindnet-default-vs-calico)). The two runtime egress-negative specs (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`) and the two manager metrics-NP specs (`E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace`, `E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace`) skip themselves on kindnet — whose enforcer does not drop egress — and only assert real packet drops on a Calico/Cilium cluster. Run them with the Calico profile when validating NetworkPolicy enforcement changes (Q7b/Q83). CI runs this profile per-PR whenever a change touches NetworkPolicy/proxy code — see [the Calico e2e lane](#the-calico-e2e-lane) below.
 
 **Curl test image.** The connectivity, isolation, and metrics specs run a `curlimages/curl` pod. It defaults to the upstream Docker Hub ref (`curlimages/curl:8.10.1`), which is fine locally. CI sets `E2E_CURL_IMAGE` to a local-registry mirror (`127.0.0.1:5000/curlimages/curl:8.10.1`, populated by the workflow's mirror step) so the kind nodes never pull from Docker Hub — anonymous Hub rate limits (HTTP 429) were starving these pods and flaking three specs.

@@ -569,6 +569,20 @@ jobs:
         if: success() && inputs.released_upgrade_check
         run: make chart-released-upgrade-check KIND_CLUSTER=actions-gateway-e2e
 
+      - name: Summarize e2e results
+        # Renders the JUnit report into the job summary and one ::error::
+        # annotation per failed spec (Q608). Without it the report is reachable
+        # only by downloading the artifact below and reading 300 KB of XML —
+        # the upload was added assuming Actions would draw a summary table from
+        # it via a built-in reporter, and there is no such reporter.
+        #
+        # Before the upload so a failure here cannot cost us the artifact, and
+        # `if: always()` because the failing run is the one worth summarizing.
+        # The script never exits non-zero — a suite that died before writing a
+        # report must not have that reported as a second, misleading failure.
+        if: always()
+        run: scripts/e2e/e2e-report-summary.sh tmp/e2e-report.xml
+
       - name: Upload e2e test report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
