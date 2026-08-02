@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+#
+# Watch a dispatched e2e run and relay its spec-level progress locally (Q615).
+#
+# Replaces `gh run watch` in the release-validation gate. Not because gh is
+# broken — it degrades to plain append-only text when stdout is not a TTY, so a
+# background run captures cleanly — but because it BLOCKS. The e2e job already
+# prints a spec heartbeat every 30 s (scripts/e2e/progress-watch.sh); sitting
+# inside gh's loop means the operator sees job-level status only, while the
+# spec-level detail they want stays in a log they have to leave the terminal to
+# read. Watching the run ourselves lets that heartbeat come through.
+#
+# The in-flight log is reachable: `gh run view --log` refuses on a run that is
+# still going, but the jobs/<id>/logs REST endpoint returns partial logs for a
+# running job.
+#
+# Poll cadence defaults to the heartbeat's own 30 s — the log grows to a few
+# hundred KB and each fetch returns all of it, so polling faster costs transfer
+# and buys nothing.
+#
+# Usage:
+#   REPO=owner/repo scripts/dogfood/e2e-run-watch.sh <run-id>
+#
+# Exits with the run's conclusion: 0 for success, non-zero otherwise.
+#
+# Sourcing this file defines its helpers without watching anything, which is how
+# e2e-run-watch-test.sh asserts them.
+set -euo pipefail
+
+# Jobs whose logs are scanned for heartbeat lines. A substring match, so it
+# survives the `e2e / e2e` vs `e2e` naming the reusable workflow produces; extra
+# matches (the gate job) simply carry no heartbeats.
+E2E_JOB_FILTER="${E2E_JOB_FILTER:-e2e}"
+E2E_RUN_WATCH_INTERVAL="${E2E_RUN_WATCH_INTERVAL:-30}"
+
+# heartbeat_lines — filter a job log on stdin to the heartbeat lines the e2e
+# suite emits, stripping the runner's leading ISO timestamp. Matching the
+# literal marker rather than parsing the log's structure keeps this indifferent
+# to everything else in it.
+heartbeat_lines() {
+	grep -o '\[e2e t+.*' || true
+}
+
+# lines_after N — print the lines of stdin beyond the first N. The log endpoint
+# returns the whole log every call, so this is what makes the relay emit each
+# heartbeat exactly once.
+lines_after() {
+	local seen="$1"
+	awk -v seen="$seen" 'NR > seen'
+}
+
+# conclusion_rc CONCLUSION — the exit status a run conclusion maps to. Anything
+# that is not an outright success fails the gate: `cancelled` and `timed_out`
+# are as fatal to a release as `failure`, and treating an unrecognized
+# conclusion as success would let a new GitHub state silently pass it.
+conclusion_rc() {
+	case "$1" in
+	success) echo 0 ;;
+	*) echo 1 ;;
+	esac
+}
+
+# e2e_job_ids RUN_ID — ids of the run's jobs whose name matches E2E_JOB_FILTER.
+# Empty while the run is still queued; the caller keeps polling.
+e2e_job_ids() {
+	gh api "repos/${REPO}/actions/runs/$1/jobs" \
+		--jq ".jobs[] | select(.name | contains(\"${E2E_JOB_FILTER}\")) | .id" 2>/dev/null || true
+}
+
+# collect_heartbeats JOB_IDS — every heartbeat line currently in those jobs'
+# logs, in order. A fetch failure yields nothing rather than aborting: a
+# transient API error must not kill an hour-long gate.
+collect_heartbeats() {
+	local job_id
+	for job_id in $1; do
+		gh api "repos/${REPO}/actions/jobs/${job_id}/logs" 2>/dev/null | heartbeat_lines
+	done
+}
+
+# run_state RUN_ID — "<status> <conclusion>".
+run_state() {
+	gh run view "$1" --repo "${REPO}" --json status,conclusion \
+		--jq '"\(.status) \(.conclusion // "")"' 2>/dev/null || echo "unknown "
+}
+
+watch_run() {
+	local run_id="$1"
+	local seen=0 job_ids="" status conclusion state all new total
+
+	echo "  watching https://github.com/${REPO}/actions/runs/${run_id}"
+
+	while true; do
+		state="$(run_state "${run_id}")"
+		status="${state%% *}"
+		conclusion="${state#* }"
+
+		[[ -n "${job_ids}" ]] || job_ids="$(e2e_job_ids "${run_id}")"
+
+		if [[ -n "${job_ids}" ]]; then
+			all="$(collect_heartbeats "${job_ids}")"
+			total="$(printf '%s' "${all}" | grep -c . || true)"
+			# A shrinking log means a re-fetch raced a rotation; re-sync rather
+			# than replaying the whole stream.
+			((total < seen)) && seen="${total}"
+			if ((total > seen)); then
+				new="$(printf '%s\n' "${all}" | lines_after "${seen}")"
+				[[ -n "${new}" ]] && printf '%s\n' "${new}"
+				seen="${total}"
+			fi
+		fi
+
+		[[ "${status}" == "completed" ]] && break
+		sleep "${E2E_RUN_WATCH_INTERVAL}" &
+		wait $! || true
+	done
+
+	echo "  run ${run_id} completed: ${conclusion}"
+	return "$(conclusion_rc "${conclusion}")"
+}
+
+main() {
+	local run_id="${1:-}"
+	[[ -n "${run_id}" ]] || {
+		echo "usage: REPO=owner/repo $0 <run-id>" >&2
+		exit 2
+	}
+	: "${REPO:?REPO must be set}"
+	watch_run "${run_id}"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	main "$@"
+fi

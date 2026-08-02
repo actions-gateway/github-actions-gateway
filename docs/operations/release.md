@@ -288,6 +288,26 @@ it fail again. The manual steps that
 follow document what it does (and the recovery path if a leg needs re-running by
 hand). From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
+**The gate narrates itself while it runs.** Each phase is announced as it starts
+(`==> [e2e] Running the e2e matrix on GAG runners`), and the e2e leg — the long
+one, ~25 minutes while runners autoscale in — relays the dispatched run's own
+spec heartbeat into your terminal every 30 s:
+
+```
+[e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_GMC_Isolation cross... (3m58s)
+```
+
+The run URL is printed before the watch begins if you would rather follow it in
+a browser. When the e2e leg finishes — pass **or fail** — the run's JUnit report
+is rendered into your terminal: counts, every failing spec with its message, and
+the ten slowest specs. A red gate names the specs that failed without you having
+to open the run.
+
+The gate also appends each phase transition as one JSON line to
+`tmp/release-validation-progress.jsonl`, so a long run can be inspected from
+another shell (`tail -f`) without disturbing it. Set `RELEASE_PROGRESS_FILE=` to
+disable the file; the terminal output is unaffected.
+
 **If you just merged something, the gate waits before it spends anything.** The
 gate's dispatched run enters the e2e workflow's per-ref concurrency group, whose
 single pending slot the next push to main would cancel it out of — and the latest
