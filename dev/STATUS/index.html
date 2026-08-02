@@ -2729,6 +2729,22 @@
 <td>Q432 fixed this in <code>shellcheck-scripts.sh</code> and never swept the class: <code>check-doc-links</code>, <code>check-conflict-markers</code>, <code>check-no-plan-refs-in-code</code> still select <code>--cached</code> only, so a brand-new doc's own links read green locally.</td>
 </tr>
 <tr>
+<td><a id="Q625"></a>Q625</td>
+<td><a href="../development/testing/#the-status-you-report-is-a-claim-too">Nothing catches a gate's exit code read through a pipe</a></td>
+<td><code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>make check \| tail</code> reports <code>tail</code>'s status, so a false green reads identical to a real one. The rule sits in CLAUDE.md and testing.md and a session tripped it anyway. Wants a PreToolUse warning when a gate is piped into <code>tail</code>/<code>head</code>/<code>grep</code>.</td>
+</tr>
+<tr>
+<td><a id="Q624"></a>Q624</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/claude-go-throttle-hook.sh"><code>go-throttle</code> denies a commit whose message text quotes a <code>-race</code> command</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The hook scans the whole Bash string, so a <code>git commit -F -</code> heredoc quoting <code>go test -race</code> reads as a second go invocation and is denied. Skip heredoc bodies and <code>git commit -m</code>/<code>-F</code> arguments; <code>claude-go-throttle-hook-test.sh</code> takes the case.</td>
+</tr>
+<tr>
 <td><a id="Q594"></a>Q594</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/plan-hygiene.yml">plan-hygiene's <code>plan</code> filter lists <code>**.go</code>, which matches nothing</a></td>
 <td><code>bug</code> <code>ci</code></td>
