@@ -2679,6 +2679,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#an-assertion-against-live-state-must-keep-its-subjects-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        An assertion against live state must keep its subject's output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#proving-a-flake-fix-invert-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3607,6 +3618,15 @@ you wrote yourself.</p>
 <p>Diff the two across the failing test's window instead of reading the failing one alone. What the failing side contains <strong>and the passing side does not</strong> is the defect, and it is usually one line.</p>
 <p>Q559 is the worked example. Its row read "a closed capacity gate never rejected the delivery" — a timeout, which reads as a slow wait. The failing attempt carried an <code>AcquireJob</code> line in the test's own namespace at the instant of the enqueue, plus a minted job Secret at teardown; the 17.00s passing attempt carried neither. So the job had been <strong>admitted</strong>, not slowly rejected. That reclassifies the fix from "raise the timeout" to "synchronize on the right signal" before any code is read — and rules the timeout out entirely, since on that tier nothing redelivers.</p>
 <p>The general form: <strong>a flake's two attempts are a controlled experiment CI already ran for you</strong> — same commit, same suite, one bit different. Diff them before forming a hypothesis, not after one fails to hold up.</p>
+<h3 id="an-assertion-against-live-state-must-keep-its-subjects-output">An assertion against live state must keep its subject's output<a class="headerlink" href="#an-assertion-against-live-state-must-keep-its-subjects-output" title="Permanent link">&para;</a></h3>
+<p>The section above assumes the failing log says something. An assertion that runs its subject with <code>&gt;/dev/null 2&gt;&amp;1</code> and prints a fixed message guarantees it does not — and a transient failure never comes back to be re-read.</p>
+<p>Distinguish the two kinds of assertion a script test makes:</p>
+<ul>
+<li><strong>Against a fixture</strong> — the inputs are constructed, so the failure can only be the condition asserted. A fixed message is fine.</li>
+<li><strong>Against live, mutable state</strong> (the tracked tree, the real workflows, the workspace) — the failure need not be the condition asserted. It can be a missing directory, an unreadable file, a mid-run abort, or something transient. Capture the subject's output and exit code, and print both on failure.</li>
+</ul>
+<p>The remedy <code>run &lt;script&gt; yourself for the report</code> is not one. In CI there is nobody at that shell, and if the cause was transient the re-run is green and the evidence is gone for good.</p>
+<p>Q596 is the worked example, and it cost a full session. <code>check-v2-api-sync-test</code>'s <code>tree-in-sync</code> — the one assertion reading the live <code>api/</code> tree — ran the gate as <code>&gt;/dev/null 2&gt;&amp;1</code> and printed <code>packages diverge</code> for <em>any</em> non-zero exit. Replaying it against stubs exiting 1 (real drift), 2 (missing directory) and 3 (mid-run abort) produced three identical, evidence-free lines. The single occurrence was undiagnosable by construction, and 2,418 reproduction runs never recovered the trigger. Note the shape: in all three of the scripts that had this bug, the <em>fixture</em> helper in the same file captured output correctly and only the live-state assertion threw it away.</p>
 <h3 id="proving-a-flake-fix-invert-it">Proving a flake fix: invert it<a class="headerlink" href="#proving-a-flake-fix-invert-it" title="Permanent link">&para;</a></h3>
 <p>Repeated passes do not validate a flake fix. A green <code>-count=20</code> is equally consistent with <em>"the race is closed"</em> and <em>"the race didn't fire this time"</em> — and on an unloaded dev machine the second is the more likely of the two, because the timing that produces the flake on a loaded CI runner often can't be reproduced locally at all. Passing-after is necessary evidence, not sufficient evidence.</p>
 <p>Run the <strong>negative control</strong> before concluding: invert the fix — restore the old value, remove the pin, revert the ordering — and confirm the suite <em>fails</em>. A fix you cannot make fail on demand has not been shown to be load-bearing, and shipping it closes the backlog row while leaving the flake live. When the inverted form refuses to fail either, that is itself the finding: the diagnosis is wrong, or the mechanism isn't the one you think it is.</p>

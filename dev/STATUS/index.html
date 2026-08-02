@@ -2663,6 +2663,14 @@
 <td>Three docs credit <code>actionlint</code>: <code>release.md:540</code> with keeping SHA-pinned <code>uses:</code> clean, <code>Makefile:446</code> and <code>testing.md:183</code> with inline <code>run:</code> blocks. No workflow runs it — the <code>lint</code> job is golangci-lint, so a workflow-only PR ships unlinted.</td>
 </tr>
 <tr>
+<td><a id="Q607"></a>Q607</td>
+<td><a href="../development/testing/#an-assertion-against-live-state-must-keep-its-subjects-output">A test's environment assumptions are unstated, and CI can run it somewhere else</a></td>
+<td><code>tests</code> <code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A test asserting on uid, installed tooling, or filesystem semantics must gate on the observed capability — <code>runs-on</code> can resolve to the self-hosted dogfood runner. Learned for Go only (Q482); Q596 caught a <code>chmod 000</code> assertion root ignores.</td>
+</tr>
+<tr>
 <td><a id="Q594"></a>Q594</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/plan-hygiene.yml">plan-hygiene's <code>plan</code> filter lists <code>**.go</code>, which matches nothing</a></td>
 <td><code>bug</code> <code>ci</code></td>
