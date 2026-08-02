@@ -4,10 +4,10 @@
 #
 # `make e2e` has written tmp/e2e-report.xml since the suite was parallelized, and
 # the workflow has uploaded it as an artifact ever since — but nothing rendered
-# it. docs/plan/e2e-tests-speed.md planned the upload on the premise that Actions
-# would draw a test-summary table from it via a built-in reporter; there is no
-# such reporter, so reading the result of a failed run still meant downloading a
-# 300 KB XML by hand. This closes that gap.
+# it: the upload was planned on the premise that Actions draws a test-summary
+# table from it via a built-in reporter, and there is no such reporter — so
+# reading the result of a failed run still meant downloading a 300 KB XML by
+# hand. This closes that gap (Q608).
 #
 # Parsing is awk, not an XML library: no XML tool is in the required tier of
 # scripts/ci/check-tools.sh, and this must run wherever `make e2e` ran. That is

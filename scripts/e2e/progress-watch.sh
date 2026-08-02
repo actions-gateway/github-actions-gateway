@@ -12,7 +12,8 @@
 # duration of each spec, so anything the suite itself prints is buffered until
 # that spec ends — which is the silence being fixed. The suite writes events to
 # a file instead (cmd/gmc/test/e2e/progress_report_test.go) and this renders
-# them. Full rationale: docs/plan/archive/e2e-progress-visibility.md.
+# them. Full rationale: docs/development/testing.md § Watching an e2e run in
+# progress.
 #
 # Usage:
 #   scripts/e2e/progress-watch.sh &          # started by the root Makefile's `e2e`

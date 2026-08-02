@@ -20,7 +20,8 @@ import (
 // at --procs > 1 the reporter suppresses spec-start entirely and intercepts
 // stdout for the duration of each spec, so anything the suite prints is
 // replayed at spec end rather than streamed. File writes are not intercepted.
-// Rationale and the measurements behind it: docs/plan/archive/e2e-progress-visibility.md.
+// Rationale and the measurements behind it (Q608):
+// docs/development/testing.md § Watching an e2e run in progress.
 
 // progressEvent is one line of $E2E_PROGRESS_FILE.
 type progressEvent struct {

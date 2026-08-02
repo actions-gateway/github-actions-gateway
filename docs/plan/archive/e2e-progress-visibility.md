@@ -16,6 +16,7 @@ Q608. Shipped in one PR, so no Queue row was ever filed.
 - [3. Post-run summary and annotations](#3-post-run-summary-and-annotations)
 - [Rejected alternatives](#rejected-alternatives)
 - [Status](#status)
+- [What the build changed from the plan](#what-the-build-changed-from-the-plan)
 
 ## Background — what the log does today
 
@@ -29,7 +30,7 @@ Measured on two real runs, one per lane, both 73 specs at `--procs 6`:
 Both lanes stream at second granularity, so the dogfood self-hosted path — where
 the runner is itself a gateway worker pod — has no log-batching pathology. One
 mechanism serves both, which is expected: `runs-on` resolves from the same
-expression in [e2e-reusable.yml](../../.github/workflows/e2e-reusable.yml), so
+expression in [e2e-reusable.yml](../../../.github/workflows/e2e-reusable.yml), so
 the two lanes run the same job definition.
 
 What the log contains during those silences:
@@ -46,7 +47,7 @@ What the log contains during those silences:
 - **`Will run 73 of 73 specs` prints once at suite start.** The denominator is
   already available; only the numerator is missing.
 - **`tmp/e2e-report.xml` is uploaded as an artifact and never rendered.**
-  [e2e-tests-speed.md §13](e2e-tests-speed.md#13-junit-report-for-pr-test-summary)
+  [e2e-tests-speed.md §13](../e2e-tests-speed.md#13-junit-report-for-pr-test-summary)
   planned the upload on the premise that "GitHub Actions can render this as a
   test summary table in the PR sidebar using the built-in test reporter". There
   is no such built-in reporter. The upload shipped, the rendering never did, and
@@ -81,7 +82,7 @@ not answer.
 ## 1. The progress event stream
 
 `ReportBeforeSuite` / `ReportBeforeEach` / `ReportAfterEach` in
-[e2e_suite_test.go](../../cmd/gmc/test/e2e/e2e_suite_test.go) append one JSON
+[e2e_suite_test.go](../../../cmd/gmc/test/e2e/e2e_suite_test.go) append one JSON
 object per line to `$E2E_PROGRESS_FILE` (default `tmp/e2e-progress.jsonl`,
 gitignored). Unset disables the whole mechanism, so a plain `go test` run is
 unaffected.
@@ -105,7 +106,7 @@ the same failure mode the autoscaler event-reason matcher exists to catch.
 and stopped after it, emits one line per interval (default 30 s):
 
 ```
-[e2e t+04:12] 31/73 done · 29 ok · 1 failed · 1 skipped · running: worker-drain 3m58s, egress-denied 2m01s
+[e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_AGC_WorkerDrain a dr... (3m58s), E2E_GMC_Isolation cross... (2m01s)
 ```
 
 Derived state: running = started-minus-ended; counts by terminal state; elapsed
