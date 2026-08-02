@@ -261,6 +261,13 @@ func TestListener_AbandonedJobDoesNotSurviveARestart(t *testing.T) {
 	require.True(t, srv.DropAssignedJob(ssID, jobID), "the job must be droppable server-side")
 	require.Eventually(t, func() bool { return m.abandonedCount() == 1 }, 10*time.Second,
 		20*time.Millisecond, "the listener must give up on the job GitHub no longer holds")
+	// The counter rises at settle, which only marks the job concluded in memory; the
+	// delete half of the ack is issued by the next flushDeletes cycle. Stopping on the
+	// counter alone can therefore cut the listener off before the message is released,
+	// which replays it for a reason the fix is not responsible for. Wait for the delete
+	// itself — the effect this test's invariant rests on.
+	require.Eventually(t, func() bool { return deleteAttempts(srv) > 0 }, 10*time.Second,
+		20*time.Millisecond, "abandoning the job must release its message before the restart")
 	stopFirst()
 
 	// Clear the runner-name conflict that stalled it. Without this the replayed

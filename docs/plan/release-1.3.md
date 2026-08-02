@@ -106,6 +106,9 @@ The prose below carries the *why* of each; this table is the state.
 | Q547 | Deleting a v2 gateway orphans its in-flight worker pods, pinning a billable node | `1.3-gate` | ✅ shipped 2026-08-01 |
 | Q536 | A GHES appliance behind a private CA cannot be reached | rides | ✅ shipped 2026-08-01 |
 | Q600 | The Q260 burst test reads its peak-provisioner count before the winner reaches the handler | gates | ✅ shipped 2026-08-01 — it reddened `main`, which pre-flight requires green |
+| Q602 | The Q583 restart test stops the listener before the abandon's message delete is issued | gates | ✅ shipped 2026-08-02 — same reason: it reddened `main` |
+| Q603 | An AGC stopped between abandoning a job and its next delete cycle re-provisions it on restart | rides | 🔲 filed — the residual Q583 narrows but does not close |
+| Q604 | `stallJob` installs its runner-name conflict after the job is already pollable | gates | ✅ shipped 2026-08-02 — same reason: it reddened `main` |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
 | — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | 🔲 rc.3: gate aborted at leg 1, no verdict |
@@ -193,6 +196,52 @@ from 0 failures in 400 local runs to 5 of 5), fixed by waiting on the counter th
 invariant reads, and confirmed still able to catch the Q260 regression by deleting
 the claim gate and requiring red. Filed to [flake watch](../STATUS.md#Q600); the
 weaker dedup predicate the measurement exposed is [Q601](../STATUS.md#Q601).
+
+**Q602 gates for the same mechanical reason, and is worth more than its fix.** The
+next `main` run went red on a *different* `-race` test —
+`TestListener_AbandonedJobDoesNotSurviveARestart`, the Q583 fix's own — with
+`assert.Never` reporting that a restarted listener had provisioned a worker for a job
+the previous one gave up on. It reproduced locally at 1 in 40.
+
+The reason it matters is that **the test was not wrong about the product.** Its
+barrier was: `abandonDeferredBefore` calls `settle` and then increments the abandoned
+counter, so the counter is published last and looks like a valid gate. But `settle`
+only marks the job concluded *in memory*; the wire delete that releases the message
+is issued by the next `flushDeletes` cycle, deliberately ("runs per cycle rather than
+only at settle time"). Stopping the listener inside that gap leaves the message
+unreleased, so it replays — and the restarted process, its abandoned set empty,
+provisions for a job GitHub has dropped. That is Q553's own failure, reached through
+a window Q583 narrows rather than closes.
+
+So the flake was a faithful, non-deterministic reproduction of a real (narrow)
+restart window. The fix pins the test to the path Q583 actually repairs — wait for
+the stub's `delete-message` call, not the counter — and the residual window is filed
+as [Q603](../STATUS.md#Q603) rather than absorbed into a green test. Deleting the
+`settle` call still turns the test red, now naming the missing release directly.
+
+**Q604 is the third gate, and the one that says something about the suite.** The Q602
+fix's own CI run went red again in the same test, but at a different point — its
+*setup*, `stallJob`, timing out on "the job that cannot register a runner name must be
+held for a re-offer". The helper enqueues the job and only then installs the
+runner-name conflict meant to stall it, so a poll (20 ms) can assign and successfully
+provision it in between; it never defers, and the wait times out. Widening that gap by
+60 ms took it from 0 failures in 80 runs to 3 of 3, with CI's exact message.
+
+What makes it worth recording is that **the codebase already knew.** `deferred_test.go`
+holds advertised capacity at zero until the conflict is staged, commenting that "the
+fake assigns a queued job as soon as a poll advertises a slot, so staging afterwards
+races the poll loop"; `conditions_test.go` stages the conflict before the listener
+starts; `ceiling_q576_test.go` and `listener_test.go` gate on capacity the same way.
+Every site that meets this hazard mitigates it — except `stallJob`, which eight tests
+call. The fix removes the hazard structurally instead of adding a fifth
+capacity dance: `scalesetstub.EnqueueStalledJob` registers the conflict inside the same
+locked section that makes the job pollable, so no window exists to lose.
+
+**Three gates, one root shape.** Q600, Q602 and Q604 were all "the test synchronized on
+something adjacent to what it asserts", and all three surfaced in AGC listener tests
+within two `main` runs. They were fixed individually because each had a distinct
+mechanism, but the pattern is worth watching: [Q601](../STATUS.md#Q601) records a fourth
+weak barrier in the same family, still unfixed.
 
 **API review verdict — ship as-is.** `scripts/release/api-surface-since.sh
 v1.3.0-rc.3` reports one field pair (`githubCABundleRef`, and the
