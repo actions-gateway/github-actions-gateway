@@ -2615,6 +2615,14 @@
 <td>Blocked by <a href="#Q539">Q539</a>. Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from worker pods.</td>
 </tr>
 <tr>
+<td><a id="Q609"></a>Q609</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/client.go"><code>DeleteMessage</code>'s error cannot tell a real delete from a swallowed 404</a></td>
+<td><code>bug</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>It reports 404/410 as a benign ack, so a caller cannot tell "deleted" from "endpoint absent". Two Q583 call sites hit it in one session; one produced a wrong-green test. Return the distinction, or warn callers.</td>
+</tr>
+<tr>
 <td><a id="Q597"></a>Q597</td>
 <td><a href="../plan/q583-restart-replay/#what-shipped">The listener's provisioned/completed/abandoned sets are never pruned</a></td>
 <td><code>debt</code></td>
@@ -2957,6 +2965,22 @@
 <td>🔲</td>
 <td>S</td>
 <td>Matrix row 17 says a new script gets a row in its group's table; <code>dogfood/</code> is a bare directory link with no table, so #1106 and Q581 each added a test script and silently added none. Give the group a table, or name the exception.</td>
+</tr>
+<tr>
+<td><a id="Q610"></a>Q610</td>
+<td><a href="../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">pr-sentinel reports <code>ready</code> while the heavy gates are still pending</a></td>
+<td><code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>On #1138 it emitted "All checks are green" with <code>mergeStateStatus: BLOCKED</code> and unit-test, integration-test, coverage and e2e-calico-gate all pending. A watcher that signals early defeats its purpose. File upstream against the plugin.</td>
+</tr>
+<tr>
+<td><a id="Q611"></a>Q611</td>
+<td><a href="../development/maintaining-backlog/"><code>docs/plan/README.md</code> has STATUS.md's contention and none of its merge tooling</a></td>
+<td><code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Every plan adds one long row near the same neighbours, so concurrent branches collide: #1138's rebase hit three conflicts, all in this file, while STATUS.md merged clean via its driver. Give it the driver, or restructure the rows.</td>
 </tr>
 <tr>
 <td><a id="Q592"></a>Q592</td>
