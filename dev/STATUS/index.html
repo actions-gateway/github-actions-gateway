@@ -2593,14 +2593,6 @@
 <td><code>watch_run</code> loops until <code>completed</code> with no deadline. Pre-#1171 it died instantly and wrongly; now it waits forever on a run that stays <code>queued</code>. Neither is bounded — the leg needs a deadline that fails the gate and tears down.</td>
 </tr>
 <tr>
-<td><a id="Q627"></a>Q627</td>
-<td><a href="../plan/gke-dogfood/#part-f--e2e-on-gke-kata-containers">Re-create the dogfood <code>e2e</code> node pool on <code>c2d-standard-8</code></a></td>
-<td><code>dogfood</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Script + docs land in this PR; the live pool still runs <code>c2-standard-8</code> and machine type is immutable, so it needs a delete/re-create at 0 nodes. <code>C2_CPUS</code>=8 (raise denied 2026-07-31, and it is 8 in every region) vs <code>C2D_CPUS</code>=100.</td>
-</tr>
-<tr>
 <td><a id="Q623"></a>Q623</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-no-plan-refs-in-code.sh"><code>no-plan-refs-in-code</code> only scopes Go, but shell and workflow comments rot the same way</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>

@@ -3617,7 +3617,7 @@ a commit that carries the harness fixes you want the line to keep. Cutting it fr
 an older RC's commit to make the tag byte-match the validated artifact is the trap
 — it strands every gate fix found <em>during</em> that release's validation, which is
 exactly when gate fixes tend to be found. <code>v1.3.0</code> is the worked example: rc.5's
-validation produced two harness fixes (<a href="../../STATUS/#Q627">Q627</a> and the e2e watch
+validation produced two harness fixes (<a href="../../plan/release-1.3/#Q627">Q627</a> and the e2e watch
 deadline), and a <code>release-1.3</code> branch cut from rc.5's commit would reproduce both
 on every future <code>v1.3.x</code>.</p>
 <p>Validating an RC whose product code matches <code>main</code> is unaffected: the images and

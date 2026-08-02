@@ -2588,7 +2588,7 @@ validation is owed.</strong> rc.5 carries 26 commits past rc.4 including the Q60
 listener fix, so rc.4's pass does not transfer. Its first gate run aborted at
 t+4m07s on a defect in the gate itself: a watcher that dies on a queued job's
 404, killing the run inside the autoscaler's backoff window before a transient
-node scale-up refusal could retry (<a href="../../STATUS/#Q627">Q627</a> covers the thin
+node scale-up refusal could retry (<a href="#Q627">Q627</a> covers the thin
 headroom that made the blip matter). Neither is evidence about the release.
 Details in
 <a href="#the-rc5-validation-attempt-2026-08-02">The rc.5 validation attempt</a>.</p>
@@ -2810,7 +2810,7 @@ The prose below carries the <em>why</em> of each; this table is the state.</p>
 <td><a id="Q627"></a>Q627</td>
 <td>The dogfood <code>e2e</code> pool has one node of C2 headroom</td>
 <td>rides</td>
-<td>🔲 filed — measured schedulable; zero headroom leaves a transient refusal nowhere to retry</td>
+<td>✅ closed 2026-08-02 — pool re-created on <code>n2-standard-8</code>, verified Ready with the kata label at <code>N2_CPUS</code> 8/200</td>
 </tr>
 </tbody>
 </table>
@@ -2824,7 +2824,7 @@ recorded below, so the label grep under-reports them.</p>
 <p><strong>Cut <code>v1.3.0</code> from <code>main</code>, not from the validated RC's commit.</strong> rc.5's
 validation produced two fixes to the gate harness itself — the e2e watch's
 behaviour on a queued run, and the <code>e2e</code> pool's machine type
-(<a href="../../STATUS/#Q627">Q627</a>) — and the harness ships in the branch. A <code>release-1.3</code>
+(<a href="#Q627">Q627</a>) — and the harness ships in the branch. A <code>release-1.3</code>
 cut from rc.5's <code>a6f168ad</code> to make the tag match the validated artifact would
 strand both, so every future <code>v1.3.x</code> backport would re-run the gate with the
 bugs this release already paid to find. The rule is written up under
@@ -3024,16 +3024,25 @@ backoff. Recorded because the wrong version shipped once.</p>
 <p>What is established about the pool is headroom, not a ceiling: <code>c2-standard-8</code>
 against <code>C2_CPUS</code> 8 is exactly one node and <code>maxNodeCount: 2</code> is unreachable, so
 a refused scale-up has nowhere to retry into. Tracked as
-<a href="../../STATUS/#Q627">Q627</a>.</p>
+<a href="#Q627">Q627</a>.</p>
 <p><strong>Resolved by re-shaping the pool, not by a quota grant.</strong> A request to raise
 <code>C2_CPUS</code> 8→16 was <strong>denied</strong> on 2026-07-31 — while an identical 8→16 ask for
 <code>IN_USE_ADDRESSES</code> was approved 33 minutes earlier on the same project and
 region, so the size of the ask was not the discriminator. Nor would a region
 move help: <code>C2_CPUS</code> is 8 in every region checked, a project default applied
-per-region rather than regional capacity. The pool is now <code>c2d-standard-8</code> —
-same 8 vCPU / 32 GB, same compute-optimized and nested-virt-capable class,
-against a <code>C2D_CPUS</code> default of 100. Twelve nodes of headroom for a pool whose
-max is 2.</p>
+per-region rather than regional capacity.</p>
+<p>The pool is now <code>n2-standard-8</code> — same 8 vCPU / 32 GB, on the nested-virt list,
+against an <code>N2_CPUS</code> default of 200. Twenty-four nodes of headroom beyond the
+pool's max of 2, and n2 is the family this pool started on, so it is already
+proven here. Verified by bringing one up: <code>Ready</code>, <code>n2-standard-8</code>,
+<code>katacontainers.io/kata-runtime=true</code>, at <code>N2_CPUS</code> 8/200.</p>
+<p><code>c2d</code> was tried first and is impossible: GCP rejects
+<code>--enable-nested-virtualization</code> for it outright, naming the families that can
+(A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3, M4 — no AMD).
+The repo's own note had claimed <code>n2/n2d/c2/c2d</code>, which is where the wrong choice
+came from; that note is corrected in
+<a href="../gke-dogfood/#part-f--e2e-on-gke-kata-containers">gke-dogfood.md</a> and in the
+two operations runbooks that repeated it.</p>
 <p><strong>The teardown held.</strong> <code>e2e-stop.sh</code> waited on the queued job rather than
 deleting the AGC under it — the 2026-07-31 incident's fix doing its job — and
 completed once the unschedulable run was cancelled by hand.</p>

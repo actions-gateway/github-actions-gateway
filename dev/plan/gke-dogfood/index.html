@@ -3849,25 +3849,35 @@ node.</p>
 <code>--enable-nested-virtualization</code> on a node pool, which exposes <code>/dev/kvm</code> on
 the node. Kata uses <code>/dev/kvm</code> to spin up microVMs.
 <a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/nested-virtualization">Official GKE docs.</a></p>
-<p><strong>Machine type note:</strong> nested virtualization on GCP requires the N1, N2/N2D, or
-C2/C2D instance families. E2 (used in Parts A–B) does <strong>not</strong> support it. The e2e
-pool uses <code>c2d-standard-8</code> (8 vCPU: the measured runner peak is ~5 vCPU — Q248,
-which is why the original <code>n2-standard-4</code> was outgrown).</p>
-<p><strong>Why C2D and not C2 (Q627).</strong> The regional <code>C2_CPUS</code> default is <strong>8</strong> — exactly
+<p><strong>Machine type note:</strong> nested virtualization is required (Kata needs <code>/dev/kvm</code>)
+and GCP supports it on a specific list, which the API names when it rejects a
+create:</p>
+<blockquote>
+<p>A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3 and M4</p>
+</blockquote>
+<p><strong>The AMD families are not on it</strong> — <code>C2D</code> and <code>N2D</code> are both rejected, as is E2
+(used in Parts A–B). An earlier revision of this note claimed <code>n2/n2d/c2/c2d</code>;
+that was wrong, and cost a pool re-create when <code>c2d-standard-8</code> was refused
+outright. The e2e pool uses <code>n2-standard-8</code> (8 vCPU: the measured runner peak is
+~5 vCPU — Q248, which is why the original <code>n2-standard-4</code> was outgrown).</p>
+<p><strong>Why N2 and not C2 (Q627).</strong> The regional <code>C2_CPUS</code> default is <strong>8</strong> — exactly
 one node of this shape — so a refused scale-up has nowhere to retry, and that is
 what cost a <code>v1.3.0-rc.5</code> validation run. A request to raise it to 16 was
 <strong>denied</strong> on 2026-07-31; an identical 8→16 ask for <code>IN_USE_ADDRESSES</code> was
 approved 33 minutes earlier, so the ratio was not the discriminator. Changing
-region does not help: <code>C2_CPUS</code> is 8 in every region checked (us-central1,
-us-west1, us-east4, europe-west1), because it is a project default applied
-per-region rather than regional capacity. <code>C2D_CPUS</code> defaults to 100 in all of
-them, so the same 8-vCPU shape gets 12 nodes of headroom instead of one.</p>
+region does not help either: <code>C2_CPUS</code> is 8 in every region checked
+(us-central1, us-west1, us-east4, europe-west1), because it is a project default
+applied per-region rather than regional capacity.</p>
+<p><code>N2_CPUS</code> defaults to <strong>200</strong> — 24 nodes of headroom beyond the pool's max of 2 —
+and n2 is this pool's original family, so it is already proven here. Of the other
+nested-virt-capable families with quota, <code>C3_CPUS</code> is 24 (3 nodes), which clears
+the max but leaves far less room.</p>
 <h3 id="f1-run-the-one-time-setup-script">F1. Run the one-time setup script<a class="headerlink" href="#f1-run-the-one-time-setup-script" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="nb">export</span><span class="w"> </span>CLUSTER<span class="w"> </span>ZONE<span class="w"> </span>APP_ID<span class="w"> </span>INSTALLATION_ID<span class="w">   </span><span class="c1"># from the Variables section</span>
 <a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>scripts/dogfood/e2e-setup.sh
 </code></pre></div>
 <p>This script owns the <strong>cluster infra</strong> the kustomize overlays can't express:
-1. Creates the <code>e2e</code> node pool (c2d-standard-8 spot, nested virt, <code>--workload-metadata=GKE_METADATA</code> — requires cluster-level <code>--workload-pool</code>, see Part A — autoscaling 0→2, taint <code>dedicated=e2e:NoSchedule</code>). The pool's node labels carry <strong>both</strong> <code>gag.dev/kata-ci=true</code> (installer scope) and <code>katacontainers.io/kata-runtime=true</code> — the latter pre-baked because the cluster autoscaler simulates scale-from-zero against configured labels only (Q286)
+1. Creates the <code>e2e</code> node pool (n2-standard-8 spot, nested virt, <code>--workload-metadata=GKE_METADATA</code> — requires cluster-level <code>--workload-pool</code>, see Part A — autoscaling 0→2, taint <code>dedicated=e2e:NoSchedule</code>). The pool's node labels carry <strong>both</strong> <code>gag.dev/kata-ci=true</code> (installer scope) and <code>katacontainers.io/kata-runtime=true</code> — the latter pre-baked because the cluster autoscaler simulates scale-from-zero against configured labels only (Q286)
 2. Installs the Kata DaemonSet, scoped to e2e pool nodes only via <code>gag.dev/kata-ci</code> and tolerating the pool taint (the chart ships no tolerations — Q286). The system and workers pools use COS; Kata requires Ubuntu or COS 1.28.4+, and the DaemonSet labels nodes <code>katacontainers.io/kata-runtime=true</code> after install
 3. Creates the <code>kata</code> RuntimeClass alias (over the chart-owned <code>kata-qemu</code> handler) with a node scheduling rule that prevents Kata pods from scheduling before the DaemonSet has finished installing
 4. Creates the <code>gag-dogfood-e2e</code> namespace (v2 marker <code>actions-gateway.com/tenant=managed</code>) and the GitHub App Secret</p>

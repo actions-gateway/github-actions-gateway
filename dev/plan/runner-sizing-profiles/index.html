@@ -2919,7 +2919,7 @@ workersPerNode: 1</code> sits below both variants' static runner request (kata 2
 3), so actuation can only ever <em>reduce</em> a worker's ask — a wrong guess cannot
 make the release's own e2e gate unschedulable. It is CPU-only for the same
 reason. The true e2e-node allocatable has not been measured (the pool is
-<code>c2d-standard-8</code> since Q627, the same 8 vCPU / 32 GB shape), and NodeShare
+<code>n2-standard-8</code> since Q627, the same 8 vCPU / 32 GB shape), and NodeShare
 divides into the runner container only, leaving the dind sidecar and Kata's
 250m RuntimeClass overhead as the operator's accounting; the honest envelope
 therefore needs one <code>kubectl get node</code> reading first (<a href="../../STATUS/#Q448">Q448</a>).
