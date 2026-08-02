@@ -2599,14 +2599,6 @@
 <td><code>BuildProxyTrustPool</code> builds system roots + the proxy CA, so a private-CA appliance fails the TLS handshake. Named as out of scope by Q506's audit, "needs its own item if the project commits to GHES" — Q506 shipping Option A is that commitment.</td>
 </tr>
 <tr>
-<td><a id="Q547"></a>Q547</td>
-<td><a href="../plan/gke-dogfood/#f3-e2e-operations--on-demand">Deleting an ActionsGateway orphans its in-flight worker pods</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>The AGC is the sole reaper; GMC deletes it on gateway delete and leaves worker pods behind — do-not-disrupt annotations then pin billable nodes forever (2026-07-31 dogfood). Cascade-reap tenant workers on gateway deletion, or add pod ownerRefs/TTL.</td>
-</tr>
-<tr>
 <td><a id="Q595"></a>Q595</td>
 <td><a href="../operations/troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">The cancel runbook's manual pod delete may re-run the job GitHub cancelled</a></td>
 <td><code>bug</code> <code>docs</code></td>

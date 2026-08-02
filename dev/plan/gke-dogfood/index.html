@@ -3917,9 +3917,15 @@ Before the delete, <code>e2e-stop.sh</code> <strong>drains</strong>: it waits fo
 the <code>gag-ci-e2e</code> scale set and for in-flight e2e worker pods, and on timeout
 fails <em>without</em> deleting — the AGC is the only thing that can serve a queued job
 or reap a worker pod, and deleting it under either strands them (2026-07-31: an
-orphaned worker pod's do-not-disrupt annotations pinned a billable node
-indefinitely, and a stranded queued run wedged main's e2e concurrency group).
-<code>SKIP_E2E_DRAIN=1</code> overrides knowingly.
+orphaned worker pod's do-not-disrupt annotations pinned a billable node, and a
+stranded queued run wedged main's e2e concurrency group).
+<code>SKIP_E2E_DRAIN=1</code> overrides knowingly.</p>
+<p>The worker half of that is now fixed in the product rather than only in the
+script (Q547): the AGC reaps its worker pods when it observes the gateway's
+<code>deletionTimestamp</code>, and the GMC holds teardown open until it has. So a delete
+under in-flight workers no longer strands a node — it <em>kills those jobs</em>, which
+is why the script still drains first. The queued-job half is unchanged and
+remains the drain's own reason: nothing reaps a run that was never acquired.
 The e2e <strong>node</strong> pool is already on-demand independently (autoscales 0→2 on job
 arrival, back to 0 ~10 min after drain).</p>
 <p>A single <code>e2-standard-2</code> system node no longer leaves ~500m free for the

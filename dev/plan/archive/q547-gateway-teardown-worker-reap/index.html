@@ -10,31 +10,27 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/operations/backup-restore/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/archive/q547-gateway-teardown-worker-reap/">
       
       
-        <link rel="prev" href="../runbook/">
-      
-      
-        <link rel="next" href="../velero-backup-restore/">
       
       
         
       
       
-      <link rel="icon" href="../../assets/favicon.svg">
+      <link rel="icon" href="../../../assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>Backup & restore - GitHub Actions Gateway</title>
+        <title>Q547 — Deleting an ActionsGateway orphans its in-flight worker pods - GitHub Actions Gateway</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -47,9 +43,9 @@
       
     
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -59,9 +55,9 @@
     
   
   
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
   <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
   <meta property="og:image:width" content="1280">
@@ -122,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#backup-restore-and-disaster-recovery" class="md-skip">
+        <a href="#q547--deleting-an-actionsgateway-orphans-its-in-flight-worker-pods" class="md-skip">
           Skip to content
         </a>
       
@@ -146,10 +142,10 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../../STATUS/">See the working backlog.</a>
+    <a href="../../../STATUS/">See the working backlog.</a>
 
             </div>
-            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
           </aside>
         
       </div>
@@ -159,9 +155,9 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href="../../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -178,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Backup & restore
+              Q547 — Deleting an ActionsGateway orphans its in-flight worker pods
             
           </span>
         </div>
@@ -291,7 +287,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../.." class="md-tabs__link">
+      <a href="../../.." class="md-tabs__link">
         
   
   
@@ -310,7 +306,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../why-gag/" class="md-tabs__link">
+      <a href="../../../why-gag/" class="md-tabs__link">
         
   
   
@@ -329,7 +325,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../features/" class="md-tabs__link">
+      <a href="../../../features/" class="md-tabs__link">
         
   
   
@@ -348,7 +344,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../demo/" class="md-tabs__link">
+      <a href="../../../demo/" class="md-tabs__link">
         
   
   
@@ -367,7 +363,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../getting-started/" class="md-tabs__link">
+      <a href="../../../getting-started/" class="md-tabs__link">
         
   
   
@@ -386,7 +382,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../roadmap/" class="md-tabs__link">
+      <a href="../../../roadmap/" class="md-tabs__link">
         
   
   
@@ -407,7 +403,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../design/" class="md-tabs__link">
+        <a href="../../../design/" class="md-tabs__link">
           
   
   
@@ -425,13 +421,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../../operations/" class="md-tabs__link">
           
   
   
@@ -467,9 +461,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href="../../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     GitHub Actions Gateway
@@ -496,7 +490,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   
@@ -523,7 +517,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../why-gag/" class="md-nav__link">
+      <a href="../../../why-gag/" class="md-nav__link">
         
   
   
@@ -550,7 +544,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../features/" class="md-nav__link">
+      <a href="../../../features/" class="md-nav__link">
         
   
   
@@ -577,7 +571,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../demo/" class="md-nav__link">
+      <a href="../../../demo/" class="md-nav__link">
         
   
   
@@ -604,7 +598,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/" class="md-nav__link">
+      <a href="../../../getting-started/" class="md-nav__link">
         
   
   
@@ -631,7 +625,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../roadmap/" class="md-nav__link">
+      <a href="../../../roadmap/" class="md-nav__link">
         
   
   
@@ -717,7 +711,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../design/" class="md-nav__link ">
+            <a href="../../../design/" class="md-nav__link ">
               
   
   
@@ -761,7 +755,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/01-executive-summary/" class="md-nav__link">
+      <a href="../../../design/01-executive-summary/" class="md-nav__link">
         
   
   
@@ -789,7 +783,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/02-architecture/" class="md-nav__link">
+      <a href="../../../design/02-architecture/" class="md-nav__link">
         
   
   
@@ -817,7 +811,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/network-architecture/" class="md-nav__link">
+      <a href="../../../design/network-architecture/" class="md-nav__link">
         
   
   
@@ -845,7 +839,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/03-api-contracts/" class="md-nav__link">
+      <a href="../../../design/03-api-contracts/" class="md-nav__link">
         
   
   
@@ -873,7 +867,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/04-operational-flows/" class="md-nav__link">
+      <a href="../../../design/04-operational-flows/" class="md-nav__link">
         
   
   
@@ -901,7 +895,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/05-security/" class="md-nav__link">
+      <a href="../../../design/05-security/" class="md-nav__link">
         
   
   
@@ -929,7 +923,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+      <a href="../../../design/06-implementation-phases/" class="md-nav__link">
         
   
   
@@ -957,7 +951,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/07-test-plan/" class="md-nav__link">
+      <a href="../../../design/07-test-plan/" class="md-nav__link">
         
   
   
@@ -985,7 +979,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/08-glossary/" class="md-nav__link">
+      <a href="../../../design/08-glossary/" class="md-nav__link">
         
   
   
@@ -1013,7 +1007,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+      <a href="../../../design/appendix-a-capacity-slos/" class="md-nav__link">
         
   
   
@@ -1041,7 +1035,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+      <a href="../../../design/appendix-b-worker-isolation/" class="md-nav__link">
         
   
   
@@ -1069,7 +1063,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+      <a href="../../../design/appendix-c-ai-implementation/" class="md-nav__link">
         
   
   
@@ -1097,7 +1091,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+      <a href="../../../design/appendix-d-alternatives-considered/" class="md-nav__link">
         
   
   
@@ -1125,7 +1119,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+      <a href="../../../design/appendix-e-capacity-planning/" class="md-nav__link">
         
   
   
@@ -1153,7 +1147,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+      <a href="../../../design/appendix-f-cost-model/" class="md-nav__link">
         
   
   
@@ -1181,7 +1175,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+      <a href="../../../design/appendix-g-future-enhancements/" class="md-nav__link">
         
   
   
@@ -1209,7 +1203,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+      <a href="../../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
         
   
   
@@ -1237,7 +1231,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+      <a href="../../../design/github-protocol-dependencies/" class="md-nav__link">
         
   
   
@@ -1269,8 +1263,6 @@
       
   
   
-    
-  
   
   
     
@@ -1334,23 +1326,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../../operations/" class="md-nav__link ">
               
   
   
@@ -1368,13 +1357,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1394,7 +1383,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../install/" class="md-nav__link">
+      <a href="../../../operations/install/" class="md-nav__link">
         
   
   
@@ -1422,7 +1411,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../air-gapped-install/" class="md-nav__link">
+      <a href="../../../operations/air-gapped-install/" class="md-nav__link">
         
   
   
@@ -1450,7 +1439,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../gitops/" class="md-nav__link">
+      <a href="../../../operations/gitops/" class="md-nav__link">
         
   
   
@@ -1478,7 +1467,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../upgrade/" class="md-nav__link">
+      <a href="../../../operations/upgrade/" class="md-nav__link">
         
   
   
@@ -1506,7 +1495,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../migration-from-arc/" class="md-nav__link">
+      <a href="../../../operations/migration-from-arc/" class="md-nav__link">
         
   
   
@@ -1534,7 +1523,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../migration-v1-to-v2/" class="md-nav__link">
+      <a href="../../../operations/migration-v1-to-v2/" class="md-nav__link">
         
   
   
@@ -1562,7 +1551,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../v1alpha1-deprecation/" class="md-nav__link">
+      <a href="../../../operations/v1alpha1-deprecation/" class="md-nav__link">
         
   
   
@@ -1590,7 +1579,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tenant-onboarding/" class="md-nav__link">
+      <a href="../../../operations/tenant-onboarding/" class="md-nav__link">
         
   
   
@@ -1618,7 +1607,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../resourcequota-sizing/" class="md-nav__link">
+      <a href="../../../operations/resourcequota-sizing/" class="md-nav__link">
         
   
   
@@ -1646,7 +1635,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../in-runner-image-builds/" class="md-nav__link">
+      <a href="../../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
   
@@ -1674,7 +1663,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../kata-dind-workloads/" class="md-nav__link">
+      <a href="../../../operations/kata-dind-workloads/" class="md-nav__link">
         
   
   
@@ -1702,7 +1691,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../p2p-image-distribution/" class="md-nav__link">
+      <a href="../../../operations/p2p-image-distribution/" class="md-nav__link">
         
   
   
@@ -1730,7 +1719,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../service-mesh-coexistence/" class="md-nav__link">
+      <a href="../../../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
   
@@ -1778,20 +1767,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
         
           
-          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="0">
             
   
   
@@ -1827,7 +1813,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability/" class="md-nav__link">
+      <a href="../../../operations/observability/" class="md-nav__link">
         
   
   
@@ -1855,7 +1841,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-metrics/" class="md-nav__link">
+      <a href="../../../operations/observability-metrics/" class="md-nav__link">
         
   
   
@@ -1883,7 +1869,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-metrics-access/" class="md-nav__link">
+      <a href="../../../operations/observability-metrics-access/" class="md-nav__link">
         
   
   
@@ -1911,7 +1897,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-alerting/" class="md-nav__link">
+      <a href="../../../operations/observability-alerting/" class="md-nav__link">
         
   
   
@@ -1939,7 +1925,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-dashboards/" class="md-nav__link">
+      <a href="../../../operations/observability-dashboards/" class="md-nav__link">
         
   
   
@@ -1967,7 +1953,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../observability-logging/" class="md-nav__link">
+      <a href="../../../operations/observability-logging/" class="md-nav__link">
         
   
   
@@ -2003,7 +1989,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cost-attribution/" class="md-nav__link">
+      <a href="../../../operations/cost-attribution/" class="md-nav__link">
         
   
   
@@ -2031,7 +2017,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../worker-rightsizing/" class="md-nav__link">
+      <a href="../../../operations/worker-rightsizing/" class="md-nav__link">
         
   
   
@@ -2059,7 +2045,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../node-shutdown-budgets/" class="md-nav__link">
+      <a href="../../../operations/node-shutdown-budgets/" class="md-nav__link">
         
   
   
@@ -2087,7 +2073,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../runbook/" class="md-nav__link">
+      <a href="../../../operations/runbook/" class="md-nav__link">
         
   
   
@@ -2112,37 +2098,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backup & restore
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../../operations/backup-restore/" class="md-nav__link">
         
   
   
@@ -2158,181 +2117,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Table of Contents
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-is-and-is-not-owned-by-the-cr" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What Is and Is Not Owned by the CR
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#backup-posture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Backup Posture
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Backup Posture">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#primary-gitops" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Primary: GitOps
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#secondary-etcd-and-per-resource-backups" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Secondary: etcd and per-resource backups
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#what-to-back-up" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What to Back Up
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#recovery-runbook" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Recovery Runbook
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Recovery Runbook">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#scenario-a-deleted-or-corrupted-actionsgateway-cr" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario A: Deleted or Corrupted ActionsGateway CR
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scenario-b-whole-tenant-namespace-lost" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario B: Whole Tenant Namespace Lost
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scenario-c-full-cluster--etcd-restore" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario C: Full Cluster / etcd Restore
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cr-stuck-terminating" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CR Stuck Terminating
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verification" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verification
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reference-links" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reference Links
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2345,7 +2129,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../velero-backup-restore/" class="md-nav__link">
+      <a href="../../../operations/velero-backup-restore/" class="md-nav__link">
         
   
   
@@ -2373,7 +2157,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../troubleshooting/" class="md-nav__link">
+      <a href="../../../operations/troubleshooting/" class="md-nav__link">
         
   
   
@@ -2401,7 +2185,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../security-operations/" class="md-nav__link">
+      <a href="../../../operations/security-operations/" class="md-nav__link">
         
   
   
@@ -2429,7 +2213,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../admission-policies/" class="md-nav__link">
+      <a href="../../../operations/admission-policies/" class="md-nav__link">
         
   
   
@@ -2457,7 +2241,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../release/" class="md-nav__link">
+      <a href="../../../operations/release/" class="md-nav__link">
         
   
   
@@ -2485,7 +2269,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../kata-ci-spike-runbook/" class="md-nav__link">
+      <a href="../../../operations/kata-ci-spike-runbook/" class="md-nav__link">
         
   
   
@@ -2540,10 +2324,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
+  <a href="#status" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Table of Contents
+        Status
       
     </span>
   </a>
@@ -2551,10 +2335,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-is-and-is-not-owned-by-the-cr" class="md-nav__link">
+  <a href="#1-what-was-measured" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What Is and Is Not Owned by the CR
+        1. What was measured
       
     </span>
   </a>
@@ -2562,22 +2346,33 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#backup-posture" class="md-nav__link">
+  <a href="#2-the-ordering-finding" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Backup Posture
+        2. The ordering finding
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Backup Posture">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Design
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Design">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#primary-gitops" class="md-nav__link">
+  <a href="#31-agc--reap-on-deletiontimestamp" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Primary: GitOps
+        3.1 AGC — reap on deletionTimestamp
       
     </span>
   </a>
@@ -2585,10 +2380,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#secondary-etcd-and-per-resource-backups" class="md-nav__link">
+  <a href="#32-gmc--gate-teardown-on-the-drain" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Secondary: etcd and per-resource backups
+        3.2 GMC — gate teardown on the drain
       
     </span>
   </a>
@@ -2596,10 +2391,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#what-to-back-up" class="md-nav__link">
+  <a href="#33-in-flight-jobs-are-killed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What to Back Up
+        3.3 In-flight jobs are killed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-accepted-residual-a-dead-agc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Accepted residual: a dead AGC
       
     </span>
   </a>
@@ -2612,82 +2418,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#recovery-runbook" class="md-nav__link">
+  <a href="#4-alternatives-rejected" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Recovery Runbook
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Recovery Runbook">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#scenario-a-deleted-or-corrupted-actionsgateway-cr" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario A: Deleted or Corrupted ActionsGateway CR
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scenario-b-whole-tenant-namespace-lost" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario B: Whole Tenant Namespace Lost
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#scenario-c-full-cluster--etcd-restore" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Scenario C: Full Cluster / etcd Restore
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cr-stuck-terminating" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CR Stuck Terminating
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#verification" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verification
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reference-links" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reference Links
+        4. Alternatives rejected
       
     </span>
   </a>
@@ -2714,254 +2448,229 @@
   
 
 
-<h1 id="backup-restore-and-disaster-recovery">Backup, Restore, and Disaster Recovery<a class="headerlink" href="#backup-restore-and-disaster-recovery" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Audience:</strong> SRE, Platform engineer</p>
-</blockquote>
-<p>The <code>ActionsGateway</code> custom resource (CR) is the <strong>source of truth</strong> for a tenant gateway. The Gateway Manager Controller (GMC) provisions every per-gateway child resource — the Actions Gateway Controller (AGC) Deployment, ServiceAccounts, RoleBinding, Service, NetworkPolicies, and metrics TLS Secrets — from that single CR, and owner-references each child to it. Deleting the CR therefore <strong>cascades</strong>: the apiserver garbage-collects all owner-referenced children. This makes the gateway cheap to recreate, but it also means an accidental <code>kubectl delete actionsgateway</code> (or a deleted namespace) tears down the running control plane.</p>
-<p>This document covers the backup posture that protects against that, and a runnable recovery procedure for restoring a deleted or corrupted gateway.</p>
-<p>For component upgrade/rollback (a different concern — the binary version, not the CR) see <a href="../upgrade/">upgrade.md</a>. For symptom-driven diagnosis see <a href="../troubleshooting/">troubleshooting.md</a>.</p>
-<hr />
-<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="#what-is-and-is-not-owned-by-the-cr">What Is and Is Not Owned by the CR</a></li>
-<li><a href="#backup-posture">Backup Posture</a></li>
-<li><a href="#primary-gitops">Primary: GitOps</a></li>
-<li><a href="#secondary-etcd-and-per-resource-backups">Secondary: etcd and per-resource backups</a></li>
-<li><a href="#what-to-back-up">What to Back Up</a></li>
-<li><a href="#recovery-runbook">Recovery Runbook</a></li>
-<li><a href="#scenario-a-deleted-or-corrupted-actionsgateway-cr">Scenario A: Deleted or Corrupted ActionsGateway CR</a></li>
-<li><a href="#scenario-b-whole-tenant-namespace-lost">Scenario B: Whole Tenant Namespace Lost</a></li>
-<li><a href="#scenario-c-full-cluster--etcd-restore">Scenario C: Full Cluster / etcd Restore</a></li>
-<li><a href="#cr-stuck-terminating">CR Stuck Terminating</a></li>
-<li><a href="#verification">Verification</a></li>
-</ul>
-<hr />
-<h2 id="what-is-and-is-not-owned-by-the-cr">What Is and Is Not Owned by the CR<a class="headerlink" href="#what-is-and-is-not-owned-by-the-cr" title="Permanent link">&para;</a></h2>
-<p>Restore planning hinges on one distinction: <strong>GMC-generated children reconcile back automatically from the CR; operator-supplied inputs do not.</strong> Re-applying the CR rebuilds everything the GMC owns, but it cannot reconstruct a credential it never created.</p>
-<p><strong>Reconciles automatically from the CR</strong> (owner-referenced, garbage-collected on CR deletion, regenerated on re-apply):</p>
+<h1 id="q547--deleting-an-actionsgateway-orphans-its-in-flight-worker-pods">Q547 — Deleting an ActionsGateway orphans its in-flight worker pods<a class="headerlink" href="#q547--deleting-an-actionsgateway-orphans-its-in-flight-worker-pods" title="Permanent link">&para;</a></h1>
+<p>Deleting a v2 <code>ActionsGateway</code> removes the AGC that is the sole reaper of its
+tenant's worker pods, but nothing removes the pods. They keep their
+node-disruption-safety annotations, so consolidation and scale-down leave them
+alone and a billable node stays pinned. Observed on the GKE dogfood cluster
+2026-07-31, on the teardown <code>scripts/dogfood/e2e-stop.sh</code> performs.</p>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<p><strong>Complete (2026-08-01).</strong> Both halves shipped with the behaviour promoted into
+<a href="../../../design/04-operational-flows/#411-tenant-teardown-and-child-reclamation">04-operational-flows.md §4.1.1</a>
+and <a href="../../../design/02-architecture/">02-architecture.md</a>; the operator-facing
+surface (the new reap reason, the two events, the <code>GatewayTerminating</code> condition,
+and the two runbooks) is in
+<a href="../../../operations/troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">troubleshooting.md</a>.
+No residual Queue row: §3.4's dead-AGC gap is an accepted trade-off, not deferred work.</p>
 <table>
 <thead>
 <tr>
-<th>Child resource</th>
-<th>Notes</th>
+<th>Phase</th>
+<th>Scope</th>
+<th>Status</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>AGC <code>Deployment</code></td>
-<td>Rebuilt from <code>spec</code>; the AGC reconstructs all in-memory session state on startup.</td>
+<td>1</td>
+<td>AGC reaps its worker pods when its <code>ActionsGateway</code> is terminating</td>
+<td>✅ Done</td>
 </tr>
 <tr>
-<td>AGC + worker <code>ServiceAccount</code></td>
-<td>Per-gateway names.</td>
+<td>2</td>
+<td>GMC gates v2 teardown on the drain, bounded by a deadline</td>
+<td>✅ Done</td>
 </tr>
 <tr>
-<td>AGC <code>RoleBinding</code></td>
-<td>Namespaced; binds the AGC ServiceAccount to the shipped tenant <code>ClusterRole</code>.</td>
-</tr>
-<tr>
-<td>AGC metrics <code>Service</code></td>
-<td>mTLS metrics endpoint.</td>
-</tr>
-<tr>
-<td>Workload + AGC <code>NetworkPolicy</code></td>
-<td>Egress lockdown, rebuilt per egress mode.</td>
-</tr>
-<tr>
-<td>Metrics TLS <code>Secret</code>s (server + client)</td>
-<td><strong>Regenerated fresh</strong> by the GMC — new key material each restore. A <code>ServiceMonitor</code> referencing the published client Secret picks up the new material automatically (same Secret name).</td>
+<td>3</td>
+<td>Tests, docs, operator-facing behaviour</td>
+<td>✅ Done</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Does <em>not</em> reconcile from the CR — must already exist or be recreated separately:</strong></p>
+<h2 id="1-what-was-measured">1. What was measured<a class="headerlink" href="#1-what-was-measured" title="Permanent link">&para;</a></h2>
+<p>All of this is read off the code, not inferred from the symptom.</p>
+<p><strong>Worker pods already carry an owner reference.</strong> Every worker pod and job Secret
+is stamped with a controller <code>OwnerReference</code> to its owning CR —
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/pod.go"><code>pod.go:265</code></a>, built by
+<code>Target.OwnerRef()</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/runnergroup_target.go"><code>runnergroup_target.go:41</code></a>
+for v1, the RunnerSet target for v2). So the Queue row's "add pod ownerRefs"
+option is already in place; it is the <em>owner</em> that survives, not the reference
+that is missing.</p>
+<p><strong>v1 is not affected.</strong> The v1 gateway's <code>reconcileDelete</code>
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go"><code>actionsgateway_controller.go:374</code></a>)
+deletes the gateway's <code>RunnerGroup</code> CRs first and waits for them to be gone.
+RunnerGroups are the gateway's own children (<code>spec.runnerGroups</code>), so deleting
+them cascades to the worker pods through the owner reference, and the
+RunnerGroup's <code>agentpool-cleanup</code> finalizer orders the GitHub-side cleanup.</p>
+<p><strong>v2 is affected, and it is a regression from the v2 API decomposition.</strong> v2
+RunnerSets are standalone tenant-authored CRs that only <em>reference</em> the gateway
+via <code>spec.gatewayRef</code>. v2 teardown deliberately leaves them alone —
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>actionsgateway_v2_controller.go:828</code></a>:
+"RunnerSets reference the gateway but are not owned by it, so they are not
+deleted — they degrade to Ready=False/GatewayNotFound via their own watch."
+That is the right call for the RunnerSet (a tenant can recreate the gateway and
+resume), but it means the worker pods' owner outlives their reaper.</p>
+<p><strong>Nothing else reaps them.</strong> The GMC holds no <code>pods</code> RBAC at all — the only
+<code>kubebuilder:rbac</code> marker for pods in the repo is the AGC's
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/doc.go"><code>cmd/agc/internal/controller/doc.go:10</code></a>).</p>
+<p><strong>The bound is 12h, not "forever".</strong> The Queue row overstates this. The
+provisioner stamps <code>activeDeadlineSeconds</code> from <code>maxWorkerLifetime</code>, which
+defaults to 12h (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go:207</code></a>),
+and the kubelet enforces it with no controller involved (Q438). An orphaned
+worker is therefore pinned for up to 12h by default — long enough to be the
+observed problem, and genuinely unbounded only when the tenant sets
+<code>maxWorkerLifetime: 0s</code> or its own <code>activeDeadlineSeconds</code> on the template.</p>
+<p><strong>Namespace deletion is a different failure, already documented.</strong> Deleting the
+tenant namespace does <em>not</em> strand worker pods — the namespace controller
+deletes them itself. It deadlocks instead, on the <code>agentpool-cleanup</code>
+finalizers, because the AGC Deployment lives inside the namespace being swept;
+<a href="../../../operations/migration-v1-to-v2/#teardown-order-is-load-bearing-never-delete-the-namespace-first">migration-v1-to-v2.md § Teardown order is load-bearing</a>
+calls it structural and
+<a href="../../../operations/troubleshooting/#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers">troubleshooting.md</a>
+carries the recovery. Q585 is the open row for the e2e spec that trips it. Q547
+is specific to <em>delete the gateway, keep the namespace</em> — the documented
+<strong>correct</strong> teardown order, and exactly what <code>e2e-stop.sh</code> does.</p>
+<h2 id="2-the-ordering-finding">2. The ordering finding<a class="headerlink" href="#2-the-ordering-finding" title="Permanent link">&para;</a></h2>
+<p>The obvious cheap fix — have the AGC reap its workers from its SIGTERM handler —
+does not work, and the reason is worth recording so it is not re-proposed.</p>
+<p><code>reconcileDelete</code> deletes its children in this order:</p>
 <table>
 <thead>
 <tr>
-<th>Resource</th>
-<th>Why it is not restored by re-applying the CR</th>
-<th>Recovery</th>
+<th>Order</th>
+<th>Child</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>GitHub App credential <code>Secret</code> (<code>spec.gitHubAppRef</code>)</td>
-<td>Operator/tenant-supplied; the GMC only <em>reads</em> it (no owner reference), so it <strong>survives</strong> a CR-only deletion but is lost if the Secret or namespace is deleted. Without it the gateway sits <code>Ready=False</code>/<code>CredentialUnavailable</code>.</td>
-<td>Recreate from your secret backup before re-applying the CR. See <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>.</td>
+<td>…</td>
+<td><code>ClusterRoleBinding</code></td>
 </tr>
 <tr>
-<td>Tenant <code>Namespace</code> + Pod Security Admission labels</td>
-<td>The namespace is operator-created; the GMC stamps PSA labels but does not create the namespace.</td>
-<td>Recreate the namespace (the GMC re-stamps PSA labels on reconcile).</td>
+<td>1</td>
+<td><code>Deployment</code> (the AGC) — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>:863</code></a></td>
 </tr>
 <tr>
-<td>Namespace <code>ResourceQuota</code></td>
-<td>Platform-owned — not a field on the CR. See <a href="../runbook/#adjusting-tenant-quota">Runbook — Adjusting Tenant Quota</a>.</td>
-<td>Re-apply from version control.</td>
+<td>…</td>
+<td><code>Service</code>, two <code>NetworkPolicy</code>s</td>
 </tr>
 <tr>
-<td><code>EgressProxy</code> CR (<code>spec.defaultProxyRef</code>)</td>
-<td>A separate CR with its own owned children; not owned by the <code>ActionsGateway</code>. A <code>defaultProxyRef</code> pointing at a missing proxy fails closed (<code>Ready=False</code>/<code>ProxyNotFound</code>).</td>
-<td>Re-apply the <code>EgressProxy</code> CR before (or alongside) the gateway.</td>
+<td>2</td>
+<td><code>RoleBinding</code> (the AGC's) — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>:868</code></a></td>
 </tr>
 <tr>
-<td>The cluster-scoped <code>ClusterRoleBinding</code> granting the AGC read of <code>ClusterRunnerTemplate</code></td>
-<td>Cluster-scoped objects cannot carry an owner reference to a namespaced CR, so the GMC deletes it explicitly via its cleanup finalizer and recreates it on reconcile.</td>
-<td>Reconciles automatically from the CR — no action needed.</td>
-</tr>
-<tr>
-<td><code>RunnerSet</code> CRs that target the gateway</td>
-<td>Reference the gateway but are <strong>not</strong> owned by it; they are never deleted by gateway teardown — they degrade to <code>Ready=False</code>/<code>GatewayNotFound</code> and recover when the gateway returns. Their <strong>worker pods</strong> are deleted, though: the AGC is their only reaper and goes with the gateway, so it reaps them first (<code>Ready=False</code>/<code>GatewayTerminating</code>, <code>reason="gateway_deleted"</code>) and any job they were running is lost.</td>
-<td>No action needed; the sets re-bind automatically. Drain before deleting a gateway if you need in-flight jobs to finish.</td>
+<td>3</td>
+<td><code>ServiceAccount</code> (the AGC's) — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>:869</code></a></td>
 </tr>
 </tbody>
 </table>
-<blockquote>
-<p><strong>In-flight jobs are not recoverable.</strong> Running jobs whose renew loop lapses during the outage are cancelled by GitHub and require a manual re-run. Queued (not-yet-acquired) jobs are redelivered to the next healthy session within ~2 minutes. This matches <a href="../runbook/#agc-total-failure">Runbook — AGC Total Failure</a>.</p>
-</blockquote>
-<hr />
-<h2 id="backup-posture">Backup Posture<a class="headerlink" href="#backup-posture" title="Permanent link">&para;</a></h2>
-<h3 id="primary-gitops">Primary: GitOps<a class="headerlink" href="#primary-gitops" title="Permanent link">&para;</a></h3>
-<p><strong>Keep the desired state in version control and let a GitOps controller (Argo CD, Flux, or <code>kubectl apply</code> from a pinned manifest repo) be the restore mechanism.</strong> This is the recommended posture: the CR is small, declarative, and fully describes the gateway, so a Git repository plus a reconcile loop <em>is</em> your backup and your restore.</p>
-<p>Track in version control, per tenant namespace:</p>
-<ul>
-<li>The <code>ActionsGateway</code> CR.</li>
-<li>Any <code>EgressProxy</code> CR referenced by <code>spec.defaultProxyRef</code>.</li>
-<li>The tenant <code>Namespace</code> manifest (including its security-profile label).</li>
-<li>The namespace <code>ResourceQuota</code>.</li>
-</ul>
-<p><strong>Never commit the GitHub App credential <code>Secret</code> in plaintext.</strong> Manage it with a secrets-aware tool — <a href="https://github.com/bitnami-labs/sealed-secrets">Sealed Secrets</a>, <a href="https://external-secrets.io/">External Secrets Operator</a>, or SOPS-encrypted manifests — so the encrypted form is safe in Git and the plaintext only ever exists in the cluster. The private key itself is never recoverable from the cluster (it is held only inside the Secret); keep the source <code>.pem</code> in a password manager or secrets vault so a new Secret can be minted if the namespace is lost. See <a href="../security-operations/">Security Operations</a> for credential-handling guidance.</p>
-<h3 id="secondary-etcd-and-per-resource-backups">Secondary: etcd and per-resource backups<a class="headerlink" href="#secondary-etcd-and-per-resource-backups" title="Permanent link">&para;</a></h3>
-<p>GitOps protects the <em>desired</em> state. To also capture live status and resources not in Git, add one of:</p>
-<ul>
-<li><strong>etcd snapshots</strong> — a cluster-level backup (<code>etcdctl snapshot save</code>, or your managed-cluster provider's equivalent) captures every object, including the credential Secret and live CR status. This is the broadest safety net and the basis for <a href="#scenario-c-full-cluster--etcd-restore">Scenario C</a>. Treat the snapshot as sensitive: it contains every Secret in the cluster.</li>
-<li><strong>Namespace-scoped backups</strong> — a tool such as <a href="https://velero.io/">Velero</a> can back up and restore a tenant namespace (CRs, Secrets, quota) as a unit, which is convenient for <a href="#scenario-b-whole-tenant-namespace-lost">Scenario B</a>. For concrete Velero backup/restore commands grounded in the ownership model above — including the label selector that skips the GMC-owned children so the controllers rebuild them — see <a href="../velero-backup-restore/">Velero Backup and Restore</a>.</li>
-<li><strong>Ad-hoc CR export</strong> — for a point-in-time copy of a single gateway:</li>
-</ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span>&gt;<span class="w"> </span>backup-&lt;name&gt;.yaml
-</code></pre></div>
-<p>Strip the runtime fields before re-applying (<code>status</code>, <code>metadata.uid</code>, <code>metadata.resourceVersion</code>, <code>metadata.creationTimestamp</code>, and the <code>metadata.finalizers</code> entry) — re-applying them can wedge the apply or resurrect a stale finalizer. The spec is the only part you need.</p>
-<h3 id="what-to-back-up">What to Back Up<a class="headerlink" href="#what-to-back-up" title="Permanent link">&para;</a></h3>
+<p>Steps 1–3 are a handful of API round trips apart — milliseconds — while a
+SIGTERM reap needs seconds of graceful shutdown. By the time the AGC could
+issue a delete, its <code>RoleBinding</code> is gone (authorization revoked) and its
+<code>ServiceAccount</code> is gone (its bound token no longer authenticates). The reap
+would <code>403</code>.</p>
+<p>Reordering does not rescue it either: the AGC needs both its RBAC <em>and</em> its pod
+alive, so any teardown that has started deleting children has already lost the
+race. The reap has to happen <strong>before</strong> the GMC deletes anything.</p>
+<h2 id="3-design">3. Design<a class="headerlink" href="#3-design" title="Permanent link">&para;</a></h2>
+<p>Two halves, settled 2026-08-01.</p>
+<h3 id="31-agc--reap-on-deletiontimestamp">3.1 AGC — reap on <code>deletionTimestamp</code><a class="headerlink" href="#31-agc--reap-on-deletiontimestamp" title="Permanent link">&para;</a></h3>
+<p>The RunnerSet reconciler already watches <code>ActionsGateway</code>
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go"><code>runnerset_controller.go:208</code></a>),
+so setting a deletion timestamp on the gateway already wakes every bound
+RunnerSet. On that signal the reconciler:</p>
+<ol>
+<li>stops both listener tiers (classic multiplexer and scale-set listener), so no
+   further job is acquired;</li>
+<li>reaps <strong>every</strong> worker pod carrying the set's <code>LabelRunnerSet</code>, unconditionally
+   — no TTL, no deadline — under a new <code>gateway_deleted</code> reap reason;</li>
+<li>zeroes <code>status.activeJobs</code> / <code>status.pendingJobs</code> and sets
+   <code>Ready=False</code> / <code>GatewayTerminating</code>.</li>
+</ol>
+<p>The trigger is a <strong>non-zero <code>deletionTimestamp</code> on a gateway that still exists</strong>,
+deliberately not a <code>NotFound</code>. <code>GatewayNotFound</code> keeps today's behaviour: an
+operator who deletes and immediately recreates a gateway must not have live
+workers reaped in the gap, and an AGC that restarts after teardown finished has
+no way to tell that gap from a real teardown.</p>
+<p>The check runs before reference resolution, not after, so a set whose template
+or proxy is also missing still reaps.</p>
+<p><strong>Why the counts are a sufficient gate.</strong> The shared reaper skips pods that
+already carry a <code>deletionTimestamp</code> before counting them
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go"><code>runner_shared.go:291</code></a>),
+so the counts fall to zero as soon as the deletes are <em>issued</em>. That is the
+right moment: once a pod has a deletion timestamp the kubelet finishes it with
+no controller involved, which is precisely the property Q547 is missing today.</p>
+<h3 id="32-gmc--gate-teardown-on-the-drain">3.2 GMC — gate teardown on the drain<a class="headerlink" href="#32-gmc--gate-teardown-on-the-drain" title="Permanent link">&para;</a></h3>
+<p><code>reconcileDelete</code> requeues <strong>before deleting any child</strong> while any RunnerSet in
+the gateway's namespace with <code>gatewayRef.name == ag.Name</code> reports
+<code>activeJobs + pendingJobs &gt; 0</code>. The GMC already holds <code>runnersets: get;list;watch</code>
+and already resolves this binding for the <code>RunnerSetsDegraded</code> rollup
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go"><code>evalRunnerSetHealth</code></a>),
+so the gate needs no new permission and no new watch.</p>
+<p>The deadline is derived from <code>ag.DeletionTimestamp</code> rather than held in memory,
+so it survives a GMC restart mid-teardown — the same stateless-deadline shape
+the reaper uses against <code>pod.CreationTimestamp</code>. On expiry the GMC emits a
+<code>WorkerDrainTimeout</code> Warning naming the sets that never drained and proceeds
+with teardown.</p>
+<p>Its value is <strong>90s</strong>, chosen against the caller rather than the healthy path —
+which resolves in seconds. Every e2e teardown deletes its gateway with
+<code>kubectl delete --timeout=2m</code>, and an operator following the documented teardown
+order does something similar; a wait that reaches the caller's own budget turns
+the bounded case into a <em>failed</em> delete rather than a slow one. The timeout only
+ever fires when no AGC is running to reap, and waiting longer in that case buys
+nothing.</p>
+<p>Neither binary gains RBAC. The AGC still holds its full tenant grant while it
+reaps, because the GMC has not deleted anything yet.</p>
+<h3 id="33-in-flight-jobs-are-killed">3.3 In-flight jobs are killed<a class="headerlink" href="#33-in-flight-jobs-are-killed" title="Permanent link">&para;</a></h3>
+<p>Reaping is immediate: a worker running a job when the gateway is deleted is
+deleted with it. This matches the existing contract — draining is the operator's
+job, and <code>e2e-stop.sh</code> already drains before deleting, with <code>SKIP_E2E_DRAIN=1</code>
+to override knowingly (<a href="../../gke-dogfood/#f3-e2e-operations--on-demand">gke-dogfood.md § F3</a>).
+Deleting a gateway means tear down now.</p>
+<h3 id="34-accepted-residual-a-dead-agc">3.4 Accepted residual: a dead AGC<a class="headerlink" href="#34-accepted-residual-a-dead-agc" title="Permanent link">&para;</a></h3>
+<p>If the AGC is already crashed, scaled to zero, or was never healthy, nothing
+reaps and nothing updates the counts. The GMC waits out its deadline, emits the
+Warning, and tears down; the pods are orphaned exactly as they are today,
+bounded by the 12h <code>activeDeadlineSeconds</code>. This is strictly no worse than the
+current behaviour and is now legible in an event rather than silent.</p>
+<p>Closing that residual would require the GMC to delete pods itself, which means
+cluster-wide <code>pods: list;delete</code> for a controller whose <code>clusterroles: bind</code> is
+deliberately <code>resourceNames</code>-scoped to <code>agc-tenant-role</code> and
+<code>agc-clusterrunnertemplate-reader</code> and which holds no <code>roles: create</code> — i.e. it
+cannot grant itself anything today. That is a real posture change and is not
+taken here.</p>
+<h2 id="4-alternatives-rejected">4. Alternatives rejected<a class="headerlink" href="#4-alternatives-rejected" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>What</th>
-<th>Where it should live</th>
-<th>Restores</th>
+<th>Option</th>
+<th>Why not</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>ActionsGateway</code> CR (spec)</td>
-<td>Git (GitOps)</td>
-<td>The whole gateway control plane</td>
+<td>Second owner reference from the pod to a gateway-scoped object</td>
+<td>Kubernetes GC deletes a dependent only when <strong>all</strong> of its owners are gone. The RunnerSet owner survives, so nothing would cascade.</td>
 </tr>
 <tr>
-<td><code>EgressProxy</code> CR (spec), if used</td>
-<td>Git (GitOps)</td>
-<td>The egress proxy pool</td>
+<td>AGC reaps from its SIGTERM handler</td>
+<td>Loses the teardown-ordering race — §2.</td>
 </tr>
 <tr>
-<td><code>Namespace</code> + security-profile label</td>
-<td>Git (GitOps)</td>
-<td>The tenant namespace</td>
+<td>GMC deletes the pods itself</td>
+<td>Needs cluster-wide pod delete for the GMC — §3.4.</td>
 </tr>
 <tr>
-<td><code>ResourceQuota</code></td>
-<td>Git (GitOps)</td>
-<td>Quota enforcement</td>
+<td>GMC deletes the RunnerSets</td>
+<td>Breaks the deliberate v2 contract that a tenant's RunnerSets survive gateway deletion and resume when it returns.</td>
 </tr>
 <tr>
-<td>GitHub App credential <code>Secret</code></td>
-<td>Encrypted (Sealed Secrets / ESO / SOPS) <strong>and</strong> the source <code>.pem</code> in a vault</td>
-<td>GitHub authentication</td>
-</tr>
-<tr>
-<td>Everything, including live status</td>
-<td>etcd snapshot / Velero</td>
-<td>Whole-cluster or whole-namespace recovery</td>
+<td>Shorten the default <code>maxWorkerLifetime</code></td>
+<td>Bounds the leak without fixing it, and trades away long-job support for every tenant to paper over a teardown bug.</td>
 </tr>
 </tbody>
 </table>
-<hr />
-<h2 id="recovery-runbook">Recovery Runbook<a class="headerlink" href="#recovery-runbook" title="Permanent link">&para;</a></h2>
-<p>Pick the scenario that matches the blast radius.</p>
-<h3 id="scenario-a-deleted-or-corrupted-actionsgateway-cr">Scenario A: Deleted or Corrupted ActionsGateway CR<a class="headerlink" href="#scenario-a-deleted-or-corrupted-actionsgateway-cr" title="Permanent link">&para;</a></h3>
-<p>The namespace and the GitHub App credential Secret are intact; only the CR is gone or has a broken spec.</p>
-<ol>
-<li><strong>Confirm the blast radius.</strong> The owned children are already gone (garbage-collected with the CR) or about to be:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway,deploy,svc,networkpolicy,sa,rolebinding<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-</code></pre></div></li>
-<li><strong>Confirm the credential Secret survived</strong> (it is not owned by the CR, so a CR-only deletion leaves it in place):
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;gitHubAppRef-name&gt;
-</code></pre></div>
-   If it is missing, recreate it first — see <a href="#scenario-b-whole-tenant-namespace-lost">Scenario B</a> step 3.</li>
-<li><strong>Re-apply the CR</strong> from version control (or your stripped CR export):
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-f<span class="w"> </span>actionsgateway.yaml
-</code></pre></div>
-   If a <code>defaultProxyRef</code> is set, ensure the <code>EgressProxy</code> CR exists first — apply it in the same step if needed.</li>
-<li><strong>Wait for reconcile.</strong> The GMC re-provisions all owned children within ~30 seconds and regenerates the metrics TLS Secrets fresh.</li>
-<li><strong><a href="#verification">Verify</a>.</strong></li>
-</ol>
-<h3 id="scenario-b-whole-tenant-namespace-lost">Scenario B: Whole Tenant Namespace Lost<a class="headerlink" href="#scenario-b-whole-tenant-namespace-lost" title="Permanent link">&para;</a></h3>
-<p>The namespace and everything in it — CR, credential Secret, quota — are gone.</p>
-<ol>
-<li><strong>Recreate and mark the namespace</strong> (including its security-profile label) from version control. See <a href="../../getting-started/#2-create-and-mark-the-tenant-namespace-and-set-its-quota">Getting Started §2</a>.</li>
-<li><strong>Re-apply the <code>ResourceQuota</code></strong> from version control.</li>
-<li><strong>Recreate the GitHub App credential Secret</strong> from your encrypted backup (or mint a fresh one from the source <code>.pem</code> in your vault). See <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>.</li>
-<li><strong>Re-apply the <code>EgressProxy</code> CR</strong>, if the gateway references one.</li>
-<li><strong>Re-apply the <code>ActionsGateway</code> CR.</strong></li>
-<li><strong><a href="#verification">Verify</a>.</strong> <code>RunnerSet</code>s that targeted this gateway flip from <code>Ready=False</code>/<code>GatewayNotFound</code> back to ready automatically once the gateway is up.</li>
-</ol>
-<blockquote>
-<p>Order matters only for the credential Secret and the <code>EgressProxy</code>: the gateway fails closed (<code>CredentialUnavailable</code> / <code>ProxyNotFound</code>) until both exist, then reconciles on its own once they appear — no gateway re-apply is needed after they land.</p>
-</blockquote>
-<h3 id="scenario-c-full-cluster--etcd-restore">Scenario C: Full Cluster / etcd Restore<a class="headerlink" href="#scenario-c-full-cluster--etcd-restore" title="Permanent link">&para;</a></h3>
-<p>For a control-plane loss, restore etcd from a snapshot per your Kubernetes distribution's documented procedure. After restore:</p>
-<ol>
-<li>Confirm the GMC is running: <code>kubectl rollout status deploy/gmc-controller-manager -n gmc-system</code>.</li>
-<li>The GMC reconciles every restored <code>ActionsGateway</code> CR idempotently — it compares desired vs. actual state and only applies what is missing. No resources are duplicated. This is the same idempotent recovery described in <a href="../runbook/#gmc-total-failure">Runbook — GMC Total Failure</a>.</li>
-<li><strong><a href="#verification">Verify</a></strong> each tenant namespace.</li>
-</ol>
-<h3 id="cr-stuck-terminating">CR Stuck Terminating<a class="headerlink" href="#cr-stuck-terminating" title="Permanent link">&para;</a></h3>
-<p>If a deleted CR hangs in <code>Terminating</code>, the GMC's cleanup finalizer (<code>actions-gateway.github.com/gmc-cleanup</code>) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down). The finalizer exists precisely to avoid orphaning the cluster-scoped <code>ClusterRoleBinding</code>.</p>
-<ol>
-<li>Check the GMC is running and reconciling — restart it if needed (<code>kubectl rollout restart deploy/gmc-controller-manager -n gmc-system</code>); it will complete teardown and clear the finalizer.</li>
-<li>Only <strong>force-remove the finalizer as a last resort</strong> when the GMC is permanently gone, and understand the trade-off: it leaves the cluster-scoped <code>ClusterRoleBinding</code> (<code>agc-clusterrunnertemplate-reader.&lt;namespace&gt;.&lt;name&gt;</code>) orphaned, which you must then delete by hand.
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Last resort only — orphans the cluster-scoped ClusterRoleBinding.</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;[{&quot;op&quot;:&quot;remove&quot;,&quot;path&quot;:&quot;/metadata/finalizers&quot;}]&#39;</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>clusterrolebinding<span class="w"> </span>agc-clusterrunnertemplate-reader.&lt;namespace&gt;.&lt;name&gt;
-</code></pre></div></li>
-</ol>
-<hr />
-<h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
-<p>After any restore, confirm the gateway is healthy — the same checks as <a href="../runbook/#adding-a-tenant">Runbook — Adding a Tenant</a>:</p>
-<ol>
-<li>The GMC has re-provisioned the children:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy,svc,networkpolicy,sa,rolebinding<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-</code></pre></div></li>
-<li>The AGC Deployment is available:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;agc-deployment-name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-</code></pre></div></li>
-<li>The CR reports healthy:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;Ready&quot;)].status}{&quot;\n&quot;}&#39;</span>
-</code></pre></div>
-   Expect <code>True</code>. If <code>CredentialUnavailable</code> or <code>ProxyNotFound</code>, the credential Secret or <code>EgressProxy</code> is still missing — recheck the relevant scenario step.</li>
-<li>Sessions are polling — <code>actions_gateway_active_sessions</code> should reach ≥ 1 per RunnerGroup within seconds. See <a href="../observability/">Observability</a>.</li>
-<li>Trigger a test workflow and confirm a worker pod is provisioned and the job completes.</li>
-</ol>
-<hr />
-<h2 id="reference-links">Reference Links<a class="headerlink" href="#reference-links" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../velero-backup-restore/">Velero Backup and Restore</a> — tool-specific how-to for namespace-level backup/restore with Velero</li>
-<li><a href="../runbook/">Runbook</a> — day-2 operations and incident response (AGC/GMC total failure)</li>
-<li><a href="../troubleshooting/">Troubleshooting</a> — symptom → diagnosis → resolution</li>
-<li><a href="../security-operations/">Security Operations</a> — credential handling and compromise response</li>
-<li><a href="../../getting-started/">Getting Started</a> — namespace, credential Secret, and CR creation steps</li>
-<li><a href="../upgrade/">Upgrade and Rollback</a> — component version changes (distinct from CR restore)</li>
-</ul>
 
 
 
@@ -2994,44 +2703,6 @@
       
         <footer class="md-footer">
   
-    
-      
-      <nav class="md-footer__inner md-grid" aria-label="Footer" >
-        
-          
-          <a href="../runbook/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Runbook">
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
-            </div>
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Previous
-              </span>
-              <div class="md-ellipsis">
-                Runbook
-              </div>
-            </div>
-          </a>
-        
-        
-          
-          <a href="../velero-backup-restore/" class="md-footer__link md-footer__link--next" aria-label="Next: Velero backup &amp; restore">
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Next
-              </span>
-              <div class="md-ellipsis">
-                Velero backup & restore
-              </div>
-            </div>
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
-            </div>
-          </a>
-        
-      </nav>
     
   
   <div class="md-footer-meta md-typeset">
@@ -3084,12 +2755,12 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../javascripts/extra.js"></script>
+        <script src="../../../javascripts/extra.js"></script>
       
     
   </body>

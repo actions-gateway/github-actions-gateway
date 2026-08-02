@@ -3259,6 +3259,11 @@ namespace last.</strong></p>
 <a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># 3. Only now, if you are retiring the tenant, the namespace.</span>
 <a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>namespace<span class="w"> </span>team-a
 </code></pre></div>
+<p>Step 2 blocks briefly while the AGC reaps the tenant's worker pods — deleting a v2
+gateway kills any job still running on it, because the AGC is those pods' only reaper
+and is torn down with the gateway. Drain first if you need in-flight jobs to finish:
+see <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">Worker Pods Reaped on Gateway
+Teardown</a>.</p>
 <p>Deleting the namespace first <strong>deadlocks</strong>, and it is structural rather than a timing
 race: the AGC Deployments live <em>inside</em> the tenant namespace, so namespace deletion
 removes the very controllers whose finalizers must clear. The namespace then sits in

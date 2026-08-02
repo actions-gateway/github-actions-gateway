@@ -2563,6 +2563,11 @@
 <td>ScaleSet worker still Running five minutes after GitHub reported its job terminal — it never received the job, or a sidecar outlived the runner; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a></td>
 </tr>
 <tr>
+<td>Workers reaped by a gateway teardown</td>
+<td><code>worker_pods_reaped_total{reason="gateway_deleted"}</code></td>
+<td>Someone deleted an <code>ActionsGateway</code> while its tenant had jobs running; those jobs are lost. Expected during a deliberate tenant teardown, and worth investigating otherwise — drain before deleting a gateway; see the <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">runbook</a></td>
+</tr>
+<tr>
 <td>Workers killed by the lifetime cap</td>
 <td><code>worker_pods_reaped_total{reason="lifetime_exceeded"}</code></td>
 <td>A worker outlived <code>maxWorkerLifetime</code> (default 12h) and the kubelet killed it. Either a wedged worker the cap correctly bounded, or a legitimately long job that needs the field raised — tell them apart before changing anything; see the <a href="../troubleshooting/#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded">runbook</a></td>
