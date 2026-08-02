@@ -2790,6 +2790,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#the-two-effects-can-belong-to-two-different-participants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two effects can belong to two different participants
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-two-effects-can-be-one-object-read-through-two-clients" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3823,6 +3834,20 @@ that outlives the object that made it — the fake is the first thing to fix, be
 <li><strong>Writing the test: wait on the state, not the call count.</strong> A count says a call was <em>served</em>, not that it <em>resolved</em> anything — a request whose body never arrives (cancelled client context) is still served and still counted. Q490's test now waits on <code>DeliveryResults</code>, the accounting it actually asserts about.</li>
 </ul>
 <p>To prove a window like this rather than guess at it, widen it: drop a <code>time.Sleep</code> between the two effects and confirm the test fails every time. Q490's probe took the flake from unreproducible in 200 local runs to 5 failures out of 5, and re-running it against the fix — still 8/8 green with the sleep in place — is the <a href="#proving-a-flake-fix-invert-it">negative control</a> that shows the ordering, not luck, is what closed it.</p>
+<h4 id="the-two-effects-can-belong-to-two-different-participants">The two effects can belong to two different participants<a class="headerlink" href="#the-two-effects-can-belong-to-two-different-participants" title="Permanent link">&para;</a></h4>
+<p>The gap need not be two effects of one operation. It can be one effect each from two
+<em>participants</em>, where the test waits on the one that is cheap to reach and asserts on
+the one that is not. Q600's <code>TestMultiplexer_DuplicateJobDeliveryProvisionsOnce</code>
+waited for the duplicate-delivery metric to reach <code>maxListeners-1</code> and then read the
+peak provisioner count. Only the <strong>losing</strong> siblings increment that metric, and a
+loser's work ends at the claim gate; the <strong>winner</strong> still has the claim registry,
+<code>SpawnReplacement</code>, and <code>StartRenewLoop</code> to clear before it enters the handler the
+count comes from. The losers can therefore satisfy the wait entirely on their own
+progress, and the assertion reads <code>0</code> — which is exactly the shape CI reported.</p>
+<p>So when picking the signal, ask <strong>who produces it</strong>, not just when. A counter fed by
+the actors you are <em>not</em> asserting about gates nothing about the one you are. The fix
+is the same as everywhere else in this section: wait on <code>handlerMax &gt;= 1</code>, the counter
+the invariant itself reads.</p>
 <h4 id="the-two-effects-can-be-one-object-read-through-two-clients">The two effects can be one object read through two clients<a class="headerlink" href="#the-two-effects-can-be-one-object-read-through-two-clients" title="Permanent link">&para;</a></h4>
 <p>There need not be a stub involved at all. A controller-runtime manager serves reads from its informer cache while an envtest suite's <code>k8sClient</code> reads the apiserver directly, so one status condition has <strong>two observers that never update together</strong>: the apiserver first, the cache a watch-delivery later. A test that waits on <code>k8sClient</code> and then does something the <em>controller</em> must judge has synchronized on the earlier of the two.</p>
 <p>Q559 is the worked example. <code>TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire</code> waited for <code>WorkerCapacityDeclined</code> through <code>k8sClient</code>, then enqueued one job and asserted it was rejected with <code>reason=capacity</code>. The admission rung reads that same condition back through <code>mgr.GetClient()</code>'s cache (<code>runnerSetTarget.capacityGateCondition</code>), so a delivery landing inside the gap is admitted and <strong>acquired</strong> — the CI failure's own log carries the <code>AcquireJob</code> line the passing run does not. The classic tier delivers a job once, so nothing redelivers and no larger timeout could have helped.</p>
