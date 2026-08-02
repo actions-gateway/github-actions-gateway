@@ -243,7 +243,8 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
                  dogfood/start-test dogfood/e2e-start-test dogfood/e2e-stop-test \
                  dogfood/delete-test \
-                 e2e/e2e-github-cleanup-test e2e/validate-cluster-test \
+                 e2e/e2e-github-cleanup-test e2e/e2e-report-summary-test \
+                 e2e/progress-watch-test e2e/validate-cluster-test \
                  fetch/download-verified-test fetch/pull-image-with-retry-test \
                  go/check-codegen-drift-test go/check-v2-api-sync-test \
                  go/coverage-test go/go-lint-scope-test go/go-vet-tags-test \
@@ -252,7 +253,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, dogfood e2e tenant teardown, dogfood cluster delete, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations, pinned cosign download path, release-verify artifact list)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, dogfood e2e tenant teardown, dogfood cluster delete, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations, pinned cosign download path, release-verify artifact list, e2e JUnit summary rendering, e2e progress heartbeat)
 	scripts/ci/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of
@@ -736,17 +737,35 @@ docker-build-fakegithub: ## Build and push only the fakegithub image (bake targe
 SUITE ?=
 _SUITE_FILTER = $(if $(filter single-node,$(SUITE)),!multi-node,$(if $(filter multi-node,$(SUITE)),multi-node,))
 
+# The suite appends spec start/end events here and scripts/e2e/progress-watch.sh
+# renders them into the periodic heartbeat (Q608). The watcher runs BESIDE ginkgo
+# rather than inside it because Ginkgo intercepts spec stdout for the duration of
+# each spec — the suite cannot narrate its own progress, only write a file
+# something else reads. Set empty to disable both halves.
+E2E_PROGRESS_FILE ?= $(REPO_ROOT)/tmp/e2e-progress.jsonl
+
+# E2E_PROGRESS_FILE sits with the other env vars INSIDE the recipe, after the
+# `cd`: a `VAR=x cd dir && cmd` prefix scopes VAR to the `cd` alone, so the
+# suite would silently emit nothing.
 _GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 	GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) WORKER_IMG=$(WORKER_IMG) WRAPPER_IMG=$(WRAPPER_IMG) \
+	E2E_PROGRESS_FILE=$(E2E_PROGRESS_FILE) \
 	$(GINKGO) run --tags e2e --timeout 30m --github-output --poll-progress-after 30s
 
 # The JUnit report lives under the repo-local tmp/ (gitignored), not /tmp:
 # host-wide temp is shared across worktrees/sessions (concurrent runs collide)
 # and sits outside the workspace, where sandboxed tooling can't read it back
 # when diagnosing a failed run.
+#
+# The watcher is killed on every exit path — the trap covers a failed suite and
+# a Ctrl-C alike — and the recipe still exits with ginkgo's status.
 .PHONY: e2e
 e2e: $(GINKGO) ## Run e2e tests; SUITE=standard|multi-node selects a subset, unset runs all specs
 	@mkdir -p $(REPO_ROOT)/tmp
+	@: >$(E2E_PROGRESS_FILE)
+	E2E_PROGRESS_FILE=$(E2E_PROGRESS_FILE) scripts/e2e/progress-watch.sh & \
+	watcher=$$!; \
+	trap 'kill -TERM $$watcher 2>/dev/null; wait $$watcher 2>/dev/null; true' EXIT INT TERM; \
 	$(_GINKGO_RUN) $(if $(_SUITE_FILTER),--label-filter '$(_SUITE_FILTER)',) \
 		--procs 6 --junit-report $(REPO_ROOT)/tmp/e2e-report.xml ./test/e2e/...
 
