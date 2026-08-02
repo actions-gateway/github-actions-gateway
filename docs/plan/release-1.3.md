@@ -137,6 +137,18 @@ ledger, not `grep '1.3-gate' docs/STATUS.md`, as authoritative: the rc.3-derived
 gates were filed as ordinary `bug` rows and pulled into scope by the decision
 recorded below, so the label grep under-reports them.
 
+**Cut `v1.3.0` from `main`, not from the validated RC's commit.** rc.5's
+validation produced two fixes to the gate harness itself — the e2e watch's
+behaviour on a queued run, and the `e2e` pool's machine type
+([Q627](../STATUS.md#Q627)) — and the harness ships in the branch. A `release-1.3`
+cut from rc.5's `a6f168ad` to make the tag match the validated artifact would
+strand both, so every future `v1.3.x` backport would re-run the gate with the
+bugs this release already paid to find. The rule is written up under
+[Patch releases and backports](../operations/release.md#patch-releases-and-backports).
+The delta this leaves to justify at the cut is small and entirely non-shipping:
+two test files, four docs, four dogfood scripts — no `api/`, no `cmd/` product
+code, no `config/crd`.
+
 **No RC has produced a verdict yet.** rc.1 aborted when the gate's then-repo-wide
 e2e routing caught concurrent CI; rc.2 reached the live API and returned Q550 and
 Q551 instead of a result; rc.3 aborted at `start.sh`'s AGC wait, which raced every
