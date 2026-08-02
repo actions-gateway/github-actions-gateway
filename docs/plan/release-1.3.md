@@ -314,23 +314,94 @@ The e2e node pool never scaled. Its kata runner pod stayed `Pending` behind
 `FailedScaleUp: GCE quota exceeded`, and the autoscaler went into backoff
 (`2 in backoff after failed scale-up`).
 
-**That refusal was transient, and the watcher bug is what made it fatal.** A
-direct probe afterwards — scaling the pool 0→1 by hand — brought up a
-`c2-standard-8` node carrying `katacontainers.io/kata-runtime=true`, satisfying
-the pending pod's selector exactly, at `C2_CPUS` 8/8. So the capacity the gate
-needed was available; what it did not have was time. The watcher tore the gate
-down at t+4m07s, well inside the autoscaler's backoff, so the retry that would
-have landed never got the chance. A gate that waited its normal ~25 minutes
-would most likely have recovered on its own.
+**The capacity was there; the autoscaler could not reach it.** A direct probe —
+scaling the pool 0→1 by hand — brings up a `c2-standard-8` carrying
+`katacontainers.io/kata-runtime=true`, satisfying the pending pod's selector
+exactly, at `C2_CPUS` 8/8. The cluster autoscaler asking for the same one node
+fails with `GCE quota exceeded` and then stays in backoff
+(`NotTriggerScaleUp: 1 in backoff after failed scale-up`) at `targetSize: 0`.
+**Why the two paths differ is unverified.** It is not simple exhaustion: at the
+second attempt every relevant quota had headroom — `C2_CPUS` 0/8, `INSTANCES`
+3/24, `IN_USE_ADDRESSES` 3/16 — and the autoscaler still would not retry.
 
-What remains true is the headroom, not a ceiling: `c2-standard-8` against
-`C2_CPUS` 8 is exactly one node, `maxNodeCount: 2` is unreachable, and a pool
-with zero headroom gives a transient refusal nowhere to retry into. Tracked as
+An earlier revision of this section called the refusal transient and said a
+full-length wait would have recovered it. The [second attempt](#the-rc5-re-run-2026-08-02)
+disproves that: the gate waited 30+ minutes and the autoscaler never left
+backoff. Recorded because the wrong version shipped once.
+
+What is established about the pool is headroom, not a ceiling: `c2-standard-8`
+against `C2_CPUS` 8 is exactly one node and `maxNodeCount: 2` is unreachable, so
+a refused scale-up has nowhere to retry into. Tracked as
 [Q627](../STATUS.md#Q627).
 
 **The teardown held.** `e2e-stop.sh` waited on the queued job rather than
 deleting the AGC under it — the 2026-07-31 incident's fix doing its job — and
 completed once the unschedulable run was cancelled by hand.
+
+### The rc.5 re-run (2026-08-02)
+
+Run against `main` at `c993c897`, with the watcher fix in. **No verdict: stopped
+by hand at t+33m with the e2e leg unable to start.** What it settled, and what it
+turned up, are both worth more than the missing verdict.
+
+**The watcher fix is confirmed.** It sat in the e2e leg for 33 minutes where the
+first attempt died after 13 seconds. That is the whole of what #1171 claimed.
+
+**It also has no upper bound.** `watch_run` loops until the run reports
+`completed`, with no deadline, so a run that stays `queued` holds the gate — and
+its billable nodes — indefinitely. Before the fix the gate failed instantly and
+wrongly; after it, it waits forever. Neither is a bounded wait, and the leg needs
+one. Tracked as [Q629](../STATUS.md#Q629).
+
+**The AGC stopped provisioning and reported itself healthy.** This is the
+finding, and it is in the product rather than the gate. Three workers were
+provisioned and each reaped while `Pending`:
+
+```
+19:44:14  reaped …5861eaa6…  phase=Pending  reason=completed_pending
+19:49:14  reaped …cb18c256…  phase=Pending  reason=completed_pending
+19:58:46  reaped …ac9fa6a7…  phase=Pending  reason=pending_deadline
+```
+
+After the `pending_deadline` reap the listener logged nothing for 16 minutes and
+created no further worker — including the 10 minutes after a Ready kata node was
+present, so capacity was not the constraint. Throughout, the RunnerSet reported
+`Ready=True … 1 job(s) assigned`, `WorkersUnschedulable=False`, and
+`JobProvisionStalled=False — no assigned job is waiting on a runner name or on
+worker capacity`. A job was assigned and waiting the entire time. The dispatched
+run never left `queued`.
+
+**The mechanism, since confirmed in tests.** A reaped Pending worker is reported
+to the listener as a **successful job**. `InformerPodWaiter.onPodDelete` resolves
+the wait with `Phase: PodSucceeded` and `ExternallyDeleted` deliberately unset;
+the session then maps anything that is not `PodFailed` to
+`broker.TaskResultSucceeded`, and every disruption-recovery arm requires
+`PodFailed`, so none fires. The assignment is concluded, its message deleted, and
+the job is never re-offered — while at GitHub the workflow job is still queued,
+no runner having ever registered. That is the 16 minutes of silence: from the
+AGC's point of view there was nothing left to do.
+
+Two characterisation tests pin it, each shown to fail when the mechanism is
+removed: `TestInformerPodWaiter_Q628_DeletedPendingPodResolvesSucceeded` on the
+production waiter and `TestProvisioner_Q628_ReapedPendingWorkerReportsSucceeded`
+on the result mapping.
+
+**`JobProvisionStalled=False` was correct, not broken.** The condition covers the
+listener's *deferral* reasons — `name_conflict` and `ceiling`, jobs held before a
+worker exists. A job whose worker was created and then reaped was never deferred,
+so the condition has nothing to report. The gap is that no condition covers this
+outcome at all.
+
+**Not a 1.3 regression.** The "deleted externally → treat as completion"
+semantics is present in `v1.2.0`; 1.3 refined the neighbouring recovery arms
+(Q497, Q502, Q575) without changing it. Tracked as
+[Q628](../STATUS.md#Q628).
+
+Class-wise this is Q550/Q551 territory — a listener availability bug reachable by
+any tenant whose workers go unschedulable in a burst — and both of those gated
+the tag. It parts company with them on age: those were defects the RC introduced
+or exposed in new code, this one has shipped in every release to date. Whether it
+gates is a decision for the cut.
 
 ### The rc.4 validation verdict (2026-08-02)
 
