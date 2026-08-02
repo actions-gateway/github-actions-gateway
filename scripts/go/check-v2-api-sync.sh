@@ -73,6 +73,13 @@ for dir in "$alpha_dir" "$beta_dir"; do
     fi
 done
 
+# Normalised copies land here rather than in a process substitution: awk's exit
+# status is unobservable through <(...), so a read that fails leaves that side
+# empty and the diff reports every line as deleted — a false divergence naming an
+# edit nobody made (Q596).
+NORM_TMP="$(mktemp -d)"
+trap 'rm -rf "$NORM_TMP"' EXIT INT TERM
+
 # Normalise the entitled differences so the diff sees only real divergence. awk
 # (not sed) per docs/development/bash-style.md.
 normalize() {
@@ -118,8 +125,14 @@ for file in "${alpha_files[@]}"; do
 
     checked=$((checked + 1))
     checked_lines=$((checked_lines + $(wc -l <"$alpha_dir/$file")))
+    if ! normalize "$alpha_dir/$file" >"$NORM_TMP/alpha" ||
+        ! normalize "$beta_dir/$file" >"$NORM_TMP/beta"; then
+        failed=1
+        printf 'check-v2-api-sync: could not read %s in both versions — trouble, not drift\n' "$file" >&2
+        continue
+    fi
     if diff_out="$(diff -u --label "$alpha_dir/$file" --label "$beta_dir/$file" \
-        <(normalize "$alpha_dir/$file") <(normalize "$beta_dir/$file"))"; then
+        "$NORM_TMP/alpha" "$NORM_TMP/beta")"; then
         continue
     fi
     failed=1
