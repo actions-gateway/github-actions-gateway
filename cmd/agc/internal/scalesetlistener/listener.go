@@ -112,6 +112,13 @@ const defaultWorkFolder = "_work"
 // the backstop for records the reap path could not deregister.
 const sweepTimeout = 30 * time.Second
 
+// teardownBudget bounds each teardown call the loop makes on its way out — the delete
+// half of the ack for anything already concluded, then the session delete. Both run on
+// a detached context inside the AGC pod's 60s grace period, so each gets a slice large
+// enough for a slow answer and small enough that a queue which never answers cannot
+// spend the budget the other one needs.
+const teardownBudget = 10 * time.Second
+
 // defaultRateLimitConditionAfter is how long GetMessage must have been answered 429
 // before the Listener surfaces RateLimited=True on the owning RunnerSet — the same
 // ten-minute window the classic listener uses, so a transient burst does not flap
@@ -703,6 +710,9 @@ func (l *Listener) createSession(ctx context.Context, ssID int) (*scaleset.Runne
 // the loop into a spin.
 func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScaleSetSession) {
 	defer l.deleteSession(ssID, sess)
+	// Ordered before the session delete by defer's LIFO: DeleteMessage is issued against
+	// the session, and a dead one answers the 404 the client reads as a successful ack.
+	defer l.flushDeletesOnExit(sess)
 
 	for {
 		if ctx.Err() != nil {
@@ -711,13 +721,15 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 		// Drop what GitHub no longer holds before re-offering the rest (Q553), so a
 		// dangling assignment is never handed to the provisioner again.
 		l.reconcileDeferred(ctx, ssID, sess)
+		// Delete the messages whose jobs have all concluded (Q583). Called here and again
+		// after handleMessage because those are the two places a job concludes, and any
+		// network work between a conclusion and its delete is a window in which a stop
+		// strands the message for the next process to replay (Q603).
+		l.flushDeletes(ctx, sess)
 		// Re-offer any job the queue will not deliver again (Q551). Once per poll cycle
 		// is the natural cadence: each job carries its own backoff deadline, and the
 		// deadlines are minutes while the loop turns over at worst every long-poll window.
 		l.retryDeferred(ctx, ssID)
-		// Delete the messages whose jobs have all concluded (Q583). Here rather than at
-		// settle time so a failed delete is retried on the next cycle.
-		l.flushDeletes(ctx, sess)
 		capacity := l.cfg.Capacity(ctx)
 		if capacity < 0 {
 			capacity = 0
@@ -744,6 +756,9 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 			continue
 		}
 		l.handleMessage(ctx, ssID, sess, msg)
+		// The completions this delivery concluded, deleted before the next long poll
+		// rather than after it (Q603).
+		l.flushDeletes(ctx, sess)
 	}
 }
 
@@ -1661,6 +1676,21 @@ func (l *Listener) unsettledJobs(jobs []scaleset.JobMessage, cleaned map[string]
 	return unsettled
 }
 
+// flushDeletesOnExit issues the outstanding delete half of the ack as the loop exits,
+// on a context detached from the cancelled one so it still runs (the deleteSession
+// rule). A job concludes in memory at settle and its message is deleted by a later
+// flushDeletes; a stop in between would otherwise leave that message in the queue for
+// the next process, which polls from cursor 0 with its provisioned/completed/abandoned
+// guards all empty and provisions a worker for a job that is over (Q603).
+func (l *Listener) flushDeletesOnExit(sess *scaleset.RunnerScaleSetSession) {
+	if sess == nil || sess.SessionID == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), teardownBudget)
+	defer cancel()
+	l.flushDeletes(ctx, sess)
+}
+
 // deleteSession tears the session down on loop exit, on a fresh background context so
 // it still runs when the loop's ctx is already cancelled. A later Listener re-creates
 // the session and replays any unacked messages.
@@ -1668,7 +1698,7 @@ func (l *Listener) deleteSession(ssID int, sess *scaleset.RunnerScaleSetSession)
 	if sess == nil || sess.SessionID == "" {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), teardownBudget)
 	defer cancel()
 	if err := l.cfg.Client.DeleteSession(ctx, ssID, sess.SessionID); err != nil {
 		l.log.Debug("scaleset: delete session on shutdown", "scaleSet", l.cfg.ScaleSetName, "err", err)

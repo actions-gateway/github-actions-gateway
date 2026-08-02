@@ -617,6 +617,14 @@ upstream session, an in-flight request, an unreported job result, a held lease.
 Enumerate it explicitly for each binary — the failure mode is always something
 nobody thought to enumerate.
 
+An acknowledgement the process has decided on but not yet sent counts, and it is
+easy to miss because in-process state says the work is finished. The AGC's
+scale-set listener concludes a job in memory and deletes its queue message
+separately; exiting in between left GitHub still holding a message the listener
+had already acted on, and the next process provisioned a worker for it (Q603).
+If a decision is only durable once a remote call lands, the exit path owes that
+call.
+
 **2. With controller-runtime, `mgr.Start` only waits for what the manager
 knows about.** Goroutines you spawn yourself from `Reconcile` are invisible to
 it: `mgr.Start` returns, `main` returns, and the process exits out from under
