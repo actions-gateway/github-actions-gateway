@@ -2617,14 +2617,6 @@
 <td>Q603 closed the graceful half; a hard kill between <code>settle</code> and its <code>DELETE</code> remains, and no ordering can close it. Both candidate fixes need something first — a live measurement, or a <a href="#Q597">Q597</a> decision — and the plan doc states which.</td>
 </tr>
 <tr>
-<td><a id="Q618"></a>Q618</td>
-<td><a href="../plan/test-progress-visibility/#phase-3--the-remaining-tiers-by-measurement">Unit <code>-race</code> progress via <code>go test -json</code></a></td>
-<td><code>tests</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Phase 3: measured 8% density, 58s silences; value is the deadlock case — a hung <code>-race</code> run says nothing until timeout. Wrapper over <code>go test -json</code>, no test-code changes. Denominator needs a <code>-list</code> pre-pass; decide first.</td>
-</tr>
-<tr>
 <td><a id="Q595"></a>Q595</td>
 <td><a href="../operations/troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">The cancel runbook's manual pod delete may re-run the job GitHub cancelled</a></td>
 <td><code>bug</code> <code>docs</code></td>

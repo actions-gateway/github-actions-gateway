@@ -2515,7 +2515,7 @@ formats and three polling loops.</p>
 <tr>
 <td>3</td>
 <td>Unit <code>-race</code> progress via <code>go test -json</code></td>
-<td>❌ Open — <a href="../../STATUS/#Q618">Q618</a></td>
+<td>✅ Shipped — Q618</td>
 </tr>
 <tr>
 <td>—</td>
@@ -2660,7 +2660,7 @@ rather than whole jobs:</p>
 <td>200 s</td>
 <td>8 %</td>
 <td>58 s</td>
-<td>worth doing — <a href="../../STATUS/#Q618">Q618</a></td>
+<td>✅ shipped in Phase 3</td>
 </tr>
 <tr>
 <td>integration (AGC)</td>
@@ -2689,10 +2689,31 @@ leaves you inferring which test hung.</p>
 <p>The mechanism is different and <em>simpler</em> than Phase 0's — plain Go tests are
 already visible to <code>go test -json</code>, so this is a wrapper over the existing
 event stream with <strong>no test-code changes at all</strong>.</p>
-<p>One honest limitation: <code>go test -json</code> has no denominator. Go does not know the
-total test count up front, so the line reads "37 done, 4 running" rather than
-"37/412". Recovering it needs a <code>go test -list '.*'</code> pre-pass. See
-<a href="#open-decisions">Open decisions</a>.</p>
+<p>Shipped as <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/gotest/progress/main.go"><code>devtools/gotest/progress</code></a>,
+which <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-test.sh"><code>go-test.sh</code></a> pipes <code>go test -json</code> through.
+It reconstructs the plain test log and interleaves the heartbeat. Full
+behaviour, the three measured properties of the <code>-json</code> stream it stands on, and
+the two deliberate differences from plain <code>go test</code> output:
+<a href="../../development/testing/#watching-a-unit-run-in-progress">testing.md § Watching a unit run in progress</a>.</p>
+<p>Two things the build changed from this plan:</p>
+<ul>
+<li><strong>The renderer had to reconstruct <code>go test</code>'s output, not just add to it.</strong>
+  <code>-json</code> replaces the plain log rather than accompanying it, so the wrapper
+  owns what a green package and a failing package print. That is what makes it
+  a Go program in <code>devtools/</code> rather than the bash+jq the earlier phases used —
+  <code>Output</code> fields are JSON-escaped free text, and getting a compile error's
+  bytes back intact is not a job for awk.</li>
+<li><strong>The denominator arrived at the package level, not the test level</strong> — see
+  <a href="#open-decisions">Open decisions</a> #2.</li>
+</ul>
+<p>A property worth recording, because it was not the reason for the change and is
+larger than the heartbeat: plain <code>go test</code> releases package output <strong>in
+command-line order</strong>, so a slow early package holds back every package behind
+it. <code>-json</code> has no such barrier (measured), so package results now appear as
+they complete.</p>
+<p>Not covered: <code>make check</code> reaches the unit tests through <code>coverage.sh</code>, a
+separate invocation that still runs plain <code>go test</code>. Its silence has not been
+measured, and design rule 5 says that measurement comes before the fix.</p>
 <h2 id="evaluated-and-rejected-migrating-other-suites-to-ginkgo">Evaluated and rejected: migrating other suites to Ginkgo<a class="headerlink" href="#evaluated-and-rejected-migrating-other-suites-to-ginkgo" title="Permanent link">&para;</a></h2>
 <p><strong>Conclusion: no. For progress reporting specifically, migrating to Ginkgo would
 make things materially worse, which is the opposite of the intuition.</strong></p>
@@ -2798,13 +2819,13 @@ phases.</p>
 </tr>
 <tr>
 <td>2</td>
-<td>Denominator for <code>go test -json</code> tiers</td>
-<td>A <code>go test -list '.*'</code> pre-pass buys "37/412" for the cost of a second (cache-warm) invocation on the slowest tier. Alternative: ship without a denominator</td>
+<td>~~Denominator for <code>go test -json</code> tiers~~</td>
+<td><strong>Settled 2026-08-02: packages, not tests.</strong> The <code>-list '.*'</code> pre-pass measured 22 s wall / 131 s CPU <em>with a warm build cache</em> — it compiles every test binary before any test runs, which also serializes the compile that go-test.sh's single invocation exists to overlap (Q17: 189 s → 163 s). <code>go list</code> gives a package denominator for ~0.3 s and no compilation</td>
 </tr>
 <tr>
 <td>3</td>
-<td>Rename <code>E2E_PROGRESS_INTERVAL</code></td>
-<td>If Phase 3 lands, the <code>E2E_</code> prefix is wrong. Rename with the generalization, not before</td>
+<td>~~Rename <code>E2E_PROGRESS_INTERVAL</code>~~</td>
+<td><strong>Settled 2026-08-02: renamed to <code>TEST_PROGRESS_INTERVAL</code></strong> with Phase 3, and both tiers read it. <code>0</code> now means "off" in both — sharing the knob without that would have made 0 a spin-loop in the e2e watcher. <code>E2E_PROGRESS_FILE</code>/<code>_SPEC_WIDTH</code> keep their prefix; they are genuinely Ginkgo-specific</td>
 </tr>
 <tr>
 <td>4</td>
