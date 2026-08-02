@@ -227,7 +227,9 @@ The one gap it cannot close: deleting the Queue row *and* the annotation togethe
 
 The gate's default is inverted from the Q345 original, which named two paths (`conditions.go`) and so covered 332 of ~2,550 identical lines. Now **every** `.go` file present in both packages must match, and a file added to both is covered the day it lands with no edit to the script. Two differences are normalised away before the diff — the `package` clause and a `+kubebuilder:storageversion` marker (only one version ever carries it). Files that genuinely differ per version are named in the script's `EXEMPT` list with the reason; a stale entry (naming a file no longer paired) fails, so the list cannot rot into a silent hole. A file present in one version only is reported but never fails — adding a test to one package is normal.
 
-Wired into `make check` and CI's `lint` job. Its behaviour — including that a body divergence in a previously-unguarded file actually fails — is asserted by `scripts/go/check-v2-api-sync-test.sh` under `make scripts-test`.
+A file the gate cannot **read** is reported as trouble, not drift: `could not read FILE in both versions`, alongside the reader's own error. The two are worth distinguishing because they look identical otherwise — the normaliser used to run inside a process substitution, where its exit status is unobservable, so a failed read left that side empty and the diff blamed every line on an edit nobody made (Q596). A "divergence" you cannot find in `git diff` is this, not drift.
+
+Wired into `make check` and CI's `lint` job. Its behaviour — including that a body divergence in a previously-unguarded file actually fails, and that an unreadable file reads as trouble — is asserted by `scripts/go/check-v2-api-sync-test.sh` under `make scripts-test`. That suite's `tree-in-sync` assertion is the one that runs the gate against the live tree; it prints the gate's exit code and full output on failure, so an occurrence is diagnosable from the CI log alone.
 
 ### The build-tag gate
 

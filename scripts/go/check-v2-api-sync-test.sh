@@ -125,11 +125,38 @@ root="$(fixture missing-dir)"
 rm -rf "$root/v2beta1"
 expect missing-directory 2 "$root"
 
-# The tracked tree is in sync.
-if "$CHECKER" >/dev/null 2>&1; then
+# A shared file the checker cannot read is trouble, not drift. Left unchecked,
+# awk's failure empties that side and the diff blames every line on an edit
+# nobody made — the shape a transient read failure takes (Q596).
+#
+# Gated on whether the mode bits actually bite rather than on $EUID: a job on a
+# self-hosted runner may read a 000 file, and asserting anyway would make this
+# suite the next flake.
+root="$(fixture unreadable)"
+chmod 000 "$root/v2beta1/shared_types.go"
+if cat "$root/v2beta1/shared_types.go" >/dev/null 2>&1; then
+    printf 'skip %-34s uid %s reads a mode-000 file\n' unreadable-file "$(id -u)"
+else
+    expect unreadable-file 1 "$root"
+    expect_output unreadable-file-explained 'trouble, not drift'
+fi
+chmod 644 "$root/v2beta1/shared_types.go"
+
+# The tracked tree is in sync. This is the one assertion reading the live tree,
+# so it is also the one whose failure can be something other than a divergence.
+# Keep the checker's own output and its exit code: discarding them is what left
+# Q596's single occurrence undiagnosable.
+tree_rc=0
+tree_out="$("$CHECKER" 2>&1)" || tree_rc=$?
+if ((tree_rc == 0)); then
     printf 'ok   %-34s tracked api/v2alpha1 vs api/v2beta1\n' tree-in-sync
 else
-    printf 'FAIL %-34s tracked v2 API packages diverge; run %s\n' tree-in-sync "$CHECKER" >&2
+    if ((tree_rc == 1)); then
+        printf 'FAIL %-34s tracked v2 API packages diverge; run %s\n' tree-in-sync "$CHECKER" >&2
+    else
+        printf 'FAIL %-34s %s exited %d — not a divergence\n' tree-in-sync "$CHECKER" "$tree_rc" >&2
+    fi
+    printf '%s\n' "$tree_out" >&2
     fails=$((fails + 1))
 fi
 
