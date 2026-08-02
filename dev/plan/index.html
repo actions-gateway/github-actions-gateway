@@ -2674,6 +2674,11 @@ markers per item.</p>
 <td>⚠️ Partial — filed 2026-07-31. Reading the code for the fix found the actuator missing too: the classic tier cancelled a job's context on a definitively lost lock and never deleted the pod, so every Q254 teardown orphaned a worker until <code>maxWorkerLifetime</code> (12h). That half shipped as <a href="../STATUS/#Q501">Q501</a>. Phase 0 answered 2026-08-01 off a capture already in the repo — Q468 recorded a live cancelled run queueing a <code>JobCompleted</code> in ~0.2 s, which on ScaleSet stamps the worker and hands it to the reaper's five-minute grace, so the unbounded defect is classic-only and candidate B is not worth building. One measurement remains: whether <code>renewjob</code> reports the loss, which <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> is now instrumented to read on its next live run</td>
 </tr>
 <tr>
+<td><a href="q583-restart-replay/">q583-restart-replay.md</a></td>
+<td>An AGC restart replays the scale-set queue from cursor 0 and provisions workers for jobs long concluded, because the listener acks by cursor only and its provisioned/completed/abandoned guards are process-scoped</td>
+<td>✅ Done 2026-08-01 — the row's "measure at the rc.4 gate first" instruction was discharged without the gate: the premise was already in the repo (a 2026-07-05 dogfood reconnect that provisioned 7 workers for a previous pass's jobs, plus Q468's ≥13 h retention), and <a href="q583-restart-replay/#the-answer-replayed-delete-ok-pruned-2026-08-01">Investigation G</a> then confirmed it live — a cursor-acked <code>JobAssigned</code> replays to a new session, <code>DeleteMessage</code> answers 204, and deleting prunes the queue. That closes Q264's P4 <code>DeleteMessage</code> unknown too. Delete-acking shipped in the same change: the listener issues the delete half of its ack once every job in a message has concluded, so replay still recovers anything in flight. Residual (unpruned process-scoped sets) is <a href="../STATUS/#Q597">Q597</a></td>
+</tr>
+<tr>
 <td><a href="docs/">docs.md</a></td>
 <td>Documentation roadmap across phases</td>
 <td>⚠️ Open — all Phase 1/2/3 items shipped except the Grafana dashboards half of 3.2; the alert rules, SLO recording rules and runbook links landed as <code>observability-alerting.md</code>, leaving dashboards as <a href="../STATUS/#Q568">Q568</a></td>

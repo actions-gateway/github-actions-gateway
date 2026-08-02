@@ -2575,14 +2575,6 @@
 <td>Unblocked: both named stalls are fixed (Q553's wedge, Q575's Pending worker). Not a namespace-scope bug — the drain is cluster-wide because the resize evicts every tenant's AGC. Re-measure on rc.4 before building: the row may no longer be real.</td>
 </tr>
 <tr>
-<td><a id="Q583"></a>Q583</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">An AGC restart replays the whole queue and provisions workers for jobs long gone</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q553's guard dies with the process; a fresh listener polls from cursor 0 because the tier never delete-acks (<code>DeleteMessage</code> wire shape unproven, a P2-surfaced P4 unknown). Measure at the rc.4 gate — it restarts AGCs — before building.</td>
-</tr>
-<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code></td>
@@ -2637,6 +2629,14 @@
 <td>🚫</td>
 <td>M</td>
 <td>Blocked by <a href="#Q539">Q539</a>. Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from worker pods.</td>
+</tr>
+<tr>
+<td><a id="Q597"></a>Q597</td>
+<td><a href="../plan/q583-restart-replay/#what-shipped">The listener's provisioned/completed/abandoned sets are never pruned</a></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>They grow with every job a listener handles, unbounded over its lifetime. Q583's delete-ack makes pruning possible — an entry is dead once its message is deleted — but dropping one early lets a replay double-provision, so it wants its own change.</td>
 </tr>
 <tr>
 <td><a id="Q319"></a>Q319</td>

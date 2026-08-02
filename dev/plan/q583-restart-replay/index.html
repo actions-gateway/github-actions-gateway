@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/plan/release-1.3/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/q583-restart-replay/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Release 1.3 Milestone Definition - GitHub Actions Gateway</title>
+        <title>Q583 — An AGC restart replays the queue and provisions workers for jobs long gone - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#release-13-milestone-definition" class="md-skip">
+        <a href="#q583--an-agc-restart-replays-the-queue-and-provisions-workers-for-jobs-long-gone" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Release 1.3 Milestone Definition
+              Q583 — An AGC restart replays the queue and provisions workers for jobs long gone
             
           </span>
         </div>
@@ -2324,22 +2324,55 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#scope-ledger" class="md-nav__link">
+  <a href="#the-defect" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scope ledger
+        The defect
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Scope ledger">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-was-already-measured" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What was already measured
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What was already measured">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#what-rc4-carries-and-the-two-scope-calls-behind-it" class="md-nav__link">
+  <a href="#the-backend-half--live-on-dogfood-2026-07-05" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What rc.4 carries, and the two scope calls behind it
+        The backend half — live on dogfood, 2026-07-05
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retention--2026-07-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retention — 2026-07-29
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-neither-one-settles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What neither one settles
       
     </span>
   </a>
@@ -2352,33 +2385,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-13-means" class="md-nav__link">
+  <a href="#investigation-g--the-measurement-the-fix-needs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What 1.3 means
+        Investigation G — the measurement the fix needs
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#definition-of-done" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Definition of Done
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Definition of Done">
+    <nav class="md-nav" aria-label="Investigation G — the measurement the fix needs">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#a-headline-feature-complete-satisfied" class="md-nav__link">
+  <a href="#a-404-reads-as-success-so-the-verdict-comes-off-the-wire" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A. Headline feature complete (satisfied)
+        A 404 reads as success, so the verdict comes off the wire
       
     </span>
   </a>
@@ -2386,43 +2408,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#b-deprecation-notice-satisfied" class="md-nav__link">
+  <a href="#what-would-make-a-result-invalid" class="md-nav__link">
     <span class="md-ellipsis">
       
-        B. Deprecation notice (satisfied)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#c-release-mechanics-satisfied" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        C. Release mechanics (satisfied)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#d-gate-integrity-satisfied" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        D. Gate integrity (satisfied)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#e-api-review-satisfied" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        E. API review (satisfied)
+        What would make a result invalid
       
     </span>
   </a>
@@ -2435,10 +2424,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#explicitly-out-of-scope" class="md-nav__link">
+  <a href="#the-fix-once-investigation-g-reports" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Explicitly out of scope
+        The fix, once Investigation G reports
       
     </span>
   </a>
@@ -2446,24 +2435,52 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#critical-path--ordering" class="md-nav__link">
+  <a href="#findings" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Critical path &amp; ordering
+        Findings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Findings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-answer-replayed-delete-ok-pruned-2026-08-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The answer: REPLAYED, DELETE-OK, PRUNED (2026-08-01)
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#guardrails" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#what-shipped" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Guardrails
+        What shipped
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decision-delete-ack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision: delete-ack
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2487,627 +2504,249 @@
   
 
 
-<h1 id="release-13-milestone-definition">Release 1.3 Milestone Definition<a class="headerlink" href="#release-13-milestone-definition" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Status: no gating Queue row remains — both 2026-07-31 gates closed the same
-day they were filed.</strong> Q550 and Q551 came out of the <code>v1.3.0-rc.2</code> validation
-window, where the RC gate's dispatched e2e job was wedged by the AGC itself:
-provisioning leaked runner registrations at GitHub (reap never deregistered
-them, and names derive from the job ID, so retries 409 against their own
-leftovers — Q550), and after four attempts the listener dropped the job
-permanently with no retry, condition, or Event (Q551). Both were availability
-bugs in the scale-set listener an ordinary tenant could hit — any burst of
-provisioning failures (quota, stockout, admission) starts the same cycle — so
-they gated the tag rather than riding the backlog.</p>
-<p><strong>Q550</strong> (<a href="../archive/q550-runner-registration-leak/">plan</a>) made the worker pod
-the record of its own registration: it carries the runner name, the reaper
-deregisters that record before deleting the pod, and a listener start sweeps
-records no live pod claims. <strong>Q551</strong> kept the skip that stops one stuck
-assignment wedging the batch, but now holds the job and re-offers it on a
-backoff, surfacing the stall as <code>JobProvisionStalled</code> plus a deferred-jobs
-gauge. Q550 removes most of what causes the collisions; Q551 makes what remains
-recoverable and visible.</p>
-<p><strong>The fixes are verified at unit and integration only.</strong> Neither can be
-re-confirmed against the live API below a dogfood run, so the RC validation
-below is where that lands. The paragraph below records the pre-2026-07-31
-history.</p>
-<p><strong>Previously: no gating Queue row remained.</strong> The original six closed 2026-07-26
-(Q359, Q400, Q404, Q411, Q412, Q393), and all four rows the
-<a href="#e-api-review-satisfied">API review</a> opened closed 2026-07-28:
-Q485 with the <code>windowStartTime</code> rename shipped, Q484 with a CEL rule requiring
-<code>nodeShare.allocatable</code> to declare cpu, memory, or both, and Q481 (<strong>ship
-<code>spec.sizing</code> as-is, deliberately</strong>) and Q486 (<strong>the two managed-autoscaler
-opt-ins keep their different shapes, deliberately</strong>) with no API change at all.</p>
-<p><strong>The last gates to clear were all API-shape questions</strong>, which is the pattern
-worth noticing: once the capability work landed, this release's residual risk
-was not anything unfinished but surface about to be frozen — cheap to fix until
-the tag, a conversion shim or a version bump afterwards.</p>
-<p><strong>The tag is still not cut.</strong> The Definition of Done also
-requires the release-candidate dogfood validation in
-<a href="../../operations/release/">operations/release.md</a>, which can only run against
-the actual RC image and is deliberately not tracked as a Queue row. Residuals
-deferred out of 1.3 are under
-<a href="#explicitly-out-of-scope">Explicitly out of scope</a>.</p>
-<p><strong><code>v1.3.0-rc.3</code> is published and verified; its dogfood validation is owed.</strong>
-Tagged 2026-08-01 off <code>7c18872d</code>, it is the first RC carrying the Q550/Q551
-fixes above — which is the reason it exists, since rc.2's own validation
-window is what exposed them and rc.2 therefore cannot be the artifact that
-clears them. <code>publish.yml</code> ran green and every artifact verification passed:
-<code>make verify-release</code> (five images, both charts), the v2 CRD manifest and
-<code>SHA256SUMS</code> blob signatures, an SBOM attestation spot-check on the amd64
-manifest, SLSA provenance binding to <code>7c18872d</code>, and both arches on the index.</p>
-<p><strong>Neither earlier RC produced a validation verdict</strong>, for unrelated reasons.
-rc.1 (2026-07-31, <code>2d85b4c6</code>) published and verified clean, but its validation
-aborted: the gate's then-repo-wide e2e routing caught concurrent sessions' CI,
-the teardown deleted the e2e AGC under a caught job, and the stranded queued
-runs wedged <code>main</code>'s e2e concurrency group until they were cancelled. That is
-fixed — the gate routes through a run-scoped <code>workflow_dispatch</code> input and
-<code>e2e-stop.sh</code> drains before deleting the AGC — and the orphaned-worker-pod
-product defect the incident exposed is Queue-tracked (GMC cascade reap). rc.2
-then reached the live API and returned Q550 and Q551 instead of a verdict. So
-<code>validate-release.sh v1.3.0-rc.3</code> is the first run in a position to clear this
-gate.</p>
-</blockquote>
-<p>The scope and Definition of Done for the <code>v1.3.0</code> tag. Queue rows that block this
-tag carry the <code>1.3-gate</code> label in <a href="../../STATUS/">docs/STATUS.md</a>; this file is what
-that label points at, per the "scope the release in a plan doc first, then add the
-label" rule in
-<a href="../../development/maintaining-backlog/#dont-pre-assign-release-versions-to-backlog-items">maintaining-backlog.md</a>.</p>
-<p>Cutting mechanics (pre-flight, tagging, verification, the dogfood release-candidate
-gate) live in <a href="../../operations/release/">operations/release.md</a> and are not repeated
-here.</p>
-<h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
-<p>Planned vs delivered, per the
-<a href="../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">scope-ledger convention</a>.
-The prose below carries the <em>why</em> of each; this table is the state.</p>
+<h1 id="q583--an-agc-restart-replays-the-queue-and-provisions-workers-for-jobs-long-gone">Q583 — An AGC restart replays the queue and provisions workers for jobs long gone<a class="headerlink" href="#q583--an-agc-restart-replays-the-queue-and-provisions-workers-for-jobs-long-gone" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> done 2026-08-01. Measured, then fixed: the replay is real,
+<code>DeleteMessage</code> works, deleting prunes the queue, and the listener now issues the
+delete half of its ack once every job in a message has concluded. The rc.4
+dogfood gate was never needed. Residual: <a href="../../STATUS/#Q597">Q597</a>.</p>
+<p>Q583 was filed with an instruction to measure at the rc.4
+gate before building, because the row's mechanism was asserted rather than
+observed. That instruction is discharged here: the measurement was already in
+the repo, twice, and the residual unknown is about the <strong>fix</strong>, not the defect.</p>
+<h2 id="the-defect">The defect<a class="headerlink" href="#the-defect" title="Permanent link">&para;</a></h2>
+<p>The scale-set listener acks by advancing a cursor and nothing else. <code>advanceCursor</code>
+(<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">listener.go</a>) moves an
+in-memory <code>lastMessageID</code>; no code path in <code>scalesetlistener</code> calls
+<code>Client.DeleteMessage</code>. The queue log is scale-set-scoped, so it outlives both the
+session and the process, and a new session polls from cursor 0.</p>
+<p>What makes the replay harmful rather than merely redundant is that the guards
+against it are process-scoped maps — <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code>
+(the last one Q553's give-up guard). A restarted AGC has all three empty, so a
+replayed <code>JobAssigned</code> for a job that concluded days ago passes every check and
+provisions a worker.</p>
+<p>The listener's own comment states this consequence outright; what it does not say
+is that <strong>nothing ever prunes the queue</strong>. The replay is therefore not bounded to
+a recent window — it is every message the scale set still retains.</p>
+<h2 id="what-was-already-measured">What was already measured<a class="headerlink" href="#what-was-already-measured" title="Permanent link">&para;</a></h2>
+<h3 id="the-backend-half--live-on-dogfood-2026-07-05">The backend half — live on dogfood, 2026-07-05<a class="headerlink" href="#the-backend-half--live-on-dogfood-2026-07-05" title="Permanent link">&para;</a></h3>
+<p><a href="../archive/gke-dogfood-turnup-findings/">gke-dogfood-turnup-findings.md</a>: during
+the Q264 P4 clean-green re-run, reconnecting a rebuilt AGC to the first pass's
+scale set <code>gag-scaleset2</code> (scaleSetID 4) replayed that pass's <code>JobAssigned</code>
+messages, "which briefly provisioned 7 pre-Q269 workers". The re-run moved to a
+fresh scale-set label — a new scale-set object, and so an empty queue — to avoid
+it.</p>
+<p>Those seven jobs had been provisioned <em>and</em> cursor-acked by the previous process
+before it went away. So the observation establishes the load-bearing fact: the
+cursor is session-scoped at the backend, the queue log is not, and a fresh
+session polling from 0 receives messages an earlier session already acked.</p>
+<p>It was written up as an aside to a different result, which is why it never became
+a bug row at the time.</p>
+<h3 id="retention--2026-07-29">Retention — 2026-07-29<a class="headerlink" href="#retention--2026-07-29" title="Permanent link">&para;</a></h3>
+<p><a href="../archive/q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a> measured
+an unacknowledged message surviving a <strong>13 h 3 m 40 s</strong> gap with no session in
+existence, redelivered to a session under a different owner name on its first
+poll. Read it as a lower bound only: <code>LOST</code> was never observed at any gap, so it
+says nothing about where retention ends.</p>
+<h3 id="what-neither-one-settles">What neither one settles<a class="headerlink" href="#what-neither-one-settles" title="Permanent link">&para;</a></h3>
+<p>Both were measured for other reasons, and each leaves a hole the other does not
+fill:</p>
+<ul>
+<li>Q468 acknowledges its <code>JobAssigned</code> <strong>in full</strong> — cursor <em>and</em> <code>DeleteMessage</code>
+  — so its check cannot separate "gone because deleted" from "gone because
+  cursor-acked". Its result is about an undeleted, un-cursor-acked message.</li>
+<li>The dogfood observation is the right shape but is a side-observation in a
+  narrative, with no message ids and no controlled before/after.</li>
+</ul>
+<p>Neither is a reason to doubt the defect. Both are reasons the <em>fix</em> wants its own
+measurement before it is built.</p>
+<h2 id="investigation-g--the-measurement-the-fix-needs">Investigation G — the measurement the fix needs<a class="headerlink" href="#investigation-g--the-measurement-the-fix-needs" title="Permanent link">&para;</a></h2>
+<p>One probe run settles three things, in one process, with no multi-hour gap and no
+dogfood cluster. Selector <code>PROBE_REPLAY_TEST=true</code>; fixture
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q583-replay-probe.yml"><code>q583-replay-probe.yml</code></a>.</p>
 <table>
 <thead>
 <tr>
-<th>Q-ID</th>
-<th>Item</th>
-<th>Gates?</th>
-<th>Status</th>
+<th>#</th>
+<th>Question</th>
+<th>Verdicts</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Q359</td>
-<td>Worker right-sizing live-validated on dogfood (<a href="#a-headline-feature-complete-satisfied">§ A</a>)</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-07-25</td>
+<td>1</td>
+<td>Does a cursor-acked but <strong>undeleted</strong> <code>JobAssigned</code> replay to a fresh session polling from cursor 0?</td>
+<td><code>REPLAYED</code> / <code>NOT-REPLAYED</code></td>
 </tr>
 <tr>
-<td>Q411</td>
-<td><code>v2alpha1</code> deprecation reaches the apiserver (<a href="#b-deprecation-notice-satisfied">§ B</a>)</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-07-26</td>
+<td>2</td>
+<td>Does <code>DeleteMessage</code> work on the wire?</td>
+<td><code>DELETE-OK</code> / <code>DELETE-FAILED</code></td>
 </tr>
 <tr>
-<td>Q412</td>
-<td><code>v2.0.0</code> named as the removal release (<a href="#b-deprecation-notice-satisfied">§ B</a>)</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-07-26</td>
-</tr>
-<tr>
-<td>Q393</td>
-<td>Announce bar derived from the git tags (<a href="#c-release-mechanics-satisfied">§ C</a>)</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-07-26</td>
-</tr>
-<tr>
-<td>Q400</td>
-<td>Heavy path gates cover <code>api/</code> and <code>scaleset/</code> (<a href="#d-gate-integrity-satisfied">§ D</a>)</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-07-26</td>
-</tr>
-<tr>
-<td>Q404</td>
-<td>Build-tagged Go files compiled and vetted in <code>make check</code> (<a href="#d-gate-integrity-satisfied">§ D</a>)</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-07-26</td>
-</tr>
-<tr>
-<td>Q481</td>
-<td><code>spec.sizing</code> shape (<a href="#e-api-review-satisfied">§ E</a>)</td>
-<td><code>1.3-gate</code></td>
-<td>✅ ship as-is, deliberately (2026-07-28)</td>
-</tr>
-<tr>
-<td>Q484</td>
-<td><code>nodeShare.allocatable</code> must declare cpu, memory, or both (<a href="#e-api-review-satisfied">§ E</a>)</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-07-28</td>
-</tr>
-<tr>
-<td>Q485</td>
-<td><code>windowStart</code> → <code>windowStartTime</code> rename (<a href="#e-api-review-satisfied">§ E</a>)</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-07-28</td>
-</tr>
-<tr>
-<td>Q486</td>
-<td>The two managed-autoscaler opt-ins keep their different shapes (<a href="#e-api-review-satisfied">§ E</a>)</td>
-<td><code>1.3-gate</code></td>
-<td>✅ no API change, deliberately (2026-07-28)</td>
-</tr>
-<tr>
-<td>Q550</td>
-<td>Scale-set runner registrations leak at GitHub</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-07-31</td>
-</tr>
-<tr>
-<td>Q551</td>
-<td>A job the listener cannot provision is skipped permanently</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-07-31</td>
-</tr>
-<tr>
-<td>Q576</td>
-<td>Ceiling-blocked provisioning retries hot, one deregister per attempt</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-08-01</td>
-</tr>
-<tr>
-<td>Q552</td>
-<td>GMC reverts a <code>kubectl rollout restart</code> of a managed AGC</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-08-01</td>
-</tr>
-<tr>
-<td>Q553</td>
-<td>AGC re-provisions jobs GitHub no longer has, livelocking a drain</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-08-01</td>
-</tr>
-<tr>
-<td>Q582</td>
-<td>v1/v2 proxy pools collide throughout migration coexistence</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-08-01</td>
-</tr>
-<tr>
-<td>Q575</td>
-<td>A worker whose <code>job-payload</code> secret is absent stalls</td>
-<td><code>1.3-gate</code></td>
-<td>✅ shipped 2026-08-01</td>
-</tr>
-<tr>
-<td><a href="../../STATUS/#Q577">Q577</a></td>
-<td><code>stop.sh</code> leaves the pool up when its drain cannot converge</td>
-<td><code>1.3-gate</code></td>
-<td>🔲 unblocked — re-measure at the gate, it may no longer be real</td>
-</tr>
-<tr>
-<td>Q583</td>
-<td>An AGC restart replays the queue and re-provisions jobs long gone</td>
-<td>rides</td>
-<td>✅ shipped 2026-08-01 (measured, then fixed — see below)</td>
-</tr>
-<tr>
-<td>Q406</td>
-<td>Capacity gate <code>AutoscalerVerdict</code> mode</td>
-<td>rides</td>
-<td>⤴ punted — <a href="#explicitly-out-of-scope">Explicitly out of scope</a></td>
-</tr>
-<tr>
-<td><a href="../../STATUS/#Q273">Q273</a>, <a href="../../STATUS/#Q264">Q264</a></td>
-<td><code>v1alpha1</code> + <code>v2alpha1</code> + classic <strong>removal</strong></td>
-<td>rides</td>
-<td>⤴ punted to <code>v2.0.0</code> — <a href="#explicitly-out-of-scope">Explicitly out of scope</a></td>
-</tr>
-<tr>
-<td>—</td>
-<td>RC validated on dogfood (<a href="#a-headline-feature-complete-satisfied">§ A</a>)</td>
-<td>gates</td>
-<td>🔲 rc.3: gate aborted at leg 1, no verdict</td>
+<td>3</td>
+<td>After deleting, does a third session polling from cursor 0 still see it?</td>
+<td><code>PRUNED</code> / <code>STILL-REPLAYS</code></td>
 </tr>
 </tbody>
 </table>
-<p><strong>Cut condition: zero open gating rows in this ledger</strong> <strong>plus the
-release-candidate dogfood validation</strong>, the ledger's last row. It has no Q-ID
-because it cannot be a Queue item — it only runs against a published RC — but it
-carries a row so its state is visible rather than buried in prose. Read the
-ledger, not <code>grep '1.3-gate' docs/STATUS.md</code>, as authoritative: the rc.3-derived
-gates were filed as ordinary <code>bug</code> rows and pulled into scope by the decision
-recorded below, so the label grep under-reports them.</p>
-<p><strong>No RC has produced a verdict yet.</strong> rc.1 aborted when the gate's then-repo-wide
-e2e routing caught concurrent CI; rc.2 reached the live API and returned Q550 and
-Q551 instead of a result; rc.3 aborted at <code>start.sh</code>'s AGC wait, which raced every
-rollout and reported a healthy AGC as timed out (fixed in #1090). Each was
-diagnosed on its own, which is how three consecutive misses went unremarked — the
-row exists so the fourth does not.</p>
-<h3 id="what-rc4-carries-and-the-two-scope-calls-behind-it">What rc.4 carries, and the two scope calls behind it<a class="headerlink" href="#what-rc4-carries-and-the-two-scope-calls-behind-it" title="Permanent link">&para;</a></h3>
-<p>rc.3's validation window produced five defects (Q575–Q578, Q580) plus a revive
-trigger on Q553. Q575, Q576, Q578, and Q580 have shipped; Q577 is unblocked by
-Q575 landing, but both stalls its row named are now fixed, so the gate should
-re-measure it rather than assume it is still real. <strong>Q576, Q552, and Q553 gate rather than ride</strong> for the same
-reason Q550 and Q551 did: each is an availability bug an ordinary tenant reaches,
-not a dogfood-harness artifact. Q576 in particular spun a saturated scale set at
-~0.8 provisioning attempts/s for 14 minutes, issuing 704 GitHub deregister calls
-for a single job.</p>
-<p><strong>Q582 was pulled into scope by an explicit maintainer decision (2026-08-01),
-though it was not an rc.3 finding.</strong> It surfaced while diagnosing the Q570 e2e
-flake: the v1 and v2 proxy pools both stamp <code>app: actions-gateway-proxy</code>, so
-during coexistence each pool's pods match the other's PDB and both HPAs wedge on
-<code>AmbiguousSelector</code> — neither autoscales. The reasoning for gating on it: 1.3 <em>is</em>
-the <code>v2.0.0</code> deprecation notice, so shipping it with a documented v1→v2 migration
-path that silently disables autoscaling on both pools undercuts the release's own
-message.</p>
-<p><strong>Q583 rides, and no longer waits on the gate.</strong> Q553's give-up guard is
-process-local, so a restarted AGC polls from cursor 0 and re-provisions jobs long
-gone. That was filed as an unproven mechanism to measure at the rc.4 gate — but
-the measurement was already in the repo: the Q264 P4 clean-green re-run
-(2026-07-05) reconnected a rebuilt AGC to an existing scale set and <strong>briefly
-provisioned 7 workers</strong> for the previous pass's jobs, and Q468 measured the queue
-retaining an unacked message across a 13 h session gap. The premise is confirmed;
-what remains unproven is the <code>DeleteMessage</code> wire shape the <em>fix</em> would rely on,
-which <a href="../q583-restart-replay/#the-answer-replayed-delete-ok-pruned-2026-08-01">Investigation G</a>
-settled on 2026-08-01 in a single probe run against the live API: the replay is
-real, <code>DeleteMessage</code> answers 204, and deleting prunes the queue. Neither
-measurement needed a dogfood cluster, so nothing here ever blocked on rc.4 — and
-Q583 still rides rather than gating, because it is a restart-time burst rather
-than a defect an ordinary tenant meets in steady state.</p>
-<h2 id="what-13-means">What 1.3 means<a class="headerlink" href="#what-13-means" title="Permanent link">&para;</a></h2>
-<p>Two things, one of which only a release can deliver.</p>
-<p><strong>The headline is worker right-sizing.</strong> Per-<code>RunnerSet</code> usage observability,
-recommendations surfaced in <code>RunnerSet.status</code>, and opt-in auto-apply sizing
-profiles, with the supporting managed-VPA and bring-your-own proxy autoscaler work
-alongside it. This is the first capability in the project with no Actions Runner
-Controller (ARC) equivalent, so it is the release's positioning story, not just a
-changelog entry. Plan:
-<a href="../runner-sizing-profiles/">runner-sizing-profiles.md</a>.</p>
-<p><strong>1.3 is the deprecation notice for <code>v2.0.0</code>.</strong> The project's stated policy is that
-API removals happen "on a named release announced at least one release ahead"
-(<a href="../../roadmap/">roadmap.md</a>, <a href="../../operations/v1alpha1-deprecation/">v1alpha1-deprecation.md</a>).
-Three removals are coupled and all land at <code>v2.0.0</code>:</p>
-<table>
-<thead>
-<tr>
-<th>Removed at <code>v2.0.0</code></th>
-<th>Currently</th>
-<th>Why it is coupled</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>v1alpha1</code> (<code>actions-gateway.github.com</code>)</td>
-<td>deprecated, served</td>
-<td>already on the removal track</td>
-</tr>
-<tr>
-<td><code>v2alpha1</code> (<code>actions-gateway.com</code>)</td>
-<td>deprecated, served</td>
-<td>superseded by <code>v2beta1</code> as storage version</td>
-</tr>
-<tr>
-<td>classic acquisition machinery</td>
-<td>served</td>
-<td><code>v2beta1</code> is ScaleSet-only, so classic exists <em>only</em> to serve the two alpha versions</td>
-</tr>
-</tbody>
-</table>
-<p>The coupling is the load-bearing fact: because <code>v2beta1</code> is already ScaleSet-only,
-classic acquisition has no consumer other than <code>v1alpha1</code> and <code>v2alpha1</code> objects.
-Removing those versions removes classic's entire reason to exist, so splitting them
-across releases would buy nothing and cost operators a second breaking migration.
-1.3 announces all three; <code>v2.0.0</code> executes all three.</p>
-<p><code>v2.0.0</code> itself is gated on the <code>v2</code> (General Availability) API being available and
-validated. That work is planned separately in <a href="../v2-ga/">v2-ga.md</a> and is
-explicitly <strong>not</strong> part of 1.3.</p>
-<h2 id="definition-of-done">Definition of Done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
-<p>All gating items closed, <code>make check</code> green, and the mandatory dogfood
-release-candidate validation from
-<a href="../../operations/release/">release.md</a> passing on the latest RC.</p>
-<h3 id="a-headline-feature-complete-satisfied">A. Headline feature complete (<em>satisfied</em>)<a class="headerlink" href="#a-headline-feature-complete-satisfied" title="Permanent link">&para;</a></h3>
-<p>No open gating row: Q359 closed 2026-07-25.</p>
-<blockquote>
-<p><strong>The headline feature is fully live-validated, and the dogfood RC gate is
-satisfied on completion rate.</strong> The second dogfood session (2026-07-25) ran the
-ScaleSet-migrated tenant to <code>sampleCount: 36</code> and confirmed both previously
-unexercised paths: all three <code>SizingDrift</code> states (<code>SizingWithinRange</code>, and
-<code>SizingDriftDetected</code> for both waste and OOM risk) and <code>Binpack</code> actuating at
-Guaranteed QoS with derived <code>requests == limits</code>. Detail:
-<a href="../runner-sizing-profiles/#both-20-sample-paths-confirmed-2026-07-25-second-session">runner-sizing-profiles.md</a>.</p>
-<p><strong>Completion rate, measured in the same session.</strong> Before the migration, Classic
-orphaned 81% of the jobs it acquired (85 acquired, 16 worker pods). After it, the
-first 28 GAG jobs ran <strong>28/28 green with zero orphans</strong>. A further 14 jobs ran while the
-tenant was misconfigured mid-session (<code>maxWorkers</code> raised past the namespace
-<code>ResourceQuota</code>, an operator mistake made during the soak), of which 6 were
-non-green. That window is excluded from the rate and recorded separately in the
-plan doc rather than folded in, in either direction. Queued jobs also survived a 16-minute AGC outage intact
-instead of being burned, which Classic could not have done.</p>
-<p><strong>What the gate still needs at tag time</strong> is a <em>release-candidate</em> run per
-<a href="../../operations/release/">release.md</a> on the actual RC image. This session ran
-<code>e0acd60</code>, a pre-release build, so it establishes the tenant and the feature are
-sound; it does not stand in for validating the tagged artifact.</p>
-</blockquote>
-<h3 id="b-deprecation-notice-satisfied">B. Deprecation notice (<em>satisfied</em>)<a class="headerlink" href="#b-deprecation-notice-satisfied" title="Permanent link">&para;</a></h3>
-<p>No open gating row: Q411 and Q412 both closed 2026-07-26. The notice now exists in
-both halves the policy needs, the API surface and the docs.</p>
-<blockquote>
-<p><strong>Q411 is closed (2026-07-26): the deprecation reaches the apiserver.</strong> All five
-<code>actions-gateway.com</code> kinds carry <code>+kubebuilder:deprecatedversion</code> on <code>v2alpha1</code>, so
-the regenerated CRDs (and their chart copies) set <code>deprecated: true</code> plus a
-<code>deprecationWarning</code> naming <code>v2beta1</code> as the replacement and <code>v2.0.0</code> as the removal
-release. Verified against a real apiserver, not just the generated YAML: on a kind
-cluster carrying <code>api/config/crd</code>, a <code>v2alpha1</code> read <em>and</em> write each emit
-<code>Warning: actions-gateway.com/v2alpha1 RunnerTemplate is deprecated; use
-actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it.</code>,
-the write still succeeds, and the same object read at <code>v2beta1</code> emits nothing. The
-warning names <code>v2.0.0</code> itself, so the API surface and the docs state one removal
-release rather than two half-answers. <code>check-v2-api-sync.sh</code> now normalises the
-marker as an entitled per-version difference, alongside <code>+kubebuilder:storageversion</code>.</p>
-<p><strong>Q412 is closed (2026-07-26): <code>v2.0.0</code> is named.</strong>
-<a href="../../operations/v1alpha1-deprecation/">v1alpha1-deprecation.md</a> is now the
-standing notice for all three removals rather than for <code>v1alpha1</code> alone: it leads
-with a what-<code>v2.0.0</code>-removes table (each row with its replacement and the move),
-states the coupling, and ends with a pre-upgrade checklist. The name is repeated
-wherever an operator forms a plan from the docs (README, roadmap, getting-started,
-install, upgrade, tenant-onboarding, migration-v1-to-v2, migration-from-arc,
-troubleshooting, why-gag) and in the design half (Appendix H, 03-api-contracts).
-Two stale statements were corrected in passing: "you can stay on <code>v1alpha1</code>
-indefinitely" (upgrade.md) and "Classic is slated for removal one <em>minor</em> release
-out" (tenant-onboarding, troubleshooting), which understated a major-tag removal.
-The <code>CiliumFQDN</code>/<code>CalicoFQDN</code> enum values were left saying "a future release (on the
-classic/<code>v1alpha1</code> deprecation clock)"; naming a release for them was filed as
-Q428 and is now <strong>settled: <code>v3.0.0</code> at the earliest</strong>, not
-<code>v2.0.0</code>. They are enum members of the beta version <code>v2beta1</code>, which <code>v2.0.0</code> keeps
-serving, and an API element is removable only by incrementing the version — so they
-outlive this release's bundle by a major tag. Stated for operators in
-<a href="../../operations/v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">v1alpha1-deprecation.md</a>.</p>
-</blockquote>
-<p>The docs half of the notice already shipped as <strong>Q409</strong>: the ARC migration guide,
-getting-started, tenant onboarding, install, and the positioning pages were all
-re-routed onto <code>v2beta1</code>, leaving <code>v2alpha1</code> described only as the <code>gag-migrate</code>
-on-ramp. That settles which version new tenants onboard on, which was the open
-question this release's deprecation decision needed answered.</p>
-<h3 id="c-release-mechanics-satisfied">C. Release mechanics (<em>satisfied</em>)<a class="headerlink" href="#c-release-mechanics-satisfied" title="Permanent link">&para;</a></h3>
-<p>No open gating row: Q393 closed 2026-07-26.</p>
-<blockquote>
-<p>The docs-site announce bar's version is now derived from the git tags at build
-time rather than hand-edited per release, so <code>v1.3.0</code> names itself with no
-pre-flight step and cannot ship the stale banner every prior stable tag did.
-<code>publish.yml</code>'s <code>announce-bar</code> job still gates the release, but now by building
-the site at the tag and asserting the <em>rendered</em> banner names it. Details:
-<a href="../../development/website/#the-announce-bar">website.md § The announce bar</a>.</p>
-</blockquote>
-<h3 id="d-gate-integrity-satisfied">D. Gate integrity (<em>satisfied</em>)<a class="headerlink" href="#d-gate-integrity-satisfied" title="Permanent link">&para;</a></h3>
-<p>No open gating row: Q400 and Q404 both closed 2026-07-26.</p>
-<p>Both mattered for the same reason, which is why they were scoped together: a gate
-that never ran leaves <code>main</code> green on evidence it never gathered, and that
-undermines the "<code>main</code> is green" precondition that
-<a href="../../operations/release/">release.md</a> pre-flight assumes.</p>
-<p>Q404 closed 2026-07-26: <code>make check</code> compiled no build-tagged file, so a compile
-break in an <code>integration</code>/<code>e2e</code>/<code>load</code> package reached only CI's path-gated heavy
-tiers, which may not even run on the PR that introduced it. <code>make
-build-tags-check</code> now vets the workspace with every first-party tag enabled, in
-both the local gate and CI's <code>lint</code> job, and a coverage assertion fails the gate
-if a <em>new</em> build tag appears that its list does not cover, so the hole cannot
-reopen in a new shape. Deliberately out of the fix: widening <code>golangci-lint</code>
-itself to the tagged trees, which needed its own triage pass and landed
-separately as Q430 (closed 2026-07-27) — <code>run.build-tags</code> now covers the same
-102 files, and the 21 findings estimated here turned out to be 100 once
-golangci-lint's default <code>max-same-issues: 3</code> cap was lifted. Detail:
-<a href="../../development/testing/#the-build-tag-gate">testing.md § The build-tag gate</a>.</p>
-<p>Q400 closed 2026-07-26: <code>api/**</code> and <code>scaleset/**</code> were added to the
-integration, security-scan, and e2e filters, and <code>api/config/**</code> to
-manifest-validate — a fourth instance of the same gap, found while fixing the
-first three, where the workflow validates the five v2 CRDs by name but never
-gated on the directory holding them. The residual risk that motivated the gate
-is unchanged and not retroactively addressed: the scaleset/api-only changes that
-merged since <code>v1.2.0</code> were never seen by those tiers, and this fix only stops
-new ones from slipping through. The recurrence guard — linting the filters
-against <code>go.work</code> rather than maintaining them by hand — was Q429, deliberately
-left out of the gate because it is new tooling rather than a correctness fix.</p>
-<p>Q429 closed 2026-07-26 anyway, inside the release: <code>make path-filters-check</code>
-(<code>scripts/ci/check-path-filters.sh</code>, also CI's <code>path-filters</code> job) now fails when a
-<code>go.work</code> module is missing from a filter whose jobs exercise the whole
-workspace, when a <code>filters:</code> block declares a filter the gate has not been told
-to treat as workspace-covering or narrow-by-design, or when a pattern names a
-path that no longer exists. It reproduces the Q400 gap end-to-end: dropping
-<code>scaleset/**</code> from <code>integration-test.yml</code> fails the gate naming the module and
-the pattern to add. What it deliberately does NOT decide is whether a narrow
-filter should have been widened — that judgement is still the reviewer's, and
-the Q400 residual risk above is unaffected. Detail:
-<a href="../../development/testing/#the-path-filter-gate">testing.md § The path-filter gate</a>.</p>
-<h3 id="e-api-review-satisfied">E. API review (<em>satisfied</em>)<a class="headerlink" href="#e-api-review-satisfied" title="Permanent link">&para;</a></h3>
-<p>1.3 is the first release to run the
-<a href="../../development/api-review/">pre-release API review</a>, and it is also the
-release that motivated it: Q476 renamed <code>capacityGate.mode: On</code> to <code>Observe</code>
-days before this tag would have published it, caught by an unrelated
-conversation rather than by any step.</p>
-<p><strong>Reviewed:</strong> the surface <code>scripts/release/api-surface-since.sh v1.2.0</code> reports — the
-<code>RunnerSet</code> additions (<code>spec.sizing</code>, <code>spec.capacityGate</code>,
-<code>spec.maxWorkerLifetime</code>, <code>status.sizingRecommendation</code>,
-<code>status.sizingProfileState</code>), the <code>ActionsGateway</code> additions
-(<code>spec.agcAutoscaling</code>, <code>spec.clusterCapacity</code>), <code>EgressProxy</code>'s
-<code>spec.managedAutoscaling</code>, thirteen new condition types/reasons, and the
-<code>actions-gateway.com/migrated-from-namespace</code> label. None of these has appeared
-in a tagged release, so all of them are in the cheap window until this tag.</p>
-<p><strong>Found and fixed before the tag:</strong> <code>capacityGate.mode: On</code> → <code>Observe</code> (Q476) —
-the value named <em>that</em> the gate was on rather than <em>how</em> it decides, which stops
-distinguishing anything once Q407's reserved <code>Probe</code>/<code>Provision</code> join the same
-axis. And <code>status.sizingRecommendation[].windowStart</code> → <code>windowStartTime</code>
-(Q485, closed 2026-07-28) — upstream spells timestamp fields <code>somethingTime</code>
-(<code>startTime</code>, <code>lastTransitionTime</code>), and this is the API's only project-defined
-<code>metav1.Time</code>, so it sets the precedent every later one is read against. The
-rename had to land in <strong>both</strong> v2alpha1 and v2beta1: the spoke↔hub conversion is
-a JSON round-trip (<code>api/v2alpha1/conversion.go</code>), so a tag renamed on one side
-only would have silently dropped the field on conversion rather than failing to
-compile.</p>
-<p><strong>Found and shipped as-is, deliberately:</strong> Q481 — <code>sizing.profile</code> carries two
-axes (where the request comes from; what limits follow) the same way
-<code>capacityGate.mode</code> did before Q470, leaving a Guaranteed node share and
-history-derived-requests-under-hand-set-limits without a profile of their own.
-Gating because
-the tag freezes the shape either way. <strong>Closed 2026-07-28 without an API
-change</strong>, on three grounds: the cost that made Q470 worth a break is absent
-here — both axes are the set owner's own choice, so nothing asks a tenant to
-assert a fact they do not own; the axes are not orthogonal, so a split shape
-still needs a <code>only meaningful when …</code> CEL rule for the headroom percent (which
-is defined off the <em>observed peak</em>, and a peak exists only under the usage
-source); and both cells are reachable <strong>additively</strong> in any later minor, which is
-the difference that matters — Q470 had to beat its tag because its fix removed
-enum values, and this one does not. The review also found the Guaranteed node
-share is reachable <em>today</em>, as a side effect of the limit-lift guard rather than
-by design — verified, pinned by
-<code>TestApplySizingProfileNodeShareLiftedLimitsReachGuaranteed</code>, and written up for
-operators in
-<a href="../../operations/worker-rightsizing/#getting-guaranteed-qos-out-of-nodeshare">worker-rightsizing.md</a>.
-Full rationale, and the rule for
-extending the enum (<code>profile</code> is an intent enum: new values name a distinct
-operator intent, mechanism recombinations go in a sibling field):
-<a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix-h §H.7</a>.</p>
-<blockquote>
-<p>The premise the row was filed under — "the sizing model is unvalidated" —
-<strong>expired before the close, and in the direction that made shipping as-is
-easier, not harder.</strong> <code>Binpack</code> was live-validated 2026-07-25 and <code>Throughput</code>
-on the dogfood <code>ci</code> tenant days later (Q449), which turns the derivation the
-split would have had to redefine from an unproven rule into a measured one.
-<code>NodeShare</code> is still envtest-only (Q448) — and it is the profile whose missing
-cell was the complaint, so the case for reshaping around it is weaker still.</p>
-</blockquote>
-<p><strong>Also shipped as-is, deliberately:</strong> Q486 — 1.3 publishes two managed-autoscaler
-opt-ins with <strong>different shapes</strong>:
-<code>EgressProxy.spec.managedAutoscaling</code> is a <code>*bool</code> defaulting <code>true</code> (an
-<em>opt-out</em> of a managed HorizontalPodAutoscaler, Q173), while
-<code>ActionsGateway.spec.agcAutoscaling</code> is a block whose <em>presence</em> is the opt-in
-into a managed VerticalPodAutoscaler and which carries its own <code>mode</code> enum
-(Q360). An operator meeting both in one changelog can fairly ask why "managed
-autoscaling" is spelled two ways. <strong>Closed 2026-07-28 without an API change</strong>, on
-three grounds, each of which decides its own side independently:</p>
+<p>Question 1 is Q583's premise under control. Questions 2 and 3 are the P4-era
+<code>DeleteMessage</code> unknown that Q264 left open — and together they are the proof
+that the proposed fix actually fixes the defect, taken <em>before</em> the fix is
+written rather than after.</p>
+<p>Phases, all in one run:</p>
 <ol>
-<li><strong>The direction is not a style choice — it follows what already ships.</strong> The
-   proxy pool's HPA was managed <em>before</em> 1.3; Q173 adds only the ability to stop
-   managing it, so the field must default to today's behaviour and can only be an
-   opt-out. The AGC VerticalPodAutoscaler is new, with no behaviour to preserve,
-   so it defaults off. Reversing either is the actual defect: an opt-in
-   <code>managedAutoscaling</code> deletes the HPA of every pool that upgrades, and a
-   default-on <code>agcAutoscaling</code> hands the single AGC pod's requests to an
-   autoscaler nobody asked for. Making them symmetric would mean breaking one of
-   those two, so this difference survives any redesign.</li>
-<li><strong>The container follows whether the opt-in carries knobs.</strong>
-   <code>managedAutoscaling</code> is a pure ownership toggle — the HPA's knobs
-   (<code>minReplicas</code>, <code>maxReplicas</code>, <code>targetCPUUtilizationPercentage</code>) already exist
-   as siblings and predate it, so a block would have to either move them (a wire
-   break) or sit next to them holding nothing. <code>agcAutoscaling</code> carries <code>mode</code>,
-   which is meaningful only when opted in; block presence gives that knob a home
-   <em>and</em> is the switch, so there is no <code>enabled: true</code> + <code>mode:</code> pair to keep
-   consistent — which is exactly the "sibling fields gated by one value" tell
-   under <a href="../../development/api-review/#one-field-answers-one-question">one field answers one question</a>.</li>
-<li><strong>Consistency is owed to the field's neighbours, not to the other CRD.</strong>
-   <code>managedAutoscaling</code> sits beside <code>managedNetworkPolicy</code> on the same
-   <code>EgressProxySpec</code> — same <code>*bool</code>, same <code>+kubebuilder:default=true</code>, same "the
-   GMC owns this object unless you say otherwise" meaning — and
-   <code>managedNetworkPolicy</code> shipped in <code>v1.1.0</code>, so that pattern is already
-   published and already learned. Reshaping <code>managedAutoscaling</code> to match a field
-   on a different CRD would make it the odd one out in the object an operator
-   actually reads it in.</li>
+<li>Ensure the durable scale set, open session <strong>gen 1</strong>, wait for a dispatched
+   job, receive its <code>JobAssigned</code> (message <em>M</em>).</li>
+<li>Advance the cursor past <em>M</em> without deleting it — exactly what the shipping
+   listener does.</li>
+<li>Cancel the run so the job goes terminal with no runner involved (the Q468
+   technique), then receive and cursor-ack its <code>JobCompleted</code> (message <em>C</em>),
+   again without deleting. The queue is now in the state a live AGC leaves
+   behind: every message acked by cursor, none deleted, the job provably over.</li>
+<li>Delete session gen 1. Open session <strong>gen 2</strong> under a different owner name and
+   poll from cursor 0 — <strong>measurement 1</strong>.</li>
+<li><code>DeleteMessage</code> on whatever came back — <strong>measurement 2</strong>.</li>
+<li>Delete session gen 2. Open session <strong>gen 3</strong>, poll from cursor 0 —
+   <strong>measurement 3</strong>.</li>
+<li>Delete the session and the scale set, which takes the queue log with it.</li>
 </ol>
-<blockquote>
-<p><strong>The <code>*bool</code> was checked against <a href="../../development/api-review/#prefer-a-string-enum-to-a-bool">prefer a string enum</a> rather than grandfathered.</strong>
-It passes because the axis it names is genuinely two-valued: it answers "does
-the GMC own the <code>&lt;name&gt;-proxy</code> HPA?", and <em>who else</em> owns scaling is
-deliberately not our question — an external KEDA, VPA, or custom HPA targets
-the stable Deployment name without telling us. If we ever manage a second
-autoscaler flavour, that is a new sibling naming the mechanism, not a third
-value here — additively, in any later minor.</p>
-</blockquote>
-<p>The accept is a real freeze: <code>managedAutoscaling</code> could not become a block later
-without a wire break. What is bought for that is a field that matches its own
-object and preserves upgrade behaviour; what is paid is one cross-CRD asymmetry,
-mitigated by both shapes being documented where operators meet them
-(<a href="../../operations/tenant-onboarding/#letting-an-autoscaler-size-the-agc-agcautoscaling">tenant-onboarding.md</a>)
-and by the rule now generalised in
-<a href="../../development/api-review/#let-the-opt-ins-direction-follow-what-already-ships">api-review.md § Let the opt-in's direction follow what already ships</a>.</p>
-<p><strong>Found by the second pass, and now closed too:</strong> the three further gating rows
-that second pass filed were Q485 and Q486 above, and one last one:</p>
+<p>A different owner name per generation is deliberate: it is what makes the backend
+see a new listener arriving rather than the same one resuming, which is what a
+restarted AGC is.</p>
+<h3 id="a-404-reads-as-success-so-the-verdict-comes-off-the-wire">A 404 reads as success, so the verdict comes off the wire<a class="headerlink" href="#a-404-reads-as-success-so-the-verdict-comes-off-the-wire" title="Permanent link">&para;</a></h3>
+<p>Building the probe surfaced something that would have invalidated its own headline
+result. <code>Client.DeleteMessage</code> reports a 404 or 410 as success — for a listener
+that is right, since a message already gone is a benign ack — but a backend that
+does not serve the endpoint <strong>also</strong> answers 404. The typed return says "acked"
+for the case the fix depends on and for the case that kills it.</p>
+<p>So measurement 2 is read from the response status via a <code>ResponseObserver</code>, not
+from the error. This is the rule Investigation E already states for its own
+reporting: the finding is what the wire did, not what the client made of it.</p>
+<p>It also constrains the fix. A listener that delete-acks and trusts
+<code>DeleteMessage</code>'s error would believe it had pruned a queue it had not touched,
+turning Q583 from a loud defect into a silent one. Whatever ships has to treat a
+404 as an ack only where that is genuinely safe, or check the status itself.</p>
+<h3 id="what-would-make-a-result-invalid">What would make a result invalid<a class="headerlink" href="#what-would-make-a-result-invalid" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Q484 — fixed 2026-07-28.</strong> A <code>nodeShare.allocatable</code>
-  carrying neither cpu nor memory was admitted, and <code>sizingProfileState</code> then
-  reported <code>Active</code> while nothing was derived. Fixed with the CEL rule the row
-  scoped — <code>'cpu' in self || 'memory' in self</code>, on the <code>allocatable</code> field
-  itself rather than on <code>sizing</code>, so ratcheting suppresses it on every write
-  that does not touch the envelope. Declaring one of the two stays valid: the
-  other resource keeps the template's ask. Rationale in
-  <a href="../../design/appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">appendix-h §H.7</a>;
-  the rejection has an
-  <a href="../../operations/troubleshooting/#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory">operator runbook</a>.
-  This was a <strong>validation tightening</strong>, which is wire-breaking after a tag — the
-  reason the row was 1.3-gating rather than ordinary backlog.</li>
+<li><strong>A <code>NOT-REPLAYED</code> verdict at step 4 must not be read as "no defect".</strong> It
+  would instead mean the backend prunes on session delete, and would contradict
+  the 2026-07-05 dogfood observation — in which case the contradiction is the
+  finding, and the next question is what differs (scale set age, job count,
+  backend change since July).</li>
+<li><strong>A <code>DELETE-FAILED</code> at step 5 says nothing about step 4's result.</strong> The two are
+  independent; record both.</li>
+<li><strong>Step 6 with no step 5</strong> is meaningless. If the delete failed, a <code>PRUNED</code> at
+  step 6 means something else pruned the queue, not that the delete worked.</li>
 </ul>
-<blockquote>
-<p><strong>Q481 and Q484 both concerned <code>NodeShare</code>, and did not overlap.</strong> Q481 asked
-whether the <em>shape</em> is right and answered yes; Q484 was a missing validation on
-a field that shape already has. Closing Q481 as ship-as-is neither fixed nor
-blocked it — worth stating because "the sizing shape was reviewed and accepted"
-is easy to misread as covering both.</p>
-</blockquote>
-<p><strong>Accepted without change:</strong> the bare-<code>string</code> enum fields
-(<code>capacityGate.mode</code>, <code>sizing.profile</code>, <code>clusterCapacity.nodeAutoscaling</code>,
-<code>status.sizingProfileState</code>) versus the named types used by <code>VPAUpdateMode</code> and
-<code>EgressPolicyMode</code>. Wire-identical either way, so it is a Go-API break for <code>api</code>
-module consumers only and does not need to beat this tag.</p>
-<h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
+<h2 id="the-fix-once-investigation-g-reports">The fix, once Investigation G reports<a class="headerlink" href="#the-fix-once-investigation-g-reports" title="Permanent link">&para;</a></h2>
+<p>Both candidate approaches were weighed against the code before the probe was
+written; the probe decides between them rather than confirming a choice already
+made. It has since reported — see <a href="#decision-delete-ack">Decision: delete-ack</a>.</p>
+<p><strong>Delete-ack</strong> — issue <code>DeleteMessage</code> once every job in a message is concluded.
+This is the root-cause fix: it prunes the queue, so a replay carries only
+genuinely unfinished work, and it bounds the process-scoped sets, which the
+listener's own comment names as the intended endgame. It needs Investigation G's
+questions 2 and 3 to come back <code>DELETE-OK</code> / <code>PRUNED</code>.</p>
+<p>Its cost is that replay-from-0 is currently load-bearing in two places, and both
+need explicit handling rather than inheriting a backstop:</p>
+<ul>
+<li>The Q373/Q575 Secret reclaim treats replay as a free retry for a completion
+  handled between the queue write and the Secret delete.</li>
+<li>Q551's deferred jobs are cursor-acked past and held only in memory, so today a
+  restart recovers them <em>because</em> the queue replays. Deleting a message whose job
+  is deferred would strand the run at GitHub forever — the exact failure Q551
+  shipped to fix. So the delete condition is "all jobs concluded", not "message
+  ackable".</li>
+</ul>
+<p><strong>Persist the cursor</strong> on <code>RunnerSet.status</code> and seed a fresh listener with it.
+Smaller, and independent of the wire shape — but the cursor is advanced past
+deferred jobs, so persisting it alone strands them at restart in exactly the way
+above, with no queue replay left to recover them. Making it safe means persisting
+the deferred set too, which is most of the delete-ack work relocated into the
+status subresource. Held as the fallback for a <code>DELETE-FAILED</code> verdict.</p>
+<h2 id="findings">Findings<a class="headerlink" href="#findings" title="Permanent link">&para;</a></h2>
+<h3 id="the-answer-replayed-delete-ok-pruned-2026-08-01">The answer: REPLAYED, DELETE-OK, PRUNED (2026-08-01)<a class="headerlink" href="#the-answer-replayed-delete-ok-pruned-2026-08-01" title="Permanent link">&para;</a></h3>
+<p>One run against <code>actions-gateway/github-actions-gateway</code>, scale set
+<code>gag-q583-replay</code> (id 18), job <code>ee751b22-…</code>, run <code>30721627864</code>. No warnings, no
+errors, scale set torn down at the end.</p>
 <table>
 <thead>
 <tr>
-<th>Deferred</th>
-<th>Was</th>
-<th>Why out of 1.3</th>
+<th>Step</th>
+<th>Observed</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Capacity gate <code>AutoscalerVerdict</code> mode</td>
-<td>Q406</td>
-<td>The quota pre-claim rung and <code>SchedulerVerdict</code> (Q405) shipped; <code>AutoscalerVerdict</code> was M-sized and unstarted at the cut. Describe what shipped as exactly that rather than implying the full ladder. (It shipped after 1.3, on 2026-07-27.)</td>
+<td>Stage</td>
+<td><code>JobAssigned</code> = message <code>100000001</code>, delivered ~0.8 s after the gen-1 session opened. Cursor advanced past it, <strong>not</strong> deleted. Run cancelled; <code>JobCompleted</code> = <code>100000002</code> (<code>result: canceled</code>) arrived ~0.8 s later, cursor advanced past it, again not deleted. gen-1 session deleted.</td>
 </tr>
 <tr>
-<td><code>v1alpha1</code> + <code>v2alpha1</code> + classic <strong>removal</strong></td>
-<td><a href="../../STATUS/#Q273">Q273</a>, <a href="../../STATUS/#Q264">Q264</a></td>
-<td>1.3 is the <em>notice</em>. Executing the removal in the same release it is announced would violate the one-release-ahead policy. These land at <code>v2.0.0</code>.</td>
+<td>Measurement 1</td>
+<td>The gen-2 session — a different owner name, polling from cursor 0 — received <strong>both</strong> <code>100000001</code> and <code>100000002</code>, carrying the same job id, run id, and <code>jobWorkflowRef</code> as staged. <strong>REPLAYED.</strong></td>
 </tr>
 <tr>
-<td><code>v2</code> GA API version</td>
-<td><a href="../v2-ga/">v2-ga.md</a></td>
-<td>Gated on a beta soak that has not started. Deliberately slow: GA signs a permanent backward-compatibility contract.</td>
+<td>Measurement 2</td>
+<td><code>DELETE https://broker.actions.githubusercontent.com/scalesets/message/{id}</code> → <strong>204 No Content</strong> for both messages, ~100 ms each. <strong>DELETE-OK.</strong></td>
+</tr>
+<tr>
+<td>Measurement 3</td>
+<td>The gen-3 session polled from cursor 0 for the full 45 s window and received <strong>nothing at all</strong>. <strong>PRUNED.</strong></td>
 </tr>
 </tbody>
 </table>
-<h2 id="critical-path--ordering">Critical path &amp; ordering<a class="headerlink" href="#critical-path--ordering" title="Permanent link">&para;</a></h2>
-<p><strong>Nothing is left to order.</strong> Six gating items closed
-2026-07-26: both gate-integrity items (Q400, Q404), both halves of the
-deprecation notice (Q411, Q412), and the announce bar (Q393); the API review's
-Q481 closed 2026-07-28 without an API change
-(<a href="#e-api-review-satisfied">§ E</a>), as did Q486, and neither
-needed ordering because a no-op decision has no dependents; Q485 closed the same
-day with the <code>windowStartTime</code> rename shipped, and Q484 with a CEL rule on
-<code>nodeShare.allocatable</code>. Each of the four was a self-contained change to one
-field or none, independent of everything else here. Neither half
-Q412 named <code>v2.0.0</code> where operators plan from the docs, and Q411 put the same
-release into the apiserver warning, so an operator who never reads the docs still
-gets told.</p>
-<p>The announce bar used to sit at the end of this list, to be landed "last,
-immediately before tagging" so it named the version being cut. Q393 made its
-version derive from the tag list at build time, so it no longer needs a place in
-the ordering at all.</p>
-<p>One thing that remains is not a Queue item at all: the release-candidate dogfood
-validation in <a href="#a-headline-feature-complete-satisfied">§ A</a>, which can only be run
-against the actual RC image. It is last regardless — it validates the RC the
-other rows have already shaped.</p>
-<h2 id="guardrails">Guardrails<a class="headerlink" href="#guardrails" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Removing a served API group is a breaking change. That is why all three removals
-  are pinned to a <strong>major</strong> tag rather than a minor, and why 1.3 must ship the notice
-  rather than quietly reserving the right to remove later.</li>
-<li>The deprecation of <code>v2alpha1</code> does <strong>not</strong> shorten its served life: it stays served
-  until <code>v2.0.0</code>, exactly like <code>v1alpha1</code>. Deprecation marks intent and emits an
-  apiserver warning; it removes nothing.</li>
-<li>Nothing in 1.3 requires a tenant to re-apply anything. The <code>v2beta1</code> conversion
-  webhook already round-trips every served version.</li>
-</ul>
+<p><strong>Q583 is real, and the mechanism is the one the row asserted.</strong> A message a
+previous session acked by cursor is redelivered to a session that never saw it:
+the cursor is session-scoped, the queue log is not. A restarted AGC — whose
+<code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> guards are all empty — reads that
+<code>JobAssigned</code> for a job cancelled minutes earlier and has nothing left that would
+stop it provisioning a worker.</p>
+<p><strong>The <code>DeleteMessage</code> wire shape is confirmed, closing Q264's P4 unknown.</strong> The
+source-derived construction is right, and the observed path is worth writing down
+because it is not what the client's own doc comment implies: the queue URL's path
+is <code>/scalesets/message</code> on <code>broker.actions.githubusercontent.com</code>, so the delete
+target is <code>/scalesets/message/{messageId}</code> — not per-scale-set in its path. The
+client already builds it correctly by appending to <code>MessageQueueURL</code>.</p>
+<p><strong>Delete-acking is a fix, not just a theory.</strong> Measurement 3 is the one that
+matters: the same poll that returned two messages 45 seconds earlier returned an
+empty log after the deletes. The contrast is what carries it — gen 2 got its
+first message ~350 ms after opening, so gen 3's empty 45 s window is not a
+too-short budget.</p>
+<p>What this does <strong>not</strong> establish, the same caveats Q468 records: one tenant, one
+region, one point in time, on backend behaviour GitHub does not document. The
+claim is "observed, 2026-08-01", not "GitHub guarantees". And nothing here bounds
+retention — Q468's ≥13 h remains the only number, still a lower bound.</p>
+<h3 id="what-shipped">What shipped<a class="headerlink" href="#what-shipped" title="Permanent link">&para;</a></h3>
+<p>Acking is now cursor advance <strong>plus</strong> a delete, and the delete waits. A handled
+message is registered against the jobs it names that have not concluded; a job
+concludes by completing with its Secret reclaimed, or by being abandoned (Q553);
+and a message whose set empties is deleted on the next poll cycle. A failed
+delete keeps its entry and is retried on the following cycle, because the cursor
+has already moved past the message and nothing else would bring it back.</p>
+<p>The wait is the whole safety argument, and each of its three cases has a test
+that fails without it: a job provisioned but still running, a Q551 deferred job
+the previous process never provisioned, and a completion whose Secret reclaim
+failed all hold their message in the queue, so a restart still re-reads them.</p>
+<p>One trap worth recording, because it cost a wrong-green test before it was
+caught. <code>Client.DeleteMessage</code> reports a 404 as success, so a stub answering 404
+made the listener believe it had deleted a message it had not, and the retry test
+passed while testing nothing. Treating a 404 as an ack is nonetheless right <em>here</em>
+— Investigation G proved the endpoint is served, so a 404 means the message is
+genuinely gone — but it means a failure that must be retried has to be a 5xx. The
+stub's lever now takes the status rather than a bool, which forces each test to
+say which backend it is modelling.</p>
+<p>Left open deliberately: <code>provisioned</code>, <code>completed</code>, and <code>abandoned</code> are still
+never pruned, so they grow with the jobs a listener handles over its lifetime.
+Pruning them is now <em>possible</em> — an entry is dead once its message is deleted —
+but it is a separate change with its own way of going wrong (drop an entry too
+early and a replay double-provisions), so it is filed as
+<a href="../../STATUS/#Q597">Q597</a> rather than bundled here.</p>
+<h3 id="decision-delete-ack">Decision: delete-ack<a class="headerlink" href="#decision-delete-ack" title="Permanent link">&para;</a></h3>
+<p><code>DELETE-OK</code> plus <code>PRUNED</code> selects delete-acking over persisting the cursor. The
+fallback is not needed. The two costs named above stand and are what the
+implementation has to handle: a message is deleted only once <strong>every job in it is
+concluded</strong>, so Q551's deferred jobs keep the replay that recovers them, and the
+Q373/Q575 Secret reclaim keeps its backstop for anything still in flight.</p>
 
 
 
