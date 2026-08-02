@@ -3722,10 +3722,17 @@ under 3 min) without producing noise on healthy runs.</p>
 hundreds of lines of log output. Reviewers and authors have to scroll to find
 out which specific tests failed.</p>
 <h3 id="approach_6">Approach<a class="headerlink" href="#approach_6" title="Permanent link">&para;</a></h3>
-<p>Ginkgo v2's <code>-ginkgo.junit-report=e2e-report.xml</code> writes a JUnit XML file.
-GitHub Actions can render this as a test summary table in the PR sidebar using
-<code>actions/upload-artifact</code> and the built-in test reporter (no third-party action
-required as of GitHub Actions runner v2.308+).</p>
+<p>Ginkgo v2's <code>-ginkgo.junit-report=e2e-report.xml</code> writes a JUnit XML file.</p>
+<blockquote>
+<p><strong>Correction (Q608, 2026-08-02).</strong> This section originally claimed Actions
+would render the upload as a test summary table via a "built-in test reporter
+(no third-party action required as of runner v2.308+)". There is no such
+reporter. The upload shipped and the rendering never did, so for four months
+reading a failed run's results meant downloading 300 KB of XML by hand.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/e2e-report-summary.sh"><code>scripts/e2e/e2e-report-summary.sh</code></a>
+now does the rendering explicitly — see
+<a href="../archive/e2e-progress-visibility/">archive/e2e-progress-visibility.md</a>.</p>
+</blockquote>
 <h3 id="implementation-steps_11">Implementation steps<a class="headerlink" href="#implementation-steps_11" title="Permanent link">&para;</a></h3>
 <ol>
 <li>
