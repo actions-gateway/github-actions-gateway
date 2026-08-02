@@ -371,17 +371,37 @@ present, so capacity was not the constraint. Throughout, the RunnerSet reported
 worker capacity`. A job was assigned and waiting the entire time. The dispatched
 run never left `queued`.
 
-**The mechanism is unverified.** `runnergroup_reaper.go` documents a
-`pendingPodDeadline` delete as resolving the waiting session goroutine, which
-"releases the listener and the slot" — consistent with an assignment that is
-never retried — but that path was not exercised, only read. Tracked as
-[Q628](../STATUS.md#Q628), which states the same caveat: the observation is
-solid, the cause is a hypothesis.
+**The mechanism, since confirmed in tests.** A reaped Pending worker is reported
+to the listener as a **successful job**. `InformerPodWaiter.onPodDelete` resolves
+the wait with `Phase: PodSucceeded` and `ExternallyDeleted` deliberately unset;
+the session then maps anything that is not `PodFailed` to
+`broker.TaskResultSucceeded`, and every disruption-recovery arm requires
+`PodFailed`, so none fires. The assignment is concluded, its message deleted, and
+the job is never re-offered — while at GitHub the workflow job is still queued,
+no runner having ever registered. That is the 16 minutes of silence: from the
+AGC's point of view there was nothing left to do.
+
+Two characterisation tests pin it, each shown to fail when the mechanism is
+removed: `TestInformerPodWaiter_Q628_DeletedPendingPodResolvesSucceeded` on the
+production waiter and `TestProvisioner_Q628_ReapedPendingWorkerReportsSucceeded`
+on the result mapping.
+
+**`JobProvisionStalled=False` was correct, not broken.** The condition covers the
+listener's *deferral* reasons — `name_conflict` and `ceiling`, jobs held before a
+worker exists. A job whose worker was created and then reaped was never deferred,
+so the condition has nothing to report. The gap is that no condition covers this
+outcome at all.
+
+**Not a 1.3 regression.** The "deleted externally → treat as completion"
+semantics is present in `v1.2.0`; 1.3 refined the neighbouring recovery arms
+(Q497, Q502, Q575) without changing it. Tracked as
+[Q628](../STATUS.md#Q628).
 
 Class-wise this is Q550/Q551 territory — a listener availability bug reachable by
 any tenant whose workers go unschedulable in a burst — and both of those gated
-the tag rather than riding the backlog. Whether Q628 gates is a decision for the
-cut, not something this run settles.
+the tag. It parts company with them on age: those were defects the RC introduced
+or exposed in new code, this one has shipped in every release to date. Whether it
+gates is a decision for the cut.
 
 ### The rc.4 validation verdict (2026-08-02)
 
