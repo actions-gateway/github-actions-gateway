@@ -697,7 +697,7 @@ not a patch.
 > an older RC's commit to make the tag byte-match the validated artifact is the trap
 > — it strands every gate fix found *during* that release's validation, which is
 > exactly when gate fixes tend to be found. `v1.3.0` is the worked example: rc.5's
-> validation produced two harness fixes ([Q627](../STATUS.md#Q627) and the e2e watch
+> validation produced two harness fixes ([Q627](../plan/release-1.3.md#Q627) and the e2e watch
 > deadline), and a `release-1.3` branch cut from rc.5's commit would reproduce both
 > on every future `v1.3.x`.
 >
