@@ -45,7 +45,13 @@
 > deferred out of 1.3 are under
 > [Explicitly out of scope](#explicitly-out-of-scope).
 >
-> **`v1.3.0-rc.3` is published and verified; its dogfood validation is owed.**
+> **Superseded 2026-08-02: `v1.3.0-rc.4` is published, verified, and its dogfood
+> validation PASSED** — the ledger's last gating row, and the first verdict any RC
+> in this line has produced. Details in
+> [The rc.4 validation verdict](#the-rc4-validation-verdict-2026-08-02); the
+> paragraphs below record the earlier history.
+>
+> **`v1.3.0-rc.3` was published and verified; its dogfood validation was owed.**
 > Tagged 2026-08-01 off `7c18872d`, it is the first RC carrying the Q550/Q551
 > fixes above — which is the reason it exists, since rc.2's own validation
 > window is what exposed them and rc.2 therefore cannot be the artifact that
@@ -101,7 +107,7 @@ The prose below carries the *why* of each; this table is the state.
 | Q553 | AGC re-provisions jobs GitHub no longer has, livelocking a drain | `1.3-gate` | ✅ shipped 2026-08-01 |
 | Q582 | v1/v2 proxy pools collide throughout migration coexistence | `1.3-gate` | ✅ shipped 2026-08-01 |
 | Q575 | A worker whose `job-payload` secret is absent stalls | `1.3-gate` | ✅ shipped 2026-08-01 |
-| [Q577](../STATUS.md#Q577) | `stop.sh` leaves the pool up when its drain cannot converge | `1.3-gate` | 🔲 unblocked — re-measure at the gate, it may no longer be real |
+| Q577 | `stop.sh` leaves the pool up when its drain cannot converge | `1.3-gate` | ✅ closed 2026-08-02 — not a defect ([why](#q577-closed-the-behaviour-is-the-fail-safe-not-the-bug)) |
 | Q583 | An AGC restart replays the queue and re-provisions jobs long gone | rides | ✅ shipped 2026-08-01 (measured, then fixed — see below) |
 | Q547 | Deleting a v2 gateway orphans its in-flight worker pods, pinning a billable node | `1.3-gate` | ✅ shipped 2026-08-01 |
 | Q536 | A GHES appliance behind a private CA cannot be reached | rides | ✅ shipped 2026-08-01 |
@@ -111,7 +117,7 @@ The prose below carries the *why* of each; this table is the state.
 | Q604 | `stallJob` installs its runner-name conflict after the job is already pollable | gates | ✅ shipped 2026-08-02 — same reason: it reddened `main` |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
-| — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | 🔲 rc.3: gate aborted at leg 1, no verdict |
+| — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | ✅ **PASSED on `v1.3.0-rc.4`, 2026-08-02** ([verdict](#the-rc4-validation-verdict-2026-08-02)) |
 
 **Cut condition: zero open gating rows in this ledger** **plus the
 release-candidate dogfood validation**, the ledger's last row. It has no Q-ID
@@ -132,8 +138,9 @@ row exists so the fourth does not.
 
 rc.3's validation window produced five defects (Q575–Q578, Q580) plus a revive
 trigger on Q553. Q575, Q576, Q578, and Q580 have shipped; Q577 is unblocked by
-Q575 landing, but both stalls its row named are now fixed, so the gate should
-re-measure it rather than assume it is still real. **Q576, Q552, and Q553 gate rather than ride** for the same
+Q575 landing, and closed at the gate as
+[not a defect](#q577-closed-the-behaviour-is-the-fail-safe-not-the-bug).
+**Q576, Q552, and Q553 gate rather than ride** for the same
 reason Q550 and Q551 did: each is an availability bug an ordinary tenant reaches,
 not a dogfood-harness artifact. Q576 in particular spun a saturated scale set at
 ~0.8 provisioning attempts/s for 14 minutes, issuing 704 GitHub deregister calls
@@ -259,6 +266,70 @@ that a core referent gets the full 253-character DNS-subdomain budget instead of
 already publishes, so this is a third instance of a settled pattern, not a new one.
 The reasons are additive condition vocabulary, which is not a freeze. Nothing
 deferred, nothing filed.
+
+### The rc.4 validation verdict (2026-08-02)
+
+**`validate-release.sh v1.3.0-rc.4` PASSED**, exit 0, ~39 minutes end to end. This
+is the **first RC in the 1.3 line to produce a verdict at all** — rc.1 aborted on
+routing, rc.2 returned Q550/Q551 instead of a result, rc.3 aborted at leg 1. The
+gate's own row exists because three consecutive misses went unremarked; the fourth
+did not.
+
+| Leg | Result |
+|---|---|
+| Lane settle | waited 7 min for `main`'s own e2e run, before any billable work |
+| Deploy rc.4 | GMC and both tenant AGCs rolled out |
+| e2e matrix on GAG runners | **green** — 30 steps executed, 0 failures |
+| `NodeShare` (`gag-dogfood-e2e`) | `sizingProfileState=Active` — the hard-failure leg |
+| `Throughput` (`gag-dogfood`) | `sizingProfileState=Active`, `sampleCounts=[127]` |
+| Signed v2 CRD manifest | blob signature verified against the publish identity |
+| Teardown | drained on the first confirm, 8 → 0 nodes |
+
+**`Throughput` actuated, which this gate is not designed to prove.** The runbook
+expects `NOT VALIDATED THIS RUN` here: the profile needs ≥20 samples per template
+container and the gate's matrix is ~7 jobs. It reported `Active` at 127 samples,
+because the sampler tracks every worker pod regardless of `spec.sizing` and the
+aggregate re-seeds from the persisted `status.sizingRecommendation` — so the CI
+tenant's ordinary traffic had already carried it over the threshold. The
+consequence is stronger than a pass: **this RC ran CI on derived sizing**, so the
+release's headline feature is validated in use rather than merely configured.
+
+**What this run did NOT establish.** `NodeShare` cleared its *state* assertion, but
+the leg reported `derived value NOT checked — no live worker pod was caught during
+the matrix`. The envelope arithmetic at pod level is therefore unconfirmed by this
+run. That is the same gap [Q448](../STATUS.md#Q448) already tracks, and it is worth
+stating rather than reading the green as total: the profile is provably `Active` and
+provably actuating, and the per-worker share it derives is not independently checked
+here.
+
+**rc.4 is not `main`.** The tag points at `084f00a5`; `main` has since taken the
+Q596, Q603, Q605 and docs changes. Nothing in that set is implicated in what the
+gate exercised, but a GA tag cut from a later commit carries code this validation
+did not cover — decide that explicitly at the cut rather than inheriting this pass.
+
+### Q577 closed: the behaviour is the fail-safe, not the bug
+
+The row asserted that `stop.sh` "leaves the pool up when its drain cannot converge",
+and was left open with an instruction to re-measure at this gate rather than build
+against it. Both halves of that instruction paid off, in opposite directions.
+
+**The gate did not exercise the failure branch.** The drain converged on the first
+confirm, so a clean teardown says nothing about what happens when it cannot — the
+run is evidence that the *causes* of non-convergence are fixed (Q553's wedge,
+Q575's `Pending` worker), not that the handling is correct.
+
+**Reading the code settles it instead.** `drain_workers` deliberately refuses to
+scale down on timeout, and says why: scaling down evicts the tenant AGCs, and an AGC
+is the only thing that reaps worker pods, so the pool would keep its billable worker
+nodes up *indefinitely* rather than for the length of one drain. It then prints which
+pods are stuck, whether the drain was moving at all, and three remedies keyed to that
+distinction — re-run, delete the stuck pods, or `SKIP_DRAIN=1` to accept stranding
+them. Q580 already removed the one misleading suggestion it used to make.
+
+So the behaviour the row names is real, intentional, and the safer of the two
+options; the alternative it implicitly asks for is worse. Closed as not-a-defect.
+The generalisable point is that a row asserting a defect is a claim about intent as
+well as behaviour, and this one was only ever checked against behaviour.
 
 ## What 1.3 means
 
