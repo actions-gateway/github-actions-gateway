@@ -2369,6 +2369,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-rc5-re-run-2026-08-02" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rc.5 re-run (2026-08-02)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-rc4-validation-verdict-2026-08-02" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2986,21 +2997,78 @@ and used <code>gh run watch</code>, which is why the same leg passed a day earli
 <p>The e2e node pool never scaled. Its kata runner pod stayed <code>Pending</code> behind
 <code>FailedScaleUp: GCE quota exceeded</code>, and the autoscaler went into backoff
 (<code>2 in backoff after failed scale-up</code>).</p>
-<p><strong>That refusal was transient, and the watcher bug is what made it fatal.</strong> A
-direct probe afterwards — scaling the pool 0→1 by hand — brought up a
-<code>c2-standard-8</code> node carrying <code>katacontainers.io/kata-runtime=true</code>, satisfying
-the pending pod's selector exactly, at <code>C2_CPUS</code> 8/8. So the capacity the gate
-needed was available; what it did not have was time. The watcher tore the gate
-down at t+4m07s, well inside the autoscaler's backoff, so the retry that would
-have landed never got the chance. A gate that waited its normal ~25 minutes
-would most likely have recovered on its own.</p>
-<p>What remains true is the headroom, not a ceiling: <code>c2-standard-8</code> against
-<code>C2_CPUS</code> 8 is exactly one node, <code>maxNodeCount: 2</code> is unreachable, and a pool
-with zero headroom gives a transient refusal nowhere to retry into. Tracked as
+<p><strong>The capacity was there; the autoscaler could not reach it.</strong> A direct probe —
+scaling the pool 0→1 by hand — brings up a <code>c2-standard-8</code> carrying
+<code>katacontainers.io/kata-runtime=true</code>, satisfying the pending pod's selector
+exactly, at <code>C2_CPUS</code> 8/8. The cluster autoscaler asking for the same one node
+fails with <code>GCE quota exceeded</code> and then stays in backoff
+(<code>NotTriggerScaleUp: 1 in backoff after failed scale-up</code>) at <code>targetSize: 0</code>.
+<strong>Why the two paths differ is unverified.</strong> It is not simple exhaustion: at the
+second attempt every relevant quota had headroom — <code>C2_CPUS</code> 0/8, <code>INSTANCES</code>
+3/24, <code>IN_USE_ADDRESSES</code> 3/16 — and the autoscaler still would not retry.</p>
+<p>An earlier revision of this section called the refusal transient and said a
+full-length wait would have recovered it. The <a href="#the-rc5-re-run-2026-08-02">second attempt</a>
+disproves that: the gate waited 30+ minutes and the autoscaler never left
+backoff. Recorded because the wrong version shipped once.</p>
+<p>What is established about the pool is headroom, not a ceiling: <code>c2-standard-8</code>
+against <code>C2_CPUS</code> 8 is exactly one node and <code>maxNodeCount: 2</code> is unreachable, so
+a refused scale-up has nowhere to retry into. Tracked as
 <a href="../../STATUS/#Q627">Q627</a>.</p>
 <p><strong>The teardown held.</strong> <code>e2e-stop.sh</code> waited on the queued job rather than
 deleting the AGC under it — the 2026-07-31 incident's fix doing its job — and
 completed once the unschedulable run was cancelled by hand.</p>
+<h3 id="the-rc5-re-run-2026-08-02">The rc.5 re-run (2026-08-02)<a class="headerlink" href="#the-rc5-re-run-2026-08-02" title="Permanent link">&para;</a></h3>
+<p>Run against <code>main</code> at <code>c993c897</code>, with the watcher fix in. <strong>No verdict: stopped
+by hand at t+33m with the e2e leg unable to start.</strong> What it settled, and what it
+turned up, are both worth more than the missing verdict.</p>
+<p><strong>The watcher fix is confirmed.</strong> It sat in the e2e leg for 33 minutes where the
+first attempt died after 13 seconds. That is the whole of what #1171 claimed.</p>
+<p><strong>It also has no upper bound.</strong> <code>watch_run</code> loops until the run reports
+<code>completed</code>, with no deadline, so a run that stays <code>queued</code> holds the gate — and
+its billable nodes — indefinitely. Before the fix the gate failed instantly and
+wrongly; after it, it waits forever. Neither is a bounded wait, and the leg needs
+one. Tracked as <a href="../../STATUS/#Q629">Q629</a>.</p>
+<p><strong>The AGC stopped provisioning and reported itself healthy.</strong> This is the
+finding, and it is in the product rather than the gate. Three workers were
+provisioned and each reaped while <code>Pending</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>19:44:14  reaped …5861eaa6…  phase=Pending  reason=completed_pending
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>19:49:14  reaped …cb18c256…  phase=Pending  reason=completed_pending
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>19:58:46  reaped …ac9fa6a7…  phase=Pending  reason=pending_deadline
+</code></pre></div>
+<p>After the <code>pending_deadline</code> reap the listener logged nothing for 16 minutes and
+created no further worker — including the 10 minutes after a Ready kata node was
+present, so capacity was not the constraint. Throughout, the RunnerSet reported
+<code>Ready=True … 1 job(s) assigned</code>, <code>WorkersUnschedulable=False</code>, and
+<code>JobProvisionStalled=False — no assigned job is waiting on a runner name or on
+worker capacity</code>. A job was assigned and waiting the entire time. The dispatched
+run never left <code>queued</code>.</p>
+<p><strong>The mechanism, since confirmed in tests.</strong> A reaped Pending worker is reported
+to the listener as a <strong>successful job</strong>. <code>InformerPodWaiter.onPodDelete</code> resolves
+the wait with <code>Phase: PodSucceeded</code> and <code>ExternallyDeleted</code> deliberately unset;
+the session then maps anything that is not <code>PodFailed</code> to
+<code>broker.TaskResultSucceeded</code>, and every disruption-recovery arm requires
+<code>PodFailed</code>, so none fires. The assignment is concluded, its message deleted, and
+the job is never re-offered — while at GitHub the workflow job is still queued,
+no runner having ever registered. That is the 16 minutes of silence: from the
+AGC's point of view there was nothing left to do.</p>
+<p>Two characterisation tests pin it, each shown to fail when the mechanism is
+removed: <code>TestInformerPodWaiter_Q628_DeletedPendingPodResolvesSucceeded</code> on the
+production waiter and <code>TestProvisioner_Q628_ReapedPendingWorkerReportsSucceeded</code>
+on the result mapping.</p>
+<p><strong><code>JobProvisionStalled=False</code> was correct, not broken.</strong> The condition covers the
+listener's <em>deferral</em> reasons — <code>name_conflict</code> and <code>ceiling</code>, jobs held before a
+worker exists. A job whose worker was created and then reaped was never deferred,
+so the condition has nothing to report. The gap is that no condition covers this
+outcome at all.</p>
+<p><strong>Not a 1.3 regression.</strong> The "deleted externally → treat as completion"
+semantics is present in <code>v1.2.0</code>; 1.3 refined the neighbouring recovery arms
+(Q497, Q502, Q575) without changing it. Tracked as
+<a href="../../STATUS/#Q628">Q628</a>.</p>
+<p>Class-wise this is Q550/Q551 territory — a listener availability bug reachable by
+any tenant whose workers go unschedulable in a burst — and both of those gated
+the tag. It parts company with them on age: those were defects the RC introduced
+or exposed in new code, this one has shipped in every release to date. Whether it
+gates is a decision for the cut.</p>
 <h3 id="the-rc4-validation-verdict-2026-08-02">The rc.4 validation verdict (2026-08-02)<a class="headerlink" href="#the-rc4-validation-verdict-2026-08-02" title="Permanent link">&para;</a></h3>
 <p><strong><code>validate-release.sh v1.3.0-rc.4</code> PASSED</strong>, exit 0, ~39 minutes end to end. This
 is the <strong>first RC in the 1.3 line to produce a verdict at all</strong> — rc.1 aborted on
