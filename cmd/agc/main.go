@@ -22,6 +22,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"flag"
@@ -84,6 +85,14 @@ func main() {
 const (
 	credsDir       = "/etc/actions-gateway/github-app" //nolint:gosec // G101: a mount-path constant, not a credential
 	proxyCACertDir = "/etc/actions-gateway/proxy-ca"
+
+	// githubCACertDir is where the GMC mounts the operator-supplied GitHub CA bundle
+	// named by ActionsGateway.spec.githubCABundleRef (Q536); githubCAConfigMapEnv
+	// carries the ConfigMap's name, which is both the opt-in signal and what the
+	// provisioner needs to project the same bundle into worker pods.
+	githubCACertDir      = "/etc/actions-gateway/github-ca"
+	githubCACertFile     = "ca.crt"
+	githubCAConfigMapEnv = "GITHUB_CA_CONFIGMAP_NAME"
 
 	// metricsBindAddress pins the controller-runtime metrics server to a known
 	// port instead of relying on the framework default (":8080" in
@@ -232,11 +241,11 @@ func run() error {
 		ctrl.Log.Info("OpenTelemetry tracing enabled", "service", tracing.ServiceName)
 	}
 
-	// ── 0.5. Configure proxy TLS cert pinning ───────────────────────────────
+	// ── 0.5. Configure the outbound TLS trust pool ──────────────────────────
 	// MUST run before any proxy-traversing client is built (the token provider,
 	// the provisioner's GitHub client), so those clients pick up the proxy CA — an
 	// ordering dependency that is invisible until it breaks.
-	if err := configureProxyTrust(proxyCACertDir, ctrl.Log.WithName("proxy-trust")); err != nil {
+	if err := configureTrustPool(proxyCACertDir, githubCACertDir, ctrl.Log.WithName("ca-trust")); err != nil {
 		return err
 	}
 
@@ -578,50 +587,67 @@ func registerReconcilers(mgr ctrl.Manager, deps reconcilerDeps) error {
 	return nil
 }
 
-// configureProxyTrust installs the per-tenant egress proxy's self-signed CA into
-// the process-wide http.DefaultTransport trust pool, when the GMC has mounted it
-// at certDir/tls.crt.
+// configureTrustPool extends the process-wide http.DefaultTransport trust pool
+// with the CAs the GMC mounted for this gateway: the per-tenant egress proxy's
+// self-signed cert at proxyDir/tls.crt, and the operator-supplied GitHub CA bundle
+// at githubDir/ca.crt (Q536).
 //
-// The GMC mounts the proxy's self-signed TLS cert (public part only) there.
-// Adding it to the trust pool — alongside the system roots — lets the AGC
-// validate the proxy's self-signed cert without losing the ability to validate
-// upstream endpoints (api.github.com, pipelinesghubeus*.actions.githubusercontent.com)
-// over the proxy's CONNECT tunnel. Go's http.Transport uses one TLSClientConfig
-// for both the AGC↔proxy hop and the AGC↔upstream-over-tunnel hop, so the pool
-// must satisfy both.
+// Both are added alongside the system roots, never in place of them, so the AGC can
+// validate the proxy's self-signed cert and a private-CA GHES appliance without
+// losing the ability to validate upstream endpoints (api.github.com,
+// pipelinesghubeus*.actions.githubusercontent.com) over the proxy's CONNECT tunnel.
+// Go's http.Transport uses one TLSClientConfig for both the AGC↔proxy hop and the
+// AGC↔upstream-over-tunnel hop, so the pool must satisfy both.
 //
 // Effective pinning: the proxy's hostname is *.svc.cluster.local, which no public
 // CA will issue a certificate for. Trusting both system roots and the per-tenant
 // proxy CA therefore preserves the property that only this proxy's cert can
 // validate for the proxy hostname.
 //
-// If the file is absent (local dev, no TLS proxy) this is a no-op and the standard
-// transport uses HTTP proxy as before. Any other read error — a permission-denied
-// mount above all — is fatal rather than a no-op, mirroring buildMetricsOptions:
-// a mounted-but-unreadable CA is a misconfiguration, and silently continuing
-// without proxy trust hides it behind unrelated x509 failures later (Q520).
+// The two sources differ in what an absent file means. The proxy CA is optional at
+// runtime, so absent (and empty) is a logged no-op; any other read error — a
+// permission-denied mount above all — is fatal, mirroring buildMetricsOptions,
+// because a mounted-but-unreadable CA is a misconfiguration that would otherwise
+// hide behind unrelated x509 failures later (Q520). The GitHub CA bundle is read
+// only when GITHUB_CA_CONFIGMAP_NAME is set, which is the gateway's explicit
+// opt-in, so there is no "not configured" reading of a failed or empty read and
+// every one is fatal.
 //
-// It mutates the global transport, so it must run before any proxy-traversing
-// client is constructed (AGC proxy-client init order, see the project memory).
-func configureProxyTrust(certDir string, log logr.Logger) error {
-	proxyCACert := filepath.Join(certDir, "tls.crt")
-	certPEM, err := os.ReadFile(proxyCACert)
-	if err != nil {
-		if os.IsNotExist(err) {
-			log.Info("proxy CA cert absent; leaving the default transport unchanged (no TLS egress proxy)", "path", proxyCACert)
-			return nil
-		}
+// With neither mounted (local dev, no TLS proxy, public GitHub) this is a no-op and
+// the standard transport is left unchanged. It mutates the global transport, so it
+// must run before any proxy-traversing client is constructed (AGC proxy-client init
+// order, see the project memory).
+func configureTrustPool(proxyDir, githubDir string, log logr.Logger) error {
+	proxyCACert := filepath.Join(proxyDir, "tls.crt")
+	proxyPEM, err := os.ReadFile(proxyCACert)
+	switch {
+	case err != nil && !os.IsNotExist(err):
 		return fmt.Errorf("read proxy CA %s: %w", proxyCACert, err)
+	case err != nil:
+		log.Info("proxy CA cert absent; leaving the default transport unchanged (no TLS egress proxy)", "path", proxyCACert)
+	case len(bytes.TrimSpace(proxyPEM)) == 0:
+		// Empty file: tolerated, matching the worker entrypoint wrapper. Logged so
+		// the mounted-but-empty case is distinguishable from the unmounted one.
+		log.Info("proxy CA cert is empty; leaving the default transport unchanged", "path", proxyCACert)
+		proxyPEM = nil
 	}
-	pool, err := transport.BuildProxyTrustPool(certPEM)
+
+	var githubPEM []byte
+	githubCACert := filepath.Join(githubDir, githubCACertFile)
+	if os.Getenv(githubCAConfigMapEnv) != "" {
+		if githubPEM, err = os.ReadFile(githubCACert); err != nil {
+			return fmt.Errorf("read GitHub CA bundle %s: %w", githubCACert, err)
+		}
+		if len(bytes.TrimSpace(githubPEM)) == 0 {
+			return fmt.Errorf("GitHub CA bundle %s is empty: githubCABundleRef names it, so the appliance would not be trusted", githubCACert)
+		}
+	}
+
+	pool, err := transport.BuildTrustPool(proxyPEM, githubPEM)
 	if err != nil {
-		return fmt.Errorf("build proxy trust pool from %s: %w", proxyCACert, err)
+		return fmt.Errorf("build trust pool from %s, %s: %w", proxyCACert, githubCACert, err)
 	}
 	if pool == nil {
-		// Empty file: tolerated as a no-op, matching the worker entrypoint
-		// wrapper. Logged so the mounted-but-empty case is distinguishable from
-		// the unmounted one.
-		log.Info("proxy CA cert is empty; leaving the default transport unchanged", "path", proxyCACert)
 		return nil
 	}
 	t := http.DefaultTransport.(*http.Transport).Clone()
@@ -653,6 +679,11 @@ func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *runnercore.Metrics,
 	// the mount and is appropriate for any deployment without a per-tenant egress
 	// proxy.
 	prov.ProxyTLSSecretName = cfg.ProxyTLSSecretName
+	// GITHUB_CA_CONFIGMAP_NAME names the ConfigMap holding the GHES appliance's CA
+	// bundle (Q536). The GMC sets it from spec.githubCABundleRef so the provisioner
+	// projects the same bundle the AGC itself trusts into every worker pod. Empty
+	// (the default) disables the mount, which is right for public GitHub.
+	prov.GitHubCAConfigMapName = cfg.GitHubCAConfigMap
 	// SECURITY_PROFILE mirrors the tenant's ActionsGateway.spec.securityProfile.
 	// The GMC sets it on the AGC Deployment so the provisioner can scale the
 	// secure-by-default worker SecurityContext to the namespace's PSA level.

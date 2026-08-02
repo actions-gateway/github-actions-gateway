@@ -356,6 +356,26 @@ func TestRunnerSetTarget_ResolveDirectEgress(t *testing.T) {
 	assert.Empty(t, spec.ProxyTLSSecretName, "direct egress: no proxy-CA mount")
 }
 
+// TestRunnerSetTarget_ResolveCarriesGitHubCABundle: the GHES appliance's CA is a
+// property of the gateway, not of the egress path, so Resolve carries it whether the
+// worker egresses through a proxy or directly (Q536).
+func TestRunnerSetTarget_ResolveCarriesGitHubCABundle(t *testing.T) {
+	scheme := runnerSetTestScheme(t)
+	ns := "team-a"
+	rs := rsObj("set", ns, nil)
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(rs, gwObj("gw", ns, ""), tmplObj("tmpl", ns)).Build()
+
+	prov := provisioner.NewProvisioner(c, nil, slog.Default())
+	prov.GitHubCAConfigMapName = "ghes-ca"
+	target := &runnerSetTarget{client: c, prov: prov, key: client.ObjectKey{Namespace: ns, Name: "set"}, uid: "uid-1"}
+
+	spec, err := target.Resolve(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, spec.ProxyTLSSecretName, "direct egress, to prove the CA does not ride the proxy branch")
+	assert.Equal(t, "ghes-ca", spec.GitHubCAConfigMapName)
+}
+
 func TestRunnerSetReconcile_FailsClosedWithGatewayNotFound(t *testing.T) {
 	scheme := runnerSetTestScheme(t)
 	ns := "team-a"

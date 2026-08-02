@@ -44,6 +44,16 @@ import (
 // `kubectl get -l actions-gateway.com/gateway=<ag>` a gateway's resources.
 const gatewayComponentLabel = "actions-gateway.com/gateway"
 
+// The operator-supplied GitHub CA bundle (Q536). Unlike every other cert the GMC
+// mounts, this one is not GMC-issued — spec.githubCABundleRef names a tenant
+// ConfigMap holding the CA that fronts a GHES appliance. The mount path is a
+// cross-binary contract: cmd/agc reads the same literal.
+const (
+	githubCAVolumeName = "github-ca"
+	githubCAMountPath  = "/etc/actions-gateway/github-ca"
+	githubCABundleKey  = "ca.crt"
+)
+
 // Per-gateway resource-name suffixes (§H.16 #1). Kept under the §H.6 52-char CR
 // name cap so the derived names stay within RFC 1123's 63-char label-value /
 // Service-name ceiling.
@@ -409,6 +419,13 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 			corev1.EnvVar{Name: "PROXY_TLS_SECRET_NAME", Value: proxyTLSSecret},
 		)
 	}
+	// GHES private-CA trust (Q536): names the ConfigMap applyGitHubCABundleV2 mounts,
+	// so the AGC knows it was opted in and its pod provisioner can project the same
+	// bundle into worker pods. Precedes extraEnv for the same reason GITHUB_API_BASE_URL
+	// does.
+	if ag.Spec.GitHubCABundleRef != nil {
+		env = append(env, corev1.EnvVar{Name: "GITHUB_CA_CONFIGMAP_NAME", Value: ag.Spec.GitHubCABundleRef.Name})
+	}
 	// Credential method (Q196/Q197/Q201). GitHubApp threads no extra env (the AGC
 	// reads the mounted Secret files); WorkloadIdentity threads the non-secret signer
 	// config — the projected ServiceAccount token volume is added by
@@ -432,7 +449,41 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 	// AGC pod carries no built-in affinity, so the block applies verbatim with no
 	// composition rules (unlike the EgressProxy's — see egressProxyAffinity).
 	applyPodSchedulingV2(&dep.Spec.Template.Spec, ag.Spec.Scheduling)
+	// GHES private-CA trust (Q536), applied here for the same reason as scheduling:
+	// spec.githubCABundleRef is v2-only, and the mount composes with nothing the
+	// shared builder already stamps.
+	applyGitHubCABundleV2(&dep.Spec.Template.Spec, ag.Spec.GitHubCABundleRef)
 	return dep
+}
+
+// applyGitHubCABundleV2 mounts the operator-supplied GitHub CA bundle into the AGC
+// container. A nil ref leaves the pod spec untouched, so a gateway that sets none
+// produces a byte-for-byte unchanged Deployment.
+//
+// The bundle is a ConfigMap, not a Secret: a CA certificate is public material, and
+// the AGC's trust pool keeps the system roots alongside it, so this widens trust for
+// githubURL without narrowing it anywhere else. The matching GITHUB_CA_CONFIGMAP_NAME
+// env is stamped with the rest of the env list, before extraEnv.
+func applyGitHubCABundleV2(pod *corev1.PodSpec, ref *gmcv2alpha1.LocalConfigMapReference) {
+	if ref == nil {
+		return
+	}
+	caMode := int32(0o444)
+	pod.Volumes = append(pod.Volumes, corev1.Volume{
+		Name: githubCAVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: ref.Name},
+				Items:                []corev1.KeyToPath{{Key: githubCABundleKey, Path: githubCABundleKey}},
+				DefaultMode:          &caMode,
+			},
+		},
+	})
+	for i := range pod.Containers {
+		pod.Containers[i].VolumeMounts = append(pod.Containers[i].VolumeMounts, corev1.VolumeMount{
+			Name: githubCAVolumeName, MountPath: githubCAMountPath, ReadOnly: true,
+		})
+	}
 }
 
 // applyPodSchedulingV2 stamps a v2 spec.scheduling block onto a pod spec, deep-copying

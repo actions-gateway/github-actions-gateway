@@ -2254,3 +2254,97 @@ func TestProvisioner_RetainsPodOnCompletionByDefault(t *testing.T) {
 	assert.Nil(t, findSecret(ctx, t, fc, "team-a", "job-"),
 		"job Secret must still be deleted on completion")
 }
+
+// testGitHubCA* mirror the unexported provisioner constants for the GHES appliance's
+// CA bundle, like testProxyCA* above.
+const (
+	testGitHubCAVolumeName = "github-ca"
+	testGitHubCAMountPath  = "/etc/actions-gateway/github-ca"
+	testGitHubCAFileName   = "ca.crt"
+)
+
+// TestBuildPod_MountsGitHubCABundle is the worker half of Q536: an AGC whose gateway
+// set githubCABundleRef projects the same ConfigMap into every worker pod, so the
+// runner's own calls to a private-CA GHES appliance — checkout, log and artifact
+// upload — complete the handshake the control plane already can. A ConfigMap, not a
+// Secret: the bundle is public certificate material.
+func TestBuildPod_MountsGitHubCABundle(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	target := &fakeTarget{
+		key:    client.ObjectKey{Namespace: "team-a", Name: "gpu"},
+		labels: map[string]string{"actions-gateway.com/runner-set": "gpu"},
+		spec: &provisioner.ResolvedSpec{
+			WorkerImage:           "runner:test",
+			GitHubCAConfigMapName: "ghes-ca",
+		},
+	}
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target,
+		provisioner.ScaleSetJob{JobID: "job-uuid-1", JITConfig: "eyJydW5uZXIiOnt9fQ=="}))
+
+	pod := findPod(ctx, t, fc, "team-a")
+	require.NotNil(t, pod)
+
+	var caVol *corev1.Volume
+	for i := range pod.Spec.Volumes {
+		if pod.Spec.Volumes[i].Name == testGitHubCAVolumeName {
+			caVol = &pod.Spec.Volumes[i]
+		}
+	}
+	require.NotNil(t, caVol, "the GitHub CA bundle must be projected into the worker pod")
+	require.NotNil(t, caVol.ConfigMap, "the bundle is public material and travels in a ConfigMap")
+	assert.Equal(t, "ghes-ca", caVol.ConfigMap.Name)
+	require.Len(t, caVol.ConfigMap.Items, 1, "the projection is pinned to the ca.crt key")
+	assert.Equal(t, testGitHubCAFileName, caVol.ConfigMap.Items[0].Key)
+
+	runner := runnerOf(t, pod)
+	var caMount *corev1.VolumeMount
+	for i := range runner.VolumeMounts {
+		if runner.VolumeMounts[i].Name == testGitHubCAVolumeName {
+			caMount = &runner.VolumeMounts[i]
+		}
+	}
+	require.NotNil(t, caMount, "the runner container must mount the GitHub CA volume")
+	assert.Equal(t, testGitHubCAMountPath, caMount.MountPath)
+	assert.True(t, caMount.ReadOnly)
+
+	envMap := make(map[string]string)
+	for _, e := range runner.Env {
+		envMap[e.Name] = e.Value
+	}
+	assert.Equal(t, testGitHubCAMountPath+"/"+testGitHubCAFileName, envMap["GITHUB_CA_CERT_PATH"],
+		"GITHUB_CA_CERT_PATH must point at the mounted bundle so the wrapper can read it")
+}
+
+// TestBuildPod_NoGitHubCAWhenConfigMapNameEmpty is the negative half: a public-GitHub
+// gateway needs no extra trust, so the pod must be exactly what it is today and
+// GITHUB_CA_CERT_PATH must be empty so the wrapper skips the bundle.
+func TestBuildPod_NoGitHubCAWhenConfigMapNameEmpty(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	target := &fakeTarget{
+		key:    client.ObjectKey{Namespace: "team-a", Name: "gpu"},
+		labels: map[string]string{"actions-gateway.com/runner-set": "gpu"},
+		spec:   &provisioner.ResolvedSpec{WorkerImage: "runner:test"},
+	}
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target,
+		provisioner.ScaleSetJob{JobID: "job-uuid-1", JITConfig: "eyJydW5uZXIiOnt9fQ=="}))
+
+	pod := findPod(ctx, t, fc, "team-a")
+	require.NotNil(t, pod)
+	for _, v := range pod.Spec.Volumes {
+		assert.NotEqual(t, testGitHubCAVolumeName, v.Name,
+			"no githubCABundleRef ⇒ no GitHub CA volume")
+	}
+	for _, e := range runnerOf(t, pod).Env {
+		if e.Name == "GITHUB_CA_CERT_PATH" {
+			assert.Empty(t, e.Value, "GITHUB_CA_CERT_PATH must be empty when no bundle is configured")
+		}
+	}
+}

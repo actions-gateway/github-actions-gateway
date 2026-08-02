@@ -134,6 +134,18 @@ type LocalSecretReference struct {
 	Name string `json:"name"`
 }
 
+// LocalConfigMapReference is a name-only reference to a Kubernetes ConfigMap in the
+// same namespace. It is distinct from LocalObjectRef because the referent is a core
+// object, not a v2 one: its name budget is the full 253-character DNS subdomain
+// rather than the 52-character v2 object budget (§H.6).
+type LocalConfigMapReference struct {
+	// Name of the referenced ConfigMap in the same namespace.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	Name string `json:"name"`
+}
+
 // ObjectRef is a name-only reference to another v2 object in the same namespace.
 //
 // All v2 references share this one shape (gatewayRef, templateRef, proxyRef) so

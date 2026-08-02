@@ -208,6 +208,14 @@ const (
 	// applied). A ProxyShareNotGranted reason for the cross-namespace consent handshake
 	// (§H.9) arrives with cross-namespace sharing (M4) — not declared until then.
 	ReasonProxyDeleted = "ProxyDeleted"
+	// ReasonCABundleNotFound — the ConfigMap named by githubCABundleRef does not exist,
+	// so the AGC cannot be provisioned with the trust it was asked to use (Degraded,
+	// fail closed: an appliance behind a private CA is unreachable without it).
+	ReasonCABundleNotFound = "CABundleNotFound"
+	// ReasonCABundleInvalid — the githubCABundleRef ConfigMap exists but carries no
+	// ca.crt key, or that key holds no parseable certificate. Distinct from
+	// CABundleNotFound so the operator sees a content problem, not a missing object.
+	ReasonCABundleInvalid = "CABundleInvalid"
 	// ReasonNoActiveSessions — a RunnerSet's references all resolved but no
 	// listener goroutine is running yet (Ready=False until one comes up).
 	ReasonNoActiveSessions = "NoActiveSessions"

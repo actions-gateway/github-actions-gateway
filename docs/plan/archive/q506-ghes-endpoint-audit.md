@@ -194,11 +194,11 @@ carrying it forward.
 - **Test fixtures and specs** — `test/fakegithub` and the `cmd/gmc/test/e2e` suite.
 - **CRD field docs and godoc examples** (`https://github.com/my-org`) — documentation,
   and each already names the GHES form alongside.
-- **Comments** in `cmd/agc/main.go:525` and `transport/proxytrust.go:31`.
+- **Comments** in `cmd/agc/main.go:525` and `transport/trustpool.go:31`.
 
 One adjacent gap worth naming so it is not rediscovered as part of this class:
 `BuildProxyTrustPool` builds system roots plus the proxy CA
-([`proxytrust.go`](../../../cmd/agc/internal/transport/proxytrust.go)). A GHES
+([`trustpool.go`](../../../cmd/agc/internal/transport/trustpool.go)). A GHES
 appliance fronted by a private CA is not trusted by that pool. That is a
 certificate-trust gap, not a hardcoded endpoint, and needs its own item if the
 project commits to GHES.

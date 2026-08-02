@@ -21,6 +21,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine](#worker--proxy--agc-pods-rejected-by-a-cluster-policy-engine)
 - [ActionsGateway Reports EgressRulesStale](#actionsgateway-reports-egressrulesstale)
 - [A GHES Tenant's Traffic Never Reaches the Appliance](#a-ghes-tenants-traffic-never-reaches-the-appliance)
+- [A GHES Appliance's Certificate Is Not Trusted](#a-ghes-appliances-certificate-is-not-trusted)
 - [Tenant Namespace Missing the Managed-Tenant Marker Label](#tenant-namespace-missing-the-managed-tenant-marker-label)
 - [ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)
 - [Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers](#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers)
@@ -904,9 +905,75 @@ policy it was asked for. It clears once `destinationCIDRs` is non-empty — the 
 your declaration at face value and does not verify the ranges actually cover the
 appliance, so if traffic still fails, check the ranges themselves.
 
-**Adjacent gap worth checking on a private-CA appliance.** The AGC's proxy trust pool is
-the system roots plus the egress proxy's CA. A GHES appliance fronted by a private CA is
-not trusted by that pool, and the symptom is a TLS handshake error rather than a timeout.
+**A private-CA appliance needs one more thing.** Egress reachability and TLS trust are
+separate problems: allowing the ranges gets packets to the appliance, but the AGC still
+has to validate its certificate. If yours is fronted by an internal CA, see
+[A GHES Appliance's Certificate Is Not Trusted](#a-ghes-appliances-certificate-is-not-trusted).
+
+---
+
+## A GHES Appliance's Certificate Is Not Trusted
+
+**Symptoms.** A GHES tenant reaches its appliance — the connection is not timing out —
+but every call fails at the TLS handshake. The AGC logs
+`x509: certificate signed by unknown authority` on token exchange or runner
+registration, and job steps that talk to the appliance (`actions/checkout`, log and
+artifact upload) fail the same way from the worker pod.
+
+**Cause.** The AGC and its worker pods trust the OS system roots plus the per-tenant
+egress proxy's own CA. An appliance fronted by a private or internal certificate
+authority chains to neither, so its certificate does not verify. Routing through an
+`EgressProxy` does not help: the proxy tunnels with `CONNECT`, so the TLS session is
+end to end between the AGC and the appliance.
+
+**Fix.** Put the CA bundle in a ConfigMap in the tenant namespace under the key
+`ca.crt`, and name it from the gateway. This is tenant-self-serve — no platform
+allowlist is involved, unlike the egress ranges above.
+
+```bash
+kubectl -n team-a create configmap ghes-ca --from-file=ca.crt=/path/to/corp-root-ca.pem
+```
+
+```yaml
+apiVersion: actions-gateway.com/v2beta1
+kind: ActionsGateway
+metadata:
+  name: my-gateway
+  namespace: team-a
+spec:
+  githubURL: https://ghes.example.com/my-org
+  githubCABundleRef:
+    name: ghes-ca
+```
+
+The bundle is **additive**: the system roots stay trusted, so a gateway that also
+reaches public hosts is unaffected. The GMC mounts it on the AGC Deployment and the AGC
+projects the same ConfigMap into every worker pod, so the control plane and the runners
+trust the same appliance.
+
+Setting or changing `githubCABundleRef` re-renders the AGC Deployment, which restarts
+that tenant's AGC pod. In-flight jobs are unaffected — worker pods are separate.
+
+**If the gateway degrades instead.** The reference is resolved at runtime, and an
+unresolvable one fails closed rather than provisioning an AGC whose pod would sit at
+`ContainerCreating`:
+
+| `Degraded` reason | Meaning | Remedy |
+|---|---|---|
+| `CABundleNotFound` | No ConfigMap of that name in the gateway's namespace | Create it, or fix the name. The gateway recovers on its own within about a minute — no edit needed |
+| `CABundleInvalid` | The ConfigMap exists but has no `ca.crt` key, or that key holds no PEM certificate | Re-create it with `--from-file=ca.crt=...` and a PEM-encoded (not DER) certificate |
+
+```bash
+kubectl -n team-a get actionsgateway my-gateway \
+  -o jsonpath='{.status.conditions[?(@.type=="Degraded")].message}{"\n"}'
+```
+
+`v1alpha1` has no equivalent field — it is frozen and removed at `v2.0.0`. A GHES
+tenant behind a private CA must be on the v2 API.
+
+**This does not cover the appliance's egress ranges.** Trusting the CA does not put the
+appliance's address space in the NetworkPolicy; that is the separate problem
+[above](#a-ghes-tenants-traffic-never-reaches-the-appliance).
 
 ---
 
@@ -1221,9 +1288,13 @@ read proxy CA /etc/actions-gateway/proxy-ca/tls.crt: permission denied
 or, when the mounted file holds no PEM certificate:
 
 ```
-build proxy trust pool from /etc/actions-gateway/proxy-ca/tls.crt: proxy CA PEM
-contained no valid certificates
+build trust pool from /etc/actions-gateway/proxy-ca/tls.crt,
+/etc/actions-gateway/github-ca/ca.crt: CA PEM contained no valid certificates
 ```
+
+The message names both mounted CA paths because one pool holds both (the proxy CA
+and, on GHES, the [appliance's CA](#a-ghes-appliances-certificate-is-not-trusted));
+the unparseable one is whichever is mounted.
 
 **Cause.** The per-tenant egress proxy's CA is mounted but the AGC cannot read or
 parse it. Only an *absent* file means "no TLS egress proxy" — the direct-egress and

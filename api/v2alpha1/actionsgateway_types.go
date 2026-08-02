@@ -40,6 +40,27 @@ type ActionsGatewaySpec struct {
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="githubURL is immutable; create a new ActionsGateway to bind a different GitHub org/enterprise/repo"
 	GitHubURL string `json:"githubURL"`
 
+	// GitHubCABundleRef names a ConfigMap in this namespace holding, under the key
+	// "ca.crt", a PEM certificate bundle to trust when reaching githubURL. Set it when
+	// a GitHub Enterprise Server appliance is fronted by a private or internal
+	// certificate authority: the AGC and its worker pods otherwise trust the system
+	// roots (plus the egress proxy's own CA) and the TLS handshake fails.
+	//
+	// The bundle is additive — the system roots stay trusted — so a gateway that also
+	// reaches public hosts is unaffected. Certificates are public material, which is
+	// why the carrier is a ConfigMap rather than a Secret.
+	//
+	// Resolved at runtime, not at admission (§H.7): a ref naming a ConfigMap that is
+	// missing, or whose ca.crt holds no parseable certificate, fails the gateway closed
+	// (Degraded, reason CABundleNotFound / CABundleInvalid) until it resolves.
+	//
+	// Unset (the default) trusts the system roots only. It does not affect egress
+	// reachability — a GHES appliance's address space must still be allowed by the
+	// egress policy (see the GitHubEgressIncomplete condition).
+	//
+	// +optional
+	GitHubCABundleRef *LocalConfigMapReference `json:"githubCABundleRef,omitempty"`
+
 	// DefaultProxyRef names an EgressProxy used for AGC control-plane egress and
 	// inherited by RunnerSets under this gateway that do not set their own proxyRef.
 	// Optional: unset means the control plane egresses directly (subject to
