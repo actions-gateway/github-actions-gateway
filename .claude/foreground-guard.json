@@ -6,8 +6,8 @@
       "make (-C [^ ]+ )?test-integration\\b": 600000,
       "make (-C [^ ]+ )?test-race\\b": 600000,
       "make .*\\be2e": 1800000,
-      "scripts/dogfood/validate-release\\.sh": 3600000,
-      "scripts/dogfood/release-sentinel\\.sh": 7200000
+      "((^|[;&|(]\\s*)(\\w+=\\S+\\s+)*|(^|[;&|(]\\s*|\\s)(bash|sh|exec|nohup)\\s+(\\w+=\\S+\\s+)*)\\S*scripts/dogfood/validate-release\\.sh": 3600000,
+      "((^|[;&|(]\\s*)(\\w+=\\S+\\s+)*|(^|[;&|(]\\s*|\\s)(bash|sh|exec|nohup)\\s+(\\w+=\\S+\\s+)*)\\S*scripts/dogfood/release-sentinel\\.sh": 7200000
     }
   },
   "hint": "pr-sentinel watches PRs in this repo — take one non-blocking snapshot (e.g. `gh pr checks <n>` without --watch), never sleep/poll gh yourself."
