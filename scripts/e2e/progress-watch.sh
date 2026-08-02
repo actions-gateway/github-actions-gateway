@@ -17,14 +17,16 @@
 #
 # Usage:
 #   scripts/e2e/progress-watch.sh &          # started by the root Makefile's `e2e`
-#   E2E_PROGRESS_FILE=... E2E_PROGRESS_INTERVAL=15 scripts/e2e/progress-watch.sh
+#   E2E_PROGRESS_FILE=... TEST_PROGRESS_INTERVAL=15 scripts/e2e/progress-watch.sh
 #
 # Sourcing this file defines its helpers without starting the loop, which is how
 # progress-watch-test.sh asserts the rendering.
 set -euo pipefail
 
 PROGRESS_FILE="${E2E_PROGRESS_FILE:-tmp/e2e-progress.jsonl}"
-PROGRESS_INTERVAL="${E2E_PROGRESS_INTERVAL:-30}"
+# Shared with the unit tier's renderer (devtools/gotest/progress), so one knob
+# paces every tier — including 0, which turns progress off rather than spinning.
+PROGRESS_INTERVAL="${TEST_PROGRESS_INTERVAL:-30}"
 
 # Longest spec text shown per running spec. The full text runs to ~200 chars
 # (container hierarchy + leaf); the leading chars are what identify it.
@@ -81,6 +83,7 @@ render_progress() {
 
 main() {
 	local last_tick=0
+	[[ "$PROGRESS_INTERVAL" == 0 ]] && return 0
 	# A final render on the way out: the Makefile stops the watcher as soon as
 	# ginkgo exits, and without this the last interval's worth of completions
 	# never appears.

@@ -132,6 +132,27 @@ expect_silent 'invalid JSON does not fail' 1010 <<-'EOF'
 EOF
 
 echo
+echo '== interval 0 turns the watcher off =='
+# TEST_PROGRESS_INTERVAL is shared with the unit tier's renderer, where 0 means
+# "no progress reporting". Without the guard in main() the same value would make
+# this watcher `sleep 0` in a tight loop for the length of an e2e run.
+TEST_PROGRESS_INTERVAL=0 "$REPO_ROOT/scripts/e2e/progress-watch.sh" >"$WORK/off.log" 2>&1 &
+watcher=$!
+# A regression here hangs rather than fails, so the assertion carries its own
+# deadline instead of relying on the caller's.
+(
+	sleep 10
+	kill -9 "$watcher" 2>/dev/null
+) &
+killer=$!
+if wait "$watcher" && [[ ! -s "$WORK/off.log" ]]; then
+	ok 'interval 0 exits without output' 'exited 0, printed nothing'
+else
+	bad 'interval 0 exits without output' "exit $? output $(printf '%q' "$(cat "$WORK/off.log")")"
+fi
+kill "$killer" 2>/dev/null || true
+
+echo
 if ((fails > 0)); then
 	echo "$fails assertion(s) failed" >&2
 	exit 1

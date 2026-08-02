@@ -45,7 +45,7 @@ formats and three polling loops.
 | 0 | The e2e suite reports itself: heartbeat + JUnit summary + annotations | ✅ Shipped — [#1152](https://github.com/actions-gateway/github-actions-gateway/pull/1152), detail in [archive/e2e-progress-visibility.md](archive/e2e-progress-visibility.md) |
 | 1 | `validate-release.sh` reports phase and spec progress in the terminal | ✅ Shipped — Q615 |
 | 2 | Background-task mode + status file + sentinel; documented as the default | ⚠️ Status file + sentinel shipped (Q616); documenting it as the default is open — [Q617](../STATUS.md#Q617) |
-| 3 | Unit `-race` progress via `go test -json` | ❌ Open — [Q618](../STATUS.md#Q618) |
+| 3 | Unit `-race` progress via `go test -json` | ✅ Shipped — Q618 |
 | — | Migrating other suites to Ginkgo | ⛔ Rejected on measurement — [see below](#evaluated-and-rejected-migrating-other-suites-to-ginkgo) |
 | — | Integration-tier progress | ⛔ Not needed on measurement — 30–64 % output density, already self-narrating |
 
@@ -167,7 +167,7 @@ rather than whole jobs:
 |---|---|---|---|---|
 | e2e suite (hosted) | 420 s | 3.8 % | 98 s | ✅ fixed in Phase 0 |
 | e2e suite (dogfood) | 464 s | 8.6 % | 78 s | ✅ fixed in Phase 0 |
-| unit tests (`-race`) | 200 s | 8 % | 58 s | worth doing — [Q618](../STATUS.md#Q618) |
+| unit tests (`-race`) | 200 s | 8 % | 58 s | ✅ shipped in Phase 3 |
 | integration (AGC) | 223 s | 30 % | 31 s | ⛔ not needed |
 | integration (GMC) | 280 s | 64 % | 75 s | ⛔ not needed |
 
@@ -185,10 +185,33 @@ The mechanism is different and *simpler* than Phase 0's — plain Go tests are
 already visible to `go test -json`, so this is a wrapper over the existing
 event stream with **no test-code changes at all**.
 
-One honest limitation: `go test -json` has no denominator. Go does not know the
-total test count up front, so the line reads "37 done, 4 running" rather than
-"37/412". Recovering it needs a `go test -list '.*'` pre-pass. See
-[Open decisions](#open-decisions).
+Shipped as [`devtools/gotest/progress`](../../devtools/gotest/progress/main.go),
+which [`go-test.sh`](../../scripts/go/go-test.sh) pipes `go test -json` through.
+It reconstructs the plain test log and interleaves the heartbeat. Full
+behaviour, the three measured properties of the `-json` stream it stands on, and
+the two deliberate differences from plain `go test` output:
+[testing.md § Watching a unit run in progress](../development/testing.md#watching-a-unit-run-in-progress).
+
+Two things the build changed from this plan:
+
+- **The renderer had to reconstruct `go test`'s output, not just add to it.**
+  `-json` replaces the plain log rather than accompanying it, so the wrapper
+  owns what a green package and a failing package print. That is what makes it
+  a Go program in `devtools/` rather than the bash+jq the earlier phases used —
+  `Output` fields are JSON-escaped free text, and getting a compile error's
+  bytes back intact is not a job for awk.
+- **The denominator arrived at the package level, not the test level** — see
+  [Open decisions](#open-decisions) #2.
+
+A property worth recording, because it was not the reason for the change and is
+larger than the heartbeat: plain `go test` releases package output **in
+command-line order**, so a slow early package holds back every package behind
+it. `-json` has no such barrier (measured), so package results now appear as
+they complete.
+
+Not covered: `make check` reaches the unit tests through `coverage.sh`, a
+separate invocation that still runs plain `go test`. Its silence has not been
+measured, and design rule 5 says that measurement comes before the fix.
 
 ## Evaluated and rejected: migrating other suites to Ginkgo
 
@@ -257,6 +280,6 @@ phases.
 | # | Decision | Notes |
 |---|---|---|
 | 1 | ~~Does `gh run watch` emit ANSI when not a TTY?~~ | **Settled 2026-08-02: no.** Piped output is plain append-only text; nothing was garbled. Phase 1 replaced it anyway, because gh's watch blocks and the relay needs the foreground |
-| 2 | Denominator for `go test -json` tiers | A `go test -list '.*'` pre-pass buys "37/412" for the cost of a second (cache-warm) invocation on the slowest tier. Alternative: ship without a denominator |
-| 3 | Rename `E2E_PROGRESS_INTERVAL` | If Phase 3 lands, the `E2E_` prefix is wrong. Rename with the generalization, not before |
+| 2 | ~~Denominator for `go test -json` tiers~~ | **Settled 2026-08-02: packages, not tests.** The `-list '.*'` pre-pass measured 22 s wall / 131 s CPU *with a warm build cache* — it compiles every test binary before any test runs, which also serializes the compile that go-test.sh's single invocation exists to overlap (Q17: 189 s → 163 s). `go list` gives a package denominator for ~0.3 s and no compilation |
+| 3 | ~~Rename `E2E_PROGRESS_INTERVAL`~~ | **Settled 2026-08-02: renamed to `TEST_PROGRESS_INTERVAL`** with Phase 3, and both tiers read it. `0` now means "off" in both — sharing the knob without that would have made 0 a spin-loop in the e2e watcher. `E2E_PROGRESS_FILE`/`_SPEC_WIDTH` keep their prefix; they are genuinely Ginkgo-specific |
 | 4 | ~~Does the release sentinel belong in-repo or as a plugin?~~ | **Settled with Q616: in-repo.** It reads this gate's own event stream and renders this gate's phases; there is nothing in it a second repo could use. `scripts/dogfood/release-sentinel.sh` |

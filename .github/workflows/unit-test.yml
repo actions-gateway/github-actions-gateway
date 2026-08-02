@@ -92,6 +92,12 @@ jobs:
               - 'scripts/go/**'
               - 'scripts/agent/local-throttle.sh'
               - 'scripts/lib/**'
+              # devtools/ is outside go.work, but go-test.sh tests it in this
+              # job's own run (the firstparty_nonworkspace_modules loop) — so
+              # without this a devtools-only change ships with its Go tests
+              # never executed. It reaches the `scripts` filter below too; that
+              # one gates shellcheck, which does not touch Go (Q618).
+              - 'devtools/**'
               - 'coverage-baseline.txt'
               - '.github/workflows/unit-test.yml'
             status:
