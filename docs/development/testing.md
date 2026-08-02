@@ -1058,6 +1058,45 @@ make e2e-clean          # tear down when done
 
 For iterating against a single spec without re-creating the cluster, see [kind-iteration.md](kind-iteration.md). It also covers pointing AGC at fakegithub vs. real GitHub via the `AGC_EXTRA_*` env vars and using `E2E_SKIP_TEARDOWN=true` to keep state between runs.
 
+### `Ordered` containers run whole, in one process — which is why a suite can hold package state
+
+Every e2e suite is an `Ordered` container, and several assign the package-level
+`fakegithubLocalPort` from their own base port in their own `BeforeAll` without
+being `Serial`. That is safe, and it is worth knowing *why* before writing a
+suite that relies on it — or one that assumes more than it grants.
+
+Two independent guarantees hold it up, both verifiable in the vendored source:
+
+1. **Parallel processes are separate OS processes.** `ginkgo --procs N` execs the
+   compiled test binary N times
+   ([`ginkgo/internal/run.go:44`](../../vendor/github.com/onsi/ginkgo/v2/ginkgo/internal/run.go))
+   and coordinates them over an RPC/HTTP server (`internal/parallel_support/`).
+   Package-level variables are therefore **per process** — never shared across
+   them, so two processes cannot race on one.
+2. **An `Ordered` container is one scheduling unit.** Ginkgo groups specs for
+   execution and "ordered containers must be preserved as a single group"
+   ([`internal/ordering.go:96`](../../vendor/github.com/onsi/ginkgo/v2/internal/ordering.go)).
+   The parallel counter hands out an index into *groups*, not specs, and each is
+   run whole by `newGroup(suite).run(...)`
+   ([`internal/suite.go:499-519`](../../vendor/github.com/onsi/ginkgo/v2/internal/suite.go)).
+   So no other container can interleave between a suite's specs and reassign
+   what its `BeforeAll` set.
+
+**What this does not grant: mutual exclusion.** Two different `Ordered`
+containers still run *concurrently* in different processes. The package var is
+safe because each process has its own copy and each suite writes a distinct base
+port before use — not because Ginkgo serialises anything. `Ordered` orders specs
+within a container; it does not order containers against each other. A resource
+that is genuinely shared *outside* the process — a cluster object, a fixed host
+port, a GitHub session — gets no protection from `Ordered` and needs `Serial`,
+an owner-scoped filter, or a per-process derivation such as
+`GinkgoParallelProcess()`.
+
+Dropping `Serial` from a suite is therefore a claim about *external* isolation,
+never about package state. Worked example, including the owner-prefix filter
+that made one such drop safe:
+[e2e-ci-speed-round-2.md](../plan/e2e-ci-speed-round-2.md#5-de-serialize-e2e_agc_workerpodlifecycle-).
+
 ### Watching an e2e run in progress
 
 At `--procs 6` Ginkgo's own output is close to silent: it suppresses spec-start entirely in parallel mode, prints a passing spec as a bare `•`, and two measured CI runs went 98 s and 78 s between any output. `make e2e` therefore runs [`scripts/e2e/progress-watch.sh`](../../scripts/e2e/progress-watch.sh) alongside the suite, which prints one line per 30 s:

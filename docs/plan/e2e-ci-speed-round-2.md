@@ -259,6 +259,10 @@ var. Six sibling suites (`job_lifecycle`, `acquire_admission`,
 contiguously within one process, so no other container can reassign it
 mid-suite. This suite keeps its own base port (19300).
 
+The general rule behind that — the two guarantees, and the mutual exclusion it
+does *not* grant — is in
+[testing.md](../development/testing.md#ordered-containers-run-whole-in-one-process--which-is-why-a-suite-can-hold-package-state).
+
 ## 6. Trim the HPA spec's fixed waits ✓
 
 **Saving: ~15 s off the serial tail, plus part of the ScalingActive wait**
