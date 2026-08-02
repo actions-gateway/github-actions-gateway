@@ -1076,20 +1076,31 @@ node.
 the node. Kata uses `/dev/kvm` to spin up microVMs.
 [Official GKE docs.](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/nested-virtualization)
 
-**Machine type note:** nested virtualization on GCP requires the N1, N2/N2D, or
-C2/C2D instance families. E2 (used in Parts A–B) does **not** support it. The e2e
-pool uses `c2d-standard-8` (8 vCPU: the measured runner peak is ~5 vCPU — Q248,
-which is why the original `n2-standard-4` was outgrown).
+**Machine type note:** nested virtualization is required (Kata needs `/dev/kvm`)
+and GCP supports it on a specific list, which the API names when it rejects a
+create:
 
-**Why C2D and not C2 (Q627).** The regional `C2_CPUS` default is **8** — exactly
+> A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3 and M4
+
+**The AMD families are not on it** — `C2D` and `N2D` are both rejected, as is E2
+(used in Parts A–B). An earlier revision of this note claimed `n2/n2d/c2/c2d`;
+that was wrong, and cost a pool re-create when `c2d-standard-8` was refused
+outright. The e2e pool uses `n2-standard-8` (8 vCPU: the measured runner peak is
+~5 vCPU — Q248, which is why the original `n2-standard-4` was outgrown).
+
+**Why N2 and not C2 (Q627).** The regional `C2_CPUS` default is **8** — exactly
 one node of this shape — so a refused scale-up has nowhere to retry, and that is
 what cost a `v1.3.0-rc.5` validation run. A request to raise it to 16 was
 **denied** on 2026-07-31; an identical 8→16 ask for `IN_USE_ADDRESSES` was
 approved 33 minutes earlier, so the ratio was not the discriminator. Changing
-region does not help: `C2_CPUS` is 8 in every region checked (us-central1,
-us-west1, us-east4, europe-west1), because it is a project default applied
-per-region rather than regional capacity. `C2D_CPUS` defaults to 100 in all of
-them, so the same 8-vCPU shape gets 12 nodes of headroom instead of one.
+region does not help either: `C2_CPUS` is 8 in every region checked
+(us-central1, us-west1, us-east4, europe-west1), because it is a project default
+applied per-region rather than regional capacity.
+
+`N2_CPUS` defaults to **200** — 24 nodes of headroom beyond the pool's max of 2 —
+and n2 is this pool's original family, so it is already proven here. Of the other
+nested-virt-capable families with quota, `C3_CPUS` is 24 (3 nodes), which clears
+the max but leaves far less room.
 
 ### F1. Run the one-time setup script
 
@@ -1099,7 +1110,7 @@ scripts/dogfood/e2e-setup.sh
 ```
 
 This script owns the **cluster infra** the kustomize overlays can't express:
-1. Creates the `e2e` node pool (c2d-standard-8 spot, nested virt, `--workload-metadata=GKE_METADATA` — requires cluster-level `--workload-pool`, see Part A — autoscaling 0→2, taint `dedicated=e2e:NoSchedule`). The pool's node labels carry **both** `gag.dev/kata-ci=true` (installer scope) and `katacontainers.io/kata-runtime=true` — the latter pre-baked because the cluster autoscaler simulates scale-from-zero against configured labels only (Q286)
+1. Creates the `e2e` node pool (n2-standard-8 spot, nested virt, `--workload-metadata=GKE_METADATA` — requires cluster-level `--workload-pool`, see Part A — autoscaling 0→2, taint `dedicated=e2e:NoSchedule`). The pool's node labels carry **both** `gag.dev/kata-ci=true` (installer scope) and `katacontainers.io/kata-runtime=true` — the latter pre-baked because the cluster autoscaler simulates scale-from-zero against configured labels only (Q286)
 2. Installs the Kata DaemonSet, scoped to e2e pool nodes only via `gag.dev/kata-ci` and tolerating the pool taint (the chart ships no tolerations — Q286). The system and workers pools use COS; Kata requires Ubuntu or COS 1.28.4+, and the DaemonSet labels nodes `katacontainers.io/kata-runtime=true` after install
 3. Creates the `kata` RuntimeClass alias (over the chart-owned `kata-qemu` handler) with a node scheduling rule that prevents Kata pods from scheduling before the DaemonSet has finished installing
 4. Creates the `gag-dogfood-e2e` namespace (v2 marker `actions-gateway.com/tenant=managed`) and the GitHub App Secret

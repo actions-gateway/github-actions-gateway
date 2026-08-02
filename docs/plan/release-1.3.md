@@ -50,7 +50,7 @@
 > listener fix, so rc.4's pass does not transfer. Its first gate run aborted at
 > t+4m07s on a defect in the gate itself: a watcher that dies on a queued job's
 > 404, killing the run inside the autoscaler's backoff window before a transient
-> node scale-up refusal could retry ([Q627](../STATUS.md#Q627) covers the thin
+> node scale-up refusal could retry ([Q627](#Q627) covers the thin
 > headroom that made the blip matter). Neither is evidence about the release.
 > Details in
 > [The rc.5 validation attempt](#the-rc5-validation-attempt-2026-08-02).
@@ -127,7 +127,7 @@ The prose below carries the *why* of each; this table is the state.
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
 | — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | 🔲 **owed on the tag that ships** — [rc.4 PASSED](#the-rc4-validation-verdict-2026-08-02); [rc.5's attempt](#the-rc5-validation-attempt-2026-08-02) aborted on gate defects, not the release |
-| <a id="Q627"></a>Q627 | The dogfood `e2e` pool has one node of C2 headroom | rides | 🔲 filed — measured schedulable; zero headroom leaves a transient refusal nowhere to retry |
+| <a id="Q627"></a>Q627 | The dogfood `e2e` pool has one node of C2 headroom | rides | ✅ closed 2026-08-02 — pool re-created on `n2-standard-8`, verified Ready with the kata label at `N2_CPUS` 8/200 |
 
 **Cut condition: zero open gating rows in this ledger** **plus the
 release-candidate dogfood validation**, the ledger's last row. It has no Q-ID
@@ -140,7 +140,7 @@ recorded below, so the label grep under-reports them.
 **Cut `v1.3.0` from `main`, not from the validated RC's commit.** rc.5's
 validation produced two fixes to the gate harness itself — the e2e watch's
 behaviour on a queued run, and the `e2e` pool's machine type
-([Q627](../STATUS.md#Q627)) — and the harness ships in the branch. A `release-1.3`
+([Q627](#Q627)) — and the harness ships in the branch. A `release-1.3`
 cut from rc.5's `a6f168ad` to make the tag match the validated artifact would
 strand both, so every future `v1.3.x` backport would re-run the gate with the
 bugs this release already paid to find. The rule is written up under
@@ -344,17 +344,28 @@ backoff. Recorded because the wrong version shipped once.
 What is established about the pool is headroom, not a ceiling: `c2-standard-8`
 against `C2_CPUS` 8 is exactly one node and `maxNodeCount: 2` is unreachable, so
 a refused scale-up has nowhere to retry into. Tracked as
-[Q627](../STATUS.md#Q627).
+[Q627](#Q627).
 
 **Resolved by re-shaping the pool, not by a quota grant.** A request to raise
 `C2_CPUS` 8→16 was **denied** on 2026-07-31 — while an identical 8→16 ask for
 `IN_USE_ADDRESSES` was approved 33 minutes earlier on the same project and
 region, so the size of the ask was not the discriminator. Nor would a region
 move help: `C2_CPUS` is 8 in every region checked, a project default applied
-per-region rather than regional capacity. The pool is now `c2d-standard-8` —
-same 8 vCPU / 32 GB, same compute-optimized and nested-virt-capable class,
-against a `C2D_CPUS` default of 100. Twelve nodes of headroom for a pool whose
-max is 2.
+per-region rather than regional capacity.
+
+The pool is now `n2-standard-8` — same 8 vCPU / 32 GB, on the nested-virt list,
+against an `N2_CPUS` default of 200. Twenty-four nodes of headroom beyond the
+pool's max of 2, and n2 is the family this pool started on, so it is already
+proven here. Verified by bringing one up: `Ready`, `n2-standard-8`,
+`katacontainers.io/kata-runtime=true`, at `N2_CPUS` 8/200.
+
+`c2d` was tried first and is impossible: GCP rejects
+`--enable-nested-virtualization` for it outright, naming the families that can
+(A2, A3, C2, C3, C4, C4D, C4N, G2, H3, H4D, N1, N2, N4, N4D, Z3, M4 — no AMD).
+The repo's own note had claimed `n2/n2d/c2/c2d`, which is where the wrong choice
+came from; that note is corrected in
+[gke-dogfood.md](gke-dogfood.md#part-f--e2e-on-gke-kata-containers) and in the
+two operations runbooks that repeated it.
 
 **The teardown held.** `e2e-stop.sh` waited on the queued job rather than
 deleting the AGC under it — the 2026-07-31 incident's fix doing its job — and
