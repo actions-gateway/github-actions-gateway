@@ -155,6 +155,38 @@ func TestInformerPodWaiter_DeleteResolvesSucceeded(t *testing.T) {
 	}
 }
 
+// Q628 characterisation, on the production waiter rather than the poll fallback.
+// The reaper's pending_deadline delete removes a pod that never scheduled, so the
+// pod it delivers is Pending, not Running. That resolves as Succeeded with
+// ExternallyDeleted unset — so the session's caller maps it to a succeeded job and
+// no disruption-recovery arm fires, because every arm requires PodFailed.
+//
+// This pins CURRENT behaviour. A worker that never ran a step is not a success, and
+// when the fix lands this expectation changes.
+func TestInformerPodWaiter_Q628_DeletedPendingPodResolvesSucceeded(t *testing.T) {
+	w := newTestWaiter(pod("ns", "p", corev1.PodPending, ""))
+
+	done := make(chan podResult, 1)
+	go func() {
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	w.onPodDelete(pod("ns", "p", corev1.PodPending, ""))
+
+	res := mustResolve(t, done)
+	if res.outcome.Phase != corev1.PodSucceeded {
+		t.Fatalf("got phase=%q, want Succeeded — a reaped Pending worker reports success", res.outcome.Phase)
+	}
+	if res.outcome.ExternallyDeleted {
+		t.Fatal("ExternallyDeleted must stay false here; setting it would arm Q502 recovery")
+	}
+	if res.outcome.Preempted {
+		t.Fatal("a reaper delete carries no preemption marker, so no recovery arm fires")
+	}
+}
+
 func TestInformerPodWaiter_DeleteTombstone(t *testing.T) {
 	w := newTestWaiter(pod("ns", "p", corev1.PodRunning, ""))
 
