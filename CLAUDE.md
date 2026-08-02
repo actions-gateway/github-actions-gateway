@@ -72,6 +72,8 @@ Five `PreToolUse` hooks guard tool calls; each denial message explains the speci
 - **go-throttle** prefixes `go build`/`go test` with the local throttle prefix: a bare form is rewritten and auto-allowed; a compound/redirected `-race` form is rewritten and *asked* (no longer blocked); a `-race` form it can't pin a single go token in is *denied* with the reason. Detail: testing.md § Resource auto-throttle.
 - **no-subagent-workers** fires on `Agent`/`Task` spawns and *asks* (soft) when a spawn looks like a parallel-dispatch worker — workers must be task chips, never sub-agents (`docs/development/parallel-dispatch.md`). Read-only agent types (`Explore`, `Plan`) pass untouched.
 
+**Adding a pattern to a hook registry?** Every hook here searches its patterns against the *whole raw command string*, so a pattern naming a command or path also matches text that merely mentions it — a `git show`/`grep` of the file, a commit message quoting the command (Q624). Anchor it to command position, and assert both directions (`scripts/agent/foreground-guard-patterns-test.sh`): a pattern that stops matching fails as silently as one that matches everything.
+
 Each Bash session starts at the worktree root. Isolate every directory change in a subshell (`(cd cmd/agc && go test ./...)`) so the parent cwd can't drift.
 
 ## Testing
