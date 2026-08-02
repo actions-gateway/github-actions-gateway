@@ -2607,14 +2607,6 @@
 <td>Measured during Q600: 5 listeners serve 37–47 deliveries (dedup 33–43) — a loser sets no <code>RecycleAgent</code>, so it re-polls at once. <code>&gt;= maxListeners-1</code> is met by one looper, leaving the sibling burst unproven. Count distinct sessions.</td>
 </tr>
 <tr>
-<td><a id="Q605"></a>Q605</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/verify-release-test.sh">Nothing executes <code>make verify-release</code>'s download path, so a moved helper broke it unnoticed</a></td>
-<td><code>ci</code> <code>tests</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured on the rc.4 cut: <code>download-cosign.sh</code> called <code>$(dirname $0)/download-verified.sh</code> after Q571 moved it to <code>fetch/</code>, so verification died at <code>No such file</code>. The test only asserts the identity regexp; shellcheck cannot see a runtime path.</td>
-</tr>
-<tr>
 <td><a id="Q595"></a>Q595</td>
 <td><a href="../operations/troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">The cancel runbook's manual pod delete may re-run the job GitHub cancelled</a></td>
 <td><code>bug</code> <code>docs</code></td>
