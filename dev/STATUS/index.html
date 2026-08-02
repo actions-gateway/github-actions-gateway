@@ -2594,11 +2594,11 @@
 </tr>
 <tr>
 <td><a id="Q627"></a>Q627</td>
-<td><a href="../operations/release/#validate-the-release-candidate-on-dogfood">The dogfood <code>e2e</code> pool has one node of C2 headroom, and its autoscaler will not retry a refused scale-up</a></td>
+<td><a href="../plan/gke-dogfood/#part-f--e2e-on-gke-kata-containers">Re-create the dogfood <code>e2e</code> node pool on <code>c2d-standard-8</code></a></td>
 <td><code>dogfood</code> <code>debt</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>c2-standard-8</code> vs <code>C2_CPUS</code> 8 = one node; <code>maxNodeCount: 2</code> unreachable. A hand resize works where the autoscaler fails <code>GCE quota exceeded</code> then sits in backoff with every quota free — difference unverified. Raise C2_CPUS to 16.</td>
+<td>Script + docs land in this PR; the live pool still runs <code>c2-standard-8</code> and machine type is immutable, so it needs a delete/re-create at 0 nodes. <code>C2_CPUS</code>=8 (raise denied 2026-07-31, and it is 8 in every region) vs <code>C2D_CPUS</code>=100.</td>
 </tr>
 <tr>
 <td><a id="Q623"></a>Q623</td>
