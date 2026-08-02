@@ -2357,6 +2357,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#the-rc4-validation-verdict-2026-08-02" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rc.4 validation verdict (2026-08-02)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q577-closed-the-behaviour-is-the-fail-safe-not-the-bug" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q577 closed: the behaviour is the fail-safe, not the bug
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2539,7 +2561,12 @@ requires the release-candidate dogfood validation in
 the actual RC image and is deliberately not tracked as a Queue row. Residuals
 deferred out of 1.3 are under
 <a href="#explicitly-out-of-scope">Explicitly out of scope</a>.</p>
-<p><strong><code>v1.3.0-rc.3</code> is published and verified; its dogfood validation is owed.</strong>
+<p><strong>Superseded 2026-08-02: <code>v1.3.0-rc.4</code> is published, verified, and its dogfood
+validation PASSED</strong> — the ledger's last gating row, and the first verdict any RC
+in this line has produced. Details in
+<a href="#the-rc4-validation-verdict-2026-08-02">The rc.4 validation verdict</a>; the
+paragraphs below record the earlier history.</p>
+<p><strong><code>v1.3.0-rc.3</code> was published and verified; its dogfood validation was owed.</strong>
 Tagged 2026-08-01 off <code>7c18872d</code>, it is the first RC carrying the Q550/Q551
 fixes above — which is the reason it exists, since rc.2's own validation
 window is what exposed them and rc.2 therefore cannot be the artifact that
@@ -2684,10 +2711,10 @@ The prose below carries the <em>why</em> of each; this table is the state.</p>
 <td>✅ shipped 2026-08-01</td>
 </tr>
 <tr>
-<td><a href="../../STATUS/#Q577">Q577</a></td>
+<td>Q577</td>
 <td><code>stop.sh</code> leaves the pool up when its drain cannot converge</td>
 <td><code>1.3-gate</code></td>
-<td>🔲 unblocked — re-measure at the gate, it may no longer be real</td>
+<td>✅ closed 2026-08-02 — not a defect (<a href="#q577-closed-the-behaviour-is-the-fail-safe-not-the-bug">why</a>)</td>
 </tr>
 <tr>
 <td>Q583</td>
@@ -2747,7 +2774,7 @@ The prose below carries the <em>why</em> of each; this table is the state.</p>
 <td>—</td>
 <td>RC validated on dogfood (<a href="#a-headline-feature-complete-satisfied">§ A</a>)</td>
 <td>gates</td>
-<td>🔲 rc.3: gate aborted at leg 1, no verdict</td>
+<td>✅ <strong>PASSED on <code>v1.3.0-rc.4</code>, 2026-08-02</strong> (<a href="#the-rc4-validation-verdict-2026-08-02">verdict</a>)</td>
 </tr>
 </tbody>
 </table>
@@ -2767,8 +2794,9 @@ row exists so the fourth does not.</p>
 <h3 id="what-rc4-carries-and-the-two-scope-calls-behind-it">What rc.4 carries, and the two scope calls behind it<a class="headerlink" href="#what-rc4-carries-and-the-two-scope-calls-behind-it" title="Permanent link">&para;</a></h3>
 <p>rc.3's validation window produced five defects (Q575–Q578, Q580) plus a revive
 trigger on Q553. Q575, Q576, Q578, and Q580 have shipped; Q577 is unblocked by
-Q575 landing, but both stalls its row named are now fixed, so the gate should
-re-measure it rather than assume it is still real. <strong>Q576, Q552, and Q553 gate rather than ride</strong> for the same
+Q575 landing, and closed at the gate as
+<a href="#q577-closed-the-behaviour-is-the-fail-safe-not-the-bug">not a defect</a>.
+<strong>Q576, Q552, and Q553 gate rather than ride</strong> for the same
 reason Q550 and Q551 did: each is an availability bug an ordinary tenant reaches,
 not a dogfood-harness artifact. Q576 in particular spun a saturated scale set at
 ~0.8 provisioning attempts/s for 14 minutes, issuing 704 GitHub deregister calls
@@ -2882,6 +2910,88 @@ that a core referent gets the full 253-character DNS-subdomain budget instead of
 already publishes, so this is a third instance of a settled pattern, not a new one.
 The reasons are additive condition vocabulary, which is not a freeze. Nothing
 deferred, nothing filed.</p>
+<h3 id="the-rc4-validation-verdict-2026-08-02">The rc.4 validation verdict (2026-08-02)<a class="headerlink" href="#the-rc4-validation-verdict-2026-08-02" title="Permanent link">&para;</a></h3>
+<p><strong><code>validate-release.sh v1.3.0-rc.4</code> PASSED</strong>, exit 0, ~39 minutes end to end. This
+is the <strong>first RC in the 1.3 line to produce a verdict at all</strong> — rc.1 aborted on
+routing, rc.2 returned Q550/Q551 instead of a result, rc.3 aborted at leg 1. The
+gate's own row exists because three consecutive misses went unremarked; the fourth
+did not.</p>
+<table>
+<thead>
+<tr>
+<th>Leg</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lane settle</td>
+<td>waited 7 min for <code>main</code>'s own e2e run, before any billable work</td>
+</tr>
+<tr>
+<td>Deploy rc.4</td>
+<td>GMC and both tenant AGCs rolled out</td>
+</tr>
+<tr>
+<td>e2e matrix on GAG runners</td>
+<td><strong>green</strong> — 30 steps executed, 0 failures</td>
+</tr>
+<tr>
+<td><code>NodeShare</code> (<code>gag-dogfood-e2e</code>)</td>
+<td><code>sizingProfileState=Active</code> — the hard-failure leg</td>
+</tr>
+<tr>
+<td><code>Throughput</code> (<code>gag-dogfood</code>)</td>
+<td><code>sizingProfileState=Active</code>, <code>sampleCounts=[127]</code></td>
+</tr>
+<tr>
+<td>Signed v2 CRD manifest</td>
+<td>blob signature verified against the publish identity</td>
+</tr>
+<tr>
+<td>Teardown</td>
+<td>drained on the first confirm, 8 → 0 nodes</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>Throughput</code> actuated, which this gate is not designed to prove.</strong> The runbook
+expects <code>NOT VALIDATED THIS RUN</code> here: the profile needs ≥20 samples per template
+container and the gate's matrix is ~7 jobs. It reported <code>Active</code> at 127 samples,
+because the sampler tracks every worker pod regardless of <code>spec.sizing</code> and the
+aggregate re-seeds from the persisted <code>status.sizingRecommendation</code> — so the CI
+tenant's ordinary traffic had already carried it over the threshold. The
+consequence is stronger than a pass: <strong>this RC ran CI on derived sizing</strong>, so the
+release's headline feature is validated in use rather than merely configured.</p>
+<p><strong>What this run did NOT establish.</strong> <code>NodeShare</code> cleared its <em>state</em> assertion, but
+the leg reported <code>derived value NOT checked — no live worker pod was caught during
+the matrix</code>. The envelope arithmetic at pod level is therefore unconfirmed by this
+run. That is the same gap <a href="../../STATUS/#Q448">Q448</a> already tracks, and it is worth
+stating rather than reading the green as total: the profile is provably <code>Active</code> and
+provably actuating, and the per-worker share it derives is not independently checked
+here.</p>
+<p><strong>rc.4 is not <code>main</code>.</strong> The tag points at <code>084f00a5</code>; <code>main</code> has since taken the
+Q596, Q603, Q605 and docs changes. Nothing in that set is implicated in what the
+gate exercised, but a GA tag cut from a later commit carries code this validation
+did not cover — decide that explicitly at the cut rather than inheriting this pass.</p>
+<h3 id="q577-closed-the-behaviour-is-the-fail-safe-not-the-bug">Q577 closed: the behaviour is the fail-safe, not the bug<a class="headerlink" href="#q577-closed-the-behaviour-is-the-fail-safe-not-the-bug" title="Permanent link">&para;</a></h3>
+<p>The row asserted that <code>stop.sh</code> "leaves the pool up when its drain cannot converge",
+and was left open with an instruction to re-measure at this gate rather than build
+against it. Both halves of that instruction paid off, in opposite directions.</p>
+<p><strong>The gate did not exercise the failure branch.</strong> The drain converged on the first
+confirm, so a clean teardown says nothing about what happens when it cannot — the
+run is evidence that the <em>causes</em> of non-convergence are fixed (Q553's wedge,
+Q575's <code>Pending</code> worker), not that the handling is correct.</p>
+<p><strong>Reading the code settles it instead.</strong> <code>drain_workers</code> deliberately refuses to
+scale down on timeout, and says why: scaling down evicts the tenant AGCs, and an AGC
+is the only thing that reaps worker pods, so the pool would keep its billable worker
+nodes up <em>indefinitely</em> rather than for the length of one drain. It then prints which
+pods are stuck, whether the drain was moving at all, and three remedies keyed to that
+distinction — re-run, delete the stuck pods, or <code>SKIP_DRAIN=1</code> to accept stranding
+them. Q580 already removed the one misleading suggestion it used to make.</p>
+<p>So the behaviour the row names is real, intentional, and the safer of the two
+options; the alternative it implicitly asks for is worse. Closed as not-a-defect.
+The generalisable point is that a row asserting a defect is a claim about intent as
+well as behaviour, and this one was only ever checked against behaviour.</p>
 <h2 id="what-13-means">What 1.3 means<a class="headerlink" href="#what-13-means" title="Permanent link">&para;</a></h2>
 <p>Two things, one of which only a release can deliver.</p>
 <p><strong>The headline is worker right-sizing.</strong> Per-<code>RunnerSet</code> usage observability,

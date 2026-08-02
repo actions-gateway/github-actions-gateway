@@ -2567,14 +2567,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q577"></a>Q577</td>
-<td><a href="../plan/gke-dogfood/#reading-a-timed-out-drain"><code>stop.sh</code> leaves the pool up when its drain cannot converge</a></td>
-<td><code>dogfood</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Unblocked: both named stalls are fixed (Q553's wedge, Q575's Pending worker). Not a namespace-scope bug — the drain is cluster-wide because the resize evicts every tenant's AGC. Re-measure on rc.4 before building: the row may no longer be real.</td>
-</tr>
-<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code></td>
