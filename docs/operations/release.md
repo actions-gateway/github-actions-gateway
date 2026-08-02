@@ -685,6 +685,26 @@ i.e. when it has diverged past the release with content you don't want in the
 patch. If `main` is clean and ready to ship, that's the next **minor** (`vX.(Y+1).0`),
 not a patch.
 
+> **A release line carries its own validation harness.** `validate-release.sh` and
+> the dogfood scripts under it live in this repo, and the gate runs *the scripts in
+> your checkout* against *the artifacts of the tag*. A `release-X.Y` branch cut from
+> `vX.Y.0` therefore inherits whatever harness that commit had — so a fix to the
+> gate only reaches a patch line if it was in the minor tag, or is cherry-picked
+> like any other fix.
+>
+> The consequence is a rule for the **minor** cut, not the patch: tag `vX.Y.0` from
+> a commit that carries the harness fixes you want the line to keep. Cutting it from
+> an older RC's commit to make the tag byte-match the validated artifact is the trap
+> — it strands every gate fix found *during* that release's validation, which is
+> exactly when gate fixes tend to be found. `v1.3.0` is the worked example: rc.5's
+> validation produced two harness fixes ([Q627](../STATUS.md#Q627) and the e2e watch
+> deadline), and a `release-1.3` branch cut from rc.5's commit would reproduce both
+> on every future `v1.3.x`.
+>
+> Validating an RC whose product code matches `main` is unaffected: the images and
+> CRDs come from the tag, the harness from your checkout, so the two move
+> independently by design.
+
 The **docs site follows automatically**: `mike` builds each version from its own
 tag, so a patch tagged off the release line publishes docs with only that line's
 content — no unreleased features. And the site's `stable` alias + default root
