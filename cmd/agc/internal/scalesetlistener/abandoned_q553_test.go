@@ -47,8 +47,10 @@ func newQuickPollServer(t *testing.T) *scalesettest.Server {
 // lands in the deferred set instead of provisioning. Returns its jobID.
 func stallJob(t *testing.T, srv *scalesettest.Server, ssID int, m *countingMetrics, want int) string {
 	t.Helper()
-	_, jobID := srv.EnqueueJob(ssID)
-	srv.FailJITConfigNamePrefix("linux-" + jobID)
+	// The conflict has to be in place before the job is pollable. Installed as a
+	// second call after EnqueueJob, a poll can assign and provision the job in the
+	// gap, and it never reaches the deferred set the wait below is watching.
+	_, jobID := srv.EnqueueStalledJob(ssID, "linux-")
 	require.Eventually(t, func() bool { return m.deferredCount() == want }, 5*time.Second, 10*time.Millisecond,
 		"the job that cannot register a runner name must be held for a re-offer")
 	return jobID

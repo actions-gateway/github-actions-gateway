@@ -626,12 +626,33 @@ func (s *Stub) EnqueueJob(scaleSetID int) (reqID int64, jobID string) {
 func (s *Stub) Enqueue(scaleSetID int) Job {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.enqueueLocked(scaleSetID, "")
+}
+
+// EnqueueStalledJob queues a job whose runner names already conflict, so it cannot
+// provision from the moment it is pollable. namePrefix is joined to the job id the
+// stub mints here, which is why a caller cannot install the conflict itself:
+// FailJITConfigNamePrefix after EnqueueJob leaves a window in which a poll assigns
+// and provisions the job before the conflict applies, and it never defers.
+func (s *Stub) EnqueueStalledJob(scaleSetID int, namePrefix string) (reqID int64, jobID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	j := s.enqueueLocked(scaleSetID, namePrefix)
+	return j.RunnerRequestID, j.JobID
+}
+
+// enqueueLocked queues a job, registering the runner-name conflict that stalls it in
+// the same critical section when conflictPrefix is non-empty. Caller holds s.mu.
+func (s *Stub) enqueueLocked(scaleSetID int, conflictPrefix string) Job {
 	ss := s.scaleSets[scaleSetID]
 	if ss == nil {
 		panic(fmt.Sprintf("scalesetstub: Enqueue on unknown scale set %d", scaleSetID))
 	}
 	j := s.newQueuedJobLocked()
 	ss.jobs = append(ss.jobs, j)
+	if conflictPrefix != "" {
+		s.conflictJITPrefixes = append(s.conflictJITPrefixes, conflictPrefix+j.jobID)
+	}
 	// A queued job produces no message until a poll re-evaluates it against the
 	// advertised capacity, so wake the parked polls to do exactly that.
 	s.notifyLocked()
