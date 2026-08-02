@@ -2577,20 +2577,12 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q615"></a>Q615</td>
-<td><a href="../plan/test-progress-visibility/#phase-1--release-validation-reports-itself">Release validation reports its own progress</a></td>
-<td><code>dogfood</code> <code>tests</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Phase 1: <code>validate-release.sh</code> goes quiet behind <code>gh run watch</code> (job status only) while Phase 0's spec heartbeat sits in the dispatched run's log. Emit a phase stream, relay the remote heartbeat via the in-flight jobs/logs API, render JUnit on exit.</td>
-</tr>
-<tr>
 <td><a id="Q616"></a>Q616</td>
 <td><a href="../plan/test-progress-visibility/#phase-2--background-task-mode-becomes-the-standard">Background-task mode for release validation</a></td>
 <td><code>dogfood</code> <code>tests</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>M</td>
-<td>Blocked on Q615's phase stream. Status file (phase, elapsed, last heartbeat, failure) + a <code>release-sentinel</code> modeled on pr-sentinel that sleeps and wakes the session on phase transitions — event-driven, never a clock poll.</td>
+<td>Phase 1 shipped the phase stream this builds on. Status file (phase, elapsed, last heartbeat, failure) + a <code>release-sentinel</code> modeled on pr-sentinel that sleeps and wakes the session on phase transitions — event-driven, never a clock poll.</td>
 </tr>
 <tr>
 <td><a id="Q617"></a>Q617</td>

@@ -2505,7 +2505,7 @@ formats and three polling loops.</p>
 <tr>
 <td>1</td>
 <td><code>validate-release.sh</code> reports phase and spec progress in the terminal</td>
-<td>❌ Open — <a href="../../STATUS/#Q615">Q615</a></td>
+<td>✅ Shipped — Q615</td>
 </tr>
 <tr>
 <td>2</td>
@@ -2563,12 +2563,13 @@ has to leave the terminal to see.</p>
    operator's terminal instead of handing them a URL.</li>
 </ol>
 <p>Plus a one-liner worth taking regardless: print the run URL before the watch.</p>
-<p><strong>Open sub-question, to settle by measurement at build time:</strong> whether
-<code>gh run watch</code> emits ANSI cursor control when stdout is not a TTY. If it does,
-running this gate as a background task is <em>already</em> producing garbled captured
-output today, independent of anything here — which would make replacing it with
-our own append-only poller a fix rather than a preference. The measurement was
-blocked in-session by the pr-sentinel hook; take it first.</p>
+<p><strong>Measured 2026-08-02: <code>gh run watch</code> emits no ANSI when stdout is not a TTY.</strong>
+Piped, it degrades to plain append-only text with UTF-8 status glyphs — so
+background-task capture was <strong>not</strong> garbled, and there was no pre-existing bug
+to fix. Replacing it is therefore justified by the relay requirement alone: gh's
+watch <em>blocks</em>, and a heartbeat cannot be interleaved from inside it. Recorded
+because the opposite conclusion was the tempting one and would have shipped an
+overstated claim.</p>
 <h2 id="phase-2--background-task-mode-becomes-the-standard">Phase 2 — background-task mode becomes the standard<a class="headerlink" href="#phase-2--background-task-mode-becomes-the-standard" title="Permanent link">&para;</a></h2>
 <p>The goal: <code>run release validation</code> means the agent launches the gate in the
 background and keeps the operator informed, and this is the documented default
@@ -2766,8 +2767,8 @@ phases.</p>
 <tbody>
 <tr>
 <td>1</td>
-<td>Does <code>gh run watch</code> emit ANSI when not a TTY?</td>
-<td>Decides whether Phase 1 replaces it or wraps it. Measure first — it may already be garbling background runs today</td>
+<td>~~Does <code>gh run watch</code> emit ANSI when not a TTY?~~</td>
+<td><strong>Settled 2026-08-02: no.</strong> Piped output is plain append-only text; nothing was garbled. Phase 1 replaced it anyway, because gh's watch blocks and the relay needs the foreground</td>
 </tr>
 <tr>
 <td>2</td>
