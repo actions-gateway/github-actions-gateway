@@ -759,10 +759,18 @@ docker-build-fakegithub: ## Build and push only the fakegithub image (bake targe
 # Ginkgo runs them after all parallel specs complete — no separate invocation or
 # label-based split needed for cluster isolation.
 #
-# SUITE=single-node|multi-node filters to a subset for local iteration; unset runs all specs.
+# SUITE=single-node|multi-node|live-github filters to a subset for local iteration;
+# unset runs all specs.
 # single-node maps to --label-filter '!multi-node' (tests that run on a 1-worker cluster).
+#
+# live-github maps to the github-real container, and is the ONLY correct way to run it.
+# That container's BeforeAll strips the GMC's AGC_EXTRA_* fakegithub overrides
+# cluster-wide and holds them off for its whole duration, so every fakegithub-backed
+# spec that stands up a tenant in that window gets an AGC pointed at real GitHub and
+# times out unable to register a session. Measured 2026-08-03: five such specs failed
+# that way in one full-suite run while the GMC carried AGC_EXTRA_GITHUB_ORG_URL alone.
 SUITE ?=
-_SUITE_FILTER = $(if $(filter single-node,$(SUITE)),!multi-node,$(if $(filter multi-node,$(SUITE)),multi-node,))
+_SUITE_FILTER = $(if $(filter single-node,$(SUITE)),!multi-node,$(if $(filter multi-node,$(SUITE)),multi-node,$(if $(filter live-github,$(SUITE)),github-real,)))
 
 # The suite appends spec start/end events here and scripts/e2e/progress-watch.sh
 # renders them into the periodic heartbeat (Q608). The watcher runs BESIDE ginkgo
@@ -771,13 +779,22 @@ _SUITE_FILTER = $(if $(filter single-node,$(SUITE)),!multi-node,$(if $(filter mu
 # something else reads. Set empty to disable both halves.
 E2E_PROGRESS_FILE ?= $(REPO_ROOT)/tmp/e2e-progress.jsonl
 
+# Whole-suite budget, not a per-spec one: Ginkgo interrupts the running spec when it
+# elapses and skips everything after it, so an under-set value reads as a spec failure
+# rather than as a budget problem. 30m fits the parallel fake-GitHub suite with room to
+# spare. It does not fit live-GitHub, whose container is Ordered and therefore serial:
+# its specs wait on real GitHub concluding jobs, which alone is ~10 minutes twice over.
+# Measured 2026-08-03 — a 30m run was interrupted in the sixth of seven live specs, so
+# the seventh never ran. Raise it with SUITE=live-github rather than for everyone.
+E2E_TIMEOUT ?= $(if $(filter live-github,$(SUITE)),90m,30m)
+
 # E2E_PROGRESS_FILE sits with the other env vars INSIDE the recipe, after the
 # `cd`: a `VAR=x cd dir && cmd` prefix scopes VAR to the `cd` alone, so the
 # suite would silently emit nothing.
 _GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 	GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) WORKER_IMG=$(WORKER_IMG) WRAPPER_IMG=$(WRAPPER_IMG) \
 	E2E_PROGRESS_FILE=$(E2E_PROGRESS_FILE) \
-	$(GINKGO) run --tags e2e --timeout 30m --github-output --poll-progress-after 30s
+	$(GINKGO) run --tags e2e --timeout $(E2E_TIMEOUT) --github-output --poll-progress-after 30s
 
 # The JUnit report lives under the repo-local tmp/ (gitignored), not /tmp:
 # host-wide temp is shared across worktrees/sessions (concurrent runs collide)
@@ -787,7 +804,7 @@ _GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 # The watcher is killed on every exit path — the trap covers a failed suite and
 # a Ctrl-C alike — and the recipe still exits with ginkgo's status.
 .PHONY: e2e
-e2e: $(GINKGO) ## Run e2e tests; SUITE=standard|multi-node selects a subset, unset runs all specs
+e2e: $(GINKGO) ## Run e2e tests; SUITE=single-node|multi-node|live-github selects a subset, unset runs all specs
 	@mkdir -p $(REPO_ROOT)/tmp
 	@: >$(E2E_PROGRESS_FILE)
 	E2E_PROGRESS_FILE=$(E2E_PROGRESS_FILE) scripts/e2e/progress-watch.sh & \

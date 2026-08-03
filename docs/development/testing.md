@@ -1250,7 +1250,14 @@ For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node
 
 A migration spec has both a v1 and a v2 tenant in one namespace and drains both. Cluster-scoped objects (`ClusterRunnerTemplate`, the per-gateway `ClusterRoleBinding`) survive namespace deletion entirely and are reclaimed last, by provenance label.
 
-**live-GitHub.** Set `GITHUB_E2E_APP_ID`, `GITHUB_E2E_INSTALLATION_ID`, `GITHUB_E2E_PRIVATE_KEY` (a PEM path or the PEM body), `GITHUB_E2E_ORG`, and `GITHUB_E2E_REPO` in the environment, then run `make e2e` (live-GitHub specs skip themselves at runtime when any variable is missing). The GitHub App key is in the macOS keychain; see the GitHub App reference memory for the retrieval command.
+**live-GitHub.** Set `GITHUB_E2E_APP_ID`, `GITHUB_E2E_INSTALLATION_ID`, `GITHUB_E2E_PRIVATE_KEY` (a PEM path or the PEM body), `GITHUB_E2E_ORG`, and `GITHUB_E2E_REPO` in the environment, then run `make e2e SUITE=live-github` (live-GitHub specs skip themselves at runtime when any variable is missing). The GitHub App key is in the macOS keychain; see the GitHub App reference memory for the retrieval command.
+
+**`SUITE=live-github`, not a bare `make e2e`** — it selects the `github-real` label and raises the suite budget to 90m, and both halves are load-bearing:
+
+- **The rest of the suite cannot run alongside it.** The container's `BeforeAll` strips the GMC's `AGC_EXTRA_*` fakegithub overrides cluster-wide and holds them off until its `AfterAll`, so any fakegithub-backed spec that stands up a tenant in that window gets an AGC pointed at real GitHub. It never registers a session and times out after 4 minutes on `no live session for this RunnerGroup` — a signature that reads as a defect in the spec rather than as contention. Measured 2026-08-03: five specs failed exactly that way in one full-suite run, with the GMC confirmed carrying `AGC_EXTRA_GITHUB_ORG_URL` alone at the time.
+- **30m does not fit the container.** It is `Ordered`, so its specs are serial, and two of them wait out GitHub's ~10-minute post-eviction conclusion. `--timeout` is a whole-suite budget: Ginkgo interrupts whatever is running and skips the rest, so an under-set value surfaces as a failure in spec N and silence about N+1. Measured 2026-08-03: a 30m run was interrupted in the sixth of seven live specs and the seventh never ran. Override further with `E2E_TIMEOUT=<dur>` if specs are added.
+
+Read the outcome from `E2E_EXIT`/the `Ran N of M Specs` line, never from the shell's status alone: `make e2e … | tee` reports `tee`'s 0 while the suite fails, and `FAIL! -- Suite Timeout Elapsed` is a budget problem wearing a failure's clothes.
 
 **Run live-GitHub on a throwaway cluster, not the shared `actions-gateway-e2e` one.** The
 live-GitHub container swaps the GMC's GitHub env vars cluster-wide and holds them for the
