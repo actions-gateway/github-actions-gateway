@@ -166,6 +166,13 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			out, _ := utils.Run(cmd)
 			_, _ = fmt.Fprintln(GinkgoWriter, out)
 		}
+		// The scale-set tenant is created inside its own spec rather than here, so this
+		// has to cope with it never having existed — a spec that failed earlier in the
+		// container leaves nothing to delete. It goes first because it registers runners
+		// on the shared fixture repo, and its AGC must still be up to deregister them:
+		// stranded registrations keep accepting assignments and block the next run's
+		// preflight.
+		deleteScaleSetTenant()
 		utils.DeleteActionsGatewayCR(tenantNS, agName)
 		utils.DeleteNamespace(tenantNS)
 		// Restore fakegithub-pointing env vars so subsequent suites in this
@@ -1052,6 +1059,233 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			"the out-of-quota gateway declined the delivery without claiming it, GitHub held the job queued, "+
 				"and a sibling gateway on the same runner group ran it to success")
 	})
+
+	// The scale-set half of Q396's experiment 1. The classic half is measured above; this
+	// runs the same disruption against the other acquisition tier and asks whether the
+	// two findings that came out of it — GitHub's ~10-minute conclusion latency after an
+	// ungraceful kill, and the re-run refusal that latency implies — reproduce there.
+	//
+	// Q417 plumbed recovery onto scale-set from the owning reconciler rather than from a
+	// job goroutine, so the detection path is genuinely different code. The 403 is
+	// tier-independent by construction — it is a property of the API and of the delay,
+	// not of how the AGC noticed — but that is reasoning, and this is the tier where it
+	// stops being reasoning.
+	//
+	// # Placed last, deliberately
+	//
+	// This is the only spec in the container that stands up a tenant on a path no
+	// live-GitHub run has ever exercised: the AGC's scale-set listener has never
+	// bootstrapped against real GitHub from inside a cluster. cmd/probe's Investigation E
+	// proves the wire protocol from a standalone binary, which is a different question.
+	// Ordered containers run specs in declaration order, so putting it here means a
+	// failure to register a scale set costs this measurement and nothing above it.
+	//
+	// # Why the bootstrap is asserted separately
+	//
+	// Without it, a listener that never opened its session would surface as "the job
+	// stayed queued for ten minutes" — indistinguishable from GitHub being slow, from a
+	// label mismatch, and from the runner group's public-repository rule. The Degraded
+	// condition the listener publishes on a successful Start says which of those it was,
+	// so it is checked before anything is dispatched.
+	It("E2E_GitHub_ScaleSetEvictedWorkerLatencyAndRerun: the same measurement on the scale-set tier", func() {
+		repoSlug := creds.org + "/" + creds.repo
+		orgURL := fmt.Sprintf("https://github.com/%s/%s", creds.org, creds.repo)
+
+		// Every runner this scale set registers is named "<scaleSetLabel>-<jobID>", and
+		// the suite recognizes its own registrations by the agName prefix alone. A label
+		// that stopped extending agName would strand runners on the shared fixture repo
+		// that neither the preflight nor `make e2e-github-cleanup` can see — so the
+		// relation is asserted here rather than left to the const's comment.
+		Expect(scaleSetLabel).To(HavePrefix(agName+"-"),
+			"the scale-set label must extend %q or its runner registrations become invisible "+
+				"to suiteRunnerPrefixes (Q511)", agName)
+
+		By("standing up the v2 scale-set tenant against real GitHub")
+		utils.CreateNamespace(scaleSetTenantNS, map[string]string{
+			// The GMC's dual-reading ValidatingAdmissionPolicies only admit v2
+			// provisioning in a namespace marked as a managed tenant.
+			"actions-gateway.com/tenant": "managed",
+		})
+		utils.CreateGitHubAppSecret(scaleSetTenantNS, scaleSetSecretName,
+			creds.appID, creds.installationID, creds.privateKeyPEM)
+		Expect(utils.ApplyManifestWithWebhookRetry(
+			scaleSetLiveManifest(scaleSetTenantNS, orgURL, scaleSetSecretName,
+				workerImage, workerEphemeralStorageLimit))).To(Succeed())
+
+		By("waiting for the per-gateway AGC Deployment to become ready")
+		utils.WaitForDeploymentReady(scaleSetTenantNS, scaleSetAGCDeploy, 5*time.Minute)
+
+		By("asserting the listener registered a scale set and opened a session at real GitHub")
+		// The risky step, asserted as itself. Listener.Start ensures the scale set and
+		// opens the session synchronously and only then publishes Degraded=False with
+		// this reason, so the condition means both halves of the bootstrap succeeded
+		// against dotcom — not merely that the AGC process is up.
+		Eventually(func(g Gomega) {
+			status, reason := runnerSetCondition(g, scaleSetTenantNS, scaleSetName, "Degraded")
+			g.Expect(status).To(Equal("False"), "Degraded=%s/%s", status, reason)
+			g.Expect(reason).To(Equal("SessionAuthorized"), "Degraded=False for %q, not an open session", reason)
+		}, 5*time.Minute, 10*time.Second).Should(Succeed(), func() string {
+			// A closure, not a string: Gomega evaluates a plain description eagerly, so
+			// the dump would be taken before the wait began and would always read "no
+			// conditions published" — a message that describes the start of the wait
+			// rather than the failure at the end of it.
+			return "the scale-set listener never opened a session against real GitHub, so nothing " +
+				"below could measure an eviction. RunnerSet conditions:\n" +
+				runnerSetConditionDump(scaleSetTenantNS, scaleSetName)
+		})
+
+		By(fmt.Sprintf("dispatching %q on the scale set's own label %q", creds.longWorkflow, scaleSetLabel))
+		// The scale set's name IS its runs-on label, so this dispatch cannot reuse the
+		// classic tenant's: the fixture takes the label as an input for exactly this.
+		runID := dispatchAndResolveRun(repoSlug, creds.longWorkflow, "runner="+scaleSetLabel)
+		AddReportEntry("Q396 scale-set workflow run", fmt.Sprintf("https://github.com/%s/actions/runs/%s", repoSlug, runID))
+		defer func() {
+			// Unconditional, same reasoning as the classic spec: the fixture sleeps ten
+			// minutes and the re-run this spec provokes sleeps ten more.
+			_, _ = utils.Run(exec.Command("gh", "run", "cancel", runID, "--repo", repoSlug))
+		}()
+
+		By("waiting for GitHub to report the job in_progress")
+		// A real runner has to be executing a real job before it is interrupted. On this
+		// tier reaching in_progress also proves the acquisition half end to end — the
+		// listener polled its queue, took the assignment, minted a JIT config and the
+		// provisioner built a worker that registered and picked the job up.
+		Eventually(func(g Gomega) {
+			// An eviction this spec did not cause is indistinguishable from a slow start
+			// when read from GitHub, and invalidates everything below it. Naming it here
+			// turns a ten-minute "still queued" timeout into an immediate, correctly
+			// attributed failure.
+			g.Expect(evictedWorkerNames(scaleSetTenantNS)).To(BeEmpty(),
+				"a scale-set worker was evicted before its job started, so nothing below would "+
+					"be measuring the eviction this spec performs. Either the node is under "+
+					"pressure from another workload, or %s is too little headroom",
+				workerEphemeralStorageLimit)
+			status, _ := firstJobState(g, repoSlug, runID)
+			g.Expect(status).To(Equal("in_progress"), "job is %q", status)
+		}, 10*time.Minute, 10*time.Second).Should(Succeed())
+
+		By("locating the scale-set worker running that job")
+		var podName string
+		Eventually(func(g Gomega) {
+			var diag string
+			podName, diag = scaleSetWorkerForRun(g, scaleSetTenantNS, runID)
+			g.Expect(podName).NotTo(BeEmpty(), "%s", diag)
+		}, 3*time.Minute, 2*time.Second).Should(Succeed())
+		AddReportEntry("Q396 scale-set evicted worker pod", podName)
+
+		By("confirming the worker really is a scale-set worker carrying its run identity")
+		// The protocol label separates this from a classic worker that happened to be in
+		// the namespace, and the repository annotation is the other half of what
+		// handleEviction needs. On this tier run identity arrives with the assignment
+		// message and nowhere else, so its absence would make recovery inert no matter
+		// what the rest of the spec observed.
+		Expect(podLabel(scaleSetTenantNS, podName, "actions-gateway.com/acquisition-protocol")).
+			To(Equal("ScaleSet"), "worker %s was not provisioned by the scale-set path", podName)
+		Expect(podAnnotation(scaleSetTenantNS, podName, "actions-gateway.com/repository")).
+			NotTo(BeEmpty(), "scale-set worker %s carries no repository annotation (Q417)", podName)
+		Expect(podEphemeralStorageLimit(scaleSetTenantNS, podName)).To(Equal(workerEphemeralStorageLimit),
+			"worker pod carries no ephemeral-storage limit; the eviction lever is absent")
+
+		relayLog := followPodLogs(scaleSetTenantNS, podName)
+		observed := newPhaseRecorder(scaleSetTenantNS, podName)
+		stopSampling := observed.start(time.Second)
+
+		By(fmt.Sprintf("overshooting the worker's ephemeral-storage limit by writing %dMiB", evictionFillMiB))
+		filledAt := time.Now()
+		fillOutput := overflowEphemeralStorage(scaleSetTenantNS, podName, evictionFillMiB)
+		AddReportEntry("Q396 scale-set fill command output", fillOutput)
+
+		By("waiting for the kubelet to evict the worker")
+		Eventually(func(g Gomega) {
+			g.Expect(podPhaseReason(scaleSetTenantNS, podName)).To(Equal("Failed/Evicted"),
+				"worker pod has not been evicted")
+		}, 5*time.Minute, 2*time.Second).Should(Succeed())
+		stopSampling()
+
+		evictedAt, exitCode, evictionMessage := evictionFacts(scaleSetTenantNS, podName)
+		AddReportEntry("Q396 scale-set observed pod phase/reason sequence", strings.Join(observed.sequence(), " -> "))
+		AddReportEntry("Q396 scale-set kubelet eviction message", evictionMessage)
+		AddReportEntry("Q396 scale-set runner container exit code", strconv.Itoa(exitCode))
+		AddReportEntry("Q396 scale-set fill to kubelet eviction", evictedAt.Sub(filledAt).Round(time.Second).String())
+		AddReportEntry("Q396 scale-set worker log tail across the eviction", relayLog.stopAndRead())
+
+		By("confirming the runner was killed outright rather than asked to stop")
+		Expect(exitCode).To(Equal(137),
+			"the evicted runner exited %d, not SIGKILL; this is not the ungraceful path", exitCode)
+
+		By("waiting for GitHub to conclude the job it can no longer hear from")
+		// The measurement, and the number the classic half puts at 9m36s. Pinned to
+		// attempt 1 for the same reason: the AGC's re-run starts a second attempt as
+		// soon as GitHub concludes the run, at which point the "latest" filter stops
+		// naming the job under measurement.
+		var jobConclusion string
+		Eventually(func(g Gomega) {
+			status, conclusion := firstJobStateForAttempt(g, repoSlug, runID, 1)
+			g.Expect(status).To(Equal("completed"), "job is still %q", status)
+			jobConclusion = conclusion
+		}, 20*time.Minute, 15*time.Second).Should(Succeed())
+
+		concludedAtRaw := firstJobCompletedAtForAttempt(Default, repoSlug, runID, 1)
+		concludedAt, err := time.Parse(time.RFC3339, concludedAtRaw)
+		Expect(err).NotTo(HaveOccurred(), "parse job completed_at %q", concludedAtRaw)
+
+		AddReportEntry("Q396 scale-set job conclusion after eviction", jobConclusion)
+		AddReportEntry("Q396 scale-set eviction (kubelet finishedAt) -> conclusion (GitHub completed_at)",
+			concludedAt.Sub(evictedAt).Round(time.Second).String())
+		AddReportEntry("Q396 scale-set server timestamps",
+			fmt.Sprintf("container finishedAt=%s, GitHub completed_at=%s",
+				evictedAt.Format(time.RFC3339), concludedAt.Format(time.RFC3339)))
+
+		By("asserting the owning reconciler detected the disruption and reached recovery")
+		agcLog := agcEvictionLogFor(scaleSetTenantNS, scaleSetAGCDeploy)
+		AddReportEntry("Q396 scale-set AGC eviction log lines", agcLog)
+		Expect(agcLog).NotTo(ContainSubstring("worker pod disrupted but run_id unknown"),
+			"the AGC saw the eviction but had no run identity to recover with. Log:\n%s", agcLog)
+
+		By("asserting the retry budget was spent exactly once, on the scale-set tier")
+		// The Q106 sharded-reservation invariant again, and additionally the tier label:
+		// the budget is keyed by run ID alone and shared across tiers, so a recovery
+		// attributed to the wrong tier would still spend the slot while telling an
+		// operator the wrong thing about which path detected it.
+		scheduled := strings.Count(agcLog, "worker pod disrupted; scheduling auto-retry")
+		Expect(scheduled).To(Equal(1),
+			"one eviction must reserve exactly one retry slot, saw %d. Log:\n%s", scheduled, agcLog)
+		Expect(agcLog).To(SatisfyAny(
+			ContainSubstring(`"tier":"scaleset"`), ContainSubstring("tier=scaleset")),
+			"the recovery was not attributed to the scale-set tier. Log:\n%s", agcLog)
+		Expect(agcLog).NotTo(ContainSubstring("disruption retry budget exhausted"),
+			"a single eviction exhausted the retry budget. Log:\n%s", agcLog)
+
+		By("waiting for the AGC's re-run to be accepted by GitHub")
+		Eventually(func(g Gomega) {
+			agcLog := agcEvictionLogFor(scaleSetTenantNS, scaleSetAGCDeploy)
+			if strings.Contains(agcLog, "disruption auto-retry failed") {
+				StopTrying("the AGC gave up on the re-run — refused past the re-run window, " +
+					"or a terminal API error. Log:\n" + agcLog).Now()
+			}
+			g.Expect(agcLog).To(ContainSubstring("disruption auto-retry triggered"),
+				"the re-run has not been accepted yet")
+		}, 5*time.Minute, 10*time.Second).Should(Succeed())
+
+		By("asserting the accepted re-run is the one the retry loop landed, not the first call")
+		rerunCalls := rerunCallsOnAcceptance(agcEvictionLogFor(scaleSetTenantNS, scaleSetAGCDeploy))
+		AddReportEntry("Q396 scale-set rerun-failed-jobs calls before GitHub accepted", strconv.Itoa(rerunCalls))
+		Expect(rerunCalls).To(BeNumerically(">=", 2),
+			"the re-run was accepted on call %d, so this tier absorbed no refusal and the "+
+				"403 the classic half measured did not reproduce here — which is the finding, "+
+				"not a passing run", rerunCalls)
+
+		By("asserting GitHub actually started a second attempt")
+		Eventually(func(g Gomega) {
+			g.Expect(runAttemptCount(g, repoSlug, runID)).To(BeNumerically(">=", 2),
+				"the AGC's re-run was accepted but GitHub created no second attempt")
+		}, 5*time.Minute, 10*time.Second).Should(Succeed())
+
+		AddReportEntry("Q396 scale-set outcome",
+			"scale set registered against real GitHub, job acquired and run, eviction detected by the "+
+				"owning reconciler, retry budget spent once at tier=scaleset, re-run accepted after the "+
+				"run concluded, and a second attempt ran")
+	})
 })
 
 // suiteRunnerPrefixes are the runner-name prefixes this suite's tenant registers with
@@ -1295,12 +1529,20 @@ func sinceBaseline(lines []string, baseline int) []string {
 	return lines[baseline:]
 }
 
-// agcLog reads the tenant AGC's full log.
+// agcLog reads the tenant AGC's full log. The v1 tenant's AGC Deployment carries the
+// fixed controller name; a v2 gateway's is named after the gateway, so that tier reads
+// its log through agcDeploymentLog.
 func agcLog(ns string) string {
 	GinkgoHelper()
+	return agcDeploymentLog(ns, agcName)
+}
+
+// agcDeploymentLog reads the full log of a named AGC Deployment.
+func agcDeploymentLog(ns, deployment string) string {
+	GinkgoHelper()
 	out, err := utils.Run(exec.Command("kubectl", "logs", "-n", ns,
-		"deployment/"+agcName, "--tail=-1"))
-	Expect(err).NotTo(HaveOccurred(), "read AGC logs in %s", ns)
+		"deployment/"+deployment, "--tail=-1"))
+	Expect(err).NotTo(HaveOccurred(), "read AGC logs from %s/%s", ns, deployment)
 	return out
 }
 
@@ -1642,8 +1884,15 @@ func evictionFacts(ns, name string) (killedAt time.Time, exitCode int, message s
 // than the whole controller log.
 func agcEvictionLog(ns string) string {
 	GinkgoHelper()
+	return agcEvictionLogFor(ns, agcName)
+}
+
+// agcEvictionLogFor is agcEvictionLog against a named AGC Deployment, for the v2
+// scale-set tenant whose Deployment is named after its gateway.
+func agcEvictionLogFor(ns, deployment string) string {
+	GinkgoHelper()
 	var kept []string
-	for _, line := range strings.Split(agcLog(ns), "\n") {
+	for _, line := range strings.Split(agcDeploymentLog(ns, deployment), "\n") {
 		if strings.Contains(line, "evicted") || strings.Contains(line, "eviction") ||
 			strings.Contains(line, "disrupt") || strings.Contains(line, "re-run") {
 			kept = append(kept, line)
