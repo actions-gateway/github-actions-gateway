@@ -40,7 +40,7 @@ func (p *Provisioner) waitForPodCompletion(ctx context.Context, namespace, podNa
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	var preempted bool
+	var preempted, started bool
 	for {
 		select {
 		case <-ctx.Done():
@@ -49,12 +49,15 @@ func (p *Provisioner) waitForPodCompletion(ctx context.Context, namespace, podNa
 			var pod corev1.Pod
 			if err := p.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: podName}, &pod); err != nil {
 				if client.IgnoreNotFound(err) == nil {
-					// Pod was deleted externally; treat as completion.
-					return PodOutcome{Phase: corev1.PodSucceeded, Preempted: preempted}, nil
+					// Pod was deleted externally; treat as completion. started is
+					// carried the same way preempted is — the pod is gone, so
+					// whether it ever ran can only come from what this loop saw.
+					return PodOutcome{Phase: corev1.PodSucceeded, Preempted: preempted, DeletedBeforeStart: !started}, nil
 				}
 				return PodOutcome{}, fmt.Errorf("provisioner: watch pod: %w", err)
 			}
 			preempted = preempted || PreemptedByScheduler(&pod)
+			started = started || podEverStarted(&pod)
 			if out, ok := terminalPhase(&pod); ok {
 				out.Preempted = out.Preempted || preempted
 				return out, nil

@@ -41,6 +41,12 @@ type PodOutcome struct {
 	// exclusions folded in (the AGC's own stamped deletions, and a deletion whose
 	// container never ran or had already exited).
 	ExternallyDeleted bool
+	// DeletedBeforeStart reports that the pod was removed before any of its
+	// containers began executing, so no step of the job ever ran and no runner
+	// registered. Set only on the paths that resolve a wait from a deletion — a pod
+	// that published a terminal phase carries that phase instead — which is where
+	// the outcome was otherwise indistinguishable from a clean run (Q628).
+	DeletedBeforeStart bool
 }
 
 // PodWaiter blocks until a worker pod reaches a terminal phase. It abstracts the
@@ -50,7 +56,8 @@ type PodOutcome struct {
 type PodWaiter interface {
 	// WaitForCompletion blocks until the named pod reaches a terminal phase or
 	// ctx is cancelled. A pod that is deleted before reaching a terminal phase is
-	// reported as PodSucceeded with an empty reason.
+	// reported as PodSucceeded with an empty reason, and with DeletedBeforeStart
+	// set when no container of it ever ran.
 	WaitForCompletion(ctx context.Context, namespace, name string) (PodOutcome, error)
 }
 
@@ -117,6 +124,18 @@ func podCreationLatency(pod *corev1.Pod) (time.Duration, bool) {
 		d = 0
 	}
 	return d, true
+}
+
+// podEverStarted reports whether any of pod's containers began executing. An
+// unschedulable pod carries no container statuses at all, so it reports false.
+func podEverStarted(pod *corev1.Pod) bool {
+	for i := range pod.Status.ContainerStatuses {
+		st := &pod.Status.ContainerStatuses[i].State
+		if st.Running != nil || st.Terminated != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // InformerPodWaiter detects worker-pod completion by registering a single event
@@ -315,13 +334,22 @@ func (w *InformerPodWaiter) onPodEvent(obj any) {
 // recovery on the deletion mark being present when a terminal phase publishes; a pod
 // that vanished without one never ran its job to a reportable end, and this is also the
 // path the reaper's pending-deadline deletions resolve through.
+//
+// DeletedBeforeStart separates the two shapes this one path carries. A worker deleted
+// mid-run reported whatever it had done; one deleted before any container started ran
+// nothing at all, and the Succeeded phase alone made those indistinguishable to the
+// caller (Q628).
 func (w *InformerPodWaiter) onPodDelete(obj any) {
 	pod := podFromDeleteObj(obj)
 	if pod == nil {
 		return
 	}
 	w.resolve(pod.Namespace+"/"+pod.Name, podResult{
-		outcome: PodOutcome{Phase: corev1.PodSucceeded, Preempted: PreemptedByScheduler(pod)},
+		outcome: PodOutcome{
+			Phase:              corev1.PodSucceeded,
+			Preempted:          PreemptedByScheduler(pod),
+			DeletedBeforeStart: !podEverStarted(pod),
+		},
 	})
 }
 

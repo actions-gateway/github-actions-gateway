@@ -43,11 +43,18 @@ var RealClock Clock = realClock{}
 // The returned broker.TaskResult is the handler's POD-PHASE PROXY of the job's
 // outcome (PodFailed→failed, else succeeded) — NOT the workflow's real
 // succeeded/failed, which only the worker's runner binary knows and reports for the
-// winner's own delivery. The AGC uses it solely as the result to report when it fans
+// winner's own delivery. The AGC uses it as the result to report when it fans
 // completion out to the deduped sibling deliveries of a fanned-out job (Q260 Option
 // A); an empty result (an error before the pod reached a terminal phase) is treated
-// as succeeded by that fan-out. The error return is the provisioning error as
-// before (recoverable; the poll loop logs and continues).
+// as succeeded by that fan-out.
+//
+// broker.TaskResultAbandoned is the one value that also changes what the listener
+// does: it means the worker was removed before it ran, so no runner registered and
+// nothing will ever report this delivery either, and the listener releases its own
+// assignment too rather than leaving it for GitHub's unstarted-job timeout (Q628).
+//
+// The error return is the provisioning error as before (recoverable; the poll loop
+// logs and continues).
 type JobHandlerFunc func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) (broker.TaskResult, error)
 
 // SiblingDelivery identifies one deduped sibling delivery of a fanned-out job so the
@@ -55,6 +62,9 @@ type JobHandlerFunc func(ctx context.Context, runServiceURL, planID string, payl
 // Each field is the sibling's OWN per-delivery value: RunnerRequestID is the
 // delivery's job id (distinct per sibling under fan-out), and RunServiceURL /
 // JobToken are what completejob needs to resolve that specific assignment.
+//
+// It also addresses a session's own delivery when that delivery needs the same
+// release — a worker removed before it ran (Q628).
 type SiblingDelivery struct {
 	RunnerRequestID string
 	RunServiceURL   string
@@ -171,6 +181,11 @@ type Config struct {
 	// RunnerRequestID and job token — with the winner's pod-phase-proxy result, and a
 	// late redelivery arriving during the linger window is resolved with the recorded
 	// terminal result. Losers do NOT complete early.
+	//
+	// It also gates the same release of a runner's OWN delivery when its worker was
+	// removed before it ran (Q628) — the identical dangling assignment, reached
+	// without any fan-out, and the identical remedy — so one switch turns off every
+	// completejob the AGC issues on its own behalf.
 	//
 	// ON BY DEFAULT: the run service's completion is per-delivery, not
 	// planID-scoped — completejob on a sibling's OWN jobID resolves only that

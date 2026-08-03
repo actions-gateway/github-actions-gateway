@@ -29,11 +29,12 @@ type Metrics struct {
 	// completed but its terminal worker pod has not yet been reaped, so the claim
 	// still lingers and the redelivery would otherwise collide on `create Pod`).
 	JobsDuplicateDeliveryTotal *prometheus.CounterVec
-	// Q260 Option A: the winner of a fanned-out job issuing a completejob on a
-	// deduped sibling delivery (or on a late redelivery within the linger window) so
-	// GitHub does not leave the acquired-but-unrun assignment dangling until its
-	// ~15-minute unstarted-job timeout. Labelled by outcome (completed, error). Only
-	// incremented when the guarded behavior is enabled (Config.FanoutCompletion).
+	// The AGC issuing a completejob on an assignment it acquired but never ran, so
+	// GitHub does not leave it dangling until its ~15-minute unstarted-job timeout: a
+	// deduped sibling delivery or a late redelivery within the linger window (Q260
+	// Option A), or a session's own delivery whose worker pod was removed before it
+	// ran (Q628). Labelled by outcome (completed, error). Only incremented when the
+	// guarded behavior is enabled (Config.FanoutCompletion).
 	AbandonedDeliveryCompletionsTotal *prometheus.CounterVec
 	// Q266: a deduped fan-out loser deferred its slot recycle until its winner
 	// concluded, rather than recycling eagerly into a 422 that cannot clear for the
@@ -147,7 +148,7 @@ func NewMetrics() *Metrics {
 
 		AbandonedDeliveryCompletionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_abandoned_delivery_completions_total",
-			Help: "Deduped sibling deliveries of a fanned-out job whose acquired-but-unrun assignment the winner released via completejob (on completion, or on a late redelivery within the linger window) so GitHub does not cancel the job at its ~15-minute unstarted-job timeout, by outcome (completed, error). Only emitted when fan-out completion (Q260 Option A) is enabled.",
+			Help: "Job assignments the AGC acquired but never ran and released via completejob, so GitHub does not cancel the job at its ~15-minute unstarted-job timeout: a deduped sibling delivery of a fanned-out job (on the winner's completion, or on a late redelivery within the linger window), or a session's own delivery whose worker pod was removed before it started. By outcome (completed, error). Only emitted when fan-out completion (Q260 Option A) is enabled.",
 		}, []string{"namespace", "runner_group", "outcome"}),
 
 		FanoutLoserRecycleDeferredTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
