@@ -1215,7 +1215,9 @@ gh api repos/<owner>/<action>/commits/<tag> --jq '.sha'
 
 `syft-version` is **not** Dependabot-managed (it's a tool download, not an action
 ref) — bump it by hand in `publish.yml` when you bump the `anchore/sbom-action`
-SHA. `actionlint` (CI `lint` job) keeps SHA-pinned `uses:` lint-clean.
+SHA. The CI `actionlint` job (`unit-test.yml`) checks that every `uses:` carries a
+well-formed ref, so a pin edited down to a bare `owner/repo` fails the PR; it does
+not check that the ref is a SHA rather than a tag — that stays a review call.
 
 ### Signing identity is tags-only
 

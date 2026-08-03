@@ -174,7 +174,9 @@ SHA-pinned, but syft is a runtime download). Dependabot already declared the
 bumps SHA pins and their `# vX.Y.Z` comments, so the pins don't rot. Policy
 + bump procedure documented in
 [release.md § Supply-chain integrity of the pipeline](../operations/release.md#supply-chain-integrity-of-the-pipeline-itself);
-`actionlint` (CI `lint`) keeps SHA-pinned `uses:` lint-clean.
+This writeup credited `actionlint` (CI `lint`) with keeping SHA-pinned `uses:`
+lint-clean; no job ran it until Q579 added the `actionlint` job, which checks that
+every `uses:` carries a well-formed ref but not that the ref is a SHA.
 
 ### Q124 — `make verify-release` accepts branch identities (Medium) — RESOLVED
 
