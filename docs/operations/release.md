@@ -888,7 +888,22 @@ per fold, and no literal `[!` anywhere.
 
 **In-page anchors do not work in a release body.** Release-body headings carry no
 `id`, so `[Upgrading](#upgrading)` is a dead link. Refer to a section by name in
-bold instead.
+bold instead. Verify on a published release rather than trusting this — the page
+does emit ids, but only on GitHub's own chrome:
+
+```bash
+curl -sS https://github.com/<owner>/<repo>/releases/tag/<tag> \
+  | grep -oE '<h[1-6][^>]*>' | grep -c 'id='
+```
+
+**So a table of contents is not available, and should not be faked.** An unlinked
+list of section names is dead weight that costs collapsed height against the
+truncation limit while navigating nothing. The folds already serve that role: a
+collapsed `<details>` is a labelled one-line entry, so a body with ten folds
+reads as an outline whether or not the reader expands any of them. Navigation
+comes from section order and the danger banner, not from a ToC. (The in-repo copy
+under `docs/releases/` does get GitHub's auto-generated file outline for free,
+which is a second reason not to hand-roll one.)
 
 **Watch the chart-version form.** Images are tagged `vX.Y.Z`, charts `X.Y.Z`.
 A copy-pasteable `helm` command with a `v` in it fails.
