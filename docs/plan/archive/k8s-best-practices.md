@@ -1,6 +1,6 @@
 # Kubernetes Best-Practices Audit
 
-> **Archived 2026-07-06.** Every finding shipped (A–G) or folded into a test plan (H). Two durable conclusions were promoted out of this audit before archival so they survive as living design/security knowledge: the A6 `CreateOrPatch`-vs-Server-Side-Apply rationale → [02-architecture.md](../../design/02-architecture.md#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply), and the HTTP/2 Rapid-Reset mitigation → [05-security.md](../../design/05-security.md). Residuals: D7 (conversion-webhook scaffolding) tracked as Q74; H2 (live-GitHub rerun-on-eviction e2e) as [Q396](../../STATUS.md#Q396). This doc is kept for the rationale.
+> **Archived 2026-07-06.** Every finding shipped (A–G) or folded into a test plan (H). Two durable conclusions were promoted out of this audit before archival so they survive as living design/security knowledge: the A6 `CreateOrPatch`-vs-Server-Side-Apply rationale → [02-architecture.md](../../design/02-architecture.md#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply), and the HTTP/2 Rapid-Reset mitigation → [05-security.md](../../design/05-security.md). Residuals: D7 (conversion-webhook scaffolding) tracked as Q74; H2 (live-GitHub rerun-on-eviction e2e) as Q396. This doc is kept for the rationale.
 
 Findings from a project-wide Kubernetes best-practices audit performed 2026-05-30. Items are grouped by theme.
 

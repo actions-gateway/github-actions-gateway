@@ -509,7 +509,7 @@ exists to capture exactly that, and [`testdata/README.md`](../../testdata/README
 documents what each capture contains.
 
 Q495 is the worked example. Its backlog row read "confirm, then fix", and both it and
-the [Q459 plan](../plan/q459-drained-worker-recovery.md) budgeted a Tier C run that would
+the [Q459 plan](../plan/archive/q459-drained-worker-recovery.md) budgeted a Tier C run that would
 evict a real job and watch for the skip. The answer was already committed:
 `testdata/job_payload.json` is a redacted capture of a live `acquirejob` response, and
 parsing it shows in seconds that the run identity lives in `contextData.github` and that
@@ -1232,6 +1232,7 @@ After the run, [`scripts/e2e/e2e-report-summary.sh`](../../scripts/e2e/e2e-repor
 
 - `multi-node` — specs that need the 2-worker cluster shape to be meaningful: `E2E_GMC_ProxyPodScheduledOnWorker` (pod-to-worker placement), `E2E_GMC_PDBPreventsEvictionBelowMinAvailable` (PodDisruptionBudget (PDB) blocks eviction while a replica survives on another node), `E2E_GMC_GMCRestartPreservesState`, and `E2E_Migration_MigratedTenantReconcilesIntoAWorkingControlPlane` (it stands up two coexisting proxy pools, each free to autoscale, and the 2-worker shape is the one it is measured on — see the anti-affinity notes below). Two whole containers carry it too: `E2E_AGC_WorkerNodeDrain` and `E2E_AGC_WorkerPreemption`.
 - `github-real` — the live-GitHub specs that dispatch against real GitHub (`E2E_GitHub_RealDispatch`); they self-skip when the `GITHUB_E2E_*` env vars are unset. The container is `Ordered` and every live-GitHub spec belongs in it: the suite runs `--procs 6`, so a second top-level container would run *concurrently* with this one, and two live gateways registered on the same org runner group is the Q511 collision inside a single run.
+- `scaleset-live` — the one scale-set spec inside that container (`E2E_GitHub_ScaleSetEvictedWorkerLatencyAndRerun`), additive to `github-real` rather than a replacement. It is declared last, and Ginkgo skips the remainder of an `Ordered` container after a failure, so any of the six specs ahead of it failing costs it the whole run — twice on 2026-08-03, at ~55 minutes each. Run it alone with `SUITE=live-github-scaleset` once the container is known green. It still must not run beside the rest of the suite, for the `AGC_EXTRA_*` reason above.
 - `real-github-egress` — the specs whose traffic terminates at the live `api.github.com`: the v1/v2 `ProxyConnectWorks` CONNECT specs, the two `E2E_V2_DirectEgress` specs (their NP ipBlock-peer waits also depend on the GMC's live `/meta` fetch), and the live-GitHub container. Not a filter label: a suite-level `AfterEach` (`cmd/gmc/test/e2e/github_egress_preflight_test.go`) uses it for failure-time attribution — see [Runner→GitHub egress attribution](#runnergithub-egress-attribution-q352).
 
 For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node` maps to `--label-filter '!multi-node'` and skips the multi-node specs; unset `SUITE` runs everything (matching CI). The HPA scale-up spec (`E2E_GMC_HPADrivesScaleUp`) is unlabelled and CI-safe: it patches `HPA.spec.minReplicas` to drive the HPA→Deployment control path deterministically rather than burning CPU to trigger autoscaling, so it runs everywhere.
@@ -1250,7 +1251,16 @@ For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node
 
 A migration spec has both a v1 and a v2 tenant in one namespace and drains both. Cluster-scoped objects (`ClusterRunnerTemplate`, the per-gateway `ClusterRoleBinding`) survive namespace deletion entirely and are reclaimed last, by provenance label.
 
-**live-GitHub.** Set `GITHUB_E2E_APP_ID`, `GITHUB_E2E_INSTALLATION_ID`, `GITHUB_E2E_PRIVATE_KEY` (a PEM path or the PEM body), `GITHUB_E2E_ORG`, and `GITHUB_E2E_REPO` in the environment, then run `make e2e` (live-GitHub specs skip themselves at runtime when any variable is missing). The GitHub App key is in the macOS keychain; see the GitHub App reference memory for the retrieval command.
+**live-GitHub.** Set `GITHUB_E2E_APP_ID`, `GITHUB_E2E_INSTALLATION_ID`, `GITHUB_E2E_PRIVATE_KEY` (a PEM path or the PEM body), `GITHUB_E2E_ORG`, and `GITHUB_E2E_REPO` in the environment, then run `make e2e SUITE=live-github` (live-GitHub specs skip themselves at runtime when any variable is missing). The GitHub App key is in the macOS keychain; see the GitHub App reference memory for the retrieval command.
+
+**`SUITE=live-github`, not a bare `make e2e`** — it selects the `github-real` label and raises the suite budget to 90m, and both halves are load-bearing:
+
+- **The rest of the suite cannot run alongside it.** The container's `BeforeAll` strips the GMC's `AGC_EXTRA_*` fakegithub overrides cluster-wide and holds them off until its `AfterAll`, so any fakegithub-backed spec that stands up a tenant in that window gets an AGC pointed at real GitHub. It never registers a session and times out after 4 minutes on `no live session for this RunnerGroup` — a signature that reads as a defect in the spec rather than as contention. Measured 2026-08-03: five specs failed exactly that way in one full-suite run, with the GMC confirmed carrying `AGC_EXTRA_GITHUB_ORG_URL` alone at the time.
+- **30m does not fit the container.** It is `Ordered`, so its specs are serial, and two of them wait out GitHub's ~10-minute post-eviction conclusion. `--timeout` is a whole-suite budget: Ginkgo interrupts whatever is running and skips the rest, so an under-set value surfaces as a failure in spec N and silence about N+1. Measured 2026-08-03: a 30m run was interrupted in the sixth of seven live specs and the seventh never ran. Override further with `E2E_TIMEOUT=<dur>` if specs are added.
+
+**A live-GitHub spec identifies its worker by the run-id annotation and nothing else.** `runningWorkerForRun` used to fall back to "the sole Running worker that was not there before this spec dispatched", from when Q495 left the annotation absent and freshness was all there was. That fallback resolves the *wrong* pod once specs trigger re-runs, which they all now do: an earlier spec's second attempt provisions a worker mid-spec, which makes someone else's pod look fresh. Measured 2026-08-03 — the cancel-path spec dispatched run `30856065695` and was handed a worker annotated `30856024324`. The fallback is gone; a spec now waits for its own annotated worker and its diagnostic separates "no run-id at all" (the Q495 regression) from "annotated for another run" (keep waiting).
+
+Read the outcome from `E2E_EXIT`/the `Ran N of M Specs` line, never from the shell's status alone: `make e2e … | tee` reports `tee`'s 0 while the suite fails, and `FAIL! -- Suite Timeout Elapsed` is a budget problem wearing a failure's clothes.
 
 **Run live-GitHub on a throwaway cluster, not the shared `actions-gateway-e2e` one.** The
 live-GitHub container swaps the GMC's GitHub env vars cluster-wide and holds them for the

@@ -6,7 +6,7 @@ measurement already committed to the repo — so Q501 is a **classic-tier** item
 candidate B's cost is not worth paying. The remaining question is Phase 2, one
 live-GitHub reading that the cancel spec is now instrumented to take.
 
-Q501 was found by [Q459's cancellation measurement](q459-drained-worker-recovery.md#the-measurement-also-found-that-a-cancel-never-reaches-the-worker-q501):
+Q501 was found by [Q459's cancellation measurement](archive/q459-drained-worker-recovery.md#the-measurement-also-found-that-a-cancel-never-reaches-the-worker-q501):
 a `sleep 600` job ran its full 600s after its run was cancelled from GitHub, which
 concluded the job at its own ~5-minute grace. Cancelling a runaway job does not
 reclaim its capacity.

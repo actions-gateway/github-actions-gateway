@@ -29,14 +29,14 @@ clean run with no `timeout-minutes` set.
 
 | Row | Relationship to these experiments |
 |---|---|
-| [Q396](../STATUS.md#Q396) | **Is** experiment 1. Already covers both tiers as of #815; only the retry-budget assertion is additive. |
+| Q396 | **Is** experiment 1. Already covers both tiers as of #815; only the retry-budget assertion is additive. |
 | Q417 | **Shipped 2026-07-26.** Was the hard prerequisite for the scale-set half of 1, and for 3 and 5: `ProvisionScaleSetWorker` is fire-and-forget, so scale-set evictions were never detected. Detection now runs from the owning reconciler off the worker pod ([scaleset-eviction-recovery.md § Phase 2 as built](scaleset-eviction-recovery.md#phase-2-as-built)). All three are unblocked. |
 | Q419 | **Shipped 2026-07-26** with Q417 — the docs half of the same gap. The tier-agnostic claims in the exec summary, README, and why-gag are now true of both tiers rather than needing a qualification. Independent of these experiments. |
 | Q420 | **Shipped 2026-07-26**, ahead of Q417 and independently of it — the reap deadline came from a pod annotation, not a pod watch. Orphaned Running workers would otherwise have contaminated 3 and 5 by holding quota, which is exactly the idle-capacity signature those experiments measure. |
 | [Q418](../STATUS.md#Q418) | Deferred, event-gated on experiment 1 attributing the delay. |
-| [Q459](q459-drained-worker-recovery.md) | **Filed by experiment 2**, 2026-07-27. Its residual: neither tier recovers a drained worker, and whether that matters turns on what GitHub does with the runner's own relayed report — a live-GitHub question. Both halves measured 2026-07-29; decided **close, gated on `deletionTimestamp`**, and Q502 shipped that implementation on both tiers. |
+| [Q459](archive/q459-drained-worker-recovery.md) | **Filed by experiment 2**, 2026-07-27. Its residual: neither tier recovers a drained worker, and whether that matters turns on what GitHub does with the runner's own relayed report — a live-GitHub question. Both halves measured 2026-07-29; decided **close, gated on `deletionTimestamp`**, and Q502 shipped that implementation on both tiers. |
 
-## Experiment 1: mid-job eviction latency, both tiers ([Q396](../STATUS.md#Q396))
+## Experiment 1: mid-job eviction latency, both tiers (Q396)
 
 Evict a worker mid-build with no `timeout-minutes` set; timestamp the kill and
 GitHub's conclusion; assert the rerun fires and the per-run retry budget
@@ -134,15 +134,195 @@ is what the two numbers measure:
 
 | Disruption | Grace | Runner reports? | Eviction → conclusion |
 |---|---|---|---|
-| Graceful delete / drain ([Q459](q459-drained-worker-recovery.md)) | 30s | yes | **15–26s** |
+| Graceful delete / drain ([Q459](archive/q459-drained-worker-recovery.md)) | 30s | yes | **15–26s** |
 | Kubelet eviction (this experiment) | ~2s, then SIGKILL | no | **9m36s** |
 
-**What remains.** The scale-set half. This run measured the classic tier; Q417
-plumbed the same recovery onto scale-set from the owning reconciler, and whether
-GitHub's conclusion latency and the 403 both reproduce there is unmeasured. The
-403 is tier-independent by construction — it is a property of the API and of the
-delay, not of how the AGC detected the eviction — but that is reasoning, not a
-measurement.
+**The scale-set half followed on 2026-08-03; see the result below.** The 403 was
+argued here to be tier-independent by construction — a property of the API and of
+the delay, not of how the AGC detected the eviction — and the measurement agrees,
+but it is worth noting that the argument was not what settled it.
+
+### Scale-set result, measured 2026-08-03
+
+Live-GitHub tier on a throwaway kind cluster, against `actions-gateway/gateway-test`
+([run 30857541535](https://github.com/actions-gateway/gateway-test/actions/runs/30857541535)),
+by `E2E_GitHub_ScaleSetEvictedWorkerLatencyAndRerun`. Every image came from the
+published `v1.3.0` release, so this result is citeable against a version an operator
+can pin; the harness and pins are described in the section below.
+
+A ScaleSet-protocol RunnerSet registered a scale set against the fixture repo, GitHub
+routed the job to its label, and a real runner executed it before anything was touched.
+
+| Observation | Scale-set | Classic (same day) | Classic (2026-07-29) |
+|---|---|---|---|
+| Worker pod phase/reason | `Running/` → `Failed/Evicted` | same | same |
+| Runner container exit code | **137** | 137 | 137 |
+| Fill → kubelet eviction | 15s | 13s | ~55s |
+| Job conclusion | **`failure`** | `failure` | `failure` |
+| **Eviction → conclusion** | **9m38s** | 9m37s | 9m36s |
+| **Re-run calls before acceptance** | **20** | 20 | n/a — fired once, refused |
+
+**The scale-set tier reproduces the classic behaviour — when the runner's report does
+not escape.** On this run it did not: 9m38s to conclusion, within two seconds of both
+classic measurements, and 20 paced calls before GitHub accepted the re-run. The 403
+refusal window is real on this tier, so the retry loop is load-bearing here and not
+merely inherited.
+
+**But a second run of the same spec, on the same build, disagreed — and that is the
+more important result.** Re-run 2026-08-03 inside the full container, it saw:
+
+| Observation | This run | The run above |
+|---|---|---|
+| Runner container exit code | 137 | 137 |
+| Pod phase/reason | `Running/` → `Failed/Evicted` | same |
+| Job runtime before conclusion | **17s** | ~9.5 min |
+| Eviction → conclusion | **−1s** (GitHub concluded *before* the kubelet's recorded exit) | 9m38s |
+| Re-run calls before acceptance | **1** | 20 |
+
+17 seconds is the *graceful* path's signature — [Q459](archive/q459-drained-worker-recovery.md)
+measured 15–26s for a drained worker whose runner does report — so the likeliest reading
+is that this eviction gave the runner enough time to get its report out, and GitHub
+concluded on the report rather than on the lapsed lock. Exit 137 does not contradict
+that: a runner that reports and then overruns its grace is still SIGKILLed.
+
+**That reading is a hypothesis, not a measurement.** The captured worker log ends
+mid-stream in both runs and shows no SIGTERM relay line either way, and the failing run's
+AGC log was not captured at all — the container's failure hook dumps the *classic*
+tenant's AGC, which is a gap in the harness rather than in the product. What would settle
+it: capture the scale-set tenant's AGC log and the worker's full log on failure, then run
+the spec enough times to see how often each outcome occurs.
+
+**What this does and does not license.** The ~10-minute figure stands for the case the
+design cares about — nothing reported, GitHub notices by itself — and is now measured on
+both tiers. It must not be quoted as "what an eviction costs", because a kubelet
+ephemeral-storage eviction is evidently not reliably ungraceful. The spec's
+`rerunCalls >= 2` assertion encodes the stronger claim and is what failed here; it is
+correct as a description of the ungraceful path and wrong as a description of every
+eviction.
+
+**The detection path is genuinely the scale-set one.** The refusals log
+`cause=eviction` against `owner=set-ss` and a `runner-set-ss-…` pod, so it is the
+owning reconciler's worker-pod watch (Q417) that saw the disruption, not a classic job
+goroutine. The budget was reserved once, at `tier="scaleset"`.
+
+**What this run established for the first time, incidentally.** The AGC's scale-set
+listener had never bootstrapped against real GitHub from inside a cluster — `cmd/probe`
+Investigation E drives the same wire protocol from a standalone binary, which is a
+different question. It registered the scale set, opened its session, took the
+assignment, minted a JIT config and provisioned a worker that GitHub then reported
+running the job. The pre-registered runner name was
+`real-ag-ss-de2978a1-838b-59ae-a1fc-5dcd47d793db`, matching `listener.runnerName`'s
+`<scaleSetName>-<jobID>` exactly.
+
+### The scale-set half: how it was measured
+
+The harness behind the result above, and the two verifications that rode the same work.
+
+**The run is pinned to published images, so the result can be cited.** The 2026-07-29
+measurement is quotable for latency but not for recovery, because its images came from
+`719e67f1` and predate the Q495 fix — the defect and the build are inseparable in it.
+`v1.3.0` (tagged 2026-08-03) carries both behaviours under measurement, verified by
+content rather than by SHA: `rerunUntilAccepted` in
+[eviction.go](../../cmd/agc/internal/provisioner/eviction.go) (Q503) and the
+`contextData.github.run_id` extraction in
+[payload.go](../../cmd/agc/internal/provisioner/payload.go) (Q495). All five images are
+published at that tag, so the run sets `GMC_IMG`/`AGC_IMG`/`WORKER_IMG`/`WRAPPER_IMG`/
+`PROXY_IMG` to `ghcr.io/actions-gateway/<name>:v1.3.0` and lets the specs compile from
+the branch. Test code does not ship in the image, so the new assertions run against
+released binaries.
+
+Two deltas belong in the result rather than in the setup: `fakegithub` is test-only and
+stays locally built (the live-GitHub arm does not use it), and the chart is `v1.3.0`
+plus the v1alpha1 deprecation annotation on two CRDs (#1199), which is an apiserver
+warning and not behaviour under measurement. A defect found on the scale-set arm would
+move that arm's pin to whichever release ships the fix, leaving the classic arm's pin
+where it is.
+
+**Two verifications rode the same work, and both are now closed.** Neither needed a
+tier of its own, so both became assertions on the classic spec:
+
+- **Q503 — verified, 20 calls.** The retry loop shipped 2026-07-30 (#1010) and
+  `E2E_GitHub_EvictedWorkerLatencyAndRerun` already failed a refused re-run (Q510),
+  but it could not separate "the loop outlasted GitHub's refusal window" from "GitHub
+  accepted the first call" — a fire-once recovery would have passed on any run GitHub
+  happened to have concluded. `rerunUntilAccepted` logs `rerunCalls` on the acceptance
+  line ([eviction.go](../../cmd/agc/internal/provisioner/eviction.go)), so the spec now
+  reads that count and requires at least one absorbed refusal. Measured 2026-08-03:
+  **20** on the classic tier and **20** on scale-set, against a ~9.5-minute conclusion
+  at a 30-second retry interval.
+- **Q544 — verified.** The `run-id` and `repository` annotations were both present on
+  a real worker at live-GitHub, on a `v1.3.0` build. The spec no longer accepts their
+  absence: worker lookup matches on the annotation and nothing else, so resolving at
+  all proves `run-id`, and `repository` is asserted alongside it because the two arrive
+  from the same payload context and `rerun-failed-jobs` needs both.
+
+  Making that an assertion immediately caught a second defect, in the harness rather
+  than the product. The lookup used to fall back to "the sole Running worker that was
+  not there before this spec dispatched", which was correct only while Q495 left the
+  annotation absent. Once these specs began triggering re-runs — all of them now do —
+  an earlier spec's second attempt could provision a worker mid-spec and make someone
+  else's pod look fresh. On 2026-08-03 the cancel-path spec dispatched run
+  `30856065695` and was handed a worker annotated `30856024324`; before the assertion
+  it would have cancel-tested a run it never dispatched, and passed. Freshness is gone
+  as an identity signal.
+
+**The scale-set arm needs a tenant that has never existed.** The live-GitHub suite
+runs one classic v1 tenant. `E2E_AGC_ScaleSetAcquisition` and
+`E2E_AGC_ScaleSetRecovery` both run against fakegithub, and `cmd/probe`
+Investigation E drives the scale-set wire from a standalone binary rather than from
+a deployed AGC. So this measurement stands up a v2 object set — `ActionsGateway`,
+`RunnerTemplate`, ScaleSet-protocol `RunnerSet` — with `githubURL` naming the
+fixture repo directly, in its own namespace, inside the existing `github-real`
+`Ordered` container (a second top-level container would run concurrently with it,
+which is the Q511 collision inside one process).
+
+Three constraints shape it:
+
+1. **The scale-set name is the RunnerSet's single `runnerLabels` entry**
+   ([runnerset_scaleset.go](../../cmd/agc/internal/controller/runnerset_scaleset.go)),
+   and CEL enforces exactly one. So the fixture workflow's `runs-on` has to be that
+   label, and it cannot be `e2e` without colliding with the classic tenant's runner
+   group.
+2. **The fixture workflow takes `runs-on` as a `workflow_dispatch` input.**
+   `drain-probe.yml` in `actions-gateway/gateway-test` pinned `runs-on: e2e`; it now
+   takes an input defaulting to `e2e`, so the classic measurement is unchanged and one
+   fixture serves both tiers. This is also the change [Q530](../STATUS.md#Q530) names
+   as its prerequisite for live-run isolation, so that row is partly unblocked.
+3. **The listener's bootstrap is asserted before anything is dispatched.** A tenant
+   that never registers its scale set would otherwise surface as "the job stayed queued
+   for ten minutes" — indistinguishable from GitHub being slow, from a label mismatch,
+   and from the runner group's public-repository rule. `Listener.Start` publishes
+   `Degraded=False/SessionAuthorized` only after ensuring the scale set *and* opening
+   the session, so that condition is checked first and its failure dumps every
+   condition on the RunnerSet.
+
+The eviction arm then mirrors the classic spec: overshoot the runner container's
+ephemeral-storage limit, wait for `Failed/Evicted`, measure the kubelet's
+`finishedAt` against GitHub's `completed_at`, and assert one budget slot reserved at
+`tier="scaleset"`, a re-run accepted after more than one call, and a second attempt
+created.
+
+**The risk that did not materialise.** The AGC's scale-set listener had never
+bootstrapped against real GitHub from inside a cluster — Investigation E proves the
+protocol, not the deployed path — and the likeliest failure was registration scope,
+since these probes register against the *repo* rather than the org precisely because
+the org's `Default` runner group sets `allows_public_repositories: false`. Pointing
+`githubURL` at the fixture repo was sufficient: it registered, sessioned, and acquired
+on the first live attempt.
+
+**What cost two runs instead was the container's shape**, and both causes are now
+fixed in the harness rather than worked around:
+
+- The container's `BeforeAll` strips the GMC's `AGC_EXTRA_*` fakegithub overrides
+  cluster-wide, so the rest of the suite cannot run beside it — five fakegithub-backed
+  specs timed out unable to register a session. `SUITE=live-github` selects the label.
+- `--timeout` is a whole-suite budget and 30m does not fit an `Ordered` container whose
+  specs wait out two ~10-minute conclusions; a run was interrupted in the sixth of
+  seven specs. `SUITE=live-github` raises it to 90m.
+- Ginkgo skips the remainder of an `Ordered` container after a failure, so this spec
+  being declared last made every spec ahead of it a gate — it lost two full runs that
+  way at ~55 minutes each. It now carries a `scaleset-live` label
+  (`SUITE=live-github-scaleset`) so the measurement can be retaken alone.
 
 ### What the harness cost to build, and why it is shaped this way
 
@@ -163,7 +343,7 @@ cluster to do exactly what is needed:
 
 The zero grace period is the point rather than a side effect: it is what makes this
 the *ungraceful* case, where GitHub must notice by itself. The graceful counterpart,
-where the runner does get its own report out, is [Q459](q459-drained-worker-recovery.md)'s.
+where the runner does get its own report out, is [Q459](archive/q459-drained-worker-recovery.md)'s.
 
 **Sizing the cap needed a measurement of its own.** The kubelet charges a pod only
 its writable layer, emptyDirs and logs — image layers are read-only and are not
@@ -234,7 +414,7 @@ cluster. The GitHub-side half is settled in
 `BeforeAll` now refuses to start while the fixture repo is not idle.
 
 This is the same contention that kept `E2E_GitHub_CancelledRunLeavesNoDeletionMark`
-pending in [q459-drained-worker-recovery.md](q459-drained-worker-recovery.md), seen
+pending in [q459-drained-worker-recovery.md](archive/q459-drained-worker-recovery.md), seen
 from the other side — there between specs, here between sessions.
 
 **A related hazard, learned expensively.** A live-GitHub run killed mid-spec leaves its
@@ -373,7 +553,7 @@ part still unmeasured. Extending both tiers to treat a graceful deletion as
 recoverable would be the fix, but doing it before knowing what GitHub does with a
 relayed cancellation risks auto-rerunning jobs that a human deliberately cancelled
 (a `kubectl delete pod`, or a run cancelled in the GitHub UI, arrives on the same
-path as a drain). [Q459](q459-drained-worker-recovery.md) carries the live-GitHub measurement and the
+path as a drain). [Q459](archive/q459-drained-worker-recovery.md) carries the live-GitHub measurement and the
 decision that follows from it.
 
 **Update, 2026-07-28.** Q459 took the first half of that measurement, and the premise
@@ -386,7 +566,7 @@ claim above that a deliberate cancel "arrives on the same path as a drain" is tr
 runner over its own broker connection rather than through the pod — and a *running*
 worker, unlike the `Pending` one drained here, publishes `PodFailed` with an empty
 reason before its object is removed rather than vanishing without a terminal phase.
-Details in [q459-drained-worker-recovery.md](q459-drained-worker-recovery.md).
+Details in [q459-drained-worker-recovery.md](archive/q459-drained-worker-recovery.md).
 
 Worth noting for that decision: the drain path is currently *worse* for the user
 than the ungraceful one. A kubelet node-pressure eviction auto-reruns the job; a
@@ -415,7 +595,7 @@ no human action.
 ### Result, measured 2026-07-29: preemption is not eviction
 
 **A `PriorityClass` preemption reaches no eviction recovery on either tier.** It is
-the *graceful-removal* path experiment 2 and [Q459](q459-drained-worker-recovery.md) already measured,
+the *graceful-removal* path experiment 2 and [Q459](archive/q459-drained-worker-recovery.md) already measured,
 not the kubelet path recovery acts on. The demo this experiment set out to produce
 does not exist to be produced: there is no automatic recovery on the preemption path to
 demonstrate.
@@ -752,13 +932,13 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
 
 1. ~~Q421 (experiment 2)~~ — **done 2026-07-27**; see
    [Result](#result-measured-2026-07-27). Its residual is
-   [Q459](q459-drained-worker-recovery.md), which needs live-GitHub and so sequences with the other
+   [Q459](archive/q459-drained-worker-recovery.md), which needs live-GitHub and so sequences with the other
    live-GitHub work below rather than ahead of it.
 2. ~~Q422 (experiment 4)~~ — **done 2026-07-31**; see the
    [result](#half-b-result-measured-2026-07-31). Both halves are now covered, and it
    left no residual.
-3. [Q396](../STATUS.md#Q396) (experiment 1), which then gates
-   [Q418](../STATUS.md#Q418). Fold [Q459](q459-drained-worker-recovery.md) in around here: both
+3. Q396 (experiment 1), which then gates
+   [Q418](../STATUS.md#Q418). Fold [Q459](archive/q459-drained-worker-recovery.md) in around here: both
    want a real GitHub run interrupted mid-job, and Q396 is already standing that
    up.
 4. ~~Q423 (experiment 3)~~ — **done 2026-07-29**; see
@@ -776,7 +956,7 @@ Q417 shipped 2026-07-26, so nothing here is blocked on it any more.
   Q417 assumed when it scoped detection to `PodFailed`/`Evicted`, or the gap is filed
   and both tiers are extended to cover deletion.~~ **Met 2026-07-27** by the second
   branch: neither tier recovers a drained worker, and the gap is filed as
-  [Q459](q459-drained-worker-recovery.md). Extending the tiers is deliberately left to that row —
+  [Q459](archive/q459-drained-worker-recovery.md). Extending the tiers is deliberately left to that row —
   the same code path carries deliberate cancellations, so it needs the live-GitHub answer
   before it can tell a drain from a `kubectl delete pod` worth honouring.
 - ~~The quota gate demonstrated under contention, with the rejection counter as

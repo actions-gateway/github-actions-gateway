@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -164,7 +165,26 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 				"deployment/"+agcName, "--tail=300")
 			out, _ := utils.Run(cmd)
 			_, _ = fmt.Fprintln(GinkgoWriter, out)
+
+			// The scale-set tenant runs its own AGC in its own namespace, and dumping
+			// only the classic one is why a scale-set failure on 2026-08-03 could not be
+			// diagnosed after the cluster was gone: the log that would have said whether
+			// the runner reported was never captured. Best-effort — the tenant does not
+			// exist unless its spec got far enough to create it.
+			cmd = exec.Command("kubectl", "logs", "-n", scaleSetTenantNS,
+				"deployment/"+scaleSetAGCDeploy, "--tail=300")
+			if out, err := utils.Run(cmd); err == nil {
+				_, _ = fmt.Fprintln(GinkgoWriter, "--- scale-set tenant AGC ---")
+				_, _ = fmt.Fprintln(GinkgoWriter, out)
+			}
 		}
+		// The scale-set tenant is created inside its own spec rather than here, so this
+		// has to cope with it never having existed — a spec that failed earlier in the
+		// container leaves nothing to delete. It goes first because it registers runners
+		// on the shared fixture repo, and its AGC must still be up to deregister them:
+		// stranded registrations keep accepting assignments and block the next run's
+		// preflight.
+		deleteScaleSetTenant()
 		utils.DeleteActionsGatewayCR(tenantNS, agName)
 		utils.DeleteNamespace(tenantNS)
 		// Restore fakegithub-pointing env vars so subsequent suites in this
@@ -367,6 +387,13 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q396 evicted worker pod", podName)
 
+		By("confirming the worker carries the run identity recovery needs")
+		// Q544. The run-id half is proven by the lookup above having resolved at all;
+		// this is the other key handleEviction reads. The re-run assertions at the
+		// bottom of this spec cannot pass without both, so checking here attributes the
+		// cause rather than leaving it to be inferred from a silent recovery.
+		assertWorkerCarriesRepository(tenantNS, podName)
+
 		By("confirming the worker carries the ephemeral-storage cap this spec overshoots")
 		// Without the cap there is nothing to exceed, the kubelet never evicts, and the
 		// spec would time out on the eviction wait for a reason that has nothing to do
@@ -492,6 +519,14 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 				"the re-run has not been accepted yet")
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
+		By("asserting the accepted re-run is the one the retry loop landed, not the first call")
+		// The distinction Q503 is actually about. An accepted re-run alone does not
+		// separate "the loop outlasted GitHub's refusal" from "GitHub accepted
+		// immediately", and only the first is the behaviour that shipped. The check is
+		// conditional on the latency measured above, because whether there was a refusal
+		// to absorb is decided by whether the runner reported — see assertRerunLanded.
+		assertRerunLanded(agcEvictionLog(tenantNS), concludedAt.Sub(evictedAt), "Q503")
+
 		By("asserting GitHub actually started a second attempt")
 		// Accepted is necessary but not the deliverable: the deliverable is a second
 		// attempt actually running, which is what "recovery" means to the tenant.
@@ -559,6 +594,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			g.Expect(podName).NotTo(BeEmpty(), "no worker pod attributable to run %s in %s: %s", runID, tenantNS, diag)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q459 interrupted worker pod", podName)
+		assertWorkerCarriesRepository(tenantNS, podName)
 
 		By("streaming the worker's logs so the relay can be observed as it happens")
 		// Started before the delete and read after: once the pod object is gone
@@ -715,6 +751,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			g.Expect(podName).NotTo(BeEmpty(), "no worker pod attributable to run %s in %s: %s", runID, tenantNS, diag)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q459 cancelled worker pod", podName)
+		assertWorkerCarriesRepository(tenantNS, podName)
 
 		By("sampling the pod's phase, deletionTimestamp and deletion-reason across the cancellation")
 		// All four fields together, sampled as it happens: the claim is about what is
@@ -1024,6 +1061,239 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			"the out-of-quota gateway declined the delivery without claiming it, GitHub held the job queued, "+
 				"and a sibling gateway on the same runner group ran it to success")
 	})
+
+	// The scale-set half of Q396's experiment 1. The classic half is measured above; this
+	// runs the same disruption against the other acquisition tier and asks whether the
+	// two findings that came out of it — GitHub's ~10-minute conclusion latency after an
+	// ungraceful kill, and the re-run refusal that latency implies — reproduce there.
+	//
+	// Q417 plumbed recovery onto scale-set from the owning reconciler rather than from a
+	// job goroutine, so the detection path is genuinely different code. The 403 is
+	// tier-independent by construction — it is a property of the API and of the delay,
+	// not of how the AGC noticed — but that is reasoning, and this is the tier where it
+	// stops being reasoning.
+	//
+	// # Placed last, deliberately
+	//
+	// This is the only spec in the container that stands up a tenant on a path no
+	// live-GitHub run has ever exercised: the AGC's scale-set listener has never
+	// bootstrapped against real GitHub from inside a cluster. cmd/probe's Investigation E
+	// proves the wire protocol from a standalone binary, which is a different question.
+	// Ordered containers run specs in declaration order, so putting it here means a
+	// failure to register a scale set costs this measurement and nothing above it.
+	//
+	// # Why it carries its own label
+	//
+	// Being last in an Ordered container means everything ahead of it is a gate: Ginkgo
+	// skips the remainder of the container after a failure, so one unrelated spec failing
+	// costs this measurement the whole run. That happened twice on 2026-08-03 — once to
+	// the suite budget elapsing, once to the cancel spec resolving the wrong worker — and
+	// both times the ~55 minutes ahead of it were spent for nothing. The scaleset-live
+	// label lets it be run on its own (SUITE=live-github-scaleset) once the container
+	// above is known green, without re-paying for six specs to prove it.
+	//
+	// # Why the bootstrap is asserted separately
+	//
+	// Without it, a listener that never opened its session would surface as "the job
+	// stayed queued for ten minutes" — indistinguishable from GitHub being slow, from a
+	// label mismatch, and from the runner group's public-repository rule. The Degraded
+	// condition the listener publishes on a successful Start says which of those it was,
+	// so it is checked before anything is dispatched.
+	It("E2E_GitHub_ScaleSetEvictedWorkerLatencyAndRerun: the same measurement on the scale-set tier", Label(scaleSetLiveLabel), func() {
+		repoSlug := creds.org + "/" + creds.repo
+		orgURL := fmt.Sprintf("https://github.com/%s/%s", creds.org, creds.repo)
+
+		// Every runner this scale set registers is named "<scaleSetLabel>-<jobID>", and
+		// the suite recognizes its own registrations by the agName prefix alone. A label
+		// that stopped extending agName would strand runners on the shared fixture repo
+		// that neither the preflight nor `make e2e-github-cleanup` can see — so the
+		// relation is asserted here rather than left to the const's comment.
+		Expect(scaleSetLabel).To(HavePrefix(agName+"-"),
+			"the scale-set label must extend %q or its runner registrations become invisible "+
+				"to suiteRunnerPrefixes (Q511)", agName)
+
+		By("standing up the v2 scale-set tenant against real GitHub")
+		utils.CreateNamespace(scaleSetTenantNS, map[string]string{
+			// The GMC's dual-reading ValidatingAdmissionPolicies only admit v2
+			// provisioning in a namespace marked as a managed tenant.
+			"actions-gateway.com/tenant": "managed",
+		})
+		utils.CreateGitHubAppSecret(scaleSetTenantNS, scaleSetSecretName,
+			creds.appID, creds.installationID, creds.privateKeyPEM)
+		Expect(utils.ApplyManifestWithWebhookRetry(
+			scaleSetLiveManifest(scaleSetTenantNS, orgURL, scaleSetSecretName,
+				workerImage, workerEphemeralStorageLimit))).To(Succeed())
+
+		By("waiting for the per-gateway AGC Deployment to become ready")
+		utils.WaitForDeploymentReady(scaleSetTenantNS, scaleSetAGCDeploy, 5*time.Minute)
+
+		By("asserting the listener registered a scale set and opened a session at real GitHub")
+		// The risky step, asserted as itself. Listener.Start ensures the scale set and
+		// opens the session synchronously and only then publishes Degraded=False with
+		// this reason, so the condition means both halves of the bootstrap succeeded
+		// against dotcom — not merely that the AGC process is up.
+		Eventually(func(g Gomega) {
+			status, reason := runnerSetCondition(g, scaleSetTenantNS, scaleSetName, "Degraded")
+			g.Expect(status).To(Equal("False"), "Degraded=%s/%s", status, reason)
+			g.Expect(reason).To(Equal("SessionAuthorized"), "Degraded=False for %q, not an open session", reason)
+		}, 5*time.Minute, 10*time.Second).Should(Succeed(), func() string {
+			// A closure, not a string: Gomega evaluates a plain description eagerly, so
+			// the dump would be taken before the wait began and would always read "no
+			// conditions published" — a message that describes the start of the wait
+			// rather than the failure at the end of it.
+			return "the scale-set listener never opened a session against real GitHub, so nothing " +
+				"below could measure an eviction. RunnerSet conditions:\n" +
+				runnerSetConditionDump(scaleSetTenantNS, scaleSetName)
+		})
+
+		By(fmt.Sprintf("dispatching %q on the scale set's own label %q", creds.longWorkflow, scaleSetLabel))
+		// The scale set's name IS its runs-on label, so this dispatch cannot reuse the
+		// classic tenant's: the fixture takes the label as an input for exactly this.
+		runID := dispatchAndResolveRun(repoSlug, creds.longWorkflow, "runner="+scaleSetLabel)
+		AddReportEntry("Q396 scale-set workflow run", fmt.Sprintf("https://github.com/%s/actions/runs/%s", repoSlug, runID))
+		defer func() {
+			// Unconditional, same reasoning as the classic spec: the fixture sleeps ten
+			// minutes and the re-run this spec provokes sleeps ten more.
+			_, _ = utils.Run(exec.Command("gh", "run", "cancel", runID, "--repo", repoSlug))
+		}()
+
+		By("waiting for GitHub to report the job in_progress")
+		// A real runner has to be executing a real job before it is interrupted. On this
+		// tier reaching in_progress also proves the acquisition half end to end — the
+		// listener polled its queue, took the assignment, minted a JIT config and the
+		// provisioner built a worker that registered and picked the job up.
+		Eventually(func(g Gomega) {
+			// An eviction this spec did not cause is indistinguishable from a slow start
+			// when read from GitHub, and invalidates everything below it. Naming it here
+			// turns a ten-minute "still queued" timeout into an immediate, correctly
+			// attributed failure.
+			g.Expect(evictedWorkerNames(scaleSetTenantNS)).To(BeEmpty(),
+				"a scale-set worker was evicted before its job started, so nothing below would "+
+					"be measuring the eviction this spec performs. Either the node is under "+
+					"pressure from another workload, or %s is too little headroom",
+				workerEphemeralStorageLimit)
+			status, _ := firstJobState(g, repoSlug, runID)
+			g.Expect(status).To(Equal("in_progress"), "job is %q", status)
+		}, 10*time.Minute, 10*time.Second).Should(Succeed())
+
+		By("locating the scale-set worker running that job")
+		var podName string
+		Eventually(func(g Gomega) {
+			var diag string
+			podName, diag = scaleSetWorkerForRun(g, scaleSetTenantNS, runID)
+			g.Expect(podName).NotTo(BeEmpty(), "%s", diag)
+		}, 3*time.Minute, 2*time.Second).Should(Succeed())
+		AddReportEntry("Q396 scale-set evicted worker pod", podName)
+
+		By("confirming the worker really is a scale-set worker carrying its run identity")
+		// The protocol label separates this from a classic worker that happened to be in
+		// the namespace, and the repository annotation is the other half of what
+		// handleEviction needs. On this tier run identity arrives with the assignment
+		// message and nowhere else, so its absence would make recovery inert no matter
+		// what the rest of the spec observed.
+		Expect(podLabel(scaleSetTenantNS, podName, "actions-gateway.com/acquisition-protocol")).
+			To(Equal("ScaleSet"), "worker %s was not provisioned by the scale-set path", podName)
+		Expect(podAnnotation(scaleSetTenantNS, podName, "actions-gateway.com/repository")).
+			NotTo(BeEmpty(), "scale-set worker %s carries no repository annotation (Q417)", podName)
+		Expect(podEphemeralStorageLimit(scaleSetTenantNS, podName)).To(Equal(workerEphemeralStorageLimit),
+			"worker pod carries no ephemeral-storage limit; the eviction lever is absent")
+
+		relayLog := followPodLogs(scaleSetTenantNS, podName)
+		observed := newPhaseRecorder(scaleSetTenantNS, podName)
+		stopSampling := observed.start(time.Second)
+
+		By(fmt.Sprintf("overshooting the worker's ephemeral-storage limit by writing %dMiB", evictionFillMiB))
+		filledAt := time.Now()
+		fillOutput := overflowEphemeralStorage(scaleSetTenantNS, podName, evictionFillMiB)
+		AddReportEntry("Q396 scale-set fill command output", fillOutput)
+
+		By("waiting for the kubelet to evict the worker")
+		Eventually(func(g Gomega) {
+			g.Expect(podPhaseReason(scaleSetTenantNS, podName)).To(Equal("Failed/Evicted"),
+				"worker pod has not been evicted")
+		}, 5*time.Minute, 2*time.Second).Should(Succeed())
+		stopSampling()
+
+		evictedAt, exitCode, evictionMessage := evictionFacts(scaleSetTenantNS, podName)
+		AddReportEntry("Q396 scale-set observed pod phase/reason sequence", strings.Join(observed.sequence(), " -> "))
+		AddReportEntry("Q396 scale-set kubelet eviction message", evictionMessage)
+		AddReportEntry("Q396 scale-set runner container exit code", strconv.Itoa(exitCode))
+		AddReportEntry("Q396 scale-set fill to kubelet eviction", evictedAt.Sub(filledAt).Round(time.Second).String())
+		AddReportEntry("Q396 scale-set worker log tail across the eviction", relayLog.stopAndRead())
+
+		By("confirming the runner was killed outright rather than asked to stop")
+		Expect(exitCode).To(Equal(137),
+			"the evicted runner exited %d, not SIGKILL; this is not the ungraceful path", exitCode)
+
+		By("waiting for GitHub to conclude the job it can no longer hear from")
+		// The measurement, and the number the classic half puts at 9m36s. Pinned to
+		// attempt 1 for the same reason: the AGC's re-run starts a second attempt as
+		// soon as GitHub concludes the run, at which point the "latest" filter stops
+		// naming the job under measurement.
+		var jobConclusion string
+		Eventually(func(g Gomega) {
+			status, conclusion := firstJobStateForAttempt(g, repoSlug, runID, 1)
+			g.Expect(status).To(Equal("completed"), "job is still %q", status)
+			jobConclusion = conclusion
+		}, 20*time.Minute, 15*time.Second).Should(Succeed())
+
+		concludedAtRaw := firstJobCompletedAtForAttempt(Default, repoSlug, runID, 1)
+		concludedAt, err := time.Parse(time.RFC3339, concludedAtRaw)
+		Expect(err).NotTo(HaveOccurred(), "parse job completed_at %q", concludedAtRaw)
+
+		AddReportEntry("Q396 scale-set job conclusion after eviction", jobConclusion)
+		AddReportEntry("Q396 scale-set eviction (kubelet finishedAt) -> conclusion (GitHub completed_at)",
+			concludedAt.Sub(evictedAt).Round(time.Second).String())
+		AddReportEntry("Q396 scale-set server timestamps",
+			fmt.Sprintf("container finishedAt=%s, GitHub completed_at=%s",
+				evictedAt.Format(time.RFC3339), concludedAt.Format(time.RFC3339)))
+
+		By("asserting the owning reconciler detected the disruption and reached recovery")
+		agcLog := agcEvictionLogFor(scaleSetTenantNS, scaleSetAGCDeploy)
+		AddReportEntry("Q396 scale-set AGC eviction log lines", agcLog)
+		Expect(agcLog).NotTo(ContainSubstring("worker pod disrupted but run_id unknown"),
+			"the AGC saw the eviction but had no run identity to recover with. Log:\n%s", agcLog)
+
+		By("asserting the retry budget was spent exactly once, on the scale-set tier")
+		// The Q106 sharded-reservation invariant again, and additionally the tier label:
+		// the budget is keyed by run ID alone and shared across tiers, so a recovery
+		// attributed to the wrong tier would still spend the slot while telling an
+		// operator the wrong thing about which path detected it.
+		scheduled := strings.Count(agcLog, "worker pod disrupted; scheduling auto-retry")
+		Expect(scheduled).To(Equal(1),
+			"one eviction must reserve exactly one retry slot, saw %d. Log:\n%s", scheduled, agcLog)
+		Expect(agcLog).To(SatisfyAny(
+			ContainSubstring(`"tier":"scaleset"`), ContainSubstring("tier=scaleset")),
+			"the recovery was not attributed to the scale-set tier. Log:\n%s", agcLog)
+		Expect(agcLog).NotTo(ContainSubstring("disruption retry budget exhausted"),
+			"a single eviction exhausted the retry budget. Log:\n%s", agcLog)
+
+		By("waiting for the AGC's re-run to be accepted by GitHub")
+		Eventually(func(g Gomega) {
+			agcLog := agcEvictionLogFor(scaleSetTenantNS, scaleSetAGCDeploy)
+			if strings.Contains(agcLog, "disruption auto-retry failed") {
+				StopTrying("the AGC gave up on the re-run — refused past the re-run window, " +
+					"or a terminal API error. Log:\n" + agcLog).Now()
+			}
+			g.Expect(agcLog).To(ContainSubstring("disruption auto-retry triggered"),
+				"the re-run has not been accepted yet")
+		}, 5*time.Minute, 10*time.Second).Should(Succeed())
+
+		By("asserting the accepted re-run is the one the retry loop landed, not the first call")
+		assertRerunLanded(agcEvictionLogFor(scaleSetTenantNS, scaleSetAGCDeploy),
+			concludedAt.Sub(evictedAt), "Q396 scale-set")
+
+		By("asserting GitHub actually started a second attempt")
+		Eventually(func(g Gomega) {
+			g.Expect(runAttemptCount(g, repoSlug, runID)).To(BeNumerically(">=", 2),
+				"the AGC's re-run was accepted but GitHub created no second attempt")
+		}, 5*time.Minute, 10*time.Second).Should(Succeed())
+
+		AddReportEntry("Q396 scale-set outcome",
+			"scale set registered against real GitHub, job acquired and run, eviction detected by the "+
+				"owning reconciler, retry budget spent once at tier=scaleset, re-run accepted after the "+
+				"run concluded, and a second attempt ran")
+	})
 })
 
 // suiteRunnerPrefixes are the runner-name prefixes this suite's tenant registers with
@@ -1267,12 +1537,20 @@ func sinceBaseline(lines []string, baseline int) []string {
 	return lines[baseline:]
 }
 
-// agcLog reads the tenant AGC's full log.
+// agcLog reads the tenant AGC's full log. The v1 tenant's AGC Deployment carries the
+// fixed controller name; a v2 gateway's is named after the gateway, so that tier reads
+// its log through agcDeploymentLog.
 func agcLog(ns string) string {
 	GinkgoHelper()
+	return agcDeploymentLog(ns, agcName)
+}
+
+// agcDeploymentLog reads the full log of a named AGC Deployment.
+func agcDeploymentLog(ns, deployment string) string {
+	GinkgoHelper()
 	out, err := utils.Run(exec.Command("kubectl", "logs", "-n", ns,
-		"deployment/"+agcName, "--tail=-1"))
-	Expect(err).NotTo(HaveOccurred(), "read AGC logs in %s", ns)
+		"deployment/"+deployment, "--tail=-1"))
+	Expect(err).NotTo(HaveOccurred(), "read AGC logs from %s/%s", ns, deployment)
 	return out
 }
 
@@ -1286,15 +1564,22 @@ func agcLog(ns string) string {
 // spec's run — and `--limit 1` then returns that one. It is not a hypothetical: the
 // cancel-path spec resolved the graceful-deletion spec's run, cancelled a run that had
 // already finished, and timed out waiting for a pod that nothing had disturbed.
-func dispatchAndResolveRun(repoSlug, workflow string) string {
+//
+// inputs are "key=value" pairs forwarded as `gh workflow run -f`. The fixture declares
+// a default for every input it takes, so a caller that passes none dispatches what
+// callers dispatched before any input existed.
+func dispatchAndResolveRun(repoSlug, workflow string, inputs ...string) string {
 	GinkgoHelper()
 	before := make(map[string]bool)
 	for _, id := range recentRunIDs(Default, repoSlug, workflow) {
 		before[id] = true
 	}
 
-	_, err := utils.Run(exec.Command("gh", "workflow", "run", workflow,
-		"--repo", repoSlug, "--ref", "main"))
+	args := []string{"workflow", "run", workflow, "--repo", repoSlug, "--ref", "main"}
+	for _, in := range inputs {
+		args = append(args, "-f", in)
+	}
+	_, err := utils.Run(exec.Command("gh", args...))
 	Expect(err).NotTo(HaveOccurred(), "dispatch %s", workflow)
 
 	var runID string
@@ -1311,27 +1596,24 @@ func dispatchAndResolveRun(repoSlug, workflow string) string {
 }
 
 // runningWorkerForRun returns the name of the Running worker pod the AGC provisioned
-// for a specific workflow run, or "" when none exists yet.
+// for a specific workflow run, or "" and a diagnostic when none exists yet.
 //
-// Scoped by the run-id annotation the AGC stamps on every worker pod
-// (provisioner.AnnotationRunID) rather than by "the first Running worker in the
-// namespace". These specs interrupt one run while a previous spec's re-run may still
-// have a worker of its own up, and picking the wrong pod would make the spec measure
-// a job nobody touched.
-// It prefers an exact match on the run-id annotation. That annotation is absent on
-// this tier (Q495), so the fallback is what actually resolves the worker today: the
-// caller snapshots the Running workers that existed *before* it dispatched, and a
-// Running worker outside that snapshot is this run's by identity rather than by
-// count. That is what lets these specs run back to back — a previous spec's worker
-// lingering past its own run no longer makes the lookup ambiguous, which is why
-// "wait for the namespace to be quiet first" is not needed and not done.
-// Only a genuine ambiguity — no annotated match and several new Running workers —
-// yields "", along with a description of what it saw. That case is reachable and was
-// hit on 2026-07-29: a second live-GitHub session dispatched the same fixture workflow
-// against the same repo, and this tenant's AGC acquired both jobs, so two workers
-// appeared that were not there before. Nothing in the cluster can separate them
-// without the run-id annotation, so the spec must fail — but it must fail saying so
-// rather than timing out on an empty string (Q500, Q495).
+// Matching is on the run-id annotation the AGC stamps on every worker pod
+// (provisioner.AnnotationRunID) and on nothing else. There used to be a fallback —
+// "the sole Running worker that was not there before this spec dispatched" — from when
+// Q495 left the annotation absent on this tier and identity-by-freshness was the only
+// thing available. On a build that stamps the annotation the fallback is not a safety
+// net but a way to resolve the WRONG pod, so it is gone.
+//
+// It failed live on 2026-08-03. The cancel-path spec dispatched run 30856065695 and was
+// handed a worker annotated 30856024324: an earlier spec's re-run had reached its second
+// attempt and provisioned a worker AFTER this spec took its snapshot, which made someone
+// else's pod "fresh". The spec would have cancel-tested a pod belonging to another run.
+// Freshness stopped being an identity signal the moment these specs started triggering
+// re-runs, and every spec here now does.
+//
+// preexisting is kept for the diagnostic alone: which workers appeared since the
+// dispatch is useless for choosing one but sharpens the message when none matches.
 func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool) (podName, diag string) {
 	out, err := utils.Run(exec.Command("kubectl", "get", "pods",
 		"-n", ns,
@@ -1347,28 +1629,56 @@ func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool
 		return fields[0], ""
 	}
 
-	all := runningWorkers(g, ns)
-	var fresh []string
-	for _, pod := range all {
-		name := strings.SplitN(pod, "=", 2)[0]
-		if !preexisting[name] {
-			fresh = append(fresh, pod)
+	// No match yet. Separate the two reasons, because they need opposite responses: an
+	// unannotated worker is a Q495 regression and waiting will not fix it, whereas
+	// workers annotated for other runs mean this run's worker simply has not been
+	// provisioned yet and the caller should keep polling.
+	var unannotated, otherRuns []string
+	for _, pod := range runningWorkers(g, ns) {
+		name, annotated, _ := strings.Cut(pod, "=")
+		if annotated == "" {
+			unannotated = append(unannotated, name+" (no run-id)")
+			continue
 		}
+		mark := ""
+		if !preexisting[name] {
+			mark = ", appeared since dispatch"
+		}
+		otherRuns = append(otherRuns, fmt.Sprintf("%s (run %s%s)", name, annotated, mark))
 	}
-	switch len(fresh) {
-	case 1:
-		AddReportEntry("Q459 worker matched without the run-id annotation",
-			fmt.Sprintf("wanted run %s; sole worker new since dispatch is %s", runID, fresh[0]))
-		return strings.SplitN(fresh[0], "=", 2)[0], ""
-	case 0:
-		return "", fmt.Sprintf("no worker has appeared since dispatch; Running workers now: %v", all)
-	default:
+
+	switch {
+	case len(unannotated) > 0:
 		return "", fmt.Sprintf(
-			"%d workers appeared since dispatch, so none can be attributed to run %s without the "+
-				"run-id annotation (Q495). Most likely another live-GitHub session dispatched the same "+
-				"fixture workflow and this AGC acquired its job too (Q500). New since dispatch: %v",
-			len(fresh), runID, fresh)
+			"no worker carries run-id=%s, and %d Running worker(s) carry NO run-id at all: %s. "+
+				"That is the Q495 regression — the AGC provisioned a worker it cannot attribute "+
+				"to a run, so eviction recovery is inert on it (Q544)",
+			runID, len(unannotated), strings.Join(unannotated, ", "))
+	case len(otherRuns) > 0:
+		return "", fmt.Sprintf(
+			"no worker carries run-id=%s yet; Running workers belong to other runs: %s. "+
+				"Workers marked \"appeared since dispatch\" are most likely an earlier spec's "+
+				"re-run reaching its second attempt, which is why freshness cannot identify a "+
+				"worker here",
+			runID, strings.Join(otherRuns, ", "))
+	default:
+		return "", fmt.Sprintf("no Running worker in %s yet", ns)
 	}
+}
+
+// assertWorkerCarriesRepository fails unless the worker also carries the repository
+// annotation.
+//
+// The run-id half needs no assertion: runningWorkerForRun matches on it and nothing
+// else, so a worker that resolved at all has one. Repository is the other key, read from
+// the same acquire-payload github context — Q495 was the two arriving together or not at
+// all — and rerun-failed-jobs needs owner/repo as well as the run id, so a worker with
+// one and not the other is one recovery still cannot act on (Q544).
+func assertWorkerCarriesRepository(ns, podName string) {
+	GinkgoHelper()
+	Expect(podAnnotation(ns, podName, "actions-gateway.com/repository")).NotTo(BeEmpty(),
+		"worker %s resolved by its run-id annotation but carries no repository annotation; "+
+			"recovery is still inert on this pod (Q495)", podName)
 }
 
 // runningWorkers returns every Running worker pod in the namespace as
@@ -1575,14 +1885,92 @@ func evictionFacts(ns, name string) (killedAt time.Time, exitCode int, message s
 // than the whole controller log.
 func agcEvictionLog(ns string) string {
 	GinkgoHelper()
+	return agcEvictionLogFor(ns, agcName)
+}
+
+// agcEvictionLogFor is agcEvictionLog against a named AGC Deployment, for the v2
+// scale-set tenant whose Deployment is named after its gateway.
+func agcEvictionLogFor(ns, deployment string) string {
+	GinkgoHelper()
 	var kept []string
-	for _, line := range strings.Split(agcLog(ns), "\n") {
+	for _, line := range strings.Split(agcDeploymentLog(ns, deployment), "\n") {
 		if strings.Contains(line, "evicted") || strings.Contains(line, "eviction") ||
 			strings.Contains(line, "disrupt") || strings.Contains(line, "re-run") {
 			kept = append(kept, line)
 		}
 	}
 	return strings.Join(kept, "\n")
+}
+
+// reportedItsOwnLoss is the eviction→conclusion latency below which the runner must have
+// got its own report out: GitHub concluded far too quickly to have been waiting out the
+// job lock.
+//
+// The two populations sit either side of a wide gap — 15–26s when a disrupted runner
+// does report (Q459), 9m36–9m38s when it does not (Q396) — so any threshold between them
+// separates the cases, and 60s is comfortably inside it.
+const reportedItsOwnLoss = 60 * time.Second
+
+// assertRerunLanded checks the re-run the AGC's recovery made, and requires it to have
+// absorbed at least one refusal only when the eviction was actually ungraceful.
+//
+// The refusal is not a property of eviction, it is a property of GitHub not yet knowing
+// the job is over. A kubelet ephemeral-storage eviction is not reliably ungraceful:
+// measured 2026-08-03, two runs of one spec on one build saw 9m38s-to-conclusion with 20
+// paced calls, and 17s-to-conclusion with the re-run accepted on the first call. Both are
+// correct behaviour — in the second the runner reported, so there was never a refusal to
+// out-wait — and an unconditional "at least two calls" fails the healthy case.
+//
+// What must hold either way is that the re-run landed at all. The Q503 negative assertion
+// is kept exactly where it means something: on the ungraceful path, where a fire-once
+// recovery would have been refused and given up.
+func assertRerunLanded(agcLog string, evictionToConclusion time.Duration, entryPrefix string) {
+	GinkgoHelper()
+	calls := rerunCallsOnAcceptance(agcLog)
+	AddReportEntry(entryPrefix+" rerun-failed-jobs calls before GitHub accepted", strconv.Itoa(calls))
+	Expect(calls).To(BeNumerically(">=", 1),
+		"the AGC logged an accepted re-run with no call count; the acceptance line has changed shape")
+
+	if evictionToConclusion < reportedItsOwnLoss {
+		AddReportEntry(entryPrefix+" eviction was graceful enough for the runner to report",
+			fmt.Sprintf("GitHub concluded %s after the kill — far inside the job lock's ~10-minute TTL — so "+
+				"the runner got its own report out and the re-run faced no refusal to absorb. Q503's retry "+
+				"loop is untested by this run, and that is a property of the disruption, not a fault",
+				evictionToConclusion.Round(time.Second)))
+		return
+	}
+
+	Expect(calls).To(BeNumerically(">=", 2),
+		"GitHub took %s to conclude — the ungraceful path, where it refuses re-runs until it does — "+
+			"yet the re-run was accepted on call %d. Either the recovery no longer waits out the refusal, "+
+			"or the refusal window has changed shape (Q503)",
+		evictionToConclusion.Round(time.Second), calls)
+}
+
+// rerunCallsAttr matches the rerunCalls attribute in either encoding the AGC may ship:
+// `"rerunCalls":19` from the JSON handler, `rerunCalls=19` from the text one.
+var rerunCallsAttr = regexp.MustCompile(`rerunCalls"?[:=](\d+)`)
+
+// rerunCallsOnAcceptance returns how many rerun-failed-jobs calls the recovery made
+// before GitHub accepted one, read off the acceptance line. Returns 0 when that line is
+// absent — the caller has already asserted it is there.
+//
+// Scoped to the acceptance line specifically. Both terminal-failure lines carry the
+// same attribute, so a scan of the whole log would report the call count of a recovery
+// that never landed as though it were one that did.
+func rerunCallsOnAcceptance(agcLog string) int {
+	GinkgoHelper()
+	for _, line := range strings.Split(agcLog, "\n") {
+		if !strings.Contains(line, "disruption auto-retry triggered") {
+			continue
+		}
+		m := rerunCallsAttr.FindStringSubmatch(line)
+		Expect(m).NotTo(BeNil(), "no rerunCalls attribute on the acceptance line: %s", line)
+		n, err := strconv.Atoi(m[1])
+		Expect(err).NotTo(HaveOccurred(), "parse rerunCalls from %q", line)
+		return n
+	}
+	return 0
 }
 
 // runAttemptCount returns the run's current attempt number. A re-run that GitHub
