@@ -2,7 +2,7 @@
 # Take the dogfood GKE cluster offline and reset the GAG runner label. Opt-in
 # dispatches are one-shot, so there is no standing push/PR CI route to revert;
 # resetting the label just makes a later dispatch a safe no-op (and undoes any
-# end-state global routing). See docs/plan/gke-dogfood.md Part D.
+# end-state global routing). See the GKE dogfood plan (indexed in docs/plan/README.md), Part D.
 #
 # Order matters (Q434). The system pool carries the tenant AGCs, and an AGC is
 # the only thing that reaps its worker pods. Scaling the pool to 0 with a job in

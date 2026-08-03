@@ -4,7 +4,7 @@ on:
   # top-level path filter leaves its required check Pending, which blocks the
   # merge forever. Fine-grained skipping still happens inside via the `changes`
   # job + each job's `if:` guard, so the expensive jobs stay off unrelated PRs.
-  # See docs/plan/required-status-checks.md.
+  # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   pull_request:
   push:
     branches: [main]
@@ -363,8 +363,9 @@ jobs:
   # this re-runs the unit tests with -cover (no race) and fails only if a
   # module's coverage drops below the floor recorded in coverage-baseline.txt
   # minus a small tolerance. `make cover-check` is the single source of truth
-  # for the measurement and gate. See docs/plan/release-1.0.md §F and
-  # docs/development/testing.md. Runs in parallel with unit-test rather than
+  # for the measurement and gate. See
+  # docs/development/testing.md#coverage-measurement-and-the-ratchet. Runs in
+  # parallel with unit-test rather than
   # chained after it so the race gate's latency isn't serialized behind a second
   # (uninstrumented) test run.
   coverage:
@@ -437,7 +438,7 @@ jobs:
   # path-gated jobs above, because a path-skip leaves them Pending and blocks the
   # merge forever. Runs on every PR (the workflow has no top-level path filter)
   # and passes only when every needed job succeeded or was legitimately skipped.
-  # See docs/plan/required-status-checks.md.
+  # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   unit-test-gate:
     needs: [changes, lint, shellcheck, vendor-check, tidy-check, unit-test, coverage, path-filters, claude-usage-test]
     if: ${{ always() }}

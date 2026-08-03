@@ -13,8 +13,9 @@
 # passing. It runs in e2e-reusable.yml after the suite and after
 # chart-upgrade-check, because it destroys and recreates the release.
 #
-# What it guards against (docs/plan/archive/q444-vap-param-resolution.md has the
-# full log; scripts/e2e/vap-param-informer-check.sh reproduces it deterministically
+# What it guards against (the q444-vap-param-resolution plan, indexed in
+# docs/plan/README.md, has the full log;
+# scripts/e2e/vap-param-informer-check.sh reproduces it deterministically
 # without Helm):
 #   - Deleting the BINDING is the trigger. The apiserver tears down the shared
 #     param informer as soon as no binding names a CORE-type paramKind, and never

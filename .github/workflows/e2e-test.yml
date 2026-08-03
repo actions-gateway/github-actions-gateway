@@ -3,7 +3,7 @@ on:
   # `gate` job always reports its required-status check (a path-skipped workflow
   # leaves the required check Pending and wedges the merge). Fine-grained
   # skipping happens inside via the `changes` job — see
-  # docs/plan/required-status-checks.md.
+  # docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   pull_request:
   push:
     branches: [main]
@@ -126,7 +126,7 @@ jobs:
   # `e2e` job, because a path-skip leaves it Pending and blocks the merge
   # forever. `needs.e2e.result` reflects the reusable workflow's conclusion.
   # Passes only when every needed job succeeded or was legitimately skipped.
-  # See docs/plan/required-status-checks.md.
+  # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   e2e-gate:
     needs: [changes, e2e]
     if: ${{ always() }}

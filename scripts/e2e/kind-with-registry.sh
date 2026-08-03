@@ -15,7 +15,7 @@
 #                      manifest, and waits for it to be ready. Use this profile
 #                      to observe NetworkPolicy egress negatives enforce at
 #                      runtime — kindnet's kube-network-policies does not drop
-#                      egress traffic (see docs/plan/worker-egress-proxy.md, Q7b).
+#                      egress traffic (Q7b).
 #   CALICO_VERSION   — Calico release tag for KIND_CNI=calico (default: v3.31.5)
 #
 # After this script runs:

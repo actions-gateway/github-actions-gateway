@@ -6,7 +6,8 @@
 # runner image that carries make + a C toolchain (the bare upstream
 # actions-runner the AGC gap-fills by default has none, so every `make …` job
 # fails exit 127). The Q235 wrapper is still injected on top at provision time.
-# See scripts/dogfood/runner/Dockerfile and docs/plan/gke-dogfood.md.
+# See scripts/dogfood/runner/Dockerfile and the GKE dogfood plan (indexed in
+# docs/plan/README.md).
 #
 # Pushes to ghcr.io/actions-gateway/dogfood-runner. Set it as the dogfood
 # RunnerTemplate's workerImage (scripts/dogfood/setup.sh wires this when

@@ -3,7 +3,7 @@
 # node pools), then install the v2 CRDs + GAG and provision the gag-dogfood
 # tenant on the v2 API (namespace + GitHub App secret + ResourceQuota +
 # ActionsGateway + RunnerTemplate + RunnerSet, direct egress).
-# See docs/plan/gke-dogfood.md Parts A3–B8.
+# See the GKE dogfood plan (indexed in docs/plan/README.md), Parts A3–B8.
 #
 # Run after the account-level GCP setup (Parts A1–A2: gcloud installed and
 # authenticated, project created, billing linked, container + compute APIs
@@ -43,7 +43,7 @@
 #                        --set "agc.tags=ghcr.io/actions-gateway/agc:$SHA" \
 #                        --set "proxy.tags=ghcr.io/actions-gateway/proxy:$SHA" \
 #                        --set "wrapper.tags=ghcr.io/actions-gateway/wrapper:$SHA"
-#                    See docs/plan/gke-dogfood.md § "Tracking post-Q74 pre-release
+#                    See the GKE dogfood plan § "Tracking post-Q74 pre-release
 #                    builds".
 set -euo pipefail
 
@@ -146,8 +146,8 @@ create_worker_pool() {
 	# CPU/mem-bound (200 CPU quota), not SSD-bound. The CI job classes are Go
 	# build/test/lint/envtest — CPU/mem-bound, not scratch-IOPS-bound — so HDD is
 	# fine; the 100 GB size is kept for container-image pull scratch. This lifts
-	# max-nodes 4->8 within the existing quota (no quota bump). See
-	# docs/plan/dogfood-runner-rightsizing.md.
+	# max-nodes 4->8 within the existing quota (no quota bump). See the
+	# dogfood-runner-rightsizing plan (indexed in docs/plan/README.md).
 	gcloud container node-pools create workers \
 		--project="${PROJECT}" \
 		--cluster="${CLUSTER}" \
@@ -180,8 +180,9 @@ create_worker_od_pool() {
 	# run only became readable once it was pinned to a non-preemptible pool, where
 	# all nodes stayed Ready across 58 monitor samples and the phantom starvation
 	# did not recur. Q264's protocol benchmarks used the same pool for the same
-	# reason. See docs/plan/archive/gke-dogfood-turnup-findings.md and
-	# docs/plan/archive/q260-fanout-completion-reconciliation.md.
+	# reason. See the gke-dogfood-turnup-findings and
+	# q260-fanout-completion-reconciliation plans (indexed in
+	# docs/plan/README.md).
 	#
 	# Deliberately NOT autoscaled: a benchmark wants a fixed, known node count so
 	# the capacity under test is a constant, not something the autoscaler moves
@@ -639,7 +640,7 @@ ${runner_image_field}
           # each. Memory is non-compressible → keep a limit: request≈peak (2Gi),
           # limit=peak×~1.4 (3Gi) for OOM headroom (was a 2×/4×-over-provisioned
           # 4Gi/8Gi guess). maxWorkers=8 → ≤8 worker nodes, matching the pool's
-          # max-nodes=8. See docs/plan/dogfood-runner-rightsizing.md.
+          # max-nodes=8. See the dogfood-runner-rightsizing plan.
           resources:
             requests:
               cpu: "2"
@@ -669,8 +670,8 @@ spec:
   # kills it. Measured on this tenant 2026-07-25: 85 jobs acquired, 16 worker pods,
   # 69 orphaned (81%). ScaleSet's single-acquirer listener cannot produce that shape
   # (Q264 P4 measured 7/7 vs Classic's 2/7). acquisitionProtocol is IMMUTABLE, so an
-  # existing Classic set must be deleted and recreated; see the migration note in
-  # docs/plan/gke-dogfood.md B7.
+  # existing Classic set must be deleted and recreated; see the migration note
+  # in the GKE dogfood plan, B7.
   acquisitionProtocol: ScaleSet
   runnerLabels: ["gag-ci-scaleset"]
   # maxWorkers 8: the pd-standard disk right-size (Q248) lifted the worker-node

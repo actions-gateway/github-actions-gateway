@@ -20,7 +20,7 @@
 # fails only if a module drops more than TOLERANCE below its floor. This avoids
 # manufacturing low-value tests to hit an arbitrary bar while still catching a
 # real coverage regression between sessions. See docs/development/testing.md
-# (§"Coverage measurement and the ratchet") and docs/plan/release-1.0.md §F.
+# (§"Coverage measurement and the ratchet").
 #
 # Modes:
 #   report   Run coverage and print the per-module table. Writes nothing.
@@ -131,7 +131,7 @@ run_coverage() {
 	# DIR<TAB>PCT table its callers parse. GOMAXPROCS + -p match make test's
 	# throttle. -trimpath makes the test-result cache key path-independent so a
 	# fresh worktree inherits an already-measured package instead of re-running
-	# it (see scripts/go/go-test.sh's header and docs/plan/archive/local-gate-throughput.md).
+	# it (see scripts/go/go-test.sh's header).
 	# A cached run still emits a byte-identical coverage profile, so the ratchet
 	# reads the same number either way.
 	echo "==> go test -coverprofile ${patterns[*]}" >&2

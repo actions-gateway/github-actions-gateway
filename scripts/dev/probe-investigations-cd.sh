@@ -12,8 +12,9 @@
 # delivery). Runs the probe with PROBE_JOB_DELIVERY_TEST=true; the probe
 # creates a second internal session immediately after AcquireJob.
 #
-# After both runs, findings are extracted from the probe logs and written into
-# docs/plan/milestone-1.md §8.C and §8.D automatically.
+# After both runs, findings are extracted from the probe logs and written
+# into docs/plan/milestone-1.md §8.C and §8.D automatically. no-plan-refs: a
+# path this script opens, not a citation.
 #
 # Required env vars (prompted interactively if not set):
 #   GITHUB_APP_ID              — numeric App ID from App settings

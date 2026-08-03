@@ -267,7 +267,14 @@ When a plan's work fully lands and `docs/STATUS.md` no longer references it (no 
 
 The same change should also keep the plan's `docs/plan/README.md` **status text** current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit.
 
-**Keep archival a docs-only operation.** Archival must never touch code — a code edit re-triggers the heavy path-gated CI (e2e / integration / trivy) on what should be a `docs/**`-only move. The way to guarantee that: **code never references a plan by path.** A Go comment must not contain `docs/plan/<file>.md`; cite the durable layer instead — a `docs/design/` or `docs/operations/` doc, or a stable `Q-ID` / appendix `§`-ref (those survive archival untouched). If a plan's conclusion is load-bearing enough that code wants to cite it, promote that conclusion to a durable doc when the plan closes. `make no-plan-refs-check` (in `make check`) fails on any `docs/plan/` path in a `.go` file. Prose mentions of a plan's *content* ("Milestone 1 §8") are fine — only file *paths* rot.
+**Keep archival a docs-only operation.** Archival must never touch code — a code edit re-triggers the heavy path-gated CI (e2e / integration / trivy) on what should be a `docs/**`-only move. The way to guarantee that: **code never references a plan by path.** A Go comment must not contain `docs/plan/<file>.md`; cite the durable layer instead — a `docs/design/` or `docs/operations/` doc, or a stable `Q-ID` / appendix `§`-ref (those survive archival untouched). If a plan's conclusion is load-bearing enough that code wants to cite it, promote that conclusion to a durable doc when the plan closes. Prose mentions of a plan's *content* ("Milestone 1 §8") are fine — only file *paths* rot.
+
+`make no-plan-refs-check` (in `make check`) enforces this, with two rules because the languages differ in what they legitimately do with a plan file:
+
+- **Go** has no legitimate use for one, so any `docs/plan/` or `../plan/` path is rejected anywhere in a `.go` file — comment or string literal alike.
+- **Shell scripts and `.github/workflows/`** read plan files as data: a workflow `paths:` filter names one, and a script may rewrite one. Those are values, not citations, and a value whose target moves breaks loudly instead of rotting into stale prose. So only **comment** text is scanned, and only a plan **file** path — the thing archival actually moves. A bare `docs/plan/` directory reference and the index `docs/plan/README.md` survive archival untouched and are never flagged.
+
+A comment that must name a plan file — because that file is what the script operates on — opts out inline with a `no-plan-refs: <reason>` marker on the same line. It silences exactly that line and shows up in the diff, so the exception stays reviewable; a whole-file allowlist would silence the next rot too.
 
 **Protocol:**
 

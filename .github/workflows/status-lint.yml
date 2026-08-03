@@ -4,7 +4,7 @@ on:
   # `gate` job always reports its required-status check. A workflow skipped by a
   # top-level path filter leaves its required check Pending, which blocks the
   # merge forever. Fine-grained skipping moved inside to the `changes` job below.
-  # See docs/plan/required-status-checks.md.
+  # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   pull_request:
   push:
     branches: [main]
@@ -80,7 +80,7 @@ jobs:
   # (`status-lint-gate`) required in the branch ruleset — never the path-gated
   # lint-status job, because a path-skip leaves it Pending and blocks the merge
   # forever. Passes only when every needed job succeeded or was legitimately
-  # skipped. See docs/plan/required-status-checks.md.
+  # skipped. See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   status-lint-gate:
     needs: [changes, lint-status]
     if: ${{ always() }}

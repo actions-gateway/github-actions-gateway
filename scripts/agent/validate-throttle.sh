@@ -23,7 +23,8 @@
 #
 # The default workload is therefore `lint`, not the race tier: golangci-lint
 # fans out one worker per logical CPU and ignores GOMAXPROCS, and the repo's own
-# baseline (docs/plan/archive/local-gate-throughput.md) puts `make check` cost in lint
+# baseline (the local-gate-throughput plan, indexed in docs/plan/README.md) puts
+# `make check` cost in lint
 # and coverage — `-race` is not part of `make check` at all.
 #
 # Read a VALID row as a trade: wall_s is what the prefix buys, p99/max/over_* are

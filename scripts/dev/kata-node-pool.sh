@@ -2,9 +2,9 @@
 #
 # Provision (or print) a GKE Standard node pool with nested virtualization
 # enabled on a nested-virt-capable machine family — the node-level prerequisite
-# for Kata Containers (see docs/plan/archive/kata-on-gke.md and
-# docs/operations/kata-ci-spike-runbook.md). Kata runs each pod inside a
-# lightweight VM via QEMU/KVM; GKE nodes are themselves GCE VMs, so KVM must be
+# for Kata Containers (see docs/operations/kata-ci-spike-runbook.md). Kata runs
+# each pod inside a lightweight VM via QEMU/KVM; GKE nodes are themselves GCE
+# VMs, so KVM must be
 # exposed to the node guest. This is a node-pool property — the runner pod that
 # later uses `runtimeClassName: kata` needs no privileged context.
 #
