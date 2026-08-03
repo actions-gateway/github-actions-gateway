@@ -184,6 +184,19 @@ class SessionConcurrency(unittest.TestCase):
         self.assertEqual(r["peak_concurrent"], 2)
         self.assertEqual(r["sessions"], 2)
         self.assertEqual(r["parallel_buckets"], 1)
+        self.assertEqual(r["session_buckets"], 2)   # two sessions x one bucket
+
+    def test_session_buckets_carries_mean_and_total(self):
+        """The stored integer has to distinguish two sessions sharing a bucket from
+        one session spanning two — same active_buckets, different concurrency."""
+        self.write("a", [("a1", "09:00"), ("a2", "09:15")])   # two buckets, alone in one
+        self.write("b", [("b1", "09:02")])                    # shares the first
+        r = self.rows()
+        self.assertEqual(r["active_buckets"], 2)
+        self.assertEqual(r["session_buckets"], 3)             # 2 + 1
+        self.assertEqual(r["session_buckets"] / r["active_buckets"], 1.5)   # mean concurrency
+        # Total session time: buckets x bucket width.
+        self.assertEqual(r["session_buckets"] * cm.SESSION_BUCKET_MIN, 30)
 
     def test_sessions_in_different_buckets_are_not(self):
         """Two sessions the same day are not two sessions at the same time."""

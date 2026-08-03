@@ -46,13 +46,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8202713,
-      "output": 69968899,
-      "cache_creation": 343031760,
-      "cache_read": 17804351271,
-      "assistant_msgs": 96707,
-      "user_msgs": 108368,
-      "headline_input_output_cachecreation": 421203372
+      "input": 8202979,
+      "output": 70047460,
+      "cache_creation": 343145712,
+      "cache_read": 17852193171,
+      "assistant_msgs": 96848,
+      "user_msgs": 108508,
+      "headline_input_output_cachecreation": 421396151
     },
     "estimated": {
       "input": 6559,
@@ -64,15 +64,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8209272,
-      "output": 70447835,
-      "cache_creation": 345041185,
-      "cache_read": 17871870114,
-      "assistant_msgs": 97449,
-      "user_msgs": 109229,
-      "headline_input_output_cachecreation": 423698292,
-      "grand_total_incl_cache_read": 18295568406,
-      "cache_reuse_ratio": 51.8
+      "input": 8209538,
+      "output": 70526396,
+      "cache_creation": 345155137,
+      "cache_read": 17919712014,
+      "assistant_msgs": 97590,
+      "user_msgs": 109369,
+      "headline_input_output_cachecreation": 423891071,
+      "grand_total_incl_cache_read": 18343603085,
+      "cache_reuse_ratio": 51.92
     }
   },
   "by_model": {
@@ -107,9 +107,9 @@
       "messages": 7321
     },
     "Opus 5": {
-      "headline": 123729372,
-      "output": 18586705,
-      "messages": 31842
+      "headline": 123922151,
+      "output": 18665266,
+      "messages": 31983
     }
   },
   "by_host": {
@@ -132,13 +132,13 @@
       "headline_input_output_cachecreation": 300762526
     },
     "mac-2": {
-      "input": 138691,
-      "output": 18006736,
-      "cache_creation": 102295419,
-      "cache_read": 6667959986,
-      "assistant_msgs": 30116,
-      "user_msgs": 34065,
-      "headline_input_output_cachecreation": 120440846
+      "input": 138957,
+      "output": 18085297,
+      "cache_creation": 102409371,
+      "cache_read": 6715801886,
+      "assistant_msgs": 30257,
+      "user_msgs": 34205,
+      "headline_input_output_cachecreation": 120633625
     }
   },
   "sessions": {
@@ -147,15 +147,19 @@
     "last_date": "2026-08-03",
     "session_days": 272,
     "peak_concurrent": 13,
+    "mean_concurrent": 2.99,
+    "hours_using_claude": 95.8,
+    "session_hours": 286.5,
+    "parallel_share_pct": 71,
     "note": "Concurrency needs session-level transcripts, which no earlier CSV preserved, so the series starts at the first day whose transcripts survive rather than at the first project day. It is never estimated."
   },
   "head_snapshot": {
     "go_code": 96031,
     "go_comments": 34794,
-    "markdown_nonblank": 60398,
+    "markdown_nonblank": 60436,
     "yaml_handwritten": 11383,
     "yaml_generated": 131197,
     "tests": 1876,
-    "commits": 1653
+    "commits": 1654
   }
 }

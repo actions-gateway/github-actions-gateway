@@ -498,12 +498,14 @@ def session_series(host):
         if owner[uuid] == sess:
             active[b].add(sess)
 
-    day = defaultdict(lambda: {"sessions": set(), "peak": 0, "active": 0, "parallel": 0})
+    day = defaultdict(lambda: {"sessions": set(), "peak": 0, "active": 0, "parallel": 0,
+                               "session_buckets": 0})
     for b, sessions in active.items():
         row = day[b.date().isoformat()]
         row["sessions"] |= sessions
         row["peak"] = max(row["peak"], len(sessions))
         row["active"] += 1
+        row["session_buckets"] += len(sessions)
         if len(sessions) > 1:
             row["parallel"] += 1
 
@@ -514,8 +516,42 @@ def session_series(host):
             "peak_concurrent": v["peak"],
             "active_buckets": v["active"],
             "parallel_buckets": v["parallel"],
+            # Mean concurrency and total session time are this / active_buckets and
+            # this / buckets-per-hour. Stored as the integer rather than as either
+            # derived figure: a ratio is not monotone, so it cannot be max-merged.
+            "session_buckets": v["session_buckets"],
         }
         for dk, v in day.items()
+    }
+
+
+def sessions_summary(rows):
+    """Headline session figures, derived from the persisted bucket counts.
+
+    ``hours_using_claude`` is wall-clock: buckets where at least one session did
+    something, so a session left open overnight adds nothing. ``session_hours``
+    sums concurrent sessions over the same buckets, and their ratio is the mean
+    concurrency — the multiplier between time spent and work in flight.
+    """
+    per_hour = 60 / SESSION_BUCKET_MIN
+    active = sum(r["active_buckets"] for r in rows)
+    sess_b = sum(r["session_buckets"] for r in rows)
+    return {
+        "bucket_minutes": SESSION_BUCKET_MIN,
+        "first_date": min((r["date"] for r in rows), default=None),
+        "last_date": max((r["date"] for r in rows), default=None),
+        # Per-day counts summed: a session spanning midnight counts in both days,
+        # so this is session-days, not a distinct-session total.
+        "session_days": sum(r["sessions"] for r in rows),
+        "peak_concurrent": max((r["peak_concurrent"] for r in rows), default=0),
+        "mean_concurrent": round(sess_b / active, 2) if active else 0,
+        "hours_using_claude": round(active / per_hour, 1),
+        "session_hours": round(sess_b / per_hour, 1),
+        "parallel_share_pct": (round(100 * sum(r["parallel_buckets"] for r in rows) / active)
+                               if active else 0),
+        "note": ("Concurrency needs session-level transcripts, which no earlier CSV "
+                 "preserved, so the series starts at the first day whose transcripts "
+                 "survive rather than at the first project day. It is never estimated."),
     }
 
 
@@ -638,7 +674,8 @@ def main():
     write_csv(model_csv, mkey + mnum + ["estimated"], m_out)
 
     # --- sessions: measured only, no backfill (see session_series) ---
-    snum = ["sessions", "peak_concurrent", "active_buckets", "parallel_buckets"]
+    snum = ["sessions", "peak_concurrent", "active_buckets", "parallel_buckets",
+            "session_buckets"]
     skey = ["date", "host"]
     s_measured = load_measured(sess_csv, skey, snum)
     merge_max_into(s_measured, session_series(host), skey, snum)
@@ -715,18 +752,7 @@ def main():
             h: {**dict(v), "headline_input_output_cachecreation": headline(v)}
             for h, v in sorted(host_tot.items())
         },
-        "sessions": {
-            "bucket_minutes": SESSION_BUCKET_MIN,
-            "first_date": min((r["date"] for r in s_out), default=None),
-            "last_date": max((r["date"] for r in s_out), default=None),
-            # Per-day counts summed: a session spanning midnight counts in both days,
-            # so this is session-days, not a distinct-session total.
-            "session_days": sum(r["sessions"] for r in s_out),
-            "peak_concurrent": max((r["peak_concurrent"] for r in s_out), default=0),
-            "note": ("Concurrency needs session-level transcripts, which no earlier CSV "
-                     "preserved, so the series starts at the first day whose transcripts "
-                     "survive rather than at the first project day. It is never estimated."),
-        },
+        "sessions": sessions_summary(s_out),
         "head_snapshot": head_snapshot(),
     }
     with open(os.path.join(DATA, "summary.json"), "w") as fh:
@@ -738,9 +764,13 @@ def main():
     print(f"machines on record : {', '.join(summary['provenance']['hosts']) or '(none)'}")
     print(f"measured span      : {first_measured} -> {summary['provenance']['last_measured_date']}")
     print(f"backfilled (est.)  : {archived} ({summary['estimation']['archived_commits']} commits)")
-    print(f"sessions           : {summary['sessions']['session_days']} session-days over "
-          f"{summary['sessions']['first_date']} -> {summary['sessions']['last_date']}, "
-          f"peak {summary['sessions']['peak_concurrent']} concurrent")
+    ss = summary["sessions"]
+    print(f"sessions           : {ss['session_days']} session-days over "
+          f"{ss['first_date']} -> {ss['last_date']}")
+    print(f"  concurrency      : mean {ss['mean_concurrent']}, peak {ss['peak_concurrent']}, "
+          f"{ss['parallel_share_pct']}% of active time parallel")
+    print(f"  time on claude   : {ss['hours_using_claude']}h wall-clock, "
+          f"{ss['session_hours']}h session-time")
     print(f"headline measured  : {headline(meas):,}")
     print(f"headline estimated : +{headline(est):,}")
     print(f"headline combined  : {headline(comb):,}")

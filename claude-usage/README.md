@@ -118,23 +118,24 @@ one): [day 7][post1] → [day 22][post2] → [day 35][post3] → [day 48][post4]
 
 | Metric | Day 7 | Day 22 | Day 80 | Source |
 |---|--:|--:|--:|---|
-| Tokens (input + output + cache-creation) | ~10M | 56.2M | **423.7M** | transcripts + est. |
-| └ measured only | — | 53.7M | 421.2M | transcripts |
+| Tokens (input + output + cache-creation) | ~10M | 56.2M | **423.9M** | transcripts + est. |
+| └ measured only | — | 53.7M | 421.4M | transcripts |
 | └ estimated backfill (May 16–18) | — | +2.5M | +2.5M | per-commit estimate |
 | └ incl. cache reads | — | 2.02B | **18.3B** | transcripts + est. |
 | Cache reuse ratio (reads ÷ writes) | — | ~44× | **~52×** | transcripts |
-| Git commits | 232 | 617 | **1,653** | git |
+| Git commits | 232 | 617 | **1,654** | git |
 | Tests (`func Test*`) | 269 | 393 | **1,876** | git |
 | Lines of Go (code) | 15.5k | 20.9k | **96.0k** | git |
 | Lines of Go (comments) | 2.3k | 4.2k | **34.8k** | git |
 | Markdown (non-blank) | 14.3k | 14.0k | **60.4k** | git |
 | YAML (hand-written) | 1.5k | 2.3k | **11.4k** | git |
-| Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **30.6k** | git |
+| Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **30.9k** | git |
 | Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 4.8 52% / Opus 5 29% / Fable 9% / Sonnet 6% / Opus 4.7 4%** | transcripts |
-| Peak concurrent sessions | — | — | **13** (since Jul 26) | transcripts |
+| Mean concurrent sessions | — | — | **3.0** (peak 13) | transcripts, since Jul 26 |
+| Hours using Claude (wall-clock) | — | — | **95.8h** → 286.5h session-time | transcripts, since Jul 26 |
 
 The headline tokens figure **includes the ~2.5M estimated backfill** for the
-archived first three days; the measured-only floor is 421.2M. Live totals (with
+archived first three days; the measured-only floor is 421.4M. Live totals (with
 the measured / estimated split) are always in
 [`data/summary.json`](data/summary.json).
 
@@ -220,11 +221,13 @@ steepens at the last of them.
 
 ### Parallel sessions
 ![Peak concurrent sessions per day, over the share of the day that was parallel](charts/parallel_sessions.png)
-How much of the work runs concurrently. **Top:** the day's peak concurrent
-sessions (bars, left axis) against how many sessions ran at all (line, right
-axis) — the two are on separate scales because they differ by roughly 4×.
-**Bottom:** the share of active time with two or more sessions going, which has
-averaged **71%**. Peak concurrency has run 8–13, on 11–48 sessions a day.
+How much of the work runs concurrently. **Top:** mean concurrency (line) against
+the day's peak (bars). The peak is the dramatic number — up to 13 — but it lasts
+a single bucket; the **mean of 3.0** is what actually multiplies a day's output.
+**Bottom:** time on Claude each day, wall-clock against session-hours. The gap
+between the two bands *is* the mean concurrency: **96h at the keyboard produced
+286h of session-time** over the window, a 3.0× multiplier. 71% of active time
+had two or more sessions running, on 11–48 sessions a day.
 
 **This chart has its own timeline, and starts at 2026-07-26.** Concurrency needs
 session-level transcripts, and no CSV before this one preserved them, so the
@@ -266,10 +269,24 @@ All exclude `vendor/`.
 ### `session_metrics.csv` — merge-preserved
 Per-day, per-`host` session concurrency, in 10-minute buckets: `sessions`
 (distinct sessions that did work that day), `peak_concurrent` (most sessions
-active in any one bucket), `active_buckets` (buckets with any session), and
-`parallel_buckets` (buckets with two or more). Every column is a count that can
-only rise as more transcripts become visible, so the upward-only merge is right
-for all of them.
+active in any one bucket), `active_buckets` (buckets with any session),
+`parallel_buckets` (buckets with two or more), and `session_buckets` (concurrent
+sessions summed over every bucket). Every column is a count that can only rise
+as more transcripts become visible, so the upward-only merge is right for all
+of them.
+
+Two headline figures are derived rather than stored, because a ratio isn't
+monotone and so can't be max-merged:
+
+| figure | from |
+|---|---|
+| **Hours using Claude** (wall-clock) | `active_buckets` ÷ 6 |
+| **Session-hours** (summed over concurrent sessions) | `session_buckets` ÷ 6 |
+| **Mean concurrency** | `session_buckets` ÷ `active_buckets` |
+
+`active_buckets` is time actually spent using Claude: a bucket only counts when
+a session did something in it, so a session left open overnight adds nothing.
+It measures engaged time, not session lifetime.
 
 There is no `estimated` column — this series is measured or absent. Summing
 across machines works for the bucket counts and `sessions`, but `peak_concurrent`
@@ -284,8 +301,9 @@ one day's peak by one.
 ### `summary.json`
 Totals split into `measured` / `estimated` / `combined` (summed from the
 persisted rows, so archival-safe), an `estimation` block documenting the
-per-commit method, a `sessions` block (bucket width, span, session-days, peak
-concurrency), per-model and per-machine (`by_host`) splits, an accurate HEAD
+per-commit method, a `sessions` block (bucket width, span, session-days, mean and
+peak concurrency, hours using Claude, session-hours, parallel share), per-model
+and per-machine (`by_host`) splits, an accurate HEAD
 working-tree snapshot, and full provenance — including which machine took the
 snapshot and which machines are on record.
 
@@ -307,7 +325,7 @@ snapshot and which machines are on record.
   (2026-05-19), so their token usage is gone from the logs. Those days are
   **backfilled** from the Pro-era per-commit rate and flagged `estimated=1`
   (see "Backfilled (estimated) days" above). The ~2.5M backfill is a modeled
-  figure, not a measurement — the defensible measured-only floor is 421.2M. The
+  figure, not a measurement — the defensible measured-only floor is 421.4M. The
   git series is fully measured from 2026-05-16.
 - **"Concurrent" is a bucket width, not a fact.** A session counts as active in
   a 10-minute bucket if it produced a record there, so two sessions are

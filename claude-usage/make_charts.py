@@ -642,7 +642,11 @@ def chart_cumulative_cache():
 
 
 def chart_parallel_sessions():
-    """Daily peak concurrency, over the share of the working day that was parallel.
+    """Concurrency over time spent, on its own shorter timeline.
+
+    Peak is the dramatic number but a burst of it lasts one bucket; the mean is
+    what multiplies a day's output, so both are drawn on one axis. Below, the gap
+    between session-hours and wall-clock hours *is* that mean.
 
     Its own timeline: concurrency needs session-level transcripts, so the series
     starts where those survive rather than at the first project day. Drawing it
@@ -651,64 +655,59 @@ def chart_parallel_sessions():
     rows = load("session_metrics.csv")
     if not rows:
         return
-    bucket = summary().get("sessions", {}).get("bucket_minutes", 10)
+    sess_meta = summary().get("sessions", {})
+    per_hour = 60 / sess_meta.get("bucket_minutes", 10)
     by_day = {}
-    for r in rows:  # sum/max each day across machines
-        d = by_day.setdefault(r["date"], {"peak": 0, "sessions": 0, "active": 0, "parallel": 0})
+    for r in rows:  # combine machines
+        d = by_day.setdefault(r["date"], {"peak": 0, "active": 0, "buckets": 0})
         # Peak is a max, not a sum: two machines' peaks need not coincide in time.
         d["peak"] = max(d["peak"], int(r["peak_concurrent"]))
-        d["sessions"] += int(r["sessions"])
         d["active"] += int(r["active_buckets"])
-        d["parallel"] += int(r["parallel_buckets"])
+        d["buckets"] += int(r["session_buckets"])
     days = sorted(by_day)
     xs = list(range(len(days)))
     peak = [by_day[d]["peak"] for d in days]
-    sess = [by_day[d]["sessions"] for d in days]
-    share = [100 * by_day[d]["parallel"] / by_day[d]["active"] if by_day[d]["active"] else 0
-             for d in days]
+    mean = [by_day[d]["buckets"] / by_day[d]["active"] if by_day[d]["active"] else 0 for d in days]
+    wall = [by_day[d]["active"] / per_hour for d in days]
+    shrs = [by_day[d]["buckets"] / per_hour for d in days]
 
     fig, (a1, a2) = plt.subplots(2, 1, figsize=(11, 7.8), sharex=True,
-                                 gridspec_kw=dict(height_ratios=[1.35, 1], hspace=0.30))
+                                 gridspec_kw=dict(height_ratios=[1.2, 1], hspace=0.30))
     halo = [pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()]
 
-    # Twin axes: the two counts differ by ~4x, and one shared scale flattens the bars.
-    a1.bar(xs, peak, color=OI["green"], width=0.62, edgecolor="white", linewidth=0.5, zorder=2)
+    a1.bar(xs, peak, color=OI["green"], width=0.62, edgecolor="white", linewidth=0.5,
+           alpha=0.45, zorder=2)
+    a1.plot(xs, mean, color=darken(OI["green"]), lw=2.6, marker="o", ms=5, zorder=4,
+            path_effects=halo)
+    for x, v in zip(xs, mean):
+        a1.annotate(f"{v:.1f}", (x, v), xytext=(0, 7), textcoords="offset points", ha="center",
+                    fontsize=9, fontweight="bold", color=darken(OI["green"]), zorder=6,
+                    path_effects=halo)
     a1.set_title("Parallel Claude Code sessions", fontsize=14, fontweight="bold", loc="left")
-    a1.set_ylabel("peak concurrent", fontsize=11, color=darken(OI["green"]))
-    a1.tick_params(axis="y", colors=darken(OI["green"]))
-    peak_top, sess_top = max(peak) * 1.30, max(sess) * 1.30
-    a1.set_ylim(0, peak_top)
-
-    a1b = a1.twinx()
-    a1b.plot(xs, sess, color=OI["vermillion"], lw=2.2, ls=(0, (5, 2)), marker="o", ms=4,
-             zorder=4, path_effects=halo)
-    # Bar labels live on the twin, which paints over a1 wholesale — mapped into its
-    # scale so they can sit above the line rather than under it.
-    for x, v in zip(xs, peak):
-        a1b.annotate(str(v), (x, v * sess_top / peak_top), xytext=(0, 4),
-                     textcoords="offset points", ha="center", fontsize=9.5, fontweight="bold",
-                     color=darken(OI["green"]), zorder=6, path_effects=halo)
-    a1b.set_ylabel("sessions run that day", fontsize=11, color=darken(OI["vermillion"]))
-    a1b.tick_params(axis="y", colors=darken(OI["vermillion"]))
-    a1b.set_ylim(0, sess_top)
-    a1b.spines["top"].set_visible(False)
-    a1.legend(handles=[mpatches.Patch(facecolor=OI["green"], edgecolor="white",
-                                      label=f"peak concurrent  ({bucket}-min buckets)"),
-                       Line2D([], [], color=OI["vermillion"], lw=2.2, ls=(0, (5, 2)), marker="o",
-                              ms=4, label="sessions run that day")],
+    a1.set_ylabel("sessions running at once", fontsize=11)
+    a1.set_ylim(0, max(peak) * 1.22)
+    a1.legend(handles=[Line2D([], [], color=darken(OI["green"]), lw=2.6, marker="o", ms=5,
+                              label="mean concurrent  (what multiplies a day's output)"),
+                       mpatches.Patch(facecolor=OI["green"], alpha=0.45, edgecolor="white",
+                                      label="peak concurrent  (one bucket's burst)")],
               frameon=False, fontsize=10, loc="upper left", ncol=2)
 
-    a2.fill_between(xs, 0, share, color=OI["skyblue"], alpha=0.35, zorder=1)
-    a2.plot(xs, share, color=OI["blue"], lw=2.4, marker="s", ms=4, zorder=3, path_effects=halo)
-    a2.set_ylabel("% of active time", fontsize=11)
-    a2.set_title("Share of the working day with two or more sessions running",
+    a2.fill_between(xs, 0, shrs, color=OI["skyblue"], alpha=0.40, zorder=1,
+                    label="session-hours  (summed over concurrent sessions)")
+    a2.plot(xs, shrs, color=OI["blue"], lw=2.4, marker="s", ms=4, zorder=3, path_effects=halo)
+    a2.fill_between(xs, 0, wall, color=OI["orange"], alpha=0.55, zorder=2)
+    a2.plot(xs, wall, color=darken(OI["orange"]), lw=2.2, marker="o", ms=4, zorder=4,
+            path_effects=halo)
+    a2.set_ylabel("hours", fontsize=11)
+    a2.set_title(f"Time on Claude each day — {sum(wall):.0f}h at the keyboard, "
+                 f"{sum(shrs):.0f}h of session-time ({sum(shrs) / sum(wall):.1f}×)",
                  fontsize=12, fontweight="bold", loc="left")
-    a2.set_ylim(0, 100)
-    a2.set_yticks([0, 25, 50, 75, 100])
-    a2.axhline(sum(share) / len(share), color=darken(OI["blue"]), ls=(0, (2, 2)), lw=1.2, zorder=2)
-    a2.annotate(f"mean {sum(share) / len(share):.0f}%", (xs[-1], sum(share) / len(share)),
-                xytext=(-4, 6), textcoords="offset points", ha="right", fontsize=9.5,
-                fontweight="bold", color=darken(OI["blue"]), path_effects=halo)
+    a2.set_ylim(0, max(shrs) * 1.22)
+    a2.legend(handles=[mpatches.Patch(facecolor=OI["skyblue"], alpha=0.40,
+                                      label="session-hours (summed over concurrent sessions)"),
+                       mpatches.Patch(facecolor=OI["orange"], alpha=0.55,
+                                      label="hours using Claude (wall-clock)")],
+              frameon=False, fontsize=9.5, loc="upper left", ncol=2)
 
     for a in (a1, a2):
         a.set_xlim(-0.6, len(days) - 0.4)
@@ -722,8 +721,8 @@ def chart_parallel_sessions():
              "session-level data survives only from " + days[0] +
              " — earlier transcripts were not retained, so this series cannot be backfilled",
              fontsize=7.5, color="#999")
-    # No tight_layout: it can't measure a twin axis and warns. save() trims with
-    # bbox_inches="tight", and hspace above already separates the panels.
+    # No tight_layout: it warns on this figure and the explicit hspace already
+    # spaces the panels. save() trims the margins with bbox_inches="tight".
     save(fig, "parallel_sessions")
 
 
