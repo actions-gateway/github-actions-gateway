@@ -806,8 +806,21 @@ framing. Anything a reader might need to act on individually gets its own line.
 the top scannable. It is also the only lever against truncation: the Releases
 *index* collapses a long body behind a **"read more"** link, and a fold counts as
 its one summary line while collapsed. `v1.3.0` hit that limit and was folded back
-under it — six folds, covering the two change lists, three API lists, and the
-tooling list. If the index is truncating, the fix is another fold, not a cut.
+under it — eight folds. If the index is truncating, the fix is another fold, not
+a cut.
+
+**Pick the next fold by measuring collapsed height, not by eye.** Sum each
+section's bytes with `<details>…</details>` bodies excluded; the biggest sections
+are rarely the ones that feel long. `v1.3.0` measured 9.5k collapsed, and the
+third-largest section was Validation — not an obvious candidate, since Upgrading
+and Highlights are larger but must both stay open.
+
+**When the content being folded is evidence, put the evidence in the `<summary>`.**
+A fold whose summary reads "Validation details" hides the receipt; one that reads
+`73/73 e2e specs on Kata microVM workers, on live GKE — the four legs, and what
+none of them assert` *is* the receipt, and a reader who never expands it has
+still seen the number. That is the exception to the count-in-the-summary
+convention: enumerations carry a count, evidence carries the finding.
 
 **Count what you list — and count the unit in the label.** State a count in a
 `<summary>` and it will be wrong the moment you curate the list. `v1.3.0`'s draft
