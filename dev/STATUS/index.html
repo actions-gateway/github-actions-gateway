@@ -2641,12 +2641,12 @@
 <td>Three shell files already carry <code>docs/plan/archive/</code> paths — they rotted and were repaired by hand. Extending needs care, not a wider glob: workflow <code>paths:</code> filters and <code>probe-investigations-cd.sh</code> (reads a plan file as data) are legitimate.</td>
 </tr>
 <tr>
-<td><a id="Q635"></a>Q635</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh"><code>doc-links</code> never reads a new doc's own links until it is staged, so it passes on a file it did not scan</a></td>
-<td><code>ci</code> <code>debt</code></td>
+<td><a id="Q639"></a>Q639</td>
+<td><a href="../development/maintaining-backlog/">Filing a Queue row surfaces no near-duplicate, so the search-before-you-file rule keeps being tripped</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>git ls-files -- '*.md'</code> lists tracked sources; the existence oracle deliberately adds untracked ones, so a link <em>to</em> a new file resolves while links <em>from</em> it are never read. Green, on a file count short by one.</td>
+<td>Twice now: Q442 duplicated Q440, Q635 duplicated Q619. The rule is precise and lives in a doc read when editing the backlog deliberately — but rows get filed mid-task, in flow. <code>make queue-id</code> is the one chokepoint every row passes through.</td>
 </tr>
 <tr>
 <td><a id="Q636"></a>Q636</td>
