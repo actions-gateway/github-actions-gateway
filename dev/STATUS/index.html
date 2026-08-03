@@ -2686,7 +2686,7 @@
 <td><code>bug</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Q603 closed the graceful half; a hard kill between <code>settle</code> and its <code>DELETE</code> remains, and no ordering can close it. Both candidate fixes need something first — a live measurement, or a <a href="#Q597">Q597</a> decision — and the plan doc states which.</td>
+<td>Q603 closed the graceful half; a hard kill between <code>settle</code> and its <code>DELETE</code> remains, and no ordering can close it. Q597 bounded the guards, so persisting them is the sharper candidate; the other needs a live measurement. The plan doc states which.</td>
 </tr>
 <tr>
 <td><a id="Q595"></a>Q595</td>
@@ -2711,14 +2711,6 @@
 <td>🚫</td>
 <td>M</td>
 <td>Blocked by <a href="#Q539">Q539</a>. Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from worker pods.</td>
-</tr>
-<tr>
-<td><a id="Q597"></a>Q597</td>
-<td><a href="../plan/q583-restart-replay/#what-shipped">The listener's provisioned/completed/abandoned sets are never pruned</a></td>
-<td><code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>They grow with every job a listener handles, unbounded over its lifetime. Q583's delete-ack makes pruning possible — an entry is dead once its message is deleted — but dropping one early lets a replay double-provision, so it wants its own change.</td>
 </tr>
 <tr>
 <td><a id="Q319"></a>Q319</td>

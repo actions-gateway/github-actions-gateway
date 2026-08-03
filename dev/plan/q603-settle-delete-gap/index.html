@@ -2614,9 +2614,12 @@ polls instead, which cannot happen — once a poll parks, there is no second one
 <p>A hard kill between <code>settle</code> and a successful <code>DELETE</code> still strands the message. Two
 candidate closures, neither built here:</p>
 <ul>
-<li><strong>Persist the guard state.</strong> Durable and unambiguous, but <code>provisioned</code>/<code>completed</code>/
-  <code>abandoned</code> already grow unbounded (<a href="../../STATUS/#Q597">Q597</a>); persisting them makes
-  that a stored-object problem rather than a memory one.</li>
+<li><strong>Persist the guard state.</strong> Durable and unambiguous. Q597 (2026-08-03) removed the
+  size objection — the guards are now retired with the message that assigned their job,
+  so they are bounded by the queue rather than by the process's lifetime — but it
+  sharpened the rest: what would have to be persisted is the guards <em>and</em> the pending-
+  message bookkeeping that retires them, since a stored guard with no retirement rule is
+  the unbounded set again, in etcd.</li>
 <li><strong>Recognise a stale assignment at intake.</strong> A restarted listener could refuse to
   provision a replayed <code>JobAssigned</code> that arrives while the scale set reports no
   assigned jobs — Q553's rule applied before provisioning instead of only after a

@@ -469,10 +469,6 @@
          <lastmod>2026-08-03</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/plan/q583-restart-replay/</loc>
-         <lastmod>2026-08-03</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/plan/q603-settle-delete-gap/</loc>
          <lastmod>2026-08-03</lastmod>
     </url>
@@ -814,6 +810,10 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q575-absent-job-payload-secret/</loc>
+         <lastmod>2026-08-03</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/plan/archive/q583-restart-replay/</loc>
          <lastmod>2026-08-03</lastmod>
     </url>
     <url>

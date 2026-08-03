@@ -2878,7 +2878,7 @@ the measurement was already in the repo: the Q264 P4 clean-green re-run
 provisioned 7 workers</strong> for the previous pass's jobs, and Q468 measured the queue
 retaining an unacked message across a 13 h session gap. The premise is confirmed;
 what remains unproven is the <code>DeleteMessage</code> wire shape the <em>fix</em> would rely on,
-which <a href="../q583-restart-replay/#the-answer-replayed-delete-ok-pruned-2026-08-01">Investigation G</a>
+which <a href="../archive/q583-restart-replay/#the-answer-replayed-delete-ok-pruned-2026-08-01">Investigation G</a>
 settled on 2026-08-01 in a single probe run against the live API: the replay is
 real, <code>DeleteMessage</code> answers 204, and deleting prunes the queue. Neither
 measurement needed a dogfood cluster, so nothing here ever blocked on rc.4 — and
