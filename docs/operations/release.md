@@ -761,6 +761,14 @@ image or chart. Say in the notes that you excluded them, so a reader does not re
 commits as 57 user-visible changes. Keep the trailing `(#NNNN)`: GitHub auto-links
 a bare `#NNNN` in a release body, so every line becomes traceable for free.
 
+**One fact per line, especially next to a procedure.** Distinct operator-facing
+changes run together into a paragraph read as background, and a paragraph sitting
+under a numbered list reads as a footnote to it. `v1.3.0`'s Upgrading section
+closed with three unrelated changes — quota accounting, a dropped proxy label, a
+new apiserver warning — in one sentence-run below its two numbered steps; as a
+bulleted list with a bold lead each, the same words are scannable. Prose is for
+framing. Anything a reader might need to act on individually gets its own line.
+
 **Fold long lists.** `<details><summary>` renders on the Releases page and keeps
 the top scannable. It is also the only lever against truncation: the Releases
 *index* collapses a long body behind a **"read more"** link, and a fold counts as
