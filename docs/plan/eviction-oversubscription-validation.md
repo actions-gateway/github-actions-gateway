@@ -144,6 +144,91 @@ GitHub's conclusion latency and the 403 both reproduce there is unmeasured. The
 delay, not of how the AGC detected the eviction — but that is reasoning, not a
 measurement.
 
+### The scale-set half: how it will be measured
+
+Method only. Nothing below has been run; results land in a sibling section when
+they exist.
+
+**The run is pinned to published images, so the result can be cited.** The 2026-07-29
+measurement is quotable for latency but not for recovery, because its images came from
+`719e67f1` and predate the Q495 fix — the defect and the build are inseparable in it.
+`v1.3.0` (tagged 2026-08-03) carries both behaviours under measurement, verified by
+content rather than by SHA: `rerunUntilAccepted` in
+[eviction.go](../../cmd/agc/internal/provisioner/eviction.go) (Q503) and the
+`contextData.github.run_id` extraction in
+[payload.go](../../cmd/agc/internal/provisioner/payload.go) (Q495). All five images are
+published at that tag, so the run sets `GMC_IMG`/`AGC_IMG`/`WORKER_IMG`/`WRAPPER_IMG`/
+`PROXY_IMG` to `ghcr.io/actions-gateway/<name>:v1.3.0` and lets the specs compile from
+the branch. Test code does not ship in the image, so the new assertions run against
+released binaries.
+
+Two deltas belong in the result rather than in the setup: `fakegithub` is test-only and
+stays locally built (the live-GitHub arm does not use it), and the chart is `v1.3.0`
+plus the v1alpha1 deprecation annotation on two CRDs (#1199), which is an apiserver
+warning and not behaviour under measurement. A defect found on the scale-set arm would
+move that arm's pin to whichever release ships the fix, leaving the classic arm's pin
+where it is.
+
+**Two verifications ride the same run.** Both are owed against a post-fix build and
+neither needs a tier of its own, so they are assertions on the classic spec rather
+than work of their own:
+
+- **Q503.** The retry loop shipped 2026-07-30 (#1010) and
+  `E2E_GitHub_EvictedWorkerLatencyAndRerun` already fails a refused re-run (Q510),
+  but it cannot yet separate "the loop outlasted GitHub's refusal window" from
+  "GitHub accepted the first call". `rerunUntilAccepted` logs `rerunCalls` on the
+  acceptance line ([eviction.go](../../cmd/agc/internal/provisioner/eviction.go));
+  after a SIGKILL eviction, with the first call 5s in and the conclusion ~9.5
+  minutes later, that count must exceed 1. Asserting it is what makes a green run
+  evidence.
+- **Q544.** `runningWorkerForRun` prefers the `run-id` annotation and falls back to
+  the before/after worker snapshot, and only the fallback branch records anything.
+  Since Q495 shipped, taking the fallback is a regression rather than an outcome, so
+  it becomes a failure that names itself — the same flip Q510 applied to the refused
+  re-run. `repository` is asserted alongside `run-id`: both keys were missing
+  together, so confirming one confirms half the fix.
+
+**The scale-set arm needs a tenant that has never existed.** The live-GitHub suite
+runs one classic v1 tenant. `E2E_AGC_ScaleSetAcquisition` and
+`E2E_AGC_ScaleSetRecovery` both run against fakegithub, and `cmd/probe`
+Investigation E drives the scale-set wire from a standalone binary rather than from
+a deployed AGC. So this measurement stands up a v2 object set — `ActionsGateway`,
+`RunnerTemplate`, ScaleSet-protocol `RunnerSet` — with `githubURL` naming the
+fixture repo directly, in its own namespace, inside the existing `github-real`
+`Ordered` container (a second top-level container would run concurrently with it,
+which is the Q511 collision inside one process).
+
+Three constraints shape it:
+
+1. **The scale-set name is the RunnerSet's single `runnerLabels` entry**
+   ([runnerset_scaleset.go](../../cmd/agc/internal/controller/runnerset_scaleset.go)),
+   and CEL enforces exactly one. So the fixture workflow's `runs-on` has to be that
+   label, and it cannot be `e2e` without colliding with the classic tenant's runner
+   group.
+2. **The fixture workflow takes `runs-on` as a `workflow_dispatch` input.**
+   `drain-probe.yml` in `actions-gateway/gateway-test` pins `runs-on: e2e` today. It
+   gains an input defaulting to `e2e`, so the classic measurement is unchanged and
+   one fixture serves both tiers. This is also the change
+   [Q530](../STATUS.md#Q530) names as its prerequisite for live-run isolation.
+3. **A green-path assertion runs before the eviction.** A scale-set tenant that
+   never acquires a job against real GitHub would otherwise fail at the eviction
+   step and read as an eviction-recovery defect. Prove acquisition first, so a
+   bootstrap failure attributes itself.
+
+The eviction arm then mirrors the classic spec: overshoot the runner container's
+ephemeral-storage limit, wait for `Failed/Evicted`, measure the kubelet's
+`finishedAt` against GitHub's `completed_at`, and assert one budget slot reserved at
+`tier="scaleset"`, a re-run accepted after more than one call, and a second attempt
+created.
+
+**The risk worth stating up front.** The AGC's scale-set listener has never
+bootstrapped against real GitHub from inside a cluster. Investigation E proves the
+protocol, not the deployed path, and the likeliest failure is registration scope:
+these probes register against the *repo* rather than the org precisely because the
+org's `Default` runner group sets `allows_public_repositories: false`. If the arm
+cannot be made to work, the classic arm of the same run still settles Q503 and Q544,
+and this section records the blocker as a measurement instead of a guess.
+
 ### What the harness cost to build, and why it is shaped this way
 
 **The eviction lever works, and it is the only aimed one.** Eviction recovery keys
