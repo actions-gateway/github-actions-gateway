@@ -1088,19 +1088,37 @@ that was wrong, and cost a pool re-create when `c2d-standard-8` was refused
 outright. The e2e pool uses `n2-standard-8` (8 vCPU: the measured runner peak is
 ~5 vCPU — Q248, which is why the original `n2-standard-4` was outgrown).
 
-**Why N2 and not C2 (Q627).** The regional `C2_CPUS` default is **8** — exactly
-one node of this shape — so a refused scale-up has nowhere to retry, and that is
-what cost a `v1.3.0-rc.5` validation run. A request to raise it to 16 was
-**denied** on 2026-07-31; an identical 8→16 ask for `IN_USE_ADDRESSES` was
-approved 33 minutes earlier, so the ratio was not the discriminator. Changing
-region does not help either: `C2_CPUS` is 8 in every region checked
-(us-central1, us-west1, us-east4, europe-west1), because it is a project default
-applied per-region rather than regional capacity.
+**The quota that actually binds is `CPUS_ALL_REGIONS`, not any family quota.**
+Two `v1.3.0-rc.5` validation runs died on `FailedScaleUp: GCE quota exceeded`
+while `C2_CPUS`, `N2_CPUS` and regional `CPUS` all sat near zero. The constraint
+is a **global, project-wide** CPU limit that defaults to **32**, which this
+cluster saturates exactly at full stretch:
 
-`N2_CPUS` defaults to **200** — 24 nodes of headroom beyond the pool's max of 2 —
-and n2 is this pool's original family, so it is already proven here. Of the other
-nested-virt-capable families with quota, `C3_CPUS` is 24 (3 nodes), which clears
-the max but leaves far less room.
+| Pool | Machine | Max nodes | vCPU |
+|---|---|---|---|
+| `default-pool` | `e2-standard-2` | 2 | 4 |
+| `workers` | `e2-standard-4` | 8 (autoscale max) | 32 |
+| `e2e` | `n2-standard-8` | 2 (autoscale max) | 16 |
+| | | | **52 worst case** |
+
+With `workers` at 7 nodes the project sits at 4 + 28 = 32/32, and the e2e pool's
+scale-up is refused for want of 8. **The gate can therefore starve itself**: its
+deploy phase routes CI to GAG, scaling `workers` out of the same global budget
+the e2e leg then needs. Raised to **64** on 2026-08-03 (approved immediately),
+covering the 52 ceiling plus headroom for spot replacement and GKE surge.
+
+**Read the API's error, not the autoscaler's event.** `FailedScaleUp` never names
+the quota. `gcloud container clusters resize` returns a 429 whose body does:
+`resource "CPUS_ALL_REGIONS": request requires '8.0' and is short '8.0'`. Chasing
+the family quotas instead cost this release two runs and three wrong diagnoses.
+
+**Why N2 and not C2.** Separate from the above: the regional `C2_CPUS` default is
+8, one node of this shape, and a request to raise it was **denied** on
+2026-07-31 — while an identical 8→16 ask for `IN_USE_ADDRESSES` was approved 33
+minutes earlier, so the size of the ask was not the discriminator. `N2_CPUS`
+defaults to 200 and n2 is this pool's original family, so it is already proven
+here. Note this alone would not have fixed anything; the global limit was the
+real blocker.
 
 ### F1. Run the one-time setup script
 
