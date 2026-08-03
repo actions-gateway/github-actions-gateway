@@ -21,6 +21,7 @@ point see [DESIGN.md](../DESIGN.md).
 | [development/](development/README.md) | Developer workflow — building, testing, kind iteration, Go workspaces, code generation. |
 | [operations/](operations/README.md) | Operator guides — runbook, troubleshooting, observability, upgrades, tenant onboarding. |
 | [plan/](plan/README.md) | Implementation plans and audits. Authoritative ordering lives in [STATUS.md](STATUS.md). |
+| [releases/](releases/README.md) | The curated GitHub Release body for each stable tag, verbatim. Authoring source, not a site page. |
 
 ## Find your path
 

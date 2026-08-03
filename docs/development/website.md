@@ -402,6 +402,7 @@ Scope is **per version**, not per site (Q558):
 |---|---|
 | `stable` and every numbered release | Operator docs only: `docs/design/`, `docs/operations/`, `docs/index.md`, `why-gag.md`, `features.md`, `roadmap.md` |
 | `dev` | The above **plus** the repo-internal docs: `docs/STATUS.md` (the [backlog](#the-backlog-page)), `docs/plan/`, `docs/development/` (this file included), `docs/assets/`'s READMEs |
+| *no version* | `docs/releases/` — see the trap below |
 
 A release is a frozen build, so a backlog published in one would be a snapshot
 stale from tag day. `dev` redeploys on every push to `main`, which is the only
@@ -426,6 +427,14 @@ Two traps worth keeping in mind when editing that wiring:
   the list keeps that from surfacing as a build warning. Because it is never a
   site page, a doc that links to it must use the absolute `github.com` URL — a
   relative `../README.md` fails `mkdocs build --strict`.
+- **`docs/releases/` is excluded on every version too**, and it is the one entry
+  that is not a repo-internal-vs-operator split: those files are GitHub Release
+  bodies, authored for github.com's comment-flavour renderer. Their GFM alerts
+  (`> [!WARNING]`) have no MkDocs equivalent and would publish as literal text,
+  and their links already point into the versioned site. The exclusion is spelled
+  out in **four** places that must agree — `mkdocs.yml`'s default, the two `env:`
+  blocks and the one `export` in `pages.yml`, and `scripts/docs/docs-preview.sh`.
+  Miss the last and `make docs-build` disagrees with CI.
 
 PR builds validate **both** scopes (`pages.yml`'s `build` job runs `mkdocs build`
 twice), so a PR that breaks a plan or development page fails there rather than on

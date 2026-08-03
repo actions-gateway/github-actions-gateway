@@ -624,6 +624,37 @@ A minor release accumulates more than a generated changelog can convey, and the
 two inputs that feed it, `operator-caveats-since.sh` and the commit log, both
 mislead in specific ways. What follows is the method, written after `v1.3.0`.
 
+**Author the notes in
+[`docs/releases/`](https://github.com/actions-gateway/github-actions-gateway/tree/main/docs/releases),
+not in a scratch file.**
+One file per stable tag, `vX.Y.Z.md`, holding the release body verbatim — no
+front matter, no heading above the first line. Publish from it:
+
+```bash
+gh release edit vX.Y.Z --notes-file docs/releases/vX.Y.Z.md
+```
+
+`v1.3.0`'s notes were drafted under `tmp/` and edited straight on the Release. By
+the time they were right they had been through a wrong count, a dead anchor, 46
+forced line breaks, two mismatched PR numbers, and a caveat that never said
+"GHES" — every one caught by hand, none by review, and none of it reviewable
+because the text was not in a diff. In-repo makes each fix a diff and each
+published body reproducible from a commit.
+
+These files are excluded from the docs site on **every** version, dev included:
+they are written for github.com's renderer, which the site is not. The exclusion
+is spelled out in four places that must agree — `mkdocs.yml`, two `env:` blocks
+and one `export` in [`pages.yml`](../../.github/workflows/pages.yml), and
+`scripts/docs/docs-preview.sh`.
+
+**Past bodies are retrievable, so the previous release is your template:**
+
+```bash
+gh release view vX.Y.Z --json body --jq .body
+```
+
+Use it to seed a new file when a tag predates this convention.
+
 **Notes answer "what is in it" and "what must I do". The docs answer "how" and
 "why".** Every explanation that can live in `upgrade.md` or an `operations/` page
 should, behind a link. `v1.3.0`'s first draft ran ~1000 words of prose. The
@@ -680,17 +711,44 @@ against github.com, so it says nothing about GHES. A feature list that reads as
 finished support overclaims. Check `docs/plan/archive/` for the feature's own
 "what this will not verify" section before describing it.
 
-**Verify every link and anchor by hand.** `make doc-links` covers the repo, not a
-notes file living outside it. Anchors are the usual failure:
+**Link the versioned docs site, not `main` and not `blob/`.** A reader of these
+notes should land on that release's instructions, and the site publishes a build
+per stable tag: `https://actions-gateway.com/X.Y.Z/operations/…`. Mind the form —
+the site drops the leading `v` exactly like the chart does. `v1.3.0` shipped 18
+such links. They 404 until the docs deploy for the tag completes, which is
+expected while the Release is still a draft.
+
+**Verify every link and anchor by hand.** Being in `docs/releases/` does not get
+them checked: `make doc-links` skips external URLs by design, and every link in a
+notes file is absolute. Anchors are the usual failure — MkDocs and GitHub agree on
+heading slugs, so deriving them from the source heading is reliable:
 
 ```bash
 grep -E '^#{1,6} ' docs/operations/upgrade.md \
   | sed -E 's/^#+ //; s/[^a-zA-Z0-9 -]//g; s/ /-/g' | tr 'A-Z' 'a-z'
 ```
 
-Pin doc links at `blob/vX.Y.Z/` so a reader of these notes gets that release's
-instructions. They 404 until the tag is pushed, which is expected while the
-Release is still a draft.
+**Do not hard-wrap.** GitHub renders a release body with comment-flavour GFM,
+where a single newline becomes `<br>`. Keep every paragraph, blockquote, and list
+continuation on one line. `v1.3.0`'s hard-wrapped draft rendered 46 of them.
+
+Check this against the **renderer**, not the source. `gh release view --json body`
+returns the raw Markdown, which never contains `<br>` however badly it is wrapped,
+so grepping that is a check that cannot fail. Render it the way GitHub will:
+
+```bash
+gh api -X POST /markdown -f mode=gfm -f "text=$(cat docs/releases/vX.Y.Z.md)" \
+  | grep -c '<br>'
+```
+
+`mode=gfm` is the comment flavour; `mode=markdown` is not, and reports 0 on a
+hard-wrapped file. The same render confirms the rest of the GitHub-only markup
+survived — expect one `markdown-alert-*` class per `> [!…]` block, one `<details>`
+per fold, and no literal `[!` anywhere.
+
+**In-page anchors do not work in a release body.** Release-body headings carry no
+`id`, so `[Upgrading](#upgrading)` is a dead link. Refer to a section by name in
+bold instead.
 
 **Watch the chart-version form.** Images are tagged `vX.Y.Z`, charts `X.Y.Z`.
 A copy-pasteable `helm` command with a `v` in it fails.
