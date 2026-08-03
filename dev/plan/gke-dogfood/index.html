@@ -3860,18 +3860,63 @@ create:</p>
 that was wrong, and cost a pool re-create when <code>c2d-standard-8</code> was refused
 outright. The e2e pool uses <code>n2-standard-8</code> (8 vCPU: the measured runner peak is
 ~5 vCPU — Q248, which is why the original <code>n2-standard-4</code> was outgrown).</p>
-<p><strong>Why N2 and not C2 (Q627).</strong> The regional <code>C2_CPUS</code> default is <strong>8</strong> — exactly
-one node of this shape — so a refused scale-up has nowhere to retry, and that is
-what cost a <code>v1.3.0-rc.5</code> validation run. A request to raise it to 16 was
-<strong>denied</strong> on 2026-07-31; an identical 8→16 ask for <code>IN_USE_ADDRESSES</code> was
-approved 33 minutes earlier, so the ratio was not the discriminator. Changing
-region does not help either: <code>C2_CPUS</code> is 8 in every region checked
-(us-central1, us-west1, us-east4, europe-west1), because it is a project default
-applied per-region rather than regional capacity.</p>
-<p><code>N2_CPUS</code> defaults to <strong>200</strong> — 24 nodes of headroom beyond the pool's max of 2 —
-and n2 is this pool's original family, so it is already proven here. Of the other
-nested-virt-capable families with quota, <code>C3_CPUS</code> is 24 (3 nodes), which clears
-the max but leaves far less room.</p>
+<p><strong>The quota that actually binds is <code>CPUS_ALL_REGIONS</code>, not any family quota.</strong>
+Two <code>v1.3.0-rc.5</code> validation runs died on <code>FailedScaleUp: GCE quota exceeded</code>
+while <code>C2_CPUS</code>, <code>N2_CPUS</code> and regional <code>CPUS</code> all sat near zero. The constraint
+is a <strong>global, project-wide</strong> CPU limit that defaults to <strong>32</strong>, which this
+cluster saturates exactly at full stretch:</p>
+<table>
+<thead>
+<tr>
+<th>Pool</th>
+<th>Machine</th>
+<th>Max nodes</th>
+<th>vCPU</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>default-pool</code></td>
+<td><code>e2-standard-2</code></td>
+<td>2</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>workers</code></td>
+<td><code>e2-standard-4</code></td>
+<td>8 (autoscale max)</td>
+<td>32</td>
+</tr>
+<tr>
+<td><code>e2e</code></td>
+<td><code>n2-standard-8</code></td>
+<td>2 (autoscale max)</td>
+<td>16</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>52 worst case</strong></td>
+</tr>
+</tbody>
+</table>
+<p>With <code>workers</code> at 7 nodes the project sits at 4 + 28 = 32/32, and the e2e pool's
+scale-up is refused for want of 8. <strong>The gate can therefore starve itself</strong>: its
+deploy phase routes CI to GAG, scaling <code>workers</code> out of the same global budget
+the e2e leg then needs. Raised to <strong>64</strong> on 2026-08-03 (approved immediately),
+covering the 52 ceiling plus headroom for spot replacement and GKE surge.</p>
+<p><strong>Read the API's error, not the autoscaler's event.</strong> <code>FailedScaleUp</code> never names
+the quota. <code>gcloud container clusters resize</code> returns a 429 whose body does:
+<code>resource "CPUS_ALL_REGIONS": request requires '8.0' and is short '8.0'</code>. Chasing
+the family quotas instead cost this release two runs and three wrong diagnoses.</p>
+<p><strong>Why N2 and not C2.</strong> Separate from the above: the regional <code>C2_CPUS</code> default is
+8, one node of this shape, and a request to raise it was <strong>denied</strong> on
+2026-07-31 — while an identical 8→16 ask for <code>IN_USE_ADDRESSES</code> was approved 33
+minutes earlier, so the size of the ask was not the discriminator. <code>N2_CPUS</code>
+defaults to 200 and n2 is this pool's original family, so it is already proven
+here. Note this alone would not have fixed anything; the global limit was the
+real blocker.</p>
 <h3 id="f1-run-the-one-time-setup-script">F1. Run the one-time setup script<a class="headerlink" href="#f1-run-the-one-time-setup-script" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="nb">export</span><span class="w"> </span>CLUSTER<span class="w"> </span>ZONE<span class="w"> </span>APP_ID<span class="w"> </span>INSTALLATION_ID<span class="w">   </span><span class="c1"># from the Variables section</span>
 <a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>scripts/dogfood/e2e-setup.sh

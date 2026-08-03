@@ -2593,6 +2593,22 @@
 <td><code>watch_run</code> loops until <code>completed</code> with no deadline. Pre-#1171 it died instantly and wrongly; now it waits forever on a run that stays <code>queued</code>. Neither is bounded — the leg needs a deadline that fails the gate and tears down.</td>
 </tr>
 <tr>
+<td><a id="Q630"></a>Q630</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel.sh">A healthy quiet e2e leg is indistinguishable from a wedged one, so the stall report is unusable</a></td>
+<td><code>dogfood</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Stall keys on status-file writes, which need relayed heartbeats, which need a fetchable job log. GitHub served <code>BlobNotFound</code> for a whole 30-min PASSED run: <code>hb: none</code>, false stalls, and re-firing instantly on relaunch. Consult run status instead.</td>
+</tr>
+<tr>
+<td><a id="Q631"></a>Q631</td>
+<td><a href="../plan/gke-dogfood/#part-f--e2e-on-gke-kata-containers">The release gate starves itself: routed CI and the e2e leg draw on one global CPU budget</a></td>
+<td><code>dogfood</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Deploy routes CI to GAG, scaling <code>workers</code> to 8 (32 vCPU) out of the same <code>CPUS_ALL_REGIONS</code> the e2e pool then needs. Cost two rc.5 runs at the old limit of 32. Raised to 64, so 52 worst case now fits — but nothing caps the competition.</td>
+</tr>
+<tr>
 <td><a id="Q623"></a>Q623</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-no-plan-refs-in-code.sh"><code>no-plan-refs-in-code</code> only scopes Go, but shell and workflow comments rot the same way</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
