@@ -541,6 +541,22 @@ The remedy `run <script> yourself for the report` is not one. In CI there is nob
 
 Q596 is the worked example, and it cost a full session. `check-v2-api-sync-test`'s `tree-in-sync` — the one assertion reading the live `api/` tree — ran the gate as `>/dev/null 2>&1` and printed `packages diverge` for *any* non-zero exit. Replaying it against stubs exiting 1 (real drift), 2 (missing directory) and 3 (mid-run abort) produced three identical, evidence-free lines. The single occurrence was undiagnosable by construction, and 2,418 reproduction runs never recovered the trigger. Note the shape: in all three of the scripts that had this bug, the *fixture* helper in the same file captured output correctly and only the live-state assertion threw it away.
 
+### A test's environment assumptions must be probed, not inferred
+
+`runs-on` is an expression here, not a constant. Nine jobs resolve theirs at run time — seven in `unit-test.yml`, `integration-test`, and the e2e job in `e2e-reusable.yml` — so a `workflow_dispatch` with `target_gag=true` (or, for e2e, merely `vars.GAG_E2E_RUNNER` being set, which is not dispatch-gated) routes them to the self-hosted dogfood runner instead of `ubuntu-latest`. **"It passed in CI" is a statement about one runner image, not about where the test runs next.**
+
+So a test that depends on the environment — the uid it runs as, a tool on `PATH`, whether mode bits bite — must **attempt the operation and branch on the result**:
+
+- **Probe the capability, never a proxy for it.** `os.Geteuid()`, `id -u` and `runtime.GOOS` are proxies, and they are wrong in both directions: a uid-0 container with `drop: ALL` *cannot* read a mode-000 file, and a non-root process holding `CAP_DAC_OVERRIDE` can. Reading the uid answers a different question than the one asserted.
+- **Skip on the probe, and say what it observed.** A silent skip and a passing test look identical in the log, which is how a gate rots into a no-op.
+- **When the capability is a job prerequisite rather than a test variable, provision it instead** — install it in the workflow so the verdict is identical on both runner types.
+
+The reviewer's tell: a test that names an environment fact in a comment or skip message but never reads it.
+
+Both remedies are in the record. **Q482** is the provision case: the `shellcheck` job runs `make scripts-test`, whose `scripts/go/go-vet-tags-test.sh` shells out to a real `go`. `ubuntu-latest` preinstalls one; the dogfood runner image omits it by design. The dependency was never written down or checked, so every `target_gag=true` dispatch reported a red that was not a failure. The fix added the same pinned `setup-go` step its six sibling jobs already had. **Q596** is the probe case: `check-v2-api-sync-test`'s `unreadable-file` assertion `chmod 000`s a fixture and requires the gate to call it trouble, gated on whether `cat` actually fails — not on `$EUID`, precisely because uid does not settle whether the mode bits bite on this runner.
+
+Q482 established this for the Go toolchain only. It covers both languages and every tier those nine jobs carry: Go unit tests, the `scripts/` shell suites under `make scripts-test`, integration, and e2e. `TestBuildTrustPool_PreservesSystemRoots` (`cmd/agc/internal/transport/trustpool_test.go`) and the `python3` guards in `scripts/docs/*-hook-test.sh` are the models in each.
+
 ### Proving a flake fix: invert it
 
 Repeated passes do not validate a flake fix. A green `-count=20` is equally consistent with *"the race is closed"* and *"the race didn't fire this time"* — and on an unloaded dev machine the second is the more likely of the two, because the timing that produces the flake on a loaded CI runner often can't be reproduced locally at all. Passing-after is necessary evidence, not sufficient evidence.
