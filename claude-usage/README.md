@@ -190,7 +190,7 @@ addition — an old machine going quiet is not evidence it was retired.
 
 ### Tokens spent vs. lines authored (the magnitude)
 ![Cumulative tokens far above cumulative lines authored, log scale](charts/tokens_vs_lines.png)
-Log y so both ends are visible at once: ~423M cumulative tokens ride well above
+Log y so both ends are visible at once: ~424M cumulative tokens ride well above
 ~198k lines authored (a linear axis crushes the lines to an invisible sliver). The
 gold-shaded gap between the two curves is the ~2,140 tokens/line — on a log axis a
 ratio is a vertical gap. "Lines authored" is all hand-written output — Go (code +
