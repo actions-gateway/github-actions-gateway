@@ -2538,10 +2538,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#7-hand-off-to-operators" class="md-nav__link">
+  <a href="#7-bump-the-pinned-release-in-the-docs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Hand off to operators
+        7. Bump the pinned release in the docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-hand-off-to-operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Hand off to operators
       
     </span>
   </a>
@@ -2941,10 +2952,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#7-hand-off-to-operators" class="md-nav__link">
+  <a href="#7-bump-the-pinned-release-in-the-docs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Hand off to operators
+        7. Bump the pinned release in the docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-hand-off-to-operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Hand off to operators
       
     </span>
   </a>
@@ -4089,16 +4111,43 @@ per-release steps:</p>
   that fail-closed posture and immediately go stale. The published digests belong
   in the <strong>release notes</strong> (step 5), which is where the operator copies them from.</li>
 </ul>
-<h3 id="7-hand-off-to-operators">7. Hand off to operators<a class="headerlink" href="#7-hand-off-to-operators" title="Permanent link">&para;</a></h3>
+<h3 id="7-bump-the-pinned-release-in-the-docs">7. Bump the pinned release in the docs<a class="headerlink" href="#7-bump-the-pinned-release-in-the-docs" title="Permanent link">&para;</a></h3>
+<p>The adopter-facing pages transcribe the chart version, the image tag, and the
+release-notes URL by hand. Nothing in the pipeline rewrites them, so after the
+tag they still advertise the <em>previous</em> release — and a reader following one
+installs a release behind, digests and all. A gate runs the bump instead of
+remembering it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>make<span class="w"> </span>release-pins-check
+</code></pre></div>
+<p>It resolves the newest stable <code>vX.Y.Z</code> tag and fails with the file and line of
+every pin that still names an older one, across the five pages that tell a
+reader which version to install — <code>README.md</code>, <code>docs/index.md</code>, and
+<code>docs/operations/</code>'s <code>install.md</code>, <code>upgrade.md</code>, and <code>gitops.md</code>. Bump each site
+it reports (charts drop the leading <code>v</code>; <code>gitops.md</code> carries the Argo
+<code>targetRevision</code> and both Flux forms) and re-run until it is green.</p>
+<p>Two things it deliberately leaves alone, both documented in
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-release-pins.sh"><code>scripts/docs/check-release-pins.sh</code></a>:
+a line beginning <code>Measured on kind</code>, whose version records what was actually
+installed for a measurement — bumping it would falsify the record — and
+<code>v2.0.0</code>, the announced <code>v1alpha1</code>/<code>v2alpha1</code> removal release. A page that
+yields <em>no</em> pin at all is a failure rather than a pass, so a pin that moves out
+of the scan's reach is reported instead of silently going unchecked.</p>
+<p>Landing the bump is a normal PR; the gate is part of <code>make check</code> and of the
+<code>doc-links</code> CI workflow, so a stale pin reddens every subsequent PR until it is
+fixed. This step exists because <code>v1.3.0</code> shipped without it: <code>README.md</code>,
+<code>docs/index.md</code>, and <code>install.md</code> were fixed by hand while <code>upgrade.md</code> and
+<code>gitops.md</code> kept pointing at <code>1.2.0</code>, and <code>install.md</code>'s own patch-line hint
+still read <code>1.2.z</code> (Q638).</p>
+<h3 id="8-hand-off-to-operators">8. Hand off to operators<a class="headerlink" href="#8-hand-off-to-operators" title="Permanent link">&para;</a></h3>
 <p>Operators install/upgrade straight from the <strong>published OCI chart</strong> with the
 digests pinned via <code>--set</code>, exactly as
 <a href="../install/#pin-images-by-digest">install.md § Pin images by digest</a> and
 <a href="../upgrade/">upgrade.md</a> document (<code>X.Y.Z</code> is the release tag without the <code>v</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
 </code></pre></div>
 <h2 id="patch-releases-and-backports">Patch releases and backports<a class="headerlink" href="#patch-releases-and-backports" title="Permanent link">&para;</a></h2>
 <p>A patch release (<code>vX.Y.Z+1</code>) is <strong>bugfix-only</strong> by SemVer. That has a release-
@@ -4237,8 +4286,8 @@ SHA-pinned, but syft itself is a runtime download).</p>
 bump both the SHA <em>and</em> the <code># vX.Y.Z</code> comment, so the pins don't rot — review and
 merge those like any dependency PR. To pin or bump by hand, resolve the tag to its
 commit SHA and keep the comment in sync:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;owner&gt;/&lt;action&gt;/commits/&lt;tag&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.sha&#39;</span>
-<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="c1"># -&gt; uses: &lt;owner&gt;/&lt;action&gt;@&lt;sha&gt; # &lt;tag&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;owner&gt;/&lt;action&gt;/commits/&lt;tag&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">&#39;.sha&#39;</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="c1"># -&gt; uses: &lt;owner&gt;/&lt;action&gt;@&lt;sha&gt; # &lt;tag&gt;</span>
 </code></pre></div>
 <p><code>syft-version</code> is <strong>not</strong> Dependabot-managed (it's a tool download, not an action
 ref) — bump it by hand in <code>publish.yml</code> when you bump the <code>anchore/sbom-action</code>

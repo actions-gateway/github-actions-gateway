@@ -2625,14 +2625,6 @@
 <td>No field-level API docs exist in <code>docs/</code>. The CRDs are the only authority, so v1.3.0's notes hand-wrote an API section with nowhere to link. The kubebuilder markers are already there, so <code>crd-ref-docs</code> can generate a page into the mkdocs site.</td>
 </tr>
 <tr>
-<td><a id="Q638"></a>Q638</td>
-<td><a href="../operations/release/#7-hand-off-to-operators">Nothing bumps the pinned current release in the docs, so they still advertise <code>1.2.0</code> after v1.3.0 shipped</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured after the tag: <code>upgrade.md</code> line 908 and four spots in <code>gitops.md</code> still pin <code>1.2.0</code>. Step 7 writes <code>X.Y.Z</code> and names no files, so the bump is remembered, not run. README fixed by hand.</td>
-</tr>
-<tr>
 <td><a id="Q639"></a>Q639</td>
 <td><a href="../development/maintaining-backlog/">Filing a Queue row surfaces no near-duplicate, so the search-before-you-file rule keeps being tripped</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
