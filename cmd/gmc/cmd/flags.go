@@ -115,11 +115,16 @@ func addFlags(fs *flag.FlagSet) *gmcFlags {
 			"allowlist): the GMC refuses to start if they intersect, because a class nameable "+
 			"from both surfaces would let a tenant lift its WORKERS to infra priority and preempt "+
 			"other tenants' proxy pods. Empty (default) forbids all "+
-			"spec.scheduling.priorityClassName references.")
+			"spec.scheduling.priorityClassName references. Augmented at runtime by the "+
+			"PriorityClassAllowlist CR's allowedInfraPriorityClasses (Q298), which the GMC "+
+			"refuses to apply if it would intersect the worker allowlist.")
 	fs.StringVar(&f.priorityClassAllowlistName, "priority-class-allowlist-name", "",
 		"Name of the cluster-scoped PriorityClassAllowlist CR whose "+
-			"spec.allowedPriorityClasses AUGMENT the --allowed-priority-classes flag "+
-			"allowlist, watched so additions take effect without a GMC restart (Q188). "+
+			"spec.allowedPriorityClasses and spec.allowedInfraPriorityClasses AUGMENT the "+
+			"--allowed-priority-classes and --allowed-infra-priority-classes flag allowlists "+
+			"respectively, watched so additions take effect without a GMC restart (Q188, Q298). "+
+			"The two effective sets must stay disjoint: a CR that would make them intersect is "+
+			"refused wholesale, leaving both flag allowlists in force. "+
 			"The same object is the priorityclass-allowlist-guard policy's paramKind, so "+
 			"the webhook and the policy read one source and cannot drift. Additive and "+
 			"fail-safe: a missing or malformed object leaves the static flag allowlist in "+

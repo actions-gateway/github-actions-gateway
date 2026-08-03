@@ -63,6 +63,11 @@ func resolveConfig(cfg *gmcFlags, getenv func(string) string) (*resolvedConfig, 
 			"--allowed-infra-priority-classes must be disjoint: a class on both would let a tenant lift its worker "+
 			"pods to infra priority and preempt other tenants' proxy pods", shared)
 	}
+	// Both allowlists also take a watched dynamic half (Q188/Q298), so the flags are
+	// no longer the only route to an overlap. Pairing makes the invariant hold at
+	// READ time: a name that reaches both sets is admitted by neither webhook,
+	// whatever let it through.
+	allowlist.Pair(priorityClassAllowlist, infraPriorityClassAllowlist)
 
 	// The platform egress destination allowlist (Q242 G.1): the EgressProxy admission
 	// webhook reads it and the ConfigMap watch augments it. A malformed

@@ -73,8 +73,19 @@ func rsWithTierPriorityClass(name, ns, priorityClassName string) *agcv2alpha1.Ru
 
 // startPriorityClassAllowlistReconciler starts a PriorityClassAllowlistReconciler
 // against the envtest apiserver for the duration of the test, wired to the given
-// shared allowlist and watching the named cluster-scoped PriorityClassAllowlist.
+// shared worker allowlist and watching the named cluster-scoped
+// PriorityClassAllowlist. The infra allowlist is a private paired instance unless
+// the caller needs it (startPriorityClassAllowlistReconcilerPair).
 func startPriorityClassAllowlistReconciler(t *testing.T, al *allowlist.PriorityClassAllowlist, name string) {
+	t.Helper()
+	infra := allowlist.New(nil)
+	allowlist.Pair(al, infra)
+	startPriorityClassAllowlistReconcilerPair(t, al, infra, name)
+}
+
+// startPriorityClassAllowlistReconcilerPair is the two-allowlist form: both the
+// worker and infra dynamic halves come from the one watched object (Q188/Q298).
+func startPriorityClassAllowlistReconcilerPair(t *testing.T, al, infra *allowlist.PriorityClassAllowlist, name string) {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
@@ -90,9 +101,10 @@ func startPriorityClassAllowlistReconciler(t *testing.T, al *allowlist.PriorityC
 	require.NoError(t, err)
 
 	err = (&controller.PriorityClassAllowlistReconciler{
-		Client:    mgr.GetClient(),
-		Name:      name,
-		Allowlist: al,
+		Client:         mgr.GetClient(),
+		Name:           name,
+		Allowlist:      al,
+		InfraAllowlist: infra,
 	}).SetupWithManager(mgr)
 	require.NoError(t, err)
 

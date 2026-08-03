@@ -1205,6 +1205,53 @@ upgrade the chart, or recover in place as below. See
 
 ---
 
+## Self-Serviced PriorityClasses Stopped Being Accepted All At Once
+
+**Symptoms.** Classes that were being admitted are suddenly rejected — on both the
+worker surfaces (`priorityTiers[]`, `podTemplate.spec.priorityClassName`) and the
+infra ones (`spec.scheduling.priorityClassName`) — right after someone edited the
+`PriorityClassAllowlist` CR. The edit itself **succeeded**; only the classes named
+directly on the GMC flags still work.
+
+**Confirm it.** The GMC logged the refusal, naming the shared classes:
+
+```sh
+kubectl --context "$CTX" logs -n <GMC_NS> deploy/<release>-controller-manager \
+  | grep sharedClasses
+```
+
+```text
+WARNING: PriorityClassAllowlist would make the worker and infra allowlists
+intersect; ignoring it and using the static flag allowlists only
+  sharedClasses=["runner-standard"]
+```
+
+**Cause.** The CR put a class on one list that the **other surface's flag** already
+pins — `allowedInfraPriorityClasses` naming something in
+`--allowed-priority-classes`, or the reverse. The CRD's CEL rule catches an overlap
+between the object's own two lists at write time, but it cannot read a controller
+flag, so this shape is admitted by the apiserver and caught by the GMC instead.
+
+The two allowlists must stay disjoint: a class on both is nameable from a worker
+pod, which is how a tenant lifts its workers to infra priority and preempts another
+tenant's proxy. Rather than apply half the object, the GMC drops **both** dynamic
+sets back to the flags — which is why every self-serviced class disappears together,
+not just the offending one.
+
+**Recovery.** Remove the shared class from one of the two lists:
+
+```sh
+kubectl --context "$CTX" edit priorityclassallowlist <release>-priorityclass-allowlist
+```
+
+Both dynamic sets are restored on the next watch event, no restart. If the class is
+genuinely needed on both surfaces, it is not — that is the escalation the split
+exists to prevent. Create a second `PriorityClass` and give each surface its own; an
+`infra-` name prefix keeps the two sets obviously distinct. See
+[Disjointness is enforced on every edit](security-operations.md#disjointness-is-enforced-on-every-edit-not-only-at-startup).
+
+---
+
 ## AGC CrashLoopBackOff or Not Acquiring Jobs
 
 **Symptoms.** The AGC pod is restarting repeatedly, or it is running but `actions_gateway_active_sessions` is zero and `actions_gateway_jobs_acquired_total` is not incrementing even when jobs are queued.
