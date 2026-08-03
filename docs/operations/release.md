@@ -709,6 +709,24 @@ warns**. `v1.3.0` deprecated `v2alpha1` (warns on every apply) alongside
 reminds an operator it is going away. That asymmetry is exactly what a reader
 cannot discover for themselves.
 
+**Diff every surface an operator can see, not just the CRDs.** Each of these is
+enumerable, and each hides in a different file, so a review that reads only the
+Go diff misses most of them. `v1.3.0` shipped five: CRD fields, metric names,
+Kubernetes Event reasons, condition reasons, and configuration (chart values,
+env tunables, CLI flags). Diff each between the two tags mechanically rather than
+reading the changelog for them — the Event reasons and the metrics had no
+enumeration at all until they were diffed, and the notes had already been through
+several reviews.
+
+Two traps. **A rename reads as a removal** when the extraction is scoped to one
+directory: env vars first appeared to have 17 removals, all of which were code
+moving out of `cmd/`; re-running repo-wide showed zero. **Adjacent string
+arguments read as the same thing**: `recordEvent(obj, type, reason, action, …)`
+puts a reason and an action side by side, so `ProvisionWorker` and
+`ApplyAGCAutoscaler` both survived extraction as reasons until each call site was
+checked. Always report "none removed" when it is true — operators are looking for
+exactly that.
+
 **Give the API surface its own section, and lead it with any new CRD.** A new kind
 is not a field: the chart installs chart-root `crds/` on a *fresh install only*,
 so a new CRD is the reason "apply the CRDs" is step 1 of Upgrading, and the two
