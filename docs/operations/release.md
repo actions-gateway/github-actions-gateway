@@ -683,7 +683,15 @@ reader needs first, not by what took the most work:
 | **API surface** | what changed in the contract | see below |
 | **Validation** | why should I believe you | receipts, not adjectives |
 | **Project and tooling** | is this project healthy | contributor-facing; last for a reason |
+| **Security** | is there anything I must patch for | state it even when the answer is no |
 | **Verifying this release** | how do I check the artifacts | the `make verify-release` line |
+
+**Say something about security even when there is nothing to report.** Silence
+reads as an omission to the one reader scanning specifically for it. State
+plainly that no advisory accompanies the release, then list what it does carry —
+dependency security bumps, and any fix that hardens credential or trust handling
+without patching a reported vulnerability. Name the scanning gates and when they
+run. `v1.3.0` had no CVE and still warranted the section.
 
 **Lead with a danger banner, and make it an alert.** GFM alerts — `> [!WARNING]`,
 `> [!CAUTION]`, `> [!NOTE]` — render as real coloured callouts in a release body
