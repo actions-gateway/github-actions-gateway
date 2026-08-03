@@ -87,6 +87,20 @@ write that still names a deprecated value, and the warning names `v3.0.0`.
 
 - **All three are deprecated and still fully served.** No release has removed any of
   them. Existing tenants keep running unchanged until they upgrade past `v2.0.0`.
+- **The apiserver says so too, on both deprecated versions.** Every `v1alpha1` and
+  `v2alpha1` CRD carries `deprecated: true` plus a `deprecationWarning`, so `kubectl`
+  prints the notice on any read or write of one of those versions — it is no longer
+  something you have to have read this page to know:
+
+    ```text
+    Warning: actions-gateway.github.com/v1alpha1 RunnerGroup is deprecated; use actions-gateway.com/v2beta1 RunnerSet. v1alpha1 is served until v2.0.0, which removes it; migrate with gag-migrate.
+    ```
+
+    The warning is advisory: it does not fail an `apply`, and both controllers
+    deduplicate it to one log line per process
+    ([observability-logging](observability-logging.md#logging)). Classic acquisition
+    carries no apiserver warning of its own — it is a *field value*, not a version, and
+    the versions that admit it are the two that warn above.
 - **New tenants should onboard on `v2beta1`.** See
   [tenant onboarding](tenant-onboarding.md) for the v2 object set.
 - **`v2alpha1` stays served as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp.**

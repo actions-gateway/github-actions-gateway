@@ -229,6 +229,7 @@ type RunnerGroupStatus struct {
 // to an adaptive pool of listener goroutines backed by ephemeral worker pods.
 //
 // +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="actions-gateway.github.com/v1alpha1 RunnerGroup is deprecated; use actions-gateway.com/v2beta1 RunnerSet. v1alpha1 is served until v2.0.0, which removes it; migrate with gag-migrate."
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=rg,categories=actions-gateway
 // +kubebuilder:printcolumn:name="MaxListeners",type=integer,JSONPath=".spec.maxListeners"
