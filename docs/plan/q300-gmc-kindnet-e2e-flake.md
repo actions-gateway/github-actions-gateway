@@ -9,6 +9,12 @@ fix — see the triage below). One genuinely unexplained dataplane event remains
 [Flake watch](../STATUS.md#flake-watch) with the failure dump upgraded to
 attribute the next occurrence from CI artifacts alone.
 
+A second `CrossTenantNetworkBlocked` occurrence (2026-08-03, on a PR branch)
+points at the same spec from the opposite direction — enforcement flapping
+rather than leaking open — and turned up a test-harness defect that hides the
+probe's own diagnostic. See
+[2026-08-03](#2026-08-03-a-second-crosstenant-occurrence-and-what-its-phase-implies).
+
 ## Post-#612 soak triage (corrected 2026-07-19)
 
 #612 merged 2026-07-13. Of ~26 `main` kindnet runs through 2026-07-19, three
@@ -264,6 +270,61 @@ and waits (bounded, best-effort) for them to finish terminating while the
 GMC/AGC controllers are still up, so the finalizers clear before the controllers
 are torn down. A back-to-back local re-run's BeforeAll no longer collides on a
 pre-existing Terminating namespace.
+
+## 2026-08-03: a second `CrossTenant` occurrence, and what its *phase* implies
+
+[Run 30833071096](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30833071096),
+on PR #1197's branch rather than `main`. `E2E_GMC_CrossTenantNetworkBlocked`
+failed at
+[`isolation_test.go:150`](../../cmd/gmc/test/e2e/isolation_test.go) — the gate
+probe pod was **still `Running`** when the 6-minute `Eventually` expired
+(`Timed out after 360.001s`, `probe pod still in phase "Running"`); 61 passed, 1
+failed, 11 skipped. It passed on a re-run of the same tree with no change to
+GMC, to any NetworkPolicy, or to the spec.
+
+**The phase narrows the cause more than the timeout does.** The probe loops 150
+times over `curl --max-time 5 --connect-timeout 5` plus `sleep 2`, exiting 0 on
+3 consecutive blocks and 1 when the loop is exhausted. That gives three
+predictions, and only one of them ends with the pod still `Running` at 360 s:
+
+| Dataplane behaviour | Per-iteration cost | Where the pod is at 360 s |
+|---|---|---|
+| Every attempt connects (never enforced) | ~2 s (the sleep) | `Failed` at ~300 s — the loop exhausts *inside* the window |
+| Enforcement lands and holds | ~7 s | `Succeeded` at ~21 s |
+| Blocks **intermittently**, never 3 in a row | 2–7 s, mean > 2.4 s | still `Running` — the observed state |
+
+So this run is not "enforcement was slow to program". A never-enforced probe
+finishes and reports `Failed` with its own diagnostic; to still be looping at
+six minutes, some attempts must have paid the 5 s connect timeout — meaning the
+dataplane *was* dropping — while never sustaining three in a row. That is
+enforcement **flapping**, which is the 2026-07-15 fail-open signal seen from the
+other side: there enforcement was confirmed and then leaked, here it never held
+long enough to be confirmed. Both are consistent with hypothesis 1 (nfqueue
+bypass accepting under load).
+
+**The assumption this rests on**, stated so it can be falsified: that a blocked
+attempt costs the full `--connect-timeout`, i.e. the packets are dropped rather
+than rejected. kindnetd's kube-network-policies issues nfqueue *drop* verdicts,
+so this holds — but a REJECT anywhere in the path would return fast and collapse
+the whole argument. **No failure dump was read for this run** (it is a
+PR-branch run, and the upgraded dump is wired for `main`), so the nfqueue
+counters that would confirm hypothesis 1 directly were not consulted. This is
+recorded as an occurrence plus an inference from the observed phase, not as
+proven attribution.
+
+### The probe's loop budget does not span the outer window
+
+Separately, and repairable without settling the dataplane question: the comment
+at `isolation_test.go:95` says the 150-iteration budget is "sized to span the
+outer `Eventually` window below". That is true only while attempts *connect*
+(~2 s each → ~300 s, just under the 6-minute window). Once attempts block, each
+iteration costs ~7 s and 150 of them run ~17 minutes — so in exactly the case
+the budget was widened for (Q179, slow NP programming), the probe is still
+looping when the window closes and the spec fails on the outer timeout instead
+of on the probe's own verdict. The failure then reports a bare phase rather than
+the probe's log, which is why this run needed arithmetic to attribute at all.
+The window and the loop budget should be derived from one another, against the
+blocked-iteration cost rather than the connected one.
 
 ## Recurrence guard
 
