@@ -3078,6 +3078,10 @@ clamps that one below warning level whatever <code>validation</code> says. That 
 <td><code>dev</code></td>
 <td>The above <strong>plus</strong> the repo-internal docs: <code>docs/STATUS.md</code> (the <a href="#the-backlog-page">backlog</a>), <code>docs/plan/</code>, <code>docs/development/</code> (this file included), <code>docs/assets/</code>'s READMEs</td>
 </tr>
+<tr>
+<td><em>no version</em></td>
+<td><code>docs/releases/</code> — see the trap below</td>
+</tr>
 </tbody>
 </table>
 <p>A release is a frozen build, so a backlog published in one would be a snapshot
@@ -3101,6 +3105,14 @@ repo-internal page.</p>
   the list keeps that from surfacing as a build warning. Because it is never a
   site page, a doc that links to it must use the absolute <code>github.com</code> URL — a
   relative <code>../README.md</code> fails <code>mkdocs build --strict</code>.</li>
+<li><strong><code>docs/releases/</code> is excluded on every version too</strong>, and it is the one entry
+  that is not a repo-internal-vs-operator split: those files are GitHub Release
+  bodies, authored for github.com's comment-flavour renderer. Their GFM alerts
+  (<code>&gt; [!WARNING]</code>) have no MkDocs equivalent and would publish as literal text,
+  and their links already point into the versioned site. The exclusion is spelled
+  out in <strong>four</strong> places that must agree — <code>mkdocs.yml</code>'s default, the two <code>env:</code>
+  blocks and the one <code>export</code> in <code>pages.yml</code>, and <code>scripts/docs/docs-preview.sh</code>.
+  Miss the last and <code>make docs-build</code> disagrees with CI.</li>
 </ul>
 <p>PR builds validate <strong>both</strong> scopes (<code>pages.yml</code>'s <code>build</code> job runs <code>mkdocs build</code>
 twice), so a PR that breaks a plan or development page fails there rather than on

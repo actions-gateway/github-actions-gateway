@@ -2617,6 +2617,30 @@
 <td>Three shell files already carry <code>docs/plan/archive/</code> paths — they rotted and were repaired by hand. Extending needs care, not a wider glob: workflow <code>paths:</code> filters and <code>probe-investigations-cd.sh</code> (reads a plan file as data) are legitimate.</td>
 </tr>
 <tr>
+<td><a id="Q635"></a>Q635</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh"><code>doc-links</code> never reads a new doc's own links until it is staged, so it passes on a file it did not scan</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>git ls-files -- '*.md'</code> lists tracked sources; the existence oracle deliberately adds untracked ones, so a link <em>to</em> a new file resolves while links <em>from</em> it are never read. Green, on a file count short by one.</td>
+</tr>
+<tr>
+<td><a id="Q636"></a>Q636</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/README.md">No gate checks a release note's links, and they are the one doc whose links are all absolute</a></td>
+<td><code>ci</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>docs/releases/</code> is now in-repo, but <code>check-doc-links</code> skips external URLs, so every anchor into the versioned site is unverified. <code>site/</code> is a working oracle — resolving the v1.3.0 notes against it caught a planted bad anchor.</td>
+</tr>
+<tr>
+<td><a id="Q637"></a>Q637</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">The release gate asserts nothing about the capacity gate or the namespace-quota rung</a></td>
+<td><code>dogfood</code> <code>tests</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>validate-release.sh</code> has zero references to <code>capacityGate</code>, <code>nodeAutoscaling</code> or quota; its legs are deploy, e2e, sizing, CRD smoke. It builds an autoscaling cluster with headroom, so the constrained path is never driven on real infra.</td>
+</tr>
+<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code></td>
