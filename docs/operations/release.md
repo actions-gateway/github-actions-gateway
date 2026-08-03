@@ -680,7 +680,7 @@ reader needs first, not by what took the most work:
 | **Upgrading** | what must I do | numbered steps; say which are guarded |
 | **Deprecations** | what is going away | see below |
 | **Everything since `<prev>`** | did my bug get fixed | folded lists with counts |
-| **API surface** | what changed in the contract | see below |
+| **API and metric surface** | what changed in the contract | CRDs *and* metrics; see below |
 | **Validation** | why should I believe you | receipts, not adjectives |
 | **Project and tooling** | is this project healthy | contributor-facing; last for a reason |
 | **Security** | is there anything I must patch for | state it even when the answer is no |
