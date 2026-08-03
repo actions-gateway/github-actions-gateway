@@ -290,6 +290,17 @@ and the e2e AGC — so a collision costs a wait, not a cluster cycle. It polls f
 up to `E2E_WAIT_TIMEOUT` seconds (default 1800), then fails with the run id;
 `E2E_WAIT_TIMEOUT=0` fails immediately instead of waiting.
 
+**The e2e leg's watch is bounded, so a run that never starts cannot hold the
+cluster.** The dispatched run is watched for up to `E2E_RUN_WATCH_TIMEOUT`
+seconds (default 5400 — 90 minutes: the 60-minute job ceiling plus the same 30
+minutes of queue the settle wait allows). Past that the gate fails with exit
+124, names the run, and tears the cluster back down to 0 nodes as it would for
+any other e2e failure. **The run itself keeps going on GitHub** — the deadline
+releases the nodes the *gate* is holding, not the ones the run is queued for, so
+cancel the run by hand if it is genuinely wedged. A healthy leg finishes in
+25–33 minutes; raise the variable rather than removing the bound if yours is
+legitimately slower.
+
 The gate also checks every local tool it needs up front — including the pinned
 `cosign` the final CRD-smoke leg verifies with (`make cosign` downloads it to
 `.build/cosign`; `COSIGN=<path>` overrides) — so a missing binary fails the run

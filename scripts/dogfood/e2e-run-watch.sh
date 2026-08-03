@@ -21,7 +21,10 @@
 # Usage:
 #   REPO=owner/repo scripts/dogfood/e2e-run-watch.sh <run-id>
 #
-# Exits with the run's conclusion: 0 for success, non-zero otherwise.
+# Exits with the run's conclusion: 0 for success, non-zero otherwise. A run that
+# never concludes exits 124 once E2E_RUN_WATCH_TIMEOUT elapses (Q629), so the
+# gate fails and its EXIT trap tears the cluster back down instead of the watch
+# holding billable nodes for as long as the process lives.
 #
 # Each relayed heartbeat is also folded into the gate's event stream (Q616), so
 # the status file answers "how far into the e2e leg" rather than only "in the
@@ -41,6 +44,24 @@ source "${E2E_RUN_WATCH_REPO_ROOT}/scripts/dogfood/lib/progress.sh"
 # matches (the gate job) simply carry no heartbeats.
 E2E_JOB_FILTER="${E2E_JOB_FILTER:-e2e}"
 E2E_RUN_WATCH_INTERVAL="${E2E_RUN_WATCH_INTERVAL:-30}"
+
+# Upper bound on one watch (Q629). The loop's only other exit is `completed`, so
+# a run that never gets there — the rc.5 case, stuck `queued` because the AGC
+# stopped provisioning — holds the gate, and its nodes, indefinitely.
+#
+# 90 minutes = the 60-minute job ceiling (`timeout_minutes` in e2e-calico.yml,
+# the largest any gate-dispatchable e2e workflow passes; GitHub cancels the job
+# past it, which concludes the run and ends the loop on its own) plus the 30
+# minutes validate-release.sh already allows an e2e run to move in
+# (E2E_WAIT_TIMEOUT). A healthy leg measures 25-33 minutes end to end, so this
+# cannot fire on a run that is merely slow — the failure #1171 fixed.
+E2E_RUN_WATCH_TIMEOUT="${E2E_RUN_WATCH_TIMEOUT:-5400}"
+
+# Exit status for a watch that hit its deadline, distinct from a run that
+# concluded non-success. Matches timeout(1).
+E2E_RUN_WATCH_TIMEOUT_RC=124
+
+now() { date +%s; }
 
 # heartbeat_lines — filter a job log on stdin to the heartbeat lines the e2e
 # suite emits, stripping the runner's leading ISO timestamp. Matching the
@@ -111,9 +132,10 @@ run_state() {
 
 watch_run() {
 	local run_id="$1"
-	local seen=0 job_ids="" status conclusion state all new total
+	local seen=0 job_ids="" status conclusion state all new total deadline
 
 	echo "  watching https://github.com/${REPO}/actions/runs/${run_id}"
+	deadline=$(($(now) + E2E_RUN_WATCH_TIMEOUT))
 
 	while true; do
 		state="$(run_state "${run_id}")"
@@ -136,6 +158,18 @@ watch_run() {
 		fi
 
 		[[ "${status}" == "completed" ]] && break
+
+		# Checked after the completion break, so a run that concludes on the
+		# same poll the deadline lands on still reports its conclusion.
+		if (($(now) >= deadline)); then
+			echo "error: run ${run_id} was still '${status}' after ${E2E_RUN_WATCH_TIMEOUT}s — giving up." >&2
+			echo "  The run keeps going on GitHub; the gate fails here so its teardown" >&2
+			echo "  releases the cluster. Raise E2E_RUN_WATCH_TIMEOUT (currently" >&2
+			echo "  ${E2E_RUN_WATCH_TIMEOUT}s) if the leg is legitimately slower than that." >&2
+			echo "  https://github.com/${REPO}/actions/runs/${run_id}" >&2
+			return "${E2E_RUN_WATCH_TIMEOUT_RC}"
+		fi
+
 		sleep "${E2E_RUN_WATCH_INTERVAL}" &
 		wait $! || true
 	done
