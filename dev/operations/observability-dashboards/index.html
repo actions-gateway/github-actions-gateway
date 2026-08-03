@@ -2507,7 +2507,7 @@
 </blockquote>
 <h2 id="tenant-dashboard">Tenant dashboard<a class="headerlink" href="#tenant-dashboard" title="Permanent link">&para;</a></h2>
 <p><img alt="The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows." src="../../assets/grafana-dashboard-tenant.png" /></p>
-<p>Filtered by the <code>$namespace</code> and <code>$runner_group</code> template variables. Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a> as data sources where applicable.</p>
+<p>Filtered by the <code>$namespace</code>, <code>$runner_group</code>, and <code>$runner_set</code> template variables. Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a> as data sources where applicable.</p>
 <p><strong>Row 1 — Gateway Health (per namespace)</strong></p>
 <table>
 <thead>
@@ -2610,7 +2610,7 @@
 </tbody>
 </table>
 <p><strong>Row 4 — Scale-set Acquisition Tier (per runner_set)</strong></p>
-<p>The default acquisition protocol (Q264). These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits <code>actions_gateway_active_sessions</code> or <code>jobs_acquired_total</code>, so its throughput and health are only visible here. Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <code>$runner_group</code> variable does not filter these.</p>
+<p>The default acquisition protocol (Q264). These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits <code>actions_gateway_active_sessions</code> or <code>jobs_acquired_total</code>, so its throughput and health are only visible here. Labelled by <code>runner_set</code> (not <code>runner_group</code>), so the <code>$runner_group</code> variable does not filter these — the <code>$runner_set</code> variable does.</p>
 <table>
 <thead>
 <tr>
@@ -2930,7 +2930,8 @@ To break either out per owner, replace <code>max(...)</code> with
 <p>The dashboards ship with these template variables already wired:</p>
 <ul>
 <li><code>$namespace</code> — <code>label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)</code> — filters to a single tenant (both dashboards). The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no <code>active_sessions</code>, so keying the variable on that alone would leave the dashboard blank.</li>
-<li><code>$runner_group</code> — <code>label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)</code> — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard). The scale-set panels are labelled <code>runner_set</code> and are not filtered by it.</li>
+<li><code>$runner_group</code> — <code>label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)</code> — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard). The <code>runner_set</code>-labelled panels are not filtered by it; <code>$runner_set</code> is their variable.</li>
+<li><code>$runner_set</code> — <code>label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)</code> — filters to a specific <code>RunnerSet</code> on the scale-set and v2 capacity panels (tenant dashboard). It reads its label values from the Q319 capacity gauges rather than the <code>scaleset_*</code> series on purpose: those gauges are emitted for <strong>every</strong> <code>RunnerSet</code>, while <code>scaleset_*</code> exists only for <code>ScaleSet</code>-protocol sets, so keying on the latter would hide a <code>Classic</code> set from the dropdown entirely.</li>
 </ul>
 <hr />
 <p>← Back to <a href="../observability/">Observability</a></p>

@@ -2721,6 +2721,14 @@
 <td>Its <code>WorkersUnschedulable</code> and quota-pressure rows name <code>actions_gateway_workers_unschedulable</code> / <code>..._worker_quota_pressure</code>, both RunnerGroup-only. Q319 added the <code>actions_gateway_runnerset_*</code> twins; cite them.</td>
 </tr>
 <tr>
+<td><a id="Q651"></a>Q651</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/exporter.py">The dashboard preview never populates the scale-set reap panel, so the shipped screenshot shows <code>No data</code></a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The panel needs <code>worker_pods_reaped_total{runner_set!=""}</code> (Q514), but <code>exporter.py</code> emits that counter with <code>runner_group</code> only. Pre-dates Q319; measured on the 2026-08-03 render.</td>
+</tr>
+<tr>
 <td><a id="Q641"></a>Q641</td>
 <td><a href="../development/testing/#a-tests-environment-assumptions-must-be-probed-not-inferred"><code>cmd/worker</code> permission tests infer the capability from uid instead of probing it</a></td>
 <td><code>tests</code> <code>debt</code></td>
