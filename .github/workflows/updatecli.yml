@@ -57,8 +57,8 @@ jobs:
           export UPDATECLI_OWNER="${GITHUB_REPOSITORY%/*}"
           export UPDATECLI_REPO="${GITHUB_REPOSITORY#*/}"
           # Scheduled runs apply; manual dispatch can request a dry-run diff.
-          cmd=apply
+          cmd='apply'
           if [[ "${DRY_RUN:-false}" == "true" ]]; then
-            cmd=diff
+            cmd='diff'
           fi
           updatecli "${cmd}" --config updatecli.d/
