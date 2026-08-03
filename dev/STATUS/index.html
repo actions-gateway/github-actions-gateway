@@ -2617,6 +2617,14 @@
 <td>No field-level API docs exist in <code>docs/</code>. The CRDs are the only authority, so v1.3.0's notes hand-wrote an API section with nowhere to link. The kubebuilder markers are already there, so <code>crd-ref-docs</code> can generate a page into the mkdocs site.</td>
 </tr>
 <tr>
+<td><a id="Q634"></a>Q634</td>
+<td><a href="../operations/troubleshooting/">Five condition reasons an operator can see are documented nowhere in <code>docs/operations/</code></a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>SizingWithinRange</code>, <code>SizingDriftDetected</code>, <code>InsufficientSamples</code>, <code>JobsProvisioning</code>, <code>GitHubEgressAllowed</code>. Four are sizing, the release headline. Godoc exists in <code>api/apiconditions/conditions.go</code>; it never reached operator docs.</td>
+</tr>
+<tr>
 <td><a id="Q623"></a>Q623</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-no-plan-refs-in-code.sh"><code>no-plan-refs-in-code</code> only scopes Go, but shell and workflow comments rot the same way</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
