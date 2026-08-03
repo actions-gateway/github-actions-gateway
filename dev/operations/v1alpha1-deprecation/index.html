@@ -2696,23 +2696,36 @@ write that still names a deprecated value, and the warning names <code>v3.0.0</c
 <ul>
 <li><strong>All three are deprecated and still fully served.</strong> No release has removed any of
   them. Existing tenants keep running unchanged until they upgrade past <code>v2.0.0</code>.</li>
-<li><strong>New tenants should onboard on <code>v2beta1</code>.</strong> See
-  <a href="../tenant-onboarding/">tenant onboarding</a> for the v2 object set.</li>
-<li><strong><code>v2alpha1</code> stays served as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp.</strong>
+<li>
+<p><strong>The apiserver says so too, on both deprecated versions.</strong> Every <code>v1alpha1</code> and
+  <code>v2alpha1</code> CRD carries <code>deprecated: true</code> plus a <code>deprecationWarning</code>, so <code>kubectl</code>
+  prints the notice on any read or write of one of those versions — it is no longer
+  something you have to have read this page to know:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Warning: actions-gateway.github.com/v1alpha1 RunnerGroup is deprecated; use actions-gateway.com/v2beta1 RunnerSet. v1alpha1 is served until v2.0.0, which removes it; migrate with gag-migrate.
+</code></pre></div>
+<p>The warning is advisory: it does not fail an <code>apply</code>, and both controllers
+deduplicate it to one log line per process
+(<a href="../observability-logging/#logging">observability-logging</a>). Classic acquisition
+carries no apiserver warning of its own — it is a <em>field value</em>, not a version, and
+the versions that admit it are the two that warn above.
+- <strong>New tenants should onboard on <code>v2beta1</code>.</strong> See
+  <a href="../tenant-onboarding/">tenant onboarding</a> for the v2 object set.
+- <strong><code>v2alpha1</code> stays served as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp.</strong>
   It carries the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs, which a
   new tenant does not. Note that alpha's contract allows an alpha version to be
   dropped without notice; naming <code>v2.0.0</code> for it is a stronger commitment than the
-  maturity level requires.</li>
-<li><strong>Existing tenants migrate with the tool</strong> on their own schedule: see
+  maturity level requires.
+- <strong>Existing tenants migrate with the tool</strong> on their own schedule: see
   <a href="../migration-v1-to-v2/">migration-v1-to-v2.md</a>. The migration is a one-shot
   fan-out, not an automatic conversion, because one v1 object becomes several v2
-  objects.</li>
-<li><strong>Migrating preserves how your jobs are acquired.</strong> <code>gag-migrate</code> maps v1 runner
+  objects.
+- <strong>Migrating preserves how your jobs are acquired.</strong> <code>gag-migrate</code> maps v1 runner
   groups to v2 <code>RunnerSet</code>s that use the same job-acquisition path: it writes
   <code>acquisitionProtocol: Classic</code> onto every emitted set, so the migration changes the
   API objects, not the runtime behaviour, and is safe to do ahead of any other change.
   Adopting <code>ScaleSet</code> for a migrated group is a distinct, later step (create a fresh
-  single-label set), never a side effect of migrating off <code>v1alpha1</code>.</li>
+  single-label set), never a side effect of migrating off <code>v1alpha1</code>.</p>
+</li>
 </ul>
 <h2 id="why-v2-what-the-decomposition-buys">Why v2 (what the decomposition buys)<a class="headerlink" href="#why-v2-what-the-decomposition-buys" title="Permanent link">&para;</a></h2>
 <ul>

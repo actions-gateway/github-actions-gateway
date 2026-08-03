@@ -2625,14 +2625,6 @@
 <td>No field-level API docs exist in <code>docs/</code>. The CRDs are the only authority, so v1.3.0's notes hand-wrote an API section with nowhere to link. The kubebuilder markers are already there, so <code>crd-ref-docs</code> can generate a page into the mkdocs site.</td>
 </tr>
 <tr>
-<td><a id="Q633"></a>Q633</td>
-<td><a href="../operations/v1alpha1-deprecation/"><code>v1alpha1</code> is slated for removal at <code>v2.0.0</code> but the apiserver never warns, while <code>v2alpha1</code> does</a></td>
-<td><code>bug</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Its CRDs carry no <code>deprecated: true</code> and no <code>deprecationWarning</code>; every v2alpha1 CRD carries both since Q411. So the users furthest behind get the least warning, and the notice has been docs-only since v1.1.0. Add the marker, or say why not.</td>
-</tr>
-<tr>
 <td><a id="Q638"></a>Q638</td>
 <td><a href="../operations/release/#7-hand-off-to-operators">Nothing bumps the pinned current release in the docs, so they still advertise <code>1.2.0</code> after v1.3.0 shipped</a></td>
 <td><code>docs</code> <code>debt</code></td>
