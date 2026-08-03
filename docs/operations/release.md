@@ -618,6 +618,387 @@ clobbers curated notes. If you want richer notes (highlights, upgrade caveats),
 --draft --notes-file …` — and the pipeline will leave your body untouched while
 still attaching the signed v2 CRD manifest asset.
 
+#### Writing the curated notes
+
+A minor release accumulates more than a generated changelog can convey, and the
+two inputs that feed it, `operator-caveats-since.sh` and the commit log, both
+mislead in specific ways. What follows is the method, written after `v1.3.0`.
+
+**Author the notes in
+[`docs/releases/`](https://github.com/actions-gateway/github-actions-gateway/tree/main/docs/releases),
+not in a scratch file.**
+One file per stable tag, `vX.Y.Z.md`, holding the release body verbatim — no
+front matter, and **no title heading** — the Releases page already renders the tag
+name as the page's `<h1>`, so a `# vX.Y.Z` in the body duplicates it. Publish from
+it:
+
+```bash
+gh release edit vX.Y.Z --notes-file docs/releases/vX.Y.Z.md
+```
+
+`v1.3.0`'s notes were drafted under `tmp/` and edited straight on the Release. By
+the time they were right they had been through a wrong count, a dead anchor, 46
+forced line breaks, two mismatched PR numbers, and a caveat that never said
+"GHES" — every one caught by hand, none by review, and none of it reviewable
+because the text was not in a diff. In-repo makes each fix a diff and each
+published body reproducible from a commit.
+
+These files are excluded from the docs site on **every** version, dev included:
+they are written for github.com's renderer, which the site is not. The exclusion
+is spelled out in four places that must agree — `mkdocs.yml`, two `env:` blocks
+and one `export` in [`pages.yml`](../../.github/workflows/pages.yml), and
+`scripts/docs/docs-preview.sh`.
+
+**Past bodies are retrievable, so the previous release is your template:**
+
+```bash
+gh release view vX.Y.Z --json body --jq .body
+```
+
+Use it to seed a new file when a tag predates this convention.
+
+**Notes answer "what is in it" and "what must I do". The docs answer "how" and
+"why".** Every explanation that can live in `upgrade.md` or an `operations/` page
+should, behind a link. `v1.3.0`'s first draft ran ~1000 words of prose; cutting it
+to links lost nothing. Link a Highlight from its bold lead, and link group
+headings rather than every line.
+
+That rule shortens the *prose*. It does not shorten the notes: `v1.3.0` shipped
+2100 words and 25 links, because enumerations kept being added — a feature list, a
+fix list, the API surface, the condition reasons. Prose is what gets cut; lists are
+what a reader actually searches. Fold the lists (below) and the length costs
+nothing.
+
+##### The section skeleton
+
+`v1.3.0` arrived at this order after several passes. It is ordered by what a
+reader needs first, not by what took the most work:
+
+| Section | Answers | Notes |
+|---|---|---|
+| *(one-line tagline)* | what this project is | for the reader who arrived from a search result |
+| *(danger banner)* | is anything here going to hurt me | a GFM alert, above the fold; see below |
+| **Highlights** | why upgrade | 3–5, each linked from its bold lead |
+| **Upgrading** | what must I do | numbered steps; say which are guarded |
+| **Deprecations** | what is going away | see below |
+| **Everything since `<prev>`** | did my bug get fixed | folded lists with counts |
+| **API and metric surface** | what changed in the contract | CRDs *and* metrics; see below |
+| **Validation** | why should I believe you | receipts, not adjectives |
+| **Project and tooling** | is this project healthy | contributor-facing; last for a reason |
+| **Security** | is there anything I must patch for | state it even when the answer is no |
+| **Verifying this release** | how do I check the artifacts | the `make verify-release` line |
+
+**Say something about security even when there is nothing to report.** Silence
+reads as an omission to the one reader scanning specifically for it. State
+plainly that no advisory accompanies the release, then list what it does carry —
+dependency security bumps, and any fix that hardens credential or trust handling
+without patching a reported vulnerability. Name the scanning gates and when they
+run. `v1.3.0` had no CVE and still warranted the section.
+
+**Lead with a danger banner, and make it an alert.** GFM alerts — `> [!WARNING]`,
+`> [!CAUTION]`, `> [!NOTE]` — render as real coloured callouts in a release body
+(verified; the render check below counts them). `v1.3.0` opens with a `[!WARNING]`
+naming the two required upgrade steps and the asymmetric rollback, because those
+are the only things that can hurt an operator who reads no further. Use `[!NOTE]`
+for a scope caveat and `[!CAUTION]` for the one thing that is genuinely
+destructive. Three alerts is a lot; more and none of them read as urgent.
+
+**Write a Deprecations section even when nothing is removed** — saying so is the
+point, since "deprecation" reads as "removal" to a skimmer. For each notice give
+the removal version, the migration path, and **whether the apiserver actually
+warns**. `v1.3.0` deprecated `v2alpha1` (warns on every apply) alongside
+`v1alpha1`, which is removal-slated and emits **no** warning at all — so nothing
+reminds an operator it is going away. That asymmetry is exactly what a reader
+cannot discover for themselves.
+
+**Diff every surface an operator can see, not just the CRDs.** Each of these is
+enumerable, and each hides in a different file, so a review that reads only the
+Go diff misses most of them. `v1.3.0` shipped five: CRD fields, metric names,
+Kubernetes Event reasons, condition reasons, and configuration (chart values,
+env tunables, CLI flags). Diff each between the two tags mechanically rather than
+reading the changelog for them — the Event reasons and the metrics had no
+enumeration at all until they were diffed, and the notes had already been through
+several reviews.
+
+Two traps. **A rename reads as a removal** when the extraction is scoped to one
+directory: env vars first appeared to have 17 removals, all of which were code
+moving out of `cmd/`; re-running repo-wide showed zero. **Adjacent string
+arguments read as the same thing**: `recordEvent(obj, type, reason, action, …)`
+puts a reason and an action side by side, so `ProvisionWorker` and
+`ApplyAGCAutoscaler` both survived extraction as reasons until each call site was
+checked. Always report "none removed" when it is true — operators are looking for
+exactly that.
+
+**Diff `docs/` as well, and link what is new from where it is actionable.** A new
+operator page is the strongest signal of a capability the notes forgot, and a
+heavily grown one shows where the release's real weight landed:
+
+```bash
+git diff --name-status v<prev>..origin/main -- docs/operations/ | grep '^A'
+git diff --stat     v<prev>..origin/main -- docs/operations/ | sort -t'|' -k2 -rn | head
+```
+
+`v1.3.0` added three operator guides and grew `troubleshooting.md` by 36
+sections. Link a new guide from the bullet it serves rather than from a
+documentation inventory — `resourcequota-sizing.md` belongs on the quota-accounting
+upgrade note, where an operator hits the problem it solves. A guide with no
+feature to attach to goes in the contributor-facing section with one line on why
+it exists.
+
+**Give the API surface its own section, and lead it with any new CRD.** A new kind
+is not a field: the chart installs chart-root `crds/` on a *fresh install only*,
+so a new CRD is the reason "apply the CRDs" is step 1 of Upgrading, and the two
+must cross-reference. Then fold the rest — new spec fields, new status fields, new
+condition reasons — grouped by kind, counted like any other fold. `v1.3.0` listed
+28 new condition reasons this way. Until a generated API reference exists, say
+which artifact is authoritative (`kubectl explain`, or the signed CRD asset).
+
+**Validation is receipts, not adjectives.** "Thoroughly tested" is worth nothing.
+Link the run, quote the counts, and quote a value measured at the layer that
+matters: `v1.3.0` cites 73/73 specs with a run link, and a derived `1500m` observed
+on the pod where the templates asked for 2 and 3 CPU. Ship the receipt wherever a
+claim is made, not only in this section — a feature line that links its own PR is a
+receipt too.
+
+**Check the validation story against the plan doc, not memory.** This is the
+section a sceptical reader checks first, so a wrong detail here costs more than
+anywhere else. `v1.3.0`'s draft claimed no candidate had ever cleared the gate and
+that rc.5 was the first to return a verdict; the plan doc records rc.4 passing the
+day before. The true version was better anyway — five candidates, three aborted,
+rc.4 passed without catching a live worker pod, rc.5 caught one — and it is
+checkable, which the flattering version was not.
+
+**Keep a contributor-facing section, and put it last.** Release, CI, docs-site, and
+tooling work ships in no image and no chart, so it does not belong in the change
+lists. It still belongs in the notes: it is what a reader evaluating the project's
+health is looking for. Fold it, label it as not user-facing, and let it sit below
+everything an operator needs.
+
+**The caveats script reports headings that *changed*, not headings that are
+*new*.** A section edited in this window is listed exactly like one added in it.
+Test each before repeating it:
+
+```bash
+git show <prev-tag>:docs/operations/upgrade.md | grep -qF "### <heading>" \
+  && echo "pre-existing" || echo "new in this window"
+```
+
+`v1.3.0` listed two `BREAKING` headings and **neither** was a caveat for an
+upgrading operator: `priorityTiers` was already in `v1.2.0` (a pre-1.0 change),
+and `capacityGate.mode`'s removed values had only ever existed on `main`.
+Repeating them unexamined would have sent operators after migrations they did not
+need.
+
+**Promote by danger, not by label.** The most hazardous item in `v1.3.0` carried
+no `BREAKING` heading at all: the PriorityClass allowlist CRD apply, which affects
+every install and whose rollback re-arms a cluster-wide outage. Read for
+consequence, not for keywords.
+
+**Distinguish "breaking" from "guarded migration".** If skipping a step stops the
+upgrade with a message naming the fix, it is a required migration and saying
+"breaking change" overstates it. If a wrong path fails silently, say so loudly.
+State which of the two you mean.
+
+**Enumerate from the commit log, filtered to what ships.** Conventional Commit
+subjects are already terse diagnoses, so they need only the prefix and Q-ID
+removed:
+
+```bash
+git log --format='%s' <prev-tag>..HEAD \
+  | grep -E '^(feat|fix)\((agc|gmc|proxy|worker|api|scaleset|chart|broker|wrapper|admission|provisioner|metrics|scalesetlistener|migrate|observability)\)'
+```
+
+**That scope list is a guess, so reconcile what it dropped — never just run it.**
+An allow-list silently omits any scope nobody thought of, and the result still
+looks like a complete list. Print the residue and read every scope in it:
+
+```bash
+git log --format='%s' <prev-tag>..HEAD | grep -E '^(feat|fix)' > /tmp/all
+# ...run the filter above into /tmp/kept, then:
+grep -vxF -f /tmp/kept /tmp/all | sed -E 's/^((feat|fix)\([^)]*\)).*/\1/' | sort | uniq -c | sort -rn
+```
+
+`v1.3.0`'s first pass kept 57 of 132 and dropped **seven shipping fixes**: two
+`fix(scalesetlistener)` (the pattern had `scaleset`, which does not match it), a
+compound `fix(agc,gmc)`, three `fix(migrate)` for the shipped `gag-migrate`
+binary, and one `fix(observability)`. Nothing in the output said so. The last
+three scopes above were added only after that reconciliation — assume the list is
+still incomplete for the next release.
+
+Exclude the `ci`, `dogfood`, `test`, `docs`, and `build` scopes, which ship in no
+image or chart. Say in the notes that you excluded them, so a reader does not read
+hundreds of commits as the user-visible change count. Keep the trailing `(#NNNN)`: GitHub auto-links
+a bare `#NNNN` in a release body, so every line becomes traceable for free.
+
+**Passing the scope filter does not make a commit shippable — check the paths.**
+The filter matches a scope string, and scopes are reused. `v1.3.0` listed
+"Attribute usage rows to the machine that measured them" as a feature; the commit
+is `feat(metrics)` and touches only `claude-usage/`, the Claude Code usage
+tooling, because that module and the product's Prometheus metrics share a scope.
+Assert the paths for every cited PR instead of reading the subjects:
+
+```bash
+git show --stat --format='' --name-only <sha> \
+  | grep -qE '^(api|broker|cmd|githubapp|scaleset|charts)/' || echo "NOT PRODUCT"
+```
+
+It was one entry in 64, and no amount of re-reading the list would have found it.
+
+**Cite the commit that did the work, not the one that filed it.** A Q-numbered
+backlog row and its implementation have near-identical subjects, so a `docs(plan)`
+commit reads exactly like the fix. `v1.3.0` cited #988 — `docs(plan): file and
+scope Q507` — under the label of #1008, the gate itself; a reader clicking through
+would have landed on a planning row. Resolve each number to its title before
+shipping, and look for the same work cited twice under two numbers.
+
+**One fact per line, especially next to a procedure.** Distinct operator-facing
+changes run together into a paragraph read as background, and a paragraph sitting
+under a numbered list reads as a footnote to it. `v1.3.0`'s Upgrading section
+closed with three unrelated changes — quota accounting, a dropped proxy label, a
+new apiserver warning — in one sentence-run below its two numbered steps; as a
+bulleted list with a bold lead each, the same words are scannable. Prose is for
+framing. Anything a reader might need to act on individually gets its own line.
+
+**Fold long lists.** `<details><summary>` renders on the Releases page and keeps
+the top scannable. It is also the only lever against truncation: the Releases
+*index* collapses a long body behind a **"read more"** link, and a fold counts as
+its one summary line while collapsed. `v1.3.0` hit that limit and was folded back
+under it — eight folds. If the index is truncating, the fix is another fold, not
+a cut.
+
+**Pick the next fold by measuring collapsed height, not by eye.** Sum each
+section's bytes with `<details>…</details>` bodies excluded; the biggest sections
+are rarely the ones that feel long. `v1.3.0` measured 9.5k collapsed, and the
+third-largest section was Validation — not an obvious candidate, since Upgrading
+and Highlights are larger but must both stay open.
+
+**When the content being folded is evidence, put the evidence in the `<summary>`.**
+A fold whose summary reads "Validation details" hides the receipt; one that reads
+`73/73 e2e specs on Kata microVM workers, on live GKE — the four legs, and what
+none of them assert` *is* the receipt, and a reader who never expands it has
+still seen the number. That is the exception to the count-in-the-summary
+convention: enumerations carry a count, evidence carries the finding.
+
+**Count what you list — and count the unit in the label.** State a count in a
+`<summary>` and it will be wrong the moment you curate the list. `v1.3.0`'s draft
+claimed 25 features and listed 23. Subtler: its "New spec fields (10)" had ten
+*bullets* carrying thirteen *fields*, because three bullets grouped related ones
+(`.minRequests` / `.maxRequests` / `.limitHeadroomPercent`). Every other fold
+counted the noun in its own label; that one silently switched to bullets. Count
+what the label says, then re-count after every edit — mechanically, not by eye.
+
+**Caveat anything a validation run did not exercise.** The dogfood gate runs
+against github.com, so it says nothing about GHES. A feature list that reads as
+finished support overclaims. Check `docs/plan/archive/` for the feature's own
+"what this will not verify" section before describing it. Then ask whether an
+unexercised feature belongs in Highlights at all — `v1.3.0` kept GHES there and
+paid for it with a caveat in three places.
+
+**A caveat is a claim, so measure it before writing it.** Understating coverage
+is as wrong as overstating it, and easier to do accidentally because it feels
+safe. `v1.3.0`'s draft said the capacity gate had "unit and envtest coverage
+only"; the repo has a live-cluster-autoscaler test for its matcher (#929) and 305
+lines of e2e proving a quota-blocked job redelivers (#1028). Before writing "only
+tested at tier X", grep for the feature at every higher tier — and if the true
+statement is narrower than the tidy one, ship the narrow statement. What survived
+here was "the release gate does not *assert* it", which is checkable.
+
+**A caveat must survive being read alone.** Every line in a folded list is read
+out of its heading's context — by search, by a linked anchor, by a skimmer. The
+`v1.3.0` draft said "Untested against a real appliance" under a GHES heading,
+which says nothing at all once the heading scrolls away; it shipped as "Untested
+against a real **GHES** appliance". Name the subject inside the caveat, and repeat
+the caveat at each place the feature is claimed rather than relying on proximity.
+
+**Link the versioned docs site, not `main` and not `blob/`.** A reader of these
+notes should land on that release's instructions, and the site publishes a build
+per stable tag: `https://actions-gateway.com/X.Y.Z/operations/…`. Mind the form —
+the site drops the leading `v` exactly like the chart does. `v1.3.0` shipped 18
+such links. They 404 until the docs deploy for the tag completes, which is
+expected while the Release is still a draft.
+
+**Verify every link and anchor.** Nothing checks them for you: `make doc-links`
+skips external URLs by design, and every link in a notes file is absolute. Anchors
+are the usual failure, and the built site is the authoritative oracle — read the
+ids MkDocs actually emitted rather than re-deriving a slug by hand, which gets
+punctuation, backticks, and parenthesised clauses wrong:
+
+```bash
+make docs-build
+grep -oE 'id="[^"]*"' site/operations/upgrade/index.html | sed 's/id="//;s/"//'
+```
+
+Better, resolve every link in the file against `site/` in one pass. Whatever you
+write, **include a URL you know is broken** and confirm it is reported: a checker
+that silently resolves nothing looks exactly like a clean file. `v1.3.0`'s notes
+were verified this way — 20 site URLs resolved, plus one deliberately bogus
+anchor that the same run flagged.
+
+**Do not hard-wrap.** GitHub renders a release body with comment-flavour GFM,
+where a single newline becomes `<br>`. Keep every paragraph, blockquote, and list
+continuation on one line. `v1.3.0`'s hard-wrapped draft rendered 46 of them.
+
+Check this against the **renderer**, not the source. `gh release view --json body`
+returns the raw Markdown, which never contains `<br>` however badly it is wrapped,
+so grepping that is a check that cannot fail. Render it the way GitHub will:
+
+```bash
+gh api -X POST /markdown -f mode=gfm -f "text=$(cat docs/releases/vX.Y.Z.md)" \
+  | grep -c '<br>'
+```
+
+`mode=gfm` is the comment flavour; `mode=markdown` is not, and reports 0 on a
+hard-wrapped file. The same render confirms the rest of the GitHub-only markup
+survived — expect one `markdown-alert-*` class per `> [!…]` block, one `<details>`
+per fold, and no literal `[!` anywhere.
+
+**In-page anchors do not work in a release body.** Release-body headings carry no
+`id`, so `[Upgrading](#upgrading)` is a dead link. Refer to a section by name in
+bold instead. Verify on a published release rather than trusting this — the page
+does emit ids, but only on GitHub's own chrome:
+
+```bash
+curl -sS https://github.com/<owner>/<repo>/releases/tag/<tag> \
+  | grep -oE '<h[1-6][^>]*>' | grep -c 'id='
+```
+
+**So a table of contents is not available, and should not be faked.** An unlinked
+list of section names is dead weight that costs collapsed height against the
+truncation limit while navigating nothing. The folds already serve that role: a
+collapsed `<details>` is a labelled one-line entry, so a body with ten folds
+reads as an outline whether or not the reader expands any of them. Navigation
+comes from section order and the danger banner, not from a ToC. (The in-repo copy
+under `docs/releases/` does get GitHub's auto-generated file outline for free,
+which is a second reason not to hand-roll one.)
+
+**Watch the chart-version form.** Images are tagged `vX.Y.Z`, charts `X.Y.Z`.
+A copy-pasteable `helm` command with a `v` in it fails.
+
+**Run the `deslop` skill over the draft before publishing.** Release notes are the
+most-read prose the project ships.
+
+##### Before publishing: the mechanical checks
+
+Every rule above that can be checked by a machine, in the order they are cheapest
+to run. None of these is a substitute for reading the notes — but each one caught
+a defect in `v1.3.0` that several careful readings had not.
+
+| Check | How | What it catches |
+|---|---|---|
+| Fold counts | recount every `<summary>` against its bullets, counting the noun the label names | a count that drifted during curation |
+| Enumerations | reconcile each surface fold against the tag-to-tag diff **both ways** | a name listed that no longer exists, or shipped and never listed |
+| Citations resolve | `gh pr view <n> --json title` for each `#NNNN` | a planning commit cited as the implementation |
+| Citations ship | `git show --stat --name-only <sha>` against product paths | a non-product commit listed as a feature |
+| Anchors | resolve every site URL against a built `site/`, **with one planted bad anchor** | a heading that moved, and a checker that silently resolves nothing |
+| Rendering | `gh api -X POST /markdown -f mode=gfm` | hard-wrapped `<br>`s, alerts that did not render, literal `[!` |
+| Published body | re-fetch and `diff` against the file | an edit made on the Release and not in the repo |
+
+Two habits make the difference. **Plant a known failure in anything that reports
+"all clear"** — a checker with a broken query and a clean file produce identical
+output. And **report the negative when it is true**: "16 metrics added, none
+removed" and "13 spec fields, nothing removed" are what an operator is actually
+scanning for, and neither is worth stating unless it was measured.
+
 ### 6. Chart version & metadata
 
 The `chart-publish` job sets the published chart's `version` and `appVersion` to

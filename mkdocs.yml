@@ -19,8 +19,14 @@ copyright: Licensed under the Apache License 2.0.
 # a backlog in one would be a snapshot stale from tag day. Only the dev path in
 # .github/workflows/pages.yml sets it, and it keeps /README.md excluded on every
 # version: MkDocs drops it anyway as a conflict with the index.md landing page.
+#
+# /releases/ is excluded on EVERY version including dev, the one path here that is
+# not repo-internal-vs-operator: those files are GitHub Release bodies, authored
+# for github.com's renderer. Their GFM alerts (`> [!WARNING]`) have no MkDocs
+# equivalent and would publish as literal text, and their links already point at
+# the versioned site. The dev override in pages.yml carries this entry too.
 # See website.md § Publication scope.
-exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/development/\n/assets/README.md\n/assets/fonts/README.md\n"]
+exclude_docs: !ENV [MKDOCS_EXCLUDE_DOCS, "/README.md\n/STATUS.md\n/plan/\n/development/\n/releases/\n/assets/README.md\n/assets/fonts/README.md\n"]
 
 # Published but deliberately absent from the nav, which stays the operator-facing
 # table of contents on every version: the repo-internal tree the `dev` version

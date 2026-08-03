@@ -77,7 +77,9 @@ main() {
   # gate: the release scope excludes docs/plan/ and docs/development/, so a
   # break in those pages only ever surfaces in the dev scope.
   "${venv_dir}/bin/mkdocs" build --strict
-  MKDOCS_EXCLUDE_DOCS=/README.md \
+  # Must match the dev override in pages.yml: /releases/ holds GitHub Release
+  # bodies, excluded from every version including dev (mkdocs.yml says why).
+  MKDOCS_EXCLUDE_DOCS=$'/README.md\n/releases/\n' \
     "${venv_dir}/bin/mkdocs" build --strict --site-dir site-dev
 }
 

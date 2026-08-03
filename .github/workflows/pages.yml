@@ -97,7 +97,9 @@ jobs:
       # that breaks a plan/development page fails here rather than on `main`.
       - name: Build the dev scope (repo-internal docs included)
         env:
-          MKDOCS_EXCLUDE_DOCS: /README.md
+          # /releases/ stays excluded on dev too — those files are GitHub Release
+          # bodies, not site pages (mkdocs.yml documents why).
+          MKDOCS_EXCLUDE_DOCS: "/README.md\n/releases/\n"
         run: mkdocs build --strict --site-dir _site-dev
 
   # Push to main: re-run the PR gate against the merged tree.
@@ -129,7 +131,9 @@ jobs:
       - run: mkdocs build --strict --site-dir _site
       - name: Build the dev scope (repo-internal docs included)
         env:
-          MKDOCS_EXCLUDE_DOCS: /README.md
+          # /releases/ stays excluded on dev too — those files are GitHub Release
+          # bodies, not site pages (mkdocs.yml documents why).
+          MKDOCS_EXCLUDE_DOCS: "/README.md\n/releases/\n"
         run: mkdocs build --strict --site-dir _site-dev
 
   # Push/dispatch: update the mike version tree on gh-pages and deploy it.
@@ -322,8 +326,11 @@ jobs:
           # !ENV default only applies when the variable is ABSENT: a
           # conditional expression falling through to '' would publish the
           # internal docs on every release instead.
+          #
+          # /releases/ is excluded here too: GitHub Release bodies are authored
+          # for github.com's renderer and publish as literal text under MkDocs.
           if [[ "${VERSION}" == "dev" ]]; then
-            export MKDOCS_EXCLUDE_DOCS='/README.md'
+            export MKDOCS_EXCLUDE_DOCS=$'/README.md\n/releases/\n'
           fi
 
           # Links from the docs into the source tree resolve against the ref
