@@ -1,8 +1,16 @@
 # Release notes
 
 One file per stable tag, `vX.Y.Z.md`, holding that release's **GitHub Release
-body verbatim** — no front matter, no heading above the first line. The file is
-the authoring source; the published body is a copy of it:
+body verbatim** — no front matter, no heading above the first line.
+
+**No title heading**, specifically. The Releases page renders the tag name as the
+page's own `<h1>`, so a `# vX.Y.Z` in the body is a duplicate title one line under
+the real one. The file therefore opens on its first real sentence, and its
+identity comes from the filename — which is also why stripping a heading at
+publish time is not the answer: the published body has to stay byte-identical to
+this file, or the drift these files exist to prevent comes back.
+
+The file is the authoring source; the published body is a copy of it:
 
 ```bash
 gh release edit vX.Y.Z --notes-file docs/releases/vX.Y.Z.md

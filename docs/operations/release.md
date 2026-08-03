@@ -628,7 +628,9 @@ mislead in specific ways. What follows is the method, written after `v1.3.0`.
 [`docs/releases/`](https://github.com/actions-gateway/github-actions-gateway/tree/main/docs/releases),
 not in a scratch file.**
 One file per stable tag, `vX.Y.Z.md`, holding the release body verbatim — no
-front matter, no heading above the first line. Publish from it:
+front matter, and **no title heading** — the Releases page already renders the tag
+name as the page's `<h1>`, so a `# vX.Y.Z` in the body duplicates it. Publish from
+it:
 
 ```bash
 gh release edit vX.Y.Z --notes-file docs/releases/vX.Y.Z.md
@@ -727,6 +729,22 @@ puts a reason and an action side by side, so `ProvisionWorker` and
 checked. Always report "none removed" when it is true — operators are looking for
 exactly that.
 
+**Diff `docs/` as well, and link what is new from where it is actionable.** A new
+operator page is the strongest signal of a capability the notes forgot, and a
+heavily grown one shows where the release's real weight landed:
+
+```bash
+git diff --name-status v<prev>..origin/main -- docs/operations/ | grep '^A'
+git diff --stat     v<prev>..origin/main -- docs/operations/ | sort -t'|' -k2 -rn | head
+```
+
+`v1.3.0` added three operator guides and grew `troubleshooting.md` by 36
+sections. Link a new guide from the bullet it serves rather than from a
+documentation inventory — `resourcequota-sizing.md` belongs on the quota-accounting
+upgrade note, where an operator hits the problem it solves. A guide with no
+feature to attach to goes in the contributor-facing section with one line on why
+it exists.
+
 **Give the API surface its own section, and lead it with any new CRD.** A new kind
 is not a field: the chart installs chart-root `crds/` on a *fresh install only*,
 so a new CRD is the reason "apply the CRDs" is step 1 of Upgrading, and the two
@@ -812,6 +830,27 @@ image or chart. Say in the notes that you excluded them, so a reader does not re
 hundreds of commits as the user-visible change count. Keep the trailing `(#NNNN)`: GitHub auto-links
 a bare `#NNNN` in a release body, so every line becomes traceable for free.
 
+**Passing the scope filter does not make a commit shippable — check the paths.**
+The filter matches a scope string, and scopes are reused. `v1.3.0` listed
+"Attribute usage rows to the machine that measured them" as a feature; the commit
+is `feat(metrics)` and touches only `claude-usage/`, the Claude Code usage
+tooling, because that module and the product's Prometheus metrics share a scope.
+Assert the paths for every cited PR instead of reading the subjects:
+
+```bash
+git show --stat --format='' --name-only <sha> \
+  | grep -qE '^(api|broker|cmd|githubapp|scaleset|charts)/' || echo "NOT PRODUCT"
+```
+
+It was one entry in 64, and no amount of re-reading the list would have found it.
+
+**Cite the commit that did the work, not the one that filed it.** A Q-numbered
+backlog row and its implementation have near-identical subjects, so a `docs(plan)`
+commit reads exactly like the fix. `v1.3.0` cited #988 — `docs(plan): file and
+scope Q507` — under the label of #1008, the gate itself; a reader clicking through
+would have landed on a planning row. Resolve each number to its title before
+shipping, and look for the same work cited twice under two numbers.
+
 **One fact per line, especially next to a procedure.** Distinct operator-facing
 changes run together into a paragraph read as background, and a paragraph sitting
 under a numbered list reads as a footnote to it. `v1.3.0`'s Upgrading section
@@ -854,6 +893,15 @@ finished support overclaims. Check `docs/plan/archive/` for the feature's own
 "what this will not verify" section before describing it. Then ask whether an
 unexercised feature belongs in Highlights at all — `v1.3.0` kept GHES there and
 paid for it with a caveat in three places.
+
+**A caveat is a claim, so measure it before writing it.** Understating coverage
+is as wrong as overstating it, and easier to do accidentally because it feels
+safe. `v1.3.0`'s draft said the capacity gate had "unit and envtest coverage
+only"; the repo has a live-cluster-autoscaler test for its matcher (#929) and 305
+lines of e2e proving a quota-blocked job redelivers (#1028). Before writing "only
+tested at tier X", grep for the feature at every higher tier — and if the true
+statement is narrower than the tidy one, ship the narrow statement. What survived
+here was "the release gate does not *assert* it", which is checkable.
 
 **A caveat must survive being read alone.** Every line in a folded list is read
 out of its heading's context — by search, by a linked anchor, by a skimmer. The
@@ -928,6 +976,28 @@ A copy-pasteable `helm` command with a `v` in it fails.
 
 **Run the `deslop` skill over the draft before publishing.** Release notes are the
 most-read prose the project ships.
+
+##### Before publishing: the mechanical checks
+
+Every rule above that can be checked by a machine, in the order they are cheapest
+to run. None of these is a substitute for reading the notes — but each one caught
+a defect in `v1.3.0` that several careful readings had not.
+
+| Check | How | What it catches |
+|---|---|---|
+| Fold counts | recount every `<summary>` against its bullets, counting the noun the label names | a count that drifted during curation |
+| Enumerations | reconcile each surface fold against the tag-to-tag diff **both ways** | a name listed that no longer exists, or shipped and never listed |
+| Citations resolve | `gh pr view <n> --json title` for each `#NNNN` | a planning commit cited as the implementation |
+| Citations ship | `git show --stat --name-only <sha>` against product paths | a non-product commit listed as a feature |
+| Anchors | resolve every site URL against a built `site/`, **with one planted bad anchor** | a heading that moved, and a checker that silently resolves nothing |
+| Rendering | `gh api -X POST /markdown -f mode=gfm` | hard-wrapped `<br>`s, alerts that did not render, literal `[!` |
+| Published body | re-fetch and `diff` against the file | an edit made on the Release and not in the repo |
+
+Two habits make the difference. **Plant a known failure in anything that reports
+"all clear"** — a checker with a broken query and a clean file produce identical
+output. And **report the negative when it is true**: "16 metrics added, none
+removed" and "13 spec fields, nothing removed" are what an operator is actually
+scanning for, and neither is worth stating unless it was measured.
 
 ### 6. Chart version & metadata
 
