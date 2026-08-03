@@ -43,6 +43,12 @@ CHARTS = os.path.join(HERE, "charts")
 PRO_TO_MAX = date(2026, 5, 23)
 MAX_5X_TO_20X = date(2026, 7, 5)  # Max 5x -> Max 20x plan upgrade
 
+# Event markers. A plan upgrade raises the ceiling on what one machine can spend;
+# a machine joining adds a second measurement source to the same day. Different
+# causes, so different styling.
+PLAN_STYLE = ("#222", "--")
+MACHINE_STYLE = ("#005E44", (0, (5, 2, 1, 2)))
+
 # Okabe–Ito colourblind-safe palette.
 OI = {
     "orange": "#E69F00", "skyblue": "#56B4E9", "green": "#009E73",
@@ -80,6 +86,44 @@ def load(name):
 
 def is_est(r):
     return str(r.get("estimated", "0")) == "1"
+
+
+def machine_joins():
+    """``(date, label)`` for each machine after the first, from its earliest row.
+
+    Derived rather than hardcoded so a third machine marks itself. Estimated
+    backfill rows carry no machine (``-``) and are skipped.
+    """
+    first = {}
+    for r in load("token_metrics.csv"):
+        h = r.get("host", "")
+        if h in ("", "-"):
+            continue
+        if h not in first or r["date"] < first[h]:
+            first[h] = r["date"]
+    order = sorted(first.items(), key=lambda kv: (kv[1], kv[0]))
+    return [(dparse(d), f"{h} joins") for h, d in order[1:]]
+
+
+def event_markers():
+    """Plan upgrades and machine joins, in date order, each with its own style."""
+    events = [(PRO_TO_MAX, "Pro → Max 5x", *PLAN_STYLE),
+              (MAX_5X_TO_20X, "Max 5x → 20x", *PLAN_STYLE)]
+    events += [(d, lbl, *MACHINE_STYLE) for d, lbl in machine_joins()]
+    return sorted(events, key=lambda e: e[0])
+
+
+def event_label(ax, x, y, label, col, yc="data"):
+    """Rotated event label reading upward, clear of the line it annotates.
+
+    ``rotation_mode="anchor"`` with va="bottom" rotates the glyph body to the left
+    of the anchor, so the line doesn't strike through the text.
+    """
+    ax.annotate(label, (x, y), xytext=(-3, 4), textcoords="offset points",
+                xycoords=("data", yc), rotation=90, rotation_mode="anchor",
+                ha="left", va="bottom", fontsize=9.5, fontweight="bold",
+                color=col, zorder=6,
+                path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()])
 
 
 def save(fig, stem):
@@ -145,12 +189,17 @@ def chart_tokens_by_model():
     handles = [mpatches.Patch(facecolor=MODEL_COLORS[m], hatch=MODEL_HATCH[m] or None,
                               edgecolor="white", label=m) for m in drawn]
     handles.append(mpatches.Patch(facecolor="#cccccc", hatch="////", edgecolor="white", label="estimated"))
-    for upg_date, label in ((PRO_TO_MAX, "  Pro → Max 5x"), (MAX_5X_TO_20X, "  Max 5x → 20x")):
-        upg = upg_date.isoformat()
-        if upg in days:
-            xi = days.index(upg)
-            ax.axvline(xi - 0.5, color="#222", ls="--", lw=1.4)
-            ax.text(xi - 0.4, max(bottom) * 0.92, label, fontsize=10, fontweight="bold", color="#222")
+    for ev_date, label, col, ls in event_markers():
+        ev = ev_date.isoformat()
+        if ev not in days:
+            continue
+        xi = days.index(ev)
+        ax.axvline(xi - 0.5, color=col, ls=ls, lw=1.4)
+        # Labels near the right edge read inward so they stay on the axes.
+        right = xi > len(days) * 0.78
+        ax.text(xi + (-0.9 if right else -0.4), max(bottom) * 0.92, label,
+                ha="right" if right else "left",
+                fontsize=10, fontweight="bold", color=col)
     ax.set_title("Daily Claude Code token usage by model", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("tokens / day  (millions)", fontsize=11)
     ax.set_xticks(xs)
@@ -334,7 +383,7 @@ def chart_tokens_vs_lines():
 
     fig, ax = plt.subplots(figsize=(11, 6.2))
     ax.set_yscale("log")
-    ax.set_ylim(1e3, 5e8)
+    ax.set_ylim(1e3, max(tok) * 1.2)  # follows the data; a fixed top clips as it grows
     ax.set_xlim(xs[0], xs[-1])
     # The cost per line is the gap between the two curves — shade it gold.
     ax.fill_between(xs, total, tok, color=OI["orange"], alpha=0.12, lw=0, zorder=1)
@@ -403,21 +452,22 @@ def chart_overview():
 
     # --- panel 1: magnitude (log) ---
     a1.set_yscale("log")
-    a1.set_ylim(1e3, 5e8)
+    a1.set_ylim(1e3, max(tok) * 1.2)  # follows the data; a fixed top clips as it grows
     a1.fill_between(xs, total, tok, color=OI["orange"], alpha=0.12, lw=0, zorder=1)
     a1.plot(xs, tok, color=OI["blue"], lw=3.0, solid_capstyle="round", zorder=4,
             path_effects=[pe.Stroke(linewidth=5, foreground="white"), pe.Normal()])
     a1.plot(xs, total, color=OI["green"], lw=3.0, ls=(0, (6, 2)), zorder=4,
             path_effects=[pe.Stroke(linewidth=5, foreground="white"), pe.Normal()])
+    # zorder above the event lines drawn later, so neither strikes through the text.
     a1.annotate(f"{tok[-1] / 1e6:,.0f}M tokens", (xs[-1], tok[-1]), xytext=(-8, 9),
                 textcoords="offset points", ha="right", fontsize=12, fontweight="bold",
-                color=OI["blue"], path_effects=halo)
+                color=OI["blue"], path_effects=halo, zorder=7)
     a1.annotate(f"{total[-1] / 1e3:,.0f}k lines", (xs[-1], total[-1]), xytext=(-8, -13),
                 textcoords="offset points", ha="right", fontsize=12, fontweight="bold",
-                color="#1B7A5A", path_effects=halo)
+                color="#1B7A5A", path_effects=halo, zorder=7)
     a1.annotate(f"≈ {ys[-1]:,.0f} tokens / line", (xs[-1], (total[-1] * tok[-1]) ** 0.5),
                 xytext=(-10, 0), textcoords="offset points", ha="right", fontsize=12.5,
-                fontweight="bold", color=gold, path_effects=halo)
+                fontweight="bold", color=gold, path_effects=halo, zorder=7)
     a1.set_ylabel("count (log scale)", fontsize=11)
     a1.set_title("Tokens spent vs. lines authored", fontsize=12.5, fontweight="bold", loc="left")
     a1.grid(axis="y", which="both", alpha=0.16)
@@ -478,6 +528,14 @@ def chart_overview():
             a.axvline(wd, color="#9AA0A6", ls=(0, (4, 3)), lw=1.0, alpha=0.7, zorder=1)
         for s in ("top", "right"):
             a.spines[s].set_visible(False)
+    # Event lines span all three panels; the label sits in the empty band along the
+    # bottom of panel 1, below the lines curve, which is clear at every event date.
+    for ev_date, label, col, ls in event_markers():
+        if not xs[0] <= ev_date <= xs[-1]:
+            continue
+        for a in (a1, a2, a3):
+            a.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=5)
+        event_label(a1, ev_date, 0.01, label, col, yc="axes fraction")
     for a in (a1, a2):
         plt.setp(a.get_xticklabels(), visible=False)
 
@@ -511,7 +569,8 @@ def chart_token_anatomy():
                 label=f"{lbl}  ({totals[k] / 1e6:,.0f}M total)")
         ax.fill_between(days, arr(k), 0.1, color=col, alpha=0.06)
     ax.set_yscale("log")
-    ax.set_ylim(1e3, 5e8)
+    # Follows the data — a fixed top clipped the cache-read peak once mac-2 joined.
+    ax.set_ylim(1e3, max(np.nanmax(arr(k)) for k, *_ in spec) * 1.5)
     ax.set_ylabel("tokens / day  (log scale)", fontsize=11)
     ax.set_title("Anatomy of token usage", fontsize=14, fontweight="bold", loc="left")
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
@@ -552,6 +611,14 @@ def chart_cumulative_cache():
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     ax.set_xlim(days[0], days[-1])
     ax.set_ylim(0, (cc + cr)[-1] * 1.10)
+    # Event lines, labelled in the empty wedge above the curve.
+    total = cc + cr
+    for ev_date, label, col, ls in event_markers():
+        if not days[0] <= ev_date <= days[-1]:
+            continue
+        ax.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=4)
+        y = total[days.index(ev_date)] if ev_date in days else 0.0
+        event_label(ax, ev_date, y + total[-1] * 0.03, label, col)
     ax.legend(frameon=False, fontsize=10.5, loc="upper left")
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)

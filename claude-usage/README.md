@@ -146,6 +146,7 @@ The three tokens-vs-lines views combined into one shared-timeline figure:
 **(1)** magnitude — tokens vs lines authored on a log axis (gap = cost/line);
 **(2)** breakdown — what those lines are (the composition);
 **(3)** cost — cumulative tokens ÷ line, with the value at each weekly guide.
+Event lines run through all three panels (labelled along the bottom of panel 1).
 The standalone versions follow below.
 
 ### Daily token usage by model
@@ -154,9 +155,15 @@ The Pro→Max 5x upgrade (first dashed line, 2026-05-23) is visible as the hand-
 from Sonnet 4.6 (orange) to Opus 4.7 (purple), then Opus 4.8 (blue), with Fable 5
 (green) appearing from June 9 and Opus 5 (vermillion) from July 25; the second
 dashed line (2026-07-05) marks the Max 5x→20x upgrade. Opus 5 takes over almost
-completely from July 26, on days roughly twice the height of the Opus 4.8 era.
-Charts use the Okabe–Ito colourblind-safe palette, and each model also carries
-its own hatch pattern.
+completely from the green dash-dot line (2026-07-26), where `mac-2` joined, on
+days roughly twice the height of the Opus 4.8 era. Charts use the Okabe–Ito
+colourblind-safe palette, and each model also carries its own hatch pattern.
+
+Two kinds of event line, styled apart because they mean different things: a
+**black dashed** line is a plan upgrade (a higher ceiling on what one machine can
+spend), a **green dash-dot** line is a machine joining (a second measurement
+source on the same day). Machine lines are derived from the first row each
+machine reports, so a third machine marks itself with no code change.
 
 ### Tokens spent vs. lines authored (the magnitude)
 ![Cumulative tokens far above cumulative lines authored, log scale](charts/tokens_vs_lines.png)
@@ -185,7 +192,9 @@ order of magnitude above everything else, every day.
 
 ### Cumulative cache traffic
 ![Cumulative cache traffic](charts/cumulative_cache.png)
-Cumulative cache reads (17.8B) vs writes (345M). Write once, replay ~52×.
+Cumulative cache reads (17.8B) vs writes (345M). Write once, replay ~52×. Both
+plan upgrades and the `mac-2` join are marked; the curve visibly steepens at the
+last of them.
 
 ## Data files
 
