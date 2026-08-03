@@ -2539,6 +2539,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#if-the-chart-renders-an-instance-of-the-crd-omit-the-new-field-when-empty" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If the chart renders an instance of the CRD, omit the new field when empty
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3037,6 +3048,35 @@ objects, which is worse than a field rename because nothing warns.</p>
 extends the same axis, the shape has to accommodate it now. Enum values that are
 <em>not yet accepted</em> are still a design constraint: <code>Probe</code>/<code>Provision</code> are the
 reason <code>Observe</code> is named the way it is.</p>
+<h3 id="if-the-chart-renders-an-instance-of-the-crd-omit-the-new-field-when-empty">If the chart renders an instance of the CRD, omit the new field when empty<a class="headerlink" href="#if-the-chart-renders-an-instance-of-the-crd-omit-the-new-field-when-empty" title="Permanent link">&para;</a></h3>
+<p>Adding an optional field is additive to the <em>schema</em> and still breaks
+<code>helm upgrade</code> when the chart also renders an object of that kind. Helm applies
+the chart-root <code>crds/</code> directory on <code>helm install</code> <strong>only</strong>, never on upgrade, so
+an upgrading cluster still holds the CRD its <em>current</em> release installed. A field
+that CRD does not declare fails server-side apply midway through the upgrade:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>failed to create typed patch object: .spec.&lt;newField&gt;: field not declared in schema
+</code></pre></div>
+<p>Midway is the damage — the release revision has already advanced, leaving a
+half-upgraded cluster. <code>make check</code> cannot see this; the signal comes from
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-released-upgrade-check.sh"><code>chart-released-upgrade-check.sh</code></a>,
+which runs in e2e.</p>
+<p>So render the key only when the value is non-empty:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>{{- with .Values.myNewField }}
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>myNewField:
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  {{- toYaml . | nindent 4 }}
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>{{- end }}
+</code></pre></div>
+<p>Unset and empty mean the same thing to both the CRD and the controller, but only
+the omitted form survives an upgrade against the older CRD — and empty is the
+default, so that is the path every existing release takes. When the value <em>is</em>
+set, the operator is adopting a new feature and the chart's documented
+<code>helm show crds … | kubectl apply -f -</code> step applies; preflight it with <code>lookup</code>
+and fail at <strong>render</strong> rather than midway.</p>
+<p>Q298 shipped this break and the gate caught it. The trap is that the chart's
+older preflight tests whether the <em>kind</em> is present, which reads as "the hazard
+is a new CRD" — it is equally a new <strong>field</strong> on an existing one, and a stale
+schema is invisible to a presence check. Today this applies to
+<code>PriorityClassAllowlist</code>, the one CRD the chart both installs and instantiates.</p>
 <h2 id="is-this-change-breaking">Is this change breaking?<a class="headerlink" href="#is-this-change-breaking" title="Permanent link">&para;</a></h2>
 <p>"Breaking" here means the wire contract, which is what a tag freezes. Go-symbol
 breaks affect <code>api</code> module consumers only and do not need to beat a tag.</p>
@@ -3051,7 +3091,7 @@ window. It is false more often than the <code>!</code> markers suggest. All thre
 had ever published: <code>windowStart</code> and <code>capacityGate</code> are both absent from every
 API tree at <code>v1.2.0</code>, so renaming and reshaping them broke nothing. Each sat at
 the <em>merged, before the tag</em> row of <a href="#the-cost-curve">the cost curve</a> — an edit.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>grep<span class="w"> </span>-l<span class="w"> </span><span class="s1">&#39;&lt;field&gt;&#39;</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>git<span class="w"> </span>tag<span class="w"> </span>--list<span class="w"> </span><span class="s1">&#39;v*&#39;</span><span class="w"> </span>--sort<span class="o">=</span>-v:refname<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>--<span class="w"> </span><span class="s1">&#39;-&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>--<span class="w"> </span>api<span class="w"> </span>cmd/agc/api<span class="w"> </span>cmd/gmc/api
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>grep<span class="w"> </span>-l<span class="w"> </span><span class="s1">&#39;&lt;field&gt;&#39;</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>git<span class="w"> </span>tag<span class="w"> </span>--list<span class="w"> </span><span class="s1">&#39;v*&#39;</span><span class="w"> </span>--sort<span class="o">=</span>-v:refname<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>--<span class="w"> </span><span class="s1">&#39;-&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>--<span class="w"> </span>api<span class="w"> </span>cmd/agc/api<span class="w"> </span>cmd/gmc/api
 </code></pre></div>
 <p>No hit means no cluster can be holding it and no manifest can name it: not
 breaking. <code>scripts/release/api-surface-since.sh &lt;tag&gt;</code> lists everything a tag cut now
@@ -3160,7 +3200,7 @@ version packages byte-identical except for the entitled differences, which
 <p>Run this in <a href="../../operations/release/#1-pre-flight">release pre-flight</a>, before
 tagging any release — including a prerelease that will become a stable line.</p>
 <h3 id="step-1--enumerate-what-is-new">Step 1 — enumerate what is new<a class="headerlink" href="#step-1--enumerate-what-is-new" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>scripts/release/api-surface-since.sh
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>scripts/release/api-surface-since.sh
 </code></pre></div>
 <p>It diffs the API packages and CRD manifests between the last tag and <code>HEAD</code> and
 prints what changed. Everything it lists is surface this release publishes for
