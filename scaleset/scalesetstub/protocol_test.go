@@ -155,9 +155,11 @@ func TestServer_AckStopsReplay(t *testing.T) {
 	if err != nil || msg == nil {
 		t.Fatalf("GetMessage = %v, %v", msg, err)
 	}
-	// Ack it, then re-create the session and confirm no replay.
-	if err := c.DeleteMessage(ctx, sess, msg.MessageID); err != nil {
-		t.Fatalf("DeleteMessage: %v", err)
+	// Ack it, then re-create the session and confirm no replay. The delete must be
+	// one the wire performed — an already-gone report would prune nothing, so the
+	// no-replay assertion below would be measuring something else.
+	if deleted, err := c.DeleteMessage(ctx, sess, msg.MessageID); err != nil || !deleted {
+		t.Fatalf("DeleteMessage = %t, %v; want true, nil", deleted, err)
 	}
 	if err := c.DeleteSession(ctx, ss.ID, sess.SessionID); err != nil {
 		t.Fatalf("DeleteSession: %v", err)

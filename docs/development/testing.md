@@ -1267,10 +1267,12 @@ Some questions are about GitHub's behaviour rather than ours, and no tier that r
 | Investigation G | `PROBE_REPLAY_TEST=true` | Does a **cursor-acked but undeleted** message replay to a fresh session polling from cursor 0, and does `DeleteMessage` stop it? The Q583 fix rests on both, and the `DeleteMessage` wire shape is the P2-surfaced P4 unknown Q264 left open. | [q583-restart-replay.md](../plan/q583-restart-replay.md) |
 
 Investigation G is one run, three session generations, so it needs no state file
-and no multi-hour gap. It reads its `DeleteMessage` verdict off the **response
-status**, not off the client's error: `Client.DeleteMessage` reports a 404/410 as
-success (for a listener, a message already gone is a benign ack), and a backend
-that does not serve the endpoint answers 404 too.
+and no multi-hour gap. Its `DeleteMessage` verdict turns on **whether the wire
+deleted anything**, not on the client's error: a 404/410 completes an ack (for a
+listener, a message already gone is nothing left to do) but deletes nothing, and a
+backend that does not serve the endpoint answers 404 too. `Client.DeleteMessage`
+returns that distinction as its first result (Q609); the response status is
+recorded alongside the verdict as the evidence it rests on.
 
 Investigation F is three phases around a state file rather than one run, because the gap it measures has to pass with **no session in existence** — so it must outlive the process, and the experiment lives on disk. Its `arm` phase leaves the message under test deliberately unacknowledged; do not "tidy up" by acknowledging it, and do not leave a session behind between phases, or the next gap measures something shorter than it claims.
 

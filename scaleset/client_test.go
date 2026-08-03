@@ -144,8 +144,8 @@ func TestClient_AutoAssignCapacityGating(t *testing.T) {
 		t.Fatalf("capacity-1 TotalAssignedJobs = %+v, want 1", msg.Statistics)
 	}
 	cursor := msg.MessageID
-	if err := c.DeleteMessage(ctx, sess, msg.MessageID); err != nil {
-		t.Fatalf("DeleteMessage: %v", err)
+	if deleted, err := c.DeleteMessage(ctx, sess, msg.MessageID); err != nil || !deleted {
+		t.Fatalf("DeleteMessage = %t, %v; want true, nil", deleted, err)
 	}
 
 	// Capacity 2: the second job now assigns; TotalAssignedJobs climbs to 2.
@@ -365,6 +365,49 @@ func TestClient_JobCompletedDelivered(t *testing.T) {
 	jobs, _ := done.Jobs()
 	if len(jobs) != 1 || jobs[0].MessageType != scaleset.MessageTypeJobCompleted || jobs[0].Result != "succeeded" {
 		t.Fatalf("completed jobs = %+v, want one JobCompleted result=succeeded", jobs)
+	}
+}
+
+// TestClient_DeleteMessageReportsWhatTheWireDid pins the distinction Q609 asked for:
+// a 404/410 completes an ack but deletes nothing, and a backend that never serves the
+// endpoint answers the same way — so a caller reading only the error cannot tell a
+// pruned queue from an untouched one. Each case fixes a status the stub answers and
+// asserts the pair the caller sees.
+func TestClient_DeleteMessageReportsWhatTheWireDid(t *testing.T) {
+	cases := []struct {
+		name        string
+		failStatus  int
+		wantDeleted bool
+		wantErr     bool
+	}{
+		{name: "served endpoint deletes", wantDeleted: true},
+		{name: "already gone", failStatus: http.StatusNotFound},
+		{name: "gone", failStatus: http.StatusGone},
+		{name: "momentarily unable", failStatus: http.StatusInternalServerError, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := scalesettest.New()
+			defer srv.Close()
+			ctx := testContext(t)
+			c := newClient(t, srv, nil)
+			ss, sess := setupScaleSet(t, ctx, c)
+
+			srv.EnqueueJob(ss.ID)
+			msg, err := c.GetMessage(ctx, sess, 1, 0)
+			if err != nil || msg == nil {
+				t.Fatalf("GetMessage = %v, %v", msg, err)
+			}
+			srv.FailDeleteMessage(tc.failStatus)
+
+			deleted, err := c.DeleteMessage(ctx, sess, msg.MessageID)
+			if deleted != tc.wantDeleted {
+				t.Errorf("deleted = %t, want %t", deleted, tc.wantDeleted)
+			}
+			if (err != nil) != tc.wantErr {
+				t.Errorf("err = %v, wantErr %t", err, tc.wantErr)
+			}
+		})
 	}
 }
 

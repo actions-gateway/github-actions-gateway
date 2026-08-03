@@ -542,9 +542,14 @@ func findCompleted(jobs []scaleset.JobMessage, jobID string) (scaleset.JobMessag
 func (p *retentionProbe) ackMessage(ctx context.Context, sess *scaleset.RunnerScaleSetSession,
 	msg *scaleset.RunnerScaleSetMessage, state *retentionState) {
 	state.Cursor = msg.MessageID
-	if err := p.client.DeleteMessage(ctx, sess, msg.MessageID); err != nil {
+	deleted, err := p.client.DeleteMessage(ctx, sess, msg.MessageID)
+	switch {
+	case err != nil:
 		p.log.Warn("INVESTIGATION-F: message delete failed; cursor advanced anyway",
 			"messageId", msg.MessageID, "error", err)
+	case !deleted:
+		p.log.Warn("INVESTIGATION-F: the wire reported the message already gone, so nothing was "+
+			"pruned; a later session may still replay it", "messageId", msg.MessageID)
 	}
 }
 

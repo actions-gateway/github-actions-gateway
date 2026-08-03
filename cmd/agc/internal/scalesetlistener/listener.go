@@ -1625,10 +1625,12 @@ func (l *Listener) settle(jobID string) {
 // each one it deletes. A failure leaves the entry in place, so the next poll cycle
 // retries it — which is why this runs per cycle rather than only at settle time.
 //
-// Client.DeleteMessage reports a 404/410 as success: a message already gone is an ack
-// that has nothing left to do. That is only safe because the endpoint is known served —
-// Investigation G measured it answering 204 (Q583) — so a 404 here means the message
-// really is gone rather than that nothing was ever deleted.
+// A 404/410 completes the ack too — a message already gone is nothing left to do — so
+// the entry is dropped either way. That is only safe because the endpoint is known
+// served (Investigation G measured it answering 204, Q583), which is why a delete the
+// wire reports as already-gone is logged: systematic 404s mean the endpoint stopped
+// serving deletes and the queue is no longer being pruned, and nothing else would say
+// so (Q609).
 func (l *Listener) flushDeletes(ctx context.Context, sess *scaleset.RunnerScaleSetSession) {
 	l.mu.Lock()
 	var ready []int64
@@ -1643,10 +1645,16 @@ func (l *Listener) flushDeletes(ctx context.Context, sess *scaleset.RunnerScaleS
 		if ctx.Err() != nil {
 			return
 		}
-		if err := l.cfg.Client.DeleteMessage(ctx, sess, messageID); err != nil {
+		deleted, err := l.cfg.Client.DeleteMessage(ctx, sess, messageID)
+		if err != nil {
 			l.log.Warn("scaleset: delete acked message; it will replay to the next session until this succeeds",
 				"scaleSet", l.cfg.ScaleSetName, "messageID", messageID, "err", err)
 			continue
+		}
+		if !deleted {
+			l.log.Warn("scaleset: queue reported the acked message already gone; if this is not isolated the "+
+				"delete endpoint is not being served and the queue is not being pruned",
+				"scaleSet", l.cfg.ScaleSetName, "messageID", messageID)
 		}
 		l.mu.Lock()
 		delete(l.pending, messageID)
