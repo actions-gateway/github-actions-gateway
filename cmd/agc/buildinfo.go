@@ -21,3 +21,5 @@ func registerBuildInfo(reg prometheus.Registerer, component, version string) {
 	g.WithLabelValues(component, version).Set(1)
 	reg.MustRegister(g)
 }
+
+// q594 probe touch
