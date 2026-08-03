@@ -2625,6 +2625,14 @@
 <td><code>SizingWithinRange</code>, <code>SizingDriftDetected</code>, <code>InsufficientSamples</code>, <code>JobsProvisioning</code>, <code>GitHubEgressAllowed</code>. Four are sizing, the release headline. Godoc exists in <code>api/apiconditions/conditions.go</code>; it never reached operator docs.</td>
 </tr>
 <tr>
+<td><a id="Q633"></a>Q633</td>
+<td><a href="../operations/v1alpha1-deprecation/"><code>v1alpha1</code> is slated for removal at <code>v2.0.0</code> but the apiserver never warns, while <code>v2alpha1</code> does</a></td>
+<td><code>bug</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Its CRDs carry no <code>deprecated: true</code> and no <code>deprecationWarning</code>; every v2alpha1 CRD carries both since Q411. So the users furthest behind get the least warning, and the notice has been docs-only since v1.1.0. Add the marker, or say why not.</td>
+</tr>
+<tr>
 <td><a id="Q623"></a>Q623</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-no-plan-refs-in-code.sh"><code>no-plan-refs-in-code</code> only scopes Go, but shell and workflow comments rot the same way</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
