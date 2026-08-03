@@ -45,15 +45,19 @@
 > deferred out of 1.3 are under
 > [Explicitly out of scope](#explicitly-out-of-scope).
 >
-> **Superseded 2026-08-02: `v1.3.0-rc.5` is published and verified, and its
-> validation is owed.** rc.5 carries 26 commits past rc.4 including the Q603
-> listener fix, so rc.4's pass does not transfer. Its first gate run aborted at
-> t+4m07s on a defect in the gate itself: a watcher that dies on a queued job's
-> 404, killing the run inside the autoscaler's backoff window before a transient
-> node scale-up refusal could retry ([Q627](#Q627) covers the thin
-> headroom that made the blip matter). Neither is evidence about the release.
-> Details in
-> [The rc.5 validation attempt](#the-rc5-validation-attempt-2026-08-02).
+> **Superseded 2026-08-03: `v1.3.0-rc.5`'s dogfood validation PASSED, and the
+> ledger has no gating row left.** Exit 0 in 30m07s: the e2e matrix green on GAG
+> runners (73/73 specs), both sizing profiles `Active`, the `NodeShare` derived
+> value confirmed on a live worker at 1500m — which rc.4's pass could not check —
+> and the signed v2 CRD artifact verified and registered. Details in
+> [The rc.5 validation verdict](#the-rc5-validation-verdict-2026-08-03).
+>
+> Three runs were needed. Two died in the gate rather than the release: a watcher
+> that treated a queued job's log 404 as a failed run, and a scale-up blocked by
+> **`CPUS_ALL_REGIONS`** — a global 32-vCPU limit the cluster's own nodes
+> saturated exactly, which no per-family or regional quota reading revealed. Both
+> fixed; the quota is now 64. **Cut `v1.3.0` from `main`** so the line carries
+> those harness fixes.
 >
 > **2026-08-02: `v1.3.0-rc.4` is published, verified, and its dogfood validation
 > PASSED** — the first verdict any RC in this line has produced. Details in
@@ -126,7 +130,7 @@ The prose below carries the *why* of each; this table is the state.
 | Q604 | `stallJob` installs its runner-name conflict after the job is already pollable | gates | ✅ shipped 2026-08-02 — same reason: it reddened `main` |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
 | [Q273](../STATUS.md#Q273), [Q264](../STATUS.md#Q264) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
-| — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | 🔲 **owed on the tag that ships** — [rc.4 PASSED](#the-rc4-validation-verdict-2026-08-02); [rc.5's attempt](#the-rc5-validation-attempt-2026-08-02) aborted on gate defects, not the release |
+| — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | ✅ **PASSED on `v1.3.0-rc.5`, 2026-08-03** ([verdict](#the-rc5-validation-verdict-2026-08-03)) — derived sizing confirmed at pod level, which rc.4's pass could not do |
 | <a id="Q627"></a>Q627 | The dogfood `e2e` pool has one node of C2 headroom | rides | ✅ closed 2026-08-02 — pool re-created on `n2-standard-8`, verified Ready with the kata label at `N2_CPUS` 8/200 |
 
 **Cut condition: zero open gating rows in this ledger** **plus the
@@ -370,6 +374,47 @@ two operations runbooks that repeated it.
 **The teardown held.** `e2e-stop.sh` waited on the queued job rather than
 deleting the AGC under it — the 2026-07-31 incident's fix doing its job — and
 completed once the unschedulable run was cancelled by hand.
+
+### The rc.5 validation verdict (2026-08-03)
+
+**`validate-release.sh v1.3.0-rc.5` PASSED**, exit 0, 30m07s end to end. This is
+the verdict the tag has been owed since it was cut, and it clears the ledger's
+last gating row.
+
+| Leg | Result |
+|---|---|
+| Lane settle | instant — no in-flight `e2e-test.yml` run |
+| Deploy rc.5 | GMC and both tenant AGCs rolled out, 3m38s |
+| e2e matrix on GAG runners | **green — 73/73 specs, 62 ok, 0 failed, 11 skipped** |
+| `NodeShare` (`gag-dogfood-e2e`) | `sizingProfileState=Active` — the hard-failure leg |
+| `NodeShare` derived value | **`cpu request=1500m` on a live worker**, against templates asking 2 and 3 |
+| `Throughput` (`gag-dogfood`) | `Active`, `sampleCounts=[158]` — actuating |
+| Signed v2 CRD manifest | blob signature verified; all five v2 CRDs applied and registered |
+| Teardown | drained to 0 nodes, exit 0 |
+
+**This pass is strictly stronger than rc.4's.** rc.4 cleared `NodeShare`'s state
+assertion but reported `derived value NOT checked — no live worker pod was caught
+during the matrix`, leaving the pod-level envelope arithmetic unconfirmed
+([Q448](../STATUS.md#Q448)). This run caught a live worker: **1500m derived where
+the templates ask 2 and 3**. The release's headline feature is now confirmed at
+the pod level on real GKE rather than inferred from a condition. `Throughput` at
+158 samples additionally means this RC ran the repo's own CI on derived sizing —
+validated in use.
+
+**What unblocked it was a quota nobody had measured.** Two earlier attempts died
+on `FailedScaleUp: GCE quota exceeded` while every per-family and regional quota
+sat near zero. The binding constraint was **`CPUS_ALL_REGIONS`** — a *global*
+limit of 32, which the cluster's own nodes saturated exactly (2×`e2-standard-2` +
+7×`e2-standard-4` = 32). The autoscaler event never names the quota; the GKE
+`setSize` API does, in the 429 body. Raised to 64 on 2026-08-03 and approved
+immediately. Detail and the per-pool arithmetic:
+[gke-dogfood.md](gke-dogfood.md#part-f--e2e-on-gke-kata-containers).
+
+**Cut `v1.3.0` from `main`.** Per
+[a release line carries its own validation harness](../operations/release.md#patch-releases-and-backports),
+the harness fixes this validation produced must be in the tag the line descends
+from. The delta from rc.5 to `main` remains non-shipping: test files, docs, and
+dogfood scripts — no `api/`, no `cmd/` product code, no `config/crd`.
 
 ### The rc.5 re-run (2026-08-02)
 
