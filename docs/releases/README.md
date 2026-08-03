@@ -28,6 +28,23 @@ breaks the rendering). All of it lives in
 Releases before `v1.3.0` predate this convention; their bodies live only on the
 Releases page. Retrieve one with `gh release view vX.Y.Z --json body --jq .body`.
 
+## Image digests are a deliberate post-tag amendment
+
+The published digests cannot exist before the tag is pushed — `publish.yml` builds
+the images from it. So the **Container images** section is written *after* the
+tag, and the file at `refs/tags/vX.Y.Z` will never contain it.
+
+That is intended. The invariant is **this file matches the published body**, not
+"this file is frozen at the tag": the file is a living record of what the Release
+says, and the tag is a point in time. Amend the file, republish with
+`--notes-file`, and re-diff.
+
+It also cannot be automated away. `publish.yml` composes a body with the digests
+only when the tag has **no** Release yet; a curated draft — the whole point of
+authoring here — makes it skip that step and leave the notes untouched. Adding
+the digests by hand is the price of a curated body, so it is a required step of
+every release, not an oversight to fix later.
+
 ## Not published to the docs site
 
 These files are written for github.com's **comment-flavour GFM** renderer, which

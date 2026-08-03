@@ -974,6 +974,29 @@ which is a second reason not to hand-roll one.)
 **Watch the chart-version form.** Images are tagged `vX.Y.Z`, charts `X.Y.Z`.
 A copy-pasteable `helm` command with a `v` in it fails.
 
+**Curating the notes means adding the image digests by hand — after the tag.**
+The compose step in `publish.yml` writes the five index digests, the verify
+command, and a changelog, but it runs **only when the tag has no Release yet**.
+A curated draft is exactly that condition, so the step logs `already exists;
+leaving its notes and flags untouched` and the digests never appear. They also
+cannot be written in advance: the images are built *from* the tag.
+
+So after `publish.yml` goes green, resolve them and amend the notes file:
+
+```bash
+for img in gmc agc proxy worker wrapper; do
+  docker buildx imagetools inspect "ghcr.io/actions-gateway/${img}:vX.Y.Z" \
+    --format '{{json .Manifest.Digest}}'
+done
+```
+
+Confirm they are **index** digests, not per-arch manifests — the mediaType must
+be a manifest list, and the index must carry both `linux/amd64` and `linux/arm64`.
+A per-arch digest pins the workload to one architecture and fails to schedule on
+the other. This makes the tagged copy of the notes file permanently one section
+behind the published body, which is intended; `docs/releases/README.md` § Image
+digests explains why.
+
 **Run the `deslop` skill over the draft before publishing.** Release notes are the
 most-read prose the project ships.
 
