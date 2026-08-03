@@ -104,6 +104,41 @@ func TestListener_KeepsGuardsWhileTheDeleteIsRefused(t *testing.T) {
 	assert.Equal(t, []string{done1, done2}, completed)
 }
 
+// TestListener_KeepsGuardsWhenTheDeleteRemovedNothing is the one case where completing
+// the ack and retiring the guard have to part company. A 404 finishes the ack — there is
+// nothing left to delete — but it is also how a backend that does not serve the endpoint
+// answers, and there the message is still in the queue. Retiring on the ack rather than
+// on the wire's answer would drop the guard in exactly the situation where it is the only
+// thing left that would recognise the replay (Q609).
+//
+// So the message leaves `pending` (nothing more can be done about it) while the guards
+// stay. The cost is that a job whose delete 404s keeps its entries — the unbounded
+// behaviour, but only on a queue already misbehaving, which is the safe direction.
+func TestListener_KeepsGuardsWhenTheDeleteRemovedNothing(t *testing.T) {
+	srv := newQuickPollServer(t)
+	srv.FailDeleteMessage(http.StatusNotFound)
+
+	prov := &recordingProvisioner{srv: srv}
+	m := newCountingMetrics()
+	l, ssID := startListener(t, srv, fixedCapacity(5), prov, m)
+
+	_, jobID := srv.EnqueueJob(ssID)
+	require.Eventually(t, func() bool { return m.completedCount() == 1 }, 10*time.Second,
+		10*time.Millisecond, "the job must run to completion")
+	require.Eventually(t, func() bool { return l.PendingMessageCount() == 0 }, 10*time.Second,
+		20*time.Millisecond, "a 404 completes the ack, so both messages leave pending")
+
+	assert.Never(t, func() bool {
+		provisioned, completed, _ := l.GuardedJobIDs()
+		return len(provisioned) == 0 || len(completed) == 0
+	}, 2*time.Second, 20*time.Millisecond,
+		"a delete that removed nothing must not retire the guard that would catch the replay")
+
+	provisioned, completed, _ := l.GuardedJobIDs()
+	assert.Equal(t, []string{jobID}, provisioned)
+	assert.Equal(t, []string{jobID}, completed)
+}
+
 // TestListener_KeepsAGuardWhoseAssignmentIsStillQueued is the case that decides how the
 // bookkeeping is shaped. A batched assignment names two jobs; one completes in a later
 // message. That completion's own message settles and deletes straight away, but the batch

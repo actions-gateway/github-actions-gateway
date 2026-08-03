@@ -1647,7 +1647,8 @@ func (l *Listener) settle(jobID string) {
 // one has, which is why a completion-only message retires nothing (its job's assignment
 // may still be ahead of the cursor; Q575's replayed-after-completion case). Deleting is
 // itself gated on the job having concluded, so this cannot retire a guard for work still
-// in flight (Q597).
+// in flight (Q597). The caller gates this on the wire confirming the delete removed
+// something, so "deleted" here means the queue really no longer holds it.
 func (l *Listener) retireGuards(p *pendingMessage) {
 	if p == nil {
 		return
@@ -1722,7 +1723,13 @@ func (l *Listener) flushDeletes(ctx context.Context, sess *scaleset.RunnerScaleS
 		l.mu.Lock()
 		p := l.pending[messageID]
 		delete(l.pending, messageID)
-		l.retireGuards(p)
+		// Retire only on a delete the wire confirms removed something. A 404 completes the
+		// ack, but it is also how a backend that does not serve the endpoint answers — and
+		// there the message is still in the queue, leaving the guards as the only thing
+		// that would recognise its replay (Q609).
+		if deleted {
+			l.retireGuards(p)
+		}
 		l.mu.Unlock()
 	}
 }
