@@ -1314,15 +1314,22 @@ func agcLog(ns string) string {
 // spec's run — and `--limit 1` then returns that one. It is not a hypothetical: the
 // cancel-path spec resolved the graceful-deletion spec's run, cancelled a run that had
 // already finished, and timed out waiting for a pod that nothing had disturbed.
-func dispatchAndResolveRun(repoSlug, workflow string) string {
+//
+// inputs are "key=value" pairs forwarded as `gh workflow run -f`. The fixture declares
+// a default for every input it takes, so a caller that passes none dispatches what
+// callers dispatched before any input existed.
+func dispatchAndResolveRun(repoSlug, workflow string, inputs ...string) string {
 	GinkgoHelper()
 	before := make(map[string]bool)
 	for _, id := range recentRunIDs(Default, repoSlug, workflow) {
 		before[id] = true
 	}
 
-	_, err := utils.Run(exec.Command("gh", "workflow", "run", workflow,
-		"--repo", repoSlug, "--ref", "main"))
+	args := []string{"workflow", "run", workflow, "--repo", repoSlug, "--ref", "main"}
+	for _, in := range inputs {
+		args = append(args, "-f", in)
+	}
+	_, err := utils.Run(exec.Command("gh", args...))
 	Expect(err).NotTo(HaveOccurred(), "dispatch %s", workflow)
 
 	var runID string
