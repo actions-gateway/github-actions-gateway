@@ -3,7 +3,9 @@
 **Status:** done 2026-08-01. Measured, then fixed: the replay is real,
 `DeleteMessage` works, deleting prunes the queue, and the listener now issues the
 delete half of its ack once every job in a message has concluded. The rc.4
-dogfood gate was never needed. Residual: [Q597](../STATUS.md#Q597).
+dogfood gate was never needed. The residual — unpruned process-scoped guard sets
+— was filed as Q597 and closed 2026-08-03; see
+[What shipped](#what-shipped).
 
 Q583 was filed with an instruction to measure at the rc.4
 gate before building, because the row's mechanism was asserted rather than
@@ -13,7 +15,7 @@ the repo, twice, and the residual unknown is about the **fix**, not the defect.
 ## The defect
 
 The scale-set listener acks by advancing a cursor and nothing else. `advanceCursor`
-([listener.go](../../cmd/agc/internal/scalesetlistener/listener.go)) moves an
+([listener.go](../../../cmd/agc/internal/scalesetlistener/listener.go)) moves an
 in-memory `lastMessageID`; no code path in `scalesetlistener` calls
 `Client.DeleteMessage`. The queue log is scale-set-scoped, so it outlives both the
 session and the process, and a new session polls from cursor 0.
@@ -32,7 +34,7 @@ a recent window — it is every message the scale set still retains.
 
 ### The backend half — live on dogfood, 2026-07-05
 
-[gke-dogfood-turnup-findings.md](archive/gke-dogfood-turnup-findings.md): during
+[gke-dogfood-turnup-findings.md](gke-dogfood-turnup-findings.md): during
 the Q264 P4 clean-green re-run, reconnecting a rebuilt AGC to the first pass's
 scale set `gag-scaleset2` (scaleSetID 4) replayed that pass's `JobAssigned`
 messages, "which briefly provisioned 7 pre-Q269 workers". The re-run moved to a
@@ -49,7 +51,7 @@ a bug row at the time.
 
 ### Retention — 2026-07-29
 
-[q468-jobcompleted-retention.md](archive/q468-jobcompleted-retention.md) measured
+[q468-jobcompleted-retention.md](q468-jobcompleted-retention.md) measured
 an unacknowledged message surviving a **13 h 3 m 40 s** gap with no session in
 existence, redelivered to a session under a different owner name on its first
 poll. Read it as a lower bound only: `LOST` was never observed at any gap, so it
@@ -73,7 +75,7 @@ measurement before it is built.
 
 One probe run settles three things, in one process, with no multi-hour gap and no
 dogfood cluster. Selector `PROBE_REPLAY_TEST=true`; fixture
-[`q583-replay-probe.yml`](../../.github/workflows/q583-replay-probe.yml).
+[`q583-replay-probe.yml`](../../../.github/workflows/q583-replay-probe.yml).
 
 | # | Question | Verdicts |
 |---|---|---|
@@ -233,8 +235,18 @@ Left open deliberately: `provisioned`, `completed`, and `abandoned` are still
 never pruned, so they grow with the jobs a listener handles over its lifetime.
 Pruning them is now *possible* — an entry is dead once its message is deleted —
 but it is a separate change with its own way of going wrong (drop an entry too
-early and a replay double-provisions), so it is filed as
-[Q597](../STATUS.md#Q597) rather than bundled here.
+early and a replay double-provisions), so it was filed as Q597 rather than
+bundled here.
+
+**Q597 closed 2026-08-03.** The bound is the delete, keyed on the jobs a message
+*assigned*: an entry is retired once every held message carrying a `JobAssigned`
+for its job has been deleted. The safety argument and the two rules that were
+tried and rejected are recorded in
+[02-architecture.md](../../design/02-architecture.md) alongside this fix. One of
+them was caught by a test already in the repo — retiring on every job a deleted
+message *names* drops the guard when a completion's message goes, which
+`TestListener_DoesNotProvisionAnAssignmentReplayedAfterItsCompletion` (Q575)
+turns red.
 
 ### Decision: delete-ack
 
