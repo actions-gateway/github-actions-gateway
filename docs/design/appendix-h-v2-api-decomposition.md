@@ -1519,7 +1519,7 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
    **Implemented mechanism (M3a, Q175).** The namespace-side selector is the label
    `actions-gateway.com/security-profile: baseline|restricted|privileged`
    (`SecurityProfileLabel`); absent on a managed tenant namespace ⇒ `baseline` (secure
-   default). Two GMC-side pieces realize the guarantee, and crucially the relocation
+   default). Two GMC-side pieces realize the guarantee, and the relocation
    makes the guard *simpler* than v1, not just relocated:
    - **`NamespacePSAReconciler`** (GMC) watches managed v2 tenant namespaces and stamps
      the six `pod-security.kubernetes.io/*` labels from the profile label via

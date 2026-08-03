@@ -6,15 +6,15 @@ hide:
 # Roadmap
 
 This page is about what GAG does **not** do yet. For what it does today, see
-[Features](features.md) — every shipped capability, with a link to the doc that
-explains it — and [Why GAG?](why-gag.md) for the capability-by-capability
+[Features](features.md) for every shipped capability, with a link to the doc that
+explains it, and [Why GAG?](why-gag.md) for the capability-by-capability
 comparison against Actions Runner Controller (ARC).
 
 GitHub Actions Gateway (GAG) is **1.0, generally available, and installable from
 the GitHub Container Registry (GHCR)**. It is Apache-2.0, vendor-neutral, and
 built for one outcome: real operators running multi-tenant self-hosted runners in
-real clusters. There is no paid tier and no commercial roadmap — the plan below is
-about capability and adoption, not revenue.
+real clusters. There is no paid tier and no commercial roadmap, so the plan below
+is about capability and adoption, not revenue.
 
 It is a direction-of-travel snapshot, not a dated commitment. Priorities move with
 what adopters actually hit first, so the surest way to influence what comes next is
@@ -24,7 +24,7 @@ describing your setup. Every open item, in priority order, is in the
 
 ## In progress / near-term
 
-Work that is scoped and actively being built — adoption-enabling polish and the
+Work that is scoped and actively being built: adoption-enabling polish and the
 last gaps an outside operator hits.
 
 - **[CI for untrusted pull requests on Kata workers](plan/q408-untrusted-pr-egress.md)** <!-- q:Q408 -->
@@ -51,14 +51,14 @@ The next four are all opt-in additions to the
 separately.
 
 - **[Proxy-side audit logging](design/appendix-g-future-enhancements.md#g3-proxy-side-audit-logging)** <!-- q:Q564 -->
-  A structured line per accepted CONNECT — tenant, host and port, bytes each way,
+  A structured line per accepted CONNECT: tenant, host and port, bytes each way,
   duration. The proxy emits counters only today, so per-tenant egress is
   reconstructable just from cluster flow logs. Off by default.
 
 - **[Per-tenant proxy rate limiting](design/appendix-g-future-enhancements.md#g2-proxy-enforced-per-tenant-rate-limiting)** <!-- q:Q565 -->
   A token bucket at the proxy, so one looping tenant is slowed before it reaches
   GitHub's ceiling; today the only feedback is a 429 and AGC backoff. Per-pod
-  state — global limits would need a shared backend.
+  state, since global limits would need a shared backend.
 
 - **[TLS on the in-cluster proxy hop](design/appendix-g-future-enhancements.md#g4-tls-between-agcworkers-and-the-proxy)** <!-- q:Q566 -->
   The CONNECT target is cleartext between the AGC or workers and the proxy,
@@ -78,10 +78,9 @@ separately.
 ## Exploring / longer-term
 
 Directions we expect to pursue as demand and validated evidence accumulate. These
-are intentionally unscheduled — each waits on a real operator need, a measured
+are intentionally unscheduled. Each waits on a real operator need, a measured
 limit, or a gating release before it becomes scheduled work. The first entry is
-the exception that proves the rule: it is a firm commitment, waiting only on the
-release that carries it.
+the exception: a firm commitment, waiting only on the release that carries it.
 
 - **[Retiring `v1alpha1`, `v2alpha1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273 -->
   Committed, but not yet started. `v1.3.0` is the one-release-ahead announcement;
@@ -91,7 +90,7 @@ release that carries it.
 
 - **Controller horizontal scaling / high availability.** <!-- q:Q169 --> The
   per-tenant controller runs
-  [one replica by design](design/02-architecture.md) — the session registry is
+  [one replica by design](design/02-architecture.md): the session registry is
   in-memory, and HA comes from GitHub redelivering an unacquired job.
   Distributed session state would enable multi-replica HA if a single controller
   becomes a measured bottleneck.
@@ -135,13 +134,13 @@ release that carries it.
 ## How priorities are set
 
 GAG's success metric is **external operators running it and telling us what
-breaks** — not stars or downloads. That feedback drives the ordering above far
+breaks**, not stars or downloads. That feedback drives the ordering above far
 more than any internal plan. If something here is in your way, or missing
-entirely, [open an issue](https://github.com/actions-gateway/github-actions-gateway/issues)
-— it's the fastest way to move it up.
+entirely, [open an issue](https://github.com/actions-gateway/github-actions-gateway/issues).
+That is the fastest way to move it up.
 
 The page above is the adopter-facing summary. The day-to-day ordering behind it
-is the **[working backlog](https://actions-gateway.com/dev/STATUS/)** — every
+is the **[working backlog](https://actions-gateway.com/dev/STATUS/)**: every
 open item, filterable by label, status, and size. It tracks the unreleased
 `main` branch, so it is published only on the `dev` version of this site and
 carries no commitment: rows are added, reordered, and deleted as work lands.

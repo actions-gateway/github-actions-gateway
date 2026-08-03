@@ -101,11 +101,11 @@ A reader copies a block and runs it. Make that safe.
 
 ## Write with substance (don't read as AI slop)
 
-Readers discount a project on sight when its docs pattern-match to generated filler —
-they bounce before they ever try the code. The tells they actually react to are
-**substance-level, not punctuation**: an em-dash or a bold-lead bullet is fine (this
-page uses both, deliberately). What reads as slop is padding, puffery, and claims
-without evidence. Earn trust by being specific and honest.
+Readers discount a project on sight when its docs pattern-match to generated filler.
+They bounce before they ever try the code. The tells that cost the most are
+substance-level: padding, puffery, and claims without evidence. Punctuation density is
+a real tell too, and the em-dash is the one this docset overuses. Earn trust by being
+specific and honest.
 
 - **Specifics over adjectives.** Replace "robust, scalable, high-performance" with the
   number, the command, or the named limit. "Multiplexes thousands of sessions as
@@ -123,14 +123,21 @@ without evidence. Earn trust by being specific and honest.
 - **Honest, not promotional.** State limitations, known gaps, and "not yet implemented"
   plainly (goal 6). A doc that admits what doesn't work yet reads as written by someone
   who actually ran it.
+- **Ration the em-dash.** One or two per page is punctuation. Several per paragraph is
+  a signature, and it is the surface tell readers spot fastest. Reach for a comma, a
+  period, a colon, or parentheses first, and keep the dash only where the aside really
+  does interrupt the sentence and no other mark carries it. Two dashes in one sentence
+  almost always means the sentence wants to be two sentences. Count with
+  `grep -o '—' <file> | wc -l`; above roughly 3 per 1,000 words, rewrite.
 - **Formatting in moderation.** Bold the keyword, not the sentence; sentence-case
   headings, not Title Case; no emoji as bullets or status markers. Mechanical,
   every-line formatting is itself a tell. (The one sanctioned Title-Case heading is the
   `## Table of Contents` index — a fixed, doc-wide convention, not prose.)
 
-The anti-pattern is cargo-culting the surface tells — purging every em-dash, banning all
-bold — while leaving the padding and puffery untouched. That fixes nothing: the
-substance is what readers judge.
+Fix both halves. Cutting punctuation density while leaving the padding and puffery
+untouched produces well-punctuated filler, and no amount of substance survives prose
+that reads as machine-generated on sight. Neither half is optional, and neither
+substitutes for the other.
 
 ## Conventions
 

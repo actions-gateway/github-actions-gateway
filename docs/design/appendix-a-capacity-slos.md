@@ -63,7 +63,7 @@ The peak-burst sizing above uses a deliberately conservative ~60 KiB/session. To
 pin the AGC's *actual* per-session overhead — the figure behind the
 density-versus-pod-per-runner claim — `TestAGCPerSessionMemory`
 (`cmd/agc/test/load/mem_test.go`, `make mem-profile`) isolates it locally, with
-no cluster, no real broker, and crucially **no in-process broker stub** (the stub
+no cluster, no real broker, and **no in-process broker stub** (the stub
 inflated the earlier ~127 KiB figure because its server side runs in the same
 process).
 

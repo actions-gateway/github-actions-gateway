@@ -4,7 +4,7 @@
 
 ---
 
-The system is delivered across five milestones over roughly five weeks. Each milestone produces a deliverable and a verifiable success criterion; later milestones build on the artifacts of earlier ones (the probe binary becomes the AGC's polling implementation, the decrypted payload becomes the test fixture for the worker pod, and so on). Operators who prefer to leverage AI-assisted implementation can consult [Appendix C](appendix-c-ai-implementation.md) for prompting guidance and a discussion of the trade-offs — that material is optional and orthogonal to the milestone structure itself.
+The system is delivered across five milestones over roughly five weeks. Each milestone produces a deliverable and a verifiable success criterion; later milestones build on the artifacts of earlier ones (the probe binary becomes the AGC's polling implementation, the decrypted payload becomes the test fixture for the worker pod, and so on). Operators who prefer AI-assisted implementation can consult [Appendix C](appendix-c-ai-implementation.md) for prompting guidance and a discussion of the trade-offs — that material is optional and orthogonal to the milestone structure itself.
 
 | Phase | Days | Focus |
 |---|---|---|

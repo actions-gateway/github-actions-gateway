@@ -438,7 +438,7 @@ review concluded this **must not be a default**, for three reasons:
 **What would trigger building it.** A design that closes the lockout window —
 e.g. always-union the freshly-observed endpoints with the prior set and only
 *remove* an IP after a confirmed drain, plus a fail-open watchdog that reverts to
-any-destination if the GMC loses apiserver contact — and demonstrated robustness
+any-destination if the GMC loses apiserver contact — and evidence that it holds
 across the managed-CP rotation behaviours above. Until then, narrowing stays the
 operator-confirmed, per-cluster `apiServerCIDRs` opt-in.
 

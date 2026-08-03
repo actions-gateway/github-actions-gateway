@@ -245,7 +245,7 @@ budget that leaves roughly 5s for the tunnel drain.
     draining tunnels. The linger cannot do its job on that path, and this is a
     measured result rather than an inference.
 
-Worth noting the upstream design intent is exactly what the proxy does. A SIG
+The upstream design intent is exactly what the proxy does. A SIG
 Node maintainer on 116965: *"the Kubernetes-portable behavior is to use the
 readiness endpoint to control being in rotation during graceful shutdown."*
 Failing `/readyz` is correct and stays. It simply does not work yet: as measured

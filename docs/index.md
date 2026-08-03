@@ -20,14 +20,14 @@ hide:
 
 </div>
 
-<p class="gag-tagline">An Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources — and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
+<p class="gag-tagline">An Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources, and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Watch the demo](demo.md){ .md-button }
 [Why GAG?](why-gag.md){ .md-button }
 [View on GitHub](https://github.com/actions-gateway/github-actions-gateway){ .md-button }
 
-<p class="gag-reassure" markdown="span">:material-check-circle: Drop-in for your existing setup — jobs target the same runner labels, so nothing in your `.github/workflows` changes.</p>
+<p class="gag-reassure" markdown="span">:material-check-circle: Drop-in for your existing setup: jobs target the same runner labels, so nothing in your `.github/workflows` changes.</p>
 
 </div>
 
@@ -54,7 +54,7 @@ kubectl apply --server-side -f \
 
 ## What GAG gives you
 
-Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc): no idle GPUs, fewer always-on resources, and guaranteed throughput instead of blocked critical jobs. [Estimate your savings vs ARC →](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc) · [See every feature →](features.md)
+Most of these ladder up to one outcome, [**lower cost**](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc): no idle GPUs, fewer always-on resources, and guaranteed throughput instead of blocked critical jobs. [Estimate your savings vs ARC →](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc) · [See every feature →](features.md)
 
 </div>
 
@@ -70,7 +70,7 @@ Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-co
     - Platform-owned quota cap
     - Blocked jobs auto-recover
     - Zero manual reruns
-    - Self-serve `ActionsGateway` CRs — no platform ticket per change
+    - Self-serve `ActionsGateway` CRs, no platform ticket per change
 
 -   :material-layers-triple:{ .lg .middle } __No blocked critical jobs__
 
@@ -200,20 +200,20 @@ GAG targets a specific audience: teams that **must** self-host runners and run t
 
     Done paying for accelerators between jobs:
 
-    - Workers scale to zero — no idle GPU
+    - Workers scale to zero, so no idle GPU
     - GPU nodes return to the scheduler on completion
     - Priority tiers keep critical GPU jobs scheduling
 
 </div>
 </div>
 
-<p class="gag-fit-note" markdown="span">:material-information-outline: **Not your setup?** If you're happy running on a vendor's infrastructure, a managed-SaaS runner is the better fit. GAG competes with Actions Runner Controller (ARC) for self-hosted, multi-tenant clusters — not on raw build speed.</p>
+<p class="gag-fit-note" markdown="span">:material-information-outline: **Not your setup?** If you're happy running on a vendor's infrastructure, a managed-SaaS runner is the better fit. GAG competes with Actions Runner Controller (ARC) for self-hosted, multi-tenant clusters, not on raw build speed.</p>
 
 <div class="gag-section-intro" markdown>
 
 ## How it fits together
 
-A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its `ActionsGateway`. Jobs are acquired with the **same single-acquirer runner-scale-set protocol ARC uses** — the shipped default — so GAG is a strict superset of ARC's model, not a different-architecture trade-off.
+A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its `ActionsGateway`. Jobs are acquired with the **same single-acquirer runner-scale-set protocol ARC uses**, the shipped default. GAG is therefore a strict superset of ARC's model, not a different-architecture trade-off.
 
 </div>
 
