@@ -366,22 +366,21 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		}, 10*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("locating the worker pod running that job")
-		var podName, matchedBy string
+		var podName string
 		Eventually(func(g Gomega) {
 			var diag string
-			podName, matchedBy, diag = runningWorkerForRun(g, tenantNS, runID, before)
+			podName, diag = runningWorkerForRun(g, tenantNS, runID, before)
 			g.Expect(podName).NotTo(BeEmpty(),
 				"no worker pod attributable to run %s in %s: %s", runID, tenantNS, diag)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q396 evicted worker pod", podName)
 
 		By("confirming the worker carries the run identity recovery needs")
-		// Q544: asserted outside the Eventually above, so a worker that exists but has
-		// no annotation fails immediately and names itself rather than retrying for
-		// three minutes. The re-run assertions at the bottom of this spec cannot pass
-		// without this, so failing here attributes the cause instead of leaving it to
-		// be inferred from a silent recovery.
-		assertWorkerCarriesRunIdentity(tenantNS, podName, matchedBy, runID)
+		// Q544. The run-id half is proven by the lookup above having resolved at all;
+		// this is the other key handleEviction reads. The re-run assertions at the
+		// bottom of this spec cannot pass without both, so checking here attributes the
+		// cause rather than leaving it to be inferred from a silent recovery.
+		assertWorkerCarriesRepository(tenantNS, podName)
 
 		By("confirming the worker carries the ephemeral-storage cap this spec overshoots")
 		// Without the cap there is nothing to exceed, the kubelet never evicts, and the
@@ -585,14 +584,14 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		}, 10*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("locating the worker pod running that job")
-		var podName, matchedBy string
+		var podName string
 		Eventually(func(g Gomega) {
 			var diag string
-			podName, matchedBy, diag = runningWorkerForRun(g, tenantNS, runID, before)
+			podName, diag = runningWorkerForRun(g, tenantNS, runID, before)
 			g.Expect(podName).NotTo(BeEmpty(), "no worker pod attributable to run %s in %s: %s", runID, tenantNS, diag)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q459 interrupted worker pod", podName)
-		assertWorkerCarriesRunIdentity(tenantNS, podName, matchedBy, runID)
+		assertWorkerCarriesRepository(tenantNS, podName)
 
 		By("streaming the worker's logs so the relay can be observed as it happens")
 		// Started before the delete and read after: once the pod object is gone
@@ -742,14 +741,14 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		}, 10*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("locating the worker pod running that job")
-		var podName, matchedBy string
+		var podName string
 		Eventually(func(g Gomega) {
 			var diag string
-			podName, matchedBy, diag = runningWorkerForRun(g, tenantNS, runID, before)
+			podName, diag = runningWorkerForRun(g, tenantNS, runID, before)
 			g.Expect(podName).NotTo(BeEmpty(), "no worker pod attributable to run %s in %s: %s", runID, tenantNS, diag)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q459 cancelled worker pod", podName)
-		assertWorkerCarriesRunIdentity(tenantNS, podName, matchedBy, runID)
+		assertWorkerCarriesRepository(tenantNS, podName)
 
 		By("sampling the pod's phase, deletionTimestamp and deletion-reason across the cancellation")
 		// All four fields together, sampled as it happens: the claim is about what is
@@ -1080,6 +1079,16 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 	// Ordered containers run specs in declaration order, so putting it here means a
 	// failure to register a scale set costs this measurement and nothing above it.
 	//
+	// # Why it carries its own label
+	//
+	// Being last in an Ordered container means everything ahead of it is a gate: Ginkgo
+	// skips the remainder of the container after a failure, so one unrelated spec failing
+	// costs this measurement the whole run. That happened twice on 2026-08-03 — once to
+	// the suite budget elapsing, once to the cancel spec resolving the wrong worker — and
+	// both times the ~55 minutes ahead of it were spent for nothing. The scaleset-live
+	// label lets it be run on its own (SUITE=live-github-scaleset) once the container
+	// above is known green, without re-paying for six specs to prove it.
+	//
 	// # Why the bootstrap is asserted separately
 	//
 	// Without it, a listener that never opened its session would surface as "the job
@@ -1087,7 +1096,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 	// label mismatch, and from the runner group's public-repository rule. The Degraded
 	// condition the listener publishes on a successful Start says which of those it was,
 	// so it is checked before anything is dispatched.
-	It("E2E_GitHub_ScaleSetEvictedWorkerLatencyAndRerun: the same measurement on the scale-set tier", func() {
+	It("E2E_GitHub_ScaleSetEvictedWorkerLatencyAndRerun: the same measurement on the scale-set tier", Label(scaleSetLiveLabel), func() {
 		repoSlug := creds.org + "/" + creds.repo
 		orgURL := fmt.Sprintf("https://github.com/%s/%s", creds.org, creds.repo)
 
@@ -1587,39 +1596,26 @@ func dispatchAndResolveRun(repoSlug, workflow string, inputs ...string) string {
 	return runID
 }
 
-// How runningWorkerForRun resolved a worker. The caller asserts on it: on a post-Q495
-// build the annotation is the only acceptable answer, and the snapshot is a regression
-// signal (Q544).
-const (
-	matchByRunIDAnnotation = "run-id annotation"
-	matchByFreshSnapshot   = "pre-dispatch snapshot"
-)
-
 // runningWorkerForRun returns the name of the Running worker pod the AGC provisioned
-// for a specific workflow run and how it was identified, or "" when none exists yet.
+// for a specific workflow run, or "" and a diagnostic when none exists yet.
 //
-// Scoped by the run-id annotation the AGC stamps on every worker pod
-// (provisioner.AnnotationRunID) rather than by "the first Running worker in the
-// namespace". These specs interrupt one run while a previous spec's re-run may still
-// have a worker of its own up, and picking the wrong pod would make the spec measure
-// a job nobody touched.
+// Matching is on the run-id annotation the AGC stamps on every worker pod
+// (provisioner.AnnotationRunID) and on nothing else. There used to be a fallback —
+// "the sole Running worker that was not there before this spec dispatched" — from when
+// Q495 left the annotation absent on this tier and identity-by-freshness was the only
+// thing available. On a build that stamps the annotation the fallback is not a safety
+// net but a way to resolve the WRONG pod, so it is gone.
 //
-// The fallback resolves by identity rather than by count: the caller snapshots the
-// Running workers that existed *before* it dispatched, and a Running worker outside
-// that snapshot is this run's. It was the path that actually worked while Q495 was
-// open and the annotation was absent on this tier. It is retained on a fixed build so
-// that a worker provisioned without run identity is reported as the pod it is, with
-// its annotations, rather than as an empty string the caller times out on — but the
-// caller must fail on it, which is what assertWorkerCarriesRunIdentity is for.
+// It failed live on 2026-08-03. The cancel-path spec dispatched run 30856065695 and was
+// handed a worker annotated 30856024324: an earlier spec's re-run had reached its second
+// attempt and provisioned a worker AFTER this spec took its snapshot, which made someone
+// else's pod "fresh". The spec would have cancel-tested a pod belonging to another run.
+// Freshness stopped being an identity signal the moment these specs started triggering
+// re-runs, and every spec here now does.
 //
-// Only a genuine ambiguity — no annotated match and several new Running workers —
-// yields "", along with a description of what it saw. That case is reachable and was
-// hit on 2026-07-29: a second live-GitHub session dispatched the same fixture workflow
-// against the same repo, and this tenant's AGC acquired both jobs, so two workers
-// appeared that were not there before. Nothing in the cluster can separate them
-// without the run-id annotation, so the spec must fail — but it must fail saying so
-// rather than timing out on an empty string (Q500, Q495).
-func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool) (podName, matchedBy, diag string) {
+// preexisting is kept for the diagnostic alone: which workers appeared since the
+// dispatch is useless for choosing one but sharpens the message when none matches.
+func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool) (podName, diag string) {
 	out, err := utils.Run(exec.Command("kubectl", "get", "pods",
 		"-n", ns,
 		"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
@@ -1631,53 +1627,59 @@ func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool
 	// The selector can match more than one pod only if a run has several jobs; these
 	// fixtures have exactly one, so the first field is the worker for this run.
 	if fields := strings.Fields(out); len(fields) > 0 {
-		return fields[0], matchByRunIDAnnotation, ""
+		return fields[0], ""
 	}
 
-	all := runningWorkers(g, ns)
-	var fresh []string
-	for _, pod := range all {
-		name := strings.SplitN(pod, "=", 2)[0]
-		if !preexisting[name] {
-			fresh = append(fresh, pod)
+	// No match yet. Separate the two reasons, because they need opposite responses: an
+	// unannotated worker is a Q495 regression and waiting will not fix it, whereas
+	// workers annotated for other runs mean this run's worker simply has not been
+	// provisioned yet and the caller should keep polling.
+	var unannotated, otherRuns []string
+	for _, pod := range runningWorkers(g, ns) {
+		name, annotated, _ := strings.Cut(pod, "=")
+		if annotated == "" {
+			unannotated = append(unannotated, name+" (no run-id)")
+			continue
 		}
+		mark := ""
+		if !preexisting[name] {
+			mark = ", appeared since dispatch"
+		}
+		otherRuns = append(otherRuns, fmt.Sprintf("%s (run %s%s)", name, annotated, mark))
 	}
-	switch len(fresh) {
-	case 1:
-		return strings.SplitN(fresh[0], "=", 2)[0], matchByFreshSnapshot, ""
-	case 0:
-		return "", "", fmt.Sprintf("no worker has appeared since dispatch; Running workers now: %v", all)
+
+	switch {
+	case len(unannotated) > 0:
+		return "", fmt.Sprintf(
+			"no worker carries run-id=%s, and %d Running worker(s) carry NO run-id at all: %s. "+
+				"That is the Q495 regression — the AGC provisioned a worker it cannot attribute "+
+				"to a run, so eviction recovery is inert on it (Q544)",
+			runID, len(unannotated), strings.Join(unannotated, ", "))
+	case len(otherRuns) > 0:
+		return "", fmt.Sprintf(
+			"no worker carries run-id=%s yet; Running workers belong to other runs: %s. "+
+				"Workers marked \"appeared since dispatch\" are most likely an earlier spec's "+
+				"re-run reaching its second attempt, which is why freshness cannot identify a "+
+				"worker here",
+			runID, strings.Join(otherRuns, ", "))
 	default:
-		return "", "", fmt.Sprintf(
-			"%d workers appeared since dispatch, so none can be attributed to run %s without the "+
-				"run-id annotation (Q495). Most likely another live-GitHub session dispatched the same "+
-				"fixture workflow and this AGC acquired its job too (Q500). New since dispatch: %v",
-			len(fresh), runID, fresh)
+		return "", fmt.Sprintf("no Running worker in %s yet", ns)
 	}
 }
 
-// assertWorkerCarriesRunIdentity fails unless the worker was resolved by its own run-id
-// annotation, and unless it also carries the repository annotation.
+// assertWorkerCarriesRepository fails unless the worker also carries the repository
+// annotation.
 //
-// Both keys are read from the same place — the acquire payload's serialised github
-// context — and Q495 was them arriving together or not at all, so asserting the pair is
-// what confirms the whole fix rather than half of it. Resolving by the pre-dispatch
-// snapshot is a regression on a build that has Q495, not an outcome, which is why it
-// fails here instead of being recorded as a report entry: that pass-through is how a
-// defect stayed invisible across five live runs before (Q510, and Q544 for this one).
-func assertWorkerCarriesRunIdentity(ns, podName, matchedBy, runID string) {
+// The run-id half needs no assertion: runningWorkerForRun matches on it and nothing
+// else, so a worker that resolved at all has one. Repository is the other key, read from
+// the same acquire-payload github context — Q495 was the two arriving together or not at
+// all — and rerun-failed-jobs needs owner/repo as well as the run id, so a worker with
+// one and not the other is one recovery still cannot act on (Q544).
+func assertWorkerCarriesRepository(ns, podName string) {
 	GinkgoHelper()
-	gotRunID := podAnnotation(ns, podName, "actions-gateway.com/run-id")
-	gotRepo := podAnnotation(ns, podName, "actions-gateway.com/repository")
-
-	Expect(matchedBy).To(Equal(matchByRunIDAnnotation),
-		"worker %s was attributed to run %s by the %s, so the AGC provisioned it without "+
-			"run identity — the Q495 regression. Its annotations: run-id=%q repository=%q",
-		podName, runID, matchedBy, gotRunID, gotRepo)
-	Expect(gotRepo).NotTo(BeEmpty(),
-		"worker %s carries its run-id annotation but no repository annotation. Both come from "+
-			"the same payload context and rerun-failed-jobs needs owner/repo as well as the run "+
-			"id, so recovery is still inert on this pod (Q495)", podName)
+	Expect(podAnnotation(ns, podName, "actions-gateway.com/repository")).NotTo(BeEmpty(),
+		"worker %s resolved by its run-id annotation but carries no repository annotation; "+
+			"recovery is still inert on this pod (Q495)", podName)
 }
 
 // runningWorkers returns every Running worker pod in the namespace as

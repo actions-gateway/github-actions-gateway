@@ -769,8 +769,12 @@ docker-build-fakegithub: ## Build and push only the fakegithub image (bake targe
 # spec that stands up a tenant in that window gets an AGC pointed at real GitHub and
 # times out unable to register a session. Measured 2026-08-03: five such specs failed
 # that way in one full-suite run while the GMC carried AGC_EXTRA_GITHUB_ORG_URL alone.
+#
+# live-github-scaleset narrows that to the one scale-set spec. It is last in an Ordered
+# container, so Ginkgo skips it whenever any spec ahead of it fails — this runs it alone
+# once the container is known green, instead of re-paying ~55 minutes to reach it.
 SUITE ?=
-_SUITE_FILTER = $(if $(filter single-node,$(SUITE)),!multi-node,$(if $(filter multi-node,$(SUITE)),multi-node,$(if $(filter live-github,$(SUITE)),github-real,)))
+_SUITE_FILTER = $(if $(filter single-node,$(SUITE)),!multi-node,$(if $(filter multi-node,$(SUITE)),multi-node,$(if $(filter live-github,$(SUITE)),github-real,$(if $(filter live-github-scaleset,$(SUITE)),scaleset-live,))))
 
 # The suite appends spec start/end events here and scripts/e2e/progress-watch.sh
 # renders them into the periodic heartbeat (Q608). The watcher runs BESIDE ginkgo
@@ -786,7 +790,7 @@ E2E_PROGRESS_FILE ?= $(REPO_ROOT)/tmp/e2e-progress.jsonl
 # its specs wait on real GitHub concluding jobs, which alone is ~10 minutes twice over.
 # Measured 2026-08-03 — a 30m run was interrupted in the sixth of seven live specs, so
 # the seventh never ran. Raise it with SUITE=live-github rather than for everyone.
-E2E_TIMEOUT ?= $(if $(filter live-github,$(SUITE)),90m,30m)
+E2E_TIMEOUT ?= $(if $(filter live-github live-github-scaleset,$(SUITE)),90m,30m)
 
 # E2E_PROGRESS_FILE sits with the other env vars INSIDE the recipe, after the
 # `cd`: a `VAR=x cd dir && cmd` prefix scopes VAR to the `cd` alone, so the

@@ -20,6 +20,12 @@ import (
 // would run concurrently with that one and put two live gateways on one fixture repo,
 // which is the Q511 collision inside a single process.
 const (
+	// scaleSetLiveLabel selects this one spec, so the scale-set measurement can be taken
+	// without re-running the six live specs ahead of it in the Ordered container. It is
+	// additive to github-real, never a replacement: the spec still belongs to that
+	// container and still must not run beside the rest of the suite.
+	scaleSetLiveLabel = "scaleset-live"
+
 	// scaleSetTenantNS holds the whole v2 object set. Separate from the classic tenant's
 	// namespace so the two gateways cannot see each other's workers, Secrets, or quota.
 	scaleSetTenantNS = "tenant-github-scaleset"
