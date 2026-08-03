@@ -27,6 +27,37 @@ check would fire on a perfectly good install.
 {{- if and .Release.IsUpgrade (not (.Capabilities.APIVersions.Has "actions-gateway.com/v2beta1/PriorityClassAllowlist")) }}
 {{- fail "the PriorityClassAllowlist CRD is not installed in this cluster. Helm installs the chart-root crds/ dir on a fresh install ONLY and skips it on every upgrade, so applying it is a standard pre-upgrade step for this chart. Run it, then re-run this upgrade:\n\n    helm show crds <chart> --version <version> | kubectl apply -f -\n\nwhere <chart> is the same chart reference you are upgrading with (e.g. oci://ghcr.io/actions-gateway/charts/actions-gateway, or a local chart directory). It is idempotent and reads the CRDs from the exact version you are upgrading to. See docs/operations/upgrade.md, \"GMC install and upgrade via Helm\"." }}
 {{- end }}
+{{- /*
+The same skipped-crds/ problem one level down (Q298): the kind can be present while
+its SCHEMA is a release behind, because Helm never reapplies crds/ on upgrade. A
+field this chart renders but the stored CRD does not declare fails server-side
+apply MIDWAY through the upgrade — "field not declared in schema" — which is the
+half-applied shape chart-released-upgrade-check.sh exists to reject.
+
+Two things keep that from happening. allowedInfraPriorityClasses is omitted
+entirely when empty (below), so every release that has not adopted the field
+upgrades against an old CRD unchanged; and when it IS set, the lookup here fails at
+render with the same one-time command as the preflight above.
+
+lookup returns empty on `helm template` and `--dry-run` (no cluster reads), so the
+guard skips rather than false-failing there — it is a better-error path, not the
+correctness boundary. The empty-value case above is what makes the default upgrade
+safe with no cluster read at all.
+*/ -}}
+{{- if and .Release.IsUpgrade .Values.allowedInfraPriorityClasses }}
+{{- $crd := lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "priorityclassallowlists.actions-gateway.com" }}
+{{- if $crd }}
+{{- $declared := false }}
+{{- range $v := $crd.spec.versions }}
+{{- if dig "schema" "openAPIV3Schema" "properties" "spec" "properties" "allowedInfraPriorityClasses" false $v }}
+{{- $declared = true }}
+{{- end }}
+{{- end }}
+{{- if not $declared }}
+{{- fail "allowedInfraPriorityClasses is set, but the PriorityClassAllowlist CRD in this cluster predates that field — Helm installs the chart-root crds/ dir on a fresh install ONLY and skips it on every upgrade, so the stored CRD is still the one your CURRENT release installed. Applying the CRDs is a standard pre-upgrade step for this chart. Run it, then re-run this upgrade:\n\n    helm show crds <chart> --version <version> | kubectl apply -f -\n\nwhere <chart> is the same chart reference you are upgrading with (e.g. oci://ghcr.io/actions-gateway/charts/actions-gateway, or a local chart directory). It is idempotent and reads the CRDs from the exact version you are upgrading to. See docs/operations/upgrade.md, \"GMC install and upgrade via Helm\"." }}
+{{- end }}
+{{- end }}
+{{- end }}
 # The platform PriorityClass allowlists, generated from
 # .Values.allowedPriorityClasses and .Values.allowedInfraPriorityClasses — the same
 # lists passed to the GMC as --allowed-priority-classes and
@@ -57,6 +88,12 @@ check would fire on a perfectly good install.
 # Editing this object in place is supported and takes effect without a restart;
 # `helm upgrade` reasserts .Values.allowedPriorityClasses over it, so persist
 # additions there.
+#
+# allowedInfraPriorityClasses is omitted when empty rather than rendered as [].
+# The two forms mean the same thing to the GMC and the CRD (unset and empty both
+# add nothing), but only the omitted one survives an upgrade whose cluster still
+# has the pre-Q298 CRD — see the preflight above. Empty is the default, so this is
+# the path every existing release takes.
 apiVersion: actions-gateway.com/v2beta1
 kind: PriorityClassAllowlist
 metadata:
@@ -69,8 +106,7 @@ spec:
     {{- toYaml .Values.allowedPriorityClasses | nindent 4 }}
     {{- else }} []
     {{- end }}
+  {{- with .Values.allowedInfraPriorityClasses }}
   allowedInfraPriorityClasses:
-    {{- if .Values.allowedInfraPriorityClasses }}
-    {{- toYaml .Values.allowedInfraPriorityClasses | nindent 4 }}
-    {{- else }} []
-    {{- end }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}

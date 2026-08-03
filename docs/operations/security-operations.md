@@ -1478,9 +1478,17 @@ becomes real, so the object is refused whole. Grep the GMC log for `sharedClasse
 remove the named class from one of the two lists, and the next watch event restores
 both dynamic sets.
 
-!!! warning "A chart upgrade reasserts `allowedPriorityClasses` over this object"
+!!! warning "A chart upgrade reasserts both lists over this object"
     An in-place edit is the fast path, not the durable one. Persist any class you
-    intend to keep in the chart's `allowedPriorityClasses` value.
+    intend to keep in the chart's `allowedPriorityClasses` /
+    `allowedInfraPriorityClasses` values.
+
+!!! note "Setting `allowedInfraPriorityClasses` for the first time needs the CRD step"
+    The field is new in Q298. Helm never reapplies the chart-root `crds/` dir on
+    upgrade, so a release upgrading from before it existed still has a CRD whose
+    schema lacks the field. The chart omits the key while the value is empty, so a
+    default upgrade is unaffected; set it, and apply the CRDs first —
+    [upgrade.md](upgrade.md#gmc-install-and-upgrade-via-helm-recommended).
 
 **One caveat the flag does not share.** The *policy* sees only this object, never
 the flag. A class listed in `--allowed-priority-classes` but absent here is
