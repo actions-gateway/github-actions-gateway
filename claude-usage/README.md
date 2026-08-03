@@ -45,6 +45,15 @@ under the new id, on top of the rows still filed under the old one, and the two
 copies are summed. The machine that produced every row predating the `host`
 column is `mac-1`.
 
+**Replacing a machine? Give the replacement a new id — never inherit the dead
+one's.** It is tempting, since the old machine is gone and the name is free, but
+the merge takes a per-column max *within* an id. A replacement filing under
+`mac-1` would collide with the retired machine's rows on any day both worked,
+and the max would keep whichever share was larger and silently drop the other.
+Under a fresh id the two land on separate rows and are summed. Retired ids are
+never removed: a day's total sums every machine that ever reported it, not just
+the live ones.
+
 ### Backfilled (estimated) days
 
 The project's first commits (2026-05-16 to -18) predate the earliest surviving
@@ -94,39 +103,56 @@ in it.
 
 ## Results
 
-Latest snapshot **2026-07-26** (project day 72; first commit 2026-05-16). "Day 7"
+Latest snapshot **2026-08-03** (project day 80; first commit 2026-05-16). "Day 7"
 is the [original day-7 Bluesky post][post1]'s published figures; "Day 22" is the
-[day-22 follow-up][post2]; "Day 72" is the current snapshot the charts here back.
+[day-22 follow-up][post2]; "Day 80" is the current snapshot the charts here back.
 The snapshots are announced as a quote-post chain (each post quotes the previous
 one): [day 7][post1] → [day 22][post2] → [day 35][post3] → [day 48][post4] →
 [day 70][post5].
 
 > **Frozen snapshot.** The committed CSVs, `summary.json`, and charts are the
-> 2026-07-26 snapshot. Re-running `compute_metrics.py` advances the token/message
+> 2026-08-03 snapshot. Re-running `compute_metrics.py` advances the token/message
 > series as new sessions accrue (the merge rule only ever revises upward); leave
 > it un-run to keep these figures, or re-run and refresh the charts to roll
 > forward to a new dated snapshot.
 
-| Metric | Day 7 | Day 22 | Day 72 | Source |
+| Metric | Day 7 | Day 22 | Day 80 | Source |
 |---|--:|--:|--:|---|
-| Tokens (input + output + cache-creation) | ~10M | 56.2M | **303.3M** | transcripts + est. |
-| └ measured only | — | 53.7M | 300.8M | transcripts |
+| Tokens (input + output + cache-creation) | ~10M | 56.2M | **423.9M** | transcripts + est. |
+| └ measured only | — | 53.7M | 421.4M | transcripts |
 | └ estimated backfill (May 16–18) | — | +2.5M | +2.5M | per-commit estimate |
-| └ incl. cache reads | — | 2.02B | **11.5B** | transcripts + est. |
-| Cache reuse ratio (reads ÷ writes) | — | ~44× | **~46×** | transcripts |
-| Git commits | 232 | 617 | **1,286** | git |
-| Tests (`func Test*`) | 269 | 393 | **1,429** | git |
-| Lines of Go (code) | 15.5k | 20.9k | **73.3k** | git |
-| Lines of Go (comments) | 2.3k | 4.2k | **24.4k** | git |
-| Markdown (non-blank) | 14.3k | 14.0k | **44.8k** | git |
-| YAML (hand-written) | 1.5k | 2.3k | **9.3k** | git |
-| Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **17.1k** | git |
-| Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 4.8 73% / Fable 8% / Sonnet 8% / Opus 4.7 6% / Opus 5 5%** | transcripts |
+| └ incl. cache reads | — | 2.02B | **18.3B** | transcripts + est. |
+| Cache reuse ratio (reads ÷ writes) | — | ~44× | **~52×** | transcripts |
+| Git commits | 232 | 617 | **1,654** | git |
+| Tests (`func Test*`) | 269 | 393 | **1,876** | git |
+| Lines of Go (code) | 15.5k | 20.9k | **96.0k** | git |
+| Lines of Go (comments) | 2.3k | 4.2k | **34.8k** | git |
+| Markdown (non-blank) | 14.3k | 14.0k | **60.4k** | git |
+| YAML (hand-written) | 1.5k | 2.3k | **11.4k** | git |
+| Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **30.9k** | git |
+| Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 4.8 52% / Opus 5 29% / Fable 9% / Sonnet 6% / Opus 4.7 4%** | transcripts |
+| Mean concurrent sessions | — | — | **3.0** (peak 13) | transcripts, since Jul 26 |
+| Hours using Claude (wall-clock) | — | — | **95.8h** → 286.5h session-time | transcripts, since Jul 26 |
 
 The headline tokens figure **includes the ~2.5M estimated backfill** for the
-archived first three days; the measured-only floor is 300.8M. Live totals (with
+archived first three days; the measured-only floor is 421.4M. Live totals (with
 the measured / estimated split) are always in
 [`data/summary.json`](data/summary.json).
+
+This snapshot spans a machine handover. `mac-1` measured everything through
+2026-07-26 and has since been **retired**; `mac-2` replaced it, taking over
+mid-morning that day and measuring through 2026-08-03. They overlap on
+2026-07-26 alone, and the overlap is clean rather than double-counted: mac-1
+recorded that morning, and every mac-2 record for the day starts at 10:26 local
+— the minute the replacement cloned the repo — so the day's total is their sum
+with no session counted on both.
+
+Because mac-1 is gone, its rows are final and 2026-07-27 onward is mac-2 only
+and **complete**, not a day awaiting a second reporter. Its transcripts went
+with the machine, so the committed CSVs are now the sole surviving record of the
+mac-1 era — the exact loss the snapshotting exists to prevent. One gap can no
+longer be closed: mac-1's last row came from a snapshot taken partway through
+2026-07-26, so anything it did later that day went unrecorded.
 
 ## Charts
 
@@ -139,6 +165,7 @@ The three tokens-vs-lines views combined into one shared-timeline figure:
 **(1)** magnitude — tokens vs lines authored on a log axis (gap = cost/line);
 **(2)** breakdown — what those lines are (the composition);
 **(3)** cost — cumulative tokens ÷ line, with the value at each weekly guide.
+Event lines run through all three panels (labelled along the bottom of panel 1).
 The standalone versions follow below.
 
 ### Daily token usage by model
@@ -146,14 +173,26 @@ The standalone versions follow below.
 The Pro→Max 5x upgrade (first dashed line, 2026-05-23) is visible as the hand-off
 from Sonnet 4.6 (orange) to Opus 4.7 (purple), then Opus 4.8 (blue), with Fable 5
 (green) appearing from June 9 and Opus 5 (vermillion) from July 25; the second
-dashed line (2026-07-05) marks the Max 5x→20x upgrade. Charts use the Okabe–Ito
-colourblind-safe palette, and each model also carries its own hatch pattern.
+dashed line (2026-07-05) marks the Max 5x→20x upgrade. Opus 5 takes over almost
+completely from the green dash-dot line (2026-07-26), where `mac-2` took over,
+on days roughly twice the height of the Opus 4.8 era. That doubling is the model
+and the plan, **not** more machines running at once — `mac-2` replaced `mac-1`
+rather than joining it. Charts use the Okabe–Ito colourblind-safe palette, and
+each model also carries its own hatch pattern.
+
+Two kinds of event line, styled apart because they mean different things: a
+**black dashed** line is a plan upgrade (a higher ceiling on what one machine can
+spend), a **green dash-dot** line is a machine's rows beginning (a change in
+which machine is measuring). Machine lines are derived from the first row each
+machine reports, so a third machine marks itself with no code change. They read
+"begins" rather than "joins" because the data can't tell a replacement from an
+addition — an old machine going quiet is not evidence it was retired.
 
 ### Tokens spent vs. lines authored (the magnitude)
 ![Cumulative tokens far above cumulative lines authored, log scale](charts/tokens_vs_lines.png)
-Log y so both ends are visible at once: ~303M cumulative tokens ride well above
-~145k lines authored (a linear axis crushes the lines to an invisible sliver). The
-gold-shaded gap between the two curves is the ~2,100 tokens/line — on a log axis a
+Log y so both ends are visible at once: ~423M cumulative tokens ride well above
+~198k lines authored (a linear axis crushes the lines to an invisible sliver). The
+gold-shaded gap between the two curves is the ~2,140 tokens/line — on a log axis a
 ratio is a vertical gap. "Lines authored" is all hand-written output — Go (code +
 tests), Markdown, hand-written YAML, and scripts & web; generated CRD YAML,
 binaries, and lockfiles excluded. The undistorted breakdown of those lines is in
@@ -162,7 +201,7 @@ the next chart.
 ### Tokens per line authored (the trend & the breakdown)
 ![Cost per line over time above a stacked breakdown of the lines](charts/tokens_per_line.png)
 **Top:** cumulative tokens ÷ lines authored, by day (measured days only). It climbs
-from ~410 tokens/line in week one to ~2,100 two months in — each line costs ~5× more
+from ~410 tokens/line in week one to ~2,140 by month three — each line costs ~5× more
 once the easy scaffolding is done and the work shifts to logic, tests, review, and
 debugging. **Bottom:** the denominator itself, decomposed — Go code, Go tests,
 Markdown docs, hand-written YAML, scripts & web. Its total height at any date *is*
@@ -176,7 +215,27 @@ order of magnitude above everything else, every day.
 
 ### Cumulative cache traffic
 ![Cumulative cache traffic](charts/cumulative_cache.png)
-Cumulative cache reads (11.2B) vs writes (243M). Write once, replay ~46×.
+Cumulative cache reads (17.9B) vs writes (345M). Write once, replay ~52×. Both
+plan upgrades and the `mac-1`→`mac-2` handover are marked; the curve visibly
+steepens at the last of them.
+
+### Parallel sessions
+![Peak concurrent sessions per day, over the share of the day that was parallel](charts/parallel_sessions.png)
+How much of the work runs concurrently. **Top:** mean concurrency (line) against
+the day's peak (bars). The peak is the dramatic number — up to 13 — but it lasts
+a single bucket; the **mean of 3.0** is what actually multiplies a day's output.
+**Bottom:** time on Claude each day, wall-clock against session-hours. The gap
+between the two bands *is* the mean concurrency: **96h at the keyboard produced
+286h of session-time** over the window, a 3.0× multiplier. 71% of active time
+had two or more sessions running, on 11–48 sessions a day.
+
+**This chart has its own timeline, and starts at 2026-07-26.** Concurrency needs
+session-level transcripts, and no CSV before this one preserved them, so the
+mac-1 era cannot be reconstructed — daily token totals can't say how many
+sessions overlapped. Drawing it against the project timeline would show 71 empty
+days and read as idleness rather than missing data. The series is never
+estimated, for the same reason: unlike token volume, concurrency has no
+per-commit rate to model it from.
 
 ## Data files
 
@@ -207,10 +266,44 @@ Per-day (last commit of each day) cumulative `commits`, `tests` (count of
 and `scripts` (non-blank shell, Python, CSS/JS/HTML, Makefile, Dockerfile).
 All exclude `vendor/`.
 
+### `session_metrics.csv` — merge-preserved
+Per-day, per-`host` session concurrency, in 10-minute buckets: `sessions`
+(distinct sessions that did work that day), `peak_concurrent` (most sessions
+active in any one bucket), `active_buckets` (buckets with any session),
+`parallel_buckets` (buckets with two or more), and `session_buckets` (concurrent
+sessions summed over every bucket). Every column is a count that can only rise
+as more transcripts become visible, so the upward-only merge is right for all
+of them.
+
+Two headline figures are derived rather than stored, because a ratio isn't
+monotone and so can't be max-merged:
+
+| figure | from |
+|---|---|
+| **Hours using Claude** (wall-clock) | `active_buckets` ÷ 6 |
+| **Session-hours** (summed over concurrent sessions) | `session_buckets` ÷ 6 |
+| **Mean concurrency** | `session_buckets` ÷ `active_buckets` |
+
+`active_buckets` is time actually spent using Claude: a bucket only counts when
+a session did something in it, so a session left open overnight adds nothing.
+It measures engaged time, not session lifetime.
+
+There is no `estimated` column — this series is measured or absent. Summing
+across machines works for the bucket counts and `sessions`, but `peak_concurrent`
+is combined with a **max, not a sum**: two machines' peaks need not fall in the
+same bucket, so adding them would invent a burst that never happened.
+
+A resumed session replays earlier records verbatim, which would credit the
+resuming session with work it only re-read, so each record is attributed to the
+earliest-starting session holding it. Replays are ~3% of records here and shift
+one day's peak by one.
+
 ### `summary.json`
 Totals split into `measured` / `estimated` / `combined` (summed from the
 persisted rows, so archival-safe), an `estimation` block documenting the
-per-commit method, per-model and per-machine (`by_host`) splits, an accurate HEAD
+per-commit method, a `sessions` block (bucket width, span, session-days, mean and
+peak concurrency, hours using Claude, session-hours, parallel share), per-model
+and per-machine (`by_host`) splits, an accurate HEAD
 working-tree snapshot, and full provenance — including which machine took the
 snapshot and which machines are on record.
 
@@ -223,14 +316,24 @@ snapshot and which machines are on record.
   per `(date, machine)` and summed, so a day worked on two machines is only
   whole once both have run the script and their rows are committed. Until then
   the day reads low rather than wrong — nothing is lost, and a later run from
-  the missing machine fills it in.
+  the missing machine fills it in. No machine is outstanding in this snapshot:
+  `mac-1` is retired and `mac-2` measured through the snapshot date. A retired
+  machine can never report again, so whatever it had not captured by its last
+  run is gone rather than pending.
 - **Archived early days are estimated, not measured.** The project's first
   commits (2026-05-16 to -18) predate the earliest surviving transcript
   (2026-05-19), so their token usage is gone from the logs. Those days are
   **backfilled** from the Pro-era per-commit rate and flagged `estimated=1`
   (see "Backfilled (estimated) days" above). The ~2.5M backfill is a modeled
-  figure, not a measurement — the defensible measured-only floor is 300.8M. The
+  figure, not a measurement — the defensible measured-only floor is 421.4M. The
   git series is fully measured from 2026-05-16.
+- **"Concurrent" is a bucket width, not a fact.** A session counts as active in
+  a 10-minute bucket if it produced a record there, so two sessions are
+  "concurrent" when both worked within the same 10 minutes — not necessarily in
+  the same second. The width is a judgement: wide enough that a session waiting
+  on a build still counts as in flight, narrow enough that work hours apart never
+  collides. At 1-minute buckets the daily peaks come out 8–12 rather than 8–13,
+  so the headline is not sensitive to it, but the parallel-share figure is.
 - **Tokens-per-line is a proxy.** The denominator is all hand-authored output —
   Go (code + tests), Markdown, hand-written YAML, and scripts & web (shell,
   Python, Make/Docker, CSS/JS) — but tokens also go into review, debugging, and

@@ -21,9 +21,11 @@ Outputs PNGs (1x + @2x) to claude-usage/charts/:
     tokens_overview      all three tokens/lines views stacked on one timeline
     token_anatomy        daily input/output/cache tokens on a log scale
     cumulative_cache     cumulative cache reads vs writes (stacked area)
+    parallel_sessions    peak concurrency + the parallel share (own shorter timeline)
 """
 
 import csv
+import json
 import os
 from datetime import date, timedelta
 
@@ -35,6 +37,7 @@ import matplotlib.patches as mpatches
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
@@ -42,6 +45,12 @@ CHARTS = os.path.join(HERE, "charts")
 
 PRO_TO_MAX = date(2026, 5, 23)
 MAX_5X_TO_20X = date(2026, 7, 5)  # Max 5x -> Max 20x plan upgrade
+
+# Event markers. A plan upgrade raises the ceiling on what one machine can spend;
+# a machine starting changes which machine is doing the measuring. Different
+# causes, so different styling.
+PLAN_STYLE = ("#222", "--")
+MACHINE_STYLE = ("#005E44", (0, (5, 2, 1, 2)))
 
 # Okabe–Ito colourblind-safe palette.
 OI = {
@@ -78,8 +87,56 @@ def load(name):
         return list(csv.DictReader(fh))
 
 
+def summary():
+    """The committed summary.json — provenance the CSVs don't carry."""
+    with open(os.path.join(DATA, "summary.json")) as fh:
+        return json.load(fh)
+
+
 def is_est(r):
     return str(r.get("estimated", "0")) == "1"
+
+
+def machine_starts():
+    """``(date, label)`` for each machine after the first, from its earliest row.
+
+    Derived rather than hardcoded so a third machine marks itself. Estimated
+    backfill rows carry no machine (``-``) and are skipped.
+
+    "begins", not "joins": the data shows where a machine's rows start, and can't
+    tell a replacement from an addition — silence from the old machine is not
+    evidence it retired. Which one it was belongs in the README.
+    """
+    first = {}
+    for r in load("token_metrics.csv"):
+        h = r.get("host", "")
+        if h in ("", "-"):
+            continue
+        if h not in first or r["date"] < first[h]:
+            first[h] = r["date"]
+    order = sorted(first.items(), key=lambda kv: (kv[1], kv[0]))
+    return [(dparse(d), f"{h} begins") for h, d in order[1:]]
+
+
+def event_markers():
+    """Plan upgrades and machine starts, in date order, each with its own style."""
+    events = [(PRO_TO_MAX, "Pro → Max 5x", *PLAN_STYLE),
+              (MAX_5X_TO_20X, "Max 5x → 20x", *PLAN_STYLE)]
+    events += [(d, lbl, *MACHINE_STYLE) for d, lbl in machine_starts()]
+    return sorted(events, key=lambda e: e[0])
+
+
+def event_label(ax, x, y, label, col, yc="data"):
+    """Rotated event label reading upward, clear of the line it annotates.
+
+    ``rotation_mode="anchor"`` with va="bottom" rotates the glyph body to the left
+    of the anchor, so the line doesn't strike through the text.
+    """
+    ax.annotate(label, (x, y), xytext=(-3, 4), textcoords="offset points",
+                xycoords=("data", yc), rotation=90, rotation_mode="anchor",
+                ha="left", va="bottom", fontsize=9.5, fontweight="bold",
+                color=col, zorder=6,
+                path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()])
 
 
 def save(fig, stem):
@@ -145,12 +202,17 @@ def chart_tokens_by_model():
     handles = [mpatches.Patch(facecolor=MODEL_COLORS[m], hatch=MODEL_HATCH[m] or None,
                               edgecolor="white", label=m) for m in drawn]
     handles.append(mpatches.Patch(facecolor="#cccccc", hatch="////", edgecolor="white", label="estimated"))
-    for upg_date, label in ((PRO_TO_MAX, "  Pro → Max 5x"), (MAX_5X_TO_20X, "  Max 5x → 20x")):
-        upg = upg_date.isoformat()
-        if upg in days:
-            xi = days.index(upg)
-            ax.axvline(xi - 0.5, color="#222", ls="--", lw=1.4)
-            ax.text(xi - 0.4, max(bottom) * 0.92, label, fontsize=10, fontweight="bold", color="#222")
+    for ev_date, label, col, ls in event_markers():
+        ev = ev_date.isoformat()
+        if ev not in days:
+            continue
+        xi = days.index(ev)
+        ax.axvline(xi - 0.5, color=col, ls=ls, lw=1.4)
+        # Labels near the right edge read inward so they stay on the axes.
+        right = xi > len(days) * 0.78
+        ax.text(xi + (-0.9 if right else -0.4), max(bottom) * 0.92, label,
+                ha="right" if right else "left",
+                fontsize=10, fontweight="bold", color=col)
     ax.set_title("Daily Claude Code token usage by model", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("tokens / day  (millions)", fontsize=11)
     ax.set_xticks(xs)
@@ -334,7 +396,7 @@ def chart_tokens_vs_lines():
 
     fig, ax = plt.subplots(figsize=(11, 6.2))
     ax.set_yscale("log")
-    ax.set_ylim(1e3, 5e8)
+    ax.set_ylim(1e3, max(tok) * 1.2)  # follows the data; a fixed top clips as it grows
     ax.set_xlim(xs[0], xs[-1])
     # The cost per line is the gap between the two curves — shade it gold.
     ax.fill_between(xs, total, tok, color=OI["orange"], alpha=0.12, lw=0, zorder=1)
@@ -403,21 +465,22 @@ def chart_overview():
 
     # --- panel 1: magnitude (log) ---
     a1.set_yscale("log")
-    a1.set_ylim(1e3, 5e8)
+    a1.set_ylim(1e3, max(tok) * 1.2)  # follows the data; a fixed top clips as it grows
     a1.fill_between(xs, total, tok, color=OI["orange"], alpha=0.12, lw=0, zorder=1)
     a1.plot(xs, tok, color=OI["blue"], lw=3.0, solid_capstyle="round", zorder=4,
             path_effects=[pe.Stroke(linewidth=5, foreground="white"), pe.Normal()])
     a1.plot(xs, total, color=OI["green"], lw=3.0, ls=(0, (6, 2)), zorder=4,
             path_effects=[pe.Stroke(linewidth=5, foreground="white"), pe.Normal()])
+    # zorder above the event lines drawn later, so neither strikes through the text.
     a1.annotate(f"{tok[-1] / 1e6:,.0f}M tokens", (xs[-1], tok[-1]), xytext=(-8, 9),
                 textcoords="offset points", ha="right", fontsize=12, fontweight="bold",
-                color=OI["blue"], path_effects=halo)
+                color=OI["blue"], path_effects=halo, zorder=7)
     a1.annotate(f"{total[-1] / 1e3:,.0f}k lines", (xs[-1], total[-1]), xytext=(-8, -13),
                 textcoords="offset points", ha="right", fontsize=12, fontweight="bold",
-                color="#1B7A5A", path_effects=halo)
+                color="#1B7A5A", path_effects=halo, zorder=7)
     a1.annotate(f"≈ {ys[-1]:,.0f} tokens / line", (xs[-1], (total[-1] * tok[-1]) ** 0.5),
                 xytext=(-10, 0), textcoords="offset points", ha="right", fontsize=12.5,
-                fontweight="bold", color=gold, path_effects=halo)
+                fontweight="bold", color=gold, path_effects=halo, zorder=7)
     a1.set_ylabel("count (log scale)", fontsize=11)
     a1.set_title("Tokens spent vs. lines authored", fontsize=12.5, fontweight="bold", loc="left")
     a1.grid(axis="y", which="both", alpha=0.16)
@@ -478,6 +541,14 @@ def chart_overview():
             a.axvline(wd, color="#9AA0A6", ls=(0, (4, 3)), lw=1.0, alpha=0.7, zorder=1)
         for s in ("top", "right"):
             a.spines[s].set_visible(False)
+    # Event lines span all three panels; the label sits in the empty band along the
+    # bottom of panel 1, below the lines curve, which is clear at every event date.
+    for ev_date, label, col, ls in event_markers():
+        if not xs[0] <= ev_date <= xs[-1]:
+            continue
+        for a in (a1, a2, a3):
+            a.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=5)
+        event_label(a1, ev_date, 0.01, label, col, yc="axes fraction")
     for a in (a1, a2):
         plt.setp(a.get_xticklabels(), visible=False)
 
@@ -511,7 +582,8 @@ def chart_token_anatomy():
                 label=f"{lbl}  ({totals[k] / 1e6:,.0f}M total)")
         ax.fill_between(days, arr(k), 0.1, color=col, alpha=0.06)
     ax.set_yscale("log")
-    ax.set_ylim(1e3, 5e8)
+    # Follows the data — a fixed top clipped the cache-read peak once volume grew.
+    ax.set_ylim(1e3, max(np.nanmax(arr(k)) for k, *_ in spec) * 1.5)
     ax.set_ylabel("tokens / day  (log scale)", fontsize=11)
     ax.set_title("Anatomy of token usage", fontsize=14, fontweight="bold", loc="left")
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
@@ -552,6 +624,14 @@ def chart_cumulative_cache():
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     ax.set_xlim(days[0], days[-1])
     ax.set_ylim(0, (cc + cr)[-1] * 1.10)
+    # Event lines, labelled in the empty wedge above the curve.
+    total = cc + cr
+    for ev_date, label, col, ls in event_markers():
+        if not days[0] <= ev_date <= days[-1]:
+            continue
+        ax.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=4)
+        y = total[days.index(ev_date)] if ev_date in days else 0.0
+        event_label(ax, ev_date, y + total[-1] * 0.03, label, col)
     ax.legend(frameon=False, fontsize=10.5, loc="upper left")
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
@@ -561,6 +641,91 @@ def chart_cumulative_cache():
     save(fig, "cumulative_cache")
 
 
+def chart_parallel_sessions():
+    """Concurrency over time spent, on its own shorter timeline.
+
+    Peak is the dramatic number but a burst of it lasts one bucket; the mean is
+    what multiplies a day's output, so both are drawn on one axis. Below, the gap
+    between session-hours and wall-clock hours *is* that mean.
+
+    Its own timeline: concurrency needs session-level transcripts, so the series
+    starts where those survive rather than at the first project day. Drawing it
+    on the project timeline would show 71 empty days and read as idleness.
+    """
+    rows = load("session_metrics.csv")
+    if not rows:
+        return
+    sess_meta = summary().get("sessions", {})
+    per_hour = 60 / sess_meta.get("bucket_minutes", 10)
+    by_day = {}
+    for r in rows:  # combine machines
+        d = by_day.setdefault(r["date"], {"peak": 0, "active": 0, "buckets": 0})
+        # Peak is a max, not a sum: two machines' peaks need not coincide in time.
+        d["peak"] = max(d["peak"], int(r["peak_concurrent"]))
+        d["active"] += int(r["active_buckets"])
+        d["buckets"] += int(r["session_buckets"])
+    days = sorted(by_day)
+    xs = list(range(len(days)))
+    peak = [by_day[d]["peak"] for d in days]
+    mean = [by_day[d]["buckets"] / by_day[d]["active"] if by_day[d]["active"] else 0 for d in days]
+    wall = [by_day[d]["active"] / per_hour for d in days]
+    shrs = [by_day[d]["buckets"] / per_hour for d in days]
+
+    fig, (a1, a2) = plt.subplots(2, 1, figsize=(11, 7.8), sharex=True,
+                                 gridspec_kw=dict(height_ratios=[1.2, 1], hspace=0.30))
+    halo = [pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()]
+
+    a1.bar(xs, peak, color=OI["green"], width=0.62, edgecolor="white", linewidth=0.5,
+           alpha=0.45, zorder=2)
+    a1.plot(xs, mean, color=darken(OI["green"]), lw=2.6, marker="o", ms=5, zorder=4,
+            path_effects=halo)
+    for x, v in zip(xs, mean):
+        a1.annotate(f"{v:.1f}", (x, v), xytext=(0, 7), textcoords="offset points", ha="center",
+                    fontsize=9, fontweight="bold", color=darken(OI["green"]), zorder=6,
+                    path_effects=halo)
+    a1.set_title("Parallel Claude Code sessions", fontsize=14, fontweight="bold", loc="left")
+    a1.set_ylabel("sessions running at once", fontsize=11)
+    a1.set_ylim(0, max(peak) * 1.22)
+    a1.legend(handles=[Line2D([], [], color=darken(OI["green"]), lw=2.6, marker="o", ms=5,
+                              label="mean concurrent  (what multiplies a day's output)"),
+                       mpatches.Patch(facecolor=OI["green"], alpha=0.45, edgecolor="white",
+                                      label="peak concurrent  (one bucket's burst)")],
+              frameon=False, fontsize=10, loc="upper left", ncol=2)
+
+    a2.fill_between(xs, 0, shrs, color=OI["skyblue"], alpha=0.40, zorder=1,
+                    label="session-hours  (summed over concurrent sessions)")
+    a2.plot(xs, shrs, color=OI["blue"], lw=2.4, marker="s", ms=4, zorder=3, path_effects=halo)
+    a2.fill_between(xs, 0, wall, color=OI["orange"], alpha=0.55, zorder=2)
+    a2.plot(xs, wall, color=darken(OI["orange"]), lw=2.2, marker="o", ms=4, zorder=4,
+            path_effects=halo)
+    a2.set_ylabel("hours", fontsize=11)
+    a2.set_title(f"Time on Claude each day — {sum(wall):.0f}h at the keyboard, "
+                 f"{sum(shrs):.0f}h of session-time ({sum(shrs) / sum(wall):.1f}×)",
+                 fontsize=12, fontweight="bold", loc="left")
+    a2.set_ylim(0, max(shrs) * 1.22)
+    a2.legend(handles=[mpatches.Patch(facecolor=OI["skyblue"], alpha=0.40,
+                                      label="session-hours (summed over concurrent sessions)"),
+                       mpatches.Patch(facecolor=OI["orange"], alpha=0.55,
+                                      label="hours using Claude (wall-clock)")],
+              frameon=False, fontsize=9.5, loc="upper left", ncol=2)
+
+    for a in (a1, a2):
+        a.set_xlim(-0.6, len(days) - 0.4)
+        a.grid(axis="y", alpha=0.22)
+        for s in ("top", "right"):
+            a.spines[s].set_visible(False)
+    a2.set_xticks(xs)
+    a2.set_xticklabels([dparse(d).strftime("%b %-d") for d in days], rotation=45, ha="right",
+                       fontsize=9)
+    fig.text(0.012, 0.01,
+             "session-level data survives only from " + days[0] +
+             " — earlier transcripts were not retained, so this series cannot be backfilled",
+             fontsize=7.5, color="#999")
+    # No tight_layout: it warns on this figure and the explicit hspace already
+    # spaces the panels. save() trims the margins with bbox_inches="tight".
+    save(fig, "parallel_sessions")
+
+
 def main():
     chart_tokens_by_model()
     chart_tokens_per_line()
@@ -568,6 +733,7 @@ def main():
     chart_overview()
     chart_token_anatomy()
     chart_cumulative_cache()
+    chart_parallel_sessions()
     print(f"wrote charts to {CHARTS}")
 
 
