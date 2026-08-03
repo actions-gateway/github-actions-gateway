@@ -7,7 +7,9 @@
 # The helpers below are where that can go quietly wrong: a conclusion mapped to
 # the wrong exit status passes a red release, a broken already-seen calculation
 # either replays the whole heartbeat every poll or stops relaying it entirely,
-# and a log fetch that propagates its exit status kills the gate outright.
+# and a log fetch that propagates its exit status kills the gate outright. The
+# watch's own deadline is asserted here too (Q629): unbounded, it holds the
+# cluster on a run that never concludes; too tight, it fails a healthy release.
 #
 # The log fixture is real: lines copied verbatim from run 30751971883, timestamp
 # prefixes and all, so the filter is asserted against what GitHub actually
@@ -18,6 +20,11 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
+
+WORK="${REPO_ROOT}/tmp/e2e-run-watch-test.$$"
+mkdir -p "$WORK"
+trap 'rm -rf "$WORK"' EXIT
+
 # shellcheck source=scripts/dogfood/e2e-run-watch.sh
 source "$REPO_ROOT/scripts/dogfood/e2e-run-watch.sh"
 
@@ -35,6 +42,15 @@ want_eq() {
 		ok "$name" "$(printf '%q' "$got")"
 	else
 		bad "$name" "want $(printf '%q' "$want") got $(printf '%q' "$got")"
+	fi
+}
+
+want_contains() {
+	local name="$1" want="$2" got="$3"
+	if [[ "$got" == *"$want"* ]]; then
+		ok "$name" "$(printf '%q' "$want")"
+	else
+		bad "$name" "want a match for $(printf '%q' "$want") in $(printf '%q' "$got")"
 	fi
 }
 
@@ -130,6 +146,91 @@ want_eq 'one job 404ing keeps the other job'\''s heartbeats' 3 \
 want_eq 'a partial failure exits clean' 0 "$rc"
 
 unset -f gh
+
+echo
+echo '== the watch is bounded =='
+# Q629. The loop's only other exit is `completed`, so a run that never reaches it
+# holds the gate — and the billable nodes it is watching — for as long as the
+# process lives. Measured on the rc.5 re-run: 33 minutes in `queued`, ended by
+# hand. The clock is faked, so this asserts the deadline rather than waiting on
+# one.
+#
+# watch_run reads both the clock and the run state through command substitution,
+# so a fake that counts in a shell variable loses every increment to the
+# subshell and the watch runs forever. Both keep their state in a file.
+CLOCK="${WORK}/clock"
+POLLS="${WORK}/polls"
+
+# 60s per reading, so a watch cannot outlast its budget by polling slowly.
+now() {
+	local t
+	t=$(($(cat "$CLOCK") + 60))
+	echo "$t" >"$CLOCK"
+	printf '%s' "$t"
+}
+sleep() { :; }
+e2e_job_ids() { :; }
+REPO=owner/repo
+E2E_RUN_WATCH_INTERVAL=0
+
+# The run stays queued for RUN_STATE_AFTER polls, then reports RUN_STATE_FINAL.
+# Reads reach the subshell fine; only the poll count has to come back out.
+run_state() {
+	local n
+	n=$(($(cat "$POLLS") + 1))
+	echo "$n" >"$POLLS"
+	if ((n > RUN_STATE_AFTER)); then
+		printf '%s' "$RUN_STATE_FINAL"
+	else
+		printf 'queued '
+	fi
+}
+
+# arm AFTER FINAL — reset both fakes and set where the run concludes.
+arm() {
+	RUN_STATE_AFTER="$1"
+	RUN_STATE_FINAL="$2"
+	echo 0 >"$CLOCK"
+	echo 0 >"$POLLS"
+}
+
+# The escape hatch matters: without a deadline the loop never ends and this test
+# would hang rather than fail, so the run concludes green far past any poll the
+# deadline permits. A watch with the deadline removed reaches it and exits 0,
+# which is what turns the assertion below red.
+arm 100 'completed success'
+
+# A 300s budget against a clock that advances 60s per reading: the first reading
+# sets the deadline at 360, so polls 1-4 read 120..300 and poll 5 reads 360 and
+# gives up. Asserting that count, not merely "under the escape hatch", pins the
+# arithmetic — an off-by-one that watched twice as long would still be bounded.
+E2E_RUN_WATCH_TIMEOUT=300
+rc=0
+watch_run 42 >/dev/null 2>"${WORK}/timeout.err" || rc=$?
+want_eq 'a run that never concludes times out' 124 "$rc"
+want_eq 'it gave up on its deadline, not the escape hatch' 5 "$(cat "$POLLS")"
+# An operator who hits this has to know which knob to turn.
+want_contains 'the timeout error names E2E_RUN_WATCH_TIMEOUT' \
+	'E2E_RUN_WATCH_TIMEOUT' "$(cat "${WORK}/timeout.err")"
+want_contains 'and the run it gave up on' 'run 42' "$(cat "${WORK}/timeout.err")"
+
+# The control that keeps this deadline from becoming #1171 again: a run that is
+# slow but still moving must be watched to its conclusion, not killed. That
+# failure — a gate that fails a healthy release — is the worse of the two.
+arm 3 'completed success'
+E2E_RUN_WATCH_TIMEOUT=3600
+rc=0
+watch_run 42 >/dev/null 2>&1 || rc=$?
+want_eq 'a slow run inside the budget still passes' 0 "$rc"
+
+# And a run that concludes red fails as a failure, not as a timeout: an operator
+# reading the exit status has two different problems to tell apart.
+arm 3 'completed failure'
+rc=0
+watch_run 42 >/dev/null 2>&1 || rc=$?
+want_eq 'a failed run fails as a failure, not a timeout' 1 "$rc"
+
+unset -f now sleep run_state e2e_job_ids arm
 
 echo
 if ((fails > 0)); then
