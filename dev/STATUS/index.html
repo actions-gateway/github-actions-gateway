@@ -2577,6 +2577,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q648"></a>Q648</td>
+<td><a href="../development/testing/#runnergithub-egress-attribution-q352">The runner→GitHub egress probe scores an HTTP 403 as reachable, so a refused runner reads as a real failure</a></td>
+<td><code>flake</code> <code>tests</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Measured 2026-08-03</strong> (run 30832163714 attempt 1): probe stamped <code>PREFLIGHT: OK (HTTP 403)</code> 3x at failure time, so it said treat-as-real; green on re-run. It errors only on transport, so 403 is OK.</td>
+</tr>
+<tr>
 <td><a id="Q642"></a>Q642</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/progress-watch-test.sh"><code>progress-watch-test</code>'s <code>interval 0</code> case fails under <code>make check</code>, passes standalone</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -2631,6 +2639,14 @@
 <td>🔲</td>
 <td>M</td>
 <td>No field-level API docs exist in <code>docs/</code>. The CRDs are the only authority, so v1.3.0's notes hand-wrote an API section with nowhere to link. The kubebuilder markers are already there, so <code>crd-ref-docs</code> can generate a page into the mkdocs site.</td>
+</tr>
+<tr>
+<td><a id="Q649"></a>Q649</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Adding a gate means hand-editing three copies of the gate list, and concurrent PRs collide on all three</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Two of three rebases on #1192 collided here. A gate name is hand-copied into <code>.PHONY</code>, the <code>check:</code> help, and testing.md's enumeration, so every gate-adding PR edits all three and they conflict.</td>
 </tr>
 <tr>
 <td><a id="Q639"></a>Q639</td>
