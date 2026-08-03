@@ -716,6 +716,14 @@ on the pod where the templates asked for 2 and 3 CPU. Ship the receipt wherever 
 claim is made, not only in this section — a feature line that links its own PR is a
 receipt too.
 
+**Check the validation story against the plan doc, not memory.** This is the
+section a sceptical reader checks first, so a wrong detail here costs more than
+anywhere else. `v1.3.0`'s draft claimed no candidate had ever cleared the gate and
+that rc.5 was the first to return a verdict; the plan doc records rc.4 passing the
+day before. The true version was better anyway — five candidates, three aborted,
+rc.4 passed without catching a live worker pod, rc.5 caught one — and it is
+checkable, which the flattering version was not.
+
 **Keep a contributor-facing section, and put it last.** Release, CI, docs-site, and
 tooling work ships in no image and no chart, so it does not belong in the change
 lists. It still belongs in the notes: it is what a reader evaluating the project's
@@ -753,12 +761,29 @@ removed:
 
 ```bash
 git log --format='%s' <prev-tag>..HEAD \
-  | grep -E '^(feat|fix)\((agc|gmc|proxy|worker|api|scaleset|chart|broker|wrapper|admission|provisioner|metrics)\)'
+  | grep -E '^(feat|fix)\((agc|gmc|proxy|worker|api|scaleset|chart|broker|wrapper|admission|provisioner|metrics|scalesetlistener|migrate|observability)\)'
 ```
 
+**That scope list is a guess, so reconcile what it dropped — never just run it.**
+An allow-list silently omits any scope nobody thought of, and the result still
+looks like a complete list. Print the residue and read every scope in it:
+
+```bash
+git log --format='%s' <prev-tag>..HEAD | grep -E '^(feat|fix)' > /tmp/all
+# ...run the filter above into /tmp/kept, then:
+grep -vxF -f /tmp/kept /tmp/all | sed -E 's/^((feat|fix)\([^)]*\)).*/\1/' | sort | uniq -c | sort -rn
+```
+
+`v1.3.0`'s first pass kept 57 of 132 and dropped **seven shipping fixes**: two
+`fix(scalesetlistener)` (the pattern had `scaleset`, which does not match it), a
+compound `fix(agc,gmc)`, three `fix(migrate)` for the shipped `gag-migrate`
+binary, and one `fix(observability)`. Nothing in the output said so. The last
+three scopes above were added only after that reconciliation — assume the list is
+still incomplete for the next release.
+
 Exclude the `ci`, `dogfood`, `test`, `docs`, and `build` scopes, which ship in no
-image or chart. Say in the notes that you excluded them, so a reader does not read 461
-commits as 57 user-visible changes. Keep the trailing `(#NNNN)`: GitHub auto-links
+image or chart. Say in the notes that you excluded them, so a reader does not read
+hundreds of commits as the user-visible change count. Keep the trailing `(#NNNN)`: GitHub auto-links
 a bare `#NNNN` in a release body, so every line becomes traceable for free.
 
 **One fact per line, especially next to a procedure.** Distinct operator-facing
@@ -776,8 +801,13 @@ its one summary line while collapsed. `v1.3.0` hit that limit and was folded bac
 under it — six folds, covering the two change lists, three API lists, and the
 tooling list. If the index is truncating, the fix is another fold, not a cut.
 
-**Count what you list.** State a count in a `<summary>` and it will be wrong the
-moment you curate the list. `v1.3.0`'s draft claimed 25 features and listed 23.
+**Count what you list — and count the unit in the label.** State a count in a
+`<summary>` and it will be wrong the moment you curate the list. `v1.3.0`'s draft
+claimed 25 features and listed 23. Subtler: its "New spec fields (10)" had ten
+*bullets* carrying thirteen *fields*, because three bullets grouped related ones
+(`.minRequests` / `.maxRequests` / `.limitHeadroomPercent`). Every other fold
+counted the noun in its own label; that one silently switched to bullets. Count
+what the label says, then re-count after every edit — mechanically, not by eye.
 
 **Caveat anything a validation run did not exercise.** The dogfood gate runs
 against github.com, so it says nothing about GHES. A feature list that reads as
