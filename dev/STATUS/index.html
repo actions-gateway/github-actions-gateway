@@ -2705,12 +2705,20 @@
 <td>Blocked by <a href="#Q539">Q539</a>. Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from worker pods.</td>
 </tr>
 <tr>
-<td><a id="Q319"></a>Q319</td>
-<td><a href="../operations/observability-metrics/">Export v2 RunnerSet worker-capacity conditions as gauges</a></td>
+<td><a id="Q643"></a>Q643</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_capacity.go"><code>WorkerCapacityDeclined</code> is the one RunnerSet capacity condition with no gauge</a></td>
 <td><code>feature</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>v1 sunset shipped, so every operator is on v2, yet the three <code>actions_gateway_worker_*</code> gauges list <code>RunnerGroupList</code> only. Q303's RunnerSet conditions have no collector. Add per-RunnerSet gauges.</td>
+<td>Q319 gauged the other three. <code>scaleset_capacity_withheld{reason="capacity"}</code> and <code>jobs_admission_rejected_total{reason="capacity"}</code> count consequences, not condition state, and neither shows the <code>AwaitingProbe</code> latch (Q512).</td>
+</tr>
+<tr>
+<td><a id="Q647"></a>Q647</td>
+<td><a href="../operations/troubleshooting/">The runbook's capacity rows cite only the RunnerGroup gauges, so a v2 operator reads a flat 0</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Its <code>WorkersUnschedulable</code> and quota-pressure rows name <code>actions_gateway_workers_unschedulable</code> / <code>..._worker_quota_pressure</code>, both RunnerGroup-only. Q319 added the <code>actions_gateway_runnerset_*</code> twins; cite them.</td>
 </tr>
 <tr>
 <td><a id="Q298"></a>Q298</td>

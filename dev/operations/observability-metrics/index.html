@@ -2863,6 +2863,24 @@
 <td><code>1</code> when <code>WorkersUnschedulable=True</code> (Q157): worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (no matching node / affinity / taints — <strong>not</strong> quota, which <code>WorkerQuotaExceeded</code> covers). Capacity is not materializing — page if sustained. The stuck pods and the scheduler verdict are named in the condition message.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_runnerset_worker_quota_pressure</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td><code>1</code> when <code>WorkerQuotaPressure=True</code> on a v2 <code>RunnerSet</code> (Q303, exported in Q319) — the per-set twin of <code>actions_gateway_worker_quota_pressure</code>, same semantics and same warning grade. Alert with <code>for:</code>, don't page.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnerset_worker_quota_exceeded</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td><code>1</code> when <code>WorkerQuotaExceeded=True</code> on a v2 <code>RunnerSet</code> — the per-set twin of <code>actions_gateway_worker_quota_exceeded</code>: the <code>ResourceQuota</code> can't admit another worker pod. Error — page. On a <code>ScaleSet</code> set the same headroom also drives <code>scaleset_capacity_withheld{reason="quota"}</code>, but the two are not equivalent: that gauge counts the slots quota removed from the ceiling, while this one trips only once there is no room for even one more worker pod.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_runnerset_workers_unschedulable</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td><code>1</code> when <code>WorkersUnschedulable=True</code> on a v2 <code>RunnerSet</code> — the per-set twin of <code>actions_gateway_workers_unschedulable</code>: worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (<strong>not</strong> quota). Page if sustained; the stuck pods and the scheduler verdict are named in the condition message.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_reap_blocking_sidecar_templates</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
@@ -2983,7 +3001,9 @@ EgressProxy reconciler sets those conditions with the same semantics as the v1
 <code>ActionsGateway</code> (a namespace-<code>ResourceQuota</code>-bounded, HPA-scaled pool whose default
 CIDR-mode <code>NetworkPolicy</code> is refreshed from the shared GitHub IP-range cache) (Q320).
 The v1 and v2 series share one metric family; the <code>name</code> label distinguishes them by
-object. Unlike these, the worker-capacity gauges below stay v1-only.</p>
+object — both kinds carry the same <code>namespace</code>/<code>name</code> labels, so nothing about the v1
+series changes. The worker-capacity gauges below take the other route, and the note on
+them says why.</p>
 <p><code>github_egress_incomplete</code> is the exception among the proxy gauges: its condition
 exists only on the <code>EgressProxy</code> — v1 has no twin — so the family is emitted only on
 a v2 install (Q537).</p>
@@ -2991,10 +3011,18 @@ a v2 install (Q537).</p>
 <code>WorkerQuotaExceeded</code>, and <code>WorkersUnschedulable</code> conditions are also set on a v2
 <code>RunnerSet</code> (Q303) with the same semantics as the v1 <code>RunnerGroup</code>, so a stalled
 set surfaces the capacity blocker in <code>.status.conditions</code> instead of only a rising
-<code>pendingJobs</code> with <code>Ready=True</code>. The three gauges above (<code>actions_gateway_worker_quota_*</code>,
-<code>actions_gateway_workers_unschedulable</code>) are still emitted only for v1 <code>RunnerGroup</code>s;
-to alert on a <code>RunnerSet</code>, scrape its conditions (e.g. via kube-state-metrics
-<code>CustomResourceStateMetrics</code>) or read them with <code>kubectl get runnerset</code>.</p>
+<code>pendingJobs</code> with <code>Ready=True</code>. Each has its own gauge — the
+<code>actions_gateway_runnerset_*</code> triplet above (Q319) — so a <code>RunnerSet</code> is alertable
+without scraping CRD conditions through kube-state-metrics.</p>
+<p><strong>Why separate families instead of a <code>runner_set</code> label on the v1 gauges.</strong> Unlike the
+proxy conditions above, the two objects do not share a label set: the v1 series key on
+<code>runner_group</code>, which a <code>RunnerSet</code> has none of. Folding both into one family would
+leave every set at <code>runner_group=""</code>, which silently breaks the
+<code>sum by (namespace, runner_group)</code> groupings the v1 series promise — every set would
+collapse into a single unnamed bucket — and would add an always-empty <code>runner_set</code>
+label to every existing v1 series. Separate names cost existing queries nothing, and a
+v2 dashboard selects on <code>runner_set</code> directly rather than filtering <code>{runner_set!=""}</code>
+on every query. The v1 families are unchanged and stay <code>RunnerGroup</code>-only.</p>
 <p><strong><code>RunnerSetsDegraded</code> on a v2 <code>ActionsGateway</code>.</strong> The v2 <code>ActionsGateway</code> carries a
 <code>RunnerSetsDegraded</code> condition (Q304) — the child-health rollup counterpart of the v1
 <code>RunnerGroupsDegraded</code> above. It is <code>True</code> when one or more of the <code>RunnerSet</code>s bound

@@ -2659,17 +2659,17 @@
 <tbody>
 <tr>
 <td>Worker quota exceeded</td>
-<td><code>max(actions_gateway_worker_quota_exceeded)</code></td>
+<td><code>max(actions_gateway_worker_quota_exceeded or actions_gateway_runnerset_worker_quota_exceeded)</code></td>
 <td>Stat (1 = red)</td>
 </tr>
 <tr>
 <td>Workers unschedulable</td>
-<td><code>max(actions_gateway_workers_unschedulable)</code></td>
+<td><code>max(actions_gateway_workers_unschedulable or actions_gateway_runnerset_workers_unschedulable)</code></td>
 <td>Stat (1 = red)</td>
 </tr>
 <tr>
 <td>Worker quota pressure</td>
-<td><code>max(actions_gateway_worker_quota_pressure)</code></td>
+<td><code>max(actions_gateway_worker_quota_pressure or actions_gateway_runnerset_worker_quota_pressure)</code></td>
 <td>Stat (1 = yellow)</td>
 </tr>
 <tr>
@@ -2679,6 +2679,14 @@
 </tr>
 </tbody>
 </table>
+<blockquote>
+<p>The three capacity panels union the v1 <code>RunnerGroup</code> family with its
+<code>actions_gateway_runnerset_*</code> v2 twin (Q319). The two families key on different
+labels — <code>runner_group</code> and <code>runner_set</code> — so <code>or</code> unions rather than overlaps them,
+and a panel that named only the v1 family would read a flat <code>0</code> on a v2-only deploy.
+To break either out per owner, replace <code>max(...)</code> with
+<code>max by (namespace, runner_set) (actions_gateway_runnerset_...)</code>.</p>
+</blockquote>
 <p><strong>Row 6 — Egress Proxy (per tenant)</strong></p>
 <table>
 <thead>
