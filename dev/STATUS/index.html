@@ -2617,6 +2617,14 @@
 <td>Q628 releases an unrun worker's assignment with <code>result=abandoned</code>; whether GitHub re-dispatches or concludes the run is unmeasured, and decides whether a re-run arm is also needed. Measurable on a turn-up: reap a Pending worker, watch the run.</td>
 </tr>
 <tr>
+<td><a id="Q646"></a>Q646</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-released-upgrade-check.sh">The released-chart upgrade gate never exercises the CRD-schema preflights</a></td>
+<td><code>tests</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>It upgrades with default values only, so any preflight gated on a value being SET is dead code in CI. Q298's <code>allowedInfraPriorityClasses</code> lookup guard was verified by hand on kind, not by a gate. Add a values-set leg.</td>
+</tr>
+<tr>
 <td><a id="Q632"></a>Q632</td>
 <td><a href="../development/code-generation/">Generate an API reference page from the CRD markers</a></td>
 <td><code>docs</code> <code>feature</code></td>
@@ -2711,14 +2719,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Its <code>WorkersUnschedulable</code> and quota-pressure rows name <code>actions_gateway_workers_unschedulable</code> / <code>..._worker_quota_pressure</code>, both RunnerGroup-only. Q319 added the <code>actions_gateway_runnerset_*</code> twins; cite them.</td>
-</tr>
-<tr>
-<td><a id="Q298"></a>Q298</td>
-<td><a href="../operations/security-operations/#infra-pods-the-separate-allowed-infra-priority-classes-allowlist">Infra PriorityClass allowlist has no dynamic augmentation (Q188 parity)</a></td>
-<td><code>security</code> <code>feature</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>--allowed-infra-priority-classes</code> is flag-only, so growing it needs a GMC restart. The worker allowlist takes an additive, fail-safe watched <code>PriorityClassAllowlist</code> CR (Q188, moved off a ConfigMap by Q492).</td>
 </tr>
 <tr>
 <td><a id="Q641"></a>Q641</td>

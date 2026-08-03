@@ -3560,8 +3560,8 @@ gateway will not fight it.</p>
 </tr>
 <tr>
 <td><code>EgressProxy</code>/<code>ActionsGateway</code> apply rejected: <code>spec.scheduling.priorityClassName … is not in the platform infra allowlist</code></td>
-<td>The class named for an <strong>infra</strong> pod is not on the GMC <code>--allowed-infra-priority-classes</code> flag (a <em>separate</em> allowlist from the worker one, empty by default)</td>
-<td>Have the platform admin create the <code>PriorityClass</code> and add its name to <code>--allowed-infra-priority-classes</code>, kept disjoint from <code>--allowed-priority-classes</code>; see <a href="../security-operations/#infra-pods-the-separate-allowed-infra-priority-classes-allowlist">security-operations.md § Infra pods</a></td>
+<td>The class named for an <strong>infra</strong> pod is not on the infra allowlist — the GMC <code>--allowed-infra-priority-classes</code> flag plus the <code>PriorityClassAllowlist</code> CR's <code>allowedInfraPriorityClasses</code> (a <em>separate</em> allowlist from the worker one, empty by default)</td>
+<td>Have the platform admin create the <code>PriorityClass</code> and add its name to <code>spec.allowedInfraPriorityClasses</code> on the CR (restart-free) or to the flag, kept disjoint from the worker allowlist either way; see <a href="../security-operations/#infra-pods-the-separate-allowed-infra-priority-classes-allowlist">security-operations.md § Infra pods</a></td>
 </tr>
 </tbody>
 </table>

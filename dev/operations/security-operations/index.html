@@ -2654,13 +2654,30 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" class="md-nav__link">
+  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Self-service additions via the PriorityClassAllowlist CR (Q188)
+        Self-service additions via the PriorityClassAllowlist CR (Q188, Q298)
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Self-service additions via the PriorityClassAllowlist CR (Q188, Q298)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#disjointness-is-enforced-on-every-edit-not-only-at-startup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disjointness is enforced on every edit, not only at startup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -3302,13 +3319,30 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" class="md-nav__link">
+  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Self-service additions via the PriorityClassAllowlist CR (Q188)
+        Self-service additions via the PriorityClassAllowlist CR (Q188, Q298)
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Self-service additions via the PriorityClassAllowlist CR (Q188, Q298)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#disjointness-is-enforced-on-every-edit-not-only-at-startup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disjointness is enforced on every edit, not only at startup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -4824,7 +4858,9 @@ any worker surface.</p>
 <p><strong>The GMC enforces disjointness at startup.</strong> If a class appears in both
 <code>--allowed-priority-classes</code> and <code>--allowed-infra-priority-classes</code>, the GMC <strong>refuses
 to boot</strong> — converting a silent priority inversion into a loud configuration error.
-Keep the two sets separate; a good convention is an <code>infra-</code> name prefix.</p>
+Keep the two sets separate; a good convention is an <code>infra-</code> name prefix. The flags
+are not the only route to an overlap once the watched CR is in play; see
+<a href="#disjointness-is-enforced-on-every-edit-not-only-at-startup">Disjointness is enforced on every edit</a>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># GMC Deployment / Helm values — args on the controller-manager container</span>
 <a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nt">args</span><span class="p">:</span>
 <a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-priority-classes=runner-standard,runner-opportunistic</span>
@@ -4874,17 +4910,43 @@ objects, so nothing breaks until the CR is edited).</p>
 <p>Any class these print that is <strong>not</strong> in your <code>--allowed-priority-classes</code> was an
 open cross-tenant preemption lever; treat a <code>system-cluster-critical</code> or
 <code>system-node-critical</code> result as an incident, not a config change.</p>
-<h3 id="self-service-additions-via-the-priorityclassallowlist-cr-q188">Self-service additions via the <code>PriorityClassAllowlist</code> CR (Q188)<a class="headerlink" href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" title="Permanent link">&para;</a></h3>
+<h3 id="self-service-additions-via-the-priorityclassallowlist-cr-q188-q298">Self-service additions via the <code>PriorityClassAllowlist</code> CR (Q188, Q298)<a class="headerlink" href="#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298" title="Permanent link">&para;</a></h3>
 <p>Editing <code>--allowed-priority-classes</code> and rolling out the GMC for every new class
-is slow. The GMC <strong>also</strong> sources the allowlist from a cluster-scoped
+is slow. The GMC <strong>also</strong> sources both allowlists from a cluster-scoped
 <code>PriorityClassAllowlist</code> CR it watches, so a platform admin can add an allowed
 class without a flag edit or restart — the change takes effect on the next watch
 event.</p>
+<p>One object carries both sets, in two lists that mirror the two flags:</p>
+<table>
+<thead>
+<tr>
+<th>CR field</th>
+<th>Augments the flag</th>
+<th>Gates</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>spec.allowedPriorityClasses</code></td>
+<td><code>--allowed-priority-classes</code></td>
+<td>worker pods (<code>priorityTiers[]</code>, <code>podTemplate.spec</code>)</td>
+</tr>
+<tr>
+<td><code>spec.allowedInfraPriorityClasses</code></td>
+<td><code>--allowed-infra-priority-classes</code></td>
+<td>infra pods (<code>EgressProxy</code> / <code>ActionsGateway</code> <code>spec.scheduling</code>)</td>
+</tr>
+</tbody>
+</table>
 <p>The chart always renders this object (named <code>&lt;release&gt;-priorityclass-allowlist</code>)
-from <code>allowedPriorityClasses</code>, and always points the GMC at it. The <strong>same object
-is the <a href="#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289"><code>priorityclass-allowlist-guard</code></a>
+from <code>allowedPriorityClasses</code> and <code>allowedInfraPriorityClasses</code>, and always points
+the GMC at it. The <strong>same object is the
+<a href="#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289"><code>priorityclass-allowlist-guard</code></a>
 policy's parameter</strong>, so the webhook and the policy read one source and cannot
-drift — there is no superset discipline to remember.</p>
+drift — there is no superset discipline to remember. The policy reads only
+<code>allowedPriorityClasses</code>: its job is the direct-write path to <code>runnergroups</code>, which
+carry no infra scheduling block, and the two infra kinds have <code>failurePolicy: fail</code>
+webhooks of their own.</p>
 <div class="admonition note">
 <p class="admonition-title">This replaced a watched ConfigMap (Q492)</p>
 <p><code>priorityClassAllowlist.configMapName</code> is removed; setting it now fails the
@@ -4905,16 +4967,70 @@ Migration steps: <a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">u
 <a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="w">  </span><span class="nt">allowedPriorityClasses</span><span class="p">:</span>
 <a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-bursty</span>
 <a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-batch</span>
+<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="w">  </span><span class="nt">allowedInfraPriorityClasses</span><span class="p">:</span><span class="w">      </span><span class="c1"># DISJOINT from the list above</span>
+<a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gag-infra-high</span>
 </code></pre></div>
-<p>The <strong>effective allowlist for the webhook is the union</strong> of the static
-<code>--allowed-priority-classes</code> flag and this object's entries: it can only <em>widen</em>
-the webhook allowlist, never remove a flag-pinned class. You still pre-create each
-<code>PriorityClass</code> object first (step 1 of the previous section) — the allowlist only
-governs which <em>names</em> a tenant may reference.</p>
+<p>The <strong>effective allowlist for each webhook is the union</strong> of its static flag and the
+matching list here: the CR can only <em>widen</em> an allowlist, never remove a
+flag-pinned class. You still pre-create each <code>PriorityClass</code> object first (step 1 of
+the previous section) — the allowlist only governs which <em>names</em> a tenant may
+reference.</p>
+<h4 id="disjointness-is-enforced-on-every-edit-not-only-at-startup">Disjointness is enforced on every edit, not only at startup<a class="headerlink" href="#disjointness-is-enforced-on-every-edit-not-only-at-startup" title="Permanent link">&para;</a></h4>
+<p>The startup check reads the two flags. Once either list can also be edited in a CR,
+that check alone is not enough: an edit could put one class on both surfaces long
+after the GMC booted. Three gates hold the invariant, and the first one you hit
+depends on how the overlap was written.</p>
+<table>
+<thead>
+<tr>
+<th>Where the overlap comes from</th>
+<th>What stops it</th>
+<th>What you see</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Both flags name the class</td>
+<td>Startup check</td>
+<td>The GMC <strong>refuses to boot</strong> with the shared names</td>
+</tr>
+<tr>
+<td>Both CR lists name the class</td>
+<td>CRD CEL rule</td>
+<td><code>kubectl apply</code> is <strong>rejected</strong>: <code>allowedPriorityClasses (worker) and allowedInfraPriorityClasses must be disjoint</code></td>
+</tr>
+<tr>
+<td>One CR list collides with the <em>other</em> flag</td>
+<td>GMC reconciler</td>
+<td>The write is admitted (CEL cannot read a controller flag), then <strong>both dynamic sets are dropped</strong> and the GMC logs <code>WARNING: PriorityClassAllowlist would make the worker and infra allowlists intersect</code> with <code>sharedClasses</code></td>
+</tr>
+<tr>
+<td>Anything that got past all three</td>
+<td>Admission read path</td>
+<td>A class on both allowlists is admitted on <strong>neither</strong> surface</td>
+</tr>
+</tbody>
+</table>
+<p>The third row is the one to recognize in practice, because the <code>kubectl apply</code>
+<strong>succeeds</strong>. The GMC then falls back to the two flag allowlists — so the symptom is
+that <em>every</em> recently self-serviced class, worker and infra alike, stops being
+accepted at once. That is deliberate: a partially applied pair is how an overlap
+becomes real, so the object is refused whole. Grep the GMC log for <code>sharedClasses</code>,
+remove the named class from one of the two lists, and the next watch event restores
+both dynamic sets.</p>
 <div class="admonition warning">
-<p class="admonition-title">A chart upgrade reasserts <code>allowedPriorityClasses</code> over this object</p>
+<p class="admonition-title">A chart upgrade reasserts both lists over this object</p>
 <p>An in-place edit is the fast path, not the durable one. Persist any class you
-intend to keep in the chart's <code>allowedPriorityClasses</code> value.</p>
+intend to keep in the chart's <code>allowedPriorityClasses</code> /
+<code>allowedInfraPriorityClasses</code> values.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Setting <code>allowedInfraPriorityClasses</code> for the first time needs the CRD step</p>
+<p>The field is new in Q298. Helm never reapplies the chart-root <code>crds/</code> dir on
+upgrade, so a release upgrading from before it existed still has a CRD whose
+schema lacks the field. The chart omits the key while the value is empty, so a
+default upgrade is unaffected; set it, and apply the CRDs first —
+<a href="../upgrade/#gmc-install-and-upgrade-via-helm-recommended">upgrade.md</a>.</p>
 </div>
 <p><strong>One caveat the flag does not share.</strong> The <em>policy</em> sees only this object, never
 the flag. A class listed in <code>--allowed-priority-classes</code> but absent here is
@@ -4924,17 +5040,18 @@ by hand.</p>
 <p><strong>Fail-safe behavior.</strong> The allowlist is a cross-tenant-isolation guardrail, so a
 broken object must never silently widen it:</p>
 <ul>
-<li>The CRD schema constrains every entry to a valid DNS-1123 subdomain and the list
-  to a set, so a malformed name is <strong>rejected at write time</strong> — it never reaches
-  the GMC or the policy.</li>
+<li>The CRD schema constrains every entry in <strong>both</strong> lists to a valid DNS-1123
+  subdomain and each list to a set, so a malformed name is <strong>rejected at write
+  time</strong> — it never reaches the GMC or the policy.</li>
 <li>A <strong>missing or deleted</strong> object, or any invalid entry that predates the schema,
-  causes the GMC to fall back to the <strong>static flag allowlist only</strong> and log a
+  causes the GMC to fall back to the <strong>static flag allowlists only</strong> and log a
   warning.</li>
-<li>An invalid list is rejected <strong>wholesale</strong> — a valid name sitting next to a typo
-  is <em>not</em> partially applied — so a mistake can never smuggle a class in.</li>
-<li>An <strong>absent or empty</strong> <code>allowedPriorityClasses</code> is valid and simply adds nothing.</li>
+<li>An invalid list is rejected <strong>wholesale</strong>, and across both lists — a valid name
+  sitting next to a typo is <em>not</em> partially applied, and a good infra addition does
+  not ride in on an object whose worker list is malformed.</li>
+<li>An <strong>absent or empty</strong> list is valid and simply adds nothing.</li>
 </ul>
-<p>Because the dynamic set is additive and resets to the static base on any error,
+<p>Because the dynamic sets are additive and reset to the static bases on any error,
 the worst case is that recently-added self-service classes stop being accepted
 until it is fixed — never that an unintended class becomes allowed.</p>
 <p><strong>RBAC.</strong> The chart grants the GMC a <code>ClusterRole</code> with <code>get</code>/<code>list</code>/<code>watch</code> on
@@ -5030,7 +5147,7 @@ writers can create <code>PriorityClass</code> objects anyway).</p>
 cannot read the GMC flag). The chart renders that object from
 <code>allowedPriorityClasses</code> — the same value that feeds <code>--allowed-priority-classes</code>
 — and the GMC watches the very same object, so the webhook and the policy cannot
-drift. See <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188">Self-service additions</a>.</p>
+drift. See <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298">Self-service additions</a>.</p>
 <p><strong>Why a CRD and not a ConfigMap (Q492).</strong> A <code>paramKind</code> on a <em>core</em> type is
 destroyed by a kube-apiserver defect the moment the set of bindings naming it goes
 empty — which <code>helm uninstall</code> does. See
