@@ -299,6 +299,45 @@ extends the same axis, the shape has to accommodate it now. Enum values that are
 *not yet accepted* are still a design constraint: `Probe`/`Provision` are the
 reason `Observe` is named the way it is.
 
+### If the chart renders an instance of the CRD, omit the new field when empty
+
+Adding an optional field is additive to the *schema* and still breaks
+`helm upgrade` when the chart also renders an object of that kind. Helm applies
+the chart-root `crds/` directory on `helm install` **only**, never on upgrade, so
+an upgrading cluster still holds the CRD its *current* release installed. A field
+that CRD does not declare fails server-side apply midway through the upgrade:
+
+```text
+failed to create typed patch object: .spec.<newField>: field not declared in schema
+```
+
+Midway is the damage — the release revision has already advanced, leaving a
+half-upgraded cluster. `make check` cannot see this; the signal comes from
+[`chart-released-upgrade-check.sh`](../../scripts/e2e/chart-released-upgrade-check.sh),
+which runs in e2e.
+
+So render the key only when the value is non-empty:
+
+```gotemplate
+{{- with .Values.myNewField }}
+myNewField:
+  {{- toYaml . | nindent 4 }}
+{{- end }}
+```
+
+Unset and empty mean the same thing to both the CRD and the controller, but only
+the omitted form survives an upgrade against the older CRD — and empty is the
+default, so that is the path every existing release takes. When the value *is*
+set, the operator is adopting a new feature and the chart's documented
+`helm show crds … | kubectl apply -f -` step applies; preflight it with `lookup`
+and fail at **render** rather than midway.
+
+Q298 shipped this break and the gate caught it. The trap is that the chart's
+older preflight tests whether the *kind* is present, which reads as "the hazard
+is a new CRD" — it is equally a new **field** on an existing one, and a stale
+schema is invisible to a presence check. Today this applies to
+`PriorityClassAllowlist`, the one CRD the chart both installs and instantiates.
+
 ## Is this change breaking?
 
 "Breaking" here means the wire contract, which is what a tag freezes. Go-symbol
