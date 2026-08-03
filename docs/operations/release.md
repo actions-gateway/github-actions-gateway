@@ -657,9 +657,70 @@ Use it to seed a new file when a tag predates this convention.
 
 **Notes answer "what is in it" and "what must I do". The docs answer "how" and
 "why".** Every explanation that can live in `upgrade.md` or an `operations/` page
-should, behind a link. `v1.3.0`'s first draft ran ~1000 words of prose. The
-shipped version ran ~525 with nine links and lost nothing. Link a Highlight from
-its bold lead, and link group headings rather than every line.
+should, behind a link. `v1.3.0`'s first draft ran ~1000 words of prose; cutting it
+to links lost nothing. Link a Highlight from its bold lead, and link group
+headings rather than every line.
+
+That rule shortens the *prose*. It does not shorten the notes: `v1.3.0` shipped
+2100 words and 25 links, because enumerations kept being added — a feature list, a
+fix list, the API surface, the condition reasons. Prose is what gets cut; lists are
+what a reader actually searches. Fold the lists (below) and the length costs
+nothing.
+
+##### The section skeleton
+
+`v1.3.0` arrived at this order after several passes. It is ordered by what a
+reader needs first, not by what took the most work:
+
+| Section | Answers | Notes |
+|---|---|---|
+| *(one-line tagline)* | what this project is | for the reader who arrived from a search result |
+| *(danger banner)* | is anything here going to hurt me | a GFM alert, above the fold; see below |
+| **Highlights** | why upgrade | 3–5, each linked from its bold lead |
+| **Upgrading** | what must I do | numbered steps; say which are guarded |
+| **Deprecations** | what is going away | see below |
+| **Everything since `<prev>`** | did my bug get fixed | folded lists with counts |
+| **API surface** | what changed in the contract | see below |
+| **Validation** | why should I believe you | receipts, not adjectives |
+| **Project and tooling** | is this project healthy | contributor-facing; last for a reason |
+| **Verifying this release** | how do I check the artifacts | the `make verify-release` line |
+
+**Lead with a danger banner, and make it an alert.** GFM alerts — `> [!WARNING]`,
+`> [!CAUTION]`, `> [!NOTE]` — render as real coloured callouts in a release body
+(verified; the render check below counts them). `v1.3.0` opens with a `[!WARNING]`
+naming the two required upgrade steps and the asymmetric rollback, because those
+are the only things that can hurt an operator who reads no further. Use `[!NOTE]`
+for a scope caveat and `[!CAUTION]` for the one thing that is genuinely
+destructive. Three alerts is a lot; more and none of them read as urgent.
+
+**Write a Deprecations section even when nothing is removed** — saying so is the
+point, since "deprecation" reads as "removal" to a skimmer. For each notice give
+the removal version, the migration path, and **whether the apiserver actually
+warns**. `v1.3.0` deprecated `v2alpha1` (warns on every apply) alongside
+`v1alpha1`, which is removal-slated and emits **no** warning at all — so nothing
+reminds an operator it is going away. That asymmetry is exactly what a reader
+cannot discover for themselves.
+
+**Give the API surface its own section, and lead it with any new CRD.** A new kind
+is not a field: the chart installs chart-root `crds/` on a *fresh install only*,
+so a new CRD is the reason "apply the CRDs" is step 1 of Upgrading, and the two
+must cross-reference. Then fold the rest — new spec fields, new status fields, new
+condition reasons — grouped by kind, counted like any other fold. `v1.3.0` listed
+28 new condition reasons this way. Until a generated API reference exists, say
+which artifact is authoritative (`kubectl explain`, or the signed CRD asset).
+
+**Validation is receipts, not adjectives.** "Thoroughly tested" is worth nothing.
+Link the run, quote the counts, and quote a value measured at the layer that
+matters: `v1.3.0` cites 73/73 specs with a run link, and a derived `1500m` observed
+on the pod where the templates asked for 2 and 3 CPU. Ship the receipt wherever a
+claim is made, not only in this section — a feature line that links its own PR is a
+receipt too.
+
+**Keep a contributor-facing section, and put it last.** Release, CI, docs-site, and
+tooling work ships in no image and no chart, so it does not belong in the change
+lists. It still belongs in the notes: it is what a reader evaluating the project's
+health is looking for. Fold it, label it as not user-facing, and let it sit below
+everything an operator needs.
 
 **The caveats script reports headings that *changed*, not headings that are
 *new*.** A section edited in this window is listed exactly like one added in it.
@@ -701,7 +762,11 @@ commits as 57 user-visible changes. Keep the trailing `(#NNNN)`: GitHub auto-lin
 a bare `#NNNN` in a release body, so every line becomes traceable for free.
 
 **Fold long lists.** `<details><summary>` renders on the Releases page and keeps
-the top scannable.
+the top scannable. It is also the only lever against truncation: the Releases
+*index* collapses a long body behind a **"read more"** link, and a fold counts as
+its one summary line while collapsed. `v1.3.0` hit that limit and was folded back
+under it — six folds, covering the two change lists, three API lists, and the
+tooling list. If the index is truncating, the fix is another fold, not a cut.
 
 **Count what you list.** State a count in a `<summary>` and it will be wrong the
 moment you curate the list. `v1.3.0`'s draft claimed 25 features and listed 23.
@@ -709,7 +774,16 @@ moment you curate the list. `v1.3.0`'s draft claimed 25 features and listed 23.
 **Caveat anything a validation run did not exercise.** The dogfood gate runs
 against github.com, so it says nothing about GHES. A feature list that reads as
 finished support overclaims. Check `docs/plan/archive/` for the feature's own
-"what this will not verify" section before describing it.
+"what this will not verify" section before describing it. Then ask whether an
+unexercised feature belongs in Highlights at all — `v1.3.0` kept GHES there and
+paid for it with a caveat in three places.
+
+**A caveat must survive being read alone.** Every line in a folded list is read
+out of its heading's context — by search, by a linked anchor, by a skimmer. The
+`v1.3.0` draft said "Untested against a real appliance" under a GHES heading,
+which says nothing at all once the heading scrolls away; it shipped as "Untested
+against a real **GHES** appliance". Name the subject inside the caveat, and repeat
+the caveat at each place the feature is claimed rather than relying on proximity.
 
 **Link the versioned docs site, not `main` and not `blob/`.** A reader of these
 notes should land on that release's instructions, and the site publishes a build
