@@ -37,6 +37,9 @@ Part of the [Observability](observability.md) guide. To scrape these metrics, se
 | `actions_gateway_worker_quota_pressure` | Gauge | `namespace`, `runner_group` | `1` when `WorkerQuotaPressure=True` (Q82): workers can't scale to the configured ceiling within the namespace `ResourceQuota` headroom. Warning — load-dependent; alert with `for:`, don't page. |
 | `actions_gateway_worker_quota_exceeded` | Gauge | `namespace`, `runner_group` | `1` when `WorkerQuotaExceeded=True` (Q82): the `ResourceQuota` can't admit another worker pod — the next acquired job's pod will be rejected. Error — page. |
 | `actions_gateway_workers_unschedulable` | Gauge | `namespace`, `runner_group` | `1` when `WorkersUnschedulable=True` (Q157): worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (no matching node / affinity / taints — **not** quota, which `WorkerQuotaExceeded` covers). Capacity is not materializing — page if sustained. The stuck pods and the scheduler verdict are named in the condition message. |
+| `actions_gateway_runnerset_worker_quota_pressure` | Gauge | `namespace`, `runner_set` | `1` when `WorkerQuotaPressure=True` on a v2 `RunnerSet` (Q303, exported in Q319) — the per-set twin of `actions_gateway_worker_quota_pressure`, same semantics and same warning grade. Alert with `for:`, don't page. |
+| `actions_gateway_runnerset_worker_quota_exceeded` | Gauge | `namespace`, `runner_set` | `1` when `WorkerQuotaExceeded=True` on a v2 `RunnerSet` — the per-set twin of `actions_gateway_worker_quota_exceeded`: the `ResourceQuota` can't admit another worker pod. Error — page. On a `ScaleSet` set the same headroom also drives `scaleset_capacity_withheld{reason="quota"}`, but the two are not equivalent: that gauge counts the slots quota removed from the ceiling, while this one trips only once there is no room for even one more worker pod. |
+| `actions_gateway_runnerset_workers_unschedulable` | Gauge | `namespace`, `runner_set` | `1` when `WorkersUnschedulable=True` on a v2 `RunnerSet` — the per-set twin of `actions_gateway_workers_unschedulable`: worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (**not** quota). Page if sustained; the stuck pods and the scheduler verdict are named in the condition message. |
 | `actions_gateway_reap_blocking_sidecar_templates` | Gauge | `namespace`, `runner_set` | Number of regular (non-native) sidecar containers in a `RunnerSet`'s resolved worker template that may keep the worker pod alive after the runner container exits, stranding the runner slot against `maxWorkers` (Q249). `> 0` also sets the advisory `PossibleReapBlockingSidecar=True` condition on the `RunnerSet` naming the offending containers. Config warning, not load — fix the template: declare the sidecar as a native sidecar (`restartPolicy: Always` init container, Kubernetes ≥ 1.29) so the pod terminates when the runner exits, or, if it exits cleanly on its own, acknowledge it in the `actions-gateway.com/self-exiting-sidecars` annotation. Advisory — does not gate `Ready`. |
 | `controller_runtime_reconcile_errors_total` | Counter | `controller` | GMC/AGC reconcile errors. Emitted by controller-runtime (no `actions_gateway_` prefix); the `controller` label distinguishes `actionsgateway`, `runnergroup`, etc. Non-zero values deserve investigation. |
 | `actions_gateway_ip_range_updates_total` | Counter | `namespace` | `NetworkPolicy` egress rule refreshes from GitHub meta API. |
@@ -89,7 +92,9 @@ Part of the [Observability](observability.md) guide. To scrape these metrics, se
 > `ActionsGateway` (a namespace-`ResourceQuota`-bounded, HPA-scaled pool whose default
 > CIDR-mode `NetworkPolicy` is refreshed from the shared GitHub IP-range cache) (Q320).
 > The v1 and v2 series share one metric family; the `name` label distinguishes them by
-> object. Unlike these, the worker-capacity gauges below stay v1-only.
+> object — both kinds carry the same `namespace`/`name` labels, so nothing about the v1
+> series changes. The worker-capacity gauges below take the other route, and the note on
+> them says why.
 >
 > `github_egress_incomplete` is the exception among the proxy gauges: its condition
 > exists only on the `EgressProxy` — v1 has no twin — so the family is emitted only on
@@ -99,10 +104,19 @@ Part of the [Observability](observability.md) guide. To scrape these metrics, se
 > `WorkerQuotaExceeded`, and `WorkersUnschedulable` conditions are also set on a v2
 > `RunnerSet` (Q303) with the same semantics as the v1 `RunnerGroup`, so a stalled
 > set surfaces the capacity blocker in `.status.conditions` instead of only a rising
-> `pendingJobs` with `Ready=True`. The three gauges above (`actions_gateway_worker_quota_*`,
-> `actions_gateway_workers_unschedulable`) are still emitted only for v1 `RunnerGroup`s;
-> to alert on a `RunnerSet`, scrape its conditions (e.g. via kube-state-metrics
-> `CustomResourceStateMetrics`) or read them with `kubectl get runnerset`.
+> `pendingJobs` with `Ready=True`. Each has its own gauge — the
+> `actions_gateway_runnerset_*` triplet above (Q319) — so a `RunnerSet` is alertable
+> without scraping CRD conditions through kube-state-metrics.
+>
+> **Why separate families instead of a `runner_set` label on the v1 gauges.** Unlike the
+> proxy conditions above, the two objects do not share a label set: the v1 series key on
+> `runner_group`, which a `RunnerSet` has none of. Folding both into one family would
+> leave every set at `runner_group=""`, which silently breaks the
+> `sum by (namespace, runner_group)` groupings the v1 series promise — every set would
+> collapse into a single unnamed bucket — and would add an always-empty `runner_set`
+> label to every existing v1 series. Separate names cost existing queries nothing, and a
+> v2 dashboard selects on `runner_set` directly rather than filtering `{runner_set!=""}`
+> on every query. The v1 families are unchanged and stay `RunnerGroup`-only.
 
 > **`RunnerSetsDegraded` on a v2 `ActionsGateway`.** The v2 `ActionsGateway` carries a
 > `RunnerSetsDegraded` condition (Q304) — the child-health rollup counterpart of the v1

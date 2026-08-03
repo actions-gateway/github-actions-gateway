@@ -65,10 +65,17 @@ The default acquisition protocol (Q264). These panels are the scale-set analog o
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Worker quota exceeded | `max(actions_gateway_worker_quota_exceeded)` | Stat (1 = red) |
-| Workers unschedulable | `max(actions_gateway_workers_unschedulable)` | Stat (1 = red) |
-| Worker quota pressure | `max(actions_gateway_worker_quota_pressure)` | Stat (1 = yellow) |
+| Worker quota exceeded | `max(actions_gateway_worker_quota_exceeded or actions_gateway_runnerset_worker_quota_exceeded)` | Stat (1 = red) |
+| Workers unschedulable | `max(actions_gateway_workers_unschedulable or actions_gateway_runnerset_workers_unschedulable)` | Stat (1 = red) |
+| Worker quota pressure | `max(actions_gateway_worker_quota_pressure or actions_gateway_runnerset_worker_quota_pressure)` | Stat (1 = yellow) |
 | Agent recycle errors | `rate(actions_gateway_agent_recycle_errors_total[5m])` | Time series |
+
+> The three capacity panels union the v1 `RunnerGroup` family with its
+> `actions_gateway_runnerset_*` v2 twin (Q319). The two families key on different
+> labels — `runner_group` and `runner_set` — so `or` unions rather than overlaps them,
+> and a panel that named only the v1 family would read a flat `0` on a v2-only deploy.
+> To break either out per owner, replace `max(...)` with
+> `max by (namespace, runner_set) (actions_gateway_runnerset_...)`.
 
 **Row 6 — Egress Proxy (per tenant)**
 
