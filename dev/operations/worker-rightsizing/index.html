@@ -2676,7 +2676,39 @@ recommendation (waste) or a memory limit sits below the highest observed
 per-job peak (OOM risk):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;SizingDrift&quot;)]}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq
 </code></pre></div>
-<p>It never gates <code>Ready</code>, and by default nothing is auto-applied: apply the
+<table>
+<thead>
+<tr>
+<th><code>status</code> / <code>reason</code></th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>True</code> / <code>SizingDriftDetected</code></td>
+<td>At least one template container has drifted materially. The message names each one, the resource, and the direction — <code>request … is &gt;=2x the recommended …</code> (waste) or <code>memory limit … is below the observed per-job peak …</code> (OOM risk) — with both measured figures.</td>
+</tr>
+<tr>
+<td><code>False</code> / <code>SizingWithinRange</code></td>
+<td>Every container the AGC could judge is inside the thresholds. <strong>Not the same as "right-sized":</strong> drift flags only waste and OOM risk, so an <em>under</em>-asking CPU request reads as within range — CPU is compressible, and the job bursts into idle node capacity rather than failing. Read <code>status.sizingRecommendation</code> yourself if you are sizing for latency.</td>
+</tr>
+<tr>
+<td><code>False</code> / <code>InsufficientSamples</code></td>
+<td>Fewer than 20 sampled jobs for every template container, so drift is not judged yet; the message points at each entry's <code>sampleCount</code>. Also what you get when the containers that <em>do</em> have enough samples are not in the template (an injected sidecar) — there is measured data but no ask to compare it against.</td>
+</tr>
+<tr>
+<td><code>False</code> / <code>SizingProfileActive</code></td>
+<td>A <a href="#sizing-profiles-opt-in-auto-apply">sizing profile</a> is deriving resources at pod build, so the template's static ask is not what worker pods run with and judging it would mislead.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>No <code>SizingDrift</code> condition at all</strong> means there was nothing to judge: no
+<code>status.sizingRecommendation</code> (metrics-server absent, sampling off, or the
+sampler still warming up) or no resolved <code>RunnerTemplate</code>. That silence is
+deliberate — otherwise every set in a cluster without metrics-server would carry
+<code>InsufficientSamples</code> forever. Read a missing condition as "not measured", not
+as "no drift"; if you expected data, start at <a href="#troubleshooting">Troubleshooting</a>.</p>
+<p>The condition never gates <code>Ready</code>, and by default nothing is auto-applied: apply the
 values to the <code>RunnerTemplate</code> yourself (Step 2's validation still applies), or
 opt into a <a href="#sizing-profiles-opt-in-auto-apply">sizing profile</a> to have the
 gateway apply them at pod-build time. Use the PromQL below when you want the
