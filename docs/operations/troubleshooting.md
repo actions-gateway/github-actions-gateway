@@ -905,6 +905,18 @@ policy it was asked for. It clears once `destinationCIDRs` is non-empty — the 
 your declaration at face value and does not verify the ranges actually cover the
 appliance, so if traffic still fails, check the ranges themselves.
 
+**Confirming it cleared.** `GitHubEgressIncomplete=False` always carries the reason
+`GitHubEgressAllowed`; the message says *which* clean state the pool is in. The GMC
+takes the first that applies, so read the table top-down — only the last one means you
+supplied ranges:
+
+| Message | The GMC sees no gap because |
+|---|---|
+| `egress policy is operator-maintained` | `spec.managedNetworkPolicy: false` — the GMC programs no `NetworkPolicy` for this pool, so it makes no claim either way. **Not a reachability check:** your own policy still has to allow the appliance. |
+| `FQDN mode carries every referrer's GitHub host` | `spec.egressPolicyMode` is not `CIDR`, so each referring gateway's `gitHubURL` host is added to the policy automatically. |
+| `every referrer targets public GitHub, which the CIDR allowlist covers` | No referring gateway names a GHES host, so the ranges `api.github.com/meta` publishes are the whole story. |
+| `spec.destinationCIDRs supplies ranges for <host>` | You supplied ranges while a GHES referrer is bound. Taken at face value — this does **not** confirm they cover the appliance. |
+
 **A private-CA appliance needs one more thing.** Egress reachability and TLS trust are
 separate problems: allowing the ranges gets packets to the appliance, but the AGC still
 has to validate its certificate. If yours is fronted by an internal CA, see
@@ -1782,6 +1794,14 @@ Only delete records that are `offline` and not `busy`; an `online` record is a l
 kubectl get runnerset <name> -n <namespace> \
   -o jsonpath='{.status.conditions[?(@.type=="JobProvisionStalled")].message}'
 ```
+
+**The condition's three reasons.** `JobProvisionStalled` is advisory — it never gates `Ready` — and it appears only on the scale-set path (`acquisitionProtocol: ScaleSet`):
+
+| `status` / `reason` | Meaning |
+|---|---|
+| `True` / `RunnerNameConflict` | At least one held job cannot register its runner name. An anomaly worth acting on — see [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409). Outranks `WorkerCeilingReached` whenever both classes are held at once, because it is the one you can do something about; a full ceiling clears itself. |
+| `True` / `WorkerCeilingReached` | Every held job is waiting only on worker capacity — this section. |
+| `False` / `JobsProvisioning` | No assigned job is waiting on a runner name or on capacity. Published when the listener opens its session and again the moment the last held job provisions or completes, so a set that has never stalled reports it too. |
 
 **When to act.** Only when the wait itself is the problem. Either raise the ceiling (`spec.maxWorkers` or the top `priorityTiers` threshold) if the cluster has room, or treat it as the signal that the tenant needs more capacity. Check first that the ceiling is the real constraint and not a downstream one — `WorkerQuotaExceeded` (namespace `ResourceQuota`) and `WorkersUnschedulable` (nothing can place the pod) are separate conditions with their own sections.
 

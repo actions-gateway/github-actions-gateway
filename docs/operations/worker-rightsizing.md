@@ -72,7 +72,21 @@ per-job peak (OOM risk):
 kubectl get runnerset <name> -n <ns> -o jsonpath='{.status.conditions[?(@.type=="SizingDrift")]}' | jq
 ```
 
-It never gates `Ready`, and by default nothing is auto-applied: apply the
+| `status` / `reason` | Meaning |
+|---|---|
+| `True` / `SizingDriftDetected` | At least one template container has drifted materially. The message names each one, the resource, and the direction — `request … is >=2x the recommended …` (waste) or `memory limit … is below the observed per-job peak …` (OOM risk) — with both measured figures. |
+| `False` / `SizingWithinRange` | Every container the AGC could judge is inside the thresholds. **Not the same as "right-sized":** drift flags only waste and OOM risk, so an *under*-asking CPU request reads as within range — CPU is compressible, and the job bursts into idle node capacity rather than failing. Read `status.sizingRecommendation` yourself if you are sizing for latency. |
+| `False` / `InsufficientSamples` | Fewer than 20 sampled jobs for every template container, so drift is not judged yet; the message points at each entry's `sampleCount`. Also what you get when the containers that *do* have enough samples are not in the template (an injected sidecar) — there is measured data but no ask to compare it against. |
+| `False` / `SizingProfileActive` | A [sizing profile](#sizing-profiles-opt-in-auto-apply) is deriving resources at pod build, so the template's static ask is not what worker pods run with and judging it would mislead. |
+
+**No `SizingDrift` condition at all** means there was nothing to judge: no
+`status.sizingRecommendation` (metrics-server absent, sampling off, or the
+sampler still warming up) or no resolved `RunnerTemplate`. That silence is
+deliberate — otherwise every set in a cluster without metrics-server would carry
+`InsufficientSamples` forever. Read a missing condition as "not measured", not
+as "no drift"; if you expected data, start at [Troubleshooting](#troubleshooting).
+
+The condition never gates `Ready`, and by default nothing is auto-applied: apply the
 values to the `RunnerTemplate` yourself (Step 2's validation still applies), or
 opt into a [sizing profile](#sizing-profiles-opt-in-auto-apply) to have the
 gateway apply them at pod-build time. Use the PromQL below when you want the
