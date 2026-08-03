@@ -147,6 +147,12 @@ def render():
         L.append(f'actions_gateway_scaleset_jobs_completed_total{{namespace="{ns}",runner_set="{rs}",result="succeeded"}} {int(completed * 0.9)}')
         L.append(f'actions_gateway_scaleset_jobs_completed_total{{namespace="{ns}",runner_set="{rs}",result="failed"}} {int(completed * 0.08)}')
         L.append(f'actions_gateway_scaleset_jobs_completed_total{{namespace="{ns}",runner_set="{rs}",result="canceled"}} {int(completed * 0.02)}')
+        # v2 worker-capacity gauges (Q319), all healthy (0). Emitted for every
+        # RunnerSet regardless of acquisition protocol, which is why the dashboard's
+        # $runner_set variable reads its label values from this family.
+        L.append(f'actions_gateway_runnerset_worker_quota_pressure{{namespace="{ns}",runner_set="{rs}"}} 0')
+        L.append(f'actions_gateway_runnerset_worker_quota_exceeded{{namespace="{ns}",runner_set="{rs}"}} 0')
+        L.append(f'actions_gateway_runnerset_workers_unschedulable{{namespace="{ns}",runner_set="{rs}"}} 0')
 
     # Per-tenant egress proxy. The proxy exposes no intrinsic namespace label, but
     # the per-tenant ServiceMonitor stamps one from the scrape target's namespace

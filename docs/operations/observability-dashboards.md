@@ -19,7 +19,7 @@ The split mirrors how the metrics are exposed (see [Accessing metrics](observabi
 
 ![The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows.](../assets/grafana-dashboard-tenant.png)
 
-Filtered by the `$namespace` and `$runner_group` template variables. Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as data sources where applicable.
+Filtered by the `$namespace`, `$runner_group`, and `$runner_set` template variables. Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as data sources where applicable.
 
 **Row 1 — Gateway Health (per namespace)**
 
@@ -51,7 +51,7 @@ Filtered by the `$namespace` and `$runner_group` template variables. Uses the [S
 
 **Row 4 — Scale-set Acquisition Tier (per runner_set)**
 
-The default acquisition protocol (Q264). These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits `actions_gateway_active_sessions` or `jobs_acquired_total`, so its throughput and health are only visible here. Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable does not filter these.
+The default acquisition protocol (Q264). These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits `actions_gateway_active_sessions` or `jobs_acquired_total`, so its throughput and health are only visible here. Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable does not filter these — the `$runner_set` variable does.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
@@ -156,7 +156,8 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 The dashboards ship with these template variables already wired:
 
 - `$namespace` — `label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)` — filters to a single tenant (both dashboards). The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no `active_sessions`, so keying the variable on that alone would leave the dashboard blank.
-- `$runner_group` — `label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)` — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard). The scale-set panels are labelled `runner_set` and are not filtered by it.
+- `$runner_group` — `label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)` — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard). The `runner_set`-labelled panels are not filtered by it; `$runner_set` is their variable.
+- `$runner_set` — `label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)` — filters to a specific `RunnerSet` on the scale-set and v2 capacity panels (tenant dashboard). It reads its label values from the Q319 capacity gauges rather than the `scaleset_*` series on purpose: those gauges are emitted for **every** `RunnerSet`, while `scaleset_*` exists only for `ScaleSet`-protocol sets, so keying on the latter would hide a `Classic` set from the dropdown entirely.
 
 ---
 
