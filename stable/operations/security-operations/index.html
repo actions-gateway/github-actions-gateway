@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.2.0/operations/security-operations/">
+        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/security-operations/">
       
       
         <link rel="prev" href="../troubleshooting/">
       
       
-        <link rel="next" href="../release/">
+        <link rel="next" href="../admission-policies/">
       
       
         
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.2.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.2.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.2.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.2.0",
+    "url": "https://actions-gateway.com/1.3.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.2.0"
+      "url": "https://actions-gateway.com/1.3.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.2.0",
-    "logo": "https://actions-gateway.com/1.2.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.3.0",
+    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,9 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            
-  <strong>v1.2.0 is here.</strong> Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
-
+            <strong>v1.3.0 is here.</strong>
+      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
           </div>
           
         </aside>
@@ -142,6 +141,15 @@
     </div>
     
       <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
         
       </div>
     
@@ -308,6 +316,25 @@
     
   
   Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
 
       </a>
     </li>
@@ -522,6 +549,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../demo/" class="md-nav__link">
         
   
@@ -641,6 +695,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -654,7 +712,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -676,14 +734,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1143,6 +1201,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1207,6 +1321,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -1223,7 +1345,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1245,14 +1367,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1446,7 +1568,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -1475,6 +1597,34 @@
     
   
     Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
   
 
     
@@ -1637,10 +1787,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
             
   
   
@@ -1658,8 +1808,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1860,6 +2010,62 @@
     
   
     Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
   
 
     
@@ -2447,10 +2653,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#self-service-additions-via-a-watched-configmap-q188" class="md-nav__link">
+  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Self-service additions via a watched ConfigMap (Q188)
+        Self-service additions via the PriorityClassAllowlist CR (Q188)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#narrowing-the-allowlist-drain-stored-references-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Narrowing the allowlist: drain stored references first
       
     </span>
   </a>
@@ -2465,6 +2682,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Defense-in-depth: the priorityclass-allowlist-guard policy (Q289)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Param resolution used to break cluster-wide (Q444, fixed in Q492)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -2549,6 +2783,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -3039,10 +3301,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#self-service-additions-via-a-watched-configmap-q188" class="md-nav__link">
+  <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Self-service additions via a watched ConfigMap (Q188)
+        Self-service additions via the PriorityClassAllowlist CR (Q188)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#narrowing-the-allowlist-drain-stored-references-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Narrowing the allowlist: drain stored references first
       
     </span>
   </a>
@@ -3057,6 +3330,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Defense-in-depth: the priorityclass-allowlist-guard policy (Q289)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Param resolution used to break cluster-wide (Q444, fixed in Q492)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -3226,7 +3516,7 @@ to the metric or audit-log query that surfaces it.</p>
 <tbody>
 <tr>
 <td><strong>Eviction-Retry API Misuse</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>) — compromised AGC looping <code>rerun-failed-jobs</code></td>
-<td><code>eviction_retries_total</code> rate climbs without matching node pressure; <code>eviction_retries_exhausted_total</code> increments</td>
+<td><code>eviction_retries_total{cause="eviction"}</code> rate climbs without matching node pressure; <code>eviction_retries_exhausted_total</code> increments. Split by the <code>tier</code> label to see which acquisition path is issuing the re-runs (Q417); the alert below aggregates over it, so it fires either way. <strong>Scope the query to <code>cause="eviction"</code></strong> — the same counter records legitimate <code>preemption</code> recoveries, which are the expected steady state under a preempting <code>priorityTiers</code> floor and would otherwise read as abuse (Q497)</td>
 <td>Metric</td>
 <td>Ticket → Page on sustained climb</td>
 </tr>
@@ -3268,7 +3558,7 @@ to the metric or audit-log query that surfaces it.</p>
 </tr>
 <tr>
 <td><strong>AGC overpermissioned Secret access</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>, H-2 residual) — compromised AGC binary issuing a full-body Secret <code>list</code></td>
-<td>AGC ServiceAccount <code>list secrets</code> in audit log (legit code path is metadata-only — see <a href="../../plan/security/">security.md H-2</a>)</td>
+<td>AGC ServiceAccount <code>list secrets</code> in audit log (legit code path is metadata-only — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/security.md">security.md H-2</a>)</td>
 <td>Audit log</td>
 <td>Page</td>
 </tr>
@@ -3293,125 +3583,131 @@ dedicated <code>actions-gateway-security</code> group. Tune thresholds to your f
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">      </span><span class="c1"># Page: eviction-retry loop — sustained re-queue rate without a</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="c1"># matching node-pressure event suggests rerun-failed-jobs abuse</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span><span class="c1"># (compromised AGC) rather than genuine eviction churn.</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayEvictionRetryAbuse</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">          </span><span class="no">sum by (namespace, runner_group) (</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">            </span><span class="no">rate(actions_gateway_eviction_retries_total[15m])</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">          </span><span class="no">) &gt; 0.05</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30m</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sustained</span><span class="nv"> </span><span class="s">eviction-retry</span><span class="nv"> </span><span class="s">rate</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}/{{</span><span class="nv"> </span><span class="s">$labels.runner_group</span><span class="nv"> </span><span class="s">}}&quot;</span>
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Eviction</span><span class="nv"> </span><span class="s">retries</span><span class="nv"> </span><span class="s">have</span><span class="nv"> </span><span class="s">run</span><span class="nv"> </span><span class="s">&gt;0.05/s</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">30m.</span><span class="nv"> </span><span class="s">Correlate</span><span class="nv"> </span><span class="s">with</span><span class="nv"> </span><span class="s">node</span><span class="nv"> </span><span class="s">pressure;</span><span class="nv"> </span><span class="s">if</span><span class="nv"> </span><span class="s">nodes</span><span class="nv"> </span><span class="s">are</span><span class="nv"> </span><span class="s">healthy,</span><span class="nv"> </span><span class="s">suspect</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">rerun</span><span class="nv"> </span><span class="s">loop</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">inspect</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">AGC.&quot;</span>
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
-<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">      </span><span class="c1"># Page: proxy connection pool saturation (slowloris / tunnel flood).</span>
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">      </span><span class="c1"># Pair with HPA: if replicas are already at maxReplicas this is a</span>
-<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">      </span><span class="c1"># ceiling, not headroom.</span>
-<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayProxyConnectionsSaturated</span>
-<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">          </span><span class="no">actions_gateway_proxy_connections_active &gt; 500</span>
-<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5m</span>
-<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
-<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Proxy</span><span class="nv"> </span><span class="s">CONNECT</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">saturated</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
-<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Active</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">&gt;</span><span class="nv"> </span><span class="s">500</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">5m.</span><span class="nv"> </span><span class="s">Check</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">slowloris</span><span class="nv"> </span><span class="s">(many</span><span class="nv"> </span><span class="s">long-lived</span><span class="nv"> </span><span class="s">tunnels)</span><span class="nv"> </span><span class="s">via</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">tunnel-duration</span><span class="nv"> </span><span class="s">histogram.&quot;</span>
-<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>
-<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">      </span><span class="c1"># Page: tunnels accumulating in the top (6h) duration bucket means</span>
-<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">      </span><span class="c1"># connections are riding the absolute lifetime cap — the M-18</span>
-<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">      </span><span class="c1"># slowloris signature.</span>
-<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayProxyLongLivedTunnels</span>
-<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="w">          </span><span class="no">increase(</span>
-<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="w">            </span><span class="no">actions_gateway_proxy_tunnel_duration_seconds_bucket{le=&quot;3600&quot;}[1h]</span>
-<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="w">          </span><span class="no">) -</span>
-<a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="w">          </span><span class="no">increase(</span>
-<a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="w">            </span><span class="no">actions_gateway_proxy_tunnel_duration_seconds_bucket{le=&quot;1800&quot;}[1h]</span>
-<a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="w">          </span><span class="no">) &gt; 20</span>
-<a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15m</span>
-<a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
-<a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Unusually</span><span class="nv"> </span><span class="s">long</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
-<a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&gt;20</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">lasted</span><span class="nv"> </span><span class="s">30m–1h</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">last</span><span class="nv"> </span><span class="s">hour.</span><span class="nv"> </span><span class="s">GitHub</span><span class="nv"> </span><span class="s">long-polls</span><span class="nv"> </span><span class="s">are</span><span class="nv"> </span><span class="s">sticky</span><span class="nv"> </span><span class="s">but</span><span class="nv"> </span><span class="s">minutes-long;</span><span class="nv"> </span><span class="s">hour-long</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">warrant</span><span class="nv"> </span><span class="s">inspection.&quot;</span>
-<a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a>
-<a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a><span class="w">      </span><span class="c1"># Ticket: allowlist-denied CONNECTs — the precise SSRF signal. Every</span>
-<a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a><span class="w">      </span><span class="c1"># increment is an explicit egress-allowlist denial, so this fires even</span>
-<a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a><span class="w">      </span><span class="c1"># when the blocked destinations are unreachable (no dial attempted).</span>
-<a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a><span class="w">      </span><span class="c1"># Also shipped in the reference PrometheusRule with a runbook_url.</span>
-<a id="__codelineno-0-55" name="__codelineno-0-55" href="#__codelineno-0-55"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayProxyConnectDenied</span>
-<a id="__codelineno-0-56" name="__codelineno-0-56" href="#__codelineno-0-56"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-0-57" name="__codelineno-0-57" href="#__codelineno-0-57"></a><span class="w">          </span><span class="no">rate(actions_gateway_proxy_connect_denied_total[5m]) &gt; 0.1</span>
-<a id="__codelineno-0-58" name="__codelineno-0-58" href="#__codelineno-0-58"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10m</span>
-<a id="__codelineno-0-59" name="__codelineno-0-59" href="#__codelineno-0-59"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-0-60" name="__codelineno-0-60" href="#__codelineno-0-60"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
-<a id="__codelineno-0-61" name="__codelineno-0-61" href="#__codelineno-0-61"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-0-62" name="__codelineno-0-62" href="#__codelineno-0-62"></a><span class="w">          </span><span class="nt">runbook_url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://actions-gateway.com/operations/runbook/#actionsgatewayproxyconnectdenied&quot;</span>
-<a id="__codelineno-0-63" name="__codelineno-0-63" href="#__codelineno-0-63"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Egress</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">denying</span><span class="nv"> </span><span class="s">CONNECTs</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
-<a id="__codelineno-0-64" name="__codelineno-0-64" href="#__codelineno-0-64"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;The</span><span class="nv"> </span><span class="s">egress</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">refusing</span><span class="nv"> </span><span class="s">CONNECT</span><span class="nv"> </span><span class="s">requests</span><span class="nv"> </span><span class="s">to</span><span class="nv"> </span><span class="s">off-allowlist</span><span class="nv"> </span><span class="s">destinations</span><span class="nv"> </span><span class="s">at</span><span class="nv"> </span><span class="s">&gt;0.1/s</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">10m</span><span class="nv"> </span><span class="s">—</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">workload</span><span class="nv"> </span><span class="s">probing</span><span class="nv"> </span><span class="s">blocked</span><span class="nv"> </span><span class="s">destinations,</span><span class="nv"> </span><span class="s">or</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">misconfigured</span><span class="nv"> </span><span class="s">egress</span><span class="nv"> </span><span class="s">target.</span><span class="nv"> </span><span class="s">Sharper</span><span class="nv"> </span><span class="s">than</span><span class="nv"> </span><span class="s">dial</span><span class="nv"> </span><span class="s">errors:</span><span class="nv"> </span><span class="s">every</span><span class="nv"> </span><span class="s">denial</span><span class="nv"> </span><span class="s">here</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">an</span><span class="nv"> </span><span class="s">explicit</span><span class="nv"> </span><span class="s">allowlist</span><span class="nv"> </span><span class="s">rejection.&quot;</span>
-<a id="__codelineno-0-65" name="__codelineno-0-65" href="#__codelineno-0-65"></a>
-<a id="__codelineno-0-66" name="__codelineno-0-66" href="#__codelineno-0-66"></a><span class="w">      </span><span class="c1"># Ticket: dial-error spike — workers repeatedly hitting blocked</span>
-<a id="__codelineno-0-67" name="__codelineno-0-67" href="#__codelineno-0-67"></a><span class="w">      </span><span class="c1"># destinations (SSRF probing, or a misconfigured workload).</span>
-<a id="__codelineno-0-68" name="__codelineno-0-68" href="#__codelineno-0-68"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayProxyDialErrorSpike</span>
-<a id="__codelineno-0-69" name="__codelineno-0-69" href="#__codelineno-0-69"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-0-70" name="__codelineno-0-70" href="#__codelineno-0-70"></a><span class="w">          </span><span class="no">rate(actions_gateway_proxy_dial_errors_total[5m]) &gt; 1</span>
-<a id="__codelineno-0-71" name="__codelineno-0-71" href="#__codelineno-0-71"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10m</span>
-<a id="__codelineno-0-72" name="__codelineno-0-72" href="#__codelineno-0-72"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-0-73" name="__codelineno-0-73" href="#__codelineno-0-73"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
-<a id="__codelineno-0-74" name="__codelineno-0-74" href="#__codelineno-0-74"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-0-75" name="__codelineno-0-75" href="#__codelineno-0-75"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Proxy</span><span class="nv"> </span><span class="s">upstream</span><span class="nv"> </span><span class="s">dial</span><span class="nv"> </span><span class="s">errors</span><span class="nv"> </span><span class="s">spiking</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
-<a id="__codelineno-0-76" name="__codelineno-0-76" href="#__codelineno-0-76"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Dial</span><span class="nv"> </span><span class="s">errors</span><span class="nv"> </span><span class="s">&gt;1/s</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">10m.</span><span class="nv"> </span><span class="s">The</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">only</span><span class="nv"> </span><span class="s">reaches</span><span class="nv"> </span><span class="s">GitHub</span><span class="nv"> </span><span class="s">CIDRs</span><span class="nv"> </span><span class="s">+</span><span class="nv"> </span><span class="s">DNS;</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">spike</span><span class="nv"> </span><span class="s">suggests</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">workload</span><span class="nv"> </span><span class="s">probing</span><span class="nv"> </span><span class="s">blocked</span><span class="nv"> </span><span class="s">destinations.&quot;</span>
-<a id="__codelineno-0-77" name="__codelineno-0-77" href="#__codelineno-0-77"></a>
-<a id="__codelineno-0-78" name="__codelineno-0-78" href="#__codelineno-0-78"></a><span class="w">      </span><span class="c1"># Page: token-refresh error spike can mean the GitHub App key was</span>
-<a id="__codelineno-0-79" name="__codelineno-0-79" href="#__codelineno-0-79"></a><span class="w">      </span><span class="c1"># revoked out-of-band — the expected first symptom of key compromise</span>
-<a id="__codelineno-0-80" name="__codelineno-0-80" href="#__codelineno-0-80"></a><span class="w">      </span><span class="c1"># response, or of an attacker&#39;s forged token being rejected.</span>
-<a id="__codelineno-0-81" name="__codelineno-0-81" href="#__codelineno-0-81"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayTokenRefreshAbuse</span>
-<a id="__codelineno-0-82" name="__codelineno-0-82" href="#__codelineno-0-82"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-0-83" name="__codelineno-0-83" href="#__codelineno-0-83"></a><span class="w">          </span><span class="no">increase(actions_gateway_token_refresh_errors_total[10m]) &gt; 3</span>
-<a id="__codelineno-0-84" name="__codelineno-0-84" href="#__codelineno-0-84"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10m</span>
-<a id="__codelineno-0-85" name="__codelineno-0-85" href="#__codelineno-0-85"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-0-86" name="__codelineno-0-86" href="#__codelineno-0-86"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
-<a id="__codelineno-0-87" name="__codelineno-0-87" href="#__codelineno-0-87"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-0-88" name="__codelineno-0-88" href="#__codelineno-0-88"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Token</span><span class="nv"> </span><span class="s">refresh</span><span class="nv"> </span><span class="s">failures</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
-<a id="__codelineno-0-89" name="__codelineno-0-89" href="#__codelineno-0-89"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;If</span><span class="nv"> </span><span class="s">no</span><span class="nv"> </span><span class="s">operator</span><span class="nv"> </span><span class="s">rotated</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">key,</span><span class="nv"> </span><span class="s">treat</span><span class="nv"> </span><span class="s">as</span><span class="nv"> </span><span class="s">possible</span><span class="nv"> </span><span class="s">key</span><span class="nv"> </span><span class="s">compromise.</span><span class="nv"> </span><span class="s">See</span><span class="nv"> </span><span class="s">runbook.md</span><span class="nv"> </span><span class="s">§</span><span class="nv"> </span><span class="s">GitHub</span><span class="nv"> </span><span class="s">App</span><span class="nv"> </span><span class="s">Key</span><span class="nv"> </span><span class="s">Compromise.&quot;</span>
-<a id="__codelineno-0-90" name="__codelineno-0-90" href="#__codelineno-0-90"></a>
-<a id="__codelineno-0-91" name="__codelineno-0-91" href="#__codelineno-0-91"></a><span class="w">      </span><span class="c1"># Page: unexpected jump in managed gateways — a compromised GMC</span>
-<a id="__codelineno-0-92" name="__codelineno-0-92" href="#__codelineno-0-92"></a><span class="w">      </span><span class="c1"># provisioning workloads, or runaway CR creation.</span>
-<a id="__codelineno-0-93" name="__codelineno-0-93" href="#__codelineno-0-93"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayManagedGatewaysJump</span>
-<a id="__codelineno-0-94" name="__codelineno-0-94" href="#__codelineno-0-94"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-0-95" name="__codelineno-0-95" href="#__codelineno-0-95"></a><span class="w">          </span><span class="no">increase(actions_gateway_managed_gateways[10m]) &gt; 5</span>
-<a id="__codelineno-0-96" name="__codelineno-0-96" href="#__codelineno-0-96"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-0-97" name="__codelineno-0-97" href="#__codelineno-0-97"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
-<a id="__codelineno-0-98" name="__codelineno-0-98" href="#__codelineno-0-98"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-0-99" name="__codelineno-0-99" href="#__codelineno-0-99"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Managed</span><span class="nv"> </span><span class="s">ActionsGateway</span><span class="nv"> </span><span class="s">count</span><span class="nv"> </span><span class="s">jumped&quot;</span>
-<a id="__codelineno-0-100" name="__codelineno-0-100" href="#__codelineno-0-100"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;More</span><span class="nv"> </span><span class="s">than</span><span class="nv"> </span><span class="s">5</span><span class="nv"> </span><span class="s">new</span><span class="nv"> </span><span class="s">ActionsGateway</span><span class="nv"> </span><span class="s">CRs</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">10m.</span><span class="nv"> </span><span class="s">Confirm</span><span class="nv"> </span><span class="s">this</span><span class="nv"> </span><span class="s">matches</span><span class="nv"> </span><span class="s">an</span><span class="nv"> </span><span class="s">expected</span><span class="nv"> </span><span class="s">onboarding;</span><span class="nv"> </span><span class="s">otherwise</span><span class="nv"> </span><span class="s">inspect</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">GMC</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">CR</span><span class="nv"> </span><span class="s">audit</span><span class="nv"> </span><span class="s">trail.&quot;</span>
-<a id="__codelineno-0-101" name="__codelineno-0-101" href="#__codelineno-0-101"></a>
-<a id="__codelineno-0-102" name="__codelineno-0-102" href="#__codelineno-0-102"></a><span class="w">      </span><span class="c1"># Ticket: tenant quota pinned at 100% — resource-exhaustion DoS or a</span>
-<a id="__codelineno-0-103" name="__codelineno-0-103" href="#__codelineno-0-103"></a><span class="w">      </span><span class="c1"># genuinely undersized quota. ResourceQuota is the hard cap, so this</span>
-<a id="__codelineno-0-104" name="__codelineno-0-104" href="#__codelineno-0-104"></a><span class="w">      </span><span class="c1"># is contained, but sustained saturation is worth a look.</span>
-<a id="__codelineno-0-105" name="__codelineno-0-105" href="#__codelineno-0-105"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayQuotaExhausted</span>
-<a id="__codelineno-0-106" name="__codelineno-0-106" href="#__codelineno-0-106"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-0-107" name="__codelineno-0-107" href="#__codelineno-0-107"></a><span class="w">          </span><span class="no">kube_resourcequota{type=&quot;used&quot;}</span>
-<a id="__codelineno-0-108" name="__codelineno-0-108" href="#__codelineno-0-108"></a><span class="w">            </span><span class="no">/ ignoring(type) kube_resourcequota{type=&quot;hard&quot;} &gt;= 1</span>
-<a id="__codelineno-0-109" name="__codelineno-0-109" href="#__codelineno-0-109"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30m</span>
-<a id="__codelineno-0-110" name="__codelineno-0-110" href="#__codelineno-0-110"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-0-111" name="__codelineno-0-111" href="#__codelineno-0-111"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
-<a id="__codelineno-0-112" name="__codelineno-0-112" href="#__codelineno-0-112"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-0-113" name="__codelineno-0-113" href="#__codelineno-0-113"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Tenant</span><span class="nv"> </span><span class="s">ResourceQuota</span><span class="nv"> </span><span class="s">saturated</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
-<a id="__codelineno-0-114" name="__codelineno-0-114" href="#__codelineno-0-114"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Quota</span><span class="nv"> </span><span class="s">at</span><span class="nv"> </span><span class="s">100%</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">30m.</span><span class="nv"> </span><span class="s">Distinguish</span><span class="nv"> </span><span class="s">legitimate</span><span class="nv"> </span><span class="s">demand</span><span class="nv"> </span><span class="s">(raise</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">platform-owned</span><span class="nv"> </span><span class="s">ResourceQuota</span><span class="nv"> </span><span class="s">on</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">namespace)</span><span class="nv"> </span><span class="s">from</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">job-flood</span><span class="nv"> </span><span class="s">(inspect</span><span class="nv"> </span><span class="s">workflow</span><span class="nv"> </span><span class="s">sources).&quot;</span>
-<a id="__codelineno-0-115" name="__codelineno-0-115" href="#__codelineno-0-115"></a>
-<a id="__codelineno-0-116" name="__codelineno-0-116" href="#__codelineno-0-116"></a><span class="w">      </span><span class="c1"># Ticket: admission webhook rejecting CRs — a tenant repeatedly</span>
-<a id="__codelineno-0-117" name="__codelineno-0-117" href="#__codelineno-0-117"></a><span class="w">      </span><span class="c1"># probing reserved namespaces or invalid specs.</span>
-<a id="__codelineno-0-118" name="__codelineno-0-118" href="#__codelineno-0-118"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayWebhookRejections</span>
-<a id="__codelineno-0-119" name="__codelineno-0-119" href="#__codelineno-0-119"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-0-120" name="__codelineno-0-120" href="#__codelineno-0-120"></a><span class="w">          </span><span class="no">rate(controller_runtime_webhook_requests_total{code=&quot;403&quot;}[10m]) &gt; 0.1</span>
-<a id="__codelineno-0-121" name="__codelineno-0-121" href="#__codelineno-0-121"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15m</span>
-<a id="__codelineno-0-122" name="__codelineno-0-122" href="#__codelineno-0-122"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
-<a id="__codelineno-0-123" name="__codelineno-0-123" href="#__codelineno-0-123"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
-<a id="__codelineno-0-124" name="__codelineno-0-124" href="#__codelineno-0-124"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-<a id="__codelineno-0-125" name="__codelineno-0-125" href="#__codelineno-0-125"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Admission</span><span class="nv"> </span><span class="s">webhook</span><span class="nv"> </span><span class="s">rejecting</span><span class="nv"> </span><span class="s">ActionsGateway</span><span class="nv"> </span><span class="s">requests&quot;</span>
-<a id="__codelineno-0-126" name="__codelineno-0-126" href="#__codelineno-0-126"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sustained</span><span class="nv"> </span><span class="s">403s</span><span class="nv"> </span><span class="s">from</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">validating</span><span class="nv"> </span><span class="s">webhook.</span><span class="nv"> </span><span class="s">Check</span><span class="nv"> </span><span class="s">which</span><span class="nv"> </span><span class="s">principal</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">submitting</span><span class="nv"> </span><span class="s">CRs</span><span class="nv"> </span><span class="s">to</span><span class="nv"> </span><span class="s">reserved</span><span class="nv"> </span><span class="s">namespaces</span><span class="nv"> </span><span class="s">or</span><span class="nv"> </span><span class="s">with</span><span class="nv"> </span><span class="s">invalid</span><span class="nv"> </span><span class="s">specs.&quot;</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span><span class="c1">#</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">      </span><span class="c1"># Scoped to cause=&quot;eviction&quot; deliberately (Q497). The same counter also</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">      </span><span class="c1"># records preemption recoveries, which are the EXPECTED steady state for a</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">      </span><span class="c1"># tenant running a preempting priorityTiers floor — including them would</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">      </span><span class="c1"># page on a supported configuration working correctly, and an alert that</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">      </span><span class="c1"># cries wolf on normal operation stops being read.</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayEvictionRetryAbuse</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">          </span><span class="no">sum by (namespace, runner_group) (</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">            </span><span class="no">rate(actions_gateway_eviction_retries_total{cause=&quot;eviction&quot;}[15m])</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">          </span><span class="no">) &gt; 0.05</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30m</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sustained</span><span class="nv"> </span><span class="s">eviction-retry</span><span class="nv"> </span><span class="s">rate</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}/{{</span><span class="nv"> </span><span class="s">$labels.runner_group</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Eviction</span><span class="nv"> </span><span class="s">retries</span><span class="nv"> </span><span class="s">have</span><span class="nv"> </span><span class="s">run</span><span class="nv"> </span><span class="s">&gt;0.05/s</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">30m.</span><span class="nv"> </span><span class="s">Correlate</span><span class="nv"> </span><span class="s">with</span><span class="nv"> </span><span class="s">node</span><span class="nv"> </span><span class="s">pressure;</span><span class="nv"> </span><span class="s">if</span><span class="nv"> </span><span class="s">nodes</span><span class="nv"> </span><span class="s">are</span><span class="nv"> </span><span class="s">healthy,</span><span class="nv"> </span><span class="s">suspect</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">rerun</span><span class="nv"> </span><span class="s">loop</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">inspect</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">AGC.&quot;</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">      </span><span class="c1"># Page: proxy connection pool saturation (slowloris / tunnel flood).</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">      </span><span class="c1"># Pair with HPA: if replicas are already at maxReplicas this is a</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">      </span><span class="c1"># ceiling, not headroom.</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayProxyConnectionsSaturated</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">          </span><span class="no">actions_gateway_proxy_connections_active &gt; 500</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5m</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Proxy</span><span class="nv"> </span><span class="s">CONNECT</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">saturated</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Active</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">&gt;</span><span class="nv"> </span><span class="s">500</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">5m.</span><span class="nv"> </span><span class="s">Check</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">slowloris</span><span class="nv"> </span><span class="s">(many</span><span class="nv"> </span><span class="s">long-lived</span><span class="nv"> </span><span class="s">tunnels)</span><span class="nv"> </span><span class="s">via</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">tunnel-duration</span><span class="nv"> </span><span class="s">histogram.&quot;</span>
+<a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a>
+<a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="w">      </span><span class="c1"># Page: tunnels accumulating in the top (6h) duration bucket means</span>
+<a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="w">      </span><span class="c1"># connections are riding the absolute lifetime cap — the M-18</span>
+<a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="w">      </span><span class="c1"># slowloris signature.</span>
+<a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayProxyLongLivedTunnels</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="w">          </span><span class="no">increase(</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a><span class="w">            </span><span class="no">actions_gateway_proxy_tunnel_duration_seconds_bucket{le=&quot;3600&quot;}[1h]</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a><span class="w">          </span><span class="no">) -</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="w">          </span><span class="no">increase(</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="w">            </span><span class="no">actions_gateway_proxy_tunnel_duration_seconds_bucket{le=&quot;1800&quot;}[1h]</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a><span class="w">          </span><span class="no">) &gt; 20</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15m</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Unusually</span><span class="nv"> </span><span class="s">long</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55" href="#__codelineno-0-55"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&gt;20</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">lasted</span><span class="nv"> </span><span class="s">30m–1h</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">last</span><span class="nv"> </span><span class="s">hour.</span><span class="nv"> </span><span class="s">GitHub</span><span class="nv"> </span><span class="s">long-polls</span><span class="nv"> </span><span class="s">are</span><span class="nv"> </span><span class="s">sticky</span><span class="nv"> </span><span class="s">but</span><span class="nv"> </span><span class="s">minutes-long;</span><span class="nv"> </span><span class="s">hour-long</span><span class="nv"> </span><span class="s">tunnels</span><span class="nv"> </span><span class="s">warrant</span><span class="nv"> </span><span class="s">inspection.&quot;</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56" href="#__codelineno-0-56"></a>
+<a id="__codelineno-0-57" name="__codelineno-0-57" href="#__codelineno-0-57"></a><span class="w">      </span><span class="c1"># Ticket: allowlist-denied CONNECTs — the precise SSRF signal. Every</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58" href="#__codelineno-0-58"></a><span class="w">      </span><span class="c1"># increment is an explicit egress-allowlist denial, so this fires even</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59" href="#__codelineno-0-59"></a><span class="w">      </span><span class="c1"># when the blocked destinations are unreachable (no dial attempted).</span>
+<a id="__codelineno-0-60" name="__codelineno-0-60" href="#__codelineno-0-60"></a><span class="w">      </span><span class="c1"># Also shipped in the reference PrometheusRule with a runbook_url.</span>
+<a id="__codelineno-0-61" name="__codelineno-0-61" href="#__codelineno-0-61"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayProxyConnectDenied</span>
+<a id="__codelineno-0-62" name="__codelineno-0-62" href="#__codelineno-0-62"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-63" name="__codelineno-0-63" href="#__codelineno-0-63"></a><span class="w">          </span><span class="no">rate(actions_gateway_proxy_connect_denied_total[5m]) &gt; 0.1</span>
+<a id="__codelineno-0-64" name="__codelineno-0-64" href="#__codelineno-0-64"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10m</span>
+<a id="__codelineno-0-65" name="__codelineno-0-65" href="#__codelineno-0-65"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-66" name="__codelineno-0-66" href="#__codelineno-0-66"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
+<a id="__codelineno-0-67" name="__codelineno-0-67" href="#__codelineno-0-67"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-68" name="__codelineno-0-68" href="#__codelineno-0-68"></a><span class="w">          </span><span class="nt">runbook_url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://actions-gateway.com/operations/runbook/#actionsgatewayproxyconnectdenied&quot;</span>
+<a id="__codelineno-0-69" name="__codelineno-0-69" href="#__codelineno-0-69"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Egress</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">denying</span><span class="nv"> </span><span class="s">CONNECTs</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-70" name="__codelineno-0-70" href="#__codelineno-0-70"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;The</span><span class="nv"> </span><span class="s">egress</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">refusing</span><span class="nv"> </span><span class="s">CONNECT</span><span class="nv"> </span><span class="s">requests</span><span class="nv"> </span><span class="s">to</span><span class="nv"> </span><span class="s">off-allowlist</span><span class="nv"> </span><span class="s">destinations</span><span class="nv"> </span><span class="s">at</span><span class="nv"> </span><span class="s">&gt;0.1/s</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">10m</span><span class="nv"> </span><span class="s">—</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">workload</span><span class="nv"> </span><span class="s">probing</span><span class="nv"> </span><span class="s">blocked</span><span class="nv"> </span><span class="s">destinations,</span><span class="nv"> </span><span class="s">or</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">misconfigured</span><span class="nv"> </span><span class="s">egress</span><span class="nv"> </span><span class="s">target.</span><span class="nv"> </span><span class="s">Sharper</span><span class="nv"> </span><span class="s">than</span><span class="nv"> </span><span class="s">dial</span><span class="nv"> </span><span class="s">errors:</span><span class="nv"> </span><span class="s">every</span><span class="nv"> </span><span class="s">denial</span><span class="nv"> </span><span class="s">here</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">an</span><span class="nv"> </span><span class="s">explicit</span><span class="nv"> </span><span class="s">allowlist</span><span class="nv"> </span><span class="s">rejection.&quot;</span>
+<a id="__codelineno-0-71" name="__codelineno-0-71" href="#__codelineno-0-71"></a>
+<a id="__codelineno-0-72" name="__codelineno-0-72" href="#__codelineno-0-72"></a><span class="w">      </span><span class="c1"># Ticket: dial-error spike — workers repeatedly hitting blocked</span>
+<a id="__codelineno-0-73" name="__codelineno-0-73" href="#__codelineno-0-73"></a><span class="w">      </span><span class="c1"># destinations (SSRF probing, or a misconfigured workload).</span>
+<a id="__codelineno-0-74" name="__codelineno-0-74" href="#__codelineno-0-74"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayProxyDialErrorSpike</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75" href="#__codelineno-0-75"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-76" name="__codelineno-0-76" href="#__codelineno-0-76"></a><span class="w">          </span><span class="no">rate(actions_gateway_proxy_dial_errors_total[5m]) &gt; 1</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77" href="#__codelineno-0-77"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10m</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78" href="#__codelineno-0-78"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79" href="#__codelineno-0-79"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
+<a id="__codelineno-0-80" name="__codelineno-0-80" href="#__codelineno-0-80"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-81" name="__codelineno-0-81" href="#__codelineno-0-81"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Proxy</span><span class="nv"> </span><span class="s">upstream</span><span class="nv"> </span><span class="s">dial</span><span class="nv"> </span><span class="s">errors</span><span class="nv"> </span><span class="s">spiking</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-82" name="__codelineno-0-82" href="#__codelineno-0-82"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Dial</span><span class="nv"> </span><span class="s">errors</span><span class="nv"> </span><span class="s">&gt;1/s</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">10m.</span><span class="nv"> </span><span class="s">The</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">only</span><span class="nv"> </span><span class="s">reaches</span><span class="nv"> </span><span class="s">GitHub</span><span class="nv"> </span><span class="s">CIDRs</span><span class="nv"> </span><span class="s">+</span><span class="nv"> </span><span class="s">DNS;</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">spike</span><span class="nv"> </span><span class="s">suggests</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">workload</span><span class="nv"> </span><span class="s">probing</span><span class="nv"> </span><span class="s">blocked</span><span class="nv"> </span><span class="s">destinations.&quot;</span>
+<a id="__codelineno-0-83" name="__codelineno-0-83" href="#__codelineno-0-83"></a>
+<a id="__codelineno-0-84" name="__codelineno-0-84" href="#__codelineno-0-84"></a><span class="w">      </span><span class="c1"># Page: token-refresh error spike can mean the GitHub App key was</span>
+<a id="__codelineno-0-85" name="__codelineno-0-85" href="#__codelineno-0-85"></a><span class="w">      </span><span class="c1"># revoked out-of-band — the expected first symptom of key compromise</span>
+<a id="__codelineno-0-86" name="__codelineno-0-86" href="#__codelineno-0-86"></a><span class="w">      </span><span class="c1"># response, or of an attacker&#39;s forged token being rejected.</span>
+<a id="__codelineno-0-87" name="__codelineno-0-87" href="#__codelineno-0-87"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayTokenRefreshAbuse</span>
+<a id="__codelineno-0-88" name="__codelineno-0-88" href="#__codelineno-0-88"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-89" name="__codelineno-0-89" href="#__codelineno-0-89"></a><span class="w">          </span><span class="no">increase(actions_gateway_token_refresh_errors_total[10m]) &gt; 3</span>
+<a id="__codelineno-0-90" name="__codelineno-0-90" href="#__codelineno-0-90"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10m</span>
+<a id="__codelineno-0-91" name="__codelineno-0-91" href="#__codelineno-0-91"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-92" name="__codelineno-0-92" href="#__codelineno-0-92"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93" href="#__codelineno-0-93"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-94" name="__codelineno-0-94" href="#__codelineno-0-94"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Token</span><span class="nv"> </span><span class="s">refresh</span><span class="nv"> </span><span class="s">failures</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95" href="#__codelineno-0-95"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;If</span><span class="nv"> </span><span class="s">no</span><span class="nv"> </span><span class="s">operator</span><span class="nv"> </span><span class="s">rotated</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">key,</span><span class="nv"> </span><span class="s">treat</span><span class="nv"> </span><span class="s">as</span><span class="nv"> </span><span class="s">possible</span><span class="nv"> </span><span class="s">key</span><span class="nv"> </span><span class="s">compromise.</span><span class="nv"> </span><span class="s">See</span><span class="nv"> </span><span class="s">runbook.md</span><span class="nv"> </span><span class="s">§</span><span class="nv"> </span><span class="s">GitHub</span><span class="nv"> </span><span class="s">App</span><span class="nv"> </span><span class="s">Key</span><span class="nv"> </span><span class="s">Compromise.&quot;</span>
+<a id="__codelineno-0-96" name="__codelineno-0-96" href="#__codelineno-0-96"></a>
+<a id="__codelineno-0-97" name="__codelineno-0-97" href="#__codelineno-0-97"></a><span class="w">      </span><span class="c1"># Page: unexpected jump in managed gateways — a compromised GMC</span>
+<a id="__codelineno-0-98" name="__codelineno-0-98" href="#__codelineno-0-98"></a><span class="w">      </span><span class="c1"># provisioning workloads, or runaway CR creation.</span>
+<a id="__codelineno-0-99" name="__codelineno-0-99" href="#__codelineno-0-99"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayManagedGatewaysJump</span>
+<a id="__codelineno-0-100" name="__codelineno-0-100" href="#__codelineno-0-100"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-101" name="__codelineno-0-101" href="#__codelineno-0-101"></a><span class="w">          </span><span class="no">increase(actions_gateway_managed_gateways[10m]) &gt; 5</span>
+<a id="__codelineno-0-102" name="__codelineno-0-102" href="#__codelineno-0-102"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-103" name="__codelineno-0-103" href="#__codelineno-0-103"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104" href="#__codelineno-0-104"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-105" name="__codelineno-0-105" href="#__codelineno-0-105"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Managed</span><span class="nv"> </span><span class="s">ActionsGateway</span><span class="nv"> </span><span class="s">count</span><span class="nv"> </span><span class="s">jumped&quot;</span>
+<a id="__codelineno-0-106" name="__codelineno-0-106" href="#__codelineno-0-106"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;More</span><span class="nv"> </span><span class="s">than</span><span class="nv"> </span><span class="s">5</span><span class="nv"> </span><span class="s">new</span><span class="nv"> </span><span class="s">ActionsGateway</span><span class="nv"> </span><span class="s">CRs</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">10m.</span><span class="nv"> </span><span class="s">Confirm</span><span class="nv"> </span><span class="s">this</span><span class="nv"> </span><span class="s">matches</span><span class="nv"> </span><span class="s">an</span><span class="nv"> </span><span class="s">expected</span><span class="nv"> </span><span class="s">onboarding;</span><span class="nv"> </span><span class="s">otherwise</span><span class="nv"> </span><span class="s">inspect</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">GMC</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">CR</span><span class="nv"> </span><span class="s">audit</span><span class="nv"> </span><span class="s">trail.&quot;</span>
+<a id="__codelineno-0-107" name="__codelineno-0-107" href="#__codelineno-0-107"></a>
+<a id="__codelineno-0-108" name="__codelineno-0-108" href="#__codelineno-0-108"></a><span class="w">      </span><span class="c1"># Ticket: tenant quota pinned at 100% — resource-exhaustion DoS or a</span>
+<a id="__codelineno-0-109" name="__codelineno-0-109" href="#__codelineno-0-109"></a><span class="w">      </span><span class="c1"># genuinely undersized quota. ResourceQuota is the hard cap, so this</span>
+<a id="__codelineno-0-110" name="__codelineno-0-110" href="#__codelineno-0-110"></a><span class="w">      </span><span class="c1"># is contained, but sustained saturation is worth a look.</span>
+<a id="__codelineno-0-111" name="__codelineno-0-111" href="#__codelineno-0-111"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayQuotaExhausted</span>
+<a id="__codelineno-0-112" name="__codelineno-0-112" href="#__codelineno-0-112"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-113" name="__codelineno-0-113" href="#__codelineno-0-113"></a><span class="w">          </span><span class="no">kube_resourcequota{type=&quot;used&quot;}</span>
+<a id="__codelineno-0-114" name="__codelineno-0-114" href="#__codelineno-0-114"></a><span class="w">            </span><span class="no">/ ignoring(type) kube_resourcequota{type=&quot;hard&quot;} &gt;= 1</span>
+<a id="__codelineno-0-115" name="__codelineno-0-115" href="#__codelineno-0-115"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30m</span>
+<a id="__codelineno-0-116" name="__codelineno-0-116" href="#__codelineno-0-116"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-117" name="__codelineno-0-117" href="#__codelineno-0-117"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
+<a id="__codelineno-0-118" name="__codelineno-0-118" href="#__codelineno-0-118"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-119" name="__codelineno-0-119" href="#__codelineno-0-119"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Tenant</span><span class="nv"> </span><span class="s">ResourceQuota</span><span class="nv"> </span><span class="s">saturated</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.namespace</span><span class="nv"> </span><span class="s">}}&quot;</span>
+<a id="__codelineno-0-120" name="__codelineno-0-120" href="#__codelineno-0-120"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Quota</span><span class="nv"> </span><span class="s">at</span><span class="nv"> </span><span class="s">100%</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">30m.</span><span class="nv"> </span><span class="s">Distinguish</span><span class="nv"> </span><span class="s">legitimate</span><span class="nv"> </span><span class="s">demand</span><span class="nv"> </span><span class="s">(raise</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">platform-owned</span><span class="nv"> </span><span class="s">ResourceQuota</span><span class="nv"> </span><span class="s">on</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">namespace)</span><span class="nv"> </span><span class="s">from</span><span class="nv"> </span><span class="s">a</span><span class="nv"> </span><span class="s">job-flood</span><span class="nv"> </span><span class="s">(inspect</span><span class="nv"> </span><span class="s">workflow</span><span class="nv"> </span><span class="s">sources).&quot;</span>
+<a id="__codelineno-0-121" name="__codelineno-0-121" href="#__codelineno-0-121"></a>
+<a id="__codelineno-0-122" name="__codelineno-0-122" href="#__codelineno-0-122"></a><span class="w">      </span><span class="c1"># Ticket: admission webhook rejecting CRs — a tenant repeatedly</span>
+<a id="__codelineno-0-123" name="__codelineno-0-123" href="#__codelineno-0-123"></a><span class="w">      </span><span class="c1"># probing reserved namespaces or invalid specs.</span>
+<a id="__codelineno-0-124" name="__codelineno-0-124" href="#__codelineno-0-124"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGatewayWebhookRejections</span>
+<a id="__codelineno-0-125" name="__codelineno-0-125" href="#__codelineno-0-125"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-0-126" name="__codelineno-0-126" href="#__codelineno-0-126"></a><span class="w">          </span><span class="no">rate(controller_runtime_webhook_requests_total{code=&quot;403&quot;}[10m]) &gt; 0.1</span>
+<a id="__codelineno-0-127" name="__codelineno-0-127" href="#__codelineno-0-127"></a><span class="w">        </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">15m</span>
+<a id="__codelineno-0-128" name="__codelineno-0-128" href="#__codelineno-0-128"></a><span class="w">        </span><span class="nt">labels</span><span class="p">:</span>
+<a id="__codelineno-0-129" name="__codelineno-0-129" href="#__codelineno-0-129"></a><span class="w">          </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">warning</span>
+<a id="__codelineno-0-130" name="__codelineno-0-130" href="#__codelineno-0-130"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+<a id="__codelineno-0-131" name="__codelineno-0-131" href="#__codelineno-0-131"></a><span class="w">          </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Admission</span><span class="nv"> </span><span class="s">webhook</span><span class="nv"> </span><span class="s">rejecting</span><span class="nv"> </span><span class="s">ActionsGateway</span><span class="nv"> </span><span class="s">requests&quot;</span>
+<a id="__codelineno-0-132" name="__codelineno-0-132" href="#__codelineno-0-132"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Sustained</span><span class="nv"> </span><span class="s">403s</span><span class="nv"> </span><span class="s">from</span><span class="nv"> </span><span class="s">the</span><span class="nv"> </span><span class="s">validating</span><span class="nv"> </span><span class="s">webhook.</span><span class="nv"> </span><span class="s">Check</span><span class="nv"> </span><span class="s">which</span><span class="nv"> </span><span class="s">principal</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">submitting</span><span class="nv"> </span><span class="s">CRs</span><span class="nv"> </span><span class="s">to</span><span class="nv"> </span><span class="s">reserved</span><span class="nv"> </span><span class="s">namespaces</span><span class="nv"> </span><span class="s">or</span><span class="nv"> </span><span class="s">with</span><span class="nv"> </span><span class="s">invalid</span><span class="nv"> </span><span class="s">specs.&quot;</span>
 </code></pre></div>
 <blockquote>
 <p><strong>Note on labels.</strong> The proxy metrics (<code>actions_gateway_proxy_*</code>) carry no
@@ -3426,7 +3722,7 @@ drop the interpolation.</p>
 <p>The most dangerous abuse signals — a compromised AGC or GMC issuing RBAC
 calls that are <em>permitted</em> but <em>anomalous</em> — are invisible to Prometheus.
 The legitimate code paths avoid them (the AGC enumerates its Secrets
-metadata-only per <a href="../../plan/security/">H-2</a>; the GMC reads Secret bodies
+metadata-only per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/security.md">H-2</a>; the GMC reads Secret bodies
 only during a reconcile via a cache-bypassing <code>Get</code>), so any of the calls
 below originating from a controller ServiceAccount indicates the binary is
 doing something its source does not.</p>
@@ -3451,7 +3747,7 @@ alert on</em> once that policy is in place.</p>
 <tr>
 <td><strong>AGC full-body Secret list</strong></td>
 <td><code>verb=list resource=secrets</code> by the AGC ServiceAccount (<code>system:serviceaccount:&lt;tenant-ns&gt;:actions-gateway-controller</code>) returning object bodies</td>
-<td>Legit AGC code lists Secret <em>metadata</em> only (<a href="../../plan/security/">H-2 residual</a>). A body <code>list</code> means out-of-band enumeration of user-managed Secrets.</td>
+<td>Legit AGC code lists Secret <em>metadata</em> only (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/security.md">H-2 residual</a>). A body <code>list</code> means out-of-band enumeration of user-managed Secrets.</td>
 <td>Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image.</td>
 </tr>
 <tr>
@@ -3689,8 +3985,8 @@ at admission time.</p>
 <h3 id="manifest-posture--polaris-automated-in-ci">Manifest posture — polaris (automated, in CI)<a class="headerlink" href="#manifest-posture--polaris-automated-in-ci" title="Permanent link">&para;</a></h3>
 <p><a href="https://polaris.docs.fairwinds.com/">polaris</a> audits the Kubernetes
 security/best-practice posture of the <strong>shipped install artifact</strong>: the CI
-<code>polaris</code> job (in <a href="../../.github/workflows/security-scan.yml"><code>.github/workflows/security-scan.yml</code></a>)
-renders the <a href="../../charts/actions-gateway">Helm chart</a> and checks the rendered
+<code>polaris</code> job (in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/.github/workflows/security-scan.yml"><code>.github/workflows/security-scan.yml</code></a>)
+renders the <a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.3.0/charts/actions-gateway">Helm chart</a> and checks the rendered
 manifests. It runs on every PR that touches the chart or the <code>Makefile</code>, and on
 every push to <code>main</code>.</p>
 <ul>
@@ -3704,7 +4000,7 @@ every push to <code>main</code>.</p>
   cross-document NetworkPolicy match polaris can't resolve statically, the
   <code>IfNotPresent</code> pull policy that is correct for a digest-pinned image, and
   Helm's <code>app.kubernetes.io/instance</code> labelling) are tuned to <code>ignore</code> in
-  <a href="../../charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a>,
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a>,
   each with a justifying comment. <strong>Never relax a <code>danger</code> check to silence a
   finding — fix the chart instead</strong> (secure-by-default).</li>
 <li><strong>Run it yourself.</strong> <code>make polaris-scan</code> (needs <code>helm</code> and <code>polaris</code> on
@@ -3787,7 +4083,7 @@ after any control-plane upgrade).</p>
 </ul>
 <p>The goal is <strong>zero critical (<code>[FAIL]</code>) findings that this stack depends on</strong>
 before the first production tenant (per
-<a href="../../plan/milestone-5/">milestone-5.md</a> §3).</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/milestone-5.md">milestone-5.md</a> §3).</p>
 <h2 id="tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening<a class="headerlink" href="#tenant-egress-posture--deliberate-widening" title="Permanent link">&para;</a></h2>
 <p><strong>The secure default is controller-managed and not opt-in.</strong> For every tenant,
 the GMC reconciles three NetworkPolicies that confine worker (and AGC) egress to
@@ -3966,7 +4262,13 @@ CNI/platform FQDN mechanisms proliferate:</p>
 <p>The emitted object is named <code>&lt;proxy&gt;-proxy-fqdn</code>, owned by the <code>EgressProxy</code>
 (garbage-collected with it), and covers the GitHub Actions runner endpoint families:
 <code>api.github.com</code>, <code>github.com</code>, <code>codeload.github.com</code>, <code>objects.githubusercontent.com</code>,
-<code>*.actions.githubusercontent.com</code>, and <code>*.blob.core.windows.net</code>. In an FQDN mode the
+<code>*.actions.githubusercontent.com</code>, and <code>*.blob.core.windows.net</code> — <strong>plus the
+<code>gitHubURL</code> host of every gateway that references this proxy</strong>, directly via
+<code>defaultProxyRef</code> or through a <code>RunnerSet</code>'s <code>proxyRef</code> (Q506). That is what makes an
+FQDN mode work for GitHub Enterprise Server without any extra configuration: the
+appliance's hostname is on the referring <code>ActionsGateway</code>, and a gateway applied after
+the proxy re-triggers the policy. A public-GitHub-only pool emits exactly what it did
+before. In an FQDN mode the
 standard <code>NetworkPolicy</code> drops its GitHub-CIDR rule (DNS + ingress are unchanged) and
 the 24h IP-range reconcile skips this proxy. The GMC also re-checks the emitted policy
 on a bounded cadence (a fraction of the egress-staleness window, ~6h at the default;
@@ -3978,14 +4280,32 @@ nothing else touches the <code>EgressProxy</code>.</p>
 by the admission webhook</strong> ("this cluster has no FQDN egress backend configured; ask
 the platform operator, or use egressPolicyMode: CIDR"), not left with a silently
 <code>Degraded</code> proxy pool. The default never guesses a mechanism or auto-detects.</p>
+<p><strong>GHES on the CIDR default needs the appliance's ranges.</strong> CIDR mode allows only the
+ranges <code>api.github.com/meta</code> publishes, and a GitHub Enterprise Server appliance on
+your own address space is in none of them — so the pool's <code>NetworkPolicy</code> denies the
+traffic it exists to carry. The GMC cannot know those ranges, so it names the gap:
+<code>GitHubEgressIncomplete=True</code> / <code>ApplianceRangesRequired</code> on the <code>EgressProxy</code>, with
+the unreachable host in the message. Supply the ranges in <code>spec.destinationCIDRs</code> —
+allowlisting them under <code>--allowed-egress-cidrs</code> first, since that field is
+platform-gated — or move the pool to an FQDN mode, which carries the host for you.
+See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">troubleshooting</a>.</p>
 </blockquote>
 <p><strong>Deprecated <code>CiliumFQDN</code> / <code>CalicoFQDN</code>.</strong> The earlier per-CNI enum values still work:
 each pins its namesake backend regardless of <code>--fqdn-policy-backend</code>, so existing
 <code>EgressProxy</code> objects keep behaving exactly as before. They are <strong>deprecated</strong> — the
-admission webhook attaches a warning steering you to <code>FQDN</code> + <code>--fqdn-policy-backend</code> —
-and will be removed in a future release (on the classic/v1alpha1 deprecation clock).
+admission webhook attaches a warning steering you to <code>FQDN</code> + <code>--fqdn-policy-backend</code>.
 Migrate by changing the tenant field to <code>FQDN</code> and setting the matching operator backend.</p>
 <blockquote>
+<p><strong>They are not removed at <code>v2.0.0</code>. The earliest release that may remove them is
+<code>v3.0.0</code>.</strong> The two values are enum members of <code>egressPolicyMode</code> in the <strong>beta</strong>
+version <code>actions-gateway.com/v2beta1</code>, and <code>v2.0.0</code> keeps serving <code>v2beta1</code> — it adds
+the General Availability (GA) <code>v2</code> version beside it rather than taking it away. An
+API element can only be removed by incrementing the version, never deleted from a
+version that is still served, so these two live exactly as long as <code>v2beta1</code> does.
+Retiring a served version is a breaking change and lands on a major tag, which puts
+the earliest possible removal at <code>v3.0.0</code> — one major beyond the <code>v2.0.0</code> that removes
+<code>v1alpha1</code>, <code>v2alpha1</code>, and classic acquisition. Full reasoning and the coupling to
+the other clocks: <a href="../v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">the deprecation and removal notice</a>.</p>
 <p><strong>Managed "Cilium" platforms usually do NOT accept the <code>cilium</code> backend.</strong> The CRD
 test is literal: <code>kubectl get crd ciliumnetworkpolicies.cilium.io</code> must succeed.
 <strong>GKE Dataplane V2's managed Cilium does not install it</strong> (dropped since GKE
@@ -3995,7 +4315,7 @@ backend's CRD is absent, the GMC's apply fails loudly and the <code>EgressProxy<
 never silently opened. The still-deferred cluster-scoped backends (AKS
 <code>CiliumClusterwideNetworkPolicy</code>, EKS <code>ClusterNetworkPolicy</code>) and OpenShift OVN
 <code>EgressFirewall</code> are tracked in the
-<a href="../../plan/q245-fqdn-intent-backend-split/">Q245 plan</a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/q245-fqdn-intent-backend-split.md">Q245 plan</a>.</p>
 <p><strong>The <code>gke</code> backend is additive-allow, so the base NetworkPolicy is load-bearing.</strong>
 Unlike Cilium/Calico policies (which are self-default-denying), a GKE <code>FQDNNetworkPolicy</code>
 only <em>adds</em> an allow — it is a union with any NetworkPolicy on the same pod, not a
@@ -4129,7 +4449,7 @@ allowlist. See
 <a href="#priority-classes-the-allowed-priority-classes-allowlist">Priority classes: the two allowlists</a>.</p>
 <p>The full per-tenant egress-IP reference architecture — cloud-by-cloud primitives,
 cost model, and the live-validated GKE recipe — is in the
-<a href="../../plan/q243-egress-ip-reference-arch/">Q243 plan</a>.</p>
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/q243-egress-ip-reference-arch.md">Q243 plan</a>.</p>
 <hr />
 <h2 id="worker-egress-destinations-the-egress-allowlist">Worker egress destinations: the egress allowlist<a class="headerlink" href="#worker-egress-destinations-the-egress-allowlist" title="Permanent link">&para;</a></h2>
 <p>By default a worker can reach <strong>only GitHub</strong> through its per-tenant egress proxy —
@@ -4375,7 +4695,11 @@ to the GitHub REST API and reading back a short-lived installation token. Both
 the JWT (signed with the tenant's private key) and the returned token are
 credential material, so this exchange must never traverse a plaintext channel.</p>
 <p>The endpoint host is taken from the <strong><code>GITHUB_API_BASE_URL</code></strong> environment
-variable, defaulting to <code>https://api.github.com</code> when unset. The token provider
+variable, defaulting to <code>https://api.github.com</code> when unset. On a
+GMC-provisioned AGC you do not set it: the GMC derives it from the gateway's
+<code>spec.gitHubURL</code> and injects it on the AGC <code>Deployment</code> — <code>https://api.github.com</code>
+for a <code>github.com</code> gateway, <code>https://&lt;host&gt;/api/v3</code> for GitHub Enterprise Server.
+The token provider
 <strong>rejects a non-HTTPS <code>GITHUB_API_BASE_URL</code> at startup</strong> — the AGC (and the
 <code>probe</code>) will refuse to start with a clear error rather than leak credentials on
 the first token mint:</p>
@@ -4387,11 +4711,13 @@ the first token mint:</p>
 HTTPS value (including a GitHub Enterprise Server base such as
 <code>https://ghe.example.com/api/v3</code>) and the unset default both work, and the error
 names the offending URL but never any token or JWT material.</p>
-<p><strong>Operator action:</strong> if you set <code>GITHUB_API_BASE_URL</code> (e.g. for GitHub
-Enterprise Server), it must begin with <code>https://</code>. A plaintext value will block
-startup. Do not work around this by editing the deployment to inject a stub
-signal — the plaintext path exists only for the project's own in-cluster test
-fixtures.</p>
+<p><strong>Operator action:</strong> on a GMC-provisioned gateway there is nothing to set —
+<code>spec.gitHubURL</code> is validated <code>https://</code> at admission, so the derived base is
+always HTTPS. If you run the AGC or <code>probe</code> standalone and set
+<code>GITHUB_API_BASE_URL</code> yourself (e.g. for GitHub Enterprise Server), it must
+begin with <code>https://</code>. A plaintext value will block startup. Do not work around
+this by editing the deployment to inject a stub signal — the plaintext path
+exists only for the project's own in-cluster test fixtures.</p>
 <p><strong>Documented dev/test trade-off.</strong> The e2e suite points the AGC at an in-cluster
 <code>fakegithub</code> over plaintext (<code>http://&lt;svc&gt;.&lt;ns&gt;.svc.cluster.local:&lt;port&gt;</code>). That
 path is permitted only by an explicit opt-in that production never carries: the
@@ -4547,58 +4873,131 @@ objects, so nothing breaks until the CR is edited).</p>
 <p>Any class these print that is <strong>not</strong> in your <code>--allowed-priority-classes</code> was an
 open cross-tenant preemption lever; treat a <code>system-cluster-critical</code> or
 <code>system-node-critical</code> result as an incident, not a config change.</p>
-<h3 id="self-service-additions-via-a-watched-configmap-q188">Self-service additions via a watched ConfigMap (Q188)<a class="headerlink" href="#self-service-additions-via-a-watched-configmap-q188" title="Permanent link">&para;</a></h3>
+<h3 id="self-service-additions-via-the-priorityclassallowlist-cr-q188">Self-service additions via the <code>PriorityClassAllowlist</code> CR (Q188)<a class="headerlink" href="#self-service-additions-via-the-priorityclassallowlist-cr-q188" title="Permanent link">&para;</a></h3>
 <p>Editing <code>--allowed-priority-classes</code> and rolling out the GMC for every new class
-is slow. The GMC can <strong>also</strong> source the allowlist from a ConfigMap it watches in
-its own install namespace, so a platform admin can add an allowed class without a
-flag edit or restart — the change takes effect on the next watch event.</p>
-<p>The ConfigMap source is <strong>additive</strong> and <strong>off by default</strong>. When unset, behavior
-is exactly the flag-only behavior above.</p>
-<ol>
-<li><strong>Enable the watch.</strong> Set the ConfigMap name on the GMC, either via the flag
-   or the Helm value:</li>
-</ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># GMC Deployment / Helm values</span>
-<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="nt">priorityClassAllowlist</span><span class="p">:</span>
-<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span><span class="nt">configMapName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-priority-class-allowlist</span><span class="w">   </span><span class="c1"># renders --priority-class-allowlist-configmap</span>
+is slow. The GMC <strong>also</strong> sources the allowlist from a cluster-scoped
+<code>PriorityClassAllowlist</code> CR it watches, so a platform admin can add an allowed
+class without a flag edit or restart — the change takes effect on the next watch
+event.</p>
+<p>The chart always renders this object (named <code>&lt;release&gt;-priorityclass-allowlist</code>)
+from <code>allowedPriorityClasses</code>, and always points the GMC at it. The <strong>same object
+is the <a href="#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289"><code>priorityclass-allowlist-guard</code></a>
+policy's parameter</strong>, so the webhook and the policy read one source and cannot
+drift — there is no superset discipline to remember.</p>
+<div class="admonition note">
+<p class="admonition-title">This replaced a watched ConfigMap (Q492)</p>
+<p><code>priorityClassAllowlist.configMapName</code> is removed; setting it now fails the
+Helm render with a migration message. A ConfigMap could not remain the
+policy's <code>paramKind</code> — a kube-apiserver defect permanently breaks param
+resolution for any <em>core-type</em> <code>paramKind</code> (see
+<a href="#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492">below</a>).
+Migration steps: <a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md</a>.</p>
+</div>
+<p><strong>Add a class without a restart.</strong> Edit the object in place:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>priorityclassallowlist<span class="w"> </span>gmc-priorityclass-allowlist
 </code></pre></div>
-<p>Setting it renders the flag <strong>and</strong> a namespaced <code>Role</code>/<code>RoleBinding</code> granting
-   the GMC <code>get</code>/<code>list</code>/<code>watch</code> on that one ConfigMap in its own namespace — the
-   GMC is never granted cluster-wide ConfigMap read.</p>
-<ol>
-<li><strong>Create the ConfigMap in the GMC's namespace.</strong> It must live in the GMC
-   install namespace (e.g. <code>gmc-system</code>) so only a platform admin — not a tenant —
-   can write it. The <code>allowedPriorityClasses</code> key lists class names, separated by
-   commas or newlines:</li>
-</ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
-<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClassAllowlist</span>
 <a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-priority-class-allowlist</span>
-<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-system</span>
-<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="nt">data</span><span class="p">:</span>
-<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="w">  </span><span class="nt">allowedPriorityClasses</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">    </span><span class="no">runner-bursty</span>
-<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="w">    </span><span class="no">runner-batch</span>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-priorityclass-allowlist</span>
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="w">  </span><span class="nt">allowedPriorityClasses</span><span class="p">:</span>
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-bursty</span>
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-batch</span>
 </code></pre></div>
-<p>The <strong>effective allowlist is the union</strong> of the static <code>--allowed-priority-classes</code>
-   flag and the ConfigMap entries: the ConfigMap can only <em>widen</em> the allowlist,
-   never remove a flag-pinned class. You still pre-create each <code>PriorityClass</code>
-   object first (step 1 of the previous section) — the allowlist only governs which
-   <em>names</em> a tenant may reference.</p>
+<p>The <strong>effective allowlist for the webhook is the union</strong> of the static
+<code>--allowed-priority-classes</code> flag and this object's entries: it can only <em>widen</em>
+the webhook allowlist, never remove a flag-pinned class. You still pre-create each
+<code>PriorityClass</code> object first (step 1 of the previous section) — the allowlist only
+governs which <em>names</em> a tenant may reference.</p>
+<div class="admonition warning">
+<p class="admonition-title">A chart upgrade reasserts <code>allowedPriorityClasses</code> over this object</p>
+<p>An in-place edit is the fast path, not the durable one. Persist any class you
+intend to keep in the chart's <code>allowedPriorityClasses</code> value.</p>
+</div>
+<p><strong>One caveat the flag does not share.</strong> The <em>policy</em> sees only this object, never
+the flag. A class listed in <code>--allowed-priority-classes</code> but absent here is
+admitted by the webhook and denied by the policy on the direct-write path. The
+chart renders both from one value, so this only arises if you edit the object down
+by hand.</p>
 <p><strong>Fail-safe behavior.</strong> The allowlist is a cross-tenant-isolation guardrail, so a
-broken ConfigMap must never silently widen it:</p>
+broken object must never silently widen it:</p>
 <ul>
-<li>A <strong>missing or deleted</strong> ConfigMap, a <strong>missing <code>allowedPriorityClasses</code> key</strong>,
-  or <strong>any invalid entry</strong> (a name that is not a valid DNS-1123 subdomain) causes
-  the GMC to fall back to the <strong>static flag allowlist only</strong> and log a warning.</li>
-<li>A malformed ConfigMap is rejected <strong>wholesale</strong> — a valid name sitting next to a
-  typo is <em>not</em> partially applied — so a mistake can never smuggle a class in.</li>
-<li>An <strong>empty</strong> <code>allowedPriorityClasses</code> value is valid and simply adds nothing.</li>
+<li>The CRD schema constrains every entry to a valid DNS-1123 subdomain and the list
+  to a set, so a malformed name is <strong>rejected at write time</strong> — it never reaches
+  the GMC or the policy.</li>
+<li>A <strong>missing or deleted</strong> object, or any invalid entry that predates the schema,
+  causes the GMC to fall back to the <strong>static flag allowlist only</strong> and log a
+  warning.</li>
+<li>An invalid list is rejected <strong>wholesale</strong> — a valid name sitting next to a typo
+  is <em>not</em> partially applied — so a mistake can never smuggle a class in.</li>
+<li>An <strong>absent or empty</strong> <code>allowedPriorityClasses</code> is valid and simply adds nothing.</li>
 </ul>
 <p>Because the dynamic set is additive and resets to the static base on any error,
-the worst case of a bad ConfigMap is that recently-added self-service classes stop
-being accepted until it is fixed — never that an unintended class becomes allowed.</p>
+the worst case is that recently-added self-service classes stop being accepted
+until it is fixed — never that an unintended class becomes allowed.</p>
+<p><strong>RBAC.</strong> The chart grants the GMC a <code>ClusterRole</code> with <code>get</code>/<code>list</code>/<code>watch</code> on
+<code>priorityclassallowlists</code> and nothing else. The kind is cluster-scoped so the role
+must be too, but it carries <strong>no write verb</strong>: the GMC can never widen its own
+allowlist.</p>
+<h3 id="narrowing-the-allowlist-drain-stored-references-first">Narrowing the allowlist: drain stored references first<a class="headerlink" href="#narrowing-the-allowlist-drain-stored-references-first" title="Permanent link">&para;</a></h3>
+<p>Adding a class is safe in any order; <strong>removing one is not</strong>. The
+<a href="#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289">guard policy</a>
+re-validates the whole stored object on every update — and the GMC webhooks do the
+same on the tenant-facing kinds. Once a class leaves the allowlist, <strong>every
+spec-changing write to a stored object still naming it is denied</strong>: the GMC's
+reconcile writes freeze, and the object cannot be edited except to move off the
+class. This holds for every narrowing route — the chart's
+<code>allowedPriorityClasses</code> value, the <code>--allowed-priority-classes</code> flag, or an
+in-place edit of the <code>PriorityClassAllowlist</code> CR.</p>
+<p><strong>Teardown is exempt</strong> (Q518): both the guard policy and the webhooks admit a
+<em>deletion-only</em> update — one whose object already carries a <code>deletionTimestamp</code>
+and whose spec is unchanged, which is what the AGC's finalizer-removal write
+looks like — so deleting a tenant that still names a removed class completes
+normally. On chart versions without this exemption, that same teardown write was
+denied and the namespace hung in <code>Terminating</code>
+(<a href="../troubleshooting/#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist">recovery</a>).
+The exemption admits nothing new: the write it admits stores a spec byte-identical
+to the one already stored, and a spec <em>change</em> on a deleting object is still
+validated (design rationale:
+<a href="../../design/05-security/#deletion-only-updates-are-exempt-from-re-validation-q518">05-security.md § Deletion-only updates</a>).</p>
+<p>Narrow in this order:</p>
+<ol>
+<li><strong>Enumerate stored references</strong> to the class you are removing. The three
+   commands under
+   <a href="#upgrading-previously-ungated-priorityclassname-fields-are-now-gated">Upgrading</a>
+   cover the tenant-authored kinds; also check the GMC-authored <code>RunnerGroup</code>s,
+   which store the class too:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CTX</span><span class="s2">&quot;</span><span class="w"> </span>get<span class="w"> </span>runnergroups.actions-gateway.github.com<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="s1">  .items[]</span>
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="s1">  | .metadata.namespace as $ns | .metadata.name as $name</span>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="s1">  | ((.spec.priorityTiers // [])[].priorityClassName),</span>
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="s1">    (.spec.podTemplate.spec.priorityClassName // empty)</span>
+<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="s1">  | &quot;\($ns)/\($name) -&gt; \(.)&quot;&#39;</span>
+</code></pre></div>
+<ol>
+<li>
+<p><strong>Move every referencing object off the class</strong> — switch it to a still-allowed
+   class or drop the field. Edit the tenant-facing CR (<code>ActionsGateway</code>,
+   <code>RunnerSet</code>, <code>RunnerTemplate</code>) and let the GMC reconcile the <code>RunnerGroup</code>s.
+   Admission validates the <em>incoming</em> object, so an update that removes the
+   reference always passes — this step also works as the un-wedge path after a
+   premature narrowing. Re-run step 1 until it prints nothing.</p>
+</li>
+<li>
+<p><strong>Remove the class from the allowlist</strong> — take it out of the chart's
+   <code>allowedPriorityClasses</code> value (which renders both the
+   <code>--allowed-priority-classes</code> flag and the <code>PriorityClassAllowlist</code> CR) and
+   upgrade the release.</p>
+</li>
+<li>
+<p><strong>Delete the <code>PriorityClass</code> object last</strong>, if you are retiring it entirely.
+   Deleting it earlier does not tighten admission (the allowlist gates names, not
+   objects) but does break scheduling for any worker pod still created with the
+   name — the apiserver rejects pods naming a nonexistent class.</p>
+</li>
+</ol>
 <h3 id="defense-in-depth-the-priorityclass-allowlist-guard-policy-q289">Defense-in-depth: the <code>priorityclass-allowlist-guard</code> policy (Q289)<a class="headerlink" href="#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289" title="Permanent link">&para;</a></h3>
 <p>The webhooks above gate every <em>tenant-facing</em> CR, but <code>RunnerGroup</code> CRs have no
 webhook of their own — they are normally authored only by the GMC from an
@@ -4610,7 +5009,13 @@ default under <code>admissionPolicy.enabled</code>, Kubernetes ≥ 1.30) that re
 <code>priorityTiers[].priorityClassName</code> or <code>podTemplate.spec.priorityClassName</code> is
 off the allowlist. Unlike a webhook, the policy also <strong>re-validates every write
 to an existing object</strong>, so a pre-gate stored RunnerGroup naming an
-off-allowlist class is caught on its next update, not just its next re-create.</p>
+off-allowlist class is caught on its next update, not just its next re-create.
+The flip side: removing a class that stored objects still name freezes every
+later spec-changing write to them. Deletion-only updates (deletionTimestamp set,
+spec unchanged — the finalizer-removal write teardown depends on) are exempt via
+the policy's <code>exclude-deletion-only-updates</code> match condition (Q518), so
+narrowing can freeze a live object but can no longer wedge its deletion — see
+<a href="#narrowing-the-allowlist-drain-stored-references-first">Narrowing the allowlist</a>.</p>
 <p>The policy matches the v2 kinds too (Q323): <code>runnersets</code>
 (<code>priorityTiers[].priorityClassName</code>) and <code>runnertemplates</code>
 (<code>podTemplate.spec.priorityClassName</code>), across v2alpha1 and v2beta1. Those kinds
@@ -4619,26 +5024,59 @@ is defense-in-depth — coverage while the webhook is unavailable or bypassed,
 plus the stored-object re-validation a webhook cannot provide.
 <code>ClusterRunnerTemplate</code> is exempt (cluster-scoped, platform-authored — its
 writers can create <code>PriorityClass</code> objects anyway).</p>
-<p>The policy reads its allowlist from a <strong>parameter ConfigMap</strong> (the apiserver
-cannot read the GMC flag):</p>
-<ul>
-<li><strong>Default:</strong> the chart renders <code>&lt;release&gt;-priorityclass-allowlist</code> in the GMC
-  namespace from <code>allowedPriorityClasses</code> — the same value that feeds
-  <code>--allowed-priority-classes</code> — so the webhook and the policy cannot drift.</li>
-<li><strong>With <code>priorityClassAllowlist.configMapName</code> set:</strong> that admin-owned watched
-  ConfigMap becomes the policy parameter instead. Keep it a <strong>superset of the
-  flag</strong> (or leave the flag empty and manage everything in the ConfigMap):
-  the policy sees only the ConfigMap, so a class allowed by flag alone would be
-  admitted by the webhook but denied here on the direct-write path — a
-  fail-closed skew, but a confusing one.</li>
-</ul>
+<p>The policy reads its allowlist from the cluster-scoped
+<strong><code>PriorityClassAllowlist</code> CR</strong> <code>&lt;release&gt;-priorityclass-allowlist</code> (the apiserver
+cannot read the GMC flag). The chart renders that object from
+<code>allowedPriorityClasses</code> — the same value that feeds <code>--allowed-priority-classes</code>
+— and the GMC watches the very same object, so the webhook and the policy cannot
+drift. See <a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188">Self-service additions</a>.</p>
+<p><strong>Why a CRD and not a ConfigMap (Q492).</strong> A <code>paramKind</code> on a <em>core</em> type is
+destroyed by a kube-apiserver defect the moment the set of bindings naming it goes
+empty — which <code>helm uninstall</code> does. See
+<a href="#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492">below</a>.</p>
 <p><strong>Failure mode.</strong> The binding uses <code>parameterNotFoundAction: Deny</code>: if the
-parameter ConfigMap is <strong>deleted</strong>, every matched write — <code>runnergroups</code>,
+parameter object is <strong>deleted</strong>, every matched write — <code>runnergroups</code>,
 <code>runnersets</code>, and <code>runnertemplates</code> alike — is denied
 (<code>no params found for policy binding</code>) until it is recreated — loud and
 fail-closed rather than silently off. The GMC surfaces this as provisioning
-errors on affected gateways; recreate the ConfigMap (or <code>helm upgrade</code>) to
-recover. Deleting the ConfigMap does not affect running workloads.</p>
+errors on affected gateways; recreate the object (or re-run the chart upgrade) to
+recover. Deleting it does not affect running workloads.</p>
+<h4 id="param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492">Param resolution used to break cluster-wide (Q444, fixed in Q492)<a class="headerlink" href="#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492" title="Permanent link">&para;</a></h4>
+<p>Releases before the <code>PriorityClassAllowlist</code> migration used a <strong>ConfigMap</strong> as the
+policy's <code>paramKind</code>, and were exposed to a kube-apiserver defect that denied
+every matched write cluster-wide:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>denied request: failed to configure binding: no params found for policy binding
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>with `Deny` parameterNotFoundAction
+</code></pre></div>
+<p>…while the ConfigMap plainly existed at the referenced name and namespace. Because
+<code>parameterNotFoundAction: Deny</code> resolves parameters <strong>before</strong> any per-object
+matching, that denied <em>every</em> matched write — <code>runnergroups</code>, <code>runnersets</code>,
+<code>runnertemplates</code>, class-naming or not. It could also fail <strong>open</strong>, silently
+enforcing a stale allowlist from a frozen informer cache.</p>
+<p>The trigger is deleting the policy's <strong>binding</strong>: the apiserver keys one <em>shared</em>
+parameter informer per core-type <code>paramKind</code>, tears it down once no binding names
+that kind, and never restarts it. <code>helm uninstall</code> deletes the guard's only
+binding, so a later reinstall could not repair it — the only recovery was a
+kube-apiserver restart, unavailable on EKS/GKE/AKS. Observed on Kubernetes 1.35.5
+and 1.36.1.</p>
+<p><strong>What fixes it.</strong> For a <em>CRD</em> <code>paramKind</code> the apiserver allocates a fresh dynamic
+informer per context, so the same transition is survivable. Moving the parameter to
+the cluster-scoped <code>PriorityClassAllowlist</code> CR (Q492) therefore removes the
+exposure at its root rather than mitigating it. The contrast is measured directly —
+the same empty-binding-set transition, one GVK apart — by
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>,
+and the uninstall/reinstall cycle is now a CI gate
+(<code>scripts/e2e/chart-reinstall-check.sh</code>). Mechanism and measurements:
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/archive/q444-vap-param-resolution.md"><code>q444-vap-param-resolution.md</code></a>.</p>
+<p><strong>If you are still on an affected release</strong>, upgrade in place — <code>helm upgrade</code>
+never removes the binding and is safe — and see
+<a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md</a>. If you are
+already in the broken state, restart kube-apiserver where you can; otherwise set
+<code>admissionPolicy.enabled=false</code> to restore writes (you lose the backstop until the
+apiserver recycles), then upgrade.</p>
+<p><strong>The benign window is not this defect.</strong> A reinstall removes the parameter object
+and recreates it, and for a second or two in between the guard correctly fails
+closed with the same message. That clears on its own.</p>
 <hr />
 <h2 id="license-attribution-in-images">License attribution in images<a class="headerlink" href="#license-attribution-in-images" title="Permanent link">&para;</a></h2>
 <p>The compiled binaries statically link third-party Go modules (MIT/BSD/Apache/ISC/…),
@@ -4665,16 +5103,16 @@ label every image already carries.</p>
   worker image ships a shell + coreutils + tar, so <code>exec</code>-cat and <code>kubectl cp</code>
   work on a worker pod:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>/licenses/LICENSE
-<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;tenant-ns&gt;/&lt;worker-pod&gt;:/licenses/THIRD-PARTY-NOTICES<span class="w"> </span>./THIRD-PARTY-NOTICES
-<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># The agc/gmc/proxy images are distroless (no shell, cat, or tar), so neither</span>
-<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># exec-cat nor kubectl cp works on them — read their /licenses from the repo</span>
-<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="c1"># root (THIRD-PARTY-NOTICES) or from the image with an OCI tool (crane/skopeo).</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>/licenses/LICENSE
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;tenant-ns&gt;/&lt;worker-pod&gt;:/licenses/THIRD-PARTY-NOTICES<span class="w"> </span>./THIRD-PARTY-NOTICES
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="c1"># The agc/gmc/proxy images are distroless (no shell, cat, or tar), so neither</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># exec-cat nor kubectl cp works on them — read their /licenses from the repo</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="c1"># root (THIRD-PARTY-NOTICES) or from the image with an OCI tool (crane/skopeo).</span>
 </code></pre></div>
 <ul>
 <li><strong>How it is kept current.</strong> <code>THIRD-PARTY-NOTICES</code> lives at the repo root and is
   <strong>generated and committed</strong> by <code>make third-party-notices</code>
-  (<a href="../../scripts/gen-third-party-notices.sh"><code>scripts/gen-third-party-notices.sh</code></a>),
+  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>),
   which concatenates the <code>LICENSE</code>/<code>NOTICE</code>/<code>COPYING</code> files of every module under
   the committed, version-pinned <code>vendor/</code> tree — offline, no network or module
   cache. The CI <code>license-notices</code> workflow runs <code>make third-party-notices-check</code>
@@ -4686,7 +5124,7 @@ label every image already carries.</p>
 <h2 id="image-provenance-signature--sbom-verification">Image provenance: signature &amp; SBOM verification<a class="headerlink" href="#image-provenance-signature--sbom-verification" title="Permanent link">&para;</a></h2>
 <p>The five first-party images (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>) are
 published to
-GHCR by the <a href="../../.github/workflows/publish.yml"><code>publish.yml</code></a> workflow on every
+GHCR by the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow on every
 <code>v*</code> release tag (the maintainer-facing cut-a-release procedure is in
 <a href="../release/">release.md</a>). Each one is:</p>
 <ul>
@@ -4722,12 +5160,12 @@ swap (the "Verify the image" step in the
 <a href="#suspected-compromised-agc-tenant-scoped">compromised-AGC</a> and
 <a href="#suspected-compromised-gmc-cluster-scoped-tier-0">compromised-GMC</a> playbooks) —
 confirm the image was signed by <em>this project's</em> publish workflow:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Pin the identity to the publish workflow on a release tag, and the issuer to</span>
-<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="c1"># GitHub&#39;s OIDC provider. A signature from any other identity (or none) fails.</span>
-<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Pin the identity to the publish workflow on a release tag, and the issuer to</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="c1"># GitHub&#39;s OIDC provider. A signature from any other identity (or none) fails.</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;
 </code></pre></div>
 <ul>
 <li><strong>A <code>cosign verify</code> failure is a stop-ship / incident signal.</strong> It means the
@@ -4749,20 +5187,27 @@ confirm the image was signed by <em>this project's</em> publish workflow:</p>
 the complement to the signature's <em>who signed it</em>. It is bound to the <strong>index</strong>
 digest (unlike the per-arch SBOM attestations), so a tag or index-digest
 reference verifies directly. The one-command check uses the GitHub CLI:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Confirms the signed SLSA provenance was minted by this project&#39;s publish</span>
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># workflow. Resolve the tag to the index digest first for a workload check.</span>
-<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Confirms the signed SLSA provenance was minted by this project&#39;s publish</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="c1"># workflow. Resolve the tag to the index digest first for a workload check.</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
 </code></pre></div>
+<blockquote>
+<p><strong>Scripting this check?</strong> <code>gh attestation verify</code> prints its summary only to a
+terminal. Redirected or captured it emits nothing while still exiting 0, so a
+passing verification is indistinguishable from one that checked nothing. In a
+pipeline, add <code>--format json</code> and assert on the result — <code>.[0].verificationResult.signature.certificate.buildSignerURI</code>
+must name this repo's <code>publish.yml</code> at a <code>refs/tags/v*</code> ref.</p>
+</blockquote>
 <p><code>cosign</code> verifies the same attestation against the keyless identity, matching the
 signature/SBOM commands above (the predicate type is the SLSA provenance v1
 in-toto type):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>slsaprovenance1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate.buildDefinition.externalParameters&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>slsaprovenance1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate.buildDefinition.externalParameters&#39;</span>
 </code></pre></div>
 <ul>
 <li><strong>A provenance verification failure is a stop-ship / incident signal</strong>, exactly
@@ -4779,21 +5224,21 @@ attached to that architecture's manifest digest</strong> (not to the index, so t
 SBOM you audit is exactly what your nodes run) — and are also uploaded as build
 artifacts on each publish run. To pull and inspect one from the registry,
 resolve the per-arch digest from the index first:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Resolve the manifest digest for the architecture you are auditing.</span>
-<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.manifests[] | select(.platform.os == &quot;linux&quot; and .platform.architecture == &quot;amd64&quot;) | .digest&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
-<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>
-<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="c1"># Download that arch&#39;s SPDX-JSON SBOM attestation, verifying its keyless signature first.</span>
-<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a><span class="w">  </span><span class="s2">&quot;ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>gmc.spdx.json
-<a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a>
-<a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a><span class="c1"># Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:</span>
-<a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.packages[].name&#39;</span><span class="w"> </span>gmc.spdx.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># Resolve the manifest digest for the architecture you are auditing.</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.manifests[] | select(.platform.os == &quot;linux&quot; and .platform.architecture == &quot;amd64&quot;) | .digest&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
+<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a>
+<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="c1"># Download that arch&#39;s SPDX-JSON SBOM attestation, verifying its keyless signature first.</span>
+<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-33-9" name="__codelineno-33-9" href="#__codelineno-33-9"></a><span class="w">  </span><span class="s2">&quot;ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-33-10" name="__codelineno-33-10" href="#__codelineno-33-10"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.payload | @base64d | fromjson | .predicate&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>gmc.spdx.json
+<a id="__codelineno-33-11" name="__codelineno-33-11" href="#__codelineno-33-11"></a>
+<a id="__codelineno-33-12" name="__codelineno-33-12" href="#__codelineno-33-12"></a><span class="c1"># Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:</span>
+<a id="__codelineno-33-13" name="__codelineno-33-13" href="#__codelineno-33-13"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.packages[].name&#39;</span><span class="w"> </span>gmc.spdx.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
 </code></pre></div>
-<p>PR CI (<a href="../../.github/workflows/security-scan.yml"><code>security-scan.yml</code></a>) builds
+<p>PR CI (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/.github/workflows/security-scan.yml"><code>security-scan.yml</code></a>) builds
 each image and generates the same SBOM as a build artifact, so SBOM generation is
 exercised on every code PR — but <strong>signing and attestation run only on
 publish</strong> (they need a registry push and the publish workflow's OIDC identity).
@@ -4806,7 +5251,7 @@ exercise the cosign sign/attest path.</p>
 <li><a href="../observability/">observability.md</a> — full metrics reference and SLO alerting</li>
 <li><a href="../runbook/">runbook.md</a> — incident response and day-2 operations</li>
 <li><a href="../troubleshooting/">troubleshooting.md</a> — symptom → diagnosis → remediation</li>
-<li><a href="../../plan/security/">Security review findings (plan/security.md)</a> — per-finding status, including H-2 and the audit-policy follow-on</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/security.md">Security review findings (plan/security.md)</a> — per-finding status, including H-2 and the audit-policy follow-on</li>
 </ul>
 
 
@@ -4862,13 +5307,13 @@ exercise the cosign sign/attest path.</p>
         
         
           
-          <a href="../release/" class="md-footer__link md-footer__link--next" aria-label="Next: Release">
+          <a href="../admission-policies/" class="md-footer__link md-footer__link--next" aria-label="Next: Admission policies (Kyverno / Gatekeeper)">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Release
+                Admission policies (Kyverno / Gatekeeper)
               </div>
             </div>
             <div class="md-footer__button md-icon">

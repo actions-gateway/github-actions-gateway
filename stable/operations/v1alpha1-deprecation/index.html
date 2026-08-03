@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.2.0/operations/v1alpha1-deprecation/">
+        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/v1alpha1-deprecation/">
       
       
         <link rel="prev" href="../migration-v1-to-v2/">
@@ -27,7 +27,7 @@
     
     
       
-        <title>v1alpha1 deprecation - GitHub Actions Gateway</title>
+        <title>Deprecations & the v2.0.0 removal - GitHub Actions Gateway</title>
       
     
     
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.2.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.2.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.2.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.2.0",
+    "url": "https://actions-gateway.com/1.3.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.2.0"
+      "url": "https://actions-gateway.com/1.3.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.2.0",
-    "logo": "https://actions-gateway.com/1.2.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.3.0",
+    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -122,7 +122,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#v1alpha1-api-deprecation-notice" class="md-skip">
+        <a href="#deprecation-and-removal-notice-v1alpha1-v2alpha1-and-classic" class="md-skip">
           Skip to content
         </a>
       
@@ -132,9 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            
-  <strong>v1.2.0 is here.</strong> Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
-
+            <strong>v1.3.0 is here.</strong>
+      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
           </div>
           
         </aside>
@@ -142,6 +141,15 @@
     </div>
     
       <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
         
       </div>
     
@@ -169,7 +177,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              v1alpha1 deprecation
+              Deprecations & the v2.0.0 removal
             
           </span>
         </div>
@@ -308,6 +316,25 @@
     
   
   Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
 
       </a>
     </li>
@@ -522,6 +549,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../demo/" class="md-nav__link">
         
   
@@ -641,6 +695,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -654,7 +712,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -676,14 +734,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1143,6 +1201,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1207,6 +1321,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -1223,7 +1345,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1245,14 +1367,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1455,7 +1577,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -1473,7 +1595,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -1497,6 +1619,45 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-v200-removes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What v2.0.0 removes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What v2.0.0 removes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-the-three-are-coupled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the three are coupled
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A fourth deprecation on a different clock: CiliumFQDN / CalicoFQDN
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#status" class="md-nav__link">
@@ -1532,10 +1693,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#removal-timeline" class="md-nav__link">
+  <a href="#the-removal-release-and-what-it-is-gated-on" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Removal timeline
+        The removal release, and what it is gated on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-upgrade-past-v200" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before you upgrade past v2.0.0
       
     </span>
   </a>
@@ -1566,6 +1738,34 @@
     
   
     Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
   
 
     
@@ -1728,10 +1928,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
             
   
   
@@ -1749,8 +1949,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1971,6 +2171,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../runbook/" class="md-nav__link">
         
   
@@ -2111,6 +2367,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../release/" class="md-nav__link">
         
   
@@ -2194,6 +2478,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#what-v200-removes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What v2.0.0 removes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What v2.0.0 removes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-the-three-are-coupled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the three are coupled
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A fourth deprecation on a different clock: CiliumFQDN / CalicoFQDN
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#status" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2227,10 +2550,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#removal-timeline" class="md-nav__link">
+  <a href="#the-removal-release-and-what-it-is-gated-on" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Removal timeline
+        The removal release, and what it is gated on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-upgrade-past-v200" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before you upgrade past v2.0.0
       
     </span>
   </a>
@@ -2257,42 +2591,127 @@
   
 
 
-<h1 id="v1alpha1-api-deprecation-notice"><code>v1alpha1</code> API deprecation notice<a class="headerlink" href="#v1alpha1-api-deprecation-notice" title="Permanent link">&para;</a></h1>
+<h1 id="deprecation-and-removal-notice-v1alpha1-v2alpha1-and-classic">Deprecation and removal notice: <code>v1alpha1</code>, <code>v2alpha1</code>, and Classic<a class="headerlink" href="#deprecation-and-removal-notice-v1alpha1-v2alpha1-and-classic" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer / tenant operator</p>
 </blockquote>
 <div class="admonition warning">
-<p class="admonition-title"><code>v1alpha1</code> is deprecated — new tenants should start on v2</p>
-<p>Onboard new tenants on the <strong>v2 API</strong> (<code>actions-gateway.com/v2alpha1</code>) — see
-<a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started</a>.
-<code>v1alpha1</code> stays fully served until removal, so nothing is forced, but it is the
-terminal API. Migrate existing tenants with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>
-at your convenience — the move changes the API objects, not how jobs are acquired.</p>
+<p class="admonition-title">Three deprecations, one removal release: <code>v2.0.0</code></p>
+<p>Onboard new tenants on the <strong>v2 API</strong> at <code>actions-gateway.com/v2beta1</code> (see
+<a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started</a>),
+and author them as single-label <code>ScaleSet</code> runner sets. Everything named below
+stays <strong>fully served until <code>v2.0.0</code></strong>, so nothing is forced today. Migrate
+existing tenants with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> at your
+convenience: the move changes the API objects, not how jobs are acquired.</p>
 </div>
-<p>The <code>actions-gateway.github.com/v1alpha1</code> API group — the monolithic
-<code>ActionsGateway</code> (with an inline <code>proxy</code> and inline <code>runnerGroups[]</code>) and the
-standalone <code>RunnerGroup</code> kind — is <strong>deprecated</strong> in favor of the decomposed
-<code>actions-gateway.com/v2alpha1</code> API. This page records the deprecation, what stays
-working during the transition, and what changes at removal.</p>
+<p>This page is the project's standing deprecation notice. It records what <code>v2.0.0</code>
+removes, what keeps working until then, and what an operator has to do before
+upgrading past it. One further deprecation runs on its own, later clock —
+<a href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">the <code>CiliumFQDN</code> / <code>CalicoFQDN</code> egress modes</a>,
+removable no earlier than <code>v3.0.0</code>.</p>
+<h2 id="what-v200-removes">What <code>v2.0.0</code> removes<a class="headerlink" href="#what-v200-removes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Removed at <code>v2.0.0</code></th>
+<th>What it is today</th>
+<th>What replaces it</th>
+<th>How you move</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>actions-gateway.github.com/v1alpha1</code></strong></td>
+<td>the monolithic <code>ActionsGateway</code> (inline <code>proxy</code> and <code>runnerGroups[]</code>) plus the standalone <code>RunnerGroup</code> kind</td>
+<td>the decomposed <code>actions-gateway.com</code> API at <code>v2beta1</code></td>
+<td><a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>, a one-shot fan-out of one v1 object into several v2 objects</td>
+</tr>
+<tr>
+<td><strong><code>actions-gateway.com/v2alpha1</code></strong></td>
+<td>v2's first served version, superseded as storage and hub version by the <code>v2beta1</code> graduation</td>
+<td><code>v2beta1</code>, the graduated, ScaleSet-only shape</td>
+<td>read and re-apply your objects at <code>v2beta1</code>; the conversion webhook already round-trips them, so there is no re-author step except for the two <code>v2alpha1</code>-only fields below</td>
+</tr>
+<tr>
+<td><strong>Classic acquisition</strong> (<code>RunnerSet.spec.acquisitionProtocol: Classic</code> and <code>spec.maxListeners</code>, both <code>v2alpha1</code>-only)</td>
+<td>the many-acquirers protocol, and the only protocol <code>v1alpha1</code> speaks</td>
+<td><code>ScaleSet</code>, the single-acquirer protocol: the default since <code>v1.1.0</code>, and the only protocol <code>v2beta1</code> serves</td>
+<td>create one fresh single-label <code>ScaleSet</code> <code>RunnerSet</code> per <code>runs-on</code> target. <code>acquisitionProtocol</code> is immutable, so this is a create-and-delete, not an edit</td>
+</tr>
+</tbody>
+</table>
+<p><code>v2beta1</code> itself is <strong>not</strong> affected. Beta's contract is that a version will not be
+removed, and <code>v2.0.0</code> adds the GA <code>v2</code> version beside it rather than taking it away.</p>
+<h3 id="why-the-three-are-coupled">Why the three are coupled<a class="headerlink" href="#why-the-three-are-coupled" title="Permanent link">&para;</a></h3>
+<p><code>v2beta1</code> is already ScaleSet-only, so classic acquisition exists <em>only</em> to serve
+<code>v1alpha1</code> and <code>v2alpha1</code> objects. Removing those two versions removes classic's
+entire reason to exist. Splitting the three removals across separate releases would
+buy nothing and would cost every operator a second breaking migration, so they land
+together on one major tag.</p>
+<h2 id="a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">A fourth deprecation on a different clock: <code>CiliumFQDN</code> / <code>CalicoFQDN</code><a class="headerlink" href="#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn" title="Permanent link">&para;</a></h2>
+<p>The <code>EgressProxy</code> field <code>spec.egressPolicyMode</code> accepts two deprecated per-Container
+Network Interface (CNI) values, <code>CiliumFQDN</code> and <code>CalicoFQDN</code>, superseded by the
+<code>FQDN</code> intent plus the operator's <code>--fqdn-policy-backend</code> selector
+(<a href="../security-operations/#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">security-operations</a>).
+They are <strong>not</strong> part of the <code>v2.0.0</code> bundle above.</p>
+<p><strong>The earliest release that may remove them is <code>v3.0.0</code>.</strong></p>
+<p>Why they cannot ride the <code>v2.0.0</code> clock:</p>
+<ol>
+<li><strong>They are elements of a beta version, not a version themselves.</strong> The two values
+   exist in <code>v2alpha1</code> <em>and</em> in <code>v2beta1</code>, which is the storage and hub version. The
+   <code>v2alpha1</code> copy disappears with <code>v2alpha1</code> at <code>v2.0.0</code>; the <code>v2beta1</code> copy does not,
+   because <code>v2.0.0</code> keeps serving <code>v2beta1</code> — it adds the General Availability (GA)
+   <code>v2</code> version beside it.</li>
+<li><strong>An API element is removed by incrementing the version, never by deleting it from
+   a served one.</strong> Deleting a value from a version already in the field would reject
+   objects an operator has stored and can still <code>kubectl apply</code> — the exact breakage
+   the versioning contract exists to prevent. So the values live for as long as
+   <code>v2beta1</code> is served.</li>
+<li><strong>Beta promises the version will not be removed without a migration path.</strong> Retiring
+   a served version is a breaking change, and this project lands breaking changes on a
+   major tag announced at least one release ahead (<a href="../../roadmap/">roadmap</a>). The next
+   major after <code>v2.0.0</code> is <code>v3.0.0</code>, so that is the earliest tag that can retire
+   <code>v2beta1</code> and, with it, these two values.</li>
+</ol>
+<p>Naming <code>v2.0.0</code> for them would have been a promise the API contract forbids keeping:
+the removal would have had to either break <code>v2beta1</code> objects or quietly not happen.</p>
+<p>Two consequences worth stating plainly:</p>
+<ul>
+<li><strong><code>v3.0.0</code> is not scheduled and carries no date</strong>, exactly as <code>v2.0.0</code> carries none.
+  It is gated on <code>v2beta1</code>'s retirement, which is gated in turn on the <code>v2</code> GA soak
+  (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/v2-ga.md">v2 GA plan</a>). The commitment here is a floor — <em>not
+  before</em> <code>v3.0.0</code> — and the removal still gets its own one-release-ahead announcement.</li>
+<li><strong>Whether the GA <code>v2</code> version defines the two values at all is a separate, open
+  question</strong>, settled by the graduation hop rather than by this notice. <code>v2</code> is a new
+  version, so it is free to omit them; if it does, an operator on <code>v2</code> simply cannot
+  set them, while an operator on <code>v2beta1</code> still can until <code>v3.0.0</code>. Either way the
+  removal release above is unchanged.</li>
+</ul>
+<p><strong>What to do now:</strong> nothing is forced, but migrate when convenient — set
+<code>egressPolicyMode: FQDN</code> on the <code>EgressProxy</code> and have the platform operator set the
+matching GMC <code>--fqdn-policy-backend</code>. The admission webhook already warns on every
+write that still names a deprecated value, and the warning names <code>v3.0.0</code>.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>v1alpha1</code> is deprecated but still served.</strong> Both API groups are served side by
-  side. No release has removed v1 capability; existing v1 tenants keep running
-  unchanged.</li>
-<li><strong>New tenants should onboard on v2.</strong> See
+<li><strong>All three are deprecated and still fully served.</strong> No release has removed any of
+  them. Existing tenants keep running unchanged until they upgrade past <code>v2.0.0</code>.</li>
+<li><strong>New tenants should onboard on <code>v2beta1</code>.</strong> See
   <a href="../tenant-onboarding/">tenant onboarding</a> for the v2 object set.</li>
-<li><strong>Existing tenants migrate with the tool</strong> on their own schedule — see
+<li><strong><code>v2alpha1</code> stays served as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp.</strong>
+  It carries the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs, which a
+  new tenant does not. Note that alpha's contract allows an alpha version to be
+  dropped without notice; naming <code>v2.0.0</code> for it is a stronger commitment than the
+  maturity level requires.</li>
+<li><strong>Existing tenants migrate with the tool</strong> on their own schedule: see
   <a href="../migration-v1-to-v2/">migration-v1-to-v2.md</a>. The migration is a one-shot
   fan-out, not an automatic conversion, because one v1 object becomes several v2
   objects.</li>
 <li><strong>Migrating preserves how your jobs are acquired.</strong> <code>gag-migrate</code> maps v1 runner
-  groups to v2 <code>RunnerSet</code>s that use the same job-acquisition path — it writes
+  groups to v2 <code>RunnerSet</code>s that use the same job-acquisition path: it writes
   <code>acquisitionProtocol: Classic</code> onto every emitted set, so the migration changes the
   API objects, not the runtime behaviour, and is safe to do ahead of any other change.
-  (The v2 default for <em>new</em> sets is now the runner-scale-set protocol, <code>ScaleSet</code>
-  (Q264 P5), and <code>Classic</code> is deprecated; adopting <code>ScaleSet</code> for a migrated group is a
-  distinct, later step — create a fresh single-label set — never a side effect of
-  migrating off <code>v1alpha1</code>.)</li>
+  Adopting <code>ScaleSet</code> for a migrated group is a distinct, later step (create a fresh
+  single-label set), never a side effect of migrating off <code>v1alpha1</code>.</li>
 </ul>
 <h2 id="why-v2-what-the-decomposition-buys">Why v2 (what the decomposition buys)<a class="headerlink" href="#why-v2-what-the-decomposition-buys" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2306,14 +2725,19 @@ working during the transition, and what changes at removal.</p>
 <li><strong>Namespace-scoped Pod Security profile.</strong> <code>securityProfile</code> moves off the
   per-gateway spec onto the namespace, matching how Pod Security Admission actually
   works.</li>
+<li><strong>Single-acquirer job acquisition.</strong> <code>ScaleSet</code> holds one listener per runner set,
+  so GitHub never assigns beyond advertised capacity. Classic's many-acquirers model
+  can mark a job <code>in_progress</code> and then fail to provision a worker for it; measured
+  on this project's own dogfood tenant, that orphaned 81% of acquired jobs
+  (<a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition">troubleshooting</a>).</li>
 </ul>
 <p>Full rationale: <a href="../../design/appendix-h-v2-api-decomposition/">Appendix H</a>.</p>
 <h2 id="the-dual-read-window-what-keeps-working-during-coexistence">The dual-read window (what keeps working during coexistence)<a class="headerlink" href="#the-dual-read-window-what-keeps-working-during-coexistence" title="Permanent link">&para;</a></h2>
 <p>The v2 cutover also aligns two grandfathered, boolean-looking label/annotation values
 and moves the project's domain-prefixed keys off <code>actions-gateway.github.com/</code> onto
-<code>actions-gateway.com/</code> (Q147 / the API-group rename). During coexistence every
-consumer — the <code>ValidatingAdmissionPolicy</code> objects and the GMC validating webhook —
-<strong>dual-reads both spellings</strong>:</p>
+<code>actions-gateway.com/</code> (Q147 / the API-group rename). During coexistence both
+consumers of these values, the <code>ValidatingAdmissionPolicy</code> objects and the GMC
+validating webhook, <strong>dual-read both spellings</strong>:</p>
 <table>
 <thead>
 <tr>
@@ -2350,26 +2774,42 @@ consumer — the <code>ValidatingAdmissionPolicy</code> objects and the GMC vali
 </tr>
 </tbody>
 </table>
-<p>The migration tool relabels these in one pass (additively — it adds the v2 keys and
-keeps the v1 keys). The dual-read <strong>only widens accepted spelling</strong>: it never relaxes
-an invariant. The window <strong>closes exactly when <code>v1alpha1</code> is removed</strong>, at which point
-the legacy <code>"true"</code> arms and the <code>actions-gateway.github.com/*</code> keys are dropped from
-the policies and the webhook.</p>
-<h2 id="removal-timeline">Removal timeline<a class="headerlink" href="#removal-timeline" title="Permanent link">&para;</a></h2>
-<p><code>v1alpha1</code> removal is gated on the <strong>v2 API reaching beta</strong> (the <code>v2beta1</code>
-graduation) — a <em>technical</em> readiness bar, not an adoption count — and will be
-announced as a <strong>named release</strong> with at least one release of notice. Gating on v2
-maturity is what lets the schedule be committed rather than open-ended: you are
-never asked to move onto an alpha, and there is no adopter census to wait on. At
-removal:</p>
-<ul>
-<li>The <code>actions-gateway.github.com</code> CRDs (<code>ActionsGateway</code>, <code>RunnerGroup</code>) are
-  withdrawn; any remaining v1 objects must be migrated first.</li>
-<li>The dual-read window closes — the legacy label/annotation spellings and the v1
-  finalizer names are no longer honored. Migrate (which relabels onto the v2 domain)
-  before upgrading past the removal release.</li>
-</ul>
-<p>Until that named release, no action is forced: run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>
+<p>The migration tool relabels these in one pass (additively: it adds the v2 keys and
+keeps the v1 keys). The dual-read <strong>only widens accepted spelling</strong>, it never relaxes
+an invariant. The window <strong>closes at <code>v2.0.0</code></strong>, when <code>v1alpha1</code> is removed and the
+legacy <code>"true"</code> arms and the <code>actions-gateway.github.com/*</code> keys are dropped from the
+policies and the webhook.</p>
+<h2 id="the-removal-release-and-what-it-is-gated-on">The removal release, and what it is gated on<a class="headerlink" href="#the-removal-release-and-what-it-is-gated-on" title="Permanent link">&para;</a></h2>
+<p><strong><code>v2.0.0</code> is the named removal release, announced with <code>v1.3.0</code>.</strong> The project's
+policy is that a removal lands on a named release announced at least one release
+ahead (<a href="../../roadmap/">roadmap</a>); <code>v1.3.0</code> carries that announcement for all three
+items above.</p>
+<p><code>v2.0.0</code> is a <strong>major</strong> tag because removing a served API version is a breaking
+change, and it is gated on the <strong><code>v2</code> (GA) API being available and validated</strong>, not on
+a date and not on an adopter census. Gating on v2 maturity is
+what lets the commitment be concrete: you are never asked to move onto an alpha to
+escape a removal, and there is no census to wait on. <code>v2beta1</code> is production-relyable
+today and converts to <code>v2</code> in place.</p>
+<p>There is deliberately <strong>no date</strong>. <code>v1.3.0</code> fixes <em>which</em> release removes these and
+<em>what</em> it removes; the GA soak that gates <code>v2.0.0</code> finishes when the evidence says
+the v2 shape is right.</p>
+<h2 id="before-you-upgrade-past-v200">Before you upgrade past <code>v2.0.0</code><a class="headerlink" href="#before-you-upgrade-past-v200" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Migrate off <code>v1alpha1</code>.</strong> Run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>, which also
+   relabels the namespace markers and annotations onto the <code>actions-gateway.com/</code>
+   spellings. Do this <em>before</em> upgrading: after removal the legacy spellings and the
+   v1 finalizer names are no longer honored, and any remaining <code>v1alpha1</code> objects
+   have no served version.</li>
+<li><strong>Move <code>v2alpha1</code> objects to <code>v2beta1</code>.</strong> Re-apply them at <code>v2beta1</code> (or let the
+   conversion webhook serve them there and re-record your GitOps manifests at that
+   version) so nothing in Git still names a removed version.</li>
+<li><strong>Replace Classic runner sets with <code>ScaleSet</code> sets.</strong> One single-label
+   <code>RunnerSet</code> per <code>runs-on</code> target, created fresh, since <code>acquisitionProtocol</code> is
+   immutable. Split any multi-label group into one set per label, and drop
+   <code>maxListeners</code>, which <code>ScaleSet</code> ignores. See
+   <a href="../tenant-onboarding/#acquisition-protocol-v2alpha1-only">tenant onboarding</a>.</li>
+</ol>
+<p>Until that release, no action is forced: run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>
 when convenient, validate the v2 path, and decommission v1 at your own pace.</p>
 
 

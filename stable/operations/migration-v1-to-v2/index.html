@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.2.0/operations/migration-v1-to-v2/">
+        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/migration-v1-to-v2/">
       
       
         <link rel="prev" href="../migration-from-arc/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.2.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.2.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.2.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.2.0",
+    "url": "https://actions-gateway.com/1.3.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.2.0"
+      "url": "https://actions-gateway.com/1.3.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.2.0",
-    "logo": "https://actions-gateway.com/1.2.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.3.0",
+    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,9 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            
-  <strong>v1.2.0 is here.</strong> Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
-
+            <strong>v1.3.0 is here.</strong>
+      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
           </div>
           
         </aside>
@@ -142,6 +141,15 @@
     </div>
     
       <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
         
       </div>
     
@@ -308,6 +316,25 @@
     
   
   Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
 
       </a>
     </li>
@@ -522,6 +549,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../demo/" class="md-nav__link">
         
   
@@ -641,6 +695,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -654,7 +712,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -676,14 +734,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1143,6 +1201,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1207,6 +1321,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -1223,7 +1345,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1245,14 +1367,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1504,6 +1626,34 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#privileged-worker-shapes-dind-become-cluster-scoped-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Privileged worker shapes (DinD) become cluster-scoped templates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Privileged worker shapes (DinD) become cluster-scoped templates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-privileged-tenant-needs-the-downgrade-opt-in-for-the-duration-of-the-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A privileged tenant needs the downgrade opt-in for the duration of the migration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1568,6 +1718,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Step 3 — coexistence, validation, and rollback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-two-tenants-keep-separate-runners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two tenants keep separate runners
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#each-agc-serves-exactly-one-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Each AGC serves exactly one API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-two-proxy-pools-stay-isolated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two proxy pools stay isolated
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1578,6 +1767,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Step 4 — decommission v1 (when ready)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#teardown-order-is-load-bearing-never-delete-the-namespace-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Teardown order is load-bearing: never delete the namespace first
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1615,7 +1821,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -1644,6 +1850,34 @@
     
   
     Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
   
 
     
@@ -1806,10 +2040,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
             
   
   
@@ -1827,8 +2061,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2049,6 +2283,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../runbook/" class="md-nav__link">
         
   
@@ -2189,6 +2479,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../release/" class="md-nav__link">
         
   
@@ -2305,6 +2623,34 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#privileged-worker-shapes-dind-become-cluster-scoped-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Privileged worker shapes (DinD) become cluster-scoped templates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Privileged worker shapes (DinD) become cluster-scoped templates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-privileged-tenant-needs-the-downgrade-opt-in-for-the-duration-of-the-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A privileged tenant needs the downgrade opt-in for the duration of the migration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2369,6 +2715,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Step 3 — coexistence, validation, and rollback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-two-tenants-keep-separate-runners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two tenants keep separate runners
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#each-agc-serves-exactly-one-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Each AGC serves exactly one API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-two-proxy-pools-stay-isolated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The two proxy pools stay isolated
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2379,6 +2764,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Step 4 — decommission v1 (when ready)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#teardown-order-is-load-bearing-never-delete-the-namespace-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Teardown order is load-bearing: never delete the namespace first
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2429,13 +2831,20 @@ create</strong>, not an automatic conversion — see the
 coexistence/rollback story, and the post-migration teardown.</p>
 <h2 id="why-upgrade-to-v2">Why upgrade to v2<a class="headerlink" href="#why-upgrade-to-v2" title="Permanent link">&para;</a></h2>
 <p>v2 is <strong>opt-in</strong>. It is served at two versions: <strong><code>v2beta1</code></strong> (the graduated,
-ScaleSet-only storage/hub version) and <strong><code>v2alpha1</code></strong> (still served for coexistence).
-<code>gag-migrate</code> lands v1 RunnerGroups on <strong><code>v2alpha1</code></strong> so a migrated set keeps its
-Classic protocol and multi-label matching during the deprecation window; a tenant then
-moves to <code>v2beta1</code> (a lossless, apiserver-side conversion) once it no longer needs
-Classic. v2 is <strong>not a drop-in replacement</strong> (new API group <code>actions-gateway.com</code>, one
+ScaleSet-only storage/hub version) and <strong><code>v2alpha1</code></strong> (deprecated, served as this
+tool's on-ramp). <code>gag-migrate</code> lands v1 RunnerGroups on <strong><code>v2alpha1</code></strong> so a migrated
+set keeps its Classic protocol and multi-label matching during the deprecation window;
+a tenant then moves to <code>v2beta1</code> (a lossless, apiserver-side conversion) once it no
+longer needs Classic. Because <code>v2alpha1</code> is deprecated, the apiserver warns on every
+<code>v2alpha1</code> read or write, including the objects <code>gag-migrate</code> applies. The warning is
+advisory and blocks nothing; it clears when the tenant moves to <code>v2beta1</code>. Detail:
+<a href="../upgrade/#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns">upgrade.md</a>.
+v2 is <strong>not a drop-in replacement</strong> (new API group <code>actions-gateway.com</code>, one
 CR decomposed into several kinds, a tool-assisted fan-out). <code>v1alpha1</code> stays fully
-supported. Migrate a tenant when one of these is worth that trade-off.</p>
+supported until it is <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>, which also
+removes <code>v2alpha1</code> and Classic, so treat the <code>v2alpha1</code> landing spot as a way station
+and <code>v2beta1</code> as the destination. Migrate a tenant when one of these is worth that
+trade-off.</p>
 <p><strong>New capabilities — no v1 equivalent:</strong></p>
 <ul>
 <li><strong>Multiple gateways per namespace.</strong> Run several GitHub orgs, or rebalance
@@ -2458,11 +2867,19 @@ supported. Migrate a tenant when one of these is worth that trade-off.</p>
 <li><strong>Per-gateway control-plane sizing.</strong> <code>ActionsGateway.spec.agcResources</code> tunes the AGC
   container CPU/memory per gateway (an additive overlay of the platform default). v1 has
   no equivalent field (<a href="../../design/appendix-h-v2-api-decomposition/#h4-spec-sketches">§H.4</a>).</li>
+<li><strong>Per-gateway managed right-sizing.</strong> <code>ActionsGateway.spec.agcAutoscaling</code> has the GMC
+  stamp a <code>VerticalPodAutoscaler</code> next to the AGC <code>Deployment</code> so an autoscaler sizes its
+  requests instead of you tuning <code>agcResources</code> by hand. Opt-in, recommendation-only by
+  default, and it composes with <code>agcResources</code> rather than overriding it. v1 has no
+  equivalent field (<a href="../tenant-onboarding/#letting-an-autoscaler-size-the-agc-agcautoscaling">tenant-onboarding</a>).</li>
 <li><strong>DNS-aware egress policy.</strong> <code>EgressProxy.egressPolicyMode</code> adds an <code>FQDN</code> intent
   (default <code>CIDR</code>) to allowlist GitHub by hostname; the operator picks the enforcement
   mechanism with the GMC <code>--fqdn-policy-backend</code> flag (<code>none</code>|<code>cilium</code>|<code>calico</code>|<code>gke</code>).
   The earlier per-CNI <code>CiliumFQDN</code> / <code>CalicoFQDN</code> values remain accepted-but-deprecated
-  (Q245).</li>
+  (Q245) and are <strong>not</strong> removed by <code>v2.0.0</code> — they are enum members of the beta version
+  <code>v2beta1</code>, which <code>v2.0.0</code> keeps serving, so <code>v3.0.0</code> is the earliest release that may
+  remove them
+  (<a href="../v1alpha1-deprecation/#a-fourth-deprecation-on-a-different-clock-ciliumfqdn--calicofqdn">why</a>).</li>
 </ul>
 <p><strong>Quality-of-life and hardening — batched into the one schema break:</strong></p>
 <ul>
@@ -2503,6 +2920,10 @@ metadata patch:</p>
 <td>a <code>RunnerTemplate</code> — <strong>identical templates collapse to one</strong></td>
 </tr>
 <tr>
+<td>a <code>RunnerGroup.spec.podTemplate</code> with a <strong>privileged</strong> container (Docker-in-Docker, sysbox)</td>
+<td>a cluster-scoped <strong><code>ClusterRunnerTemplate</code></strong> instead, referenced as <code>templateRef.kind: ClusterRunnerTemplate</code> — see <a href="#privileged-worker-shapes-dind-become-cluster-scoped-templates">privileged worker shapes</a></td>
+</tr>
+<tr>
 <td>each <code>RunnerGroup</code></td>
 <td>a <code>RunnerSet</code> (<code>gatewayRef</code> + <code>templateRef</code>; <code>proxyRef</code> left unset so it inherits the gateway's <code>defaultProxyRef</code>)</td>
 </tr>
@@ -2533,15 +2954,75 @@ label, the domain-migrated <code>privileged-profile</code> grant, and the aligne
   the tool never reads, prints, or copies the credential Secret's contents.</li>
 <li><strong>The eligibility grant is never invented.</strong> A tenant migrating to
   <code>securityProfile: privileged</code> keeps the <em>existing</em> platform grant (domain-migrated);
-  if the namespace holds no grant, the tool warns rather than self-granting one.</li>
+  if the namespace holds no grant, the tool warns rather than self-granting one. The
+  grant is recognized on <strong>either label domain</strong> — <code>actions-gateway.github.com/</code>
+  or <code>actions-gateway.com/</code>, both valued <code>allowed</code> — matching what the v1 admission
+  webhook accepts during coexistence, so a namespace already relabelled onto the v2
+  domain is never reported as ungranted.</li>
 </ul>
+<h3 id="privileged-worker-shapes-dind-become-cluster-scoped-templates">Privileged worker shapes (DinD) become cluster-scoped templates<a class="headerlink" href="#privileged-worker-shapes-dind-become-cluster-scoped-templates" title="Permanent link">&para;</a></h3>
+<p>v2 refuses a privileged container in a <strong>namespaced</strong> <code>RunnerTemplate</code> — a tenant must
+not be able to self-author a privileged worker shape. Privileged shapes live on the
+platform-owned, cluster-scoped <code>ClusterRunnerTemplate</code>, which exists precisely to hold
+golden Docker-in-Docker / sysbox templates
+(<a href="../../design/appendix-h-v2-api-decomposition/">§H.6</a>).</p>
+<p>So when a v1 <code>RunnerGroup</code>'s <code>podTemplate</code> declares a privileged container or init
+container, <code>gag-migrate</code> emits a <code>ClusterRunnerTemplate</code> rather than a
+<code>RunnerTemplate</code>, and sets the set's <code>templateRef.kind: ClusterRunnerTemplate</code>.
+Non-privileged groups are unaffected. <strong>This changes what a migration touches</strong>, so it
+is called out in the dry-run with a warning, and there are three things to know:</p>
+<ul>
+<li><strong>It needs cluster-scoped create permission.</strong> <code>--apply</code> already requires permission
+  to patch the tenant namespace; this adds <code>create</code> on
+  <code>clusterrunnertemplates.actions-gateway.com</code>.</li>
+<li><strong>Deleting the tenant namespace does not reclaim it.</strong> Cluster-scoped objects have no
+  owning namespace. Every emitted template is labelled with the namespace it came from,
+  so you can always find them again:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>clusterrunnertemplates<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/migrated-from-namespace<span class="o">=</span>team-a
+</code></pre></div>
+<ul>
+<li><strong>Templates are not shared between tenants.</strong> The emitted name is namespace-qualified
+  (<code>crt-&lt;namespace&gt;-&lt;hash&gt;</code>), so two tenants with a byte-identical DinD worker shape
+  still get their own object — editing one never changes the other's worker pods. Within
+  one namespace, identical groups still collapse to a single template as usual.</li>
+</ul>
+<p>Pod Security Admission remains the runtime enforcement backstop, exactly as it is for
+the namespaced kind: a privileged worker pod is only admitted in a namespace whose
+<code>actions-gateway.com/security-profile</code> is <code>privileged</code>, which in turn requires the
+platform <code>privileged-profile=allowed</code> grant the migration carries forward and never
+invents — held on either label domain. A privileged tenant therefore migrates under
+exactly the grant it already had.</p>
+<h4 id="a-privileged-tenant-needs-the-downgrade-opt-in-for-the-duration-of-the-migration">A privileged tenant needs the downgrade opt-in for the duration of the migration<a class="headerlink" href="#a-privileged-tenant-needs-the-downgrade-opt-in-for-the-duration-of-the-migration" title="Permanent link">&para;</a></h4>
+<p>Relocating <code>securityProfile: privileged</code> onto the namespace is <strong>rejected by default</strong>,
+and every privileged tenant hits this. The <code>namespace-security-profile-guard</code> policy
+compares the incoming <code>actions-gateway.com/security-profile</code> label against the current
+one, and an <strong>absent</strong> label reads as the <code>baseline</code> default. A tenant coming from v1
+has never carried the v2 label, and <code>privileged</code> is the <em>least</em> restrictive level — so
+the relocation always presents as <code>baseline</code> → <code>privileged</code>, i.e. a downgrade, and is
+denied without the opt-in annotation.</p>
+<p>The downgrade is only apparent: the namespace's PSA enforcement is <em>already</em>
+<code>privileged</code> under v1, stamped there by the GMC from the gateway's spec. But the policy
+cannot see that, and it must not — it is the control that stops a stray re-apply from
+silently relaxing a tenant's isolation. <code>gag-migrate</code> therefore warns in the dry-run
+instead of writing the annotation itself, for the same reason it never invents the
+eligibility grant: opting into a downgrade is the operator's decision.</p>
+<p>Add it before <code>--apply</code>, and remove it once the migration is verified:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>annotate<span class="w"> </span>namespace<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.com/allow-profile-downgrade<span class="o">=</span>allowed
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>gag-migrate<span class="w"> </span>--namespace<span class="w"> </span>team-a<span class="w"> </span>--context<span class="w"> </span>my-cluster<span class="w"> </span>--apply
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>kubectl<span class="w"> </span>annotate<span class="w"> </span>namespace<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.com/allow-profile-downgrade-
+</code></pre></div>
+<p>Tenants migrating to <code>baseline</code> or <code>restricted</code> need none of this.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
 <li>The <strong>v2 CRDs are installed</strong> and the GMC is serving the v2 reconcilers — install
   the opt-in <code>actions-gateway-crds-v2</code> chart and restart the GMC if it was already
   running (see <a href="../../getting-started/#1-deploy-the-gmc">Getting Started — the v2 CRDs</a>).</li>
 <li><code>kubectl</code> access to the cluster with permission to read the tenant's v1 objects and
-  (for <code>--apply</code>) create v2 objects and patch the namespace.</li>
+  (for <code>--apply</code>) create v2 objects and patch the namespace. A tenant with a privileged
+  (DinD/sysbox) worker shape additionally needs <code>create</code> on cluster-scoped
+  <code>clusterrunnertemplates.actions-gateway.com</code> — see
+  <a href="#privileged-worker-shapes-dind-become-cluster-scoped-templates">privileged worker shapes</a>.</li>
 <li>Get the tool. Either <strong>download the signed release binary</strong> for your platform from
   the <a href="https://github.com/actions-gateway/github-actions-gateway/releases">GitHub Release</a>
   (<code>gag-migrate-&lt;version&gt;-&lt;os&gt;-&lt;arch&gt;</code>), or <strong>build from source</strong>: from <code>cmd/gmc</code>,
@@ -2549,24 +3030,24 @@ label, the domain-migrated <code>privileged-profile</code> grant, and the aligne
   <code>.build/gag-migrate</code>. To verify a downloaded binary (keyless signature over the
   checksum manifest):</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span>--bundle<span class="w"> </span>SHA256SUMS.cosign.bundle<span class="w"> </span>SHA256SUMS<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;https://github.com/actions-gateway/github-actions-gateway/.*&#39;</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>sha256sum<span class="w"> </span>-c<span class="w"> </span>SHA256SUMS<span class="w">   </span><span class="c1"># then confirm your binary&#39;s checksum matches</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span>--bundle<span class="w"> </span>SHA256SUMS.cosign.bundle<span class="w"> </span>SHA256SUMS<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">&#39;https://github.com/actions-gateway/github-actions-gateway/.*&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>sha256sum<span class="w"> </span>-c<span class="w"> </span>SHA256SUMS<span class="w">   </span><span class="c1"># then confirm your binary&#39;s checksum matches</span>
 </code></pre></div>
 <h3 id="pin-the-target-cluster">Pin the target cluster<a class="headerlink" href="#pin-the-target-cluster" title="Permanent link">&para;</a></h3>
 <p><code>gag-migrate</code> talks to whatever your kubeconfig resolves to. <strong>Pass <code>--context</code> to pin
 the cluster explicitly</strong> rather than relying on the ambient current-context (a parallel
 session can silently repoint it):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>gag-migrate<span class="w"> </span>--namespace<span class="w"> </span>team-a<span class="w"> </span>--context<span class="w"> </span>my-cluster
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>gag-migrate<span class="w"> </span>--namespace<span class="w"> </span>team-a<span class="w"> </span>--context<span class="w"> </span>my-cluster
 </code></pre></div>
 <p>Before any write, <code>--apply</code> echoes the resolved target context and scope and requires an
 explicit <code>yes</code>. In automation, pass <code>--assume-yes</code> (or set <code>ASSUME_YES=1</code>) to skip the
 prompt.</p>
 <h2 id="step-1--dry-run-and-review">Step 1 — dry-run and review<a class="headerlink" href="#step-1--dry-run-and-review" title="Permanent link">&para;</a></h2>
 <p>Dry-run is the default; the tool prints the v2 manifests and applies nothing.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>gag-migrate<span class="w"> </span>--namespace<span class="w"> </span>team-a<span class="w">            </span><span class="c1"># print to stdout</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>gag-migrate<span class="w"> </span>--namespace<span class="w"> </span>team-a<span class="w"> </span>--output-dir<span class="w"> </span>./migration<span class="w">   </span><span class="c1"># or write per-namespace files</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>gag-migrate<span class="w"> </span>--namespace<span class="w"> </span>team-a<span class="w">            </span><span class="c1"># print to stdout</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>gag-migrate<span class="w"> </span>--namespace<span class="w"> </span>team-a<span class="w"> </span>--output-dir<span class="w"> </span>./migration<span class="w">   </span><span class="c1"># or write per-namespace files</span>
 </code></pre></div>
 <p>Review the output:</p>
 <ul>
@@ -2574,6 +3055,9 @@ prompt.</p>
   <code>RunnerGroup</code> count if templates are shared — that is the object-size win), and one
   <code>RunnerSet</code> per group.</li>
 <li>Confirm <code>defaultProxyRef</code> is set on the <code>ActionsGateway</code>.</li>
+<li>If any <code>ClusterRunnerTemplate</code> appears, confirm you expected a privileged worker
+  shape there — that object is cluster-scoped and outlives the tenant namespace
+  (<a href="#privileged-worker-shapes-dind-become-cluster-scoped-templates">detail</a>).</li>
 <li>Read the trailing <strong>namespace patch</strong> comment block — it lists the exact
   <code>kubectl label</code>/<code>kubectl annotate</code> commands the <code>--apply</code> path will run.</li>
 <li>Resolve any <strong>warnings</strong> (e.g. a name truncated under the 52-char cap, or a
@@ -2582,12 +3066,12 @@ prompt.</p>
 <p>To migrate every tenant at once, use <code>--all-namespaces</code> (discovers every namespace
 holding a v1 <code>ActionsGateway</code>).</p>
 <h2 id="step-2--apply">Step 2 — apply<a class="headerlink" href="#step-2--apply" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>gag-migrate<span class="w"> </span>--namespace<span class="w"> </span>team-a<span class="w"> </span>--context<span class="w"> </span>my-cluster<span class="w"> </span>--apply
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># About to APPLY the v2 migration.</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1">#   Target context: my-cluster</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1">#   Scope:          namespace &quot;team-a&quot;</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># ...</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Proceed? [y/N] y</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>gag-migrate<span class="w"> </span>--namespace<span class="w"> </span>team-a<span class="w"> </span>--context<span class="w"> </span>my-cluster<span class="w"> </span>--apply
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># About to APPLY the v2 migration.</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1">#   Target context: my-cluster</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1">#   Scope:          namespace &quot;team-a&quot;</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># ...</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># Proceed? [y/N] y</span>
 </code></pre></div>
 <p><code>--apply</code> first <strong>echoes the resolved target context and scope and waits for a <code>yes</code></strong>
 (the wrong-cluster guard) — so <code>--all-namespaces --apply</code> can never write cluster-wide
@@ -2596,10 +3080,22 @@ prompt in automation.</p>
 <p>It then creates the v2 objects (children before referrers) and patches the namespace
 additively. It is <strong>idempotent</strong>: an object that already exists is left untouched, so a
 re-run never clobbers a hand-edited v2 object. It never deletes v1 objects.</p>
+<p>Every create passes through a v2 validating webhook served by the GMC, so <code>--apply</code>
+<strong>rides out a transiently unreachable webhook</strong> rather than aborting partway through
+the fan-out. If the webhook endpoint is mid-rollout (or the apiserver's call to it
+times out), you will see:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>admission webhook unreachable applying EgressProxy/team-a-egress: Internal error occurred: failed calling webhook ...
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>this is usually transient (webhook endpoint rolling out); retrying for up to 1m30s
+</code></pre></div>
+<p>This is informational — the apply continues on its own once the webhook answers, and
+gives up with the last error after <strong>90 seconds</strong> if it never does. Only a webhook the
+apiserver could not <em>reach</em> is retried; a webhook that ran and <strong>rejected</strong> the object
+fails immediately with its own reason, so a real admission problem is never hidden
+behind a wait.</p>
 <p>Verify the v2 set reaches steady state:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>get<span class="w"> </span>actionsgateways.actions-gateway.com,egressproxies,runnersets
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># Each RunnerSet should reach Ready=True once its references resolve; a</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Ready=False/TemplateNotFound or /ProxyNotFound names the missing referent.</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>get<span class="w"> </span>actionsgateways.actions-gateway.com,egressproxies,runnersets
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># Each RunnerSet should reach Ready=True once its references resolve; a</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Ready=False/TemplateNotFound or /ProxyNotFound names the missing referent.</span>
 </code></pre></div>
 <h2 id="step-3--coexistence-validation-and-rollback">Step 3 — coexistence, validation, and rollback<a class="headerlink" href="#step-3--coexistence-validation-and-rollback" title="Permanent link">&para;</a></h2>
 <p>After <code>--apply</code>, the v1 and v2 object sets <strong>run side by side</strong>. The v1 gateway keeps
@@ -2607,13 +3103,138 @@ acquiring jobs exactly as before; the v2 gateway provisions its own AGC and runs
 own <code>RunnerSet</code>s. Validate the v2 path end to end (trigger a workflow that targets the
 v2 runner labels and confirm a worker pod is provisioned and egresses through the
 proxy) before removing v1.</p>
+<h3 id="the-two-tenants-keep-separate-runners">The two tenants keep separate runners<a class="headerlink" href="#the-two-tenants-keep-separate-runners" title="Permanent link">&para;</a></h3>
+<p>The tool keeps each tenant's name, so a namespace normally holds a <code>RunnerGroup</code> and a
+<code>RunnerSet</code> <strong>called the same thing</strong>. They are still two independent tenants, and each
+provisions its own pool of pre-registered runners:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>v1 <code>RunnerGroup</code> <code>web</code></th>
+<th>v2 <code>RunnerSet</code> <code>web</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent Secret</td>
+<td><code>agentpool-web-&lt;index&gt;</code></td>
+<td><code>agentpool-rs-web-&lt;index&gt;</code></td>
+</tr>
+<tr>
+<td>Secret label</td>
+<td><code>actions-gateway/runner-group=web</code></td>
+<td><code>actions-gateway.com/runner-set=web</code></td>
+</tr>
+<tr>
+<td>GitHub runner name</td>
+<td><code>web-&lt;index&gt;</code></td>
+<td><code>rs-web-&lt;index&gt;</code></td>
+</tr>
+</tbody>
+</table>
+<p>So during coexistence you will see <strong>two sets of runners</strong> registered with GitHub for
+one tenant — expected, and the reason both can run at once. Each agent Secret also
+carries an <code>ownerReference</code> to the <code>RunnerGroup</code> or <code>RunnerSet</code> it belongs to, so
+<code>kubectl -n team-a get secret agentpool-web-0 -o jsonpath='{.metadata.ownerReferences}'</code>
+answers "which tenant owns this?" without guessing from the name.</p>
+<h3 id="each-agc-serves-exactly-one-api">Each AGC serves exactly one API<a class="headerlink" href="#each-agc-serves-exactly-one-api" title="Permanent link">&para;</a></h3>
+<p>The namespace runs two AGC Deployments during coexistence, and they divide the work by
+kind rather than sharing it:</p>
+<table>
+<thead>
+<tr>
+<th>AGC</th>
+<th><code>GATEWAY_NAME</code></th>
+<th>Reconciles</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the v1 singleton (<code>agc</code>)</td>
+<td>unset</td>
+<td><code>RunnerGroup</code>s only</td>
+</tr>
+<tr>
+<td>each migrated gateway's (<code>&lt;gateway&gt;-agc</code>)</td>
+<td>the gateway's name</td>
+<td>that gateway's <code>RunnerSet</code>s only</td>
+</tr>
+</tbody>
+</table>
+<p>So a tenant is served by exactly one controller, and the AGC whose logs answer a question
+about a <code>RunnerGroup</code> is always the v1 one. Confirm which pod is which with:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/managed-by<span class="o">=</span>gateway-manager-controller<span class="w"> </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;NAME:.metadata.name,GATEWAY:.spec.template.spec.containers[?(@.name==&quot;agc&quot;)].env[?(@.name==&quot;GATEWAY_NAME&quot;)].value&#39;</span>
+</code></pre></div>
+<p>A gateway-scoped AGC logs <code>v1alpha1 RunnerGroup reconciler disabled</code> at startup — that
+line is the division working, not a problem.</p>
+<p>Upgrading an install that already ran v2 <strong>moves</strong> its existing agent Secrets onto the
+<code>agentpool-rs-</code> names on the first reconcile, carrying each agent's GitHub registration
+with it. Nothing re-registers, and no Secret is left behind — but if you have scripts or
+dashboards that match <code>agentpool-&lt;set&gt;-</code> for a <code>RunnerSet</code>, update them to
+<code>agentpool-rs-&lt;set&gt;-</code>.</p>
+<h3 id="the-two-proxy-pools-stay-isolated">The two proxy pools stay isolated<a class="headerlink" href="#the-two-proxy-pools-stay-isolated" title="Permanent link">&para;</a></h3>
+<p>The namespace also runs two egress proxy pools during coexistence — v1's inline
+<code>actions-gateway-proxy</code> and the extracted <code>EgressProxy</code>'s <code>&lt;proxy&gt;-proxy</code> — and they are
+independent: separate <code>Deployment</code>s, <code>Service</code>s, <code>HorizontalPodAutoscaler</code>s,
+<code>PodDisruptionBudget</code>s, and <code>NetworkPolicy</code>s, each governing only its own pods. Each
+pool's replicas spread across nodes among <em>themselves</em>, so two coexisting pools need
+<code>max(v1, v2)</code> worker nodes, not v1+v2.</p>
+<p>What keeps them apart is the label each pool's selectors key on. Select them separately:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>v1 inline pool</th>
+<th>v2 <code>EgressProxy</code> pool</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Workload name</td>
+<td><code>actions-gateway-proxy</code></td>
+<td><code>&lt;proxy&gt;-proxy</code></td>
+</tr>
+<tr>
+<td>Selector label</td>
+<td><code>app=actions-gateway-proxy</code></td>
+<td><code>actions-gateway.com/egress-proxy=&lt;proxy&gt;</code></td>
+</tr>
+<tr>
+<td>Reached by</td>
+<td>v1 AGC and worker pods</td>
+<td>that gateway's AGC and worker pods</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-proxy<span class="w">                  </span><span class="c1"># v1 pool only</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/egress-proxy<span class="w">           </span><span class="c1"># every v2 pool</span>
+</code></pre></div>
+<p>Both pools' pods also carry the recommended <code>app.kubernetes.io/name=actions-gateway-proxy</code>
+label, which is the version-agnostic way to list every proxy pod in the namespace. It is
+metadata for humans and tooling — do not build a <code>NetworkPolicy</code> or PDB selector on it.</p>
+<p>Before <code>v1.3.0</code> the v2 pool also stamped <code>app: actions-gateway-proxy</code>, which put each
+pool's pods under the other's <code>PodDisruptionBudget</code>, wedged <strong>both</strong> pools'
+autoscaling on <code>AmbiguousSelector</code>, and made the two pools repel each other off every
+node. If a namespace you migrated on an earlier release shows either symptom, upgrading
+the GMC clears it — and recreates that <code>EgressProxy</code>'s pool once in the process. See
+<a href="../upgrade/#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once">the upgrade note</a>.</p>
 <p><strong>Rollback is "stay on v1."</strong> Nothing about the migration removes v1 capability, so if
 the v2 path misbehaves you simply keep using the v1 gateway and delete the v2 objects:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span>--all
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>--all
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>egressproxies.actions-gateway.com<span class="w"> </span>--all
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnertemplates.actions-gateway.com<span class="w"> </span>--all
+<p>Order matters — the <code>RunnerSet</code>s go <strong>before</strong> the <code>ActionsGateway</code> that owns their AGC,
+because deleting the gateway first removes the controller whose finalizer they are
+waiting on (see <a href="#teardown-order-is-load-bearing-never-delete-the-namespace-first">Teardown order is load-bearing</a>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>egressproxies.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnertemplates.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># Cluster-scoped, so NOT covered by the -n team-a deletes above:</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>clusterrunnertemplates<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/migrated-from-namespace<span class="o">=</span>team-a
 </code></pre></div>
+<p>The v1 tenant is unaffected by any of this: its agent Secrets and GitHub runner
+registrations are derived separately from the v2 set's
+(<a href="#the-two-tenants-keep-separate-runners">detail</a>), so removing the v2 objects leaves
+the <code>RunnerGroup</code> exactly as it was.</p>
 <p>The additive namespace labels are harmless to leave in place (the v1 markers are
 untouched), but you may remove the v2 keys if you want a clean rollback.</p>
 <h2 id="step-4--decommission-v1-when-ready">Step 4 — decommission v1 (when ready)<a class="headerlink" href="#step-4--decommission-v1-when-ready" title="Permanent link">&para;</a></h2>
@@ -2621,26 +3242,95 @@ untouched), but you may remove the v2 keys if you want a clean rollback.</p>
 controllers are still running during coexistence, so deleting the v1 <code>ActionsGateway</code>
 runs its finalizer and cascades cleanup of its AGC, proxy, and <code>RunnerGroup</code> children
 normally — nothing is stranded:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>--all
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Confirm the v1 RunnerGroups and the singleton AGC/proxy children are gone.</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>--all
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Confirm the v1 RunnerGroups and the singleton AGC/proxy children are gone.</span>
 </code></pre></div>
+<h3 id="teardown-order-is-load-bearing-never-delete-the-namespace-first">Teardown order is load-bearing: never delete the namespace first<a class="headerlink" href="#teardown-order-is-load-bearing-never-delete-the-namespace-first" title="Permanent link">&para;</a></h3>
+<p>Whether you are rolling back, decommissioning v1, or retiring the tenant outright,
+<strong>delete the custom resources while their controllers are still running, and delete the
+namespace last.</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># 1. The CRs first — their finalizers run while the AGC is still up.</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>runnergroups.actions-gateway.github.com<span class="w"> </span>--all
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># 2. Then the gateways, which cascade their AGC, proxy, and RBAC children.</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span>--all
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>delete<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>--all
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># 3. Only now, if you are retiring the tenant, the namespace.</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>namespace<span class="w"> </span>team-a
+</code></pre></div>
+<p>Step 2 blocks briefly while the AGC reaps the tenant's worker pods — deleting a v2
+gateway kills any job still running on it, because the AGC is those pods' only reaper
+and is torn down with the gateway. Drain first if you need in-flight jobs to finish:
+see <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">Worker Pods Reaped on Gateway
+Teardown</a>.</p>
+<p>Deleting the namespace first <strong>deadlocks</strong>, and it is structural rather than a timing
+race: the AGC Deployments live <em>inside</em> the tenant namespace, so namespace deletion
+removes the very controllers whose finalizers must clear. The namespace then sits in
+<code>Terminating</code> indefinitely on</p>
+<ul>
+<li><code>actions-gateway.com/agentpool-cleanup</code> (v2 <code>RunnerSet</code>),</li>
+<li><code>actions-gateway.github.com/agentpool-cleanup</code> (v1 <code>RunnerGroup</code>),</li>
+<li><code>actions-gateway.github.com/gmc-cleanup</code> (v1 <code>ActionsGateway</code>).</li>
+</ul>
+<p>Nothing will clear them on its own. Recovery, once you have confirmed the namespace is
+otherwise empty and no cluster-scoped object depends on it, is to drop the finalizers by
+hand — which <strong>skips the GitHub-side deregistration those finalizers exist to perform</strong>,
+so the tenant's runner records are left registered and must be removed from the GitHub
+runners page afterwards:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>patch<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span>--type<span class="w"> </span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;metadata&quot;:{&quot;finalizers&quot;:[]}}&#39;</span>
+</code></pre></div>
+<p>Repeat per stuck kind. Prefer the ordered teardown above; this is a recovery path, not
+an alternative.</p>
+<p>If you later retire the tenant entirely, remember that any <code>ClusterRunnerTemplate</code> the
+migration emitted is cluster-scoped and survives deleting the namespace — reclaim it by
+its provenance label
+(<a href="#privileged-worker-shapes-dind-become-cluster-scoped-templates">detail</a>).</p>
 <p>The legacy <code>actions-gateway.github.com/*</code> namespace markers and finalizers are
-retired cluster-wide when <code>v1alpha1</code> is removed (see the
-<a href="../v1alpha1-deprecation/">deprecation notice</a>); until then the dual-read window keeps
-both spellings working.</p>
+retired cluster-wide when <code>v1alpha1</code> is removed at <strong><code>v2.0.0</code></strong> (see the
+<a href="../v1alpha1-deprecation/">deprecation and removal notice</a>); until then the dual-read
+window keeps both spellings working.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>A <code>RunnerSet</code> sits <code>Ready=False</code>/<code>TemplateNotFound</code>.</strong> Its <code>templateRef</code> names a
   template that has not been applied (or was hand-deleted). Re-run the dry-run and
-  apply the missing <code>RunnerTemplate</code>.</li>
+  apply the missing <code>RunnerTemplate</code>. For a privileged set, check <code>templateRef.kind</code> is
+  <code>ClusterRunnerTemplate</code> — with no explicit kind the referent resolves as a namespaced
+  <code>RunnerTemplate</code>, which will never be found.</li>
+<li><strong><code>--apply</code> fails creating a <code>ClusterRunnerTemplate</code> with a permissions error.</strong> The
+  tenant has a privileged worker shape, which migrates to a cluster-scoped object; the
+  account running the tool needs <code>create</code> on
+  <code>clusterrunnertemplates.actions-gateway.com</code>
+  (<a href="#privileged-worker-shapes-dind-become-cluster-scoped-templates">detail</a>).</li>
 <li><strong>The namespace patch is rejected.</strong> The <code>actions-gateway.com/security-profile</code>
   label is guarded by the <code>namespace-security-profile-guard</code> admission policy — a
   downgrade needs the <code>allow-profile-downgrade=allowed</code> annotation, and <code>privileged</code>
   needs the platform <code>privileged-profile=allowed</code> grant. The dry-run warnings call
-  these out.</li>
-<li><strong><code>gag-migrate</code> reports no namespaces.</strong> With <code>--all-namespaces</code> it only targets
-  namespaces holding a v1 <code>ActionsGateway</code>; pass <code>--namespace</code> explicitly otherwise.</li>
+  these out. Migrating a <strong>privileged</strong> tenant always trips the downgrade rule; see
+  <a href="#a-privileged-tenant-needs-the-downgrade-opt-in-for-the-duration-of-the-migration">the downgrade opt-in</a>.
+  Note the ordering cost of discovering this at <code>--apply</code> time rather than in the
+  dry-run: the namespace patch is the <strong>last</strong> step, so the v2 objects are already
+  created when it fails. Re-running after adding the annotation is safe — apply is
+  idempotent and skips what exists.</li>
+<li><strong><code>--apply</code> fails with <code>failed calling webhook … context deadline exceeded</code>.</strong> The
+  apiserver could not reach the GMC validating webhook. <code>--apply</code> already retries this
+  for 90 seconds, so reaching this error means the webhook was down for longer than
+  that — check the GMC deployment is <code>Running</code> with programmed endpoints
+  (<code>kubectl -n gag-system get deploy,endpoints</code>) before re-running. Re-running is
+  safe: apply is idempotent and skips whatever the aborted run already created.</li>
+<li><strong>The dry-run warns the namespace "holds no privileged-eligibility grant on either
+  label domain".</strong> The tenant migrates to <code>securityProfile: privileged</code> but carries
+  the grant label on neither domain, or carries it with a value other than <code>allowed</code>
+  (the match is exact — the legacy <code>"true"</code> is <em>not</em> a grant here). Apply the v2 label
+  the warning names, as a platform administrator:</li>
 </ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.com/privileged-profile<span class="o">=</span>allowed
+</code></pre></div>
+<p>The warning fires only when the grant is genuinely absent from both domains: a
+  namespace holding it on either one is recognized, and the tool carries it forward
+  onto the v2 domain without complaint.
+- <strong><code>gag-migrate</code> reports no namespaces.</strong> With <code>--all-namespaces</code> it only targets
+  namespaces holding a v1 <code>ActionsGateway</code>; pass <code>--namespace</code> explicitly otherwise.</p>
 
 
 
@@ -2695,13 +3385,13 @@ both spellings working.</p>
         
         
           
-          <a href="../v1alpha1-deprecation/" class="md-footer__link md-footer__link--next" aria-label="Next: v1alpha1 deprecation">
+          <a href="../v1alpha1-deprecation/" class="md-footer__link md-footer__link--next" aria-label="Next: Deprecations &amp; the v2.0.0 removal">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                v1alpha1 deprecation
+                Deprecations & the v2.0.0 removal
               </div>
             </div>
             <div class="md-footer__button md-icon">

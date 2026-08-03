@@ -205,8 +205,12 @@ body[data-md-color-scheme="slate"] {
   margin-bottom: 0;
 }
 
-/* Narrow screens: stack the lockup with the logo centred above the title. */
-@media screen and (max-width: 42rem) {
+/* Narrow screens: stack the lockup with the logo centred above the title. The
+   breakpoint is set by the headline, not the logo — side by side, the logomark
+   and its gap take ~162px out of the headline column, and below 56rem that
+   leaves less than the longest unbreakable phrase needs. Stacking hands the
+   headline the full hero width instead of splitting the phrase. */
+@media screen and (max-width: 56rem) {
   .gag-hero__intro {
     flex-direction: column;
     align-items: center;
@@ -251,13 +255,38 @@ body[data-md-color-scheme="slate"] {
 }
 
 .gag-hero h1 {
-  font-size: clamp(1.9rem, 1.25rem + 2.4vw, 2.9rem);
+  /* Upper bound is set by the headline column, not by taste: at 44rem minus the
+     logomark and its gap the column is 35.9rem, and the longest unbreakable
+     phrase is 26 characters of Monaspace Neon (15.86em all told), so anything
+     much above 2.2rem forces "Self-hosted GitHub Actions" to overrun. 2.2rem
+     leaves ~20px spare at the tightest width (1200px, where the logomark hits
+     its 132px cap); every fallback mono face is narrower than Neon, so a failed
+     webfont load only ever gains slack. */
+  font-size: clamp(1.9rem, 1.25rem + 2.4vw, 2.2rem);
   line-height: 1.12;
   letter-spacing: -0.01em;
   margin: 0 0 0.7rem;
   /* Pretty (not balance): the headline wraps around the floated logomark, so
      keep the lines flush-left rather than centre-balanced. */
   text-wrap: pretty;
+}
+
+/* Headline phrases that read as one unit ("Self-hosted GitHub Actions", "zero
+   idle compute") and shouldn't be split by a line break — the headline reads as
+   two phrases at a glance instead of three ragged lines. Paired with the h1
+   font-size cap above, which is what keeps the longest phrase inside the
+   headline column. Released below 44rem, where even the full stacked width is
+   narrower than the phrase at the minimum type size; phones wrap inside the
+   phrase rather than pushing the page sideways. Distinct from the .gag-nowrap
+   table-chip utility below, which never releases. */
+.gag-hero__phrase {
+  white-space: nowrap;
+}
+
+@media screen and (max-width: 44rem) {
+  .gag-hero__phrase {
+    white-space: normal;
+  }
 }
 
 /* The hero title is the page banner, not a deep-link target — drop its ¶ permalink. */
@@ -870,6 +899,15 @@ body[data-md-color-scheme="slate"] {
   padding-left: 1.5em;
 }
 
+/* Keep a short code chip on one line inside a narrow table column (Material
+   default word-breaks code in table cells). Applied per-span via raw HTML
+   (<code class="gag-nowrap">) — attr_list does not attach to inline code —
+   and never table-wide: long code in other columns still needs to wrap. */
+.md-typeset .gag-nowrap {
+  white-space: nowrap;
+  word-break: normal;
+}
+
 /* v2 API badge — small pill on benefit cards that require the v2alpha1 API. */
 .gag-v2-badge {
   display: inline-flex;
@@ -973,9 +1011,29 @@ body[data-md-color-scheme="slate"] {
 /* The why-gag comparison table: fill the column (so it isn't left-aligned with a
    right-hand gap) and restore roomy cell padding. Material's default cell padding
    is :not([class])-guarded, so the reveal JS that classes this table drops it —
-   hence re-stating it here. Scoped to this page so other tables are untouched. */
+   hence re-stating it here. Scoped to this page so other tables are untouched.
+   table-layout: fixed pins the column widths below: under auto layout the browser
+   splits width by each column's max-content demand, and the GAG column's
+   continuation sentences dwarf the other two — it took 58% while the capability
+   label, the anchor of every row, was starved to 19% (narrower than ARC's 23%)
+   and wrapped labels that would otherwise fit on one line. */
 .md-content__inner:has(.gag-vs-hero) table {
   width: 100%;
+  table-layout: fixed;
+}
+
+/* Label column gets room for a one-line capability name; the two compared columns
+   stay close enough to read side-by-side, GAG widest as it carries ~2x the text. */
+.md-content__inner:has(.gag-vs-hero) table th:nth-child(1) {
+  width: 26%;
+}
+
+.md-content__inner:has(.gag-vs-hero) table th:nth-child(2) {
+  width: 32%;
+}
+
+.md-content__inner:has(.gag-vs-hero) table th:nth-child(3) {
+  width: 42%;
 }
 
 .md-content__inner:has(.gag-vs-hero) table th,
@@ -1163,4 +1221,48 @@ button.persona-pill:focus-visible {
 
 .md-typeset a.persona-pill:hover {
   background: color-mix(in srgb, var(--md-accent-fg-color) 20%, transparent);
+}
+
+/* Backlog filters on the dev-only STATUS page — one labelled chip bar per
+   dimension, reusing the persona chip look. */
+.backlog-filters {
+  margin: 0 0 1rem;
+}
+
+.backlog-filter {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.backlog-filter__legend {
+  flex: 0 0 3.4rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--md-default-fg-color--light);
+}
+
+/* The bars sit inside a labelled row, so drop the standalone bottom margin. */
+.backlog-filter .persona-bar {
+  margin: 0;
+}
+
+.md-typeset .backlog-count {
+  margin: 0.2rem 0 0;
+  font-size: 0.7rem;
+  color: var(--md-default-fg-color--light);
+}
+
+/* Row labels select their chip, like the persona pills. */
+.md-typeset code.backlog-label {
+  cursor: pointer;
+}
+
+@media screen and (max-width: 44.9375em) {
+  .backlog-filter__legend {
+    flex-basis: 100%;
+  }
 }

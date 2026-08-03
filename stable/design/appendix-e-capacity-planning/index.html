@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.2.0/design/appendix-e-capacity-planning/">
+        <link rel="canonical" href="https://actions-gateway.com/1.3.0/design/appendix-e-capacity-planning/">
       
       
         <link rel="prev" href="../appendix-d-alternatives-considered/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.2.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.2.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.2.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.2.0",
+    "url": "https://actions-gateway.com/1.3.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.2.0"
+      "url": "https://actions-gateway.com/1.3.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.2.0",
-    "logo": "https://actions-gateway.com/1.2.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.3.0",
+    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,9 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            
-  <strong>v1.2.0 is here.</strong> Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
-
+            <strong>v1.3.0 is here.</strong>
+      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
           </div>
           
         </aside>
@@ -142,6 +141,15 @@
     </div>
     
       <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
         
       </div>
     
@@ -308,6 +316,25 @@
     
   
   Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
 
       </a>
     </li>
@@ -522,6 +549,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../demo/" class="md-nav__link">
         
   
@@ -643,6 +697,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -659,7 +717,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -681,14 +739,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1279,6 +1337,45 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#e11-managed-vertical-right-sizing-of-the-control-planes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11. Managed Vertical Right-Sizing of the Control Planes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="E.11. Managed Vertical Right-Sizing of the Control Planes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#e111-precedence-against-agcresources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11.1. Precedence against agcResources
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e112-when-the-vpa-crds-are-absent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11.2. When the VPA CRDs are absent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1331,6 +1428,62 @@
     
   
     Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
   
 
     
@@ -1406,6 +1559,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -1419,7 +1580,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1441,14 +1602,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1642,7 +1803,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -1671,6 +1832,34 @@
     
   
     Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
   
 
     
@@ -1830,10 +2019,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="0">
             
   
   
@@ -1851,8 +2040,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2073,6 +2262,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/runbook/" class="md-nav__link">
         
   
@@ -2193,6 +2438,34 @@
     
   
     Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
   
 
     
@@ -2444,6 +2717,45 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#e11-managed-vertical-right-sizing-of-the-control-planes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11. Managed Vertical Right-Sizing of the Control Planes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="E.11. Managed Vertical Right-Sizing of the Control Planes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#e111-precedence-against-agcresources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11.1. Precedence against agcResources
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#e112-when-the-vpa-crds-are-absent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        E.11.2. When the VPA CRDs are absent
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2469,7 +2781,7 @@
 <hr />
 <p>This appendix is a practical guide for operators and tenant teams deciding how to structure their <code>RunnerGroup</code>s, size their <code>maxListeners</code> counts, and plan for growth. The raw constraint numbers live in <a href="../03-api-contracts/#35-github-api-rate-limit-budget">§3.5</a> and <a href="../appendix-a-capacity-slos/">Appendix A</a>; this appendix explains how to reason about them in practice.</p>
 <blockquote>
-<p><strong>Milestone 1 protocol findings</strong> (see <a href="../../plan/milestone-1/#8-investigation-findings">docs/plan/milestone-1.md §8</a>):</p>
+<p><strong>Milestone 1 protocol findings</strong> (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/milestone-1.md#8-investigation-findings">docs/plan/milestone-1.md §8</a>):</p>
 <p><em>Session reuse confirmed</em> (Investigation C) — a session remains live after <code>acquirejob</code>; goroutines loop without a delete→create cycle. The steady-state cost remains <strong>one session per RunnerGroup</strong>.</p>
 <p><em>One session per registered runner agent enforced</em> (Investigation D) — <code>POST /sessions</code> returns 409 if the agentId already has a session. Each concurrent listener goroutine requires a distinct pre-registered agent. The AGC must provision up to <code>maxListeners</code> agents per RunnerGroup at setup time. This does not change the rate-limit math (one active session per agent, same session-count formula), but it adds an agent-registration step to RunnerGroup provisioning — see <a href="../02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a>.</p>
 <p><em>Opportunistic delivery supported</em> (inferred from Investigation C timing) — a newly dispatched job arrived in <code>GetMessage</code> within ~1 second of dispatch, consistent with delivery to any active polling session. No warm standby pool is needed.</p>
@@ -2512,7 +2824,7 @@
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Steady-state sessions   = number of RunnerGroups in the ActionsGateway
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Peak sessions (worst case) = sum of maxListeners across all RunnerGroups
 </code></pre></div>
-<p>The platform-owned namespace <code>ResourceQuota</code> remains the binding constraint on how many jobs run concurrently — it is independent of listener count. It is set on the namespace by the platform admin (or your GitOps / tenant-operator stack), not on the <code>ActionsGateway</code> CR.</p>
+<p>The platform-owned namespace <code>ResourceQuota</code> remains the binding constraint on how many jobs run concurrently — it is independent of listener count. It is set on the namespace by the platform admin (or your GitOps / tenant-operator stack), not on the <code>ActionsGateway</code> CR. For the arithmetic that turns runner shapes and <code>maxWorkers</code> into the actual quota numbers — including the native sidecars, Kata <code>RuntimeClass</code> overhead, and per-worker PVCs that the per-container asks alone do not account for — see <a href="../../operations/resourcequota-sizing/">sizing the platform-owned <code>ResourceQuota</code></a>.</p>
 <hr />
 <h2 id="e2-what-runnergroups-are-and-arent-for">E.2. What RunnerGroups Are (and Aren't) For<a class="headerlink" href="#e2-what-runnergroups-are-and-arent-for" title="Permanent link">&para;</a></h2>
 <p>A <code>RunnerGroup</code> represents a <strong>pool of listener goroutines sharing a common pod shape</strong>. It is not a per-repo, per-team, or per-workflow construct.</p>
@@ -2614,7 +2926,8 @@
 </code></pre></div>
 <p>For example, 50 RunnerGroups each with <code>maxListeners: 10</code> → 500 concurrent goroutines at peak → ~30 MiB of goroutine working set. The recommended sizing (see <a href="../appendix-a-capacity-slos/">Appendix A</a>) is a <code>2Gi</code> memory <strong>request</strong> with a <code>4Gi</code> memory <strong>limit</strong> — the request is a generous scheduling reservation absorbing Go runtime overhead and heap churn during reconcile storms, and the limit sits well above the working set so transient bursts don't OOMKill the single-pod control plane while a true runaway is still bounded. On the v1 API the GMC stamps no resources on the AGC pod, so the platform applies this sizing on the AGC Deployment through its Helm/Kustomize overlay (or a namespace <code>LimitRange</code> that supplies default requests). If an operator adds many RunnerGroups with high <code>maxListeners</code> values and begins observing <code>container OOMKilled</code> events or high GC pressure (visible via <code>go_gc_duration_seconds</code> in Prometheus), raising the AGC Deployment's <code>resources.limits.memory</code> is the correct first response.</p>
 <p>CPU consumption is predominantly I/O-bound — goroutines spend nearly all of their time blocked on <code>GET /message</code> long-polls. CPU pressure appears only during reconcile churn (many RunnerGroups being created or deleted simultaneously) or during a token refresh storm. The recommended <code>2</code>-core CPU <strong>limit</strong> is sufficient for most deployments; raise the AGC Deployment's <code>resources.limits.cpu</code> only if <code>container_cpu_throttled_seconds_total</code> shows sustained throttling during peak reconcile activity.</p>
-<p><strong>Optional VPA right-sizing.</strong> A <a href="https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler">Vertical Pod Autoscaler</a> in <code>Auto</code> mode will observe the AGC's actual CPU and memory usage over time and adjust its resource requests automatically. This is useful for operators who want the AGC to self-tune rather than set limits manually, especially in early-production environments where workload shape is still stabilizing. The AGC handles VPA-initiated restarts gracefully: when killed, in-flight listener goroutines deregister their sessions via <code>DELETE /sessions</code>, and the AGC re-registers them within GitHub's 2-minute redelivery window on restart (see <a href="../04-operational-flows/#42-job-execution-flow-agc">§4.2</a> and the <code>SessionReacquisition</code> SLO in <a href="../appendix-a-capacity-slos/">Appendix A</a>).</p>
+<p><strong>Optional VPA right-sizing.</strong> A <a href="https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler">Vertical Pod Autoscaler</a> (VPA) observes the AGC's actual CPU and memory usage over time and adjusts its resource requests automatically. This is useful for operators who want the AGC to self-tune rather than set limits manually, especially in early-production environments where workload shape is still stabilizing. The AGC handles VPA-initiated restarts gracefully: when killed, in-flight listener goroutines deregister their sessions via <code>DELETE /sessions</code>, and the AGC re-registers them within GitHub's 2-minute redelivery window on restart (see <a href="../04-operational-flows/#42-job-execution-flow-agc">§4.2</a> and the <code>SessionReacquisition</code> SLO in <a href="../appendix-a-capacity-slos/">Appendix A</a>).</p>
+<p>Under v2 this is a first-class opt-in rather than something the operator hand-rolls: see <a href="#e11-managed-vertical-right-sizing-of-the-control-planes">E.11</a> for the two managed opt-ins the system ships, the precedence rules against <code>agcResources</code>, and what happens on a cluster where the VPA CRDs are not installed.</p>
 <blockquote>
 <p><strong>v2 promotes AGC sizing to a CR field — <code>spec.agcResources</code> (Q171).</strong> This appendix describes the v1 API (<code>actions-gateway.github.com/v1alpha1</code>), where AGC sizing is platform-applied on the Deployment as above. The v2 <code>ActionsGateway</code> (<code>actions-gateway.com/v2alpha1</code>) instead exposes an optional <code>agcResources</code> field of the standard <code>corev1.ResourceRequirements</code> shape for tenant-controlled per-gateway sizing, and makes the <a href="../appendix-a-capacity-slos/">Appendix A</a> sizing (requests <code>cpu: 500m</code> / <code>memory: 2Gi</code>, limits <code>cpu: 2</code> / <code>memory: 4Gi</code>) the GMC-stamped default: the override is additive per key, so setting one knob keeps the default for the rest and omitting the field reproduces the default unchanged. See <a href="../appendix-h-v2-api-decomposition/">Appendix H</a> for the v2 decomposition and <a href="../../operations/tenant-onboarding/#tuning-agc-control-plane-resources">tenant-onboarding</a> for the operator-facing how-to and the recommended floor.</p>
 </blockquote>
@@ -2745,6 +3058,73 @@ label first to give every group a distinct name:</p>
 <li>Update workflow files to target the correct label sets.</li>
 <li>Confirm <code>RateLimited</code> condition clears on both CRs.</li>
 </ol>
+<hr />
+<h2 id="e11-managed-vertical-right-sizing-of-the-control-planes">E.11. Managed Vertical Right-Sizing of the Control Planes<a class="headerlink" href="#e11-managed-vertical-right-sizing-of-the-control-planes" title="Permanent link">&para;</a></h2>
+<p>Both control planes — the cluster-wide Gateway Manager Controller (GMC) and each per-tenant AGC — are single-shape, long-lived workloads whose correct resource footprint is exactly the thing an operator cannot know in advance. Manual sizing is therefore either wasteful (a 2Gi request for a 60 MiB working set) or dangerous (a limit below the working set OOMKills a single-pod control plane). Q360 ships two opt-ins that hand that judgement to a Vertical Pod Autoscaler instead.</p>
+<p>Both are <strong>opt-in and off by default</strong>, and both default to recommendation-only, so turning them on is observable before it is disruptive.</p>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Opt-in</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GMC (cluster-wide)</td>
+<td>Helm value <code>vpa.enabled: true</code></td>
+<td>the <code>*-controller-manager</code> Deployment</td>
+</tr>
+<tr>
+<td>AGC (per tenant)</td>
+<td><code>ActionsGateway.spec.agcAutoscaling</code></td>
+<td>that gateway's <code>&lt;gw&gt;-agc</code> Deployment</td>
+</tr>
+</tbody>
+</table>
+<p>The per-gateway opt-in is the presence of the block; there is no <code>enabled</code> flag, so removing <code>agcAutoscaling</code> deletes the managed <code>VerticalPodAutoscaler</code> again. <code>spec.agcAutoscaling.mode</code> is the autoscaler's <code>updateMode</code>, restricted to three values:</p>
+<table>
+<thead>
+<tr>
+<th><code>mode</code></th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Off</code> (default)</td>
+<td>The autoscaler publishes a recommendation in its own status and never mutates a pod.</td>
+</tr>
+<tr>
+<td><code>Initial</code></td>
+<td>The recommendation is applied at pod creation only. A running AGC is never evicted by the autoscaler.</td>
+</tr>
+<tr>
+<td><code>Recreate</code></td>
+<td>The autoscaler may evict the AGC pod to apply a new recommendation — safe per the restart analysis in <a href="#e9-scaling-the-agc-itself">E.9</a>, but still a control-plane restart, so it is opt-in.</td>
+</tr>
+</tbody>
+</table>
+<p>Upstream's fourth value, <code>Auto</code>, is deliberately <strong>not</strong> exposed. It is an alias whose actuation mechanism is version-dependent (today it evicts like <code>Recreate</code>; in-place pod resize is still alpha), so a gateway pinned to <code>Auto</code> would silently change its restart behavior on a VPA upgrade. Naming <code>Recreate</code> makes the eviction explicit.</p>
+<h3 id="e111-precedence-against-agcresources">E.11.1. Precedence against <code>agcResources</code><a class="headerlink" href="#e111-precedence-against-agcresources" title="Permanent link">&para;</a></h3>
+<p>Both <code>agcResources</code> and the autoscaler influence the AGC container's resources, so the division is fixed and explicit rather than last-writer-wins. <strong>They compose; they do not compete.</strong></p>
+<ul>
+<li><strong><code>agcResources</code> alone decides what the GMC stamps on the Deployment.</strong> That is unchanged by the opt-in, and it is the sizing actually in effect whenever the autoscaler is not actuating: <code>mode: Off</code>, the VPA components absent or down, or before the first recommendation exists.</li>
+<li><strong>The managed autoscaler is pinned to <code>controlledValues: RequestsOnly</code>.</strong> It moves <em>requests</em> only; the limits from <code>agcResources</code> (or the platform default) are never raised or lowered by it. On a single-pod control plane, an autoscaler that also drifted the memory <em>limit</em> would erode the OOM ceiling that bounds a runaway — the property the limit exists for.</li>
+<li><strong>A request the tenant explicitly set becomes the autoscaler's <code>minAllowed</code>.</strong> An explicit floor is honored as a floor rather than silently overwritten. Leave <code>agcResources.requests</code> unset to let the autoscaler size the AGC all the way down to its own global floor — that is the configuration where right-sizing has the most to win.</li>
+<li><strong>The effective limits become <code>maxAllowed</code>.</strong> This is a correctness requirement, not a preference: a container whose request exceeds its own limit is rejected by the apiserver, so the autoscaler must never recommend above the stamped limit. It is also the pairing upstream requires — <code>RequestsOnly</code> on a container that <em>has</em> limits is only safe with a <code>maxAllowed</code> at most equal to them — which is why the ceiling is always emitted rather than optional.</li>
+</ul>
+<p><strong>Resolved at reconcile, not at admission.</strong> Setting both fields is a coherent configuration (sizing plus bounds), not a contradiction, so rejecting the combination at admission would remove a useful and idiomatic way to configure a VPA. What admission-time rejection buys — "no silent surprises" — is bought instead by making the resolution visible: the derived bounds are on the stamped <code>VerticalPodAutoscaler</code> object, the GMC emits a Normal Event naming them when the autoscaler first appears, and the <code>AGCAutoscalingUnavailable</code> condition states which knob owns what. The chart-level opt-in follows the same rules against the chart's <code>resources</code> value.</p>
+<h3 id="e112-when-the-vpa-crds-are-absent">E.11.2. When the VPA CRDs are absent<a class="headerlink" href="#e112-when-the-vpa-crds-are-absent" title="Permanent link">&para;</a></h3>
+<p>The <code>autoscaling.k8s.io</code> CRDs are not part of core Kubernetes, so an opt-in can be unsatisfiable through no fault of the CR. The GMC probes its RESTMapper for the <code>VerticalPodAutoscaler</code> kind and, when it is missing:</p>
+<ul>
+<li><strong>provisions the gateway normally</strong> — the AGC is created with its <code>agcResources</code> sizing and reaches <code>Ready=True</code>. A missing optional right-sizing prerequisite is not a reason to withhold a tenant's runners;</li>
+<li><strong>does not fail or retry the write</strong> — nothing is applied against a kind the apiserver does not serve, so there is no error to hot-loop on;</li>
+<li><strong>surfaces it</strong> — the advisory <code>AGCAutoscalingUnavailable=True</code> condition (reason <code>VPACRDNotInstalled</code>, naming the remediation) plus one Warning Event per transition. The condition is advisory: it never gates <code>Ready</code>, exactly like <code>EgressUnattributed</code>. Like every other v2 gateway condition it also exports a Prometheus gauge, <code>actions_gateway_agc_autoscaling_unavailable</code> (Q390), so the unsatisfiable opt-in is alertable rather than visible only via <code>kubectl describe</code>;</li>
+<li><strong>converges on its own</strong> — the gateway re-probes every 10 minutes, so installing the vertical-pod-autoscaler later takes effect without an operator edit. Ten minutes is a poll, not a hot loop: one cached-discovery lookup per gateway per interval.</li>
+</ul>
+<p>The chart-level opt-in has no equivalent runtime path — Helm renders the object at install time, so <code>vpa.enabled: true</code> without the CRDs fails <code>helm install</code> loudly, the same prerequisite contract as <code>metrics.serviceMonitor.enabled</code>.</p>
 <hr />
 <p>← <a href="../appendix-d-alternatives-considered/">Appendix D</a> | <a href="../">Back to index</a></p>
 

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.2.0/operations/install/">
+        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/install/">
       
       
         <link rel="prev" href="../">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.2.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.2.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.2.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.2.0",
+    "url": "https://actions-gateway.com/1.3.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.2.0"
+      "url": "https://actions-gateway.com/1.3.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.2.0",
-    "logo": "https://actions-gateway.com/1.2.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.3.0",
+    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,9 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            
-  <strong>v1.2.0 is here.</strong> Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
-
+            <strong>v1.3.0 is here.</strong>
+      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
           </div>
           
         </aside>
@@ -142,6 +141,15 @@
     </div>
     
       <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
         
       </div>
     
@@ -308,6 +316,25 @@
     
   
   Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
 
       </a>
     </li>
@@ -522,6 +549,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../demo/" class="md-nav__link">
         
   
@@ -641,6 +695,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -654,7 +712,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -676,14 +734,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1143,6 +1201,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1207,6 +1321,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -1223,7 +1345,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1245,14 +1367,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1350,6 +1472,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Preflight the cluster (required first step)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#preflighting-a-freshly-created-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preflighting a freshly created cluster
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1443,6 +1582,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Key values an operator sets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The policy parameter is a CRD, not a ConfigMap (Q492)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1642,7 +1798,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -1671,6 +1827,34 @@
     
   
     Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
   
 
     
@@ -1833,10 +2017,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
             
   
   
@@ -1854,8 +2038,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2076,6 +2260,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../runbook/" class="md-nav__link">
         
   
@@ -2216,6 +2456,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../release/" class="md-nav__link">
         
   
@@ -2318,6 +2586,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Preflight the cluster (required first step)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#preflighting-a-freshly-created-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preflighting a freshly created cluster
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2412,6 +2697,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Key values an operator sets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The policy parameter is a CRD, not a ConfigMap (Q492)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2488,7 +2790,7 @@ runtime from each tenant's <code>ActionsGateway</code> CR. The chart is the <str
 path — there is no kustomize overlay; the plain-YAML files under <code>cmd/gmc/config/</code>
 are the controller-gen codegen + test substrate, not an install vehicle. For the
 full chart reference (every value, the templates it renders, offline validation),
-see the <a href="../../charts/actions-gateway/README.md">chart README</a>.</p>
+see the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/charts/actions-gateway/README.md">chart README</a>.</p>
 <hr />
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2562,7 +2864,7 @@ remediation hint for each:</p>
 <tr>
 <td><strong>metrics-server present</strong></td>
 <td>WARN</td>
-<td>The resource metrics the GMC/AGC HorizontalPodAutoscalers consume. Install succeeds without it; autoscaling stays degraded until it is present.</td>
+<td>The resource metrics the GMC/AGC HorizontalPodAutoscalers consume, and the source for the AGC's <a href="../worker-rightsizing/">worker usage sampling</a>. Install succeeds without it; autoscaling and usage sampling stay degraded until it is present. Checked with a <a href="#preflighting-a-freshly-created-cluster">bounded retry</a> — on a brand-new cluster the addon is often still starting.</td>
 </tr>
 </tbody>
 </table>
@@ -2573,18 +2875,37 @@ it schedules no workloads and needs no extra permissions, so it is safe to run
 against a fresh cluster. Resolve every <strong>FAIL</strong> before proceeding; for CNI
 enforcement specifically, install on a cluster whose CNI enforces
 <code>NetworkPolicy</code> (see <a href="#prerequisites">Prerequisites</a>).</p>
+<h3 id="preflighting-a-freshly-created-cluster">Preflighting a freshly created cluster<a class="headerlink" href="#preflighting-a-freshly-created-cluster" title="Permanent link">&para;</a></h3>
+<p>A cluster that was created minutes ago is still converging, so a one-shot check
+can report a prerequisite absent that is merely slow to start. The
+metrics-server check therefore retries, bounded in wall clock:</p>
+<ul>
+<li>If the <code>metrics.k8s.io</code> APIService is registered but not yet <code>Available</code>, the
+  preflight prints a <code>[WAIT]</code> line and retries for up to <strong>150 s</strong> (a managed
+  addon typically needs ~2 min from cluster creation). It reports <code>PASS</code> as soon
+  as the API serves, so <code>VALIDATE_STRICT=1</code> does not fail a from-zero bootstrap
+  on an addon that is still coming up.</li>
+<li>If no <code>metrics.k8s.io</code> APIService is registered at all, metrics-server is not
+  installed: the preflight warns after a short <strong>15 s</strong> grace rather than paying
+  the full budget.</li>
+</ul>
+<p>Both budgets are env-overridable — <code>VALIDATE_METRICS_TIMEOUT</code>,
+<code>VALIDATE_METRICS_GRACE</code>, and the <code>VALIDATE_METRICS_INTERVAL</code> poll interval, all
+in whole seconds. Set <code>VALIDATE_METRICS_TIMEOUT=0 VALIDATE_METRICS_GRACE=0</code> to
+restore the previous single-shot behaviour (useful in a scripted preflight
+against a long-running cluster, where a converging addon is not expected).</p>
 <hr />
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>General availability — <code>v1.0.0</code>.</strong> The chart is published, cosign-signed,
-and installable straight from the GHCR OCI registry. Pin <code>--version 1.0.0</code>
+<p><strong>Current release — <code>v1.3.0</code>.</strong> The chart is published, cosign-signed,
+and installable straight from the GHCR OCI registry. Pin <code>--version 1.3.0</code>
 (the chart version is the release tag without the leading <code>v</code>). Newer patch
-releases publish as <code>1.0.z</code>; pin the version you have verified.</p>
+releases publish as <code>1.2.z</code>; pin the version you have verified.</p>
 </blockquote>
 <p>Install the published, signed chart straight from the registry — no source
 checkout needed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.0.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.3.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
@@ -2592,7 +2913,7 @@ checkout needed:</p>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
 </code></pre></div>
 <p>Copy the four image digests from the
-<a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.0.0">release notes</a>
+<a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.3.0">release notes</a>
 (the chart ships <strong>no</strong> baked-in digests — empty digests are the fail-closed
 secure default, so an unconfigured render is rejected). Verify the chart and
 image signatures before installing — see
@@ -2652,7 +2973,7 @@ private registry, point the chart at it, and authenticate the pulls — see
 throughout (relocation is content-addressed).</p>
 <h3 id="without-cert-manager">Without cert-manager<a class="headerlink" href="#without-cert-manager" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.0.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.3.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--set<span class="w"> </span>certManager.enabled<span class="o">=</span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
@@ -2696,13 +3017,16 @@ Flux <code>HelmRelease</code> examples (with the CRD-pruning gotcha handled) and
 source the GitHub App credential Secret securely — External Secrets Operator or
 Sealed Secrets — so the private key is never committed to Git.</p>
 <h3 id="optional-the-v2-api-crds">Optional: the v2 API CRDs<a class="headerlink" href="#optional-the-v2-api-crds" title="Permanent link">&para;</a></h3>
-<p>The main chart installs the <code>v1alpha1</code> (<code>actions-gateway.github.com</code>) CRDs — the
-fully supported, standard path. The v2 (<code>actions-gateway.com</code>) API ships its five
-CRDs in a <strong>separate, opt-in chart</strong>, <code>actions-gateway-crds-v2</code>, split out so the
-main chart's Helm release Secret stays under the 1 MiB limit.</p>
+<p>The main chart installs the <code>v1alpha1</code> (<code>actions-gateway.github.com</code>) CRDs — still
+fully served, but <a href="../v1alpha1-deprecation/">deprecated</a>. The v2
+(<code>actions-gateway.com</code>) API that new tenants onboard on ships its five CRDs in a
+<strong>separate, opt-in chart</strong>, <code>actions-gateway-crds-v2</code>, split out so the main chart's
+Helm release Secret stays under the 1 MiB limit. Install it alongside the main chart
+unless you are running v1-only.</p>
 <p>Each v2 CRD is served at <strong>two versions</strong>: <strong><code>v2beta1</code></strong> (the served <strong>and</strong> storage
-version — the graduated, ScaleSet-only shape) and <strong><code>v2alpha1</code></strong> (still served for
-coexistence and the <code>gag-migrate</code> on-ramp). The apiserver converts between them
+version — the graduated, ScaleSet-only shape) and <strong><code>v2alpha1</code></strong> (served as the
+<code>gag-migrate</code> on-ramp, deprecated, and
+<a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>). The apiserver converts between them
 through a <strong>conversion webhook hosted by the GMC</strong> (the <code>/convert</code> endpoint on the
 same <code>webhook-service</code> that fronts the validating webhooks). Two consequences for an
 operator:</p>
@@ -2852,47 +3176,99 @@ digests. The knobs an operator is most likely to override:</p>
 <td>Leave on; needs an enforcing CNI (see prerequisites).</td>
 </tr>
 <tr>
+<td><code>vpa.enabled</code></td>
+<td><code>false</code></td>
+<td>Set <code>true</code> to let a Vertical Pod Autoscaler right-size the GMC instead of tuning <code>resources</code> by hand. Requires the Kubernetes vertical-pod-autoscaler installed (the <code>autoscaling.k8s.io</code> CRDs) — enabling it without them fails <code>helm install</code>, same as <code>metrics.serviceMonitor.enabled</code>. <code>vpa.updateMode</code> defaults to <code>Off</code> (recommendation only); it moves requests only, so <code>resources.limits</code> stays your hard ceiling. The per-tenant equivalent is <code>ActionsGateway.spec.agcAutoscaling</code> (<a href="../tenant-onboarding/#letting-an-autoscaler-size-the-agc-agcautoscaling">tenant-onboarding</a>).</td>
+</tr>
+<tr>
 <td><code>systemCriticalPriorityQuota.enabled</code></td>
 <td><code>true</code></td>
 <td>Leave on; ships the scoped <code>ResourceQuota</code> that lets the GMC's <code>system-cluster-critical</code> pods schedule under GKE's restricted PriorityClass admission (see <a href="#gke-and-other-restricted-priorityclass-clusters">GKE and other restricted-PriorityClass clusters</a>). Set <code>false</code> only if you provision that quota out-of-band.</td>
+</tr>
+<tr>
+<td><code>admissionPolicy.enabled</code></td>
+<td><code>true</code></td>
+<td>Leave it on. It ships the <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code>, the backstop that gates direct <code>runnergroups</code> writes (which have no webhook) against the PriorityClass allowlist. The managed-control-plane caveat that used to sit here is <a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492">resolved</a>. Set <code>false</code> to rely on the GMC webhook allowlist alone.</td>
 </tr>
 </tbody>
 </table>
 <p>A <code>values.schema.json</code> validates these at install/lint time (digest format,
 enum values, etc.). The <strong>full reference</strong> — every value with its default and
 description — lives in the
-<a href="../../charts/actions-gateway/README.md#values">chart README</a>; this table is
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/charts/actions-gateway/README.md#values">chart README</a>; this table is
 only the common subset, not a duplicate.</p>
+<h3 id="the-policy-parameter-is-a-crd-not-a-configmap-q492">The policy parameter is a CRD, not a ConfigMap (Q492)<a class="headerlink" href="#the-policy-parameter-is-a-crd-not-a-configmap-q492" title="Permanent link">&para;</a></h3>
+<p>The guard reads its allowlist from a cluster-scoped <code>PriorityClassAllowlist</code> CR
+(<code>&lt;release&gt;-priorityclass-allowlist</code>), which the chart renders from
+<code>allowedPriorityClasses</code> and the GMC also watches. One object, two consumers, so
+the webhook and the policy cannot disagree.</p>
+<p>That it is a <strong>CRD</strong> and not a <code>ConfigMap</code> is load-bearing, not incidental.
+Releases that used a ConfigMap were exposed to a kube-apiserver defect (Q444):
+the apiserver keys one <em>shared</em> parameter informer per core-type <code>paramKind</code>,
+tears it down as soon as no binding names that kind, and never restarts it. A
+<code>helm uninstall</code> deletes the guard's only binding and so tripped exactly that,
+leaving every <code>runnergroups</code>/<code>runnersets</code>/<code>runnertemplates</code> write denied
+cluster-wide with <code>no params found for policy binding</code> — recoverable only by
+restarting kube-apiserver, which EKS/GKE/AKS do not offer. It could also fail
+<em>open</em>, silently enforcing a stale allowlist from a frozen cache.</p>
+<p>For a CRD <code>paramKind</code> the apiserver allocates a fresh dynamic informer per
+context, so the same uninstall/reinstall cycle is survivable. This is measured
+rather than inferred: <code>scripts/e2e/vap-param-informer-check.sh</code> runs the identical
+empty-binding-set transition against both kinds on one apiserver, and
+<code>scripts/e2e/chart-reinstall-check.sh</code> drives a real uninstall/reinstall in CI.</p>
+<p><strong>One consequence, and it is not install-time.</strong> This CRD ships in the chart-root
+<code>crds/</code> directory rather than <code>templates/crds/</code> like the others, because the same
+release also creates a <code>PriorityClassAllowlist</code> object and Helm resolves REST
+mappings for the whole manifest before applying any of it — a CR whose CRD is a
+template in the same release fails the install outright. A <strong>fresh <code>helm install</code>
+handles this for you</strong>; <code>crds/</code> is applied first.</p>
+<p>An <strong>upgrade does not</strong>. Helm skips <code>crds/</code> entirely on upgrade, so applying the
+chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally
+rather than conditionally, so the procedure does not depend on which version you
+are coming from:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>&lt;chart&gt;<span class="w"> </span>--version<span class="w"> </span>&lt;version&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+</code></pre></div>
+<p>It is idempotent and version-correct, so it also covers any future schema change
+to this CRD with no release-note callout to remember. The chart preflights the
+CRD's presence and fails with that command rather than letting Helm emit a bare
+<code>no matches for kind</code>. Steps:
+<a href="../upgrade/#gmc-install-and-upgrade-via-helm-recommended">upgrade.md</a>.</p>
+<p><code>helm uninstall</code> leaves the CRD behind, which is the same end state as the
+<code>helm.sh/resource-policy: keep</code> the other CRDs carry.</p>
+<p>Upstream, for the underlying apiserver bug:
+<a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a>.
+Migrating an existing release off the ConfigMap:
+<a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md</a>.</p>
 <hr />
 <h2 id="verify-a-healthy-install">Verify a healthy install<a class="headerlink" href="#verify-a-healthy-install" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># 1. Both GMC replicas are Running and Ready (HA default replicaCount=2).</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>gmc-controller-manager
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Expected: READY 2/2</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Expected: 2 pods, all Running</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
-<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># 2. A leader has been elected (the lease holder is the active replica).</span>
-<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>lease<span class="w"> </span>-n<span class="w"> </span>gmc-system
-<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Expected: a lease whose HOLDER is one of the GMC pods</span>
-<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
-<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># 3. Both CRDs are installed and Established.</span>
-<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">                </span>runnergroups.actions-gateway.github.com
-<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">condition</span><span class="o">=</span>Established<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">  </span>crd/actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">  </span>crd/runnergroups.actions-gateway.github.com
-<a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>
-<a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="c1"># 4. The validating webhook and the admission policies are present.</span>
-<a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="c1"># (Resource names carry the chart namePrefix, default &quot;gmc-&quot;.)</span>
-<a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingwebhookconfiguration<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>actions-gateway
-<a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingadmissionpolicy<span class="w"> </span>gmc-namespace-psa-guard<span class="w"> </span>gmc-tenant-resource-guard<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="w">  </span>gmc-priorityclass-allowlist-guard
-<a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>
-<a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="c1"># 5. No errors in the GMC manager logs.</span>
-<a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>--tail<span class="o">=</span><span class="m">30</span>
-<a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="c1"># Look for: &quot;Starting workers&quot; / &quot;successfully acquired lease&quot;; no repeated</span>
-<a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="c1"># &quot;AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE must be pinned by digest&quot;.</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># 1. Both GMC replicas are Running and Ready (HA default replicaCount=2).</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>gmc-controller-manager
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Expected: READY 2/2</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Expected: 2 pods, all Running</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># 2. A leader has been elected (the lease holder is the active replica).</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>lease<span class="w"> </span>-n<span class="w"> </span>gmc-system
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c1"># Expected: a lease whose HOLDER is one of the GMC pods</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># 3. Both CRDs are installed and Established.</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">                </span>runnergroups.actions-gateway.github.com
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">condition</span><span class="o">=</span>Established<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">  </span>crd/actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">  </span>crd/runnergroups.actions-gateway.github.com
+<a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>
+<a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="c1"># 4. The validating webhook and the admission policies are present.</span>
+<a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="c1"># (Resource names carry the chart namePrefix, default &quot;gmc-&quot;.)</span>
+<a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingwebhookconfiguration<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>actions-gateway
+<a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a>kubectl<span class="w"> </span>get<span class="w"> </span>validatingadmissionpolicy<span class="w"> </span>gmc-namespace-psa-guard<span class="w"> </span>gmc-tenant-resource-guard<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">  </span>gmc-priorityclass-allowlist-guard
+<a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>
+<a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="c1"># 5. No errors in the GMC manager logs.</span>
+<a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>--tail<span class="o">=</span><span class="m">30</span>
+<a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="c1"># Look for: &quot;Starting workers&quot; / &quot;successfully acquired lease&quot;; no repeated</span>
+<a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="c1"># &quot;AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE must be pinned by digest&quot;.</span>
 </code></pre></div>
 <p>A forgotten <code>agc</code>/<code>proxy</code>/<code>wrapper</code> digest now fails the <strong>render</strong> with a clear
 per-image message (see <a href="#pin-images-by-digest">Pin images by digest</a>), so a
@@ -2904,18 +3280,28 @@ to create the GitHub App Secret and the first <code>ActionsGateway</code> CR, or
 <a href="../tenant-onboarding/">Tenant Onboarding Checklist</a> to bring up a tenant.</p>
 <hr />
 <h2 id="uninstall">Uninstall<a class="headerlink" href="#uninstall" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
 </code></pre></div>
 <p>The two CRDs ship as templates carrying <code>helm.sh/resource-policy: keep</code>, so
 <code>helm uninstall</code> <strong>preserves the CRDs and every tenant's <code>ActionsGateway</code> /
 <code>RunnerGroup</code> object</strong> rather than cascade-deleting them — uninstalling the GMC
 does not tear down running tenant gateways. To fully remove them, delete the
 tenant CRs first, then the CRDs explicitly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Only after confirming no tenant still needs their gateways:</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>actionsgateway<span class="w"> </span>--all<span class="w"> </span>--all-namespaces
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">                   </span>runnergroups.actions-gateway.github.com
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Only after confirming no tenant still needs their gateways:</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>actionsgateway<span class="w"> </span>--all<span class="w"> </span>--all-namespaces
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">                   </span>runnergroups.actions-gateway.github.com
 </code></pre></div>
+<p>The <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code> is removed by
+<code>helm uninstall</code> along with its binding and its parameter object; the
+<code>PriorityClassAllowlist</code> <strong>CRD</strong> is left behind, as <code>crds/</code> contents always are.
+Removing the binding used to be the trigger for a cluster-wide outage (Q444) when
+the parameter was a ConfigMap — a reinstall could not repair it. It is safe now
+that the parameter is a CRD, which is
+<a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492">why it is one</a>; the
+uninstall/reinstall cycle is covered by <code>scripts/e2e/chart-reinstall-check.sh</code> in CI.
+Symptoms of the old failure, if you meet it on a pre-Q492 release:
+<a href="../troubleshooting/#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding">troubleshooting.md</a>.</p>
 <p>The install namespace (<code>gmc-system</code>) is left in place if you created it with
 <code>--create-namespace</code>; remove it with <code>kubectl delete namespace gmc-system</code> once
 empty.</p>
@@ -2929,7 +3315,7 @@ empty.</p>
   changes, and the per-component upgrade procedures.</li>
 </ul>
 <hr />
-<p>← <a href=".">Back to Operations</a></p>
+<p>← <a href="../">Back to Operations</a></p>
 
 
 

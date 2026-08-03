@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.2.0/why-gag/">
+        <link rel="canonical" href="https://actions-gateway.com/1.3.0/why-gag/">
       
       
         <link rel="prev" href="..">
       
       
-        <link rel="next" href="../demo/">
+        <link rel="next" href="../features/">
       
       
         
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.2.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.2.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.2.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.2.0",
+    "url": "https://actions-gateway.com/1.3.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.2.0"
+      "url": "https://actions-gateway.com/1.3.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.2.0",
-    "logo": "https://actions-gateway.com/1.2.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.3.0",
+    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,9 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            
-  <strong>v1.2.0 is here.</strong> Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
-
+            <strong>v1.3.0 is here.</strong>
+      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
           </div>
           
         </aside>
@@ -142,6 +141,15 @@
     </div>
     
       <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
         
       </div>
     
@@ -310,6 +318,25 @@
     
   
   Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
 
       </a>
     </li>
@@ -626,6 +653,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../demo/" class="md-nav__link">
         
   
@@ -745,6 +799,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -758,7 +816,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -780,14 +838,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1247,6 +1305,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1309,6 +1423,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -1322,7 +1444,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1344,14 +1466,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1545,7 +1667,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -1574,6 +1696,34 @@
     
   
     Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
   
 
     
@@ -1733,10 +1883,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="0">
             
   
   
@@ -1754,8 +1904,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1976,6 +2126,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/runbook/" class="md-nav__link">
         
   
@@ -2096,6 +2302,34 @@
     
   
     Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
   
 
     
@@ -2287,9 +2521,9 @@
 <a class="md-button" href="../design/02-architecture/">See the architecture</a></p>
 </div>
 <div class="gag-vs-hero__proof">
-<p class="gag-vs-hero__proof-cap">When a worker is evicted or blocked by a full <code>ResourceQuota</code></p>
+<p class="gag-vs-hero__proof-cap">When a worker is evicted, preempted, or blocked by a full <code>ResourceQuota</code></p>
 <div class="gag-vs-row gag-vs-row--arc"><span class="gag-vs-row__tag">ARC</span><span class="gag-vs-row__text">the runner is marked <code>Failed</code> and the job sits in GitHub's queue until someone reruns it by hand</span></div>
-<div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">the job lock is fast-cancelled and the job re-queued automatically — it runs as soon as capacity frees up, no manual rerun</span></div>
+<div class="gag-vs-row gag-vs-row--gag"><span class="gag-vs-row__tag">GAG</span><span class="gag-vs-row__text">the job is concluded (~10 min lock-lapse bound at worst) and re-run automatically: no manual rerun, and it runs as soon as capacity frees up</span></div>
 </div>
 </div>
 <h2 id="the-problem-arc-leaves-you-with">The problem ARC leaves you with<a class="headerlink" href="#the-problem-arc-leaves-you-with" title="Permanent link">&para;</a></h2>
@@ -2305,7 +2539,7 @@ letting tenants run their own runners.</p>
 <p>A quota-blocked or evicted job can't recover on its own:</p>
 <ul>
 <li>ARC retries the same runner (<a href="https://github.com/actions/actions-runner-controller/pull/4305">30 s loop</a>), then marks it <code>Failed</code></li>
-<li>the job sits in GitHub's queue up to its 24-hour timeout</li>
+<li>the job sits in GitHub's queue until GitHub's queue timeout cancels it (at least 24 h, up to 48 h)</li>
 <li>cleared and rerun by hand (<a href="https://github.com/actions/actions-runner-controller/issues/4155">#4155</a>, <a href="https://github.com/actions/actions-runner-controller/issues/4203">#4203</a>) — so teams avoid enforcing quotas</li>
 </ul>
 </li>
@@ -2320,13 +2554,13 @@ letting tenants run their own runners.</p>
 </ul>
 </li>
 <li>
-<p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 17H7V7h10m4 4V9h-2V7a2 2 0 0 0-2-2h-2V3h-2v2h-2V3H9v2H7c-1.11 0-2 .89-2 2v2H3v2h2v2H3v2h2v2a2 2 0 0 0 2 2h2v2h2v-2h2v2h2v-2h2a2 2 0 0 0 2-2v-2h2v-2h-2v-2m-6 2h-2v-2h2m2-2H9v6h6z"/></svg></span> <strong>Listener memory piles up</strong></p>
+<p><span class="twemoji lg middle"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 17H7V7h10m4 4V9h-2V7a2 2 0 0 0-2-2h-2V3h-2v2h-2V3H9v2H7c-1.11 0-2 .89-2 2v2H3v2h2v2H3v2h2v2a2 2 0 0 0 2 2h2v2h2v-2h2v2h2v-2h2a2 2 0 0 0 2-2v-2h2v-2h-2v-2m-6 2h-2v-2h2m2-2H9v6h6z"/></svg></span> <strong>Listener pods pile up</strong></p>
 <hr />
-<p>One .NET listener pod per scale set, running 24/7:</p>
+<p>One always-on listener pod per scale set, running 24/7:</p>
 <ul>
-<li>~256 MiB resident + a cluster IP each</li>
+<li>a pod slot + a cluster IP each</li>
 <li>held alive just to long-poll GitHub</li>
-<li>10 scale sets ≈ 2.5 GiB before a job runs</li>
+<li>10 scale sets ≈ 10 always-on pods before a job runs</li>
 </ul>
 </li>
 <li>
@@ -2344,8 +2578,8 @@ letting tenants run their own runners.</p>
 <h2 id="what-changes-with-gag">What changes with GAG<a class="headerlink" href="#what-changes-with-gag" title="Permanent link">&para;</a></h2>
 <div class="gag-stats" markdown="0">
   <div class="gag-stat">
-    <span class="gag-stat__num">600&nbsp;KiB</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener memory for 10 runner sets</strong> — one shared pod, versus ~2.5 GiB across 10 on ARC</span>
+    <span class="gag-stat__num">1&nbsp;pod</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener footprint for 10 runner sets</strong> — every listener is a ~12&nbsp;KiB goroutine in one shared pod, versus 10 always-on listener pods (and 10 cluster IPs) on ARC</span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">0</span>
@@ -2353,7 +2587,7 @@ letting tenants run their own runners.</p>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">Auto</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Recovery for quota-blocked and evicted jobs</strong> — the lock is fast-cancelled and the job re-queued, no manual rerun</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Handling for quota-blocked and disrupted jobs</strong> — a job the quota has no room for is never taken on, so it stays queued at GitHub until there is capacity; a worker lost to eviction, scheduler preemption, or a node drain has its job re-run automatically, no manual rerun. Both run on both acquisition tiers</span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">1</span>
@@ -2401,7 +2635,17 @@ footprint.</p>
 <tr>
 <td>Safe under a per-tenant <code>ResourceQuota</code></td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> quota-blocked jobs stall; manual cleanup + rerun</td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../design/04-operational-flows/">auto lock-cancel + re-queue</a></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../design/04-operational-flows/#42-job-execution-flow-agc">won't take on a job it can't place</a><br><span class="gag-cont">live quota headroom is read <em>before</em> the job is claimed — on the default tier it bounds the capacity advertised to GitHub, on classic it declines the claim — so the job stays queued at GitHub. If headroom is lost afterwards, the pod create is retried in place while the lock is held</span></td>
+</tr>
+<tr>
+<td>Auto-re-run jobs disrupted mid-flight (eviction / preemption / drain)</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> runner marked <code>Failed</code>; the job waits in GitHub's queue for a manual rerun</td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-run automatically, with a per-run retry budget</a><br><span class="gag-cont">kubelet evictions, scheduler preemptions under a <code>priorityTiers</code> floor, node drains, and hand-deleted workers all re-run through GitHub's own re-run API — retried until GitHub accepts it — with <code>maxEvictionRetries</code> capping the budget per run</span></td>
+</tr>
+<tr>
+<td>Stop claiming jobs when the cluster can't place the worker</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> the runner claims its own job, so there is no seat before the claim to decide at</td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> opt-in <a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs"><code>capacityGate</code> on the runner set</a><br><span class="gag-cont">off by default. When on, an unplaceable worker shape (drained pool, changed taint, spot gone) stops the gateway taking on more work, so jobs stay queued at GitHub instead of being claimed and cancelled. It bounds the <em>rate</em> of wasted claims — roughly one per <code>pendingPodDeadline</code> window — it does not eliminate the first one. The tenant turns it on; the platform states once, on the gateway, whether the cluster has a node autoscaler — so a runner set can never gate on a signal that is wrong for the cluster it runs in. Where a node may still arrive, the gate waits for cluster-autoscaler or Karpenter to say it will not add one</span></td>
 </tr>
 <tr>
 <td>Guaranteed floor for critical runner types</td>
@@ -2419,14 +2663,19 @@ footprint.</p>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../design/network-architecture/">per-tenant proxy pool</a><br><span class="gag-cont"><span class="gag-v2-badge">v2</span> proxy optional</span></td>
 </tr>
 <tr>
-<td>Listener memory, 10 runner sets at rest</td>
-<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> ~2.5 GiB across 10 pods</td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> ~600 KiB in 1 shared pod</td>
+<td>Listener footprint, 10 runner sets at rest</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> 10 always-on pods + 10 cluster IPs</td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> 1 shared pod — ~12 KiB per listener session</td>
 </tr>
 <tr>
 <td>Per-tenant utilization metrics</td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> scale-set metrics, not tenant-scoped</td>
 <td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <a href="../operations/observability/">Prometheus per tenant + group</a><br><span class="gag-cont">job counts in <code>kubectl get</code>; ready-to-apply <a href="../operations/observability-dashboards/#tenant-dashboard">tenant dashboard + alerts as code</a></span></td>
+</tr>
+<tr>
+<td>Right-size runner resources from measured usage</td>
+<td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> no feedback loop — runner <code>resources</code> stay a guess</td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <span class="gag-v2-badge">v2</span> <a href="../operations/worker-rightsizing/">measured recommendations in <code>RunnerSet</code> status</a><br><span class="gag-cont">+ opt-in profiles that auto-apply them at pod build (<code>Binpack</code>/<code>Throughput</code>/<code>NodeShare</code>), a <code>SizingDrift</code> condition, and per-job peak metrics</span></td>
 </tr>
 <tr>
 <td>Cross-tenant fleet health view (platform admin)</td>
@@ -2446,14 +2695,44 @@ footprint.</p>
 </tbody>
 </table>
 <p>Every capability above is available today.</p>
+<!-- The canonical fires/doesn't-fire matrix is
+     docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
+     When a case is added or removed there, update this box too. -->
+<div class="admonition info">
+<p class="admonition-title">Disruptions re-run themselves — failures and cancels never do</p>
+<p>The auto-re-run claim is scoped on purpose. What re-runs itself: a job whose
+worker the <em>cluster</em> took away — a kubelet eviction, a scheduler preemption
+under a <code>priorityTiers</code> floor, a node drain, even a stray
+<code>kubectl delete pod</code> — each retried until GitHub accepts it, within a
+per-run budget (<code>maxEvictionRetries</code>). What never does, by design: a job
+that ran and <strong>failed</strong> (re-running it would mask real breakage), a run you
+<strong>cancelled</strong> (a cancel is the intended stop), and workers the gateway's own
+cleanup reaped as stuck (a re-run would loop them). The full boundary, with
+the detection marks and metrics:
+<a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">which disruptions auto-re-run a job</a>.</p>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Why measured right-sizing can't be bolted onto ARC</p>
+<p>The right-sizing row is structural, not a feature race. Ephemeral runner
+pods — ARC's and GAG's alike — run one job, live minutes, and have no
+<code>/scale</code>-style controller to group them, so stock Vertical Pod Autoscaler
+(and the dashboards built on it) cannot size them: its grouping, its
+evict-and-resize actuation, and its long-running-service statistics all
+miss this workload shape. The only place the loop can close is <em>inside the
+controller that creates the pods</em>, at pod-build time — which is where GAG
+runs it: sample per-job peaks, publish the recommendation on the
+<code>RunnerSet</code>, and (opt-in) apply it to the next job's pod, with GPUs never
+touched. The full alternatives analysis is in
+<a href="../design/appendix-d-alternatives-considered/#d7-worker-right-sizing-why-built-in-not-bolted-on">Appendix D §D.7</a>.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Onboarding: start on v2</p>
-<p>New tenants should onboard on the <strong>recommended v2 API</strong>
-(<code>actions-gateway.com/v2alpha1</code> — a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> +
-<code>RunnerTemplate</code>, with an optional standalone <code>EgressProxy</code>); the rows marked
+<p>New tenants should onboard on the <strong>recommended v2 API</strong> at
+<code>actions-gateway.com/v2beta1</code> — a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> +
+<code>RunnerTemplate</code>, with an optional standalone <code>EgressProxy</code>; the rows marked
 <span class="gag-v2-badge">v2</span> are v2-only. The single-CR <code>v1alpha1</code> shape
 shown below is still fully served but
-<strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong> — see the
+<strong><a href="../operations/v1alpha1-deprecation/">deprecated, and removed at <code>v2.0.0</code></a></strong> — see the
 <a href="../operations/migration-v1-to-v2/">v1 → v2 migration guide</a> and the
 <a href="../getting-started/">getting-started walkthrough</a> for the v2 object set.</p>
 </div>
@@ -2466,8 +2745,9 @@ the utilization-and-cost argument,
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Where GAG is behind ARC</p>
-<p>It's <strong>maturity, not capability.</strong> ARC is GA and widely deployed; GAG's
-recommended v2 API is still alpha and rides a Public-Preview runner-scale-set
+<p>It's <strong>maturity, not capability.</strong> ARC is GA and widely deployed; GAG's v2 API
+has only just reached beta (<code>v2beta1</code>, its first stability contract) and rides a
+Public-Preview runner-scale-set
 protocol. That is precisely why the v1 → v2 migration is handled on a committed,
 documented schedule with a working
 <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> tool — the discipline is the
@@ -2512,6 +2792,30 @@ ships as reconciled defaults, not a post-install project.</p>
 </li>
 </ul>
 </div>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Sandboxed runtimes compose with these defaults, and GAG's own CI runs that way</p>
+<p>A sandboxed runtime is just a <code>runtimeClassName</code> on the worker pod template,
+so GAG and ARC can both set one. The differentiator is not that field. It is
+the layer underneath it, and the evidence that the combination holds.</p>
+<p><strong>Kata bounds the kernel, not the pod network.</strong> A micro-VM does not change
+the pod's network identity: the cloud metadata service still answers from
+<em>inside</em> the guest, so a compromised job can mint node credentials over the
+pod network even though the kernel it escaped into is disposable. GAG's
+default-deny NetworkPolicies are what close that path, reconciled per tenant
+rather than hand-built alongside. Kata is one layer, not a posture.</p>
+<p><strong>GAG's own end-to-end CI runs under it.</strong> The suite creates a <code>kind</code> cluster
+inside a worker pod with <code>runtimeClassName: kata</code> and <strong>zero</strong>
+<code>privileged: true</code>, validated on a nested-virtualization GKE node pool (node
+kernel <code>6.8.0-1054-gke</code>, guest kernel <code>6.18.35</code>), and the default for that
+suite ever since. The cluster-side how-to is written down, including
+the capability set an unprivileged <code>dockerd</code> needs and
+<a href="../operations/kata-dind-workloads/#what-kata-does-not-buy-you">what Kata does not buy you</a>.</p>
+<p><strong>This is not yet a claim about untrusted pull requests.</strong> That CI variant
+still runs a permissive egress policy, because its jobs pull from CDN-fronted
+public registries no CIDR allowlist can pin. Closing it takes an in-cluster
+pull-through mirror plus egress scoped to the mirror, GitHub, and DNS: see
+the <a href="../roadmap/#in-progress--near-term">roadmap</a>.</p>
 </div>
 <p>For the full threat model, per-profile controls, and the abuse-response
 playbooks, see <a href="../design/05-security/">Security</a> and
@@ -2559,7 +2863,7 @@ GitHub binding and runner sets — not one CR that must own everything.</p>
 </div>
 <p>The v2 object set below is feature-equivalent to the legacy single-CR example — a
 proxied gateway with a GPU runner set (priority tiers) and a Linux runner set:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span><span class="w">               </span><span class="c1"># (1)!</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-egress</span>
@@ -2568,7 +2872,7 @@ proxied gateway with a GPU runner set (priority tiers) and a Linux runner set:</
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">minReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">maxReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="nn">---</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerTemplate</span><span class="w">            </span><span class="c1"># (2)!</span>
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
@@ -2579,7 +2883,7 @@ proxied gateway with a GPU runner set (priority tiers) and a Linux runner set:</
 <a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
 <a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
 <a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="nn">---</span>
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span><span class="w">            </span><span class="c1"># (3)!</span>
 <a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-gateway</span>
@@ -2593,7 +2897,7 @@ proxied gateway with a GPU runner set (priority tiers) and a Linux runner set:</
 <a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">  </span><span class="nt">defaultProxyRef</span><span class="p">:</span>
 <a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-egress</span><span class="w">         </span><span class="c1"># every RunnerSet inherits this unless it sets proxyRef</span>
 <a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="nn">---</span>
-<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
 <a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
 <a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu</span>
@@ -2601,24 +2905,23 @@ proxied gateway with a GPU runner set (priority tiers) and a Linux runner set:</
 <a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
 <a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># (4)!</span>
-<a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="w">  </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
-<a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a><span class="w">  </span><span class="nt">priorityTiers</span><span class="p">:</span><span class="w">                </span><span class="c1"># (5)!</span>
-<a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-critical</span>
-<a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
-<a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
-<a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
-<a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a><span class="nn">---</span>
-<a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
-<a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
-<a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux</span>
-<a id="__codelineno-0-55" name="__codelineno-0-55" href="#__codelineno-0-55"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-0-56" name="__codelineno-0-56" href="#__codelineno-0-56"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-0-57" name="__codelineno-0-57" href="#__codelineno-0-57"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-0-58" name="__codelineno-0-58" href="#__codelineno-0-58"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-0-59" name="__codelineno-0-59" href="#__codelineno-0-59"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;self-hosted&quot;</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-0-60" name="__codelineno-0-60" href="#__codelineno-0-60"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+<a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;gpu&quot;</span><span class="p p-Indicator">]</span><span class="w">         </span><span class="c1"># (5)!</span>
+<a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="w">  </span><span class="nt">priorityTiers</span><span class="p">:</span><span class="w">                </span><span class="c1"># (6)!</span>
+<a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-critical</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="w">      </span><span class="nt">threshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a><span class="nn">---</span>
+<a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
+<a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux</span>
+<a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-0-55" name="__codelineno-0-55" href="#__codelineno-0-55"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-0-56" name="__codelineno-0-56" href="#__codelineno-0-56"></a><span class="w">  </span><span class="nt">gatewayRef</span><span class="p">:</span><span class="w">  </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">team-a-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-0-57" name="__codelineno-0-57" href="#__codelineno-0-57"></a><span class="w">  </span><span class="nt">templateRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">default</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-0-58" name="__codelineno-0-58" href="#__codelineno-0-58"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;linux&quot;</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-0-59" name="__codelineno-0-59" href="#__codelineno-0-59"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
 </code></pre></div>
 <ol>
 <li>Optional. A standalone per-tenant egress proxy pool, Horizontal Pod Autoscaler
@@ -2639,6 +2942,10 @@ proxied gateway with a GPU runner set (priority tiers) and a Linux runner set:</
     shares is <strong>platform-owned</strong>, set on the namespace by the platform admin, so it
     is a real cap the tenant cannot raise. Priority tiers decide who wins when it
     is contended.</li>
+<li>Exactly one label per runner set: it is the set's scale-set name at GitHub and
+    its single <code>runs-on</code> match target (<code>runs-on: gpu</code>), unique across the sets under
+    one gateway. This is the same single-name routing ARC scale sets use, so
+    <code>runs-on</code> lines carry across from ARC unedited.</li>
 <li>The first 5 GPU pods get the higher-priority <code>PriorityClass</code>; the next tier
     bursts opportunistically; the final threshold caps total concurrency. The
     <code>priorityClassName</code> values must be on the platform's allowlist (the GMC
@@ -2648,7 +2955,7 @@ proxied gateway with a GPU runner set (priority tiers) and a Linux runner set:</
 </ol>
 <p>The legacy single-CR <code>v1alpha1</code> shape — which expresses this whole gateway in one
 <code>ActionsGateway</code> CR — is still fully served but
-<strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong>; see the
+<strong><a href="../operations/v1alpha1-deprecation/">deprecated, and removed at <code>v2.0.0</code></a></strong>; see the
 <a href="../getting-started/#legacy-the-v1alpha1-api-deprecated">getting-started walkthrough</a>
 for it and the <a href="../operations/migration-v1-to-v2/">v1 → v2 migration guide</a> to move
 across without changing how your jobs are acquired.</p>
@@ -2716,13 +3023,13 @@ every concept above onto GAG and walks one runner group across with zero downtim
         
         
           
-          <a href="../demo/" class="md-footer__link md-footer__link--next" aria-label="Next: Demo">
+          <a href="../features/" class="md-footer__link md-footer__link--next" aria-label="Next: Features">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Demo
+                Features
               </div>
             </div>
             <div class="md-footer__button md-icon">

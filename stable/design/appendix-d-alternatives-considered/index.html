@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.2.0/design/appendix-d-alternatives-considered/">
+        <link rel="canonical" href="https://actions-gateway.com/1.3.0/design/appendix-d-alternatives-considered/">
       
       
         <link rel="prev" href="../appendix-c-ai-implementation/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.2.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.2.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.2.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.2.0",
+    "url": "https://actions-gateway.com/1.3.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.2.0"
+      "url": "https://actions-gateway.com/1.3.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.2.0",
-    "logo": "https://actions-gateway.com/1.2.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.3.0",
+    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,9 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            
-  <strong>v1.2.0 is here.</strong> Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
-
+            <strong>v1.3.0 is here.</strong>
+      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
           </div>
           
         </aside>
@@ -142,6 +141,15 @@
     </div>
     
       <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
         
       </div>
     
@@ -308,6 +316,25 @@
     
   
   Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
 
       </a>
     </li>
@@ -522,6 +549,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../demo/" class="md-nav__link">
         
   
@@ -643,6 +697,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -659,7 +717,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -681,14 +739,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1168,6 +1226,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#d7-worker-right-sizing-why-built-in-not-bolted-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D.7. Worker Right-Sizing: Why Built In, Not Bolted On
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D.8. Gating Intake on Capacity: Which Signals Are Safe to Gate On
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1261,6 +1341,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1323,6 +1459,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -1336,7 +1480,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1358,14 +1502,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1559,7 +1703,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -1588,6 +1732,34 @@
     
   
     Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
   
 
     
@@ -1747,10 +1919,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" >
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="0">
             
   
   
@@ -1768,8 +1940,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1990,6 +2162,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/runbook/" class="md-nav__link">
         
   
@@ -2110,6 +2338,34 @@
     
   
     Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
   
 
     
@@ -2278,6 +2534,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#d7-worker-right-sizing-why-built-in-not-bolted-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D.7. Worker Right-Sizing: Why Built In, Not Bolted On
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D.8. Gating Intake on Capacity: Which Signals Are Safe to Gate On
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2354,7 +2632,7 @@
 </ul>
 <p><strong>Disadvantages</strong></p>
 <ul>
-<li><strong>Session multiplexing.</strong> In <code>RunnerScaleSet</code> mode, ARC uses one <code>Runner.Listener</code> process per scale set (not one per slot), so its steady-state long-poll connection count is similar to this design's adaptive listener model. However, each <code>Runner.Listener</code> process carries a ~256 MiB resident memory footprint (the full .NET runner runtime), versus ~60 KiB per goroutine in the Actions Gateway Controller (AGC) — roughly a 4,000× difference per active session. At a tenant operating 10 RunnerScaleSets, that is ~2.5 GiB for ARC's listeners versus ~600 KiB for the AGC at rest. (These figures — the per-listener and per-goroutine footprints, the ~4,000× ratio, and the ~2.5 GiB vs ~600 KiB totals — are order-of-magnitude estimates, not benchmarked measurements.)</li>
+<li><strong>Listener packaging.</strong> In <code>RunnerScaleSet</code> mode, ARC uses one listener per scale set (not one per slot) — a Go binary (<code>cmd/ghalistener</code>, built on the same official <code>github.com/actions/scaleset</code> client library this design tracks) — so its steady-state long-poll connection count is similar to this design's adaptive listener model. The difference is packaging: ARC deploys each listener as its own always-on pod with its own cluster IP, while the Actions Gateway Controller (AGC) runs every listener as a goroutine in one shared pod, at a measured ~12.2 KiB of AGC state per session (<a href="../appendix-a-capacity-slos/">Appendix A</a>). At a tenant operating 10 RunnerScaleSets, that is 10 always-on listener pods and 10 cluster IPs for ARC versus 1 AGC pod and 1 cluster IP here. (No per-listener memory ratio is published: the <code>gha-runner-scale-set</code> chart ships no default listener resource requests, so there is no measured ARC-side figure to compare against — see <a href="../appendix-a-capacity-slos/">Appendix A</a> for why the earlier ~4,000× claim was retired.)</li>
 <li><strong>Multi-tenant isolation.</strong> ARC does not provide a self-service multi-tenancy model. Each team typically requires a separate <code>RunnerDeployment</code> or <code>RunnerScaleSet</code> with its own RBAC, and cluster-admin involvement is required to set up network policies and resource quotas per tenant. There is no equivalent of the <code>ActionsGateway</code> CR that lets a team provision an isolated gateway instance within their existing namespace without cluster-admin.</li>
 <li><strong>Egress IP isolation.</strong> ARC provides no per-tenant egress IP control. All runner traffic exits from shared node IPs unless the operator independently layers a proxy or NAT gateway, which is not part of ARC's feature set. This design's per-tenant <code>EgressProxyPool</code> (Tier 3) provides this natively.</li>
 <li><strong>GPU idle cost.</strong> ARC's <code>RunnerScaleSet</code> can scale to zero runners between bursts, which eliminates idle GPU pod allocations during quiet periods. However, the scale-down latency is governed by the autoscaler's reaction time (typically 30–60 seconds after queue depth drops), whereas this design's ephemeral worker pods release their compute immediately on job completion. For GPU workloads where node hours are expensive, the difference in idle time per job cycle accumulates.</li>
@@ -2362,7 +2640,7 @@
 <li><strong>No shared quota across runner sets, and no minimum guarantees within a shared pool.</strong> ARC's <code>maxRunners</code> is a per-<code>RunnerScaleSet</code> property with no mechanism to express a shared budget across multiple sets. A team with three RunnerScaleSets each capped at 50 can theoretically schedule 150 concurrent runners — exceeding the namespace's actual resource capacity — and there is no native way to say "all sets combined may use at most 100 concurrent jobs" without external tooling or manual coordination of per-set caps. Conversely, lowering per-set caps to constrain the aggregate introduces the opposite problem: a large CPU runner set can be capped low enough to protect namespace headroom, but there is no mechanism to guarantee that GPU runners (which need that headroom) can actually claim it when they need it. This design bounds all worker pods from all <code>RunnerGroup</code>s against the same Kubernetes <code>ResourceQuota</code> for the shared ceiling, and adds a <code>priorityTiers</code> field on each <code>RunnerGroup</code> to express minimum guarantees within that pool: the first N pods of a high-priority group are assigned a preempting <code>PriorityClass</code> that displaces lower-priority pods when the namespace is contended, while additional pods above the preemption threshold schedule opportunistically. Both the shared ceiling and the per-group priority floors are expressed declaratively in the <code>ActionsGateway</code> CR and enforced by the Kubernetes scheduler — no external tooling or manual cap coordination required.</li>
 <li><strong>Broker protocol opacity.</strong> Because ARC wraps the official runner binary, it inherits any breaking changes GitHub makes to the broker protocol without exposing them as first-class API contracts. This design's explicit broker API documentation (<a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">§3.3</a>) makes compatibility requirements visible and testable.</li>
 </ul>
-<p><strong>Verdict:</strong> ARC is the right choice for most teams that need Kubernetes-native self-hosted runners. It is mature, officially supported, and avoids the maintenance burden of re-implementing the broker protocol. This design is the right choice when the requirements include goroutine-level memory efficiency at scale (4,000× less resident memory per listener than ARC's .NET runner process), per-tenant egress IP isolation without additional infrastructure, or self-service multi-tenant onboarding with per-tenant namespace isolation, <code>priorityTiers</code> preemption control, and declarative <code>ActionsGateway</code> provisioning — none of which ARC provides natively.</p>
+<p><strong>Verdict:</strong> ARC is the right choice for most teams that need Kubernetes-native self-hosted runners. It is mature, officially supported, and avoids the maintenance burden of re-implementing the broker protocol. This design is the right choice when the requirements include listener consolidation at scale (one shared AGC pod instead of an always-on listener pod and cluster IP per scale set), per-tenant egress IP isolation without additional infrastructure, or self-service multi-tenant onboarding with per-tenant namespace isolation, <code>priorityTiers</code> preemption control, and declarative <code>ActionsGateway</code> provisioning — none of which ARC provides natively.</p>
 <hr />
 <h2 id="d4-arc-with-keda-autoscaling">D.4. ARC with KEDA Autoscaling<a class="headerlink" href="#d4-arc-with-keda-autoscaling" title="Permanent link">&para;</a></h2>
 <p>A common production pattern layers <a href="https://keda.sh/">KEDA</a> on top of ARC, using a <code>ScaledObject</code> targeting ARC's queue-depth metric to drive runner replica count. This addresses ARC's baseline idle-runner problem more aggressively than ARC's built-in autoscaler alone.</p>
@@ -2387,7 +2665,7 @@
 <p><strong>What it does.</strong> Kueue arbitrates workloads against declarative quota. Its core objects are <code>ClusterQueue</code> and <code>LocalQueue</code> (the quota and submission surfaces), <code>ResourceFlavor</code> (heterogeneous resource pools, e.g. GPU vs CPU), <code>Cohort</code> (quota borrowing between queues), and <code>WorkloadPriorityClass</code> (priority-ordered preemption). Per its own documentation, Kueue "decides when a job should wait, when a job should be admitted to start (as in pods can be created), and when a job should be preempted." It installs as Custom Resource Definitions (CRDs), a cluster-wide controller, and admission webhooks, and therefore requires cluster-admin to deploy.</p>
 <p><strong>Where it overlaps.</strong> Kueue's quota-and-priority model overlaps the same need this design addresses with a shared <code>ResourceQuota</code> ceiling plus per-<code>RunnerGroup</code> <code>priorityTiers</code>: keeping a high-priority runner type from being starved by a flood of lower-priority work, and expressing a shared budget across heterogeneous pools. A cluster that already runs Kueue has a credible answer to the priority/quota half of the problem at the pod layer.</p>
 <p><strong>The differentiator.</strong> Kueue gates the <em>pod</em> layer; this design's admission decision has to happen one layer above it, at the GitHub broker. A worker pod only exists <em>after</em> the Actions Gateway Controller (AGC) has already claimed the job from GitHub (<code>acquirejob</code>), at which point GitHub considers the job owned by that session and the job lock is ticking. Kueue has no visibility into the broker and cannot defer a job that is not yet a Kubernetes workload; if it defers the <em>pod</em> after the claim, the work is queued while the lock the design must renew counts down — the exact failure the broker-layer admission gate exists to prevent. So Kueue <strong>augments</strong> rather than <strong>replaces</strong> the design's gate: in a cluster that already runs Kueue, this design's worker pods can still participate in a <code>ClusterQueue</code> for cluster-wide quota and preemption at the pod layer, while the broker-layer decision of <em>whether to claim the job at all</em> stays upstream of anything Kueue can act on. Kueue also requires cluster-admin to install, which is in tension with this design's self-service-without-cluster-admin requirement, so making it a hard dependency would regress that goal.</p>
-<p>The full argument — why admission is gated before <code>acquirejob</code> rather than delegated to an in-cluster queue, and why a durable internal queue was also rejected — is developed in the pre-acquisition admission-control plan (Q59; see <a href="../../plan/archive/acquire-admission-control/#relationship-to-kueue-why-an-off-the-shelf-k8s-queue-isnt-the-admission-layer">Relationship to Kueue</a>) and is not duplicated here.</p>
+<p>The full argument — why admission is gated before <code>acquirejob</code> rather than delegated to an in-cluster queue, and why a durable internal queue was also rejected — is developed in the pre-acquisition admission-control plan (Q59; see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/archive/acquire-admission-control.md#relationship-to-kueue-why-an-off-the-shelf-k8s-queue-isnt-the-admission-layer">Relationship to Kueue</a>) and is not duplicated here.</p>
 <p><strong>Verdict:</strong> Kueue is a strong fit for cluster-wide batch quota and priority arbitration at the pod layer, and composes with this design rather than competing with it. It is not a substitute for runner-control-plane admission, because the decision that matters for GitHub Actions jobs — whether to claim a job from the broker — happens before any Kubernetes workload exists for Kueue to manage.</p>
 <hr />
 <h2 id="d6-exostellar-and-infrastructure--gpu-cost-optimizers">D.6. Exostellar and Infrastructure / GPU Cost Optimizers<a class="headerlink" href="#d6-exostellar-and-infrastructure--gpu-cost-optimizers" title="Permanent link">&para;</a></h2>
@@ -2399,6 +2677,161 @@
 <p><strong>Unverified — treat as a hypothesis, not a claim.</strong> Working notes for this analysis speculated that vendors such as Exostellar layer a queue manager (e.g. Kueue) beneath ARC for GPU/quota management. Public materials reviewed for this appendix describe Exostellar as an infrastructure / GPU optimizer (spot-VM migration and GPU slicing) and do <strong>not</strong> describe a GitHub Actions runner, ARC integration, or a runner-queue product. The "layered under ARC" pattern is therefore not asserted here. What can be stated with confidence is the layer distinction above: infrastructure optimizers and this design address different layers and are not substitutes.</p>
 </blockquote>
 <p><strong>Verdict:</strong> Infrastructure and GPU cost optimizers are complementary to this design, not alternatives. They lower the cost of compute that is running; this design lowers cost primarily by ensuring compute is not running when no job needs it, and adds the runner-control-plane properties (multiplexing, egress isolation, multi-tenant self-service) that sit entirely outside an infrastructure optimizer's scope.</p>
+<hr />
+<h2 id="d7-worker-right-sizing-why-built-in-not-bolted-on">D.7. Worker Right-Sizing: Why Built In, Not Bolted On<a class="headerlink" href="#d7-worker-right-sizing-why-built-in-not-bolted-on" title="Permanent link">&para;</a></h2>
+<p>The worker right-sizing loop (Q359: per-job usage sampling → measured
+recommendations in <code>RunnerSet</code> status → opt-in sizing profiles applied at
+pod-build time; see <a href="../02-architecture/#22-tier-2--actions-gateway-controller-agc">§2.2</a>
+and <a href="../appendix-h-v2-api-decomposition/#h7-reference-integrity--runtime-conditions-not-admission">Appendix H §H.7</a>)
+is implemented inside the AGC rather than delegated to external sizing tooling.
+That was a deliberate choice among four alternatives, and the deciding argument
+is structural, not preference — it is worth recording because "why didn't you
+just use VPA?" is the obvious question, and because the same structural facts
+explain why this capability is hard for other runner controllers to retrofit.</p>
+<p><strong>The workload shape that breaks generic tooling.</strong> A worker pod runs exactly
+one CI job and lives minutes. Three consequences follow: pods can only be sized
+<em>at creation</em> (there is no steady state to converge on later); the sizing
+statistic that matters is the <strong>per-job peak envelope</strong> (p95/max of per-job
+peaks), not a time-weighted usage distribution; and there is no long-lived
+controller object with <code>/scale</code> semantics to group pods under (<code>replicas</code> is
+meaningless in a scale-to-zero design).</p>
+<p><strong>Alternative 1 — stock Vertical Pod Autoscaler (VPA).</strong> Fails on all three
+facts. Its <code>targetRef</code> requires a <code>/scale</code> subresource <code>RunnerSet</code> cannot
+meaningfully offer; its actuation is evict-and-resize, which on a one-job pod
+means killing the CI job to resize it; and its recommender models long-running
+services (usage distributions with half-life decay, OOM-event feedback), the
+wrong statistic for run-to-completion work. Recommendation dashboards layered on
+VPA (Goldilocks, Kubecost's request right-sizing) inherit the same foundation.
+<strong>Verdict:</strong> structurally unfit, not merely inconvenient.</p>
+<p><strong>Alternative 2 — VPA with a custom recommender.</strong> VPA's recommender is
+pluggable, so a batch-aware recommender could in principle replace the stock
+model. But the actuation and grouping problems remain (a webhook applying
+"Initial"-style values still needs a pod-grouping convention VPA does not have
+for <code>/scale</code>-less owners), so this path amounts to writing the hard parts from
+scratch <em>inside someone else's framing</em> — more total machinery than the native
+implementation, spread across more failure domains.</p>
+<p><strong>Alternative 3 — an external recommender closing the loop through GitOps.</strong> A
+cron or pipeline queries the Phase 1 Prometheus series, derives values, and
+opens pull requests against the tenant's <code>RunnerTemplate</code>. This is a legitimate
+design — auditable in git, zero new API surface — and nothing in GAG prevents an
+operator from running exactly this today on top of the exported metrics. It was
+rejected as <em>the</em> design because it requires a Prometheus (the Phase 1 decision
+deliberately avoided a hard external dependency), closes the loop on a
+days-scale cadence, cannot express per-container confidence gating at pod-build
+time, and pushes per-tenant automation onto every adopter — the opposite of the
+batteries-included posture that motivates the feature.</p>
+<p><strong>Alternative 4 — a from-scratch, general-purpose batch right-sizer.</strong> The
+serious contender. Designed fresh for run-to-completion pods it would be: a
+<code>PodSizingPolicy</code>-style CRD with a <strong>label selector</strong> (solving the grouping
+problem correctly), the same peak-per-pod-lifetime sampler and
+p95-of-peaks-plus-headroom recommender, and a <strong>mutating admission webhook</strong> as
+the only generic pod-creation actuation hook. This tool would genuinely
+generalize — Kubernetes Jobs, Tekton TaskRuns, Argo Workflows, and ARC's
+ephemeral runners all share the one-pod-one-unit-of-work shape — and no good
+open-source implementation of it exists. It was not chosen because the webhook
+is an entire failure domain the native design simply does not have:
+<code>failurePolicy: Fail</code> makes a sick <em>optimization</em> component block every matching
+pod (the CI fleet stops launching), <code>Ignore</code> makes sizing silently stop; either
+way the tool needs its own certs, chart, Tier-0 security review, and install
+step — and GAG's headline feature would begin "first install this other thing."
+The AGC's provisioner already <em>is</em> the pod creator, so native actuation is an
+in-process function call with direct access to confidence state: strictly less
+machinery, no availability coupling, and the recommendation surfaces on the
+tenant's own <code>RunnerSet</code> under their existing RBAC.</p>
+<p><strong>What the coupling costs, honestly.</strong> The sizing API (<code>spec.sizing</code>,
+<code>status.sizingRecommendation</code>) is permanent GAG surface carried into the v2beta1
+graduation, and a built-in feature cannot serve other batch systems the way
+Alternative 4 could. That deferred generality is deliberately kept cheap to
+revisit: the sampler/histogram/derivation core touches GAG at exactly two narrow
+seams (the worker-pod owner label and the v2 status types), and
+<a href="../appendix-g-future-enhancements/#g15-extract-the-batch-right-sizer-into-a-standalone--reusable-tool">Appendix G §G.15</a>
+records the extraction path and its triggers.</p>
+<p><strong>The competitive corollary.</strong> The same three structural facts apply to ARC:
+its ephemeral runner pods are <code>/scale</code>-less, one-job, minutes-lived — so stock
+VPA cannot size them either, and only ARC's own controller (or an
+Alternative-4-style webhook tool that does not exist) could actuate at pod
+creation. A measured sizing loop is therefore a capability that effectively
+must live <em>inside</em> a runner controller, which is why "measure → recommend →
+apply, built in" is a durable differentiator rather than a feature gap ARC
+closes by adding a sidecar tool.</p>
+<p><strong>Verdict:</strong> For this workload shape, the sizing loop belongs in the controller
+that builds the pods. Generic tooling fails structurally (D.7 alternatives 1–2),
+the GitOps loop remains available to operators who prefer it (alternative 3),
+and the general-purpose tool (alternative 4) is a valid <em>future extraction</em> of
+the shipped core, not a better first implementation.</p>
+<hr />
+<h2 id="d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on">D.8. Gating Intake on Capacity: Which Signals Are Safe to Gate On<a class="headerlink" href="#d8-gating-intake-on-capacity-which-signals-are-safe-to-gate-on" title="Permanent link">&para;</a></h2>
+<p>The pre-acquisition admission gate refuses to claim a job from GitHub when the
+worker pod that job needs cannot be provisioned, because a claimed job holds a
+single-use JIT runner record and a ticking job lock. Two rungs are implemented:
+the owner's declared worker ceiling (Q59) and observed namespace-<code>ResourceQuota</code>
+headroom (#784). A third, obvious-looking rung is deliberately <strong>not</strong>
+implemented on the same terms: the scheduler's own <code>Unschedulable</code> verdict, which
+the <code>WorkersUnschedulable</code> condition already publishes as observability.</p>
+<p>That looks inconsistent, and the reason it is not is worth recording, because it
+does not appear to be written down anywhere in the ecosystem and it explains why
+every other runner controller settled for timeouts instead.</p>
+<p><strong>The principle.</strong> A capacity signal is safe to gate intake on if, and only if,
+<strong>no other actor is waiting on that signal to make capacity appear.</strong> Gating
+suppresses the signal; suppressing a signal that something else acts on destroys
+the rescue.</p>
+<p>Applied to the four signals:</p>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Is it an input to another actor?</th>
+<th>Safe to gate on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ResourceQuota</code> headroom</td>
+<td>No. No autoscaler adds a node because a namespace quota is full. Self-clearing as in-flight jobs finish.</td>
+<td>Yes, unconditionally (#784)</td>
+</tr>
+<tr>
+<td>Scheduler <code>Unschedulable</code> verdict</td>
+<td><strong>Only if a cluster autoscaler is running.</strong> A Pending unschedulable pod <em>is</em> the request for a node.</td>
+<td>Conditionally: yes on a cluster that cannot grow, no otherwise</td>
+</tr>
+<tr>
+<td>Autoscaler declination (<code>NotTriggerScaleUp</code>, Karpenter <code>FailedScheduling</code>)</td>
+<td>No. The actor already evaluated this pod and declined, so nothing further is pending on it.</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>ProvisioningRequest</code> <code>check-capacity</code> answer</td>
+<td>No. Asking <em>is</em> the request for capacity, so the trigger is not forfeited.</td>
+<td>Yes (Appendix <a href="../appendix-g-future-enhancements/#g16-provisioningrequest-pre-acquire-capacity-probe-check-capacity">G.16</a>)</td>
+</tr>
+</tbody>
+</table>
+<p>Three consequences follow.</p>
+<p><strong>Elasticity is a property of the cluster, not of the signal.</strong> The scheduler's
+verdict is the <em>same</em> fact on every cluster; only the presence of an autoscaler
+changes whether acting on it is safe. So the choice cannot be made once in code.
+It is an operator input, and on a fixed-size cluster (on-premises, a contracted
+node count) the cheapest rung is also the correct one, because no rescue was ever
+coming and every wasted claim is pure loss.</p>
+<p><strong>Even where gating is safe, it should rate-limit rather than hard-stop.</strong> A gate
+derived from the existence of a stuck pod is self-clearing: intake stops, the pod
+is reaped at <code>pendingPodDeadline</code>, the condition clears, one job is claimed, and
+the cycle repeats. A burst of <em>N</em> wasted claims becomes roughly one per deadline
+window while a Pending pod remains present for much of it, which keeps any
+autoscaler being asked and keeps the tenant discovering recovery. Rate-bounding,
+not elimination, is the achievable property.</p>
+<p><strong>Predicting placement in-process is not a fourth option.</strong> Reimplementing the
+scheduler's filter plugins (taints, affinity, topology spread, DRA, extended
+resources) is a large surface that will drift from the scheduler.
+<code>WorkersUnschedulable</code> deliberately reads the scheduler's verdict rather than
+guessing, and any capacity rung should delegate for the same reason.</p>
+<p><strong>Verdict:</strong> the quota rung is unconditionally safe and is implemented; the
+scheduler-verdict rung is safe exactly where nothing will act on the pod, so it
+belongs behind an explicit, off-by-default operator choice; the autoscaler's own
+declination and a solicited <code>ProvisioningRequest</code> answer are both safe and differ
+only in cost. The sequencing of those rungs is planned in
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/capacity-aware-intake.md">capacity-aware-intake.md</a>.</p>
 <hr />
 <p>← <a href="../appendix-c-ai-implementation/">Appendix C</a> | <a href="../">Back to index</a></p>
 

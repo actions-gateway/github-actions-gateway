@@ -10,31 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.3.0/design/github-protocol-dependencies/">
+        <link rel="canonical" href="https://actions-gateway.com/1.3.0/features/">
       
       
-        <link rel="prev" href="../appendix-h-v2-api-decomposition/">
+        <link rel="prev" href="../why-gag/">
       
       
-        <link rel="next" href="../../operations/">
+        <link rel="next" href="../demo/">
       
       
         
       
       
-      <link rel="icon" href="../../assets/favicon.svg">
+      <link rel="icon" href="../assets/favicon.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
       
-        <title>GitHub protocol dependencies - GitHub Actions Gateway</title>
+        <title>Features - GitHub Actions Gateway</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -47,9 +47,9 @@
       
     
     
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -59,9 +59,9 @@
     
   
   
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
   <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
@@ -122,7 +122,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#github-protocol-dependency-register" class="md-skip">
+        <a href="#features" class="md-skip">
           Skip to content
         </a>
       
@@ -148,7 +148,7 @@
   <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
 
             </div>
-            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
           </aside>
         
       </div>
@@ -158,9 +158,9 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href=".." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -177,7 +177,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              GitHub protocol dependencies
+              Features
             
           </span>
         </div>
@@ -290,7 +290,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../.." class="md-tabs__link">
+      <a href=".." class="md-tabs__link">
         
   
   
@@ -309,7 +309,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../why-gag/" class="md-tabs__link">
+      <a href="../why-gag/" class="md-tabs__link">
         
   
   
@@ -326,9 +326,11 @@
   
   
   
+    
   
-    <li class="md-tabs__item">
-      <a href="../../features/" class="md-tabs__link">
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
         
   
   
@@ -347,7 +349,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../demo/" class="md-tabs__link">
+      <a href="../demo/" class="md-tabs__link">
         
   
   
@@ -366,7 +368,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../getting-started/" class="md-tabs__link">
+      <a href="../getting-started/" class="md-tabs__link">
         
   
   
@@ -385,7 +387,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../roadmap/" class="md-tabs__link">
+      <a href="../roadmap/" class="md-tabs__link">
         
   
   
@@ -402,13 +404,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../design/" class="md-tabs__link">
           
   
   
@@ -430,7 +430,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../operations/" class="md-tabs__link">
+        <a href="../operations/" class="md-tabs__link">
           
   
   
@@ -466,9 +466,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+    <a href=".." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
       
-  <img src="../../assets/logo.svg" alt="logo">
+  <img src="../assets/logo.svg" alt="logo">
 
     </a>
     GitHub Actions Gateway
@@ -495,7 +495,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -522,7 +522,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../why-gag/" class="md-nav__link">
+      <a href="../why-gag/" class="md-nav__link">
         
   
   
@@ -546,10 +546,37 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../features/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -565,6 +592,103 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#job-intake-and-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Job intake and recovery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capacity-cost-and-right-sizing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capacity, cost, and right-sizing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tenant-isolation-and-egress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tenant isolation and egress
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-posture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security posture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Observability
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#install-and-day-2-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install and day-2 operations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-surface-and-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API surface and migration
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -576,7 +700,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../demo/" class="md-nav__link">
+      <a href="../demo/" class="md-nav__link">
         
   
   
@@ -603,7 +727,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/" class="md-nav__link">
+      <a href="../getting-started/" class="md-nav__link">
         
   
   
@@ -630,7 +754,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../roadmap/" class="md-nav__link">
+      <a href="../roadmap/" class="md-nav__link">
         
   
   
@@ -654,8 +778,6 @@
       
   
   
-    
-  
   
   
     
@@ -705,23 +827,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../design/" class="md-nav__link ">
               
   
   
@@ -739,13 +858,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -765,7 +884,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../01-executive-summary/" class="md-nav__link">
+      <a href="../design/01-executive-summary/" class="md-nav__link">
         
   
   
@@ -793,7 +912,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../02-architecture/" class="md-nav__link">
+      <a href="../design/02-architecture/" class="md-nav__link">
         
   
   
@@ -821,7 +940,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../network-architecture/" class="md-nav__link">
+      <a href="../design/network-architecture/" class="md-nav__link">
         
   
   
@@ -849,7 +968,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../03-api-contracts/" class="md-nav__link">
+      <a href="../design/03-api-contracts/" class="md-nav__link">
         
   
   
@@ -877,7 +996,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../04-operational-flows/" class="md-nav__link">
+      <a href="../design/04-operational-flows/" class="md-nav__link">
         
   
   
@@ -905,7 +1024,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../05-security/" class="md-nav__link">
+      <a href="../design/05-security/" class="md-nav__link">
         
   
   
@@ -933,7 +1052,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../06-implementation-phases/" class="md-nav__link">
+      <a href="../design/06-implementation-phases/" class="md-nav__link">
         
   
   
@@ -961,7 +1080,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../07-test-plan/" class="md-nav__link">
+      <a href="../design/07-test-plan/" class="md-nav__link">
         
   
   
@@ -989,7 +1108,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../08-glossary/" class="md-nav__link">
+      <a href="../design/08-glossary/" class="md-nav__link">
         
   
   
@@ -1017,7 +1136,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-a-capacity-slos/" class="md-nav__link">
+      <a href="../design/appendix-a-capacity-slos/" class="md-nav__link">
         
   
   
@@ -1045,7 +1164,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-b-worker-isolation/" class="md-nav__link">
+      <a href="../design/appendix-b-worker-isolation/" class="md-nav__link">
         
   
   
@@ -1073,7 +1192,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-c-ai-implementation/" class="md-nav__link">
+      <a href="../design/appendix-c-ai-implementation/" class="md-nav__link">
         
   
   
@@ -1101,7 +1220,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-d-alternatives-considered/" class="md-nav__link">
+      <a href="../design/appendix-d-alternatives-considered/" class="md-nav__link">
         
   
   
@@ -1129,7 +1248,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-e-capacity-planning/" class="md-nav__link">
+      <a href="../design/appendix-e-capacity-planning/" class="md-nav__link">
         
   
   
@@ -1157,7 +1276,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-f-cost-model/" class="md-nav__link">
+      <a href="../design/appendix-f-cost-model/" class="md-nav__link">
         
   
   
@@ -1185,7 +1304,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-g-future-enhancements/" class="md-nav__link">
+      <a href="../design/appendix-g-future-enhancements/" class="md-nav__link">
         
   
   
@@ -1213,7 +1332,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../appendix-h-v2-api-decomposition/" class="md-nav__link">
+      <a href="../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
         
   
   
@@ -1238,37 +1357,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    GitHub protocol dependencies
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../design/github-protocol-dependencies/" class="md-nav__link">
         
   
   
@@ -1284,81 +1376,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-this-register-exists" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why this register exists
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#stability-tiers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Stability tiers
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-register" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The register
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#why-it-matters-beyond-maintenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why it matters beyond maintenance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#maintenance" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Maintenance
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1451,7 +1468,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../operations/" class="md-nav__link ">
+            <a href="../operations/" class="md-nav__link ">
               
   
   
@@ -1495,7 +1512,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/install/" class="md-nav__link">
+      <a href="../operations/install/" class="md-nav__link">
         
   
   
@@ -1523,7 +1540,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+      <a href="../operations/air-gapped-install/" class="md-nav__link">
         
   
   
@@ -1551,7 +1568,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/gitops/" class="md-nav__link">
+      <a href="../operations/gitops/" class="md-nav__link">
         
   
   
@@ -1579,7 +1596,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/upgrade/" class="md-nav__link">
+      <a href="../operations/upgrade/" class="md-nav__link">
         
   
   
@@ -1607,7 +1624,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+      <a href="../operations/migration-from-arc/" class="md-nav__link">
         
   
   
@@ -1635,7 +1652,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+      <a href="../operations/migration-v1-to-v2/" class="md-nav__link">
         
   
   
@@ -1663,7 +1680,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+      <a href="../operations/v1alpha1-deprecation/" class="md-nav__link">
         
   
   
@@ -1691,7 +1708,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+      <a href="../operations/tenant-onboarding/" class="md-nav__link">
         
   
   
@@ -1719,7 +1736,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+      <a href="../operations/resourcequota-sizing/" class="md-nav__link">
         
   
   
@@ -1747,7 +1764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+      <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
   
@@ -1775,7 +1792,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+      <a href="../operations/kata-dind-workloads/" class="md-nav__link">
         
   
   
@@ -1803,7 +1820,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+      <a href="../operations/p2p-image-distribution/" class="md-nav__link">
         
   
   
@@ -1831,7 +1848,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+      <a href="../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
   
@@ -1925,7 +1942,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability/" class="md-nav__link">
+      <a href="../operations/observability/" class="md-nav__link">
         
   
   
@@ -1953,7 +1970,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-metrics/" class="md-nav__link">
+      <a href="../operations/observability-metrics/" class="md-nav__link">
         
   
   
@@ -1981,7 +1998,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+      <a href="../operations/observability-metrics-access/" class="md-nav__link">
         
   
   
@@ -2009,7 +2026,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-alerting/" class="md-nav__link">
+      <a href="../operations/observability-alerting/" class="md-nav__link">
         
   
   
@@ -2037,7 +2054,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+      <a href="../operations/observability-dashboards/" class="md-nav__link">
         
   
   
@@ -2065,7 +2082,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-logging/" class="md-nav__link">
+      <a href="../operations/observability-logging/" class="md-nav__link">
         
   
   
@@ -2101,7 +2118,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/cost-attribution/" class="md-nav__link">
+      <a href="../operations/cost-attribution/" class="md-nav__link">
         
   
   
@@ -2129,7 +2146,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+      <a href="../operations/worker-rightsizing/" class="md-nav__link">
         
   
   
@@ -2157,7 +2174,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+      <a href="../operations/node-shutdown-budgets/" class="md-nav__link">
         
   
   
@@ -2185,7 +2202,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/runbook/" class="md-nav__link">
+      <a href="../operations/runbook/" class="md-nav__link">
         
   
   
@@ -2213,7 +2230,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/backup-restore/" class="md-nav__link">
+      <a href="../operations/backup-restore/" class="md-nav__link">
         
   
   
@@ -2241,7 +2258,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+      <a href="../operations/velero-backup-restore/" class="md-nav__link">
         
   
   
@@ -2269,7 +2286,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/troubleshooting/" class="md-nav__link">
+      <a href="../operations/troubleshooting/" class="md-nav__link">
         
   
   
@@ -2297,7 +2314,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/security-operations/" class="md-nav__link">
+      <a href="../operations/security-operations/" class="md-nav__link">
         
   
   
@@ -2325,7 +2342,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/admission-policies/" class="md-nav__link">
+      <a href="../operations/admission-policies/" class="md-nav__link">
         
   
   
@@ -2353,7 +2370,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/release/" class="md-nav__link">
+      <a href="../operations/release/" class="md-nav__link">
         
   
   
@@ -2381,7 +2398,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+      <a href="../operations/kata-ci-spike-runbook/" class="md-nav__link">
         
   
   
@@ -2436,10 +2453,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-this-register-exists" class="md-nav__link">
+  <a href="#job-intake-and-recovery" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why this register exists
+        Job intake and recovery
       
     </span>
   </a>
@@ -2447,10 +2464,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#stability-tiers" class="md-nav__link">
+  <a href="#capacity-cost-and-right-sizing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Stability tiers
+        Capacity, cost, and right-sizing
       
     </span>
   </a>
@@ -2458,10 +2475,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-register" class="md-nav__link">
+  <a href="#tenant-isolation-and-egress" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The register
+        Tenant isolation and egress
       
     </span>
   </a>
@@ -2469,10 +2486,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#why-it-matters-beyond-maintenance" class="md-nav__link">
+  <a href="#security-posture" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why it matters beyond maintenance
+        Security posture
       
     </span>
   </a>
@@ -2480,10 +2497,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#maintenance" class="md-nav__link">
+  <a href="#observability" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Maintenance
+        Observability
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#install-and-day-2-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install and day-2 operations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-surface-and-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API surface and migration
       
     </span>
   </a>
@@ -2510,114 +2549,100 @@
   
 
 
-<h1 id="github-protocol-dependency-register">GitHub protocol dependency register<a class="headerlink" href="#github-protocol-dependency-register" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p><strong>Audience:</strong> Maintainer / platform engineer. This is a durable watch-list, not
-a tutorial.</p>
-</blockquote>
-<h2 id="why-this-register-exists">Why this register exists<a class="headerlink" href="#why-this-register-exists" title="Permanent link">&para;</a></h2>
-<p>GAG's core capability — multiplexing thousands of virtual runner sessions and
-provisioning workers on demand — rests on speaking GitHub's <strong>runner-facing
-protocols directly</strong>, not just the public REST API. Those protocols are GitHub's
-to change, and several are <strong>not</strong> covered by a published wire specification or a
-compatibility guarantee. <a href="../appendix-d-alternatives-considered/">Appendix D</a> names
-this explicitly as the maintenance risk GAG takes on in exchange for its density
-and isolation advantages over ARC ("this design re-implements a significant portion
-of the broker API … which carries ongoing maintenance risk").</p>
-<p>As of the Q264 scale-set work, GAG depends on <strong>two</strong> such protocols at once — and
-one of them (runner-scale-set) is officially <strong>Public Preview</strong>, where GitHub
-reserves the right to change interfaces. The risk is not theoretical: the live
-scale-set probe (Q264 §2a) found the current backend <strong>auto-assigns</strong> jobs, a
-behaviour that deviates from the ARC-era sources the client was built from. A
-protocol GAG assumed was stable had already drifted.</p>
-<p>This register is the single place that answers, for each GitHub-internal protocol
-GAG speaks: <strong>what is the source of truth, how stable is it, and what event should
-make us revisit it?</strong> Update it whenever a protocol dependency is added, changes
-stability tier, or drifts in a way that bites.</p>
-<h2 id="stability-tiers">Stability tiers<a class="headerlink" href="#stability-tiers" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Tier</th>
-<th>Meaning</th>
-<th>Implication</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>T1 — Documented &amp; supported</strong></td>
-<td>Public wire spec or REST reference + a compatibility commitment.</td>
-<td>Treat as stable; changes are announced.</td>
-</tr>
-<tr>
-<td><strong>T2 — Official client, no wire spec (Preview)</strong></td>
-<td>An official client library exists but the wire protocol is undocumented and the surface may change (pre-1.0 / Public Preview).</td>
-<td>Pin a version; own the semantics in our own fake/tests; watch for GA and for backend deviations.</td>
-</tr>
-<tr>
-<td><strong>T3 — Reverse-engineered, unsupported</strong></td>
-<td>No official client and no spec; behaviour inferred from <code>actions/runner</code> / ARC source and live probes.</td>
-<td>Highest drift risk; a silent server-side change surfaces only as a live failure. Cover with a live probe + dogfood early-warning.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="the-register">The register<a class="headerlink" href="#the-register" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Protocol</th>
-<th>What GAG uses it for</th>
-<th>GAG code</th>
-<th>Source of truth</th>
-<th>Tier</th>
-<th>Drift-watch trigger</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Classic per-runner broker</strong></td>
-<td>Today's acquisition path: <code>CreateSession</code> / <code>GetMessage</code> / <code>AcquireJob</code> / <code>RenewJob</code> / <code>CompleteJob</code> per virtual runner session.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/broker/client.go"><code>broker/client.go</code></a>; brokertest fake</td>
-<td>Reverse-engineered from <code>actions/runner</code> + ARC (Milestone 1 wire probe); GAG documents it in <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">03-api-contracts §3.3</a>.</td>
-<td><strong>T3</strong></td>
-<td>Being retired (Q264): the classic machinery is removed at the v2beta1 graduation. Until then, the dogfood e2e is the early-warning for a silent broker change; a live wedge that is <em>not</em> an on-our-side seam is the signal (the fan-out saga was one such investigation).</td>
-</tr>
-<tr>
-<td><strong>Runner scale-set</strong></td>
-<td>Q264 acquisition path: one session per scale set, capacity-gated long-poll, per-job JIT config; single-acquirer, kills the fan-out.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.3.0/scaleset"><code>scaleset/</code></a> client + fake; <a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.3.0/cmd/agc/internal/scalesetlistener"><code>cmd/agc/internal/scalesetlistener/</code></a>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/cmd/probe/scaleset.go"><code>cmd/probe/scaleset.go</code></a> live probe</td>
-<td>Official <a href="https://github.com/actions/scaleset"><code>actions/scaleset</code></a> Go client (Public Preview, MIT) as the <em>reference</em>, cross-checked against ARC and live probes. GAG owns its own client (Q264 §5a-U6-C) rather than vendoring. <strong>No wire-spec document</strong>; the auto-assign backend contract is undocumented (upstream <a href="https://github.com/actions/scaleset/issues/107">actions/scaleset#107</a>, unanswered).</td>
-<td><strong>T2</strong></td>
-<td><strong>Q270</strong>: <code>actions/scaleset</code> reaching GA/v1.0, <em>or</em> the auto-assign contract (#107) being documented. Either fires a revisit of the U6 vendor-vs-own decision and lifts the Preview caveat. The <code>PROBE_SCALESET_*</code> scenarios in <code>cmd/probe</code> are the live drift probe; run them before relying on a wire assumption — the probe drives the <code>scaleset</code> package itself (Q362), so a live run is evidence about the shipped client, and it reports the raw wire through the client's <code>ResponseObserver</code> hook rather than issuing its own requests.</td>
-</tr>
-</tbody>
-</table>
-<p><em>Not in scope here:</em> the <strong>public REST API</strong> (registration-token endpoints, org/repo
-admin) is T1 and covered by GitHub's normal API compatibility — it is the <em>runner
-protocols above</em> that carry the drift risk this register tracks.</p>
-<h2 id="why-it-matters-beyond-maintenance">Why it matters beyond maintenance<a class="headerlink" href="#why-it-matters-beyond-maintenance" title="Permanent link">&para;</a></h2>
+<h1 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h1>
+<p>Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that
+explains each one. For the argument against Actions Runner Controller (ARC), see
+<a href="../why-gag/">Why GAG?</a>; for what is not here yet, see the <a href="../roadmap/">roadmap</a>.</p>
+<p>Two badges appear below: <span class="gag-v2-badge">v2</span> marks a capability
+available only in the <code>actions-gateway.com/v2beta1</code> API, and
+<span class="gag-maturity-badge">beta</span> marks one whose API shape is still
+under its first stability contract.</p>
+<div class="admonition tip">
+<p class="admonition-title">Check the version you're running</p>
+<p>Use the <strong>version selector</strong> at the top of the page to switch between the
+latest stable <a href="https://github.com/actions-gateway/github-actions-gateway/releases">release</a>
+(the default) and <strong><code>dev</code></strong>, the unreleased <code>main</code> branch. A capability listed
+under <code>dev</code> but not under a numbered release has not shipped in a tagged
+chart yet.</p>
+</div>
+<h2 id="job-intake-and-recovery">Job intake and recovery<a class="headerlink" href="#job-intake-and-recovery" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Positioning.</strong> GAG's differentiator vs ARC is partly <em>protocol transparency</em> —
-  making the broker contract explicit and testable where ARC leaves it implicit
-  (<a href="../appendix-d-alternatives-considered/">Appendix D</a>). Depending on a Preview
-  protocol without tracking its maturity would quietly undercut that claim; this
-  register is how the claim stays honest.</li>
-<li><strong>Secure-by-default.</strong> A protocol change can move a security boundary (e.g. where
-  a token is delivered). Both current protocols keep the App token out of the worker
-  and all traffic behind the per-tenant egress proxy; any tier change must be
-  re-checked against that invariant, not assumed to carry over.</li>
+<li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Runner-scale-set acquisition</a></strong> — the same single-acquirer protocol ARC uses, with no many-acquirers fan-out. The default in v2.</li>
+<li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Quota-aware intake</a></strong> — a job the namespace <code>ResourceQuota</code> has no room for is never taken on, so it stays queued at GitHub until there is capacity.</li>
+<li><strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Auto re-run for disrupted jobs</a></strong> — a worker lost to eviction, preemption, a node drain, or a bare <code>kubectl delete pod</code> has its run re-run automatically, under a per-run budget.</li>
+<li><strong><a href="../operations/troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">Capacity gate for unplaceable workers</a></strong> — opt-in: stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them. Off by default.</li>
+<li><strong><a href="../design/02-architecture/">Priority tiers per runner set</a></strong> — reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.</li>
+<li><strong><a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">Worker scale-up rate limiting</a></strong> — opt-in token bucket capping how <em>fast</em> workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.</li>
+<li><strong><a href="../design/02-architecture/">Scale-to-zero workers</a></strong> — worker pods exist only while a job runs; listeners are ~12 KiB goroutines in one shared pod, not a listener pod per runner group.</li>
+<li><strong><a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">Unmodified upstream runner images</a></strong> — the wrapper is injected into each worker pod at runtime — an OCI image volume on Kubernetes 1.33+, an initContainer below — so the stock <code>actions/runner</code> image, or any derivative, runs with no rebuild.</li>
 </ul>
-<h2 id="maintenance">Maintenance<a class="headerlink" href="#maintenance" title="Permanent link">&para;</a></h2>
-<p>Update this register when:</p>
-<ol>
-<li>A <strong>new</strong> GitHub-internal protocol dependency is added (new row + tier + code
-   pointer + watch trigger).</li>
-<li>A protocol <strong>changes tier</strong> — e.g. <code>actions/scaleset</code> reaches GA (T2 → T1), or a
-   T1 REST surface GAG starts depending on in an undocumented way (T1 → T3).</li>
-<li>A <strong>drift incident</strong> occurs — record what deviated, how it surfaced, and whether
-   the fake/tests were updated to encode the new reality (as Q264 §2a did for
-   auto-assign).</li>
-</ol>
+<h2 id="capacity-cost-and-right-sizing">Capacity, cost, and right-sizing<a class="headerlink" href="#capacity-cost-and-right-sizing" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><a href="../operations/worker-rightsizing/">Measured worker right-sizing</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — per-job CPU/memory peaks sampled and turned into recommended <code>requests</code>/<code>limits</code> in <code>RunnerSet</code> status, with an advisory <code>SizingDrift</code> condition.</li>
+<li><strong><a href="../operations/worker-rightsizing/">Sizing profiles</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — opt-in <code>Binpack</code>, <code>Throughput</code>, and <code>NodeShare</code> profiles apply the measurement at pod-build time, with clamps, a confidence fallback, and GPUs never touched.</li>
+<li><strong><a href="../operations/tenant-onboarding/#letting-an-autoscaler-size-the-agc-agcautoscaling">Managed AGC right-sizing</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — opt-in <code>agcAutoscaling</code> stamps a <code>VerticalPodAutoscaler</code> next to a gateway's AGC so requests track observed usage; explicit <code>agcResources</code> become the floor and ceiling, and a missing VPA install degrades to an advisory condition.</li>
+<li><strong><a href="../operations/resourcequota-sizing/"><code>ResourceQuota</code> sizing guide</a></strong> — turn runner shapes and concurrency ceilings into the quota numbers a platform admin sets, including what the quota actually counts.</li>
+<li><strong><a href="../operations/cost-attribution/">Per-tenant cost attribution</a></strong> — map tenant namespaces and <code>app.kubernetes.io/*</code> labels to OpenCost/Kubecost allocation queries for real dollars per tenant.</li>
+<li><strong><a href="../design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc">Savings calculator</a></strong> — the interactive cost model behind the ARC comparison.</li>
+<li><strong><a href="../operations/node-shutdown-budgets/">Node shutdown budgets</a></strong> — how much shutdown time GKE, EKS, AKS, RKE2, Kubespray, and OpenShift actually grant, and why proxy pools stay off spot capacity.</li>
+</ul>
+<h2 id="tenant-isolation-and-egress">Tenant isolation and egress<a class="headerlink" href="#tenant-isolation-and-egress" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><a href="../design/network-architecture/">Per-tenant egress IPs</a></strong> — a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.</li>
+<li><strong><a href="../operations/migration-v1-to-v2/">Standalone <code>EgressProxy</code></a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — the proxy becomes its own object, optionally shared, or omitted entirely for direct — still <code>NetworkPolicy</code>-restricted — egress.</li>
+<li><strong><a href="../operations/security-operations/#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">FQDN egress policy</a></strong> — express GitHub egress by hostname instead of CIDR on Cilium, Calico, or GKE Dataplane V2.</li>
+<li><strong><a href="../operations/troubleshooting/#actionsgateway-reports-egressrulesstale">Auto-refreshed GitHub egress rules</a></strong> — the GMC re-reads GitHub's published IP ranges every 24 hours into each tenant's <code>NetworkPolicy</code>, and an <code>EgressRulesStale</code> condition — with a paging alert — fires when the refresh stalls past its window.</li>
+<li><strong><a href="../operations/migration-v1-to-v2/">Bring your own proxy autoscaler</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — <code>managedAutoscaling: false</code> hands the proxy pool to KEDA, VPA, or a custom HorizontalPodAutoscaler.</li>
+<li><strong><a href="../operations/service-mesh-coexistence/">Service mesh coexistence</a></strong> — run alongside Istio, Linkerd, or ambient mode with injection opt-out and egress exclusions that keep the per-tenant proxy honored.</li>
+<li><strong><a href="../operations/tenant-onboarding/">One resource per tenant</a></strong> — a single <code>ActionsGateway</code> provisions an isolated controller, proxy pool, RBAC, and network policies inside the platform-owned quota.</li>
+</ul>
+<h2 id="security-posture">Security posture<a class="headerlink" href="#security-posture" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><a href="../design/05-security/">Secure-by-default hardening</a></strong> — Pod Security Admission per namespace, default-deny NetworkPolicies, and credentials kept out of environment variables, all reconciled rather than opt-in.</li>
+<li><strong><a href="../operations/kata-dind-workloads/">Kata micro-VM workers</a></strong> — validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a <code>kind</code> cluster inside an unprivileged worker pod.</li>
+<li><strong><a href="../operations/in-runner-image-builds/">In-runner image builds</a></strong> — a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right <code>securityProfile</code> and PSA level.</li>
+<li><strong><a href="../operations/release/">Signed images, SBOM, and SLSA provenance</a></strong> — every published image is keyless-signed and carries a Software Bill of Materials (SBOM) attestation.</li>
+<li><strong><a href="../operations/admission-policies/">Admission policy compatibility</a></strong> — a Kyverno/Gatekeeper matrix covering whether GAG pods comply with common cluster policies, plus sample enforce and exception policies.</li>
+<li><strong><a href="../operations/security-operations/">Optional CONNECT destination allow-listing</a></strong> — defense in depth, off by default: an opted-in proxy refuses a CONNECT outside the permitted set and counts each refusal as an alertable Server-Side Request Forgery (SSRF) signal. The mandatory default-deny NetworkPolicy stays the primary gate.</li>
+<li><strong><a href="../design/05-security/#gmc-privilege-escalation-blast-radius-and-compensating-controls">Self-confining controller privileges</a></strong> — shipped <code>ValidatingAdmissionPolicy</code> guards deny the GMC's own cluster-wide writes outside admin-marked tenant namespaces, so a compromised manager cannot touch <code>kube-system</code> or any unmarked namespace.</li>
+<li><strong><a href="../operations/security-operations/#self-service-additions-via-the-priorityclassallowlist-cr-q188">Restart-free platform allowlists</a></strong> — grow the PriorityClass and egress-destination allowlists by editing a watched <code>PriorityClassAllowlist</code> CR or ConfigMap, no GMC restart; a missing or invalid object fails safe back to the flag baseline.</li>
+<li><strong><a href="../operations/observability-logging/#what-never-appears-in-logs">Credential redaction in logs</a></strong> — every GitHub response body passes one sanitizer that strips tokens, JWTs, and JIT configs before it can reach a log line, at every log level.</li>
+<li><strong><a href="../operations/security-operations/">Abuse detection and response</a></strong> — the threat model's abuse heuristics mapped to operator alerts, with compromise-response playbooks.</li>
+<li><strong><a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model">Workload-identity credentials</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — mint short-lived GitHub credentials through an external signer so the GitHub App private key never enters the cluster.</li>
+</ul>
+<h2 id="observability">Observability<a class="headerlink" href="#observability" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><a href="../operations/observability-metrics/">Metrics reference</a></strong> — every Prometheus metric the GMC, AGC, and proxy export, scoped per tenant and runner group.</li>
+<li><strong><a href="../operations/observability-metrics/#full-metrics-reference">Fleet rollups for platform admins</a></strong> — cross-tenant degraded, egress-stale, and quota gauges in a single pane.</li>
+<li><strong><a href="../operations/observability-metrics-access/">Scraping setup</a></strong> — wiring the mutual-TLS metrics endpoints into your Prometheus.</li>
+<li><strong><a href="../operations/observability-alerting/">Alerting and SLOs</a></strong> — ready-to-apply alert rules as code.</li>
+<li><strong><a href="../operations/observability-dashboards/">Grafana dashboards</a></strong> — a tenant dashboard and a platform dashboard, both as code.</li>
+<li><strong><a href="../operations/observability-logging/">Logging and tracing</a></strong> — structured logs and OpenTelemetry tracing across the four tiers.</li>
+</ul>
+<h2 id="install-and-day-2-operations">Install and day-2 operations<a class="headerlink" href="#install-and-day-2-operations" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><a href="../operations/install/">Helm install</a></strong> — the OCI chart, digest pinning, healthy-install verification, and a <code>scripts/e2e/validate-cluster.sh</code> pre-flight that fails loudly on a network-policy-less CNI.</li>
+<li><strong><a href="../operations/install/#verify-a-healthy-install">Highly available manager</a></strong> — the GMC installs as two replicas with leader election, a <code>PodDisruptionBudget</code>, and anti-co-location spread by default, releasing its lease on shutdown so failover takes seconds rather than a lease timeout.</li>
+<li><strong><a href="../operations/air-gapped-install/">Air-gapped install</a></strong> — relocate images and the OCI chart to a private registry with digests preserved, including pull Secrets for the runtime pods.</li>
+<li><strong><a href="../operations/gitops/">GitOps install</a></strong> — declarative Argo CD <code>Application</code> and Flux <code>HelmRelease</code> examples, with the CRD-pruning gotcha handled.</li>
+<li><strong><a href="../operations/upgrade/">Upgrade and rollback</a></strong> — versioned upgrade procedures and the rollback path for each release.</li>
+<li><strong><a href="../operations/backup-restore/">Backup and restore</a></strong> — backup posture and a recovery runbook, with a <a href="../operations/velero-backup-restore/">Velero-specific how-to</a>.</li>
+<li><strong><a href="../operations/troubleshooting/">Troubleshooting</a></strong> — symptom to diagnosis to remediation, organised by observable failure mode.</li>
+<li><strong><a href="../operations/runbook/">Production runbook</a></strong> — the operational procedures an on-call SRE needs.</li>
+<li><strong><a href="../operations/p2p-image-distribution/">P2P image distribution</a></strong> — add a Spegel or Dragonfly mirror to survive ephemeral-worker pull storms.</li>
+</ul>
+<h2 id="api-surface-and-migration">API surface and migration<a class="headerlink" href="#api-surface-and-migration" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><a href="../operations/migration-v1-to-v2/">The v2 API</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — the recommended shape for new tenants: a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> + <code>RunnerTemplate</code>, with <code>v2beta1</code> as the graduated storage and hub version.</li>
+<li><strong><a href="../operations/migration-v1-to-v2/">Reusable runner templates</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — one <code>RunnerTemplate</code> referenced by many runner sets, or a cluster-wide <code>ClusterRunnerTemplate</code> shared across namespaces.</li>
+<li><strong><a href="../operations/migration-v1-to-v2/">Multiple gateways per namespace</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span> — scoped gateways coexist, each with its own GitHub binding and runner sets.</li>
+<li><strong><a href="../operations/troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">GitHub Enterprise Server gateways</a></strong> — a gateway whose <code>gitHubURL</code> names a GHES appliance addresses that appliance on every GitHub surface, with a <code>GitHubEgressIncomplete</code> condition flagging an incomplete CIDR allow-list. <strong>Untested against a real GHES appliance.</strong></li>
+<li><strong><a href="../operations/troubleshooting/#a-ghes-appliances-certificate-is-not-trusted">GHES behind a private CA</a></strong> <span class="gag-v2-badge">v2</span> — <code>spec.githubCABundleRef</code> names a ConfigMap whose CA bundle is added to the trust of both the gateway's AGC and its worker pods, never replacing the system roots. <strong>Untested against a real GHES appliance.</strong></li>
+<li><strong><a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a></strong> — a one-shot fan-out that moves a tenant off <code>v1alpha1</code> without changing how jobs are acquired: dry-run, review, apply.</li>
+<li><strong><a href="../operations/v1alpha1-deprecation/">Deprecations and the <code>v2.0.0</code> removal</a></strong> — what <code>v2.0.0</code> removes, what keeps working until then, and the pre-upgrade checklist.</li>
+<li><strong><a href="../operations/migration-from-arc/">Migrating from ARC</a></strong> — concept mapping, behavioral differences, and a worked zero-downtime migration of one runner group.</li>
+<li><strong><a href="../getting-started/">Getting started</a></strong> — first-time GitHub App setup, the v2 object set, and credential rotation. There is also a <a href="../demo/">recorded demo</a> of one real job on a local kind cluster.</li>
+</ul>
 
 
 
@@ -2655,7 +2680,7 @@ protocols above</em> that carry the drift risk this register tracks.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../appendix-h-v2-api-decomposition/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Appendix H — v2 API decomposition">
+          <a href="../why-gag/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Why GAG">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2665,20 +2690,20 @@ protocols above</em> that carry the drift risk this register tracks.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Appendix H — v2 API decomposition
+                Why GAG
               </div>
             </div>
           </a>
         
         
           
-          <a href="../../operations/" class="md-footer__link md-footer__link--next" aria-label="Next: Overview">
+          <a href="../demo/" class="md-footer__link md-footer__link--next" aria-label="Next: Demo">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Overview
+                Demo
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -2740,12 +2765,12 @@ protocols above</em> that carry the drift risk this register tracks.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../javascripts/extra.js"></script>
+        <script src="../javascripts/extra.js"></script>
       
     
   </body>

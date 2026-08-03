@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.2.0/operations/observability-metrics/">
+        <link rel="canonical" href="https://actions-gateway.com/1.3.0/operations/observability-metrics/">
       
       
         <link rel="prev" href="../observability/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.2.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.3.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.2.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.2.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.2.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.3.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.3.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.3.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.2.0",
+    "url": "https://actions-gateway.com/1.3.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.2.0"
+      "url": "https://actions-gateway.com/1.3.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.2.0",
-    "logo": "https://actions-gateway.com/1.2.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.3.0",
+    "logo": "https://actions-gateway.com/1.3.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,9 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            
-  <strong>v1.2.0 is here.</strong> Day-2 observability across the v2 API — conditions, events, metrics, dashboards, runbook-linked alerts — and <code>gag-migrate</code> as a signed release artifact.
-
+            <strong>v1.3.0 is here.</strong>
+      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
           </div>
           
         </aside>
@@ -142,6 +141,15 @@
     </div>
     
       <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/1.3.0"><strong>Go to the current docs.</strong></a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
         
       </div>
     
@@ -308,6 +316,25 @@
     
   
   Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
 
       </a>
     </li>
@@ -522,6 +549,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../demo/" class="md-nav__link">
         
   
@@ -641,6 +695,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -654,7 +712,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -676,14 +734,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1143,6 +1201,62 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1207,6 +1321,14 @@
       
         
       
+        
+      
+        
+      
+        
+      
+        
+      
     
     
     
@@ -1223,7 +1345,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1245,14 +1367,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1446,7 +1568,7 @@
   <span class="md-ellipsis">
     
   
-    v1alpha1 deprecation
+    Deprecations & the v2.0.0 removal
   
 
     
@@ -1475,6 +1597,34 @@
     
   
     Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
   
 
     
@@ -1639,10 +1789,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_14" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_15" checked>
         
           
-          <label class="md-nav__link" for="__nav_7_14" id="__nav_7_14_label" tabindex="">
+          <label class="md-nav__link" for="__nav_8_15" id="__nav_8_15_label" tabindex="">
             
   
   
@@ -1660,8 +1810,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_14_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_7_14">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_15_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1789,6 +1939,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#worker-usage--right-sizing-metrics-q359" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker usage / right-sizing metrics (Q359)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#proxy-metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1859,6 +2020,17 @@
     <span class="md-ellipsis">
       
         Label Cardinality Warning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#breaking-observability-changes-q417" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking observability changes (Q417)
       
     </span>
   </a>
@@ -2040,6 +2212,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../runbook/" class="md-nav__link">
         
   
@@ -2180,6 +2408,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../release/" class="md-nav__link">
         
   
@@ -2286,6 +2542,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#worker-usage--right-sizing-metrics-q359" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker usage / right-sizing metrics (Q359)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#proxy-metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2363,6 +2630,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#breaking-observability-changes-q417" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Breaking observability changes (Q417)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#breaking-observability-changes-q205" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2424,8 +2702,8 @@
 <tr>
 <td><code>actions_gateway_jobs_admission_rejected_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td>Delivered jobs the pre-acquisition capacity gate left queued at GitHub (acquire skipped because the group is at its worker ceiling). Expected to rise under sustained saturation; a persistent gap vs. <code>jobs_acquired_total</code> means demand exceeds the group's <code>maxWorkers</code> / <code>priorityTiers</code> ceiling — raise the ceiling or namespace <code>ResourceQuota</code>.</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>reason</code></td>
+<td>Delivered jobs the pre-acquisition capacity gate left queued at GitHub (acquire skipped). Expected to rise under sustained saturation; a persistent gap vs. <code>jobs_acquired_total</code> means demand exceeds available capacity. The <code>reason</code> label says which limit bound and therefore what to raise: <code>reason="ceiling"</code> — the owner is at its configured <code>maxWorkers</code> / max <code>priorityTiers</code> threshold (Q59); <code>reason="quota"</code> — the namespace <code>ResourceQuota</code> has no headroom for another worker pod, so the AGC declined to claim rather than claim-and-stall (#784). Read the owner's <code>WorkerQuotaExceeded</code> condition for the binding resource; <code>reason="capacity"</code> — the owner opted into <code>spec.capacityGate</code> and the cluster cannot currently <em>place</em> another worker pod of its shape, so the AGC declined rather than spend a JIT runner record on a pod that would be reaped (Q405, Q406). Read the set's <code>WorkerCapacityDeclined</code> condition for which signal said so: <code>reason: ScaleUpDeclined</code> is the cluster autoscaler's own declination (the default, where the gateway reports <code>clusterCapacity.nodeAutoscaling: Present</code>), <code>reason: PodsUnschedulable</code> is the scheduler's verdict (<code>Absent</code>), and <code>reason: AwaitingProbe</code> is the latched state — the declined pods were reaped and intake is limited to one probe job per <code>pendingPodDeadline</code> window until a worker pod schedules (Q512). One label value covers both on purpose — the rung, the refusal, and the operator's remedy are the same; only the evidence differs, and the condition carries that. Off by default: this series is absent until a <code>RunnerSet</code> sets <code>spec.capacityGate.mode</code>. <strong>Classic acquisition only</strong> — this is the <em>per-delivered-job</em> form of the gate, so both <code>reason</code> series read a flat zero on a <code>ScaleSet</code> set. That set enforces the same ladder as a capacity integer instead, and its equivalents are <a href="#scale-set-acquisition-tier-q264"><code>scaleset_advertised_capacity</code> / <code>scaleset_capacity_withheld</code></a> (Q443).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_jobs_duplicate_delivery_total</code></td>
@@ -2485,19 +2763,31 @@
 <td><code>actions_gateway_renew_job_teardowns_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>reason</code></td>
-<td>Workers self-cancelled because the job's lock was definitively lost (Q254), avoiding an orphan pod. <code>reason="job_not_found"</code> is a definitive 404/410 from the run service (job recycled/reassigned); <code>reason="consecutive_failures"</code> is 5 consecutive renewal failures (~5 min). See the <a href="../troubleshooting/#renewjob-failures-rising">runbook</a>.</td>
+<td>Workers self-cancelled because the job's lock was definitively lost (Q254), avoiding an orphan pod — each also deletes the worker pod and increments <code>worker_pods_reaped_total{reason="job_abandoned"}</code> (Q501). <code>reason="job_not_found"</code> is a definitive 404/410 from the run service (job recycled/reassigned); <code>reason="consecutive_failures"</code> is 5 consecutive renewal failures (~5 min). See the <a href="../troubleshooting/#renewjob-failures-rising">runbook</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_retries_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td>Jobs automatically re-queued after worker pod eviction.</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
+<td>Recoveries <strong>started</strong> after a worker pod disruption — one per reserved retry-budget slot, incremented before the API calls. A recovery now outlasts GitHub's refusal window: the re-run is retried while GitHub answers <code>403 This workflow is already running</code> (which after an ungraceful eviction lasts until the job lock's TTL lapses, ~10 minutes — Q503), so in steady state each increment corresponds to a re-run that eventually lands. The recoveries that instead never landed are counted by <code>actions_gateway_eviction_rerun_failures_total</code> below — read the two together: <code>retries_total − rerun_failures_total</code> is the honest recovery count. <code>tier="classic"</code> is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; <code>tier="scaleset"</code> is the scale-set path, where the owning reconciler detects the disruption from the worker pod itself (Q417). <code>cause="eviction"</code> is the kubelet's node-pressure eviction; <code>cause="preemption"</code> is kube-scheduler displacing the worker for a higher <code>priorityTiers</code> tier (Q497); <code>cause="deletion"</code> is an external graceful deletion — a drain or a <code>kubectl delete pod</code> — whose worker published a terminal phase carrying the deletion mark (Q502; graceful too, with a measured 15–26s conclusion latency, so the retry loop lands it within a few paced attempts). The retry budget is <strong>shared</strong> — it is keyed by run ID alone, so <code>maxEvictionRetries</code> bounds re-runs per run across both tiers <strong>and all causes</strong> together, not once per combination. Labels added in Q417 (<code>tier</code>) and Q497 (<code>cause</code>); see <a href="#breaking-observability-changes-q417">Breaking observability changes</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td>Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an <code>EvictionRetriesExhausted</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170).</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
+<td>Disruption retries exhausted; job requires manual re-run. Each occurrence also emits an <code>EvictionRetriesExhausted</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170). <code>tier</code> and <code>cause</code> as above.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_failures_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
+<td>Disruption recoveries whose re-run was <strong>never accepted</strong> by GitHub, so the budget slot is spent but the job was not re-run and needs a manual <code>gh run rerun</code> (Q503). <code>reason="run_never_concluded"</code>: GitHub was still answering <code>403 This workflow is already running</code> when the 15-minute re-run window closed — the original run outlived the job lock's ~10-minute TTL bound, which is itself worth investigating. <code>reason="api_error"</code>: a terminal API failure (a non-403 error, or a 403 that is a permissions problem rather than the still-running refusal). Each occurrence also emits an <code>EvictionRerunFailed</code> Warning Event naming the run. <strong>Expected to be zero</strong>; see the <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">runbook</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
+<td>Disrupted <strong>scale-set</strong> worker pods that carried no workflow-run identity, so no automatic re-run could be attempted and the job stays failed until a human re-runs it (Q417). Each occurrence also emits an <code>EvictionRecoveryIdentityUnknown</code> Warning Event on the owning <code>RunnerSet</code>. This is the one failure mode that makes scale-set eviction recovery silently inert, which is why it is counted separately from an exhausted budget: an exhausted budget means a tenant is evicting more than <code>maxEvictionRetries</code> allows, while this means GitHub did not send the assignment fields (<code>ownerName</code>, <code>repositoryName</code>, <code>workflowRunId</code>) the mechanism reads. <strong>Expected to be zero</strong> — the assignment fields were confirmed present on live GitHub on 2026-07-26, so a sustained rate is a protocol-level regression, not a capacity problem — see the <a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_quota_retries_total</code></td>
@@ -2514,8 +2804,8 @@
 <tr>
 <td><code>actions_gateway_worker_pods_reaped_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code>, <code>reason</code></td>
-<td>Worker pods deleted by the lifecycle reaper. <code>reason="completed_ttl"</code> is routine cleanup after <code>completedPodTTL</code>; <code>reason="pending_deadline"</code> means a pod was stuck Pending past <code>pendingPodDeadline</code> and its job was cancelled — each such reap also emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup.</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>runner_set</code>, <code>reason</code></td>
+<td>Worker pods the AGC deleted — the lifecycle reaper's five reasons, plus the job-abandoned reclaim. <code>runner_group</code> carries the owning CR's name on <strong>both</strong> acquisition tiers (a <code>RunnerSet</code>'s reaps land there too, unchanged, so existing <code>runner_group</code>-keyed queries keep working); <code>runner_set</code> additionally carries the set name on scale-set reaps and is empty on classic ones (added in Q514), so the reap series join the <a href="#scale-set-acquisition-tier-q264"><code>runner_set</code>-labelled <code>scaleset_*</code> gauges</a> on <code>(namespace, runner_set)</code> — filter with <code>{runner_set!=""}</code> for the scale-set-only view. <code>reason="completed_ttl"</code> is routine cleanup after <code>completedPodTTL</code>; <code>reason="pending_deadline"</code> means a pod was stuck Pending past <code>pendingPodDeadline</code> and its job was cancelled — each such reap also emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup. <code>reason="completed_pending"</code> means a pod was still Pending thirty seconds after GitHub reported its job terminal — the job ended before the pod could start, so the pod had nothing to run and (on the scale-set tier) no longer has the JIT-config Secret it mounts — and emits a <code>WorkerPodCompletedPending</code> Warning Event; it is deliberately distinct from <code>pending_deadline</code>, which would send you after a scheduling problem that does not exist; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending">runbook</a>. <code>reason="orphaned_running"</code> means a pod was still Running five minutes after GitHub reported its job terminal — a ScaleSet worker that registered but never received its job, or a pod held open by a container that outlived the runner — and emits a <code>WorkerPodOrphanedRunning</code> Warning Event; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a>. <code>reason="lifetime_exceeded"</code> means the kubelet killed the pod for outliving <code>maxWorkerLifetime</code> (default 12h, the pod's <code>activeDeadlineSeconds</code>) and emits a <code>WorkerPodLifetimeExceeded</code> Warning Event — the unconditional backstop for a worker orphaned while the AGC was down, and the one reap reason that fires with no AGC running; see the <a href="../troubleshooting/#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded">runbook</a>. <code>reason="gateway_deleted"</code> means the pod's <code>ActionsGateway</code> is being deleted: the AGC is the pods' only reaper and is torn down with the gateway, so it stops acquiring and deletes them itself rather than strand them — any job they were running is lost, and a single <code>WorkerPodsReapedOnGatewayTeardown</code> Warning Event names the count; see the <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">runbook</a>. <code>reason="job_abandoned"</code> is the one non-reaper source: the classic-tier provisioner reclaiming the worker of a job whose lock was definitively lost, immediately after the matching <code>renew_job_teardowns_total</code> increment — it should track that counter, and see the <a href="../troubleshooting/#renewjob-failures-rising">runbook</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_worker_scaleup_throttled_total</code></td>
@@ -2527,7 +2817,7 @@
 <td><code>actions_gateway_message_poll_errors_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>reason</code></td>
-<td><code>GetMessage</code> errors (excludes empty polls and session expiry — those are normal). <code>reason="rate_limited"</code> is a 429; <code>reason="timeout"</code> is a black-holed long-poll the broker accepted but never answered, bounded by the client response-header deadline and retried (see <a href="../troubleshooting/#listener-stalls-for-minutes-after-a-black-holed-broker-connection">Listener Stalls After a Black-Holed Broker Connection</a>); <code>reason="other"</code> is any remaining transport/decode error.</td>
+<td><code>GetMessage</code> errors (excludes empty polls and session expiry — those are normal). <code>reason="rate_limited"</code> is a 429; <code>reason="timeout"</code> is a black-holed long-poll the broker accepted but never answered, bounded by the client response-header deadline and retried (see <a href="../troubleshooting/#listener-stalls-for-minutes-after-a-black-holed-broker-connection">Listener Stalls After a Black-Holed Broker Connection</a>); <code>reason="other"</code> is any remaining transport/decode error. <strong>Both acquisition tiers</strong> — a <code>ScaleSet</code> set writes the same <code>namespace</code>/<code>reason</code> series as a Classic group (Q446), so one query covers a mixed fleet and keeps working after Classic is removed. Credential rejection (401/403) and session expiry (404/410) are <em>not</em> counted on either tier: both are heal paths, not poll failures. On a <code>ScaleSet</code> set the counter is the rate-able half of a picture the conditions complete — <code>Degraded</code>/<code>Unauthorized</code> on a rejected session refresh, and <code>RateLimited</code> once a 429 episode outlasts ten minutes — so a stream of brief episodes shows up here even though no condition trips.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_agent_recycles_total</code></td>
@@ -2540,6 +2830,12 @@
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code></td>
 <td>Failed agent re-registration attempts. Sustained growth shrinks listener capacity — see the <a href="../troubleshooting/#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero">runbook</a>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_broker_session_leaks_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>Broker sessions the AGC gave up deleting: every <code>DELETE /sessions</code> attempt failed (3 tries inside a 10 s budget), so the session stays registered at GitHub until it expires server-side (Q436). The listener recovers either way — it opens a fresh session and keeps its polling slot — so this is <strong>not</strong> an availability alarm on its own. A one-off during a GitHub blip or a fleet-wide teardown is expected. A <strong>sustained</strong> rate means the tenant is accumulating server-side sessions nobody polls, and points at a slow or unreachable broker on the control-plane path: check <code>actions_gateway_message_poll_errors_total{reason="timeout"}</code> and the egress proxy for the same tenant.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_broker_token_propagation_retries_total</code></td>
@@ -2614,6 +2910,12 @@
 <td><code>1</code> when <code>EgressRulesStale=True</code> (Q157): the GitHub egress IP-range allowlist has not been refreshed within the staleness window (just over two of the ~24h refresh cycles), so a stalled refresh loop may have let the proxy <code>NetworkPolicy</code> drift from GitHub's published ranges. Advisory — does not gate <code>Ready</code>; page if sustained, as new GitHub ranges will be silently dropped. <code>name</code> is the v1 <code>ActionsGateway</code> or, on a v2 deploy, the CIDR-mode <code>EgressProxy</code> carrying the condition (an FQDN-mode proxy carries no refreshed CIDR rule, so it never trips) (Q320).</td>
 </tr>
 <tr>
+<td><code>actions_gateway_github_egress_incomplete</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when an <code>EgressProxy</code>'s <code>GitHubEgressIncomplete=True</code> (Q506): a referring gateway names a GitHub Enterprise Server host, and the pool's <code>CIDR</code>-mode allowlist carries only the ranges <code>api.github.com/meta</code> publishes — which never contain a customer appliance, so the tenant's GitHub traffic is denied. Advisory — does not gate <code>Ready</code>, but the affected tenant acquires no jobs; ticket it, as the fix is an operator config change (<code>spec.destinationCIDRs</code> or an FQDN egress mode) that will not self-heal. See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">A GHES Tenant's Traffic Never Reaches the Appliance</a>. v2 only, emitted only on a v2 install (Q537).</td>
+</tr>
+<tr>
 <td><code>actions_gateway_runnersets_degraded</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
@@ -2632,6 +2934,12 @@
 <td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>EgressUnattributed=True</code> (§H.10): the gateway runs in <strong>direct</strong> egress mode, so its GitHub traffic is not attributed to a per-tenant egress proxy. Advisory — expected and <code>0</code> on a proxied deploy; a <code>1</code> on a deploy meant to be proxied flags a misconfiguration. v2 only, emitted only on a v2 install (Q321).</td>
 </tr>
 <tr>
+<td><code>actions_gateway_agc_autoscaling_unavailable</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>name</code></td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>AGCAutoscalingUnavailable=True</code> (Q360, §E.11): the gateway opted into managed AGC right-sizing (<code>agcAutoscaling</code>) but it cannot be satisfied — the <code>VerticalPodAutoscaler</code> CRDs are not installed (<code>VPACRDNotInstalled</code>) or a precedence conflict blocks the managed VPA. Advisory — the AGC still runs on its stamped <code>agcResources</code> sizing and <code>Ready</code> is unaffected; the opt-in is simply inert until the blocker clears. <code>0</code> when satisfied or not opted in. Without this gauge the unsatisfiable opt-in is visible only via <code>kubectl describe</code> (Q390). v2 only, emitted only on a v2 install (Q321).</td>
+</tr>
+<tr>
 <td><code>actions_gateway_build_info</code></td>
 <td>Gauge</td>
 <td><code>component</code>, <code>version</code></td>
@@ -2640,6 +2948,32 @@
 </tbody>
 </table>
 <blockquote>
+<p><strong>Reading the eviction metrics across tiers and causes.</strong> Both <code>eviction_retries_total</code>
+and <code>eviction_retries_exhausted_total</code> are emitted on <strong>both</strong> acquisition tiers, split
+by the <code>tier</code> label (Q417), and for the <strong>three</strong> recovered disruptions, split by the
+<code>cause</code> label (Q497, Q502). Detection differs across every combination — an inline pod
+wait on classic, the owning reconciler's recovery pass on scale-set; a <code>PodFailed</code>/
+<code>Evicted</code> phase for an eviction, a <code>DisruptionTarget</code> condition for a preemption, the
+pod's <code>deletionTimestamp</code> at terminal publish for an external deletion — but they
+share one budget, keyed by workflow run alone, so <code>maxEvictionRetries</code> caps re-runs
+per run across the whole set rather than once per combination.</p>
+<p><strong>The <code>cause</code> split is a diagnosis, not decoration.</strong> A climbing <code>cause="eviction"</code>
+rate means node pressure: memory or disk exhaustion on the nodes, and the fix is
+capacity or worker sizing. A climbing <code>cause="preemption"</code> rate means a <code>priorityTiers</code>
+floor is displacing more opportunistic work than the tenant sized for, and the fix is
+tier thresholds or where the work is placed. A climbing <code>cause="deletion"</code> rate means
+something outside the gateway is deleting live workers — node drains from upgrades or
+autoscaler consolidation, a descheduler, or hand-run deletes — and the fix is finding
+the deleter. Reading one as another sends an operator hunting in entirely the wrong
+place.</p>
+<p>A flat zero on <code>tier="scaleset"</code> while workers are visibly being disrupted means the
+recovery is not firing, not that nothing happened. Check
+<code>kubectl get pods --field-selector=status.phase=Failed</code> for <code>Evicted</code> pods, then
+<code>actions_gateway_eviction_recovery_identity_unknown_total</code> and the
+<a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.
+For preemption specifically, see
+<a href="../troubleshooting/#a-preempted-workers-job-is-not-re-run">A Preempted Worker's Job Is Not Re-Run</a>
+— its scale-set path has a time limit the eviction path does not.</p>
 <p><strong>Proxy conditions on a v2 deploy.</strong> On a v2 install (the opt-in
 <code>actions-gateway-crds-v2</code> CRDs), the GMC also counts v2 <code>ActionsGateway</code>s in
 <code>managed_gateways</code> and reflects each <code>EgressProxy</code>'s proxy conditions in
@@ -2649,6 +2983,9 @@ EgressProxy reconciler sets those conditions with the same semantics as the v1
 CIDR-mode <code>NetworkPolicy</code> is refreshed from the shared GitHub IP-range cache) (Q320).
 The v1 and v2 series share one metric family; the <code>name</code> label distinguishes them by
 object. Unlike these, the worker-capacity gauges below stay v1-only.</p>
+<p><code>github_egress_incomplete</code> is the exception among the proxy gauges: its condition
+exists only on the <code>EgressProxy</code> — v1 has no twin — so the family is emitted only on
+a v2 install (Q537).</p>
 <p><strong>Worker-capacity conditions on v2 <code>RunnerSet</code>s.</strong> The <code>WorkerQuotaPressure</code>,
 <code>WorkerQuotaExceeded</code>, and <code>WorkersUnschedulable</code> conditions are also set on a v2
 <code>RunnerSet</code> (Q303) with the same semantics as the v1 <code>RunnerGroup</code>, so a stalled
@@ -2665,19 +3002,21 @@ to the gateway (<code>spec.gatewayRef</code>) are impaired — not serving jobs:
 abnormal-is-True impairing condition — <code>Degraded</code> (revoked/invalid credentials, pushed
 by the listener independently of <code>Ready</code>, Q330), <code>CredentialUnavailable</code>,
 <code>RunnerVersionTooOld</code>, or <code>WorkersUnschedulable</code>. The advisory conditions (<code>RateLimited</code>,
-the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>PossibleReapBlockingSidecar</code>) are
-excluded so the rollup does not flap on normal load. The condition message names the impaired sets and their
+the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>PossibleReapBlockingSidecar</code>,
+<code>JobProvisionStalled</code>) are excluded so the rollup does not flap on normal load. The condition message names the impaired sets and their
 tripped signals, giving the operator a single pane without inspecting each child.
 Advisory — like the v1 rollup it does <strong>not</strong> gate <code>Ready</code>, since the gateway's own
 AGC control plane can be healthy while a tenant's set is impaired. It is exported as the <code>actions_gateway_runnersets_degraded</code>
-gauge (Q321), alongside <code>actions_gateway_agc_available</code> and
-<code>actions_gateway_egress_unattributed</code> for the gateway's <code>AGCAvailable</code> and
-<code>EgressUnattributed</code> conditions — the v2 twins of the v1 <code>ActionsGateway</code>
-condition gauges. All three are emitted only on a v2 install and labelled per
-gateway (<code>namespace</code>, <code>name</code>).</p>
+gauge (Q321), alongside <code>actions_gateway_agc_available</code>,
+<code>actions_gateway_egress_unattributed</code>, and <code>actions_gateway_agc_autoscaling_unavailable</code>
+for the gateway's <code>AGCAvailable</code>, <code>EgressUnattributed</code>, and <code>AGCAutoscalingUnavailable</code>
+conditions — the v2 twins of the v1 <code>ActionsGateway</code> condition gauges. Every v2
+gateway condition thus has a metric twin, so the advisory <code>agcAutoscaling</code> opt-in
+(Q360/Q390) is alertable rather than only visible via <code>kubectl describe</code>. All are
+emitted only on a v2 install and labelled per gateway (<code>namespace</code>, <code>name</code>).</p>
 </blockquote>
 <h3 id="scale-set-acquisition-tier-q264">Scale-set acquisition tier (Q264)<a class="headerlink" href="#scale-set-acquisition-tier-q264" title="Permanent link">&para;</a></h3>
-<p>These counters are emitted <strong>only</strong> by a <code>RunnerSet</code> with <code>spec.acquisitionProtocol: ScaleSet</code> (Q264 Option E, the default since P5), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool. A <code>Classic</code> (deprecated) <code>RunnerSet</code> never increments them, so they read zero on a Classic-only deployment; the classic <code>actions_gateway_jobs_*</code> series above are what a Classic set emits. All four are labelled per <code>RunnerSet</code> (<code>namespace</code>, <code>runner_set</code>). During the P4 dogfood validation (the Q224 fan-out acceptance gate) these are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.</p>
+<p>These series are emitted <strong>only</strong> by a <code>RunnerSet</code> with <code>spec.acquisitionProtocol: ScaleSet</code> (Q264 Option E, the default since P5), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool. A <code>Classic</code> (deprecated) <code>RunnerSet</code> never touches them, so they read zero on a Classic-only deployment; the classic <code>actions_gateway_jobs_*</code> series above are what a Classic set emits. All are labelled per <code>RunnerSet</code> (<code>namespace</code>, <code>runner_set</code>). During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.</p>
 <table>
 <thead>
 <tr>
@@ -2704,7 +3043,7 @@ gateway (<code>namespace</code>, <code>name</code>).</p>
 <td><code>actions_gateway_scaleset_provision_errors_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
-<td>Failed provision attempts (JIT-config mint or worker pod create). A transient failure leaves the job un-provisioned to retry on a later poll. A <code>generate-jitconfig</code> <strong>runner-name conflict</strong> (HTTP 409) instead retries under a fresh runner name; if it still conflicts after a bounded number of tries the job is <strong>skipped</strong> (counted here once) so it cannot wedge the queue cursor behind it — it is re-assigned or timed out server-side (Q270). A sustained rate warrants checking the run service's <code>generate-jitconfig</code> responses and namespace quota headroom.</td>
+<td>Failed provision attempts (JIT-config mint or worker pod create). A transient failure leaves the job un-provisioned to retry on a later poll. A <code>generate-jitconfig</code> <strong>runner-name conflict</strong> (HTTP 409) instead retries under a fresh runner name; if it still conflicts after a bounded number of tries the job is <strong>deferred</strong> (counted here once per round) so it cannot wedge the queue cursor behind it (Q270), and re-offered on a backoff until it runs — see <code>…_jobs_deferred</code> below. A job held because the set is at its <strong>worker ceiling</strong> is <em>not</em> counted here (Q576): it is backpressure rather than a failure, and <code>…_jobs_deferred{reason="ceiling"}</code> carries it. A sustained rate warrants checking the run service's <code>generate-jitconfig</code> responses and namespace quota headroom.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_scaleset_jobs_completed_total</code></td>
@@ -2712,13 +3051,125 @@ gateway (<code>namespace</code>, <code>name</code>).</p>
 <td><code>namespace</code>, <code>runner_set</code>, <code>result</code></td>
 <td>Terminal <code>JobCompleted</code> messages the queue delivered, by GitHub-reported <code>result</code> (e.g. <code>succeeded</code>, <code>failed</code>, <code>canceled</code>). This is the completion signal the classic many-acquirers protocol never delivered, so it is unique to the scale-set tier. Counted at most once per job even if a re-created session replays the message.</td>
 </tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_deferred</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
+<td>Assigned jobs the listener is holding for a later re-offer, by why. Each one is a workflow run queued at GitHub with no worker running it, and it is the metric twin of the <code>RunnerSet</code>'s advisory <code>JobProvisionStalled</code> condition, whose message names the job ids. <strong>Alert on the reason, not the total</strong> — the two mean different things. <code>reason="name_conflict"</code>: the runner name will not register — a <code>generate-jitconfig</code> 409 that neither deleting the stale record nor a fresh suffixed name could clear (Q551). An anomaly; <strong>any non-zero value is worth alerting on</strong>, fix per <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>. <code>reason="ceiling"</code>: the set is already running as many workers as its spec allows (Q576) — expected backpressure that clears as workers finish, so alert only on it being <em>sustained</em>, if at all; see <a href="../troubleshooting/#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached">Scale-Set Jobs Waiting at the Worker Ceiling</a>. Both reasons are published on every update, zero included, so a series never freezes at its last non-zero reading. Dropped when the <code>RunnerSet</code> is deleted.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_jobs_abandoned_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Assigned jobs the listener gave up on because the scale set stopped counting them as assigned — GitHub is no longer holding the job and never reported it complete (Q553). Each is a <strong>workflow run that will not run</strong>, so unlike <code>…_jobs_deferred</code> this is a loss, not backpressure: it is what distinguishes a deferred set that cleared because its jobs ran from one that cleared because they evaporated. <strong>Any non-zero value is worth alerting on</strong>; see <a href="../troubleshooting/#scale-set-assignments-abandoned-assignmentabandoned">Scale-Set Assignments Abandoned</a>. It is expected to stay flat in steady state — a small burst around a mass run cancellation or a <code>stop.sh</code> drain is the designed behaviour, a sustained rate is not.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_advertised_capacity</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>The <code>X-ScaleSetMaxCapacity</code> most recently advertised for the set: the total jobs GitHub may keep assigned to it at once. This is the scale-set tier's whole admission decision — the minimum of the declared worker ceiling, live namespace-<code>ResourceQuota</code> headroom (Q443), and — when the set opts in — its capacity gate (Q405). A value below the set's <code>maxWorkers</code> means a rung is binding; <strong><code>0</code> means GitHub will assign nothing at all</strong> until it recovers. Dropped when the <code>RunnerSet</code> is deleted, so a stale series does not outlive the set.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_capacity_withheld</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
+<td>Slots the named rung removed from the declared ceiling on that same poll — <code>advertised_capacity</code> plus the sum of these equals the ceiling. <code>reason="quota"</code> is namespace-<code>ResourceQuota</code> headroom; <code>reason="capacity"</code> is the opt-in capacity gate, which bounds the total at the set's own in-flight workers while the cluster cannot place another (Q405) — plus one probe slot per <code>pendingPodDeadline</code> window while the gate is latched (<code>AwaitingProbe</code>, Q512), so under a sustained decline expect this series to <em>hold</em> near the ceiling across reap cycles rather than sawtooth back to <code>0</code>. Every evaluated rung publishes a value each poll, <strong>including an explicit <code>0</code></strong>, so a series never sits frozen at its last non-zero reading — the capacity rung publishes its zero even with the gate <code>Off</code>, because the gate is per-set spec rather than a rung the AGC skips. Nothing is published for a rung an operator has turned off AGC-wide (<code>AGC_QUOTA_ADMISSION=false</code>).</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Why gauges and not a rejection counter.</strong> On the classic tier a declined job is a
+delivered job, counted by <code>actions_gateway_jobs_admission_rejected_total{reason}</code>.
+On the scale-set tier the equivalent job is never assigned in the first place, so
+there is nothing to count — which is why that counter reads a flat zero here, and why
+these two gauges are its counterpart. Pair them with the set's
+<code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code> conditions, which name the binding
+resource in their message.</p>
+</blockquote>
+<h3 id="worker-usage--right-sizing-metrics-q359">Worker usage / right-sizing metrics (Q359)<a class="headerlink" href="#worker-usage--right-sizing-metrics-q359" title="Permanent link">&para;</a></h3>
+<p>The AGC samples worker pod CPU/memory usage from the <code>metrics.k8s.io</code> API
+(metrics-server) every 15s (<code>WORKER_USAGE_SAMPLE_INTERVAL</code> on the AGC
+Deployment; <code>0</code>/<code>off</code> disables) and folds each finished pod's peak into these
+series. One worker pod runs exactly one job, so a per-pod peak is a <strong>per-job
+peak</strong>. Emitted for v2 <code>RunnerSet</code> workers only, labelled per RunnerSet and
+container (bounded cardinality: one series per RunnerSet × container name).
+These are the input to the <a href="../worker-rightsizing/">worker right-sizing recipe</a>;
+without metrics-server they stay empty and <code>…_poll_errors_total</code> counts instead.</p>
+<p>The same sampled history also drives two status surfaces on the v2 <code>RunnerSet</code>
+(Q359 Phase 2): <code>status.sizingRecommendation</code> (per-container recommended
+<code>requests</code>/<code>limits</code> with observed p95/max, sample count, and window) and the
+advisory <code>SizingDrift</code> condition — <code>True</code> when, after ≥20 sampled jobs, the
+template's ask is ≥2× the recommendation (waste) or a memory limit is below the
+observed per-job peak (OOM risk). Advisory only; never gates <code>Ready</code>. A set
+that opts into a sizing profile (<code>spec.sizing.profile</code>) additionally reports
+<code>status.sizingProfileState</code> (<code>Active</code>/<code>AwaitingSamples</code>), and <code>SizingDrift</code>
+reads <code>False/SizingProfileActive</code> while the profile actuates. A set on the
+<code>Throughput</code> profile also carries the advisory <code>SizingProfileOverridden</code>
+condition — <code>True</code> when a worker pod the profile built <em>without</em> a CPU limit was
+admitted <em>with</em> one (a <code>LimitRange</code> cpu default, a mutating webhook, a policy
+engine), which cancels the profile while rejecting nothing
+(<a href="../worker-rightsizing/#when-something-re-injects-the-cpu-limit-throughput-removes">detail</a>).
+See the
+<a href="../worker-rightsizing/#step-0--read-the-built-in-recommendation-first">right-sizing recipe</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_worker_usage_job_cpu_peak_cores</code></td>
+<td>Histogram</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>container</code></td>
+<td>Per-job CPU peak (cores), one observation per sampled job. <code>histogram_quantile</code> over a chosen window gives the p50/p95 the right-sizing derivation needs.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_job_memory_peak_bytes</code></td>
+<td>Histogram</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>container</code></td>
+<td>Per-job memory peak (bytes), one observation per sampled job.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_cpu_peak_cores</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>container</code></td>
+<td>Highest per-job CPU peak seen since AGC start — the absolute-max cross-check for the interpolated histogram quantiles. Resets on AGC restart (bridge with <code>max_over_time</code>).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_memory_peak_bytes</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>container</code></td>
+<td>Highest per-job memory peak seen since AGC start.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_jobs_sampled_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Jobs that finished with at least one usage sample in the histograms.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_jobs_unsampled_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Jobs that finished before any sample landed (shorter than ~one sampling interval). A high ratio vs <code>…_jobs_sampled_total</code> means the histograms under-represent the workload.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_worker_usage_poll_errors_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code></td>
+<td>Failed <code>PodMetrics</code> list calls. A constant rate means usage is not being sampled at all — metrics-server missing or the RBAC grant absent; see <a href="../worker-rightsizing/#troubleshooting">troubleshooting</a>.</td>
+</tr>
 </tbody>
 </table>
 <h3 id="proxy-metrics">Proxy metrics<a class="headerlink" href="#proxy-metrics" title="Permanent link">&para;</a></h3>
 <p>The per-tenant egress proxy exposes its own metrics on <code>:8443</code> over <strong>mutual
 TLS</strong> — the same posture as the AGC (see <a href="../observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">Scraping per-tenant AGC and proxy
 metrics (mTLS)</a>), and
-restricted by the L-8 NetworkPolicy (see <a href="../../plan/security/">security.md L-8</a>).
+restricted by the L-8 NetworkPolicy (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/docs/plan/security.md">security.md L-8</a>).
 The proxy's <code>:8081</code> port serves only the plaintext health probes (<code>/healthz</code>,
 <code>/readyz</code>), not metrics. Each proxy is a separate scrape target; these metrics
 carry no intrinsic <code>namespace</code> label. The GMC-generated per-tenant proxy
@@ -2843,8 +3294,8 @@ triggers the next reconcile (typically sub-second).</p>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;name&gt;
 </code></pre></div>
 <p>Add <code>-o wide</code> for node placement or <code>-w</code> to watch phase transitions live.</p>
-<p><strong>Correlating a pod with its GitHub Actions job:</strong> the AGC stamps four
-annotations on every worker pod at creation time from the AcquireJob payload:</p>
+<p><strong>Correlating a pod with its GitHub Actions job:</strong> the AGC stamps these
+annotations on every worker pod at creation time:</p>
 <table>
 <thead>
 <tr>
@@ -2872,10 +3323,60 @@ annotations on every worker pod at creation time from the AcquireJob payload:</p
 <tr>
 <td><code>actions-gateway.com/workflow</code></td>
 <td><code>CI</code></td>
-<td>Workflow name</td>
+<td>Workflow name. Classic only — the scale-set protocol delivers no workflow name</td>
 </tr>
 </tbody>
 </table>
+<p>On the scale-set tier these are more than diagnostics: <code>run-id</code> and <code>repository</code>
+are the <strong>only</strong> record of which workflow run a worker was serving, because that
+tier provisions fire-and-forget with no in-process job state. Eviction recovery
+reads them back off the pod to name the run to re-run (Q417), so a worker missing
+them cannot be recovered automatically — that case is counted by
+<code>actions_gateway_eviction_recovery_identity_unknown_total</code>. Do not remove or
+overwrite them.</p>
+<p>Scale-set worker pods additionally carry:</p>
+<table>
+<thead>
+<tr>
+<th>Metadata</th>
+<th>Example</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions-gateway.com/acquisition-protocol</code> (label)</td>
+<td><code>ScaleSet</code></td>
+<td>Marks the pod as provisioned by the scale-set tier. Present only on that tier, so <code>-l actions-gateway.com/acquisition-protocol=ScaleSet</code> selects exactly the scale-set workers</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/runner-name</code> (annotation)</td>
+<td><code>gag-ci-e2e-8f3c…</code></td>
+<td>The name this pod's runner is registered under at GitHub. The AGC deregisters that record when it reaps the pod, and treats a name stamped here as in-use when it sweeps stale records (Q550)</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/job-completed-at</code> (annotation)</td>
+<td><code>2026-07-26T12:00:00Z</code></td>
+<td>When GitHub reported the pod's job terminal. Gives a still-Running worker a reap deadline (Q420)</td>
+</tr>
+<tr>
+<td><code>actions-gateway.com/eviction-handled-at</code> (annotation)</td>
+<td><code>2026-07-26T12:04:00Z</code></td>
+<td>When the AGC adjudicated this pod's eviction. Its presence is what makes automatic recovery at-most-once per evicted pod across reconciles, restarts, and replicas (Q417)</td>
+</tr>
+</tbody>
+</table>
+<p>All four are controller-set: never set them by hand. Editing or removing
+<code>runner-name</code> in particular makes the pod's runner record uncollectable, which is
+what leaves stale registrations behind — see
+<a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>.</p>
+<p>Worker pods on <strong>either</strong> tier gain one more annotation at end of life:
+<code>actions-gateway.com/deletion-reason</code>, stamped with the reap reason (e.g.
+<code>completed_ttl</code>, <code>pending_deadline</code>) immediately before the AGC's reaper deletes the
+pod (Q502). It marks the deletion as the AGC's own, which is what excludes reaper
+cleanup from the graceful-deletion recovery that a drain or a manual delete triggers.
+Controller-set; never set it by hand — a hand-set stamp suppresses automatic recovery
+for that pod.</p>
 <p>To see them in a table:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/runner-group<span class="o">=</span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;NAME:.metadata.name,PHASE:.status.phase,RUN:.metadata.annotations.actions-gateway\.com/run-id,JOB:.metadata.annotations.actions-gateway\.com/job-name,WORKFLOW:.metadata.annotations.actions-gateway\.com/workflow&#39;</span>
@@ -2883,7 +3384,10 @@ annotations on every worker pod at creation time from the AcquireJob payload:</p
 <p>Or inspect a single pod in full:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
-<p>The annotations are absent if the AcquireJob payload did not include the corresponding <code>system.github.*</code> variables (older GitHub runners or stub/test jobs).</p>
+<p>The annotations are absent if the job's identity did not reach the AGC: on the
+classic tier, an AcquireJob payload without the corresponding <code>system.github.*</code>
+variables (older GitHub runners or stub/test jobs); on the scale-set tier, an
+assignment message without <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code>.</p>
 <h3 id="selecting-gag-objects-with-the-recommended-labels">Selecting GAG objects with the recommended labels<a class="headerlink" href="#selecting-gag-objects-with-the-recommended-labels" title="Permanent link">&para;</a></h3>
 <p>Every object GAG creates — AGC/proxy/worker pods, Deployments, Services,
 NetworkPolicies, ServiceAccounts, RBAC, Secrets, PDBs, HPAs, and the per-tenant CRs
@@ -2978,6 +3482,55 @@ labels and the per-tenant namespaces to allocation queries — see
 <li><strong>Stable, human-meaningful names</strong> like <code>gpu-2x</code>, <code>cpu-standard</code>, <code>gpu-a100</code> are correct. These are configured in the <code>ActionsGateway</code> spec and should not change after initial setup.</li>
 <li>If you need per-workflow or per-repo attribution, use Prometheus recording rules or labels from job metadata, not from RunnerGroup names.</li>
 </ul>
+<h2 id="breaking-observability-changes-q417">Breaking observability changes (Q417)<a class="headerlink" href="#breaking-observability-changes-q417" title="Permanent link">&para;</a></h2>
+<p>Q417 ported eviction recovery to the scale-set acquisition tier and added a <code>tier</code>
+label to the two eviction counters so the two tiers' recoveries are distinguishable.
+Q497 extended recovery to scheduler preemption and added a <code>cause</code> label, on those two
+counters and on the identity counter, for the same reason — the two disruptions demand
+different operator responses:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Labels before</th>
+<th>After Q417</th>
+<th>After Q497</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions_gateway_eviction_retries_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>+ <code>tier</code></td>
+<td>+ <code>cause</code></td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>+ <code>tier</code></td>
+<td>+ <code>cause</code></td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
+<td><code>namespace</code>, <code>runner_group</code></td>
+<td>—</td>
+<td>+ <code>cause</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>What breaks.</strong> Only queries that match the full label set exactly, or that render
+one series per metric and now render more. Aggregations are unaffected: <code>sum(...)</code>,
+<code>increase(...) &gt; 0</code>, and <code>sum by (namespace, runner_group) (...)</code> keep working
+unchanged, which covers the shipped dashboards and alert rules. Add <code>tier</code> or <code>cause</code>
+to a <code>by (...)</code> clause where you want the split.</p>
+<p><strong>One reading does change meaning even though no query breaks.</strong> Before Q497,
+<code>actions_gateway_eviction_retries_total</code> counted node-pressure evictions only, so a
+dashboard titled "evictions" was accurate. It now also counts preemptions, which are a
+routine consequence of running a <code>priorityTiers</code> floor rather than a sign of node
+trouble. An alert that pages on this counter rising should filter to
+<code>{cause="eviction"}</code> unless it genuinely wants both.</p>
+<p><strong>Continuity.</strong> Both counters keep their names, so history is preserved; series
+recorded before the upgrade simply carry no <code>tier</code> label.</p>
 <h2 id="breaking-observability-changes-q205">Breaking observability changes (Q205)<a class="headerlink" href="#breaking-observability-changes-q205" title="Permanent link">&para;</a></h2>
 <p>The Q205 naming audit aligned metric and span/attribute names to the Prometheus and
 OpenTelemetry conventions before the v2beta1 freeze. These are <strong>breaking</strong> for any
