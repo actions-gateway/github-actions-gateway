@@ -1,11 +1,12 @@
 {
   "provenance": {
-    "snapshot_date": "2026-07-26",
+    "snapshot_date": "2026-08-03",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
-    "transcript_files_read": 328,
-    "snapshot_host": "mac-1",
+    "transcript_files_read": 239,
+    "snapshot_host": "mac-2",
     "hosts": [
-      "mac-1"
+      "mac-1",
+      "mac-2"
     ],
     "host_basis": "token/message rows are per (date, machine); a day's total is the sum across machines, and the upward-only merge applies within a machine",
     "token_date_basis": "UTC date of message timestamp",
@@ -13,7 +14,7 @@
     "token_dedup": "(message.id, requestId)",
     "message_dedup": "record uuid (user) / (message.id, requestId) (assistant)",
     "first_measured_date": "2026-05-19",
-    "last_measured_date": "2026-07-26",
+    "last_measured_date": "2026-08-03",
     "first_project_date": "2026-05-16",
     "growth_chart_baseline": {
       "tokens": 10000000,
@@ -45,13 +46,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8064022,
-      "output": 51962163,
-      "cache_creation": 240736341,
-      "cache_read": 11136391285,
-      "assistant_msgs": 66591,
-      "user_msgs": 74303,
-      "headline_input_output_cachecreation": 300762526
+      "input": 8202201,
+      "output": 69809002,
+      "cache_creation": 342692434,
+      "cache_read": 17752432229,
+      "assistant_msgs": 96432,
+      "user_msgs": 108076,
+      "headline_input_output_cachecreation": 420703637
     },
     "estimated": {
       "input": 6559,
@@ -63,15 +64,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8070581,
-      "output": 52441099,
-      "cache_creation": 242745766,
-      "cache_read": 11203910128,
-      "assistant_msgs": 67333,
-      "user_msgs": 75164,
-      "headline_input_output_cachecreation": 303257446,
-      "grand_total_incl_cache_read": 11507167574,
-      "cache_reuse_ratio": 46.15
+      "input": 8208760,
+      "output": 70287938,
+      "cache_creation": 344701859,
+      "cache_read": 17819951072,
+      "assistant_msgs": 97174,
+      "user_msgs": 108937,
+      "headline_input_output_cachecreation": 423198557,
+      "grand_total_incl_cache_read": 18243149629,
+      "cache_reuse_ratio": 51.7
     }
   },
   "by_model": {
@@ -83,7 +84,7 @@
     "Other": {
       "headline": 0,
       "output": 0,
-      "messages": 142
+      "messages": 164
     },
     "Opus 4.7": {
       "headline": 16947491,
@@ -101,14 +102,14 @@
       "messages": 44636
     },
     "Fable 5": {
-      "headline": 25611173,
-      "output": 3519346,
-      "messages": 4657
+      "headline": 37084788,
+      "output": 5498574,
+      "messages": 7321
     },
     "Opus 5": {
-      "headline": 14762141,
-      "output": 2559197,
-      "messages": 4412
+      "headline": 123229637,
+      "output": 18426808,
+      "messages": 31567
     }
   },
   "by_host": {
@@ -129,15 +130,24 @@
       "assistant_msgs": 66591,
       "user_msgs": 74303,
       "headline_input_output_cachecreation": 300762526
+    },
+    "mac-2": {
+      "input": 138179,
+      "output": 17846839,
+      "cache_creation": 101956093,
+      "cache_read": 6616040944,
+      "assistant_msgs": 29841,
+      "user_msgs": 33773,
+      "headline_input_output_cachecreation": 119941111
     }
   },
   "head_snapshot": {
-    "go_code": 73314,
-    "go_comments": 24382,
-    "markdown_nonblank": 44834,
-    "yaml_handwritten": 9324,
-    "yaml_generated": 130318,
-    "tests": 1429,
-    "commits": 1286
+    "go_code": 96031,
+    "go_comments": 34794,
+    "markdown_nonblank": 60360,
+    "yaml_handwritten": 11383,
+    "yaml_generated": 131197,
+    "tests": 1876,
+    "commits": 1650
   }
 }
