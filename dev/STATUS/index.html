@@ -2673,6 +2673,14 @@
 <td>Twice now: Q442 duplicated Q440, Q635 duplicated Q619. The rule is precise and lives in a doc read when editing the backlog deliberately — but rows get filed mid-task, in flow. <code>make queue-id</code> is the one chokepoint every row passes through.</td>
 </tr>
 <tr>
+<td><a id="Q656"></a>Q656</td>
+<td><a href="../development/queue-id-allocation/"><code>make queue-id</code> reports a free ID but reserves nothing, so concurrent sessions collide</a></td>
+<td><code>ci</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-03: Q644 allocated here, #1194 merged it first; shipped as Q647 after renames across commit, PR body, and a plan doc. <code>lint-backlog</code> catches it only at rebase. Same chokepoint as <a href="#Q639">Q639</a> — reservation, not dedup search.</td>
+</tr>
+<tr>
 <td><a id="Q636"></a>Q636</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/README.md">No gate checks a release note's links, and they are the one doc whose links are all absolute</a></td>
 <td><code>ci</code> <code>docs</code></td>
