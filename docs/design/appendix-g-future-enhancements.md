@@ -927,12 +927,13 @@ runner-platform layer for GitHub Actions:
 
 **Sketch — detection before actuation, two phases.**
 
-1. **Flaky-job detection (no behavior change).** GAG already sees every job
-   outcome per `RunnerSet`. Record re-run-then-pass transitions per job name
-   (the Azure/Buildkite detector) and surface them: a per-set flaky-jobs
-   metric, K8s events, and an advisory condition. This is pure observability,
-   zero masking risk, and no CI product offers it per *tenant* on shared
-   runners. It also builds the history an only-known-flakes mode needs.
+1. **Flaky-job detection (no behavior change).** Record re-run-then-pass
+   transitions per job name (the Azure/Buildkite detector) and surface them: a
+   per-set flaky-jobs metric, K8s events, and an advisory condition. This is
+   pure observability, zero masking risk, and no CI product offers it per
+   *tenant* on shared runners. It also builds the history an only-known-flakes
+   mode needs. Its prerequisite is a real per-job outcome, which the AGC does
+   not read today — see the signal note below.
 2. **Opt-in retry (`spec.flakyRetry` on the `RunnerSet`).** Bounded per-run
    budget separate from `maxEvictionRetries`, its own `cause` value on the
    existing counters, driven by the same paced `rerun-failed-jobs` loop.
@@ -956,10 +957,82 @@ runner-platform layer for GitHub Actions:
    compute; per-set counters must make the spend visible (the
    [cost-attribution doc](../operations/cost-attribution.md) would gain a
    flake-spend line).
-4. **Failure classification is thin at the platform layer.** GAG sees job
-   conclusions and step outcomes via the jobs API, not exit codes; a
-   GitLab-style failure taxonomy would need log/annotation heuristics.
-   Phase 2 ships without matchers first — budget + scope knobs only.
+4. **Failure classification is thin at the platform layer, but less thin than
+   it looks.** The AGC polls no jobs API; its only outcome signal is the pod
+   phase, used as a proxy (`PodFailed`→failed, else succeeded). One layer
+   down there is more: `Runner.Worker` encodes the job's real `TaskResult` as
+   exit code `100 + result`, and the wrapper flattens only 100/101 (the two
+   GitHub concludes as `success`) to 0, passing 102 failed / 103 canceled /
+   104 skipped through verbatim
+   ([`translateWorkerExitCode`](../../cmd/worker/main.go)). Nothing in the
+   AGC reads `ContainerStatuses[].State.Terminated.ExitCode`. Reading it is
+   the cheap prerequisite for phase 1's detector; a GitLab-style taxonomy
+   past that still needs log or annotation heuristics. Phase 2 ships without
+   matchers first: budget and scope knobs only.
+
+**Signals, and why an explicit one from the job is a separate question.**
+
+The three retry arms all decide from Kubernetes pod facts alone: phase,
+`reason: Evicted`, the `DisruptionTarget` condition, a `deletionTimestamp`.
+Nothing from inside the job reaches the decision. A tenant-supplied "this
+failure was flaky, retry it" verdict is a different signal class from the
+static per-set opt-in phase 2 sketches, and needs its own channel. Four
+candidates, and only one is both expressive and safe:
+
+| Channel | Carries | Verdict |
+|---|---|---|
+| Container exit code | The runner's real `TaskResult` | Free (already propagated, unread), but the runner owns it and no step can set it. Fidelity, not intent. |
+| Termination message (`/dev/termination-log` → `State.Terminated.Message`) | Anything the job writes, 4 KiB | The workable one, with one hole: the log is per-container, so a step running in a workflow `container:` job writes to a different filesystem than the kubelet reads. The wrapper must also make the path writable by the job's user. |
+| A `runs-on` label (e.g. `gag-flaky-retry`) | Per-job opt-in | Free, since the listener sees job labels at acquisition, but static policy rather than a per-failure verdict. |
+| Pod self-annotation | Anything | Rejected. Grants tenant-controlled workflow code patch permission on its own pod. |
+
+Two objections bound the value. First, the moment a tenant writes a signal
+into their workflow, the "nothing in your workflows changes" property this
+enhancement is sold on is gone, and a job that can emit "retry me" can
+equally wrap the step in a retry loop. What survives: an in-workflow wrapper
+retries steps *on the same worker*, while a platform signal re-runs the whole
+job on a fresh pod — new node, new network, clean runner — which is a flake
+class a step wrapper structurally cannot fix. Second, `rerun-failed-jobs` is
+run-granular and fires only after the run concludes, so a signal from one job
+re-runs its siblings too; the waiting machinery exists (`rerunUntilAccepted`
+already holds through `errRunNotConcluded`), the fan-out is the cost.
+
+Whichever channel wins, the writer is tenant-controlled code, often an
+untrusted PR's workflow. Gating is not optional: an operator-set `RunnerSet`
+opt-in (a workflow author's signal must never enable retry on its own), the
+existing per-run budget plus a per-window cap, and its own `cause` label so
+the spend is attributable.
+
+**What the isolation shapes do and do not change.** Neither Docker-in-Docker
+nor Kata interposes on the exit code. In both shipped shapes `dockerd` is a
+nested process of the runner container or a native sidecar reachable over
+localhost ([Kata + DinD](../operations/kata-dind-workloads.md)), so the
+wrapper is still PID 1 of the runner container and still owns its exit code;
+what DinD changes is reaping (Q249), which is phase *timing*, not outcome
+fidelity. Kata reports exit status through the ordinary `kata-agent` → shim →
+containerd → kubelet path.
+
+Two things are worth stating plainly before anything is built on this:
+
+- **Nothing has measured that a runner-produced non-zero exit reaches
+  `PodFailed`.** `translateWorkerExitCode`'s 102 passthrough is unit-tested;
+  the e2e sites that assert `PodFailed` are all external-kill shapes (evicted,
+  deleted), not a job that failed on its own merits. A green e2e run cannot
+  settle it either, because a *successful* job exits 0 whether or not the
+  runtime propagates codes faithfully. The measurement is a single dogfood
+  turn-up on the Kata overlay: fail a step deliberately, then read
+  `.status.containerStatuses[0].state.terminated.exitCode` and `.status.phase`.
+- **A workflow `container:` job is the real boundary**, and it splits the two
+  channels. The exit code survives it, because the runner execs into the job
+  container, reads the step status, and computes `TaskResult` itself. A signal
+  *file* does not: the workspace is bind-mounted across that boundary and
+  `/dev/termination-log` is not, so the obvious implementation vanishes
+  silently for exactly the tenants most likely to want it.
+
+That argues for the wrapper as the translator rather than the job writing a
+pod-visible file directly. It sits on the runner-container side of every one
+of these boundaries, already owns the exit code, and can read a
+workspace-relative marker the job wrote from wherever it ran.
 
 **Trigger.** Q555 tracks the design decision. Promote when a design session
 commits the CRD shape, or an operator asks for it (the demand signal that
