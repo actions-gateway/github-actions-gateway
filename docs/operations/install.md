@@ -118,7 +118,7 @@ against a long-running cluster, where a converging addon is not expected).
 > **Current release — `v1.3.0`.** The chart is published, cosign-signed,
 > and installable straight from the GHCR OCI registry. Pin `--version 1.3.0`
 > (the chart version is the release tag without the leading `v`). Newer patch
-> releases publish as `1.2.z`; pin the version you have verified.
+> releases publish as `1.3.z`; pin the version you have verified.
 
 Install the published, signed chart straight from the registry — no source
 checkout needed:
