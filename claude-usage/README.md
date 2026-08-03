@@ -45,6 +45,15 @@ under the new id, on top of the rows still filed under the old one, and the two
 copies are summed. The machine that produced every row predating the `host`
 column is `mac-1`.
 
+**Replacing a machine? Give the replacement a new id — never inherit the dead
+one's.** It is tempting, since the old machine is gone and the name is free, but
+the merge takes a per-column max *within* an id. A replacement filing under
+`mac-1` would collide with the retired machine's rows on any day both worked,
+and the max would keep whichever share was larger and silently drop the other.
+Under a fresh id the two land on separate rows and are summed. Retired ids are
+never removed: a day's total sums every machine that ever reported it, not just
+the live ones.
+
 ### Backfilled (estimated) days
 
 The project's first commits (2026-05-16 to -18) predate the earliest surviving
@@ -128,12 +137,20 @@ archived first three days; the measured-only floor is 420.7M. Live totals (with
 the measured / estimated split) are always in
 [`data/summary.json`](data/summary.json).
 
-This is the first snapshot spanning two machines. `mac-1` measured everything up
-to 2026-07-26; `mac-2` joined that day and measured through 2026-08-03. The two
-overlap only on 2026-07-26, where both worked and the day's total is their sum.
-`mac-1` has not reported since, so **2026-07-27 onward is mac-2 only** — if
-`mac-1` also worked those days, they currently read low and a run from that
-machine will fill them in.
+This snapshot spans a machine handover. `mac-1` measured everything through
+2026-07-26 and has since been **retired**; `mac-2` replaced it, taking over
+mid-morning that day and measuring through 2026-08-03. They overlap on
+2026-07-26 alone, and the overlap is clean rather than double-counted: mac-1
+recorded that morning, and every mac-2 record for the day starts at 10:26 local
+— the minute the replacement cloned the repo — so the day's total is their sum
+with no session counted on both.
+
+Because mac-1 is gone, its rows are final and 2026-07-27 onward is mac-2 only
+and **complete**, not a day awaiting a second reporter. Its transcripts went
+with the machine, so the committed CSVs are now the sole surviving record of the
+mac-1 era — the exact loss the snapshotting exists to prevent. One gap can no
+longer be closed: mac-1's last row came from a snapshot taken partway through
+2026-07-26, so anything it did later that day went unrecorded.
 
 ## Charts
 
@@ -155,15 +172,19 @@ The Pro→Max 5x upgrade (first dashed line, 2026-05-23) is visible as the hand-
 from Sonnet 4.6 (orange) to Opus 4.7 (purple), then Opus 4.8 (blue), with Fable 5
 (green) appearing from June 9 and Opus 5 (vermillion) from July 25; the second
 dashed line (2026-07-05) marks the Max 5x→20x upgrade. Opus 5 takes over almost
-completely from the green dash-dot line (2026-07-26), where `mac-2` joined, on
-days roughly twice the height of the Opus 4.8 era. Charts use the Okabe–Ito
-colourblind-safe palette, and each model also carries its own hatch pattern.
+completely from the green dash-dot line (2026-07-26), where `mac-2` took over,
+on days roughly twice the height of the Opus 4.8 era. That doubling is the model
+and the plan, **not** more machines running at once — `mac-2` replaced `mac-1`
+rather than joining it. Charts use the Okabe–Ito colourblind-safe palette, and
+each model also carries its own hatch pattern.
 
 Two kinds of event line, styled apart because they mean different things: a
 **black dashed** line is a plan upgrade (a higher ceiling on what one machine can
-spend), a **green dash-dot** line is a machine joining (a second measurement
-source on the same day). Machine lines are derived from the first row each
-machine reports, so a third machine marks itself with no code change.
+spend), a **green dash-dot** line is a machine's rows beginning (a change in
+which machine is measuring). Machine lines are derived from the first row each
+machine reports, so a third machine marks itself with no code change. They read
+"begins" rather than "joins" because the data can't tell a replacement from an
+addition — an old machine going quiet is not evidence it was retired.
 
 ### Tokens spent vs. lines authored (the magnitude)
 ![Cumulative tokens far above cumulative lines authored, log scale](charts/tokens_vs_lines.png)
@@ -193,8 +214,8 @@ order of magnitude above everything else, every day.
 ### Cumulative cache traffic
 ![Cumulative cache traffic](charts/cumulative_cache.png)
 Cumulative cache reads (17.8B) vs writes (345M). Write once, replay ~52×. Both
-plan upgrades and the `mac-2` join are marked; the curve visibly steepens at the
-last of them.
+plan upgrades and the `mac-1`→`mac-2` handover are marked; the curve visibly
+steepens at the last of them.
 
 ## Data files
 
@@ -241,7 +262,10 @@ snapshot and which machines are on record.
   per `(date, machine)` and summed, so a day worked on two machines is only
   whole once both have run the script and their rows are committed. Until then
   the day reads low rather than wrong — nothing is lost, and a later run from
-  the missing machine fills it in.
+  the missing machine fills it in. No machine is outstanding in this snapshot:
+  `mac-1` is retired and `mac-2` measured through the snapshot date. A retired
+  machine can never report again, so whatever it had not captured by its last
+  run is gone rather than pending.
 - **Archived early days are estimated, not measured.** The project's first
   commits (2026-05-16 to -18) predate the earliest surviving transcript
   (2026-05-19), so their token usage is gone from the logs. Those days are

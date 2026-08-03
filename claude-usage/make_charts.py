@@ -44,7 +44,7 @@ PRO_TO_MAX = date(2026, 5, 23)
 MAX_5X_TO_20X = date(2026, 7, 5)  # Max 5x -> Max 20x plan upgrade
 
 # Event markers. A plan upgrade raises the ceiling on what one machine can spend;
-# a machine joining adds a second measurement source to the same day. Different
+# a machine starting changes which machine is doing the measuring. Different
 # causes, so different styling.
 PLAN_STYLE = ("#222", "--")
 MACHINE_STYLE = ("#005E44", (0, (5, 2, 1, 2)))
@@ -88,11 +88,15 @@ def is_est(r):
     return str(r.get("estimated", "0")) == "1"
 
 
-def machine_joins():
+def machine_starts():
     """``(date, label)`` for each machine after the first, from its earliest row.
 
     Derived rather than hardcoded so a third machine marks itself. Estimated
     backfill rows carry no machine (``-``) and are skipped.
+
+    "begins", not "joins": the data shows where a machine's rows start, and can't
+    tell a replacement from an addition — silence from the old machine is not
+    evidence it retired. Which one it was belongs in the README.
     """
     first = {}
     for r in load("token_metrics.csv"):
@@ -102,14 +106,14 @@ def machine_joins():
         if h not in first or r["date"] < first[h]:
             first[h] = r["date"]
     order = sorted(first.items(), key=lambda kv: (kv[1], kv[0]))
-    return [(dparse(d), f"{h} joins") for h, d in order[1:]]
+    return [(dparse(d), f"{h} begins") for h, d in order[1:]]
 
 
 def event_markers():
-    """Plan upgrades and machine joins, in date order, each with its own style."""
+    """Plan upgrades and machine starts, in date order, each with its own style."""
     events = [(PRO_TO_MAX, "Pro → Max 5x", *PLAN_STYLE),
               (MAX_5X_TO_20X, "Max 5x → 20x", *PLAN_STYLE)]
-    events += [(d, lbl, *MACHINE_STYLE) for d, lbl in machine_joins()]
+    events += [(d, lbl, *MACHINE_STYLE) for d, lbl in machine_starts()]
     return sorted(events, key=lambda e: e[0])
 
 
@@ -569,7 +573,7 @@ def chart_token_anatomy():
                 label=f"{lbl}  ({totals[k] / 1e6:,.0f}M total)")
         ax.fill_between(days, arr(k), 0.1, color=col, alpha=0.06)
     ax.set_yscale("log")
-    # Follows the data — a fixed top clipped the cache-read peak once mac-2 joined.
+    # Follows the data — a fixed top clipped the cache-read peak once volume grew.
     ax.set_ylim(1e3, max(np.nanmax(arr(k)) for k, *_ in spec) * 1.5)
     ax.set_ylabel("tokens / day  (log scale)", fontsize=11)
     ax.set_title("Anatomy of token usage", fontsize=14, fontweight="bold", loc="left")
