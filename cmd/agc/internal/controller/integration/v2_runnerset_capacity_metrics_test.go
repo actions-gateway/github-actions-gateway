@@ -1,0 +1,171 @@
+//go:build integration
+
+package integration_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
+)
+
+// Q319: the RunnerSet worker-capacity gauges, proven against a real apiserver with
+// the reconciler writing the conditions the collector reads. The collector is
+// registered into a throwaway registry (the scale-set tests' pattern) rather than
+// scraped from the global controller-runtime one, so a series here belongs to this
+// test's fixture and cannot be another suite's leftover.
+
+const (
+	familyQuotaPressure = "actions_gateway_runnerset_worker_quota_pressure"
+	familyQuotaExceeded = "actions_gateway_runnerset_worker_quota_exceeded"
+	familyUnschedulable = "actions_gateway_runnerset_workers_unschedulable"
+)
+
+// runnerSetCapacityGauge returns the value reg currently exposes for the named gauge
+// family at (ns, name), and whether that series exists at all — so a caller can tell
+// an unemitted series from a legitimate 0.
+func runnerSetCapacityGauge(reg *prometheus.Registry, family, ns, name string) (float64, bool) {
+	fams, err := reg.Gather()
+	if err != nil {
+		return 0, false
+	}
+	for _, f := range fams {
+		if f.GetName() != family {
+			continue
+		}
+		for _, m := range f.GetMetric() {
+			var gotNS, gotSet string
+			for _, l := range m.GetLabel() {
+				switch l.GetName() {
+				case "namespace":
+					gotNS = l.GetValue()
+				case "runner_set":
+					gotSet = l.GetValue()
+				}
+			}
+			if gotNS == ns && gotSet == name {
+				return m.GetGauge().GetValue(), true
+			}
+		}
+	}
+	return 0, false
+}
+
+// requireCapacityGauge asserts the series exists and carries want.
+func requireCapacityGauge(t *testing.T, reg *prometheus.Registry, family, ns, name string, want float64) {
+	t.Helper()
+	got, ok := runnerSetCapacityGauge(reg, family, ns, name)
+	require.True(t, ok, "%s must be emitted for %s/%s", family, ns, name)
+	require.Equal(t, want, got, "%s for %s/%s", family, ns, name)
+}
+
+// newCapacityGaugeRegistry registers a fresh collector reading through the direct
+// (uncached) envtest client, so a gather reflects the apiserver rather than an
+// informer that may not have caught up.
+func newCapacityGaugeRegistry(t *testing.T) *prometheus.Registry {
+	t.Helper()
+	reg := prometheus.NewRegistry()
+	require.NoError(t, reg.Register(controller.NewRunnerSetCapacityCollector(k8sClient)))
+	return reg
+}
+
+// TestV2_RunnerSet_CapacityGauges_QuotaExceeded proves the error tier reaches the
+// gauges: an exhausted namespace ResourceQuota reads 1 on the exceeded family under
+// the set's own (namespace, runner_set) labels, while the superseded pressure tier
+// reads 0 — the collector maps each condition independently rather than exporting a
+// single capacity flag.
+func TestV2_RunnerSet_CapacityGauges_QuotaExceeded(t *testing.T) {
+	const ns = "v2-rs-cap-gauge-quota"
+	const setName = "gauge-quota-set"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplateWithCPURequest("tmpl", ns, "500m")))
+	rs := newRunnerSet(setName, ns, "gw")
+	rs.Spec.MaxWorkers = ptr.To(int32(3))
+	require.NoError(t, k8sClient.Create(ctx, rs))
+
+	// Headroom below a single 500m worker trips the error tier, which supersedes the
+	// warning tier the 3-worker ceiling would otherwise raise.
+	quota := &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{Name: "tight", Namespace: ns},
+		Spec:       corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourceRequestsCPU: resource.MustParse("100m")}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, quota))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), quota)
+		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconciler(t)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	reg := newCapacityGaugeRegistry(t)
+	require.Eventually(t, func() bool {
+		v, ok := runnerSetCapacityGauge(reg, familyQuotaExceeded, ns, setName)
+		return ok && v == 1
+	}, 20*time.Second, 200*time.Millisecond,
+		"an exhausted namespace ResourceQuota must read 1 on "+familyQuotaExceeded)
+
+	requireCapacityGauge(t, reg, familyQuotaPressure, ns, setName, 0)
+	requireCapacityGauge(t, reg, familyUnschedulable, ns, setName, 0)
+}
+
+// TestV2_RunnerSet_CapacityGauges_WorkersUnschedulable proves the scheduler-verdict
+// signal reaches its own gauge, and that a set with no capacity problem emits
+// explicit zeros on the other two families rather than no series at all — a frozen
+// or absent series is what an operator's alert would misread as healthy.
+func TestV2_RunnerSet_CapacityGauges_WorkersUnschedulable(t *testing.T) {
+	const ns = "v2-rs-cap-gauge-unsched"
+	const setName = "gauge-unsched-set"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newRunnerSet(setName, ns, "gw")
+	// A 12s pending deadline gives a 6s scheduling grace and a 6s window to observe
+	// the gauge before the reaper deletes the pod.
+	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
+	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 12 * time.Second}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconciler(t)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	reg := newCapacityGaugeRegistry(t)
+	require.Eventually(t, func() bool {
+		v, ok := runnerSetCapacityGauge(reg, familyUnschedulable, ns, setName)
+		return ok && v == 0
+	}, 20*time.Second, 200*time.Millisecond,
+		"a healthy set must emit an explicit 0 on "+familyUnschedulable+", not an absent series")
+	requireCapacityGauge(t, reg, familyQuotaPressure, ns, setName, 0)
+	requireCapacityGauge(t, reg, familyQuotaExceeded, ns, setName, 0)
+
+	pod := createV2WorkerPod(t, ns, setName, "worker-gauge-unsched")
+	markUnschedulable(t, pod, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
+
+	require.Eventually(t, func() bool {
+		v, ok := runnerSetCapacityGauge(reg, familyUnschedulable, ns, setName)
+		return ok && v == 1
+	}, 11*time.Second, 100*time.Millisecond,
+		"a worker pod the scheduler cannot place must read 1 on "+familyUnschedulable)
+
+	// No ResourceQuota constrains this namespace, so the quota families stay 0 while
+	// the scheduler signal is True — the three gauges do not move together.
+	requireCapacityGauge(t, reg, familyQuotaExceeded, ns, setName, 0)
+}

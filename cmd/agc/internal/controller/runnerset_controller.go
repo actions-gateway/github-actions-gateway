@@ -188,6 +188,11 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	r.ensureMaps()
 
+	// Export the worker-capacity conditions (Q303) as gauges from the cached client,
+	// so a stalled set is alertable without kube-state-metrics — the v2 twin of the
+	// v1 RunnerGroup registrations (Q319).
+	registerRunnerSetCapacityMetrics(mgr.GetClient())
+
 	// Drain listener goroutines inside the manager's graceful shutdown so SIGTERM
 	// cannot kill the process mid-DELETE and leak GitHub-side sessions (Q222).
 	if err := mgr.Add(&listenerShutdown{stop: r.stopListeners, log: r.Log, owner: "RunnerSet"}); err != nil {
