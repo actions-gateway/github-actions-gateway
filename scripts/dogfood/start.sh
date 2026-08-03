@@ -2,7 +2,7 @@
 # Bring the dogfood GKE cluster online and dispatch an isolated CI validation
 # burst onto GAG. Ordinary push/PR CI is NOT re-routed — only the explicit
 # workflow_dispatch runs below target GAG (opt-in model; see Q224/Q264 P4).
-# See docs/plan/gke-dogfood.md Part D.
+# See the GKE dogfood plan (indexed in docs/plan/README.md), Part D.
 #
 # Required env vars (export before running):
 #   PROJECT   GCP project ID (e.g. actions-gateway-dogfood)

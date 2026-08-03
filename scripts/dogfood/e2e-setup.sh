@@ -3,7 +3,7 @@
 # kustomize overlays can't express: the e2e node pool (nested virtualization +
 # Workload Identity), the Kata Containers runtime + `kata` RuntimeClass alias,
 # the gag-dogfood-e2e namespace, and the GitHub App Secret.
-# See docs/plan/gke-dogfood.md Part F.
+# See the GKE dogfood plan (indexed in docs/plan/README.md), Part F.
 #
 # The tenant OBJECTS (ResourceQuota + ActionsGateway + ClusterRunnerTemplate +
 # RunnerSet + egress policy, and the namespace's security-profile gates) are
@@ -15,7 +15,7 @@
 # corrected this script's Kata install (the old release-asset URLs 404; the
 # RuntimeClass used an invalid scheduling.nodeClassification field; the pool did
 # not pin --image-type so it got COS). Q286 wires GAG's e2e suite through it —
-# see docs/plan/archive/kata-on-gke.md.
+# see the kata-on-gke plan (indexed in docs/plan/README.md).
 #
 # Run once after the main cluster setup (Parts A–B of the runbook).
 # Idempotent and safe to re-run: the e2e node-pool create is skipped if the

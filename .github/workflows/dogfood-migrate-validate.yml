@@ -9,8 +9,7 @@
 # validation window, so a push- or PR-triggered run would queue against a runner
 # label with nothing behind it. It routes no real CI and gates nothing.
 #
-# Deleted with the rest of the v1 surface at v2.0.0. Plan:
-# docs/plan/q415-migrate-dogfood-validation.md
+# Deleted with the rest of the v1 surface at v2.0.0. Plan: Q415.
 name: dogfood-migrate-validate
 
 on:

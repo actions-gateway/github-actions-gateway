@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Route e2e CI jobs back to GitHub-hosted runners and tear down the on-demand
 # e2e tenant's AGC. The e2e node pool autoscales to 0 once jobs drain (~10 min).
-# See docs/plan/gke-dogfood.md Part F.
+# See the GKE dogfood plan (indexed in docs/plan/README.md), Part F.
 #
 # On-demand (Q231): deleting the ActionsGateway makes the GMC tear down the
 # per-tenant AGC pod, freeing its standing ~500m CPU on the system node. The

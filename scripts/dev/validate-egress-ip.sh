@@ -3,7 +3,8 @@
 # (Q243, the residual left after Q282).
 #
 # WHAT THIS PROVES
-#   The 2026-07-07 campaign (docs/plan/q243-q245-q230-live-validation-campaign.md)
+#   The 2026-07-07 campaign (the q243-q245-q230 live-validation-campaign plan,
+#   indexed in docs/plan/README.md)
 #   proved the Cloud NAT *mechanism* — two tenants on two pod secondary ranges
 #   egress from distinct, stable IPs — but found that a real EgressProxy could not
 #   be pinned to one tenant pool: its built-in cross-node anti-affinity *spread* a
@@ -58,7 +59,8 @@
 # FLAGS
 #   --teardown-only  Delete the resources this script creates in PROJECT, then exit.
 #
-# See docs/plan/q243-egress-ip-reference-arch.md § "Re-runnable live validation".
+# See the q243 egress-IP reference-arch plan (indexed in docs/plan/README.md)
+# § "Re-runnable live validation".
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"

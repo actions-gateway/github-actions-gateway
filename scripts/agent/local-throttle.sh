@@ -40,8 +40,9 @@
 # scheduling latency, with zero stutter events past 50 ms, zero swapins and zero
 # WindowServer reports across nine runs. The variant keeping a CPU demotion was
 # both faster and lower-jitter than bare `-d throttle`, so there was no
-# speed-versus-safety trade to adjudicate. Evidence and method:
-# docs/plan/archive/local-gate-throughput.md; instruments: scripts/agent/qos-cluster-probe.sh
+# speed-versus-safety trade to adjudicate. Evidence and method: the
+# local-gate-throughput plan (indexed in docs/plan/README.md); instruments:
+# scripts/agent/qos-cluster-probe.sh
 # (compute ceiling) and scripts/agent/validate-throttle.sh (desktop cost).
 #
 # Throttling is auto-detected and applies ONLY to an interactive, GUI-bearing

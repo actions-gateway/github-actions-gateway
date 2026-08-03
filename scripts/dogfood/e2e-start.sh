@@ -2,7 +2,7 @@
 # Spin up the on-demand e2e tenant on GKE. The system pool must already be
 # running (run dogfood/start.sh first) and the one-time e2e setup must have run
 # once (dogfood/e2e-setup.sh — node pool + Kata runtime + GitHub App Secret).
-# See docs/plan/gke-dogfood.md Part F.
+# See the GKE dogfood plan (indexed in docs/plan/README.md), Part F.
 #
 # Routing is NOT wired by default (2026-07-31 incident): flipping the repo-wide
 # vars.GAG_E2E_RUNNER routes EVERY e2e job — other sessions' PRs and merges
@@ -53,8 +53,9 @@ E2E_VARIANT="${E2E_VARIANT:-kata}"
 
 # System pool sizing for the e2e window (Q335). 2 nodes was live-validated
 # green with both always-on AGCs plus the on-demand e2e AGC (see
-# docs/plan/archive/kata-on-gke.md#what-the-live-session-found-2026-07-16).
-# The effective size never drops below the derived running size (Q357), so
+# the kata-on-gke plan's 2026-07-16 live-session findings, indexed in
+# docs/plan/README.md). The effective size never drops below the derived
+# running size (Q357), so
 # with a third always-on tenant this resize cannot evict a tenant AGC.
 SYSTEM_POOL="${SYSTEM_POOL:-default-pool}"
 E2E_SYSTEM_NODES="${E2E_SYSTEM_NODES:-2}"

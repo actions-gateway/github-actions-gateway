@@ -152,8 +152,8 @@ init_throttle() {
 # N used to be 1 — strictly one heavy run machine-wide — which made the gate set
 # the pace for a machine running several sessions: one run used `jobs` threads
 # while every sibling blocked for its whole duration. GAG_HEAVY_BUILD_SLOTS=1
-# restores that behaviour; see scripts/agent/local-throttle.sh and
-# docs/plan/archive/local-gate-throughput.md for why the default moved.
+# restores that behaviour; see scripts/agent/local-throttle.sh for why the
+# default moved.
 #
 # It re-execs the calling script once holding an advisory lock for the script's
 # whole lifetime, then proceeds normally in the re-exec'd child. Call it AFTER
