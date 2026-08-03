@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.2.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.2.0">Read the release notes.</a>
+            <strong>v1.3.0 is here.</strong>
+      Measured worker right-sizing with opt-in auto-apply profiles, a capacity gate that stops claiming jobs the cluster can't place, and auto-re-run for evicted, preempted, and drained workers.
           </div>
           
         </aside>
@@ -2607,6 +2607,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Deploy routes CI to GAG, scaling <code>workers</code> to 8 (32 vCPU) out of the same <code>CPUS_ALL_REGIONS</code> the e2e pool then needs. Cost two rc.5 runs at the old limit of 32. Raised to 64, so 52 worst case now fits — but nothing caps the competition.</td>
+</tr>
+<tr>
+<td><a id="Q632"></a>Q632</td>
+<td><a href="../development/code-generation/">Generate an API reference page from the CRD markers</a></td>
+<td><code>docs</code> <code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>No field-level API docs exist in <code>docs/</code>. The CRDs are the only authority, so v1.3.0's notes hand-wrote an API section with nowhere to link. The kubebuilder markers are already there, so <code>crd-ref-docs</code> can generate a page into the mkdocs site.</td>
 </tr>
 <tr>
 <td><a id="Q623"></a>Q623</td>
