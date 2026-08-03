@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -358,14 +359,22 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		}, 10*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("locating the worker pod running that job")
-		var podName string
+		var podName, matchedBy string
 		Eventually(func(g Gomega) {
 			var diag string
-			podName, diag = runningWorkerForRun(g, tenantNS, runID, before)
+			podName, matchedBy, diag = runningWorkerForRun(g, tenantNS, runID, before)
 			g.Expect(podName).NotTo(BeEmpty(),
 				"no worker pod attributable to run %s in %s: %s", runID, tenantNS, diag)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q396 evicted worker pod", podName)
+
+		By("confirming the worker carries the run identity recovery needs")
+		// Q544: asserted outside the Eventually above, so a worker that exists but has
+		// no annotation fails immediately and names itself rather than retrying for
+		// three minutes. The re-run assertions at the bottom of this spec cannot pass
+		// without this, so failing here attributes the cause instead of leaving it to
+		// be inferred from a silent recovery.
+		assertWorkerCarriesRunIdentity(tenantNS, podName, matchedBy, runID)
 
 		By("confirming the worker carries the ephemeral-storage cap this spec overshoots")
 		// Without the cap there is nothing to exceed, the kubelet never evicts, and the
@@ -492,6 +501,23 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 				"the re-run has not been accepted yet")
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
+		By("asserting the accepted re-run is the one the retry loop landed, not the first call")
+		// The distinction Q503 is actually about. An accepted re-run alone does not
+		// separate "the loop outlasted GitHub's refusal" from "GitHub accepted
+		// immediately", and only the first is the behaviour that shipped — a
+		// fire-once recovery would also reach the assertion above on a run GitHub
+		// happened to have concluded. rerunUntilAccepted reports how many calls it
+		// took; the first goes out evictionRetryDelay (5s) after the eviction, and the
+		// conclusion measured above is minutes later, so at least one refusal must
+		// precede the acceptance.
+		rerunCalls := rerunCallsOnAcceptance(agcEvictionLog(tenantNS))
+		AddReportEntry("Q503 rerun-failed-jobs calls before GitHub accepted", strconv.Itoa(rerunCalls))
+		Expect(rerunCalls).To(BeNumerically(">=", 2),
+			"the re-run was accepted on call %d, so no refusal was ever absorbed and the retry "+
+				"loop is untested by this run. Either the recovery no longer waits, or GitHub now "+
+				"concludes an ungraceful eviction inside evictionRetryDelay — in which case the "+
+				"eviction→conclusion latency recorded above is the finding", rerunCalls)
+
 		By("asserting GitHub actually started a second attempt")
 		// Accepted is necessary but not the deliverable: the deliverable is a second
 		// attempt actually running, which is what "recovery" means to the tenant.
@@ -552,13 +578,14 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		}, 10*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("locating the worker pod running that job")
-		var podName string
+		var podName, matchedBy string
 		Eventually(func(g Gomega) {
 			var diag string
-			podName, diag = runningWorkerForRun(g, tenantNS, runID, before)
+			podName, matchedBy, diag = runningWorkerForRun(g, tenantNS, runID, before)
 			g.Expect(podName).NotTo(BeEmpty(), "no worker pod attributable to run %s in %s: %s", runID, tenantNS, diag)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q459 interrupted worker pod", podName)
+		assertWorkerCarriesRunIdentity(tenantNS, podName, matchedBy, runID)
 
 		By("streaming the worker's logs so the relay can be observed as it happens")
 		// Started before the delete and read after: once the pod object is gone
@@ -708,13 +735,14 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		}, 10*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("locating the worker pod running that job")
-		var podName string
+		var podName, matchedBy string
 		Eventually(func(g Gomega) {
 			var diag string
-			podName, diag = runningWorkerForRun(g, tenantNS, runID, before)
+			podName, matchedBy, diag = runningWorkerForRun(g, tenantNS, runID, before)
 			g.Expect(podName).NotTo(BeEmpty(), "no worker pod attributable to run %s in %s: %s", runID, tenantNS, diag)
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		AddReportEntry("Q459 cancelled worker pod", podName)
+		assertWorkerCarriesRunIdentity(tenantNS, podName, matchedBy, runID)
 
 		By("sampling the pod's phase, deletionTimestamp and deletion-reason across the cancellation")
 		// All four fields together, sampled as it happens: the claim is about what is
@@ -1310,21 +1338,31 @@ func dispatchAndResolveRun(repoSlug, workflow string) string {
 	return runID
 }
 
+// How runningWorkerForRun resolved a worker. The caller asserts on it: on a post-Q495
+// build the annotation is the only acceptable answer, and the snapshot is a regression
+// signal (Q544).
+const (
+	matchByRunIDAnnotation = "run-id annotation"
+	matchByFreshSnapshot   = "pre-dispatch snapshot"
+)
+
 // runningWorkerForRun returns the name of the Running worker pod the AGC provisioned
-// for a specific workflow run, or "" when none exists yet.
+// for a specific workflow run and how it was identified, or "" when none exists yet.
 //
 // Scoped by the run-id annotation the AGC stamps on every worker pod
 // (provisioner.AnnotationRunID) rather than by "the first Running worker in the
 // namespace". These specs interrupt one run while a previous spec's re-run may still
 // have a worker of its own up, and picking the wrong pod would make the spec measure
 // a job nobody touched.
-// It prefers an exact match on the run-id annotation. That annotation is absent on
-// this tier (Q495), so the fallback is what actually resolves the worker today: the
-// caller snapshots the Running workers that existed *before* it dispatched, and a
-// Running worker outside that snapshot is this run's by identity rather than by
-// count. That is what lets these specs run back to back — a previous spec's worker
-// lingering past its own run no longer makes the lookup ambiguous, which is why
-// "wait for the namespace to be quiet first" is not needed and not done.
+//
+// The fallback resolves by identity rather than by count: the caller snapshots the
+// Running workers that existed *before* it dispatched, and a Running worker outside
+// that snapshot is this run's. It was the path that actually worked while Q495 was
+// open and the annotation was absent on this tier. It is retained on a fixed build so
+// that a worker provisioned without run identity is reported as the pod it is, with
+// its annotations, rather than as an empty string the caller times out on — but the
+// caller must fail on it, which is what assertWorkerCarriesRunIdentity is for.
+//
 // Only a genuine ambiguity — no annotated match and several new Running workers —
 // yields "", along with a description of what it saw. That case is reachable and was
 // hit on 2026-07-29: a second live-GitHub session dispatched the same fixture workflow
@@ -1332,7 +1370,7 @@ func dispatchAndResolveRun(repoSlug, workflow string) string {
 // appeared that were not there before. Nothing in the cluster can separate them
 // without the run-id annotation, so the spec must fail — but it must fail saying so
 // rather than timing out on an empty string (Q500, Q495).
-func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool) (podName, diag string) {
+func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool) (podName, matchedBy, diag string) {
 	out, err := utils.Run(exec.Command("kubectl", "get", "pods",
 		"-n", ns,
 		"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
@@ -1344,7 +1382,7 @@ func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool
 	// The selector can match more than one pod only if a run has several jobs; these
 	// fixtures have exactly one, so the first field is the worker for this run.
 	if fields := strings.Fields(out); len(fields) > 0 {
-		return fields[0], ""
+		return fields[0], matchByRunIDAnnotation, ""
 	}
 
 	all := runningWorkers(g, ns)
@@ -1357,18 +1395,40 @@ func runningWorkerForRun(g Gomega, ns, runID string, preexisting map[string]bool
 	}
 	switch len(fresh) {
 	case 1:
-		AddReportEntry("Q459 worker matched without the run-id annotation",
-			fmt.Sprintf("wanted run %s; sole worker new since dispatch is %s", runID, fresh[0]))
-		return strings.SplitN(fresh[0], "=", 2)[0], ""
+		return strings.SplitN(fresh[0], "=", 2)[0], matchByFreshSnapshot, ""
 	case 0:
-		return "", fmt.Sprintf("no worker has appeared since dispatch; Running workers now: %v", all)
+		return "", "", fmt.Sprintf("no worker has appeared since dispatch; Running workers now: %v", all)
 	default:
-		return "", fmt.Sprintf(
+		return "", "", fmt.Sprintf(
 			"%d workers appeared since dispatch, so none can be attributed to run %s without the "+
 				"run-id annotation (Q495). Most likely another live-GitHub session dispatched the same "+
 				"fixture workflow and this AGC acquired its job too (Q500). New since dispatch: %v",
 			len(fresh), runID, fresh)
 	}
+}
+
+// assertWorkerCarriesRunIdentity fails unless the worker was resolved by its own run-id
+// annotation, and unless it also carries the repository annotation.
+//
+// Both keys are read from the same place — the acquire payload's serialised github
+// context — and Q495 was them arriving together or not at all, so asserting the pair is
+// what confirms the whole fix rather than half of it. Resolving by the pre-dispatch
+// snapshot is a regression on a build that has Q495, not an outcome, which is why it
+// fails here instead of being recorded as a report entry: that pass-through is how a
+// defect stayed invisible across five live runs before (Q510, and Q544 for this one).
+func assertWorkerCarriesRunIdentity(ns, podName, matchedBy, runID string) {
+	GinkgoHelper()
+	gotRunID := podAnnotation(ns, podName, "actions-gateway.com/run-id")
+	gotRepo := podAnnotation(ns, podName, "actions-gateway.com/repository")
+
+	Expect(matchedBy).To(Equal(matchByRunIDAnnotation),
+		"worker %s was attributed to run %s by the %s, so the AGC provisioned it without "+
+			"run identity — the Q495 regression. Its annotations: run-id=%q repository=%q",
+		podName, runID, matchedBy, gotRunID, gotRepo)
+	Expect(gotRepo).NotTo(BeEmpty(),
+		"worker %s carries its run-id annotation but no repository annotation. Both come from "+
+			"the same payload context and rerun-failed-jobs needs owner/repo as well as the run "+
+			"id, so recovery is still inert on this pod (Q495)", podName)
 }
 
 // runningWorkers returns every Running worker pod in the namespace as
@@ -1583,6 +1643,32 @@ func agcEvictionLog(ns string) string {
 		}
 	}
 	return strings.Join(kept, "\n")
+}
+
+// rerunCallsAttr matches the rerunCalls attribute in either encoding the AGC may ship:
+// `"rerunCalls":19` from the JSON handler, `rerunCalls=19` from the text one.
+var rerunCallsAttr = regexp.MustCompile(`rerunCalls"?[:=](\d+)`)
+
+// rerunCallsOnAcceptance returns how many rerun-failed-jobs calls the recovery made
+// before GitHub accepted one, read off the acceptance line. Returns 0 when that line is
+// absent — the caller has already asserted it is there.
+//
+// Scoped to the acceptance line specifically. Both terminal-failure lines carry the
+// same attribute, so a scan of the whole log would report the call count of a recovery
+// that never landed as though it were one that did.
+func rerunCallsOnAcceptance(agcLog string) int {
+	GinkgoHelper()
+	for _, line := range strings.Split(agcLog, "\n") {
+		if !strings.Contains(line, "disruption auto-retry triggered") {
+			continue
+		}
+		m := rerunCallsAttr.FindStringSubmatch(line)
+		Expect(m).NotTo(BeNil(), "no rerunCalls attribute on the acceptance line: %s", line)
+		n, err := strconv.Atoi(m[1])
+		Expect(err).NotTo(HaveOccurred(), "parse rerunCalls from %q", line)
+		return n
+	}
+	return 0
 }
 
 // runAttemptCount returns the run's current attempt number. A re-run that GitHub
