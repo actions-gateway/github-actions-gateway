@@ -2474,12 +2474,12 @@
 <h1 id="self-hosted-github-actions-with-zero-idle-compute"><span class="gag-hero__phrase">Self-hosted GitHub Actions</span> with <span class="gag-hero__phrase">zero idle compute</span><a class="headerlink" href="#self-hosted-github-actions-with-zero-idle-compute" title="Permanent link">&para;</a></h1>
 </div>
 </div>
-<p class="gag-tagline">An Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources — and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
+<p class="gag-tagline">An Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes: zero idle compute, zero guessed resources, and jobs disrupted by the cluster re-run themselves. Workers are right-sized from measured usage, critical jobs keep scheduling even on a full cluster, and tenants self-manage runners under quotas that are safe to enforce.</p>
 <p><a class="md-button md-button--primary" href="getting-started/">Get started</a>
 <a class="md-button" href="demo/">Watch the demo</a>
 <a class="md-button" href="why-gag/">Why GAG?</a>
 <a class="md-button" href="https://github.com/actions-gateway/github-actions-gateway">View on GitHub</a></p>
-<p class="gag-reassure"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> Drop-in for your existing setup — jobs target the same runner labels, so nothing in your <code>.github/workflows</code> changes.</p>
+<p class="gag-reassure"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> Drop-in for your existing setup: jobs target the same runner labels, so nothing in your <code>.github/workflows</code> changes.</p>
 </div>
 <div class="gag-install">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span><span class="se">\</span>
@@ -2498,7 +2498,7 @@
 </div>
 <div class="gag-section-intro">
 <h2 id="what-gag-gives-you">What GAG gives you<a class="headerlink" href="#what-gag-gives-you" title="Permanent link">&para;</a></h2>
-<p>Most of these ladder up to one outcome — <a href="design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc"><strong>lower cost</strong></a>: no idle GPUs, fewer always-on resources, and guaranteed throughput instead of blocked critical jobs. <a href="design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc">Estimate your savings vs ARC →</a> · <a href="features/">See every feature →</a></p>
+<p>Most of these ladder up to one outcome, <a href="design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc"><strong>lower cost</strong></a>: no idle GPUs, fewer always-on resources, and guaranteed throughput instead of blocked critical jobs. <a href="design/appendix-f-cost-model/#f5-savings-calculator-this-system-vs-arc">Estimate your savings vs ARC →</a> · <a href="features/">See every feature →</a></p>
 </div>
 <div class="gag-pillars">
 <div class="grid cards">
@@ -2511,7 +2511,7 @@
 <li>Platform-owned quota cap</li>
 <li>Blocked jobs auto-recover</li>
 <li>Zero manual reruns</li>
-<li>Self-serve <code>ActionsGateway</code> CRs — no platform ticket per change</li>
+<li>Self-serve <code>ActionsGateway</code> CRs, no platform ticket per change</li>
 </ul>
 </li>
 <li>
@@ -2637,7 +2637,7 @@
 <hr />
 <p>Done paying for accelerators between jobs:</p>
 <ul>
-<li>Workers scale to zero — no idle GPU</li>
+<li>Workers scale to zero, so no idle GPU</li>
 <li>GPU nodes return to the scheduler on completion</li>
 <li>Priority tiers keep critical GPU jobs scheduling</li>
 </ul>
@@ -2645,10 +2645,10 @@
 </ul>
 </div>
 </div>
-<p class="gag-fit-note"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 9h2V7h-2m1 13c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m-1 15h2v-6h-2z"/></svg></span> <strong>Not your setup?</strong> If you're happy running on a vendor's infrastructure, a managed-SaaS runner is the better fit. GAG competes with Actions Runner Controller (ARC) for self-hosted, multi-tenant clusters — not on raw build speed.</p>
+<p class="gag-fit-note"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 9h2V7h-2m1 13c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m-1 15h2v-6h-2z"/></svg></span> <strong>Not your setup?</strong> If you're happy running on a vendor's infrastructure, a managed-SaaS runner is the better fit. GAG competes with Actions Runner Controller (ARC) for self-hosted, multi-tenant clusters, not on raw build speed.</p>
 <div class="gag-section-intro">
 <h2 id="how-it-fits-together">How it fits together<a class="headerlink" href="#how-it-fits-together" title="Permanent link">&para;</a></h2>
-<p>A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its <code>ActionsGateway</code>. Jobs are acquired with the <strong>same single-acquirer runner-scale-set protocol ARC uses</strong> — the shipped default — so GAG is a strict superset of ARC's model, not a different-architecture trade-off.</p>
+<p>A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its <code>ActionsGateway</code>. Jobs are acquired with the <strong>same single-acquirer runner-scale-set protocol ARC uses</strong>, the shipped default. GAG is therefore a strict superset of ARC's model, not a different-architecture trade-off.</p>
 </div>
 <div class="gag-flow">
   <div class="gag-flow__node gag-flow__node--input">

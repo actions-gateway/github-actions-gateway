@@ -2692,7 +2692,7 @@
 pin the AGC's <em>actual</em> per-session overhead — the figure behind the
 density-versus-pod-per-runner claim — <code>TestAGCPerSessionMemory</code>
 (<code>cmd/agc/test/load/mem_test.go</code>, <code>make mem-profile</code>) isolates it locally, with
-no cluster, no real broker, and crucially <strong>no in-process broker stub</strong> (the stub
+no cluster, no real broker, and <strong>no in-process broker stub</strong> (the stub
 inflated the earlier ~127 KiB figure because its server side runs in the same
 process).</p>
 <p><strong>Methodology.</strong> The probe drives the real multiplexing core

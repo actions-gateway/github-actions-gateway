@@ -2536,11 +2536,11 @@ a wrong or missing answer. In rough order of leverage:</p>
 <li>Shell snippets follow the repo <a href="../bash-style/">bash conventions</a>.</li>
 </ul>
 <h2 id="write-with-substance-dont-read-as-ai-slop">Write with substance (don't read as AI slop)<a class="headerlink" href="#write-with-substance-dont-read-as-ai-slop" title="Permanent link">&para;</a></h2>
-<p>Readers discount a project on sight when its docs pattern-match to generated filler —
-they bounce before they ever try the code. The tells they actually react to are
-<strong>substance-level, not punctuation</strong>: an em-dash or a bold-lead bullet is fine (this
-page uses both, deliberately). What reads as slop is padding, puffery, and claims
-without evidence. Earn trust by being specific and honest.</p>
+<p>Readers discount a project on sight when its docs pattern-match to generated filler.
+They bounce before they ever try the code. The tells that cost the most are
+substance-level: padding, puffery, and claims without evidence. Punctuation density is
+a real tell too, and the em-dash is the one this docset overuses. Earn trust by being
+specific and honest.</p>
 <ul>
 <li><strong>Specifics over adjectives.</strong> Replace "robust, scalable, high-performance" with the
   number, the command, or the named limit. "Multiplexes thousands of sessions as
@@ -2558,14 +2558,21 @@ without evidence. Earn trust by being specific and honest.</p>
 <li><strong>Honest, not promotional.</strong> State limitations, known gaps, and "not yet implemented"
   plainly (goal 6). A doc that admits what doesn't work yet reads as written by someone
   who actually ran it.</li>
+<li><strong>Ration the em-dash.</strong> One or two per page is punctuation. Several per paragraph is
+  a signature, and it is the surface tell readers spot fastest. Reach for a comma, a
+  period, a colon, or parentheses first, and keep the dash only where the aside really
+  does interrupt the sentence and no other mark carries it. Two dashes in one sentence
+  almost always means the sentence wants to be two sentences. Count with
+  <code>grep -o '—' &lt;file&gt; | wc -l</code>; above roughly 3 per 1,000 words, rewrite.</li>
 <li><strong>Formatting in moderation.</strong> Bold the keyword, not the sentence; sentence-case
   headings, not Title Case; no emoji as bullets or status markers. Mechanical,
   every-line formatting is itself a tell. (The one sanctioned Title-Case heading is the
   <code>## Table of Contents</code> index — a fixed, doc-wide convention, not prose.)</li>
 </ul>
-<p>The anti-pattern is cargo-culting the surface tells — purging every em-dash, banning all
-bold — while leaving the padding and puffery untouched. That fixes nothing: the
-substance is what readers judge.</p>
+<p>Fix both halves. Cutting punctuation density while leaving the padding and puffery
+untouched produces well-punctuated filler, and no amount of substance survives prose
+that reads as machine-generated on sight. Neither half is optional, and neither
+substitutes for the other.</p>
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

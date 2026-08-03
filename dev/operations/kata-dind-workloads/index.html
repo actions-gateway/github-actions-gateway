@@ -3076,7 +3076,7 @@ before you conclude "Kata, therefore safe":</p>
   and more exotic one, but it is not empty (<code>CVE-2019-14378</code>, the VENOM class).
   Kata makes escape <em>much harder</em>, not impossible. On GKE the hypervisor is
   itself running inside a GCE VM (nested virtualisation), so the stack is
-  deeper and less battle-tested than Kata on bare metal.</li>
+  deeper and less exercised in production than Kata on bare metal.</li>
 <li><strong>Kata <em>without</em> Workload Identity can be worse than privileged DinD <em>with</em>
   compensating controls.</strong> Both configurations let a compromised runner mint
   the node's service-account token over the pod network. The Kata one <em>feels</em>

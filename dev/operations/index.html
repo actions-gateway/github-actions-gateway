@@ -2363,7 +2363,7 @@
 <tr>
 <td><a href="runbook/">runbook.md</a></td>
 <td>SRE</td>
-<td>Production runbook — high-level operational procedures. For initial setup see <a href="../getting-started/">Getting Started</a>.</td>
+<td>Production runbook: high-level operational procedures. For initial setup see <a href="../getting-started/">Getting Started</a>.</td>
 </tr>
 <tr>
 <td><a href="backup-restore/">backup-restore.md</a></td>
@@ -2373,7 +2373,7 @@
 <tr>
 <td><a href="velero-backup-restore/">velero-backup-restore.md</a></td>
 <td>SRE, Platform engineer</td>
-<td>Velero-specific how-to — namespace-level backup/restore commands grounded in GAG's ownership model, with the selector that skips GMC-owned children so the controllers rebuild them.</td>
+<td>Velero-specific how-to: namespace-level backup/restore commands grounded in GAG's ownership model, with the selector that skips GMC-owned children so the controllers rebuild them.</td>
 </tr>
 <tr>
 <td><a href="troubleshooting/">troubleshooting.md</a></td>
@@ -2383,32 +2383,32 @@
 <tr>
 <td><a href="observability/">observability.md</a></td>
 <td>SRE, Platform engineer</td>
-<td>Observability guide hub — links to the <a href="observability-metrics/">metrics reference</a>, <a href="observability-metrics-access/">scraping setup</a>, <a href="observability-alerting/">alerting &amp; SLOs</a>, <a href="observability-dashboards/">Grafana dashboards</a>, and <a href="observability-logging/">logging &amp; tracing</a>.</td>
+<td>Observability guide hub: links to the <a href="observability-metrics/">metrics reference</a>, <a href="observability-metrics-access/">scraping setup</a>, <a href="observability-alerting/">alerting &amp; SLOs</a>, <a href="observability-dashboards/">Grafana dashboards</a>, and <a href="observability-logging/">logging &amp; tracing</a>.</td>
 </tr>
 <tr>
 <td><a href="cost-attribution/">cost-attribution.md</a></td>
 <td>SRE, Platform engineer, Budget owner</td>
-<td>Live per-tenant cost attribution — map GAG's tenant namespaces and <code>app.kubernetes.io/*</code> labels to OpenCost/Kubecost allocation queries for real $/tenant.</td>
+<td>Live per-tenant cost attribution: map GAG's tenant namespaces and <code>app.kubernetes.io/*</code> labels to OpenCost/Kubecost allocation queries for real $/tenant.</td>
 </tr>
 <tr>
 <td><a href="worker-rightsizing/">worker-rightsizing.md</a></td>
 <td>SRE, Platform engineer</td>
-<td>Right-size worker <code>requests</code>/<code>limits</code> from the gateway's built-in per-RunnerSet usage metrics — read the peak distribution, derive values, validate.</td>
+<td>Right-size worker <code>requests</code>/<code>limits</code> from the gateway's built-in per-RunnerSet usage metrics: read the peak distribution, derive values, validate.</td>
 </tr>
 <tr>
 <td><a href="node-shutdown-budgets/">node-shutdown-budgets.md</a></td>
 <td>SRE, Platform engineer</td>
-<td>How much shutdown time each platform actually grants — graceful-node-shutdown and preemption-notice defaults for GKE/EKS/AKS/RKE2/Kubespray/OpenShift, drain timeouts, and why proxy pools should stay off spot capacity.</td>
+<td>How much shutdown time each platform actually grants: graceful-node-shutdown and preemption-notice defaults for GKE/EKS/AKS/RKE2/Kubespray/OpenShift, drain timeouts, and why proxy pools should stay off spot capacity.</td>
 </tr>
 <tr>
 <td><a href="security-operations/">security-operations.md</a></td>
 <td>SRE, Security</td>
-<td>Abuse-detection runbook — maps the threat model's abuse heuristics to operator alerts and compromise-response playbooks.</td>
+<td>Abuse-detection runbook: maps the threat model's abuse heuristics to operator alerts and compromise-response playbooks.</td>
 </tr>
 <tr>
 <td><a href="admission-policies/">admission-policies.md</a></td>
 <td>Platform engineer, Security</td>
-<td>Kyverno/Gatekeeper compatibility matrix — whether GAG pods comply with common cluster admission policies, plus sample enforce/exception policies.</td>
+<td>Kyverno/Gatekeeper compatibility matrix: whether GAG pods comply with common cluster admission policies, plus sample enforce/exception policies.</td>
 </tr>
 <tr>
 <td><a href="tenant-onboarding/">tenant-onboarding.md</a></td>
@@ -2418,7 +2418,7 @@
 <tr>
 <td><a href="resourcequota-sizing/">resourcequota-sizing.md</a></td>
 <td>Platform engineer</td>
-<td>Turn runner shapes and concurrency ceilings into the namespace <code>ResourceQuota</code> numbers — what the quota actually counts (native sidecars, Kata overhead, PVCs), which keys are safe to constrain, and a worked DinD example.</td>
+<td>Turn runner shapes and concurrency ceilings into the namespace <code>ResourceQuota</code> numbers: what the quota actually counts (native sidecars, Kata overhead, PVCs), which keys are safe to constrain, and a worked DinD example.</td>
 </tr>
 <tr>
 <td><a href="in-runner-image-builds/">in-runner-image-builds.md</a></td>
@@ -2428,37 +2428,37 @@
 <tr>
 <td><a href="kata-dind-workloads/">kata-dind-workloads.md</a></td>
 <td>Platform engineer</td>
-<td>Run DinD / image-build jobs under Kata Containers (KVM micro-VM) at <code>securityProfile: baseline</code> — nested-virt node prerequisites, the Kata DaemonSet + <code>RuntimeClass</code> setup, and the worker <code>podTemplate</code> <code>runtimeClassName</code>.</td>
+<td>Run DinD / image-build jobs under Kata Containers (KVM micro-VM) at <code>securityProfile: baseline</code>: nested-virt node prerequisites, the Kata DaemonSet + <code>RuntimeClass</code> setup, and the worker <code>podTemplate</code> <code>runtimeClassName</code>.</td>
 </tr>
 <tr>
 <td><a href="p2p-image-distribution/">p2p-image-distribution.md</a></td>
 <td>Platform engineer, SRE</td>
-<td>Recommended scale companion — adding a peer-to-peer image mirror (Spegel/Dragonfly) to survive ephemeral-worker pull storms, and the <code>imagePullPolicy</code>/digest-pin interplay.</td>
+<td>Recommended scale companion: adding a peer-to-peer image mirror (Spegel/Dragonfly) to survive ephemeral-worker pull storms, and the <code>imagePullPolicy</code>/digest-pin interplay.</td>
 </tr>
 <tr>
 <td><a href="service-mesh-coexistence/">service-mesh-coexistence.md</a></td>
 <td>Platform engineer, SRE</td>
-<td>Running GAG alongside Istio/Linkerd/ambient — injection opt-out, sidecar lifecycle, and egress exclusions so the per-tenant proxy is honored.</td>
+<td>Running GAG alongside Istio/Linkerd/ambient: injection opt-out, sidecar lifecycle, and egress exclusions so the per-tenant proxy is honored.</td>
 </tr>
 <tr>
 <td><a href="migration-from-arc/">migration-from-arc.md</a></td>
 <td>Platform engineer</td>
-<td>Coming from Actions Runner Controller (ARC) scale-set mode — concept mapping, behavioral differences, and a worked one-runner-group migration.</td>
+<td>Coming from Actions Runner Controller (ARC) scale-set mode: concept mapping, behavioral differences, and a worked one-runner-group migration.</td>
 </tr>
 <tr>
 <td><a href="install/">install.md</a></td>
 <td>Platform engineer</td>
-<td>Install the GMC with the <code>actions-gateway</code> Helm chart — prerequisites, digest pinning, healthy-install verification, uninstall.</td>
+<td>Install the GMC with the <code>actions-gateway</code> Helm chart: prerequisites, digest pinning, healthy-install verification, uninstall.</td>
 </tr>
 <tr>
 <td><a href="air-gapped-install/">air-gapped-install.md</a></td>
 <td>Platform engineer</td>
-<td>Install on an air-gapped / egress-restricted cluster — relocate the images and OCI chart to a private registry (digests preserved), set per-image registry overrides + image-pull Secrets, wire pull Secrets for the runtime AGC/proxy/worker pods.</td>
+<td>Install on an air-gapped / egress-restricted cluster: relocate the images and OCI chart to a private registry (digests preserved), set per-image registry overrides + image-pull Secrets, wire pull Secrets for the runtime AGC/proxy/worker pods.</td>
 </tr>
 <tr>
 <td><a href="gitops/">gitops.md</a></td>
 <td>Platform engineer</td>
-<td>Install the OCI chart declaratively via Argo CD or Flux — <code>Application</code> / <code>HelmRelease</code> examples with the CRD-pruning gotcha handled, plus sourcing the GitHub App credential Secret with External Secrets Operator or Sealed Secrets (raw key never committed).</td>
+<td>Install the OCI chart declaratively via Argo CD or Flux: <code>Application</code> / <code>HelmRelease</code> examples with the CRD-pruning gotcha handled, plus sourcing the GitHub App credential Secret with External Secrets Operator or Sealed Secrets (raw key never committed).</td>
 </tr>
 <tr>
 <td><a href="v1alpha1-deprecation/">v1alpha1-deprecation.md</a></td>
@@ -2483,7 +2483,7 @@
 <tr>
 <td><a href="kata-ci-spike-runbook/">kata-ci-spike-runbook.md</a></td>
 <td>Platform engineer, Security</td>
-<td>Live go/no-go runbook for the Q226 Kata-on-GKE spike — run an unprivileged <code>dockerd</code>+<code>kind</code> runner inside a Kata micro-VM, step-by-step against the six acceptance criteria. Applies the artifacts in <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/kata-ci">deploy/kata-ci/</a>.</td>
+<td>Live go/no-go runbook for the Q226 Kata-on-GKE spike: run an unprivileged <code>dockerd</code>+<code>kind</code> runner inside a Kata micro-VM, step-by-step against the six acceptance criteria. Applies the artifacts in <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/kata-ci">deploy/kata-ci/</a>.</td>
 </tr>
 <tr>
 <td><a href="../design/08-glossary/">../design/08-glossary.md</a></td>

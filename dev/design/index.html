@@ -122,7 +122,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#high-scale-virtualized-github-actions-gateway--design-documentation" class="md-skip">
+        <a href="#high-scale-virtualized-github-actions-gateway-design-documentation" class="md-skip">
           Skip to content
         </a>
       
@@ -2387,7 +2387,7 @@
   
 
 
-<h1 id="high-scale-virtualized-github-actions-gateway--design-documentation">High-Scale Virtualized GitHub Actions Gateway — Design Documentation<a class="headerlink" href="#high-scale-virtualized-github-actions-gateway--design-documentation" title="Permanent link">&para;</a></h1>
+<h1 id="high-scale-virtualized-github-actions-gateway-design-documentation">High-Scale Virtualized GitHub Actions Gateway: Design Documentation<a class="headerlink" href="#high-scale-virtualized-github-actions-gateway-design-documentation" title="Permanent link">&para;</a></h1>
 <p>This folder contains the full system design for the GitHub Actions Gateway, organized into focused documents with cross-references. All documents are intended to render correctly on GitHub.</p>
 <hr />
 <h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
@@ -2437,23 +2437,23 @@
 <li><a href="appendix-g-future-enhancements/">Appendix G — Optional Future Enhancements</a></li>
 <li><a href="appendix-h-v2-api-decomposition/">Appendix H — v2 API Decomposition (Proposal)</a></li>
 <li><a href="network-architecture/">Network Architecture</a></li>
-<li><a href="github-protocol-dependencies/">GitHub Protocol Dependency Register</a> — the GitHub-internal protocols GAG speaks, their stability tier, and drift-watch triggers</li>
+<li><a href="github-protocol-dependencies/">GitHub Protocol Dependency Register</a>: the GitHub-internal protocols GAG speaks, their stability tier, and drift-watch triggers</li>
 </ol>
 <p><strong>Operations</strong></p>
 <ul>
-<li><a href="../getting-started/">Getting Started</a> — initial setup, credential rotation</li>
-<li><a href="../operations/observability/">Observability</a> — metrics reference, alert rules</li>
-<li><a href="../operations/troubleshooting/">Troubleshooting</a> — symptom → diagnosis → resolution</li>
-<li><a href="../operations/runbook/">Runbook</a> — day-2 operations, incident response</li>
-<li><a href="../operations/upgrade/">Upgrade &amp; Rollback</a> — per-component upgrade procedures</li>
-<li><a href="../operations/tenant-onboarding/">Tenant Onboarding</a> — checklist for onboarding a new tenant team</li>
+<li><a href="../getting-started/">Getting Started</a>: initial setup, credential rotation</li>
+<li><a href="../operations/observability/">Observability</a>: metrics reference, alert rules</li>
+<li><a href="../operations/troubleshooting/">Troubleshooting</a>: symptom → diagnosis → resolution</li>
+<li><a href="../operations/runbook/">Runbook</a>: day-2 operations, incident response</li>
+<li><a href="../operations/upgrade/">Upgrade &amp; Rollback</a>: per-component upgrade procedures</li>
+<li><a href="../operations/tenant-onboarding/">Tenant Onboarding</a>: checklist for onboarding a new tenant team</li>
 </ul>
 <hr />
 <h2 id="reading-paths-by-role">Reading Paths by Role<a class="headerlink" href="#reading-paths-by-role" title="Permanent link">&para;</a></h2>
-<p><strong>Architect</strong> — reviewing the overall design: start with <a href="01-executive-summary/">01-executive-summary.md</a>, then <a href="02-architecture/">02-architecture.md</a>, then <a href="03-api-contracts/">03-api-contracts.md</a>. Read <a href="04-operational-flows/">04-operational-flows.md</a> and <a href="05-security/">05-security.md</a> for depth.</p>
-<p><strong>Platform engineer</strong> — deploying or operating the system: read <a href="../getting-started/">Getting Started</a> first, then <a href="02-architecture/#21-tier-1--gateway-manager-controller-gmc">02-architecture.md §2.1</a> (GMC), <a href="appendix-a-capacity-slos/">Appendix A</a> (SLOs), <a href="../operations/observability/">Observability</a>, <a href="../operations/runbook/">Runbook</a>, and <a href="../operations/upgrade/">Upgrade &amp; Rollback</a>.</p>
-<p><strong>Security engineer</strong> — reviewing trust boundaries and threats: read <a href="05-security/">05-security.md</a>, <a href="02-architecture/#24-tier-4--ephemeral-worker-pod">02-architecture.md §2.4</a> (worker isolation), <a href="03-api-contracts/#32-github-app-credentials-secret-schema">03-api-contracts.md §3.2</a> (credentials), and <a href="appendix-b-worker-isolation/">Appendix B</a> (runtime hardening).</p>
-<p><strong>Tenant team</strong> — authoring RunnerGroup configs: read <a href="../getting-started/">Getting Started</a>, <a href="03-api-contracts/#31-kubernetes-crd-schemas">03-api-contracts.md §3.1</a> (CRD schemas), and <a href="appendix-e-capacity-planning/">Appendix E</a> (sizing guidance).</p>
+<p><strong>Architect</strong>: reviewing the overall design: start with <a href="01-executive-summary/">01-executive-summary.md</a>, then <a href="02-architecture/">02-architecture.md</a>, then <a href="03-api-contracts/">03-api-contracts.md</a>. Read <a href="04-operational-flows/">04-operational-flows.md</a> and <a href="05-security/">05-security.md</a> for depth.</p>
+<p><strong>Platform engineer</strong>: deploying or operating the system: read <a href="../getting-started/">Getting Started</a> first, then <a href="02-architecture/#21-tier-1--gateway-manager-controller-gmc">02-architecture.md §2.1</a> (GMC), <a href="appendix-a-capacity-slos/">Appendix A</a> (SLOs), <a href="../operations/observability/">Observability</a>, <a href="../operations/runbook/">Runbook</a>, and <a href="../operations/upgrade/">Upgrade &amp; Rollback</a>.</p>
+<p><strong>Security engineer</strong>: reviewing trust boundaries and threats: read <a href="05-security/">05-security.md</a>, <a href="02-architecture/#24-tier-4--ephemeral-worker-pod">02-architecture.md §2.4</a> (worker isolation), <a href="03-api-contracts/#32-github-app-credentials-secret-schema">03-api-contracts.md §3.2</a> (credentials), and <a href="appendix-b-worker-isolation/">Appendix B</a> (runtime hardening).</p>
+<p><strong>Tenant team</strong>: authoring RunnerGroup configs: read <a href="../getting-started/">Getting Started</a>, <a href="03-api-contracts/#31-kubernetes-crd-schemas">03-api-contracts.md §3.1</a> (CRD schemas), and <a href="appendix-e-capacity-planning/">Appendix E</a> (sizing guidance).</p>
 <hr />
 <h2 id="system-overview">System Overview<a class="headerlink" href="#system-overview" title="Permanent link">&para;</a></h2>
 <p>The gateway is a <strong>four-tier system</strong> for running GitHub Actions self-hosted runners at scale on Kubernetes:</p>

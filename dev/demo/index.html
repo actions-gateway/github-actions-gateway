@@ -2464,12 +2464,12 @@
 
 <h1 id="demo-a-real-job-on-a-local-cluster">Demo: a real job on a local cluster<a class="headerlink" href="#demo-a-real-job-on-a-local-cluster" title="Permanent link">&para;</a></h1>
 <p>GitHub Actions Gateway (GAG) in 30 seconds: a real GitHub Actions job runs in a
-<strong>worker pod that exists only while the job runs</strong>, then disappears — no runner
+<strong>worker pod that exists only while the job runs</strong>, then disappears. No runner
 sits idle. Nothing here is staged; every line was captured from a real run on a
 local <a href="https://kind.sigs.k8s.io/">kind</a> cluster against <strong>real GitHub</strong> (a
 self-hosted <code>runs-on: e2e</code> workflow).</p>
-<p><img alt="Terminal recording: a GitHub Actions job running on GAG — no idle pods, then one job spins up a worker pod that runs and is deleted on completion, green on GitHub." src="../assets/demo-local-kind.svg" /></p>
-<p>The recording assumes GAG is already installed and shows only the payoff — see
+<p><img alt="Terminal recording: a GitHub Actions job running on GAG. No idle pods, then one job spins up a worker pod that runs and is deleted on completion, green on GitHub." src="../assets/demo-local-kind.svg" /></p>
+<p>The recording assumes GAG is already installed and shows only the payoff. See
 <a href="#try-it-yourself">Try it yourself</a> to run it on your own cluster.</p>
 <h2 id="what-the-demo-shows">What the demo shows<a class="headerlink" href="#what-the-demo-shows" title="Permanent link">&para;</a></h2>
 <table>
@@ -2483,7 +2483,7 @@ self-hosted <code>runs-on: e2e</code> workflow).</p>
 <tbody>
 <tr>
 <td><strong>Idle</strong></td>
-<td>Before any job, the team's namespace holds only a lightweight controller and proxy — <strong>zero worker pods</strong>.</td>
+<td>Before any job, the team's namespace holds only a lightweight controller and proxy: <strong>zero worker pods</strong>.</td>
 <td>No idle compute (and no idle GPUs) between jobs.</td>
 </tr>
 <tr>
@@ -2494,24 +2494,24 @@ self-hosted <code>runs-on: e2e</code> workflow).</p>
 <tr>
 <td><strong>Green</strong></td>
 <td><code>gh run view</code> shows the job succeeded on GitHub (in ~8s).</td>
-<td>The job really ran on real GitHub — you paid for compute only while it ran.</td>
+<td>The job really ran on real GitHub, and you paid for compute only while it ran.</td>
 </tr>
 </tbody>
 </table>
 <h2 id="try-it-yourself">Try it yourself<a class="headerlink" href="#try-it-yourself" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Install GAG on your cluster</strong> — <a href="../getting-started/">Getting Started</a> covers
+<li><strong>Install GAG on your cluster.</strong> <a href="../getting-started/">Getting Started</a> covers
   the Helm chart, a tenant namespace and quota, the GitHub App credential Secret,
   and the <code>ActionsGateway</code> resource.</li>
-<li><strong>Reproduce this exact demo for free on a local kind cluster</strong> — a step-by-step
+<li><strong>Reproduce this exact demo for free on a local kind cluster.</strong> A step-by-step
   from-source guide (build the images, stand up kind, onboard a tenant, run one
   job) lives in the repository:
   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/development/local-kind-demo.md">Reproduce the local-kind demo</a>.</li>
 </ul>
 <h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../why-gag/">Why GAG?</a> — how GAG compares to Actions Runner Controller (ARC).</li>
-<li><a href="../design/02-architecture/">Architecture</a> — the four-tier design behind what the demo shows.</li>
+<li><a href="../why-gag/">Why GAG?</a>: how GAG compares to Actions Runner Controller (ARC).</li>
+<li><a href="../design/02-architecture/">Architecture</a>: the four-tier design behind what the demo shows.</li>
 </ul>
 <hr />
 <p><em>The recording is a hand-authored <a href="https://asciinema.org/">asciinema</a> cast (v2)

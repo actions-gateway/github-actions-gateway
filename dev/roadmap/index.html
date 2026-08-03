@@ -2470,21 +2470,21 @@
 
 <h1 id="roadmap">Roadmap<a class="headerlink" href="#roadmap" title="Permanent link">&para;</a></h1>
 <p>This page is about what GAG does <strong>not</strong> do yet. For what it does today, see
-<a href="../features/">Features</a> — every shipped capability, with a link to the doc that
-explains it — and <a href="../why-gag/">Why GAG?</a> for the capability-by-capability
+<a href="../features/">Features</a> for every shipped capability, with a link to the doc that
+explains it, and <a href="../why-gag/">Why GAG?</a> for the capability-by-capability
 comparison against Actions Runner Controller (ARC).</p>
 <p>GitHub Actions Gateway (GAG) is <strong>1.0, generally available, and installable from
 the GitHub Container Registry (GHCR)</strong>. It is Apache-2.0, vendor-neutral, and
 built for one outcome: real operators running multi-tenant self-hosted runners in
-real clusters. There is no paid tier and no commercial roadmap — the plan below is
-about capability and adoption, not revenue.</p>
+real clusters. There is no paid tier and no commercial roadmap, so the plan below
+is about capability and adoption, not revenue.</p>
 <p>It is a direction-of-travel snapshot, not a dated commitment. Priorities move with
 what adopters actually hit first, so the surest way to influence what comes next is
 to <a href="https://github.com/actions-gateway/github-actions-gateway/issues">open an issue</a>
 describing your setup. Every open item, in priority order, is in the
 <a href="https://actions-gateway.com/dev/STATUS/">working backlog</a>.</p>
 <h2 id="in-progress--near-term">In progress / near-term<a class="headerlink" href="#in-progress--near-term" title="Permanent link">&para;</a></h2>
-<p>Work that is scoped and actively being built — adoption-enabling polish and the
+<p>Work that is scoped and actively being built: adoption-enabling polish and the
 last gaps an outside operator hits.</p>
 <ul>
 <li>
@@ -2516,7 +2516,7 @@ separately.</p>
 <ul>
 <li>
 <p><strong><a href="../design/appendix-g-future-enhancements/#g3-proxy-side-audit-logging">Proxy-side audit logging</a></strong> <!-- q:Q564 -->
-  A structured line per accepted CONNECT — tenant, host and port, bytes each way,
+  A structured line per accepted CONNECT: tenant, host and port, bytes each way,
   duration. The proxy emits counters only today, so per-tenant egress is
   reconstructable just from cluster flow logs. Off by default.</p>
 </li>
@@ -2524,7 +2524,7 @@ separately.</p>
 <p><strong><a href="../design/appendix-g-future-enhancements/#g2-proxy-enforced-per-tenant-rate-limiting">Per-tenant proxy rate limiting</a></strong> <!-- q:Q565 -->
   A token bucket at the proxy, so one looping tenant is slowed before it reaches
   GitHub's ceiling; today the only feedback is a 429 and AGC backoff. Per-pod
-  state — global limits would need a shared backend.</p>
+  state, since global limits would need a shared backend.</p>
 </li>
 <li>
 <p><strong><a href="../design/appendix-g-future-enhancements/#g4-tls-between-agcworkers-and-the-proxy">TLS on the in-cluster proxy hop</a></strong> <!-- q:Q566 -->
@@ -2547,10 +2547,9 @@ separately.</p>
 </ul>
 <h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
 <p>Directions we expect to pursue as demand and validated evidence accumulate. These
-are intentionally unscheduled — each waits on a real operator need, a measured
+are intentionally unscheduled. Each waits on a real operator need, a measured
 limit, or a gating release before it becomes scheduled work. The first entry is
-the exception that proves the rule: it is a firm commitment, waiting only on the
-release that carries it.</p>
+the exception: a firm commitment, waiting only on the release that carries it.</p>
 <ul>
 <li>
 <p><strong><a href="../operations/v1alpha1-deprecation/">Retiring <code>v1alpha1</code>, <code>v2alpha1</code>, and the classic acquisition protocol</a></strong> <!-- q:Q273 -->
@@ -2562,7 +2561,7 @@ release that carries it.</p>
 <li>
 <p><strong>Controller horizontal scaling / high availability.</strong> <!-- q:Q169 --> The
   per-tenant controller runs
-  <a href="../design/02-architecture/">one replica by design</a> — the session registry is
+  <a href="../design/02-architecture/">one replica by design</a>: the session registry is
   in-memory, and HA comes from GitHub redelivering an unacquired job.
   Distributed session state would enable multi-replica HA if a single controller
   becomes a measured bottleneck.</p>
@@ -2606,12 +2605,12 @@ release that carries it.</p>
 </ul>
 <h2 id="how-priorities-are-set">How priorities are set<a class="headerlink" href="#how-priorities-are-set" title="Permanent link">&para;</a></h2>
 <p>GAG's success metric is <strong>external operators running it and telling us what
-breaks</strong> — not stars or downloads. That feedback drives the ordering above far
+breaks</strong>, not stars or downloads. That feedback drives the ordering above far
 more than any internal plan. If something here is in your way, or missing
-entirely, <a href="https://github.com/actions-gateway/github-actions-gateway/issues">open an issue</a>
-— it's the fastest way to move it up.</p>
+entirely, <a href="https://github.com/actions-gateway/github-actions-gateway/issues">open an issue</a>.
+That is the fastest way to move it up.</p>
 <p>The page above is the adopter-facing summary. The day-to-day ordering behind it
-is the <strong><a href="https://actions-gateway.com/dev/STATUS/">working backlog</a></strong> — every
+is the <strong><a href="https://actions-gateway.com/dev/STATUS/">working backlog</a></strong>: every
 open item, filterable by label, status, and size. It tracks the unreleased
 <code>main</code> branch, so it is published only on the <code>dev</code> version of this site and
 carries no commitment: rows are added, reordered, and deleted as work lands.</p>
