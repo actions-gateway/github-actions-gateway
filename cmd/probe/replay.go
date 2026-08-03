@@ -181,7 +181,7 @@ type replayProbe struct {
 
 	client *scaleset.Client
 	// deletes carries the raw status of each DeleteMessage response, which is the
-	// only place measurement 2's answer exists — see deleteObserver.
+	// evidence measurement 2's verdict is recorded against — see deleteObserver.
 	deletes *deleteObserver
 	// hc serves the one call outside the scale-set protocol: the REST run-cancel
 	// that drives the job terminal without a live runner.
@@ -191,16 +191,13 @@ type replayProbe struct {
 }
 
 // deleteObserver records the raw status of every DeleteMessage response on its way
-// past the wire logger.
+// past the wire logger, so a verdict names the status the backend actually answered.
 //
-// Measurement 2 cannot be read from Client.DeleteMessage's error, and the reason is
-// the whole point of taking the measurement: the client reports a 404/410 as success,
-// because for a listener a message already gone is a benign ack. A backend that does
-// not serve the endpoint at all answers 404 too — so the typed return says "acked"
-// for both the case the fix depends on and the case that kills it.
-//
-// This is the same rule Investigation E states for its own reporting: the finding is
-// what the wire did, not what the client made of it.
+// The verdict itself turns on Client.DeleteMessage's first result, which separates a
+// delete the wire performed from the 404/410 an unserved endpoint answers (Q609). The
+// status is what that verdict is reported against — the same rule Investigation E
+// states for its own reporting: the finding is what the wire did, not what the client
+// made of it.
 type deleteObserver struct {
 	inner scaleset.ResponseObserver
 
@@ -514,7 +511,7 @@ func (p *replayProbe) measureDelete(ctx context.Context, st *staged, ids []int64
 
 	ok := true
 	for _, id := range ids {
-		err := p.client.DeleteMessage(ctx, sess, id)
+		deleted, err := p.client.DeleteMessage(ctx, sess, id)
 		status := p.deletes.take()
 		switch {
 		case err != nil:
@@ -528,13 +525,13 @@ func (p *replayProbe) measureDelete(ctx context.Context, st *staged, ids []int64
 				"was observed at all, so there is no wire evidence to read a verdict from",
 				"messageId", id)
 			ok = false
-		case status < 200 || status > 299:
-			// The client reports 404/410 as a benign no-op, so this is the branch that
-			// separates "the endpoint took the delete" from "the endpoint is not there".
-			p.log.Error("INVESTIGATION-G: VERDICT 2 "+verdictDeleteFail+" — the wire answered a "+
-				"non-2xx that Client.DeleteMessage reports as success (a 404/410 is a benign ack "+
-				"for a listener). The endpoint is not served at the shape the client constructs; "+
-				"delete-acking cannot be the Q583 fix",
+		case !deleted:
+			// A 404/410, which completes an ack for a listener but here says the wire
+			// removed nothing — the branch that separates "the endpoint took the delete"
+			// from "the endpoint is not there".
+			p.log.Error("INVESTIGATION-G: VERDICT 2 "+verdictDeleteFail+" — the wire reported the "+
+				"message already gone rather than deleting it. The endpoint is not served at the "+
+				"shape the client constructs; delete-acking cannot be the Q583 fix",
 				"messageId", id, "status", status)
 			ok = false
 		default:

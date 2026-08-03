@@ -460,9 +460,9 @@ func (s *Stub) FailSessionCreate(on bool) {
 
 // FailDeleteMessage makes the message-DELETE ack answer status instead of acting;
 // zero restores it. Pass 404 for a backend that does not serve the endpoint — which
-// Client.DeleteMessage reports to its caller as a successful ack, so only a probe
-// reading the raw status can see it — or a 5xx for one that is momentarily unable to,
-// which the caller does see and must retry (Q583).
+// Client.DeleteMessage reports as a completed ack that deleted nothing, visible only
+// in its first result (Q609) — or a 5xx for one that is momentarily unable to, which
+// surfaces as an error the caller must retry (Q583).
 func (s *Stub) FailDeleteMessage(status int) {
 	s.mu.Lock()
 	s.failDeleteMessageStatus = status

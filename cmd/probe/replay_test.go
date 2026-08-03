@@ -410,11 +410,10 @@ func TestReplay_AcceptedDeleteThatDoesNotPruneStillReplays(t *testing.T) {
 	}
 }
 
-// TestDeleteObserver_ReadsTheWireNotTheError covers the seam verdict 2 rests on:
-// Client.DeleteMessage reports a 404 as success, so the status has to survive the
-// trip from the response to the verdict — and each take must be attributable to one
-// delete rather than lingering into the next.
-func TestDeleteObserver_ReadsTheWireNotTheError(t *testing.T) {
+// TestDeleteObserver_AttributesEachStatusToOneDelete covers what verdict 2 is recorded
+// against: the status has to survive the trip from the response to the verdict, and
+// each take must be attributable to one delete rather than lingering into the next.
+func TestDeleteObserver_AttributesEachStatusToOneDelete(t *testing.T) {
 	o := &deleteObserver{}
 	if got := o.take(); got != 0 {
 		t.Errorf("take with nothing observed = %d, want 0", got)

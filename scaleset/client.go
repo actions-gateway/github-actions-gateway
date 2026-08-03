@@ -925,40 +925,43 @@ func (c *Client) AcquireJobs(ctx context.Context, scaleSetID int, sess *RunnerSc
 // cursor handles the first half, this the second, so a redelivery on a re-created
 // session (which polls from cursor 0) no longer replays an acked message.
 //
-// WIRE SHAPE SOURCE-DERIVED, NOT LIVE-PROBED: the DELETE endpoint
-// ({messageQueueUrl}/{messageId}) is taken from the official actions/scaleset
-// listener; the live probe acknowledged by cursor only and never exercised the
-// message DELETE (Q264 plan §2.2 caveat). P4 live validation must confirm this URL
-// shape and status semantics before the P3 listener relies on delete-based acking
-// over pure cursor advance — flagged as a P2-surfaced unknown.
-func (c *Client) DeleteMessage(ctx context.Context, sess *RunnerScaleSetSession, messageID int64) error {
+// The first result reports what the wire did: true when the backend removed the
+// message (2xx), false when it answered 404/410. Both complete an ack — a message
+// already gone is nothing left to do — but a backend that does not serve the DELETE
+// endpoint at all answers 404 too, so the two cannot be folded into one success. A
+// caller that only needs the message absent may ignore it; one whose conclusion
+// rests on the delete having happened must read it rather than the error (Q609).
+//
+// The endpoint ({messageQueueUrl}/{messageId}) is source-derived from the official
+// actions/scaleset listener and confirmed live by Q583 Investigation G, which
+// measured it answering 204 and pruning the queue log.
+func (c *Client) DeleteMessage(ctx context.Context, sess *RunnerScaleSetSession, messageID int64) (bool, error) {
 	u, err := url.Parse(sess.MessageQueueURL)
 	if err != nil {
-		return fmt.Errorf("scaleset: DeleteMessage: parse queue URL: %w", err)
+		return false, fmt.Errorf("scaleset: DeleteMessage: parse queue URL: %w", err)
 	}
 	u.Path = strings.TrimRight(u.Path, "/") + "/" + strconv.FormatInt(messageID, 10)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u.String(), nil)
 	if err != nil {
-		return err
+		return false, err
 	}
 	req.Header.Set("Authorization", "Bearer "+sess.MessageQueueAccessToken)
 
 	start := time.Now()
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("scaleset: DeleteMessage: %w", err)
+		return false, fmt.Errorf("scaleset: DeleteMessage: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	c.observe("DeleteMessage", req, resp, start, len(body))
-	// A 404/410 means the message is already gone — a benign no-op for an ack.
 	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
-		return nil
+		return false, nil
 	}
 	if err := statusError(resp.StatusCode, resp.Header, body); err != nil {
-		return fmt.Errorf("scaleset: DeleteMessage: %w", err)
+		return false, fmt.Errorf("scaleset: DeleteMessage: %w", err)
 	}
-	return nil
+	return true, nil
 }
 
 // recordPollError increments the poll-error metric when a recorder is wired.
