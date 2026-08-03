@@ -4,7 +4,7 @@
 
 ---
 
-The milestones in [§6](06-implementation-phases.md) describe *what* to build and *how to verify* it; they do not prescribe a working style. This appendix collects guidance for teams who choose to leverage AI-assisted coding tools (e.g. Claude Code, GitHub Copilot, Cursor) during implementation. The guidance is optional and orthogonal to the design itself.
+The milestones in [§6](06-implementation-phases.md) describe *what* to build and *how to verify* it; they do not prescribe a working style. This appendix collects guidance for teams who choose to use AI-assisted coding tools (e.g. Claude Code, GitHub Copilot, Cursor) during implementation. The guidance is optional and orthogonal to the design itself.
 
 ---
 

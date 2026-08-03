@@ -1,12 +1,12 @@
 # Getting Started
 
 > **Want to see it first?** The [Demo](demo.md) walks one real GitHub job through
-> a local kind cluster — job → ephemeral worker pod → green on GitHub — with the
+> a local kind cluster (job → ephemeral worker pod → green on GitHub) with the
 > exact commands to reproduce it.
 
 !!! tip "New tenants: start on `v2beta1`"
     The recommended shape for a new tenant is the **v2 API** at
-    **`actions-gateway.com/v2beta1`** — a decomposed `ActionsGateway` +
+    **`actions-gateway.com/v2beta1`**: a decomposed `ActionsGateway` +
     `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in
     [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below.
     `v2beta1` is the graduated, ScaleSet-only storage and hub version, v2's first
@@ -36,7 +36,7 @@
 
 ## 1. Deploy the GMC
 
-The shipped install artifact is the **`actions-gateway` Helm chart** ([reference](../charts/actions-gateway/README.md)). It installs the Gateway Manager Controller (GMC), its CRDs, RBAC, validating webhook, and admission policy. The GMC then provisions per-tenant AGC instances and proxy pools at runtime — they are not installed by the chart.
+The shipped install artifact is the **`actions-gateway` Helm chart** ([reference](../charts/actions-gateway/README.md)). It installs the Gateway Manager Controller (GMC), its CRDs, RBAC, validating webhook, and admission policy. The GMC then provisions per-tenant AGC instances and proxy pools at runtime. They are not installed by the chart.
 
 ```sh
 helm install gag charts/actions-gateway \
@@ -47,11 +47,11 @@ helm install gag charts/actions-gateway \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-All four images must be **pinned by digest** — the chart refuses to render while any of the four digests (`gmc`/`agc`/`proxy`/`wrapper`) is empty, naming the one to set (the worker-wrapper image is on by default, so it is required too) — so pin them as above (or pass `--set allowFloatingImageTags=true` for dev/test only). See the [chart README](../charts/actions-gateway/README.md) for the full values reference and the cert-manager toggle.
+All four images must be **pinned by digest**. The chart refuses to render while any of the four digests (`gmc`/`agc`/`proxy`/`wrapper`) is empty, naming the one to set (the worker-wrapper image is on by default, so it is required too). Pin them as above, or pass `--set allowFloatingImageTags=true` for dev/test only. See the [chart README](../charts/actions-gateway/README.md) for the full values reference and the cert-manager toggle.
 
-> **Dev/CI.** The Helm chart is the single install path — there is no kustomize alternative. To install an unreleased chart from a source checkout, substitute the local `charts/actions-gateway` path for the `oci://…` ref above; `make deploy` (used by the e2e suite) wraps the same `helm install` with floating image tags for local iteration.
+> **Dev/CI.** The Helm chart is the single install path. There is no kustomize alternative. To install an unreleased chart from a source checkout, substitute the local `charts/actions-gateway` path for the `oci://…` ref above; `make deploy` (used by the e2e suite) wraps the same `helm install` with floating image tags for local iteration.
 
-For the recommended **v2** path, also install the opt-in v2 CRDs. They ship separately (and are applied server-side, never `helm install`ed) because the CRDs are large enough that a Helm release Secret would exceed its 1 MiB limit. For the default `gmc-system` namespace, apply the pre-rendered, cosign-signed manifest attached to the release — no helm needed:
+For the recommended **v2** path, also install the opt-in v2 CRDs. They ship separately (and are applied server-side, never `helm install`ed) because the CRDs are large enough that a Helm release Secret would exceed its 1 MiB limit. For the default `gmc-system` namespace, apply the pre-rendered, cosign-signed manifest attached to the release, no helm needed:
 
 ```sh
 kubectl apply --server-side -f \
@@ -67,7 +67,7 @@ helm template actions-gateway-crds-v2 \
   | kubectl apply --server-side -f -
 ```
 
-Either way the `clientConfig` must resolve to the GMC's `webhook-service`: each v2 CRD is served at `v2beta1` (the storage/hub version) and `v2alpha1`, and the apiserver converts between them via a conversion webhook hosted by the GMC (see [install.md § the v2 API CRDs](operations/install.md#optional-the-v2-api-crds) for signature verification and the full options). The GMC **detects the v2 CRDs at startup**: with them present it starts the v2 controllers; without them it comes up clean on v1 only (logging `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled`) — it does not error-loop. Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`). See the [chart README](../charts/actions-gateway-crds-v2/README.md).
+Either way the `clientConfig` must resolve to the GMC's `webhook-service`: each v2 CRD is served at `v2beta1` (the storage/hub version) and `v2alpha1`, and the apiserver converts between them via a conversion webhook hosted by the GMC (see [install.md § the v2 API CRDs](operations/install.md#optional-the-v2-api-crds) for signature verification and the full options). The GMC **detects the v2 CRDs at startup**: with them present it starts the v2 controllers; without them it comes up clean on v1 only (logging `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled`). It does not error-loop. Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`). See the [chart README](../charts/actions-gateway-crds-v2/README.md).
 
 ## 2. Create and mark the tenant namespace, and set its quota
 
@@ -90,8 +90,8 @@ kubectl label namespace team-a actions-gateway.github.com/tenant=true
 The namespace `ResourceQuota` (and any `LimitRange`) is **platform-owned**: the
 platform admin creates and manages it on the tenant namespace, and the gateway
 operates *within* it but never creates or mutates it. This is the real,
-tenant-uncontrollable cap on how much compute a tenant can consume — apply it
-here (or via your GitOps / tenant-operator stack: Capsule, HNC, vCluster, kiosk):
+tenant-uncontrollable cap on how much compute a tenant can consume. Apply it
+here, or via your GitOps / tenant-operator stack: Capsule, HNC, vCluster, kiosk.
 
 ```yaml
 apiVersion: v1
@@ -123,7 +123,7 @@ spec:
 
 The `LimitRange` is not optional here. A `ResourceQuota` that constrains
 `requests.cpu`/`requests.memory` makes those requests **mandatory** for every pod
-in the namespace — Kubernetes rejects any pod that omits a constrained resource.
+in the namespace: Kubernetes rejects any pod that omits a constrained resource.
 The AGC control-plane pod stamps no requests of its own, so without a `LimitRange`
 to supply defaults it is refused with `must specify requests.cpu` and never
 schedules. The `LimitRange` above fills that gap (and covers any worker pod whose
@@ -132,7 +132,7 @@ runner group leaves requests unset). See
 
 The gateway reads remaining quota and reacts to exhaustion (it won't claim a job
 the quota can't place, and lock-cancels then reruns any job that loses headroom
-after the claim — see [why-gag](why-gag.md)), but the quota itself is yours to
+after the claim, see [why-gag](why-gag.md)), but the quota itself is yours to
 size and own.
 
 ## 3. Create a GitHub App credential Secret
@@ -161,7 +161,7 @@ The **v2 API** (`actions-gateway.com/v2beta1`) decomposes the single v1 CR into
 small, composable kinds: an `ActionsGateway` (identity + GitHub binding), a
 `RunnerTemplate` (a reusable pod shape), a `RunnerSet` per runner type, and an
 optional `EgressProxy`. The set below is feature-equivalent to the legacy v1
-example — a proxied gateway with a GPU runner set (priority tiers) and a Linux
+example, a proxied gateway with a GPU runner set (priority tiers) and a Linux
 runner set:
 
 ```yaml
@@ -200,8 +200,8 @@ spec:
   githubURL: https://github.com/my-org
   defaultProxyRef:
     name: team-a-egress          # every RunnerSet below inherits this unless it sets its own proxyRef
-  # securityProfile is a *namespace* label in v2 (set in Step 2), not a CR field —
-  # all gateways in a namespace share one Pod Security level. See Tenant Onboarding.
+  # securityProfile is a *namespace* label in v2 (set in Step 2), not a CR field.
+  # All gateways in a namespace share one Pod Security level. See Tenant Onboarding.
 ---
 apiVersion: actions-gateway.com/v2beta1
 kind: RunnerSet
@@ -236,10 +236,10 @@ spec:
 
 The GMC provisions the AGC, the proxy pool, RBAC, and network policies in
 `team-a` automatically. The **namespace `ResourceQuota` is still platform-owned**
-(Step 2) — it is not a field on any of these CRs.
+(Step 2). It is not a field on any of these CRs.
 
 **The proxy is optional in v2.** Drop the `EgressProxy` and the `defaultProxyRef`
-and traffic egresses **directly** to GitHub — still `NetworkPolicy`-restricted to
+and traffic egresses **directly** to GitHub, still `NetworkPolicy`-restricted to
 DNS + the GitHub CIDR allowlist, but without a stable per-tenant egress IP to
 allow-list. That collapses the minimal onboarding to three objects. For the
 proxy-less flow, reusable/cluster-default templates, multiple gateways per
@@ -251,7 +251,7 @@ Tenants requiring more than 250 concurrent sessions should shard across multiple
 
 ## Legacy: the `v1alpha1` API (deprecated)
 
-!!! warning "`v1alpha1` is deprecated — new tenants should use v2 above"
+!!! warning "`v1alpha1` is deprecated: new tenants should use v2 above"
     The `actions-gateway.github.com/v1alpha1` single-CR API is still fully served
     and supported, but it is **[deprecated](operations/v1alpha1-deprecation.md)**
     in favor of the decomposed v2 API, and it is **removed at `v2.0.0`** (announced
@@ -260,7 +260,7 @@ Tenants requiring more than 250 concurrent sessions should shard across multiple
     are already on v1, [`gag-migrate`](operations/migration-v1-to-v2.md) moves you
     to v2 without changing how your jobs are acquired.
 
-The v1 API expresses the whole gateway — proxy and all runner groups — in a single
+The v1 API expresses the whole gateway, proxy and all runner groups, in a single
 `ActionsGateway` CR:
 
 ```yaml
@@ -276,7 +276,7 @@ spec:
   # (required). The App above must be installed on this same org/enterprise.
   gitHubURL: https://github.com/my-org
   # securityProfile selects the Pod Security Admission level the GMC stamps
-  # on the tenant namespace. Defaults to "baseline" — blocks privileged
+  # on the tenant namespace. Defaults to "baseline", which blocks privileged
   # containers, host namespaces, hostPath, and dangerous capabilities, with
   # no external policy engine required. Use "restricted" for stricter
   # isolation (runAsNonRoot, drop ALL caps, seccomp RuntimeDefault) or
@@ -287,11 +287,11 @@ spec:
     minReplicas: 2
     maxReplicas: 10
   # The namespace ResourceQuota is platform-owned and set on the namespace in
-  # step 2 — it is not a field on this CR.
+  # step 2. It is not a field on this CR.
   #
   # A runner group has no `name` field. Its RunnerGroup CR name is derived by the
   # GMC from the gateway name + the group's FIRST runnerLabel, so make that first
-  # label distinctive per group ("gpu", "linux" below) — two groups whose first
+  # label distinctive per group ("gpu", "linux" below). Two groups whose first
   # label matches would derive the same name and collide.
   runnerGroups:
     - runnerLabels: ["gpu", "self-hosted"]
@@ -376,7 +376,7 @@ When your GitHub App private key expires or is compromised, follow these steps t
 
 7. **Revoke the old key** in the GitHub App settings.
 
-**Important:** Do not update the Secret in-place. The GMC watches the `gitHubAppRef.name` reference, not the Secret's contents. Changing the Secret data without changing the reference name does not trigger an AGC rollout — the AGC will continue using the cached token derived from the old key until it restarts or the token expires. Creating a new Secret and updating the reference is the correct rotation path.
+**Important:** Do not update the Secret in-place. The GMC watches the `gitHubAppRef.name` reference, not the Secret's contents. Changing the Secret data without changing the reference name does not trigger an AGC rollout. The AGC continues using the cached token derived from the old key until it restarts or the token expires. Creating a new Secret and updating the reference is the correct rotation path.
 
 **If the referenced Secret is deleted before you complete the rotation**, the GMC sets a `CredentialUnavailable=True` condition on the `ActionsGateway` CR and stops reconciling child resources. Recreating the Secret (with the same name, or updating `gitHubAppRef.name`) clears the condition and resumes normal operation. To inspect the condition:
 

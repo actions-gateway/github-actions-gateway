@@ -900,7 +900,7 @@ chart value.
 
 ## GMC Upgrade
 
-The GMC runs `replicas: 2` with leader election. Only one replica reconciles at any time; leadership transfers seamlessly during a rolling update. In-flight reconciliations are idempotent — the new leader re-derives state and converges without producing duplicate resources.
+The GMC runs `replicas: 2` with leader election. Only one replica reconciles at any time. The outgoing leader releases its lease on shutdown, so leadership transfers in seconds during a rolling update rather than at a lease timeout. In-flight reconciliations are idempotent — the new leader re-derives state and converges without producing duplicate resources.
 
 The active replica releases its leader lease on graceful shutdown (`--leader-elect-release-on-cancel`, on by default), so during a rollout the standby takes over within one retry period (~2s) instead of waiting out the full lease (~15s). This is why the Deployment's short `terminationGracePeriodSeconds: 10` introduces no reconcile gap. If you run on a slow or heavily loaded API server and see spurious leader-lease losses (the GMC restarting with "failed to renew lease"), widen the timing with the tunables below rather than disabling leader election:
 

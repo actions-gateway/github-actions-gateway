@@ -115,8 +115,8 @@ user-namespace. It is selected per-pod with a `RuntimeClass`.
 - **Recommended profile:** `baseline`. A Sysbox-backed pod runs an inner
   daemon as root *inside* the container (mapped to an unprivileged range on
   the host), so it needs root-in-container — which `baseline` permits and
-  `restricted` (with its `runAsNonRoot` requirement) does not. Crucially,
-  it needs **no** `privileged: true` container, so it stays out of the
+  `restricted` (with its `runAsNonRoot` requirement) does not. It needs
+  **no** `privileged: true` container, so it stays out of the
   `privileged` profile entirely. This is Sysbox's whole value proposition:
   "real" DinD at `baseline` rather than `privileged`.
 - **RuntimeClass × profile interplay:**
