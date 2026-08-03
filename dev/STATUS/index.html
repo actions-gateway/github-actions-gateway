@@ -2585,14 +2585,6 @@
 <td><strong>Measured 2026-08-03:</strong> <code>FAIL interval 0 exits without output — exit 137 output ''</code> (line 148 SIGKILLs the watcher). Green twice standalone, so the watcher does not exit within the test's grace under the 41-way <code>run-parallel</code> load.</td>
 </tr>
 <tr>
-<td><a id="Q628"></a>Q628</td>
-<td><a href="../plan/release-1.3/#the-rc5-re-run-2026-08-02">A worker reaped while Pending is reported as a <em>succeeded</em> job, so the assignment is concluded and never re-offered</a></td>
-<td><code>bug</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Confirmed in tests, both paths: a delete resolves <code>PodSucceeded</code>/<code>ExternallyDeleted=false</code>, mapping to <code>TaskResultSucceeded</code> and arming no recovery (all need <code>PodFailed</code>). GitHub keeps the job queued forever. Pre-dates v1.2.0; not a 1.3 regression.</td>
-</tr>
-<tr>
 <td><a id="Q630"></a>Q630</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel.sh">A healthy quiet e2e leg is indistinguishable from a wedged one, so the stall report is unusable</a></td>
 <td><code>dogfood</code> <code>tests</code></td>
@@ -2615,6 +2607,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>Happened twice in one session; both catches were ad-hoc, by looking for a live teardown process. Self-cleaning holds only when the gate exits on its own. Wants a mechanism — idempotent teardown at next start, or a reaper — not a fourth doc rule.</td>
+</tr>
+<tr>
+<td><a id="Q645"></a>Q645</td>
+<td><a href="../plan/release-1.3/#the-rc5-re-run-2026-08-02">Nothing has measured what the run service does with an <code>abandoned</code> completion</a></td>
+<td><code>dogfood</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q628 releases an unrun worker's assignment with <code>result=abandoned</code>; whether GitHub re-dispatches or concludes the run is unmeasured, and decides whether a re-run arm is also needed. Measurable on a turn-up: reap a Pending worker, watch the run.</td>
 </tr>
 <tr>
 <td><a id="Q632"></a>Q632</td>

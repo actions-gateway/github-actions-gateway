@@ -3162,10 +3162,21 @@ the session then maps anything that is not <code>PodFailed</code> to
 the job is never re-offered — while at GitHub the workflow job is still queued,
 no runner having ever registered. That is the 16 minutes of silence: from the
 AGC's point of view there was nothing left to do.</p>
-<p>Two characterisation tests pin it, each shown to fail when the mechanism is
+<p>Two characterisation tests pinned it, each shown to fail when the mechanism is
 removed: <code>TestInformerPodWaiter_Q628_DeletedPendingPodResolvesSucceeded</code> on the
 production waiter and <code>TestProvisioner_Q628_ReapedPendingWorkerReportsSucceeded</code>
 on the result mapping.</p>
+<p><strong>Fixed (2026-08-03).</strong> A pod removed before any container started now resolves
+with <code>PodOutcome.DeletedBeforeStart</code>, the session reports the job as
+<code>abandoned</code> rather than succeeded, and the listener releases its own delivery
+with <code>completejob</code> — the same remedy the Q260 fan-out already applies to a
+deduped sibling's identically dangling assignment, behind the same
+<code>AGC_FANOUT_COMPLETION</code> switch. Disruption recovery is deliberately <em>not</em> armed:
+<code>rerun-failed-jobs</code> has no failed job to act on for a job that never ran, which
+is the exclusion <code>externallyDeletedBeforeTerminal</code> already encodes. <strong>What the
+run service does with an <code>abandoned</code> completion — re-dispatch or conclude — is
+unmeasured</strong>; the release is what stops the assignment dangling either way.
+Tracked for a live measurement as <a href="../../STATUS/#Q645">Q645</a>.</p>
 <p><strong><code>JobProvisionStalled=False</code> was correct, not broken.</strong> The condition covers the
 listener's <em>deferral</em> reasons — <code>name_conflict</code> and <code>ceiling</code>, jobs held before a
 worker exists. A job whose worker was created and then reaped was never deferred,
@@ -3173,8 +3184,7 @@ so the condition has nothing to report. The gap is that no condition covers this
 outcome at all.</p>
 <p><strong>Not a 1.3 regression.</strong> The "deleted externally → treat as completion"
 semantics is present in <code>v1.2.0</code>; 1.3 refined the neighbouring recovery arms
-(Q497, Q502, Q575) without changing it. Tracked as
-<a href="../../STATUS/#Q628">Q628</a>.</p>
+(Q497, Q502, Q575) without changing it. Tracked as Q628, fixed below.</p>
 <p>Class-wise this is Q550/Q551 territory — a listener availability bug reachable by
 any tenant whose workers go unschedulable in a burst — and both of those gated
 the tag. It parts company with them on age: those were defects the RC introduced
