@@ -155,15 +155,15 @@ func TestInformerPodWaiter_DeleteResolvesSucceeded(t *testing.T) {
 	}
 }
 
-// Q628 characterisation, on the production waiter rather than the poll fallback.
-// The reaper's pending_deadline delete removes a pod that never scheduled, so the
-// pod it delivers is Pending, not Running. That resolves as Succeeded with
-// ExternallyDeleted unset — so the session's caller maps it to a succeeded job and
-// no disruption-recovery arm fires, because every arm requires PodFailed.
+// Q628, on the production waiter rather than the poll fallback. The reaper's
+// pending_deadline delete removes a pod that never scheduled, so the pod it delivers
+// is Pending, not Running, and no container of it ever ran. The phase stays Succeeded
+// — the delete path's contract, which Q497 preemption detection also rides — and
+// DeletedBeforeStart is what separates it from a worker deleted mid-run.
 //
-// This pins CURRENT behaviour. A worker that never ran a step is not a success, and
-// when the fix lands this expectation changes.
-func TestInformerPodWaiter_Q628_DeletedPendingPodResolvesSucceeded(t *testing.T) {
+// ExternallyDeleted stays false: setting it would arm Q502 recovery, which re-runs a
+// job through rerun-failed-jobs and has nothing to act on for a job that never ran.
+func TestInformerPodWaiter_Q628_DeletedPendingPodNeverStarted(t *testing.T) {
 	w := newTestWaiter(pod("ns", "p", corev1.PodPending, ""))
 
 	done := make(chan podResult, 1)
@@ -177,13 +177,42 @@ func TestInformerPodWaiter_Q628_DeletedPendingPodResolvesSucceeded(t *testing.T)
 
 	res := mustResolve(t, done)
 	if res.outcome.Phase != corev1.PodSucceeded {
-		t.Fatalf("got phase=%q, want Succeeded — a reaped Pending worker reports success", res.outcome.Phase)
+		t.Fatalf("got phase=%q, want Succeeded — the delete path's phase is unchanged", res.outcome.Phase)
+	}
+	if !res.outcome.DeletedBeforeStart {
+		t.Fatal("a Pending pod ran no container, so DeletedBeforeStart must be set")
 	}
 	if res.outcome.ExternallyDeleted {
 		t.Fatal("ExternallyDeleted must stay false here; setting it would arm Q502 recovery")
 	}
 	if res.outcome.Preempted {
 		t.Fatal("a reaper delete carries no preemption marker, so no recovery arm fires")
+	}
+}
+
+// The other half of the Q628 discriminator: a worker deleted while its container was
+// running did run the job, so it keeps the plain Succeeded outcome and is not reported
+// as abandoned.
+func TestInformerPodWaiter_Q628_DeletedRunningPodHasStarted(t *testing.T) {
+	running := pod("ns", "p", corev1.PodRunning, "")
+	running.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:  "runner",
+		State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{StartedAt: metav1.Now()}},
+	}}
+	w := newTestWaiter(running)
+
+	done := make(chan podResult, 1)
+	go func() {
+		out, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{outcome: out}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	w.onPodDelete(running)
+
+	res := mustResolve(t, done)
+	if res.outcome.DeletedBeforeStart {
+		t.Fatal("a container was running, so DeletedBeforeStart must stay false")
 	}
 }
 

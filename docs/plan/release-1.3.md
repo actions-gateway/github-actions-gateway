@@ -460,10 +460,22 @@ the job is never re-offered — while at GitHub the workflow job is still queued
 no runner having ever registered. That is the 16 minutes of silence: from the
 AGC's point of view there was nothing left to do.
 
-Two characterisation tests pin it, each shown to fail when the mechanism is
+Two characterisation tests pinned it, each shown to fail when the mechanism is
 removed: `TestInformerPodWaiter_Q628_DeletedPendingPodResolvesSucceeded` on the
 production waiter and `TestProvisioner_Q628_ReapedPendingWorkerReportsSucceeded`
 on the result mapping.
+
+**Fixed (2026-08-03).** A pod removed before any container started now resolves
+with `PodOutcome.DeletedBeforeStart`, the session reports the job as
+`abandoned` rather than succeeded, and the listener releases its own delivery
+with `completejob` — the same remedy the Q260 fan-out already applies to a
+deduped sibling's identically dangling assignment, behind the same
+`AGC_FANOUT_COMPLETION` switch. Disruption recovery is deliberately *not* armed:
+`rerun-failed-jobs` has no failed job to act on for a job that never ran, which
+is the exclusion `externallyDeletedBeforeTerminal` already encodes. **What the
+run service does with an `abandoned` completion — re-dispatch or conclude — is
+unmeasured**; the release is what stops the assignment dangling either way.
+Tracked for a live measurement as [Q645](../STATUS.md#Q645).
 
 **`JobProvisionStalled=False` was correct, not broken.** The condition covers the
 listener's *deferral* reasons — `name_conflict` and `ceiling`, jobs held before a
@@ -473,8 +485,7 @@ outcome at all.
 
 **Not a 1.3 regression.** The "deleted externally → treat as completion"
 semantics is present in `v1.2.0`; 1.3 refined the neighbouring recovery arms
-(Q497, Q502, Q575) without changing it. Tracked as
-[Q628](../STATUS.md#Q628).
+(Q497, Q502, Q575) without changing it. Tracked as Q628, fixed below.
 
 Class-wise this is Q550/Q551 territory — a listener availability bug reachable by
 any tenant whose workers go unschedulable in a burst — and both of those gated

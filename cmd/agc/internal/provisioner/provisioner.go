@@ -430,10 +430,10 @@ func (p *Provisioner) Handle(target Target) listener.JobHandlerFunc {
 
 // provision stages the job wiring, creates the worker pod, and waits for it to
 // reach a terminal phase. The returned broker.TaskResult is the POD-PHASE PROXY of
-// the outcome (PodFailed→failed, else succeeded) that the listener reports when it
-// fans completion out to the deduped sibling deliveries of a fanned-out job (Q260
-// Option A); it is empty on any error path that returns before the pod reached a
-// terminal phase (the fan-out treats an empty result as succeeded).
+// the outcome (PodFailed→failed, a worker removed before it ran→abandoned, else
+// succeeded) that the listener reports for this job's assignments (Q260 Option A);
+// it is empty on any error path that returns before the pod reached a terminal
+// phase (the fan-out treats an empty result as succeeded).
 func (p *Provisioner) provision(ctx context.Context, target Target, planID string, payload []byte, jitConfig string) (result broker.TaskResult, err error) {
 	key := target.Key()
 	log := p.logForKey(key)
@@ -565,29 +565,20 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		_ = p.deleteSecret(ctx, key.Namespace, secretName)
 		return "", err
 	}
-	// Pod-phase proxy of the job outcome for the listener's fan-out completion of a
-	// fanned-out job's deduped sibling deliveries (Q260 Option A). The AGC does not
-	// learn the workflow's real result (only the worker's runner binary reports it,
-	// for the winner's own delivery), so PodFailed→failed and anything else
-	// (Succeeded, or a terminal phase we cannot map) →succeeded is the honest proxy.
-	if outcome.Phase == corev1.PodFailed {
-		result = broker.TaskResultFailed
-	} else {
-		result = broker.TaskResultSucceeded
-	}
-
 	duration := time.Since(start)
 	span.SetAttributes(
 		attribute.String("gateway.pod.phase", string(outcome.Phase)),
 		attribute.String("gateway.pod.reason", outcome.Reason),
 		attribute.Bool("gateway.pod.preempted", outcome.Preempted),
 		attribute.Bool("gateway.pod.externally_deleted", outcome.ExternallyDeleted),
+		attribute.Bool("gateway.pod.deleted_before_start", outcome.DeletedBeforeStart),
 		attribute.Float64("gateway.provision.duration_seconds", duration.Seconds()),
 	)
 	// Per-pod completion line; podName is on the logger context. Debug (Q87, Theme D).
 	log.Debug("worker pod completed",
 		"phase", outcome.Phase, "reason", outcome.Reason, "preempted", outcome.Preempted,
-		"externallyDeleted", outcome.ExternallyDeleted, "duration", duration)
+		"externallyDeleted", outcome.ExternallyDeleted,
+		"deletedBeforeStart", outcome.DeletedBeforeStart, "duration", duration)
 	if p.Metrics != nil {
 		p.Metrics.JobDuration.WithLabelValues(key.Namespace, key.Name).Observe(duration.Seconds())
 	}
@@ -622,6 +613,31 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	}
 	if cause != "" {
 		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, cause)
+	}
+
+	// Pod-phase proxy of the job outcome, which the listener reports for this job's
+	// assignments (Q260 Option A). The AGC does not learn the workflow's real result —
+	// only the worker's runner binary reports it, and only for a job it actually ran —
+	// so PodFailed→failed and anything else→succeeded is the honest proxy.
+	//
+	// A worker taken away before any container started ran no step and registered no
+	// runner, so neither value describes it: succeeded concluded an assignment whose
+	// job never ran, and the listener had nothing to distinguish it from a clean run
+	// (Q628). It is reported abandoned instead, which is what lets the listener
+	// release the assignment rather than leave it dangling.
+	//
+	// Not when a recovery armed above: those causes already re-run the job, and
+	// preemption's own victim is most often a pod that never started (Q497). One
+	// recovery per disruption, not two.
+	switch {
+	case outcome.DeletedBeforeStart && cause == "":
+		result = broker.TaskResultAbandoned
+		log.Warn("worker pod was removed before it ran; reporting the job as abandoned so its assignment is released",
+			"phase", outcome.Phase, "duration", duration)
+	case outcome.Phase == corev1.PodFailed:
+		result = broker.TaskResultFailed
+	default:
+		result = broker.TaskResultSucceeded
 	}
 
 	// 8. Cleanup. The job Secret is always deleted here. The pod is deleted

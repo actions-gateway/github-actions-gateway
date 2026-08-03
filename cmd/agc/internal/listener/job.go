@@ -166,7 +166,7 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 			// (Q247) it resolves only this assignment. Gated by
 			// Config.FanoutCompletion.
 			if cfg.FanoutCompletion && claim.LateResult != "" && runServiceURL != "" {
-				completeSiblingDelivery(ctx, cfg, log, planID, delivery, claim.LateResult)
+				completeDelivery(ctx, cfg, log, planID, delivery, claim.LateResult)
 				return acquired, nil
 			}
 			// Q266: the winner is still running. GitHub considers THIS deduped runner
@@ -267,6 +267,19 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		if result != "" {
 			jobResult = result
 		}
+		// Abandoned means the worker was removed before it ran, so the runner binary
+		// never registered and nothing will ever report THIS delivery. Release it on
+		// the same terms as a deduped sibling — it is the same dangling assignment —
+		// or GitHub holds the job queued until its unstarted-job timeout cancels the
+		// run, having been told nothing (Q628). ctx, not jobCtx: the renew loop may
+		// have cancelled the job, which is exactly when the release matters.
+		if result == broker.TaskResultAbandoned && cfg.FanoutCompletion && runServiceURL != "" {
+			completeDelivery(ctx, cfg, log, planID, SiblingDelivery{
+				RunnerRequestID: jobID,
+				RunServiceURL:   runServiceURL,
+				JobToken:        jobToken,
+			}, result)
+		}
 		return acquired, jobErr
 	}
 	return acquired, nil
@@ -287,7 +300,7 @@ func completeSiblingDeliveries(ctx context.Context, cfg Config, log *slog.Logger
 			wg.Add(1)
 			go func(sib SiblingDelivery) {
 				defer wg.Done()
-				completeSiblingDelivery(ctx, cfg, log, planID, sib, result)
+				completeDelivery(ctx, cfg, log, planID, sib, result)
 			}(sib)
 		}
 		wg.Wait()
@@ -295,15 +308,17 @@ func completeSiblingDeliveries(ctx context.Context, cfg Config, log *slog.Logger
 	return done
 }
 
-// completeSiblingDelivery resolves one deduped sibling delivery's job assignment via
-// completejob so GitHub does not leave it dangling until the ~15-minute
-// unstarted-job timeout and cancel the whole job even after the winner completed it
-// (Q260 Option A). sib.RunnerRequestID is the sibling delivery's OWN jobID, distinct
-// from the winner's; under the per-delivery lock model (Q247) completing it resolves
-// only that assignment. result is the winner's pod-phase proxy. Best-effort: the
-// call is bounded by the control-plane timeout and failures are logged and counted,
-// never fatal — the runner still recycles its slot. Gated by Config.FanoutCompletion.
-func completeSiblingDelivery(ctx context.Context, cfg Config, log *slog.Logger, planID string, sib SiblingDelivery, result broker.TaskResult) {
+// completeDelivery resolves one acquired-but-unrun job assignment via completejob so
+// GitHub does not leave it dangling until the ~15-minute unstarted-job timeout and
+// cancel the whole job (Q260 Option A). Two deliveries reach it: a deduped sibling the
+// winner is reconciling, and — when the winner's own worker was removed before it ran,
+// so the runner binary never reported anything — the winner's own (Q628).
+//
+// sib.RunnerRequestID is that delivery's OWN jobID; under the per-delivery lock model
+// (Q247) completing it resolves only that assignment. Best-effort: the call is bounded
+// by the control-plane timeout and failures are logged and counted, never fatal — the
+// runner still recycles its slot. Gated by Config.FanoutCompletion.
+func completeDelivery(ctx context.Context, cfg Config, log *slog.Logger, planID string, sib SiblingDelivery, result broker.TaskResult) {
 	cctx, cancel := context.WithTimeout(ctx, cfg.controlPlaneTimeout())
 	defer cancel()
 	err := cfg.Broker.CompleteJob(cctx, sib.RunServiceURL, broker.CompleteJobRequest{
@@ -317,15 +332,15 @@ func completeSiblingDelivery(ctx context.Context, cfg Config, log *slog.Logger, 
 	var notFound *broker.JobNotFoundError
 	switch {
 	case err == nil:
-		log.Debug("completed a deduped sibling delivery via completejob so GitHub does not cancel the job at its unstarted-job timeout",
+		log.Debug("released an acquired-but-unrun job assignment via completejob so GitHub does not cancel the job at its unstarted-job timeout",
 			"planID", planID, "jobID", sib.RunnerRequestID, "result", result)
 	case errors.As(err, &notFound):
 		// The assignment is already gone server-side — nothing left to resolve.
-		log.Debug("deduped sibling delivery already resolved server-side",
+		log.Debug("job assignment already resolved server-side",
 			"planID", planID, "jobID", sib.RunnerRequestID)
 	default:
 		outcome = "error"
-		log.Warn("failed to complete a deduped sibling delivery; GitHub may cancel the job at its unstarted-job timeout",
+		log.Warn("failed to release an acquired-but-unrun job assignment; GitHub may cancel the job at its unstarted-job timeout",
 			"planID", planID, "jobID", sib.RunnerRequestID, "error", err)
 	}
 	if cfg.Metrics != nil {

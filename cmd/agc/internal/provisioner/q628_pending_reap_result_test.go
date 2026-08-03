@@ -12,21 +12,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// Q628 characterisation. A worker pod that never leaves Pending is deleted by the
-// reaper at spec.pendingPodDeadline. This pins what the session goroutine then
-// reports for a job that never ran a single step.
+// Q628. A worker pod that never leaves Pending is deleted by the reaper at
+// spec.pendingPodDeadline, and the session goroutine must not report the job it
+// never ran as a success — that concluded the assignment and left the workflow job
+// queued at GitHub with no runner ever registered. Measured on the v1.3.0-rc.5
+// dogfood gate, where three workers were reaped this way and the listener then went
+// silent for 16 minutes with capacity available.
 //
-// This asserts CURRENT behaviour, not desired behaviour: the job is reported to
-// the listener as SUCCEEDED, so the assignment is concluded and never re-offered,
-// while the workflow job is still queued at GitHub with no runner ever registered.
-// Measured on the v1.3.0-rc.5 dogfood gate, where three workers were reaped this
-// way and the listener then went silent for 16 minutes with capacity available.
-//
-// The mapping under test is provisioner.go's pod-phase proxy: anything that is not
-// PodFailed becomes TaskResultSucceeded, and every disruption-recovery arm requires
-// PodFailed, so a reaped Pending worker matches none of them. When the fix lands,
-// this test flips — a job whose worker never started is not a success.
-func TestProvisioner_Q628_ReapedPendingWorkerReportsSucceeded(t *testing.T) {
+// The mapping under test is provisioner.go's pod-phase proxy. abandoned, not failed:
+// no step ran, so there is no failure to report — and it is the value the listener
+// keys its own assignment release on.
+func TestProvisioner_Q628_ReapedPendingWorkerReportsAbandoned(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx := context.Background()
 	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
@@ -56,7 +52,7 @@ func TestProvisioner_Q628_ReapedPendingWorkerReportsSucceeded(t *testing.T) {
 	got := <-done
 	require.NoError(t, got.err, "the session must not surface an error for a reaped worker")
 
-	assert.Equal(t, broker.TaskResultSucceeded, got.result,
-		"Q628: a worker reaped while Pending is reported as a SUCCEEDED job, so the "+
-			"listener concludes an assignment whose job never ran")
+	assert.Equal(t, broker.TaskResultAbandoned, got.result,
+		"Q628: a worker reaped while Pending ran no step, so the job is abandoned — "+
+			"reporting it succeeded concluded an assignment whose job never ran")
 }

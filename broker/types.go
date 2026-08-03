@@ -139,9 +139,10 @@ type RenewJobResponse struct {
 // TaskResult is a job's terminal result as reported to
 // POST {run_service_url}/completejob. The values mirror the runner SDK's
 // TaskResult enum (Microsoft.TeamFoundation.DistributedTask.WebApi.TaskResult).
-// The AGC itself sends only TaskResultSkipped, for a deduplicated duplicate
-// delivery it acquired but will not run (Q260 follow-up); the remaining values are
-// defined for wire fidelity and future use.
+// The AGC itself sends the winner's pod-phase proxy when it releases a job
+// assignment nothing else will report — a deduped sibling delivery (Q260 Option A)
+// or its own delivery when the worker was removed before it ran (Q628, which sends
+// TaskResultAbandoned). The remaining values are defined for wire fidelity.
 //
 // WIRE FORMAT NOT LIVE-CONFIRMED: the exact serialization the run service expects
 // for the result field (lowercase camelCase strings here, vs PascalCase or the
@@ -164,17 +165,21 @@ const (
 	// Q260 loser): honest (acquired, ran nothing) and the smallest blast radius if
 	// the run service maps a delivery's completion onto the whole job.
 	TaskResultSkipped TaskResult = "skipped"
-	// TaskResultAbandoned is a job the runner gave up without a conclusion.
+	// TaskResultAbandoned is a job the runner gave up without a conclusion. The AGC
+	// reports it for a delivery whose worker pod was removed before any container
+	// ran — an unschedulable worker reaped at spec.pendingPodDeadline, say: the
+	// assignment is real and must be released, but no step executed, so neither
+	// succeeded nor failed describes it (Q628).
 	TaskResultAbandoned TaskResult = "abandoned"
 )
 
 // CompleteJobRequest is the request body for POST {run_service_url}/completejob.
 // A runner sends it to report a job's terminal result. In GAG the worker pod's
 // runner binary makes this call for a job it actually ran; the AGC itself sends it
-// only for a deduplicated duplicate delivery it acquired but will not run — so
-// GitHub does not leave that per-delivery job assignment dangling until its
-// ~15-minute unstarted-job timeout and cancel the job even after the winning
-// sibling completed it (Q260 follow-up).
+// for an assignment it acquired but never ran — so GitHub does not leave that
+// per-delivery job assignment dangling until its ~15-minute unstarted-job timeout
+// and cancel the job. That covers a deduplicated duplicate delivery (Q260 follow-up)
+// and a delivery whose worker pod was removed before it started (Q628).
 //
 // JobID is the delivery's own RunnerRequestID — distinct per sibling under GitHub's
 // broker fan-out — so, under the per-delivery lock model the renew path relies on

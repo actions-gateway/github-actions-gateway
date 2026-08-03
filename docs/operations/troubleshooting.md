@@ -1520,9 +1520,11 @@ kubectl describe nodes | grep -A 5 "Allocated resources"
 
 ## Worker Pod Reaped While Pending (WorkerPodStuckPending)
 
-**Symptoms.** A `Warning` Event with reason `WorkerPodStuckPending` appears on the RunnerGroup (`kubectl describe runnergroup -n <namespace>`), `actions_gateway_worker_pods_reaped_total{reason="pending_deadline"}` increments, and the job the pod was created for is cancelled by GitHub (it never started, so its lock lapsed). The worker pod itself is gone.
+**Symptoms.** A `Warning` Event with reason `WorkerPodStuckPending` appears on the RunnerGroup (`kubectl describe runnergroup -n <namespace>`), `actions_gateway_worker_pods_reaped_total{reason="pending_deadline"}` increments, `actions_gateway_abandoned_delivery_completions_total` increments alongside it, and the job the pod was created for does not run. The worker pod itself is gone.
 
 **What happened.** The pod stayed `Pending` longer than the RunnerGroup's `pendingPodDeadline` (default 10m), so the AGC deleted it. A permanently Pending pod would otherwise hold one of the group's concurrency-ceiling slots forever — the ceiling counts Pending pods. The deadline is a capacity-protection mechanism, not a retry mechanism: the job is **not** re-queued automatically.
+
+**The session releases the job assignment (Q628).** No runner ever registered, so nothing inside the pod can report the job. The session therefore issues `completejob` with `result=abandoned` on its own delivery, and logs `worker pod was removed before it ran; reporting the job as abandoned so its assignment is released`. Without it the assignment sits acquired-but-unresolved until GitHub's ~15-minute unstarted-job timeout cancels the whole run — and before Q628 the session reported the job as **succeeded**, so a fanned-out job's sibling deliveries were resolved green for work that never happened. How the run service dispositions an `abandoned` completion (re-dispatch versus conclude) has not been measured against live GitHub; the AGC-side signal is the metric. The release shares the `AGC_FANOUT_COMPLETION=false` opt-out with the Q260 fan-out — opting out restores the dangling assignment and the timeout cancel.
 
 **Likely causes.**
 - `workerImage` (or the `podTemplate` container image) does not exist or is not pullable from the cluster — `ErrImagePull` / `ImagePullBackOff`.
