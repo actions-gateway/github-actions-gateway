@@ -3133,11 +3133,12 @@ by hand at t+33m with the e2e leg unable to start.</strong> What it settled, and
 turned up, are both worth more than the missing verdict.</p>
 <p><strong>The watcher fix is confirmed.</strong> It sat in the e2e leg for 33 minutes where the
 first attempt died after 13 seconds. That is the whole of what #1171 claimed.</p>
-<p><strong>It also has no upper bound.</strong> <code>watch_run</code> loops until the run reports
-<code>completed</code>, with no deadline, so a run that stays <code>queued</code> holds the gate — and
+<p><strong>It also had no upper bound.</strong> <code>watch_run</code> looped until the run reported
+<code>completed</code>, with no deadline, so a run that stayed <code>queued</code> held the gate — and
 its billable nodes — indefinitely. Before the fix the gate failed instantly and
-wrongly; after it, it waits forever. Neither is a bounded wait, and the leg needs
-one. Tracked as <a href="../../STATUS/#Q629">Q629</a>.</p>
+wrongly; after it, it waited forever. Neither is a bounded wait. Q629 gave the
+watch a deadline (<code>E2E_RUN_WATCH_TIMEOUT</code>, default 90 minutes) that fails the
+leg and lets the EXIT trap tear the cluster down.</p>
 <p><strong>The AGC stopped provisioning and reported itself healthy.</strong> This is the
 finding, and it is in the product rather than the gate. Three workers were
 provisioned and each reaped while <code>Pending</code>:</p>

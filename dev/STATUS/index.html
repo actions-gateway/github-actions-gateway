@@ -2585,14 +2585,6 @@
 <td>Confirmed in tests, both paths: a delete resolves <code>PodSucceeded</code>/<code>ExternallyDeleted=false</code>, mapping to <code>TaskResultSucceeded</code> and arming no recovery (all need <code>PodFailed</code>). GitHub keeps the job queued forever. Pre-dates v1.2.0; not a 1.3 regression.</td>
 </tr>
 <tr>
-<td><a id="Q629"></a>Q629</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-run-watch.sh">The release gate's e2e watch has no upper bound, so a stuck run holds nodes forever</a></td>
-<td><code>dogfood</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>watch_run</code> loops until <code>completed</code> with no deadline. Pre-#1171 it died instantly and wrongly; now it waits forever on a run that stays <code>queued</code>. Neither is bounded — the leg needs a deadline that fails the gate and tears down.</td>
-</tr>
-<tr>
 <td><a id="Q630"></a>Q630</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/release-sentinel.sh">A healthy quiet e2e leg is indistinguishable from a wedged one, so the stall report is unusable</a></td>
 <td><code>dogfood</code> <code>tests</code></td>
