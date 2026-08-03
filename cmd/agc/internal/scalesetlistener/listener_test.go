@@ -49,6 +49,15 @@ func (p *recordingProvisioner) setScaleSetID(id int) {
 	p.mu.Unlock()
 }
 
+// setCompleteErr switches auto-completion on and off mid-run, so a test can decide per
+// job whether it concludes or stays in flight. Set it before the job is enqueued: after,
+// a poll can provision in the gap.
+func (p *recordingProvisioner) setCompleteErr(v bool) {
+	p.mu.Lock()
+	p.completeErr = v
+	p.mu.Unlock()
+}
+
 func (p *recordingProvisioner) jobIDs() []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
