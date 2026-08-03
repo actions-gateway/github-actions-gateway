@@ -10,6 +10,7 @@
 SHELL := /bin/bash
 
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
+ACTIONLINT     := $(REPO_ROOT)/.build/actionlint
 CONTROLLER_GEN := $(REPO_ROOT)/.build/controller-gen
 KUBEBUILDER    := $(REPO_ROOT)/.build/kubebuilder
 SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
@@ -64,7 +65,7 @@ WRAPPER_IMG    ?= $(IMAGE_REGISTRY)/wrapper:e2e-$(GIT_SHA)
         cover cover-update cover-check tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo golangci-lint lint lint-backlog plan-index-check no-plan-refs-check shellcheck queue-unblock queue-id \
+        ginkgo golangci-lint lint lint-backlog plan-index-check no-plan-refs-check shellcheck actionlint queue-unblock queue-id \
         third-party-notices third-party-notices-check vendor-check tidy-check \
         vulncheck govulncheck trivy-scan polaris-scan manifest-validate
 
@@ -103,12 +104,12 @@ all: generate build test ## Generate, build, and test all modules
 # first of the three — a compile break should not wait out lint and the suite.
 CHECK_FAST_GATES := lint-backlog roadmap-check plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
-                    v2-api-sync-check path-filters-check shellcheck chart-crds-check \
+                    v2-api-sync-check path-filters-check shellcheck actionlint chart-crds-check \
                     chart-rbac-check chart-webhook-check codegen-check scripts-test \
                     claude-usage-test doc-links
 
 .PHONY: check
-check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + chart-CRD/RBAC/webhook drift + controller-gen manifest/DeepCopy drift + scripts-test + claude-usage tests + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + actionlint + chart-CRD/RBAC/webhook drift + controller-gen manifest/DeepCopy drift + scripts-test + claude-usage tests + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
 	scripts/ci/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")
 	$(MAKE) build-tags-check
 	$(MAKE) lint
@@ -494,12 +495,22 @@ plan-index-check: ## Assert active plans in docs/plan/README.md are still STATUS
 no-plan-refs-check: ## Assert Go code and shell/workflow comments don't reference plan-doc paths (cite durable docs / Q-IDs instead)
 	scripts/docs/check-no-plan-refs-in-code.sh
 
-# Without this gate, standalone helper scripts ship unlinted: actionlint only
-# covers inline workflow `run:` blocks. Glob, version pin, and rationale live
-# in the script header.
+# Without this gate, standalone helper scripts ship unlinted: the `actionlint`
+# target below covers only the inline workflow `run:` blocks. Glob, version pin,
+# and rationale live in the script header.
 .PHONY: shellcheck
 shellcheck: ## Shellcheck every present scripts/*.sh — tracked or untracked-and-not-gitignored (recursive; matches the CI shellcheck gate)
 	scripts/ci/shellcheck-scripts.sh
+
+# The workflow-side half of the shellcheck gate above (Q579). Three docs credited
+# actionlint with keeping `uses:` and inline `run:` blocks clean while no gate ran
+# it, so a workflow-only PR shipped unlinted. actionlint builds from the vendored
+# tools/ module — no new host dependency — and delegates run: blocks to the
+# shellcheck already required for `make check`; the script fails when that is
+# missing rather than skipping the half silently.
+.PHONY: actionlint
+actionlint: $(ACTIONLINT) ## Lint .github/workflows/** with actionlint (schema, uses:, expressions + shellcheck over inline run: blocks)
+	ACTIONLINT=$(ACTIONLINT) scripts/ci/actionlint-workflows.sh
 
 .PHONY: queue-unblock
 queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock ID=Q12; bare 12 also accepted)
@@ -850,7 +861,7 @@ karpenter-cluster-delete: ## Delete the live-Karpenter kind cluster (no-op if it
 ##@ Tools
 
 .PHONY: tools
-tools: $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GINKGO) $(GOLANGCI_LINT) $(GOVULNCHECK) ## Build all vendored build tools into .build/
+tools: $(ACTIONLINT) $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GINKGO) $(GOLANGCI_LINT) $(GOVULNCHECK) ## Build all vendored build tools into .build/
 
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Build golangci-lint into .build/
@@ -871,17 +882,18 @@ cosign: $(COSIGN) ## Download pinned cosign (COSIGN_VERSION) into .build/
 verify-release: $(COSIGN) ## Verify cosign signatures for a published release: make verify-release VERSION=vX.Y.Z
 	@COSIGN=$(COSIGN) scripts/release/verify-release.sh $(VERSION)
 
-# The kubebuilder-ecosystem tools all build the same way from the vendored
-# tools/ module; only the package path differs (the target-specific TOOL_PKG
-# below). ginkgo is the exception: it builds from cmd/gmc (workspace on) so it
-# matches the ginkgo version the e2e suite imports.
+# These all build the same way from the vendored tools/ module; only the package
+# path differs (the target-specific TOOL_PKG below). ginkgo is the exception: it
+# builds from cmd/gmc (workspace on) so it matches the ginkgo version the e2e
+# suite imports.
+$(ACTIONLINT):     TOOL_PKG := github.com/rhysd/actionlint/cmd/actionlint
 $(CONTROLLER_GEN): TOOL_PKG := sigs.k8s.io/controller-tools/cmd/controller-gen
 $(KUBEBUILDER):    TOOL_PKG := sigs.k8s.io/kubebuilder/v4
 $(SETUP_ENVTEST):  TOOL_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
 $(GOLANGCI_LINT):  TOOL_PKG := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 $(GOVULNCHECK):    TOOL_PKG := golang.org/x/vuln/cmd/govulncheck
 
-$(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GOLANGCI_LINT) $(GOVULNCHECK):
+$(ACTIONLINT) $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GOLANGCI_LINT) $(GOVULNCHECK):
 	mkdir -p $(REPO_ROOT)/.build
 	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ $(TOOL_PKG)
 

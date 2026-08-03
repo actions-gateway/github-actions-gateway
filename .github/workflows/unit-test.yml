@@ -34,6 +34,24 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Pin the shellcheck version rather than using ubuntu-latest's preinstalled one:
+# that version drifts with the runner image and its SC2015-style heuristics
+# differ between releases, so an unpinned gate gives a different verdict locally
+# vs. CI. Pinning makes `make shellcheck` reproducible; devs install the same
+# version to match (see docs/development/testing.md).
+#
+# Workflow-level so the two jobs that install shellcheck — `shellcheck` (the
+# scripts/ tree) and `actionlint` (inline workflow `run:` blocks) — cannot drift
+# to different versions and disagree about the same script.
+env:
+  SHELLCHECK_VERSION: v0.11.0
+  # SHA256 of shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz (Q127).
+  # GitHub release assets are mutable for an existing tag, so verify the bytes
+  # before trusting the binary. Bumped in lockstep with the version by updatecli
+  # (updatecli.d/shellcheck.yaml; shellcheck publishes no checksum file, so it
+  # hashes the tarball directly).
+  SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+
 jobs:
   # Fine-grained path gate. The coarse paths-ignore above still lets non-code,
   # non-docs files (e.g. .gitignore, LICENSE) trigger this workflow, so classify
@@ -155,14 +173,20 @@ jobs:
               - 'scripts/go/go-work-tidy.sh'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
-            # Path-filter coherence gate scope (Q429): the filter lists this gate
-            # reads, plus the module list it reads them against. Deliberately the
-            # only filter that watches ALL of .github/workflows/ — editing any
-            # workflow's `filters:` block must re-run the gate that lints it.
+            # Scope for the two gates that read the workflows themselves: the
+            # path-filter coherence gate (Q429) and actionlint (Q579). Their
+            # trigger set is the same — any workflow edit must re-run both — so
+            # they share one filter rather than keeping two lists that would have
+            # to stay in step. Deliberately the only filter watching ALL of
+            # .github/workflows/: editing any workflow's `filters:` block must
+            # re-run the gate that lints it.
             workflows:
               - '.github/workflows/**'
+              - '.github/actionlint.yaml'
               - 'go.work'
               - 'scripts/ci/check-path-filters.sh'
+              - 'scripts/ci/actionlint-workflows.sh'
+              - 'tools/**'
               - 'Makefile'
             # The claude-usage/ Python module (Q437). It matched no filter in this
             # repo — it is neither Go code nor a shell script — so its unittest
@@ -235,10 +259,10 @@ jobs:
       # touched — exactly the diff this job's `code` filter sees.
       - name: controller-gen manifest drift (make codegen-check)
         run: make codegen-check
-  # Shellcheck the standalone helper scripts under scripts/. actionlint already
-  # covers inline workflow `run:` blocks, but the scripts/*.sh files ship unlinted
-  # otherwise. Isolated from the `lint` job so a scripts-only change does not also
-  # trigger the full Go lint. `make shellcheck` (scripts/ci/shellcheck-scripts.sh) is
+  # Shellcheck the standalone helper scripts under scripts/. The `actionlint` job
+  # below covers the inline workflow `run:` blocks, but the scripts/*.sh files
+  # ship unlinted otherwise. Isolated from the `lint` job so a scripts-only
+  # change does not also trigger the full Go lint. `make shellcheck` (scripts/ci/shellcheck-scripts.sh) is
   # the single source of truth for the file set (every present scripts/*.sh,
   # recursive — tracked or untracked-and-not-gitignored).
   shellcheck:
@@ -246,19 +270,6 @@ jobs:
     if: needs.changes.outputs.scripts == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 5
-    # Pin the shellcheck version rather than using ubuntu-latest's preinstalled
-    # one: that version drifts with the runner image and its SC2015-style
-    # heuristics differ between releases, so an unpinned gate gives a different
-    # verdict locally vs. CI. Pinning makes `make shellcheck` reproducible; devs
-    # install the same version to match (see docs/development/testing.md).
-    env:
-      SHELLCHECK_VERSION: v0.11.0
-      # SHA256 of shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz (Q127).
-      # GitHub release assets are mutable for an existing tag, so verify the
-      # bytes before trusting the binary. Bumped in lockstep with the version by
-      # updatecli (updatecli.d/shellcheck.yaml; shellcheck publishes no checksum
-      # file, so it hashes the tarball directly).
-      SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # `make scripts-test` below shells out to go (go-vet-tags-test.sh runs a
@@ -403,6 +414,42 @@ jobs:
       - name: path filters cover go.work (make path-filters-check)
         run: make path-filters-check
 
+  # Lint the workflows themselves (Q579). Three docs credited actionlint with
+  # keeping SHA-pinned `uses:` clean and with linting inline `run:` blocks while
+  # nothing in CI ran it, so a workflow-only PR shipped unlinted. Its own job
+  # rather than a step in `lint`, for the same reason as path-filters above: a
+  # workflow-only change must re-run this and nothing else.
+  #
+  # actionlint builds from the vendored tools/ module — a Go linter, so tools/ is
+  # its home the same way golangci-lint's is — which keeps it off the host
+  # dependency list while `make actionlint` still gives the identical local
+  # verdict. Its `run:` linting is delegated to shellcheck, which must therefore
+  # be installed here: with shellcheck absent actionlint silently disables that
+  # half and still exits 0 (scripts/ci/actionlint-workflows.sh fails instead).
+  actionlint:
+    needs: [changes]
+    if: needs.changes.outputs.workflows == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      # Same pinned install as the shellcheck job, off the same workflow-level
+      # version + digest, so both jobs lint shell with one shellcheck.
+      - name: install pinned shellcheck
+        run: |
+          set -euo pipefail
+          base="shellcheck-${SHELLCHECK_VERSION}"
+          url="https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${base}.linux.x86_64.tar.xz"
+          scripts/fetch/download-verified.sh "$url" "${SHELLCHECK_SHA256}" "$RUNNER_TEMP/sc.tar.xz"
+          tar -xf "$RUNNER_TEMP/sc.tar.xz" -C "$RUNNER_TEMP"
+          sudo install "$RUNNER_TEMP/${base}/shellcheck" /usr/local/bin/shellcheck
+          shellcheck --version
+      - name: lint workflows (make actionlint)
+        run: make actionlint
+
   # Run the claude-usage/ Python suite (Q437). That module holds the committed
   # record of the project's Claude Code usage — for days whose session transcripts
   # have since been archived, the CSVs under claude-usage/data/ are the only
@@ -440,7 +487,7 @@ jobs:
   # and passes only when every needed job succeeded or was legitimately skipped.
   # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   unit-test-gate:
-    needs: [changes, lint, shellcheck, vendor-check, tidy-check, unit-test, coverage, path-filters, claude-usage-test]
+    needs: [changes, lint, shellcheck, actionlint, vendor-check, tidy-check, unit-test, coverage, path-filters, claude-usage-test]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

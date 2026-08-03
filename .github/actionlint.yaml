@@ -1,0 +1,18 @@
+# actionlint configuration (see .github/workflows/unit-test.yml's `actionlint` job).
+#
+# actionlint validates every `runs-on:` label against GitHub's hosted-runner set
+# and rejects anything it does not recognise, so each self-hosted label this repo
+# targets has to be declared here. Declaring them is what keeps the check useful:
+# a typo'd label still fails, instead of the whole rule being switched off.
+#
+# These are the labels registered by the GAG dogfood cluster's own runner scale
+# sets — the credential-gated probe workflows and the scale-set probe. The
+# migrated unit/integration/e2e jobs reach their runner through
+# `fromJSON(vars.GAG_RUNNER)` instead, which is an expression actionlint does not
+# resolve, so no entry is needed (or possible) for those.
+self-hosted-runner:
+  labels:
+    - probe
+    - gag-probe-scaleset
+    - gag-q468-retention
+    - gag-q583-replay

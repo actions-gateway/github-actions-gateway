@@ -347,6 +347,8 @@ jobs:
           # One bullet per matrix leg — legs run in parallel and can't share a
           # table header, so a bullet renders cleanly where a header-less table row
           # would not.
+          # Single-quoted printf format string: the %s must reach printf unexpanded.
+          # shellcheck disable=SC2016
           printf -- '- **%s** — `%s`\n' "${{ matrix.name }}" "${IMAGE}" >> "${GITHUB_STEP_SUMMARY}"
 
   # Package, push, and keyless-sign the Helm chart as an OCI artifact to GHCR,
@@ -540,6 +542,8 @@ jobs:
             exit 0
           fi
           notes="${RUNNER_TEMP}/release-notes.md"
+          # Single-quoted printf format strings: the %s must reach printf unexpanded.
+          # shellcheck disable=SC2016
           {
             printf '## Container images\n\n'
             printf 'Pin these immutable multi-arch index digests (not the floating `%s` tag):\n\n' "${TAG}"
@@ -554,6 +558,8 @@ jobs:
               echo "could not resolve index digest for ${image}:${TAG}" >&2
               exit 1
             fi
+            # Single-quoted printf format string: the %s must reach printf unexpanded.
+            # shellcheck disable=SC2016
             printf -- '- **%s** — `%s@%s`\n' "${name}" "${image}" "${digest}" >> "${notes}"
           done
           {
@@ -636,6 +642,8 @@ jobs:
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
+          # Single-quoted printf format strings: the %s must reach printf unexpanded.
+          # shellcheck disable=SC2016
           {
             printf -- '- **chart** — `%s`\n' "${REF}"
             printf -- '  install: `helm install actions-gateway oci://%s/%s/charts/actions-gateway --version %s`\n' \
