@@ -2609,6 +2609,14 @@
 <td>Deploy routes CI to GAG, scaling <code>workers</code> to 8 (32 vCPU) out of the same <code>CPUS_ALL_REGIONS</code> the e2e pool then needs. Cost two rc.5 runs at the old limit of 32. Raised to 64, so 52 worst case now fits — but nothing caps the competition.</td>
 </tr>
 <tr>
+<td><a id="Q640"></a>Q640</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Killing the release gate skips <code>trap teardown EXIT</code>, so the cluster keeps billing</a></td>
+<td><code>dogfood</code> <code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Happened twice in one session; both catches were ad-hoc, by looking for a live teardown process. Self-cleaning holds only when the gate exits on its own. Wants a mechanism — idempotent teardown at next start, or a reaper — not a fourth doc rule.</td>
+</tr>
+<tr>
 <td><a id="Q632"></a>Q632</td>
 <td><a href="../development/code-generation/">Generate an API reference page from the CRD markers</a></td>
 <td><code>docs</code> <code>feature</code></td>
