@@ -255,6 +255,7 @@ type ActionsGatewayStatus struct {
 // ActionsGateway is a namespace-scoped CRD managed by the GMC.
 //
 // +kubebuilder:object:root=true
+// +kubebuilder:deprecatedversion:warning="actions-gateway.github.com/v1alpha1 ActionsGateway is deprecated; use actions-gateway.com/v2beta1 ActionsGateway. v1alpha1 is served until v2.0.0, which removes it; migrate with gag-migrate."
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=ag,categories=actions-gateway
 // +kubebuilder:printcolumn:name="ProxyReady",type=integer,JSONPath=".status.proxyReadyReplicas"

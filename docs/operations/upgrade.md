@@ -12,6 +12,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: v1alpha1 is deprecated and the apiserver now warns](#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns)
   - [Non-breaking: an EgressProxy pool's pods drop the app: actions-gateway-proxy label (its pool is recreated once)](#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once)
   - [Non-breaking: GitHub Enterprise Server gateways now reach their own appliance (they never did)](#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did)
   - [Non-breaking: a GHES appliance behind a private CA can now be trusted (`spec.githubCABundleRef`)](#non-breaking-a-ghes-appliance-behind-a-private-ca-can-now-be-trusted-specgithubcabundleref)
@@ -83,6 +84,36 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### Non-breaking: `v1alpha1` is deprecated and the apiserver now warns
+
+Both `actions-gateway.github.com` kinds carry `deprecated: true` on their `v1alpha1`
+version, so `kubectl` prints a warning on any `v1alpha1` read or write:
+
+```text
+Warning: actions-gateway.github.com/v1alpha1 ActionsGateway is deprecated; use actions-gateway.com/v2beta1 ActionsGateway. v1alpha1 is served until v2.0.0, which removes it; migrate with gag-migrate.
+```
+
+`RunnerGroup` carries the same warning naming `actions-gateway.com/v2beta1 RunnerSet` as
+its replacement. The v1 monolith fans out into several v2 objects, so unlike the
+`v2alpha1` → `v2beta1` move below, the replacement is a different **kind** and not the
+same kind at a newer version — which is why the warning names
+[`gag-migrate`](migration-v1-to-v2.md) rather than a re-apply.
+
+**Nothing breaks, and the upgrade needs no action.** Deprecation marks intent and removes
+nothing: `v1alpha1` stays fully served, existing objects keep reconciling untouched, and
+the removal release is the same `v2.0.0` the docs have named since `v1.3.0`. The warning
+is advisory client-side output; it does not fail an `apply`, and controllers or CI that
+ignore warnings are unaffected. The AGC and GMC receive the same warning through their
+own Kubernetes clients but log it once per unique message per process (deduplicated), so
+a tenant reconciling under churn does not flood its controller log.
+
+**What to do about it.** Run [`gag-migrate`](migration-v1-to-v2.md) at your convenience —
+it is a one-shot fan-out of one v1 object into several v2 objects, and it preserves how
+jobs are acquired. Onboard new tenants on `v2beta1` instead
+([tenant onboarding](tenant-onboarding.md)). `v1alpha1` is one of three things `v2.0.0`
+removes; the standing notice for all three, with a pre-upgrade checklist, is the
+[deprecation and removal notice](v1alpha1-deprecation.md).
 
 ### Non-breaking: an `EgressProxy` pool's pods drop the `app: actions-gateway-proxy` label (its pool is recreated once)
 

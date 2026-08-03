@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,7 +14,16 @@ func warnError(err error) {
 	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
 }
 
-// Run executes the provided command within this context
+// Run executes the provided command within this context.
+//
+// On success it returns stdout ALONE. Callers feed that straight back into the
+// next command as a value — a jsonpath result, a resource name — so anything
+// kubectl writes to stderr must not reach them: a CRD deprecationWarning is
+// emitted on every read of a deprecated version, and folding it in spliced the
+// notice into label selectors and rendered manifests (Q633).
+//
+// On failure it returns both streams. Diagnosis wants everything, and an
+// admission rejection an e2e spec asserts on arrives on stderr.
 func Run(cmd *exec.Cmd) (string, error) {
 	dir, _ := GetProjectDir()
 	cmd.Dir = dir
@@ -25,12 +35,23 @@ func Run(cmd *exec.Cmd) (string, error) {
 	cmd.Env = append(os.Environ(), "GO111MODULE=on")
 	command := strings.Join(cmd.Args, " ")
 	_, _ = fmt.Fprintf(GinkgoWriter, "running: %q\n", command)
-	output, err := cmd.CombinedOutput()
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+
+	// Surface stderr even on success — a deprecation warning is worth seeing in
+	// the spec's output, just not worth splicing into its data.
+	if stderr.Len() > 0 {
+		_, _ = fmt.Fprintf(GinkgoWriter, "stderr: %s\n", stderr.String())
+	}
 	if err != nil {
-		return string(output), fmt.Errorf("%q failed with error %q: %w", command, string(output), err)
+		both := stdout.String() + stderr.String()
+		return both, fmt.Errorf("%q failed with error %q: %w", command, both, err)
 	}
 
-	return string(output), nil
+	return stdout.String(), nil
 }
 
 // UninstallCertManager uninstalls cert-manager via the Makefile target.

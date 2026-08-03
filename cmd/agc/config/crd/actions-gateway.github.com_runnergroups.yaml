@@ -45,6 +45,10 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    deprecated: true
+    deprecationWarning: actions-gateway.github.com/v1alpha1 RunnerGroup is deprecated;
+      use actions-gateway.com/v2beta1 RunnerSet. v1alpha1 is served until v2.0.0,
+      which removes it; migrate with gag-migrate.
     name: v1alpha1
     schema:
       openAPIV3Schema:

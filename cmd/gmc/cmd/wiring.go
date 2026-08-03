@@ -31,9 +31,9 @@ import (
 func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Options,
 	webhookServer webhook.Server) (ctrl.Manager, error) {
 	// Dedupe API server warnings to one log line per unique message per process.
-	// The default handler logs every occurrence, and the v2alpha1 deprecation
-	// warning repeats on every read/write of a v2 CR — under reconcile churn it
-	// dominates the log (Q515).
+	// The default handler logs every occurrence, and the v1alpha1/v2alpha1
+	// deprecation warnings repeat on every read/write of a deprecated-version CR —
+	// under reconcile churn they dominate the log (Q515).
 	restCfg := ctrl.GetConfigOrDie()
 	restCfg.WarningHandlerWithContext = logf.NewKubeAPIWarningLogger(
 		logf.KubeAPIWarningLoggerOptions{Deduplicate: true})

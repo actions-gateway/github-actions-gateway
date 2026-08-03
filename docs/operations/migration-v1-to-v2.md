@@ -23,7 +23,9 @@ set keeps its Classic protocol and multi-label matching during the deprecation w
 a tenant then moves to `v2beta1` (a lossless, apiserver-side conversion) once it no
 longer needs Classic. Because `v2alpha1` is deprecated, the apiserver warns on every
 `v2alpha1` read or write, including the objects `gag-migrate` applies. The warning is
-advisory and blocks nothing; it clears when the tenant moves to `v2beta1`. Detail:
+advisory and blocks nothing; it clears when the tenant moves to `v2beta1`.
+[`v1alpha1` warns the same way](upgrade.md#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns),
+so a tenant mid-migration sees a notice on both sides until v1 is decommissioned. Detail:
 [upgrade.md](upgrade.md#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns).
 v2 is **not a drop-in replacement** (new API group `actions-gateway.com`, one
 CR decomposed into several kinds, a tool-assisted fan-out). `v1alpha1` stays fully
