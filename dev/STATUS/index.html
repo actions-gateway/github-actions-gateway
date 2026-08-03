@@ -2577,6 +2577,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q642"></a>Q642</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/progress-watch-test.sh"><code>progress-watch-test</code>'s <code>interval 0</code> case fails under <code>make check</code>, passes standalone</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Measured 2026-08-03:</strong> <code>FAIL interval 0 exits without output — exit 137 output ''</code> (line 148 SIGKILLs the watcher). Green twice standalone, so the watcher does not exit within the test's grace under the 41-way <code>run-parallel</code> load.</td>
+</tr>
+<tr>
 <td><a id="Q628"></a>Q628</td>
 <td><a href="../plan/release-1.3/#the-rc5-re-run-2026-08-02">A worker reaped while Pending is reported as a <em>succeeded</em> job, so the assignment is concluded and never re-offered</a></td>
 <td><code>bug</code> <code>dogfood</code></td>
@@ -2711,14 +2719,6 @@
 <td>🚫</td>
 <td>M</td>
 <td>Blocked by <a href="#Q539">Q539</a>. Validate the composed stack: node-level P2P for pod images, in-guest mirror for job pulls; confirm the P2P mesh stays unreachable from worker pods.</td>
-</tr>
-<tr>
-<td><a id="Q609"></a>Q609</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scaleset/client.go"><code>DeleteMessage</code>'s error cannot tell a real delete from a swallowed 404</a></td>
-<td><code>bug</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>It reports 404/410 as a benign ack, so a caller cannot tell "deleted" from "endpoint absent". Two Q583 call sites hit it in one session; one produced a wrong-green test. Return the distinction, or warn callers.</td>
 </tr>
 <tr>
 <td><a id="Q597"></a>Q597</td>
