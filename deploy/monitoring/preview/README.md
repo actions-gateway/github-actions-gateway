@@ -43,6 +43,20 @@ cd deploy/monitoring/preview
 Writes one PNG per dashboard into `OUT_DIR` (default `.`):
 `actions-gateway-tenant.png` and `actions-gateway-platform.png`.
 
+### Promoting a render into the docs
+
+The rendered PNGs are **gitignored here** — the copies the docs embed live in
+`docs/assets/`, and nothing copies them for you. A dashboard change that skips this
+step leaves the published screenshot showing the old panels, which is how it drifts:
+
+```sh
+cp actions-gateway-tenant.png ../../../docs/assets/grafana-dashboard-tenant.png
+cp actions-gateway-platform.png ../../../docs/assets/grafana-dashboard-platform.png
+```
+
+Copy only the dashboards you actually changed. The synthetic workload differs run to
+run, so re-committing an unchanged dashboard's PNG is pure binary churn.
+
 Prerequisites: `docker`, `kind`, `helm`, `kubectl`, `curl` on `PATH`. (On macOS
 the script adds Docker Desktop's bundled `kubectl` automatically if it isn't
 already on `PATH`.) `magick` (ImageMagick) is optional — when present, each PNG
