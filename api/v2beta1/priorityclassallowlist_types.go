@@ -5,7 +5,11 @@ import (
 )
 
 // PriorityClassAllowlistSpec is the platform allowlist of PriorityClass names a
-// tenant may reference.
+// tenant may reference. It carries two disjoint sets — one for worker pods, one
+// for infra pods — because a class nameable from both surfaces would let a tenant
+// lift its workers to infra priority and preempt other tenants' proxy pods.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.allowedPriorityClasses) || !has(self.allowedInfraPriorityClasses) || !self.allowedPriorityClasses.exists(c, c in self.allowedInfraPriorityClasses)",message="allowedPriorityClasses (worker) and allowedInfraPriorityClasses must be disjoint: a class on both would let a tenant lift its worker pods to infra priority and preempt other tenants' proxy pods"
 type PriorityClassAllowlistSpec struct {
 	// AllowedPriorityClasses is the set of cluster-scoped PriorityClass names
 	// tenants may reference from RunnerSet.spec.priorityTiers[].priorityClassName
@@ -30,6 +34,30 @@ type PriorityClassAllowlistSpec struct {
 	// +kubebuilder:validation:items:MaxLength=253
 	// +kubebuilder:validation:items:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	AllowedPriorityClasses []string `json:"allowedPriorityClasses,omitempty"`
+
+	// AllowedInfraPriorityClasses is the set of cluster-scoped PriorityClass names
+	// a tenant may reference from EgressProxy.spec.scheduling.priorityClassName and
+	// ActionsGateway.spec.scheduling.priorityClassName — the INFRA pods, meaning the
+	// per-tenant egress proxy pool and the AGC control plane.
+	//
+	// Infra pods are meant to outrank workers: an evicted proxy takes a tenant's
+	// whole egress path down. That is why this is a SEPARATE set, and why it must
+	// stay disjoint from AllowedPriorityClasses — a class on both is nameable from a
+	// worker pod, so any tenant could lift its workers to infra priority and preempt
+	// another tenant's proxy. The spec-level CEL rule rejects an overlap within this
+	// object; the GMC additionally refuses an overlap against its static flags.
+	//
+	// Unset or empty forbids every named class — the secure default. This list is
+	// additive to the GMC's static --allowed-infra-priority-classes flag. The
+	// priorityclass-allowlist-guard ValidatingAdmissionPolicy does not read it: the
+	// infra surfaces are gated by failurePolicy=fail webhooks, not by that policy.
+	//
+	// +optional
+	// +listType=set
+	// +kubebuilder:validation:MaxItems=128
+	// +kubebuilder:validation:items:MaxLength=253
+	// +kubebuilder:validation:items:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
+	AllowedInfraPriorityClasses []string `json:"allowedInfraPriorityClasses,omitempty"`
 }
 
 // PriorityClassAllowlist is the cluster-scoped, platform-owned allowlist of
@@ -54,6 +82,7 @@ type PriorityClassAllowlistSpec struct {
 // +kubebuilder:storageversion
 // +kubebuilder:resource:scope=Cluster,shortName=pca,categories=actions-gateway
 // +kubebuilder:printcolumn:name="Allowed",type=string,JSONPath=`.spec.allowedPriorityClasses`
+// +kubebuilder:printcolumn:name="Infra",type=string,JSONPath=`.spec.allowedInfraPriorityClasses`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type PriorityClassAllowlist struct {
 	metav1.TypeMeta   `json:",inline"`

@@ -8,12 +8,16 @@
 //
 // The same PriorityClassAllowlist type backs both, but the two instances must stay
 // DISJOINT — an infra class nameable from a worker pod would let a tenant lift its
-// workers to infra priority and preempt other tenants' proxies. Intersection powers
-// the GMC startup check that enforces that disjointness.
+// workers to infra priority and preempt other tenants' proxies. Disjointness is
+// enforced at three points: Intersection powers the GMC startup check on the two
+// flags; ApplyDynamicPair refuses a watched-CR update that would create an overlap
+// against either static base; and a paired allowlist denies at READ time any name
+// that reached both sets anyway, so no ordering or wiring mistake can turn the
+// overlap into an admitted pod.
 //
 // Each allowlist is the union of a static base (a flag) and a dynamic set sourced
-// from a watched ConfigMap (Q188), so a platform admin can grow it without editing
-// the flag and rolling out the GMC.
+// from a watched PriorityClassAllowlist CR (Q188 worker, Q298 infra), so a platform
+// admin can grow either without editing the flag and rolling out the GMC.
 package allowlist
 
 import (
@@ -22,29 +26,45 @@ import (
 )
 
 // PriorityClassAllowlist is the effective set of cluster-scoped PriorityClass
-// names a tenant RunnerGroup may reference in priorityTiers. It is the union of
-// an immutable static set (from the GMC --allowed-priority-classes flag) and a
-// dynamic set sourced from a watched ConfigMap (Q188).
+// names a tenant may reference from one family of surfaces. It is the union of an
+// immutable static set (from a GMC flag) and a dynamic set sourced from the watched
+// PriorityClassAllowlist CR (Q188).
 //
 // The dynamic set is strictly ADDITIVE: it can only ever widen the allowlist
 // beyond the static base, never narrow or replace it. This is the fail-safe
-// design — a missing, deleted, or malformed ConfigMap leaves the static flag
-// allowlist in force (the ConfigMap reconciler clears the dynamic set via
-// SetDynamic(nil) in those cases), so a bad ConfigMap can never silently widen
-// the guardrail nor strip a class the platform pinned via the flag.
+// design — a missing, deleted, or malformed CR leaves the static flag allowlist
+// in force (the reconciler clears the dynamic set via SetDynamic(nil) in those
+// cases), so a bad CR can never silently widen the guardrail nor strip a class
+// the platform pinned via the flag.
 //
 // All methods are safe for concurrent use. The admission webhook reads the
-// effective set on every ValidateCreate/ValidateUpdate while the ConfigMap
-// reconciler replaces the dynamic set on watch events.
+// effective set on every ValidateCreate/ValidateUpdate while the reconciler
+// replaces the dynamic set on watch events.
 type PriorityClassAllowlist struct {
 	// static is fixed at construction from the flag and never mutated, so it is
 	// read without the lock.
 	static map[string]bool
 
 	mu sync.RWMutex
-	// dynamic is the ConfigMap-sourced augmentation, replaced wholesale by
-	// SetDynamic. nil until the reconciler first applies a ConfigMap.
+	// dynamic is the CR-sourced augmentation, replaced wholesale by SetDynamic.
+	// nil until the reconciler first applies a CR.
 	dynamic map[string]bool
+
+	// counterpart is the OTHER PriorityClass allowlist (worker↔infra), linked once
+	// at startup by Pair and never reassigned. A name present in both allowlists is
+	// allowed by NEITHER: whichever layer let the overlap through, the class stops
+	// being nameable rather than becoming nameable from a worker pod.
+	counterpart *PriorityClassAllowlist
+}
+
+// Pair links the worker and infra allowlists so each denies any name the other
+// also allows. Call it once at startup, before the manager serves admission, on
+// the two instances the webhooks read; it is the read-time half of the
+// disjointness invariant that Intersection checks on the flags and
+// ApplyDynamicPair checks on every CR update.
+func Pair(worker, infra *PriorityClassAllowlist) {
+	worker.counterpart = infra
+	infra.counterpart = worker
 }
 
 // New returns an allowlist whose static base is staticNames (the
@@ -57,8 +77,19 @@ func New(staticNames []string) *PriorityClassAllowlist {
 	return &PriorityClassAllowlist{static: toSet(staticNames)}
 }
 
-// Allowed reports whether name is on the effective allowlist (static ∪ dynamic).
+// Allowed reports whether name is on the effective allowlist (static ∪ dynamic)
+// and NOT on the paired counterpart's. A name on both is denied here and there:
+// it is exactly the worker/infra overlap the two allowlists exist to prevent, and
+// denying is the only resolution that cannot escalate.
 func (a *PriorityClassAllowlist) Allowed(name string) bool {
+	return a.contains(name) && !a.counterpart.contains(name)
+}
+
+// contains reports membership in this allowlist's own sets, ignoring the
+// counterpart. It is the non-recursive half of Allowed; a nil allowlist contains
+// nothing, which is both the secure default for an unwired webhook and what makes
+// an unpaired counterpart a no-op.
+func (a *PriorityClassAllowlist) contains(name string) bool {
 	if a == nil {
 		return false
 	}
@@ -86,8 +117,31 @@ func (a *PriorityClassAllowlist) AllowedPodPriorityClass(name string) bool {
 }
 
 // Names returns the effective allowlist as a sorted, de-duplicated slice for
-// deterministic admission-rejection messages.
+// deterministic admission-rejection messages. Names the counterpart also allows
+// are excluded, so the list an operator reads in a rejection is the set Allowed
+// actually admits.
 func (a *PriorityClassAllowlist) Names() []string {
+	if a == nil {
+		return nil
+	}
+	own := a.ownNames()
+	if a.counterpart == nil {
+		return own
+	}
+	names := make([]string, 0, len(own))
+	for _, n := range own {
+		if !a.counterpart.contains(n) {
+			names = append(names, n)
+		}
+	}
+	return names
+}
+
+// ownNames returns this allowlist's own effective set (static ∪ dynamic), sorted
+// and ignoring the counterpart. Intersection reads it rather than Names: the
+// shared names Names filters out are precisely the ones a disjointness check is
+// looking for.
+func (a *PriorityClassAllowlist) ownNames() []string {
 	if a == nil {
 		return nil
 	}
@@ -108,10 +162,13 @@ func (a *PriorityClassAllowlist) Names() []string {
 	return names
 }
 
-// SetDynamic replaces the dynamic (ConfigMap-sourced) set with names, augmenting
-// the static base. Passing nil or empty clears the dynamic set, leaving only the
-// static base in force — the fail-safe the ConfigMap reconciler invokes when the
-// ConfigMap is absent or fails validation. Empty entries are dropped.
+// SetDynamic replaces the dynamic (CR-sourced) set with names, augmenting the
+// static base. Passing nil or empty clears the dynamic set, leaving only the
+// static base in force — the fail-safe the reconciler invokes when the CR is
+// absent or fails validation. Empty entries are dropped.
+//
+// Use ApplyDynamicPair to update a worker/infra pair: it is what checks the
+// disjointness this method does not.
 func (a *PriorityClassAllowlist) SetDynamic(names []string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -146,11 +203,60 @@ func Intersection(a, b *PriorityClassAllowlist) []string {
 		return nil
 	}
 	other := make(map[string]bool)
-	for _, n := range b.Names() {
+	for _, n := range b.ownNames() {
 		other[n] = true
 	}
 	var shared []string
-	for _, n := range a.Names() {
+	for _, n := range a.ownNames() {
+		if other[n] {
+			shared = append(shared, n)
+		}
+	}
+	sort.Strings(shared)
+	return shared
+}
+
+// ApplyDynamicPair replaces the dynamic halves of the worker and infra allowlists
+// from one watched PriorityClassAllowlist CR (Q188 worker, Q298 infra), refusing
+// the update wholesale if the two effective sets would overlap.
+//
+// The CRD's CEL rule already rejects a CR whose own two lists intersect, but it
+// cannot see the GMC's flags: a CR adding a class the OTHER surface's static flag
+// already pins is the overlap that reaches here. On any overlap both dynamic sets
+// are cleared and the shared names returned, so the GMC falls back to the two flag
+// allowlists — which the startup check proved disjoint — rather than serving a
+// partially applied pair.
+//
+// Both sets are cleared before either is applied, so no intermediate state is
+// wider than the checked final pair: after the clear the effective sets are the
+// two disjoint static bases, and each subsequent set moves one side to a value
+// already proven disjoint from the other's final value. On the overlap path that
+// same clear IS the fail-safe.
+func ApplyDynamicPair(worker, infra *PriorityClassAllowlist, workerNames, infraNames []string) []string {
+	shared := candidateOverlap(worker, workerNames, infra, infraNames)
+	worker.SetDynamic(nil)
+	infra.SetDynamic(nil)
+	if len(shared) > 0 {
+		return shared
+	}
+	worker.SetDynamic(workerNames)
+	infra.SetDynamic(infraNames)
+	return nil
+}
+
+// candidateOverlap returns the sorted names that would sit on both allowlists if
+// each took the given dynamic set, static bases included.
+func candidateOverlap(a *PriorityClassAllowlist, aNames []string, b *PriorityClassAllowlist, bNames []string) []string {
+	other := toSet(bNames)
+	for n := range b.static {
+		other[n] = true
+	}
+	candidate := toSet(aNames)
+	for n := range a.static {
+		candidate[n] = true
+	}
+	var shared []string
+	for n := range candidate {
 		if other[n] {
 			shared = append(shared, n)
 		}

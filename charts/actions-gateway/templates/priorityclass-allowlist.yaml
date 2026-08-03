@@ -27,16 +27,24 @@ check would fire on a perfectly good install.
 {{- if and .Release.IsUpgrade (not (.Capabilities.APIVersions.Has "actions-gateway.com/v2beta1/PriorityClassAllowlist")) }}
 {{- fail "the PriorityClassAllowlist CRD is not installed in this cluster. Helm installs the chart-root crds/ dir on a fresh install ONLY and skips it on every upgrade, so applying it is a standard pre-upgrade step for this chart. Run it, then re-run this upgrade:\n\n    helm show crds <chart> --version <version> | kubectl apply -f -\n\nwhere <chart> is the same chart reference you are upgrading with (e.g. oci://ghcr.io/actions-gateway/charts/actions-gateway, or a local chart directory). It is idempotent and reads the CRDs from the exact version you are upgrading to. See docs/operations/upgrade.md, \"GMC install and upgrade via Helm\"." }}
 {{- end }}
-# The platform PriorityClass allowlist, generated from .Values.allowedPriorityClasses
-# — the same list passed to the GMC as --allowed-priority-classes — so the webhook
-# and the priorityclass-allowlist-guard policy cannot drift.
+# The platform PriorityClass allowlists, generated from
+# .Values.allowedPriorityClasses and .Values.allowedInfraPriorityClasses — the same
+# lists passed to the GMC as --allowed-priority-classes and
+# --allowed-infra-priority-classes — so the webhooks and the
+# priorityclass-allowlist-guard policy cannot drift.
+#
+# The two lists must be DISJOINT: a class on both is nameable from a worker pod, so
+# a tenant could lift its workers to infra priority and preempt other tenants'
+# proxies. The CRD's CEL rule rejects an overlap on write, and the GMC refuses to
+# apply a pair that would overlap its flags (Q298).
 #
 # TWO consumers read this one object:
-#   - the GMC, via --priority-class-allowlist-name, folding it into the dynamic
-#     half of its webhook allowlist so an admin can add a class without a GMC
-#     rollout (Q188);
+#   - the GMC, via --priority-class-allowlist-name, folding both lists into the
+#     dynamic halves of its webhook allowlists so an admin can add a class without
+#     a GMC rollout (Q188 worker, Q298 infra);
 #   - the priorityclass-allowlist-guard ValidatingAdmissionPolicy, as its
-#     paramKind — the apiserver cannot read a controller flag.
+#     paramKind — the apiserver cannot read a controller flag. It reads only
+#     allowedPriorityClasses: the infra surfaces have failurePolicy=fail webhooks.
 #
 # It is rendered unconditionally, NOT gated on admissionPolicy.enabled: it is the
 # allowlist source for the webhook whether or not the policy backstop is on.
@@ -59,5 +67,10 @@ spec:
   allowedPriorityClasses:
     {{- if .Values.allowedPriorityClasses }}
     {{- toYaml .Values.allowedPriorityClasses | nindent 4 }}
+    {{- else }} []
+    {{- end }}
+  allowedInfraPriorityClasses:
+    {{- if .Values.allowedInfraPriorityClasses }}
+    {{- toYaml .Values.allowedInfraPriorityClasses | nindent 4 }}
     {{- else }} []
     {{- end }}

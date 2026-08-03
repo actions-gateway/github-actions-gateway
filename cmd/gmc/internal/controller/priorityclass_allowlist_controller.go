@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -21,11 +22,17 @@ import (
 )
 
 // PriorityClassAllowlistReconciler watches a single designated, cluster-scoped
-// PriorityClassAllowlist CR and reconciles its contents into the dynamic half of
-// the PriorityClass admission allowlist (Q188). This lets a platform admin add an
-// allowed PriorityClass name without editing the GMC --allowed-priority-classes
-// flag and rolling out the controller — the change takes effect on the next watch
-// event, restart-free.
+// PriorityClassAllowlist CR and reconciles its two lists into the dynamic halves
+// of the worker and infra PriorityClass admission allowlists (Q188 worker, Q298
+// infra). This lets a platform admin add an allowed PriorityClass name to either
+// surface without editing the GMC --allowed-priority-classes /
+// --allowed-infra-priority-classes flags and rolling out the controller — the
+// change takes effect on the next watch event, restart-free.
+//
+// The two allowlists must stay disjoint (Q284), and a CR edit is a route to an
+// overlap the startup flag check cannot see. Both lists are therefore applied
+// through allowlist.ApplyDynamicPair, which refuses the pair wholesale when the
+// resulting effective sets would share a class.
 //
 // The same object is the `paramKind` of the priorityclass-allowlist-guard
 // ValidatingAdmissionPolicy, so the webhook and the policy read one source and
@@ -41,27 +48,33 @@ import (
 // replicas to contend over.
 //
 // Fail-safe contract (the allowlist is a cross-tenant-isolation guardrail, so a
-// bad object must never widen it): on a missing/deleted CR, or any invalid entry,
-// the reconciler clears the dynamic set (Allowlist.SetDynamic(nil)) so only the
-// static flag allowlist remains in force, and logs the reason. A malformed list is
+// bad object must never widen it): on a missing/deleted CR, any invalid entry, or
+// a worker/infra overlap, the reconciler clears BOTH dynamic sets so only the
+// static flag allowlists remain in force, and logs the reason. A malformed list is
 // rejected WHOLESALE — the valid subset is not partially applied — so a typo can
-// never silently smuggle in a class alongside garbage. The CRD schema already
-// constrains each entry to a DNS 1123 subdomain, so the invalid-entry path is now
-// defence in depth rather than the primary gate; it still runs, because an object
-// written before a schema change (or through a path that bypassed validation)
-// must not be trusted.
+// never silently smuggle in a class alongside garbage, and neither list is applied
+// when the other is bad. The CRD schema already constrains each entry to a DNS 1123
+// subdomain and rejects an overlap between the object's own two lists, so those
+// paths are now defence in depth rather than the primary gate; they still run,
+// because an object written before a schema change (or through a path that bypassed
+// validation) must not be trusted.
 type PriorityClassAllowlistReconciler struct {
 	client.Client
 	// Name is the name of the watched cluster-scoped PriorityClassAllowlist.
 	// Required.
 	Name string
-	// Allowlist is the shared allowlist the admission webhook reads. The
+	// Allowlist is the shared WORKER allowlist the admission webhooks read. The
 	// reconciler owns its dynamic half. Required.
 	Allowlist *allowlist.PriorityClassAllowlist
+	// InfraAllowlist is the shared INFRA allowlist gating
+	// spec.scheduling.priorityClassName on EgressProxy and v2 ActionsGateway pods
+	// (Q298). The reconciler owns its dynamic half and keeps it disjoint from
+	// Allowlist. Required.
+	InfraAllowlist *allowlist.PriorityClassAllowlist
 }
 
-// Reconcile reads the designated PriorityClassAllowlist and updates the dynamic
-// allowlist. See the type doc for the fail-safe contract.
+// Reconcile reads the designated PriorityClassAllowlist and updates both dynamic
+// allowlists. See the type doc for the fail-safe contract.
 func (r *PriorityClassAllowlistReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -69,53 +82,80 @@ func (r *PriorityClassAllowlistReconciler) Reconcile(ctx context.Context, _ ctrl
 	key := types.NamespacedName{Name: r.Name}
 	if err := r.Get(ctx, key, &pca); err != nil {
 		if client.IgnoreNotFound(err) == nil {
-			// Absent/deleted object: fall back to the static flag allowlist.
-			r.Allowlist.SetDynamic(nil)
-			log.Info("PriorityClassAllowlist not present; using the static --allowed-priority-classes flag only",
+			// Absent/deleted object: fall back to the static flag allowlists.
+			r.failSafe()
+			log.Info("PriorityClassAllowlist not present; using the static flag allowlists only",
 				"priorityClassAllowlist", r.Name,
-				"effectiveAllowlist", r.Allowlist.Names())
+				"effectiveAllowlist", r.Allowlist.Names(),
+				"effectiveInfraAllowlist", r.InfraAllowlist.Names())
 			return ctrl.Result{}, nil
 		}
 		// A transient read error (not NotFound): requeue rather than mutate the
-		// allowlist on incomplete information. The previously applied dynamic set
-		// stays in force until we can read authoritative state.
+		// allowlists on incomplete information. The previously applied dynamic sets
+		// stay in force until we can read authoritative state.
 		return ctrl.Result{}, fmt.Errorf("get PriorityClassAllowlist %s: %w", r.Name, err)
 	}
 
-	names, err := parsePriorityClassAllowlist(&pca)
-	if err != nil {
-		// Malformed contents: fail safe to the static flag allowlist and log a
-		// warning. Do NOT requeue — the data is invalid, not transiently
-		// unreadable; the next watch event (an admin fixing it) drives the retry.
-		r.Allowlist.SetDynamic(nil)
-		log.Info("WARNING: PriorityClassAllowlist is invalid; ignoring it and using the static --allowed-priority-classes flag only",
+	names, workerErr := parsePriorityClassNames(pca.Spec.AllowedPriorityClasses)
+	infraNames, infraErr := parsePriorityClassNames(pca.Spec.AllowedInfraPriorityClasses)
+	if err := errors.Join(workerErr, infraErr); err != nil {
+		// Malformed contents: fail safe to the static flag allowlists and log a
+		// warning. Do NOT requeue — the data is invalid, not transiently unreadable;
+		// the next watch event (an admin fixing it) drives the retry. A bad entry on
+		// either list withholds both, so a valid infra addition never rides in on an
+		// object whose worker list is garbage.
+		r.failSafe()
+		log.Info("WARNING: PriorityClassAllowlist is invalid; ignoring it and using the static flag allowlists only",
 			"priorityClassAllowlist", r.Name,
 			"reason", err.Error(),
-			"effectiveAllowlist", r.Allowlist.Names())
+			"effectiveAllowlist", r.Allowlist.Names(),
+			"effectiveInfraAllowlist", r.InfraAllowlist.Names())
 		return ctrl.Result{}, nil
 	}
 
-	r.Allowlist.SetDynamic(names)
-	log.Info("applied PriorityClass allowlist from PriorityClassAllowlist",
+	if shared := allowlist.ApplyDynamicPair(r.Allowlist, r.InfraAllowlist, names, infraNames); len(shared) > 0 {
+		// The object's own two lists are kept disjoint by the CRD's CEL rule, so this
+		// is an entry colliding with the OTHER surface's static flag, which CEL cannot
+		// see. ApplyDynamicPair has already dropped both dynamic sets; refuse rather
+		// than let a tenant reach infra priority from a worker pod.
+		log.Info("WARNING: PriorityClassAllowlist would make the worker and infra allowlists intersect; "+
+			"ignoring it and using the static flag allowlists only",
+			"priorityClassAllowlist", r.Name,
+			"sharedClasses", shared,
+			"effectiveAllowlist", r.Allowlist.Names(),
+			"effectiveInfraAllowlist", r.InfraAllowlist.Names())
+		return ctrl.Result{}, nil
+	}
+
+	log.Info("applied PriorityClass allowlists from PriorityClassAllowlist",
 		"priorityClassAllowlist", r.Name,
 		"dynamicEntries", names,
-		"effectiveAllowlist", r.Allowlist.Names())
+		"dynamicInfraEntries", infraNames,
+		"effectiveAllowlist", r.Allowlist.Names(),
+		"effectiveInfraAllowlist", r.InfraAllowlist.Names())
 	return ctrl.Result{}, nil
 }
 
-// parsePriorityClassAllowlist validates and normalises the PriorityClass names on
-// the CR. Every entry must be a valid RFC 1123 DNS subdomain (the form Kubernetes
+// failSafe drops both dynamic sets, leaving the two static flag allowlists — which
+// the GMC startup check proved disjoint — as the effective guardrail.
+func (r *PriorityClassAllowlistReconciler) failSafe() {
+	r.Allowlist.SetDynamic(nil)
+	r.InfraAllowlist.SetDynamic(nil)
+}
+
+// parsePriorityClassNames validates and normalises one of the CR's PriorityClass
+// lists. Every entry must be a valid RFC 1123 DNS subdomain (the form Kubernetes
 // requires of a PriorityClass name); any invalid entry fails the whole parse so
-// the caller falls back to the static allowlist rather than partially applying
+// the caller falls back to the static allowlists rather than partially applying
 // malformed config. Blank entries are skipped, duplicates collapse, and the result
 // is sorted so the logged allowlist is stable.
 //
 // An absent or empty list is valid and yields an empty list (the admin has
 // explicitly added no dynamic classes), leaving the static base untouched.
-func parsePriorityClassAllowlist(pca *v2beta1.PriorityClassAllowlist) ([]string, error) {
+func parsePriorityClassNames(entries []string) ([]string, error) {
 	seen := make(map[string]bool)
 	var names []string
-	for _, entry := range pca.Spec.AllowedPriorityClasses {
+	for _, entry := range entries {
 		name := strings.TrimSpace(entry)
 		if name == "" {
 			continue
@@ -138,8 +178,8 @@ func parsePriorityClassAllowlist(pca *v2beta1.PriorityClassAllowlist) ([]string,
 // disabling leader election so the dynamic allowlist is maintained in every
 // replica that serves the admission webhook.
 func (r *PriorityClassAllowlistReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if r.Name == "" || r.Allowlist == nil {
-		return fmt.Errorf("PriorityClassAllowlistReconciler requires Name and Allowlist")
+	if r.Name == "" || r.Allowlist == nil || r.InfraAllowlist == nil {
+		return fmt.Errorf("PriorityClassAllowlistReconciler requires Name, Allowlist, and InfraAllowlist")
 	}
 	runUnconditionally := false
 	return ctrl.NewControllerManagedBy(mgr).

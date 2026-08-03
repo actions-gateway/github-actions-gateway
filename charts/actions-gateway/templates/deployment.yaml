@@ -74,10 +74,11 @@ spec:
         # Empty/unset rejects all (secure default).
         - --allowed-infra-priority-classes={{ join "," . }}
         {{- end }}
-        # Q188: also source the PriorityClass allowlist from the cluster-scoped
+        # Q188/Q298: also source both PriorityClass allowlists from the cluster-scoped
         # PriorityClassAllowlist CR the chart renders, watched so additions take
         # effect without a restart. Additive to --allowed-priority-classes and
-        # fail-safe on a missing/bad object. The same CR is the
+        # --allowed-infra-priority-classes, fail-safe on a missing/bad object, and
+        # refused wholesale if the two would intersect. The same CR is the
         # priorityclass-allowlist-guard policy's paramKind (Q492), so the webhook
         # and the policy read one source and cannot drift.
         - --priority-class-allowlist-name={{ include "actions-gateway.namePrefix" . }}-priorityclass-allowlist

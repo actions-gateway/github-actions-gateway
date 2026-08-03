@@ -1125,7 +1125,7 @@ kubectl edit priorityclassallowlist <release>-priorityclass-allowlist
 A chart upgrade reasserts `allowedPriorityClasses` over it, exactly as it would
 have reasserted a chart-rendered ConfigMap — so persist anything durable in
 values. Full detail:
-[security-operations.md](security-operations.md#self-service-additions-via-the-priorityclassallowlist-cr-q188).
+[security-operations.md](security-operations.md#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298).
 
 #### Rolling back past this change re-arms the outage it fixes
 

@@ -196,3 +196,130 @@ func TestIntersection_NilOperand(t *testing.T) {
 		t.Errorf("nil operand must contribute no intersection, got %v", shared)
 	}
 }
+
+func TestPair_ClassOnBothAllowlistsIsAllowedByNeither(t *testing.T) {
+	// The invariant the two allowlists exist to hold: an infra class must never be
+	// nameable from a worker pod. Whatever let the overlap in — a flag pair the
+	// startup check never saw, a future second writer of the dynamic sets — the read
+	// path denies rather than escalates.
+	worker := New([]string{"runner-standard"})
+	infra := New([]string{"gag-infra-critical"})
+	Pair(worker, infra)
+
+	if !worker.Allowed("runner-standard") || !infra.Allowed("gag-infra-critical") {
+		t.Fatalf("precondition: disjoint sets must each allow their own class")
+	}
+
+	infra.SetDynamic([]string{"runner-standard"})
+	if worker.Allowed("runner-standard") {
+		t.Errorf("a class the infra allowlist also allows must not be nameable from a worker pod")
+	}
+	if infra.Allowed("runner-standard") {
+		t.Errorf("the conflicted class must be denied on the infra surface too, not merely relocated")
+	}
+	if infra.Allowed("gag-infra-critical") != true {
+		t.Errorf("an unconflicted infra class must stay allowed")
+	}
+}
+
+func TestPair_ConflictedNameLeavesRejectionMessages(t *testing.T) {
+	worker := New([]string{"runner-standard", "shared"})
+	infra := New([]string{"gag-infra-critical", "shared"})
+	Pair(worker, infra)
+
+	// Names() feeds the admission-rejection message, so it must list what Allowed
+	// actually admits — not a class the pairing denies.
+	if got, want := worker.Names(), []string{"runner-standard"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("worker Names() = %v, want %v", got, want)
+	}
+	if got, want := infra.Names(), []string{"gag-infra-critical"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("infra Names() = %v, want %v", got, want)
+	}
+	// Intersection must still SEE the overlap: it is the disjointness check, and a
+	// check reading the filtered view would report clean exactly when it is not.
+	if got, want := Intersection(worker, infra), []string{"shared"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("Intersection = %v, want %v", got, want)
+	}
+}
+
+func TestApplyDynamicPair_AppliesDisjointSets(t *testing.T) {
+	worker := New([]string{"runner-standard"})
+	infra := New([]string{"gag-infra-critical"})
+	Pair(worker, infra)
+
+	if shared := ApplyDynamicPair(worker, infra, []string{"runner-bursty"}, []string{"gag-infra-high"}); shared != nil {
+		t.Fatalf("disjoint sets must apply, got conflict %v", shared)
+	}
+	for _, name := range []string{"runner-standard", "runner-bursty"} {
+		if !worker.Allowed(name) {
+			t.Errorf("worker allowlist should allow %q", name)
+		}
+	}
+	for _, name := range []string{"gag-infra-critical", "gag-infra-high"} {
+		if !infra.Allowed(name) {
+			t.Errorf("infra allowlist should allow %q", name)
+		}
+	}
+}
+
+func TestApplyDynamicPair_RejectsOverlapWholesale(t *testing.T) {
+	// The case the CRD's CEL rule cannot catch: the CR's infra list names a class the
+	// WORKER flag already pins. CEL sees only the object, never the flags.
+	worker := New([]string{"runner-standard"})
+	infra := New([]string{"gag-infra-critical"})
+	Pair(worker, infra)
+
+	if shared := ApplyDynamicPair(worker, infra, []string{"runner-bursty"}, nil); shared != nil {
+		t.Fatalf("precondition: the first apply must succeed, got %v", shared)
+	}
+
+	shared := ApplyDynamicPair(worker, infra, []string{"runner-bursty"}, []string{"runner-standard"})
+	if want := []string{"runner-standard"}; !reflect.DeepEqual(shared, want) {
+		t.Fatalf("ApplyDynamicPair = %v, want conflict %v", shared, want)
+	}
+	// Both dynamic sets drop: the pair is refused wholesale, so the previously valid
+	// worker addition does not survive alongside a rejected infra one.
+	if worker.Allowed("runner-bursty") {
+		t.Errorf("a refused pair must not leave the worker dynamic set applied")
+	}
+	if infra.Allowed("runner-standard") {
+		t.Errorf("the conflicting infra class must never become allowed")
+	}
+	// The static flag allowlists — proven disjoint at startup — remain in force.
+	if !worker.Allowed("runner-standard") || !infra.Allowed("gag-infra-critical") {
+		t.Errorf("a refused pair must fall back to the static flag allowlists, not empty ones")
+	}
+}
+
+func TestApplyDynamicPair_RejectsOverlapWithinTheCR(t *testing.T) {
+	// Defence in depth for the CRD CEL rule: an object stored before the rule
+	// existed, or written through a path that skipped validation.
+	worker := New(nil)
+	infra := New(nil)
+	Pair(worker, infra)
+
+	shared := ApplyDynamicPair(worker, infra, []string{"both"}, []string{"both"})
+	if want := []string{"both"}; !reflect.DeepEqual(shared, want) {
+		t.Fatalf("ApplyDynamicPair = %v, want conflict %v", shared, want)
+	}
+	if worker.Allowed("both") || infra.Allowed("both") {
+		t.Errorf("a class on both CR lists must be allowed by neither surface")
+	}
+}
+
+func TestApplyDynamicPair_ClearsWhenBothEmpty(t *testing.T) {
+	worker := New([]string{"runner-standard"})
+	infra := New([]string{"gag-infra-critical"})
+	Pair(worker, infra)
+	ApplyDynamicPair(worker, infra, []string{"runner-bursty"}, []string{"gag-infra-high"})
+
+	if shared := ApplyDynamicPair(worker, infra, nil, nil); shared != nil {
+		t.Fatalf("clearing both sets cannot conflict, got %v", shared)
+	}
+	if worker.Allowed("runner-bursty") || infra.Allowed("gag-infra-high") {
+		t.Errorf("an emptied CR must drop both dynamic sets")
+	}
+	if !worker.Allowed("runner-standard") || !infra.Allowed("gag-infra-critical") {
+		t.Errorf("clearing the dynamic sets must not strip the static flag classes")
+	}
+}

@@ -111,7 +111,9 @@ allowedPriorityClasses: []
 # would let a tenant lift its workers to infra priority and preempt other tenants'
 # proxies. The GMC refuses to start if the two intersect. Pre-create the classes with
 # a value above the worker classes. Empty (default) forbids all
-# spec.scheduling.priorityClassName references — the secure default. See
+# spec.scheduling.priorityClassName references — the secure default. This list also
+# renders into the PriorityClassAllowlist CR below, so an admin can add an infra
+# class in place without a GMC rollout (Q298). See
 # docs/operations/security-operations.md § Infra pods: the separate allowlist.
 # e.g. allowedInfraPriorityClasses: ["gag-infra-critical"]
 allowedInfraPriorityClasses: []
