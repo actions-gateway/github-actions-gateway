@@ -1,0 +1,35 @@
+# Q594 throwaway probe — measures how dorny/paths-filter's picomatch treats
+# '**.go' vs '**/*.go'. Never merged; this branch is deleted after the run.
+name: q594-picomatch-probe
+on:
+  push:
+    branches: ["claude/**"]
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        id: f
+        with:
+          list-files: json
+          filters: |
+            broken:
+              - '**.go'
+            fixed:
+              - '**/*.go'
+            everything:
+              - '**'
+      - name: report
+        run: |
+          echo "changed files seen by the action: ${{ steps.f.outputs.everything_files }}"
+          echo "broken  ('**.go')   = ${{ steps.f.outputs.broken }}"
+          echo "fixed   ('**/*.go') = ${{ steps.f.outputs.fixed }}"
+          echo "broken_files = ${{ steps.f.outputs.broken_files }}"
+          echo "fixed_files  = ${{ steps.f.outputs.fixed_files }}"
