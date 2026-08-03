@@ -3017,28 +3017,20 @@
 <td>The other three §3.2 deliverables shipped (21 alert rules, SLO recording rules, runbook links). Panel JSON can be written against documented metric names; only validating that it renders needs a live Grafana, which dogfood can supply.</td>
 </tr>
 <tr>
+<td><a id="Q657"></a>Q657</td>
+<td><a href="../plan/eviction-oversubscription-validation/#scale-set-result-measured-2026-08-03">A kubelet eviction is not reliably ungraceful, so the ~10-minute figure is conditional</a></td>
+<td><code>tests</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Two runs of one spec on one build: 9m38s to conclusion with 20 paced re-run calls, and 17s with the re-run accepted first call — the graceful signature. Undiagnosed: the AGC log was not captured. Quantify the split, then qualify the design claim.</td>
+</tr>
+<tr>
 <td><a id="Q448"></a>Q448</td>
 <td><a href="../plan/runner-sizing-profiles/#the-live-path-and-why-the-rc-gate-could-not-have-found-this">Tighten the e2e NodeShare envelope against a measured allocatable</a></td>
 <td><code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>The declared 1500m÷1 envelope is a deliberate lower bound, so actuation can only reduce a worker's ask. Measure a live e2e node's allocatable, subtract the dind sidecar and Kata's 250m overhead, then raise it.</td>
-</tr>
-<tr>
-<td><a id="Q396"></a>Q396</td>
-<td><a href="../plan/eviction-oversubscription-validation/#experiment-1-mid-job-eviction-latency-both-tiers-q396">Time eviction→GitHub-cancel and assert the rerun fires</a></td>
-<td><code>tests</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Classic tier measured 2026-07-29: 9m36s eviction→conclusion, unconfounded; its refused re-run shipped fixed (Q503 — verify live on the next run). Remaining: the scale-set half, where neither latency nor the refusal is measured.</td>
-</tr>
-<tr>
-<td><a id="Q544"></a>Q544</td>
-<td><a href="../plan/q459-drained-worker-recovery/#status">Confirm the Q495 run-identity annotation on a real worker at live-GitHub</a></td>
-<td><code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The 2026-07-29 runs predate the fix (images from 719e67f1): every worker matched by the snapshot fallback, none by the annotation — the unfixed build's behaviour. Classic drain recovery rests on it; check <code>run-id</code> on the next credentialed run.</td>
 </tr>
 <tr>
 <td><a id="Q522"></a>Q522</td>
@@ -3235,7 +3227,7 @@
 <td><a href="../plan/scaleset-eviction-recovery/#phase-3-fast-release-if-phase-1-justifies-it">Fast-release evicted jobs instead of waiting out the lock</a></td>
 <td><code>speed</code></td>
 <td>M</td>
-<td><strong>Event:</strong> <a href="#Q396">Q396</a>'s benchmark attributes the eviction→conclusion delay to something the AGC can short-circuit. Probe deregistration first; <code>cmd/probe</code> has the scale-set harness.</td>
+<td><strong>Event:</strong> a probe shows deregistering an evicted job's runner makes GitHub conclude before the lock TTL. Q396 measured 9m36-9m38s on both tiers, all of it GitHub's own detection. <code>cmd/probe</code> has the harness.</td>
 </tr>
 <tr>
 <td><a id="Q424"></a>Q424</td>

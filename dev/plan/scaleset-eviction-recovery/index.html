@@ -2572,7 +2572,7 @@ exposure to a gap that only the deprecated tier covers.</p>
 <tbody>
 <tr>
 <td>1 — measure the real baseline</td>
-<td>❌ Open, tracked by <a href="../../STATUS/#Q396">Q396</a>. Gates Phase 3 only.</td>
+<td>❌ Open, tracked by Q396. Gates Phase 3 only.</td>
 </tr>
 <tr>
 <td>2 — port eviction recovery to scale-set</td>
@@ -2701,7 +2701,7 @@ coincided with the job's 10-minute <code>timeout-minutes</code> boundary.</p>
 <p>Three mechanisms are indistinguishable in that measurement: the lock TTL,
 GitHub's own liveness detection, and the workflow timeout. Optimizing against an
 unattributed number risks building a mechanism that removes none of it.</p>
-<p><a href="../../STATUS/#Q396">Q396</a> already tracks a clean dogfood benchmark for classic.
+<p>Q396 already tracks a clean dogfood benchmark for classic.
 Extending it to scale-set, with no <code>timeout-minutes</code> confound, is the cheapest
 gate on the whole effort.</p>
 <h2 id="why-classic-only-is-not-worth-shipping">Why classic-only is not worth shipping<a class="headerlink" href="#why-classic-only-is-not-worth-shipping" title="Permanent link">&para;</a></h2>
@@ -2720,7 +2720,7 @@ that ships and then is deleted. Do not implement classic-only.</p>
 <p>Three gates, cheapest first. Each produces a recorded answer whether or not the
 next phase proceeds.</p>
 <h3 id="phase-1-measure-the-real-baseline-gate">Phase 1: measure the real baseline (gate)<a class="headerlink" href="#phase-1-measure-the-real-baseline-gate" title="Permanent link">&para;</a></h3>
-<p>Tracked by <a href="../../STATUS/#Q396">Q396</a>, whose scope now covers both tiers. Evict a
+<p>Tracked by Q396, whose scope now covers both tiers. Evict a
 worker mid-job with no <code>timeout-minutes</code> set and timestamp eviction, GitHub's
 conclusion, and the annotation text.</p>
 <p><strong>Decides:</strong> whether there is meaningful latency to remove, and which mechanism
@@ -2785,7 +2785,7 @@ it closes a functional regression rather than an optimization gap.</p>
 </tr>
 <tr>
 <td>Cover deletion, not only terminal phase</td>
-<td>Deliberately <strong>not</strong> covered, with the reasoning recorded rather than inherited: a graceful deletion (drain, reaper) is exactly the case Q385's SIGTERM relay owns, and re-running it would double-report. The gap that remains is a <em>force</em> delete with no grace, which classic shares — see the residual note in <a href="../v2-ga/#phase-3--the-coupled-removals">v2-ga.md</a>. Q421 measured the drain path on 2026-07-27 and confirmed the exclusion holds on both tiers: a drained pod publishes no terminal phase at all, so nothing reaches this predicate and no rerun fires. Whether that <em>should</em> stay true was <a href="../q459-drained-worker-recovery/">Q459</a>, decided 2026-07-29: <strong>close, gated on <code>deletionTimestamp</code></strong> — a drained worker carries the mark, a cancelled or genuinely failed one does not. Q502 shipped that implementation, recovering the terminal-phase-with-mark shape while the no-terminal-phase deletion this row describes stays excluded.</td>
+<td>Deliberately <strong>not</strong> covered, with the reasoning recorded rather than inherited: a graceful deletion (drain, reaper) is exactly the case Q385's SIGTERM relay owns, and re-running it would double-report. The gap that remains is a <em>force</em> delete with no grace, which classic shares — see the residual note in <a href="../v2-ga/#phase-3--the-coupled-removals">v2-ga.md</a>. Q421 measured the drain path on 2026-07-27 and confirmed the exclusion holds on both tiers: a drained pod publishes no terminal phase at all, so nothing reaches this predicate and no rerun fires. Whether that <em>should</em> stay true was <a href="../archive/q459-drained-worker-recovery/">Q459</a>, decided 2026-07-29: <strong>close, gated on <code>deletionTimestamp</code></strong> — a drained worker carries the mark, a cancelled or genuinely failed one does not. Q502 shipped that implementation, recovering the terminal-phase-with-mark shape while the no-terminal-phase deletion this row describes stays excluded.</td>
 </tr>
 <tr>
 <td>Ordering and budget</td>
@@ -2840,7 +2840,7 @@ are cheap to run.</p>
   before it disappears, so no rerun fires
   (<a href="../eviction-oversubscription-validation/#result-measured-2026-07-27">result</a>).
   The pod watch this phase adds should not inherit the gap; whether to close it at
-  all is <a href="../q459-drained-worker-recovery/">Q459</a>.</li>
+  all is <a href="../archive/q459-drained-worker-recovery/">Q459</a>.</li>
 <li><strong>Ordering and budget.</strong> Report the terminal result, then rerun, consuming
   exactly one slot from the per-run budget.</li>
 <li><strong>Observability.</strong> A distinct metric or Event so a fast release is
@@ -2857,7 +2857,7 @@ are cheap to run.</p>
   evictions of the same run (the Q106 invariant, envtest-covered as classic is).</li>
 <li>⚠️ Operator docs describe eviction recovery on both tiers — done — but with the
   latency still <em>inferred</em> rather than measured, because Phase 1 has not run. The docs
-  say so where they discuss latency; <a href="../../STATUS/#Q396">Q396</a> closes it.</li>
+  say so where they discuss latency; Q396 closes it.</li>
 </ul>
 <p>Phase 3 additionally requires a measured before/after latency on dogfood, and a
 metric that distinguishes the two paths.</p>

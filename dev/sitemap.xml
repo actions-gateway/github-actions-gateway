@@ -453,10 +453,6 @@
          <lastmod>2026-08-03</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/plan/q459-drained-worker-recovery/</loc>
-         <lastmod>2026-08-03</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/plan/q501-cancel-relay/</loc>
          <lastmod>2026-08-03</lastmod>
     </url>
@@ -766,6 +762,10 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/q444-vap-param-resolution/</loc>
+         <lastmod>2026-08-03</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/plan/archive/q459-drained-worker-recovery/</loc>
          <lastmod>2026-08-03</lastmod>
     </url>
     <url>
