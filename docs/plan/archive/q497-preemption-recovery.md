@@ -31,7 +31,7 @@ preemption cause and leaves the rest of the graceful-removal path exactly as it 
 (That measurement landed the same day, while this work was in flight: a cancelled run's
 worker publishes no deletion mark, so the drain slice is decided as well; Q502 carried
 its implementation, since shipped
-([q459-drained-worker-recovery.md](../q459-drained-worker-recovery.md)). It did not change anything here
+([q459-drained-worker-recovery.md](q459-drained-worker-recovery.md)). It did not change anything here
 — the two slices key on different signals and ship independently — but it does mean the
 "stays open" framing this plan was written against is now only true of the code, not of
 the decision.)

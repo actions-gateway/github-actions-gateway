@@ -509,7 +509,7 @@ exists to capture exactly that, and [`testdata/README.md`](../../testdata/README
 documents what each capture contains.
 
 Q495 is the worked example. Its backlog row read "confirm, then fix", and both it and
-the [Q459 plan](../plan/q459-drained-worker-recovery.md) budgeted a Tier C run that would
+the [Q459 plan](../plan/archive/q459-drained-worker-recovery.md) budgeted a Tier C run that would
 evict a real job and watch for the skip. The answer was already committed:
 `testdata/job_payload.json` is a redacted capture of a live `acquirejob` response, and
 parsing it shows in seconds that the run identity lives in `contextData.github` and that

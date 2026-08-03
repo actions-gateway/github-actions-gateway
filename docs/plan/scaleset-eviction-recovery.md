@@ -27,7 +27,7 @@ exposure to a gap that only the deprecated tier covers.
 
 | Phase | State |
 |---|---|
-| 1 — measure the real baseline | ❌ Open, tracked by [Q396](../STATUS.md#Q396). Gates Phase 3 only. |
+| 1 — measure the real baseline | ❌ Open, tracked by Q396. Gates Phase 3 only. |
 | 2 — port eviction recovery to scale-set | ✅ **Shipped 2026-07-26** (Q417). See [Phase 2 as built](#phase-2-as-built). |
 | 3 — fast release | ❌ Open, tracked by [Q418](../STATUS.md#Q418), still gated on Phase 1. |
 
@@ -181,7 +181,7 @@ Three mechanisms are indistinguishable in that measurement: the lock TTL,
 GitHub's own liveness detection, and the workflow timeout. Optimizing against an
 unattributed number risks building a mechanism that removes none of it.
 
-[Q396](../STATUS.md#Q396) already tracks a clean dogfood benchmark for classic.
+Q396 already tracks a clean dogfood benchmark for classic.
 Extending it to scale-set, with no `timeout-minutes` confound, is the cheapest
 gate on the whole effort.
 
@@ -208,7 +208,7 @@ next phase proceeds.
 
 ### Phase 1: measure the real baseline (gate)
 
-Tracked by [Q396](../STATUS.md#Q396), whose scope now covers both tiers. Evict a
+Tracked by Q396, whose scope now covers both tiers. Evict a
 worker mid-job with no `timeout-minutes` set and timestamp eviction, GitHub's
 conclusion, and the annotation text.
 
@@ -267,7 +267,7 @@ Against the design constraints listed below:
 | Constraint | How it was met |
 |---|---|
 | Do not double-report | `PodFailed` + `reason == "Evicted"` only — the kubelet's node-pressure kill, the one case where nothing in the pod ran. Made explicit in `evictedAwaitingRecovery` rather than left to the rerun call's benign 404/410 handling. Classic pods are excluded by the `acquisition-protocol` label, so one eviction never spends two budget slots. |
-| Cover deletion, not only terminal phase | Deliberately **not** covered, with the reasoning recorded rather than inherited: a graceful deletion (drain, reaper) is exactly the case Q385's SIGTERM relay owns, and re-running it would double-report. The gap that remains is a *force* delete with no grace, which classic shares — see the residual note in [v2-ga.md](v2-ga.md#phase-3--the-coupled-removals). Q421 measured the drain path on 2026-07-27 and confirmed the exclusion holds on both tiers: a drained pod publishes no terminal phase at all, so nothing reaches this predicate and no rerun fires. Whether that *should* stay true was [Q459](q459-drained-worker-recovery.md), decided 2026-07-29: **close, gated on `deletionTimestamp`** — a drained worker carries the mark, a cancelled or genuinely failed one does not. Q502 shipped that implementation, recovering the terminal-phase-with-mark shape while the no-terminal-phase deletion this row describes stays excluded. |
+| Cover deletion, not only terminal phase | Deliberately **not** covered, with the reasoning recorded rather than inherited: a graceful deletion (drain, reaper) is exactly the case Q385's SIGTERM relay owns, and re-running it would double-report. The gap that remains is a *force* delete with no grace, which classic shares — see the residual note in [v2-ga.md](v2-ga.md#phase-3--the-coupled-removals). Q421 measured the drain path on 2026-07-27 and confirmed the exclusion holds on both tiers: a drained pod publishes no terminal phase at all, so nothing reaches this predicate and no rerun fires. Whether that *should* stay true was [Q459](archive/q459-drained-worker-recovery.md), decided 2026-07-29: **close, gated on `deletionTimestamp`** — a drained worker carries the mark, a cancelled or genuinely failed one does not. Q502 shipped that implementation, recovering the terminal-phase-with-mark shape while the no-terminal-phase deletion this row describes stays excluded. |
 | Ordering and budget | Claim first (`eviction-handled-at`, optimistic lock), then rerun, consuming exactly one slot. Claiming before the GitHub call makes recovery at-most-once per evicted pod across reconciles, restarts, and replicas — the safe direction, since a duplicate rerun silently spends budget while a missed one is visible in the metric. |
 | Observability | `tier` label on both eviction counters; a dedicated `eviction_recovery_identity_unknown_total` plus `EvictionRecoveryIdentityUnknown` Event for the one mode that makes the mechanism inert. |
 | Which `TaskResult` | Not applicable to Phase 2 — that question belongs to the Phase 3 fast release, which is what posts a terminal result. Phase 2 posts nothing to the run service. |
@@ -314,7 +314,7 @@ are cheap to run.
   before it disappears, so no rerun fires
   ([result](eviction-oversubscription-validation.md#result-measured-2026-07-27)).
   The pod watch this phase adds should not inherit the gap; whether to close it at
-  all is [Q459](q459-drained-worker-recovery.md).
+  all is [Q459](archive/q459-drained-worker-recovery.md).
 - **Ordering and budget.** Report the terminal result, then rerun, consuming
   exactly one slot from the per-run budget.
 - **Observability.** A distinct metric or Event so a fast release is
@@ -332,7 +332,7 @@ Phase 2 is the shippable unit:
   evictions of the same run (the Q106 invariant, envtest-covered as classic is).
 - ⚠️ Operator docs describe eviction recovery on both tiers — done — but with the
   latency still *inferred* rather than measured, because Phase 1 has not run. The docs
-  say so where they discuss latency; [Q396](../STATUS.md#Q396) closes it.
+  say so where they discuss latency; Q396 closes it.
 
 Phase 3 additionally requires a measured before/after latency on dogfood, and a
 metric that distinguishes the two paths.
