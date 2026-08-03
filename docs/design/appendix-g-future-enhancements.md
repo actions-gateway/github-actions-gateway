@@ -982,7 +982,7 @@ candidates, and only one is both expressive and safe:
 | Channel | Carries | Verdict |
 |---|---|---|
 | Container exit code | The runner's real `TaskResult` | Free (already propagated, unread), but the runner owns it and no step can set it. Fidelity, not intent. |
-| Termination message (`/dev/termination-log` → `State.Terminated.Message`) | Anything the job writes, 4 KiB | The workable one. No RBAC, no in-pod API access, and the AGC already reads pod status. The wrapper must make the path writable by the job's user. |
+| Termination message (`/dev/termination-log` → `State.Terminated.Message`) | Anything the job writes, 4 KiB | The workable one, with one hole: the log is per-container, so a step running in a workflow `container:` job writes to a different filesystem than the kubelet reads. The wrapper must also make the path writable by the job's user. |
 | A `runs-on` label (e.g. `gag-flaky-retry`) | Per-job opt-in | Free, since the listener sees job labels at acquisition, but static policy rather than a per-failure verdict. |
 | Pod self-annotation | Anything | Rejected. Grants tenant-controlled workflow code patch permission on its own pod. |
 
@@ -1002,6 +1002,37 @@ untrusted PR's workflow. Gating is not optional: an operator-set `RunnerSet`
 opt-in (a workflow author's signal must never enable retry on its own), the
 existing per-run budget plus a per-window cap, and its own `cause` label so
 the spend is attributable.
+
+**What the isolation shapes do and do not change.** Neither Docker-in-Docker
+nor Kata interposes on the exit code. In both shipped shapes `dockerd` is a
+nested process of the runner container or a native sidecar reachable over
+localhost ([Kata + DinD](../operations/kata-dind-workloads.md)), so the
+wrapper is still PID 1 of the runner container and still owns its exit code;
+what DinD changes is reaping (Q249), which is phase *timing*, not outcome
+fidelity. Kata reports exit status through the ordinary `kata-agent` → shim →
+containerd → kubelet path.
+
+Two things are worth stating plainly before anything is built on this:
+
+- **Nothing has measured that a runner-produced non-zero exit reaches
+  `PodFailed`.** `translateWorkerExitCode`'s 102 passthrough is unit-tested;
+  the e2e sites that assert `PodFailed` are all external-kill shapes (evicted,
+  deleted), not a job that failed on its own merits. A green e2e run cannot
+  settle it either, because a *successful* job exits 0 whether or not the
+  runtime propagates codes faithfully. The measurement is a single dogfood
+  turn-up on the Kata overlay: fail a step deliberately, then read
+  `.status.containerStatuses[0].state.terminated.exitCode` and `.status.phase`.
+- **A workflow `container:` job is the real boundary**, and it splits the two
+  channels. The exit code survives it, because the runner execs into the job
+  container, reads the step status, and computes `TaskResult` itself. A signal
+  *file* does not: the workspace is bind-mounted across that boundary and
+  `/dev/termination-log` is not, so the obvious implementation vanishes
+  silently for exactly the tenants most likely to want it.
+
+That argues for the wrapper as the translator rather than the job writing a
+pod-visible file directly. It sits on the runner-container side of every one
+of these boundaries, already owns the exit code, and can read a
+workspace-relative marker the job wrote from wherever it ran.
 
 **Trigger.** Q555 tracks the design decision. Promote when a design session
 commits the CRD shape, or an operator asks for it (the demand signal that
