@@ -444,8 +444,12 @@ type Listener struct {
 	// per-job provision path, so it is a sync.Once rather than a plain bool.
 	identityWarnOnce sync.Once
 
-	mu          sync.Mutex
-	scaleSetID  int
+	mu         sync.Mutex
+	scaleSetID int
+	// The three replay guards. Each answers a redelivered JobAssigned, and each is retired
+	// by retireGuards once every message carrying one for its job has been deleted — so
+	// they are bounded by the work still in the queue, not by the jobs the listener has
+	// handled over its lifetime (Q597).
 	provisioned map[string]bool // jobIDs provisioned this process (idempotency + replay guard)
 	// completed holds jobIDs GitHub has reported terminal. It guards double-counting on
 	// replay, and gates provisioning: a worker for a completed job would stall on the
@@ -457,12 +461,22 @@ type Listener struct {
 	// one GitHub has stopped holding is not coming back under the same id.
 	abandoned map[string]bool
 	// pending holds every message acked by cursor but not yet deleted, keyed by message
-	// id; the value is the set of jobs it is still waiting on. An entry with an empty
-	// set is settled and awaiting its delete, which flushDeletes issues and retries
-	// (Q583).
-	pending       map[int64]map[string]bool
+	// id. An entry whose unsettled set is empty is settled and awaiting its delete, which
+	// flushDeletes issues and retries (Q583).
+	pending       map[int64]*pendingMessage
 	lastStats     scaleset.RunnerScaleSetStatistic
 	lastMessageID int64
+}
+
+// pendingMessage is one cursor-acked message the Listener has not yet deleted.
+type pendingMessage struct {
+	// assigned is the jobs the message carries a JobAssigned for, kept for the whole life
+	// of the entry — it is what says which guards the delete retires. Deliberately not
+	// the same set as unsettled, which settle empties before the delete lands, and
+	// deliberately assignments only: those are the deliveries the guards answer.
+	assigned map[string]bool
+	// unsettled is the jobs that have not concluded. Empty means ready to delete.
+	unsettled map[string]bool
 }
 
 // New validates cfg and builds a Listener.
@@ -491,7 +505,7 @@ func New(cfg Config) (*Listener, error) {
 		provisioned:        make(map[string]bool),
 		completed:          make(map[string]bool),
 		abandoned:          make(map[string]bool),
-		pending:            make(map[int64]map[string]bool),
+		pending:            make(map[int64]*pendingMessage),
 		deferred:           make(map[string]*deferredJob),
 	}
 	if l.log == nil {
@@ -976,7 +990,7 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 		// delete it: it names no job, and nothing about a later delivery would make it
 		// readable.
 		l.advanceCursor(msg.MessageID)
-		l.holdForDelete(msg.MessageID, nil)
+		l.holdForDelete(msg.MessageID, nil, nil)
 		return
 	}
 
@@ -1023,7 +1037,7 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 		l.advanceCursor(msg.MessageID)
 		// The delete half. A message whose jobs have all concluded goes on the next
 		// flush; one still owed a worker is held, so a restart re-reads it (Q583).
-		l.holdForDelete(msg.MessageID, l.unsettledJobs(jobs, cleaned))
+		l.holdForDelete(msg.MessageID, assignedJobIDs(jobs), l.unsettledJobs(jobs, cleaned))
 	}
 }
 
@@ -1595,35 +1609,84 @@ func (l *Listener) advanceCursor(messageID int64) {
 	l.mu.Unlock()
 }
 
-// holdForDelete registers a cursor-acked message for the delete half of the ack,
-// waiting on the jobs it names that have not concluded. A message naming none is
-// registered settled, so the next flushDeletes removes it.
+// holdForDelete registers a cursor-acked message for the delete half of the ack:
+// assigned is the jobs it carries a JobAssigned for, unsettled the jobs it names that
+// have not concluded. A message naming none is registered settled, so the next
+// flushDeletes removes it.
 //
 // The wait is what keeps replay working where it is the recovery path rather than the
 // bug: a job provisioned but still running, and a Q551 deferred job the previous
 // process never provisioned at all, both hold their message in the queue, so a restart
 // re-reads them. Only a job that has concluded — completed with its Secret reclaimed,
 // or abandoned (Q553) — releases one.
-func (l *Listener) holdForDelete(messageID int64, unsettled map[string]bool) {
+func (l *Listener) holdForDelete(messageID int64, assigned, unsettled map[string]bool) {
 	l.mu.Lock()
-	l.pending[messageID] = unsettled
+	l.pending[messageID] = &pendingMessage{assigned: assigned, unsettled: unsettled}
 	l.mu.Unlock()
 }
 
 // settle marks a job concluded, releasing every held message waiting on it. A job is
 // named by two messages — its JobAssigned and its JobCompleted — so this drops it from
-// all of them rather than from one.
+// all of them rather than from one. The assigned sets are untouched: that is what
+// retireGuards reads, and a settled job whose assignment is still queued still needs
+// its guards.
 func (l *Listener) settle(jobID string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	for _, waiting := range l.pending {
-		delete(waiting, jobID)
+	for _, p := range l.pending {
+		delete(p.unsettled, jobID)
 	}
 }
 
+// retireGuards drops the replay guards for the jobs a just-deleted message assigned,
+// keeping any whose assignment another held message still carries. Caller holds mu, with
+// the message already out of pending.
+//
+// The guards answer exactly one thing: a redelivered JobAssigned. So an entry is dead
+// once every message carrying a JobAssigned for its job has been deleted — and at least
+// one has, which is why a completion-only message retires nothing (its job's assignment
+// may still be ahead of the cursor; Q575's replayed-after-completion case). Deleting is
+// itself gated on the job having concluded, so this cannot retire a guard for work still
+// in flight (Q597).
+func (l *Listener) retireGuards(p *pendingMessage) {
+	if p == nil {
+		return
+	}
+	for jobID := range p.assigned {
+		if l.assignmentPending(jobID) {
+			continue
+		}
+		delete(l.provisioned, jobID)
+		delete(l.completed, jobID)
+		delete(l.abandoned, jobID)
+	}
+}
+
+// assignmentPending reports whether any undeleted message still carries a JobAssigned for
+// jobID. Caller holds mu.
+func (l *Listener) assignmentPending(jobID string) bool {
+	for _, p := range l.pending {
+		if p.assigned[jobID] {
+			return true
+		}
+	}
+	return false
+}
+
+// assignedJobIDs is the set of jobs a message carries a JobAssigned for — the deliveries
+// the replay guards exist to answer, and so the guards its delete may retire.
+func assignedJobIDs(jobs []scaleset.JobMessage) map[string]bool {
+	assigned := make(map[string]bool)
+	for _, j := range scaleset.AssignedJobs(jobs) {
+		assigned[j.JobID] = true
+	}
+	return assigned
+}
+
 // flushDeletes issues the delete half of the ack for every settled message, dropping
-// each one it deletes. A failure leaves the entry in place, so the next poll cycle
-// retries it — which is why this runs per cycle rather than only at settle time.
+// each one it deletes along with the replay guards that delete retires (Q597). A failure
+// leaves the entry in place, so the next poll cycle retries it — which is why this runs
+// per cycle rather than only at settle time.
 //
 // A 404/410 completes the ack too — a message already gone is nothing left to do — so
 // the entry is dropped either way. That is only safe because the endpoint is known
@@ -1634,8 +1697,8 @@ func (l *Listener) settle(jobID string) {
 func (l *Listener) flushDeletes(ctx context.Context, sess *scaleset.RunnerScaleSetSession) {
 	l.mu.Lock()
 	var ready []int64
-	for messageID, waiting := range l.pending {
-		if len(waiting) == 0 {
+	for messageID, p := range l.pending {
+		if len(p.unsettled) == 0 {
 			ready = append(ready, messageID)
 		}
 	}
@@ -1657,7 +1720,9 @@ func (l *Listener) flushDeletes(ctx context.Context, sess *scaleset.RunnerScaleS
 				"scaleSet", l.cfg.ScaleSetName, "messageID", messageID)
 		}
 		l.mu.Lock()
+		p := l.pending[messageID]
 		delete(l.pending, messageID)
+		l.retireGuards(p)
 		l.mu.Unlock()
 	}
 }
