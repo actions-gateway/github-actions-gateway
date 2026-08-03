@@ -2633,6 +2633,14 @@
 <td>Its CRDs carry no <code>deprecated: true</code> and no <code>deprecationWarning</code>; every v2alpha1 CRD carries both since Q411. So the users furthest behind get the least warning, and the notice has been docs-only since v1.1.0. Add the marker, or say why not.</td>
 </tr>
 <tr>
+<td><a id="Q638"></a>Q638</td>
+<td><a href="../operations/release/#7-hand-off-to-operators">Nothing bumps the pinned current release in the docs, so they still advertise <code>1.2.0</code> after v1.3.0 shipped</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured after the tag: <code>upgrade.md</code> line 908 and four spots in <code>gitops.md</code> still pin <code>1.2.0</code>. Step 7 writes <code>X.Y.Z</code> and names no files, so the bump is remembered, not run. README fixed by hand.</td>
+</tr>
+<tr>
 <td><a id="Q623"></a>Q623</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-no-plan-refs-in-code.sh"><code>no-plan-refs-in-code</code> only scopes Go, but shell and workflow comments rot the same way</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
