@@ -2701,6 +2701,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-tests-environment-assumptions-must-be-probed-not-inferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A test's environment assumptions must be probed, not inferred
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#proving-a-flake-fix-invert-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3711,6 +3722,17 @@ you wrote yourself.</p>
 </ul>
 <p>The remedy <code>run &lt;script&gt; yourself for the report</code> is not one. In CI there is nobody at that shell, and if the cause was transient the re-run is green and the evidence is gone for good.</p>
 <p>Q596 is the worked example, and it cost a full session. <code>check-v2-api-sync-test</code>'s <code>tree-in-sync</code> — the one assertion reading the live <code>api/</code> tree — ran the gate as <code>&gt;/dev/null 2&gt;&amp;1</code> and printed <code>packages diverge</code> for <em>any</em> non-zero exit. Replaying it against stubs exiting 1 (real drift), 2 (missing directory) and 3 (mid-run abort) produced three identical, evidence-free lines. The single occurrence was undiagnosable by construction, and 2,418 reproduction runs never recovered the trigger. Note the shape: in all three of the scripts that had this bug, the <em>fixture</em> helper in the same file captured output correctly and only the live-state assertion threw it away.</p>
+<h3 id="a-tests-environment-assumptions-must-be-probed-not-inferred">A test's environment assumptions must be probed, not inferred<a class="headerlink" href="#a-tests-environment-assumptions-must-be-probed-not-inferred" title="Permanent link">&para;</a></h3>
+<p><code>runs-on</code> is an expression here, not a constant. Nine jobs resolve theirs at run time — seven in <code>unit-test.yml</code>, <code>integration-test</code>, and the e2e job in <code>e2e-reusable.yml</code> — so a <code>workflow_dispatch</code> with <code>target_gag=true</code> (or, for e2e, merely <code>vars.GAG_E2E_RUNNER</code> being set, which is not dispatch-gated) routes them to the self-hosted dogfood runner instead of <code>ubuntu-latest</code>. <strong>"It passed in CI" is a statement about one runner image, not about where the test runs next.</strong></p>
+<p>So a test that depends on the environment — the uid it runs as, a tool on <code>PATH</code>, whether mode bits bite — must <strong>attempt the operation and branch on the result</strong>:</p>
+<ul>
+<li><strong>Probe the capability, never a proxy for it.</strong> <code>os.Geteuid()</code>, <code>id -u</code> and <code>runtime.GOOS</code> are proxies, and they are wrong in both directions: a uid-0 container with <code>drop: ALL</code> <em>cannot</em> read a mode-000 file, and a non-root process holding <code>CAP_DAC_OVERRIDE</code> can. Reading the uid answers a different question than the one asserted.</li>
+<li><strong>Skip on the probe, and say what it observed.</strong> A silent skip and a passing test look identical in the log, which is how a gate rots into a no-op.</li>
+<li><strong>When the capability is a job prerequisite rather than a test variable, provision it instead</strong> — install it in the workflow so the verdict is identical on both runner types.</li>
+</ul>
+<p>The reviewer's tell: a test that names an environment fact in a comment or skip message but never reads it.</p>
+<p>Both remedies are in the record. <strong>Q482</strong> is the provision case: the <code>shellcheck</code> job runs <code>make scripts-test</code>, whose <code>scripts/go/go-vet-tags-test.sh</code> shells out to a real <code>go</code>. <code>ubuntu-latest</code> preinstalls one; the dogfood runner image omits it by design. The dependency was never written down or checked, so every <code>target_gag=true</code> dispatch reported a red that was not a failure. The fix added the same pinned <code>setup-go</code> step its six sibling jobs already had. <strong>Q596</strong> is the probe case: <code>check-v2-api-sync-test</code>'s <code>unreadable-file</code> assertion <code>chmod 000</code>s a fixture and requires the gate to call it trouble, gated on whether <code>cat</code> actually fails — not on <code>$EUID</code>, precisely because uid does not settle whether the mode bits bite on this runner.</p>
+<p>Q482 established this for the Go toolchain only. It covers both languages and every tier those nine jobs carry: Go unit tests, the <code>scripts/</code> shell suites under <code>make scripts-test</code>, integration, and e2e. <code>TestBuildTrustPool_PreservesSystemRoots</code> (<code>cmd/agc/internal/transport/trustpool_test.go</code>) and the <code>python3</code> guards in <code>scripts/docs/*-hook-test.sh</code> are the models in each.</p>
 <h3 id="proving-a-flake-fix-invert-it">Proving a flake fix: invert it<a class="headerlink" href="#proving-a-flake-fix-invert-it" title="Permanent link">&para;</a></h3>
 <p>Repeated passes do not validate a flake fix. A green <code>-count=20</code> is equally consistent with <em>"the race is closed"</em> and <em>"the race didn't fire this time"</em> — and on an unloaded dev machine the second is the more likely of the two, because the timing that produces the flake on a loaded CI runner often can't be reproduced locally at all. Passing-after is necessary evidence, not sufficient evidence.</p>
 <p>Run the <strong>negative control</strong> before concluding: invert the fix — restore the old value, remove the pin, revert the ordering — and confirm the suite <em>fails</em>. A fix you cannot make fail on demand has not been shown to be load-bearing, and shipping it closes the backlog row while leaving the flake live. When the inverted form refuses to fail either, that is itself the finding: the diagnosis is wrong, or the mechanism isn't the one you think it is.</p>
