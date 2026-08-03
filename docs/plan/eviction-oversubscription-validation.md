@@ -162,12 +162,43 @@ routed the job to its label, and a real runner executed it before anything was t
 | **Eviction → conclusion** | **9m38s** | 9m37s | 9m36s |
 | **Re-run calls before acceptance** | **20** | 20 | n/a — fired once, refused |
 
-**Both open questions are answered, and the answer to each is "the same as classic".**
-Three measurements across two acquisition tiers land within two seconds of each other,
-which puts the ~10-minute figure on the job lock's TTL rather than on anything
-tier-specific. And both tiers needed exactly 20 paced calls before GitHub accepted the
-re-run — the 403 refusal window reproduces here, so the retry loop is load-bearing on
-this tier too and not merely inherited.
+**The scale-set tier reproduces the classic behaviour — when the runner's report does
+not escape.** On this run it did not: 9m38s to conclusion, within two seconds of both
+classic measurements, and 20 paced calls before GitHub accepted the re-run. The 403
+refusal window is real on this tier, so the retry loop is load-bearing here and not
+merely inherited.
+
+**But a second run of the same spec, on the same build, disagreed — and that is the
+more important result.** Re-run 2026-08-03 inside the full container, it saw:
+
+| Observation | This run | The run above |
+|---|---|---|
+| Runner container exit code | 137 | 137 |
+| Pod phase/reason | `Running/` → `Failed/Evicted` | same |
+| Job runtime before conclusion | **17s** | ~9.5 min |
+| Eviction → conclusion | **−1s** (GitHub concluded *before* the kubelet's recorded exit) | 9m38s |
+| Re-run calls before acceptance | **1** | 20 |
+
+17 seconds is the *graceful* path's signature — [Q459](archive/q459-drained-worker-recovery.md)
+measured 15–26s for a drained worker whose runner does report — so the likeliest reading
+is that this eviction gave the runner enough time to get its report out, and GitHub
+concluded on the report rather than on the lapsed lock. Exit 137 does not contradict
+that: a runner that reports and then overruns its grace is still SIGKILLed.
+
+**That reading is a hypothesis, not a measurement.** The captured worker log ends
+mid-stream in both runs and shows no SIGTERM relay line either way, and the failing run's
+AGC log was not captured at all — the container's failure hook dumps the *classic*
+tenant's AGC, which is a gap in the harness rather than in the product. What would settle
+it: capture the scale-set tenant's AGC log and the worker's full log on failure, then run
+the spec enough times to see how often each outcome occurs.
+
+**What this does and does not license.** The ~10-minute figure stands for the case the
+design cares about — nothing reported, GitHub notices by itself — and is now measured on
+both tiers. It must not be quoted as "what an eviction costs", because a kubelet
+ephemeral-storage eviction is evidently not reliably ungraceful. The spec's
+`rerunCalls >= 2` assertion encodes the stronger claim and is what failed here; it is
+correct as a description of the ungraceful path and wrong as a description of every
+eviction.
 
 **The detection path is genuinely the scale-set one.** The refusals log
 `cause=eviction` against `owner=set-ss` and a `runner-set-ss-…` pod, so it is the

@@ -165,6 +165,18 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 				"deployment/"+agcName, "--tail=300")
 			out, _ := utils.Run(cmd)
 			_, _ = fmt.Fprintln(GinkgoWriter, out)
+
+			// The scale-set tenant runs its own AGC in its own namespace, and dumping
+			// only the classic one is why a scale-set failure on 2026-08-03 could not be
+			// diagnosed after the cluster was gone: the log that would have said whether
+			// the runner reported was never captured. Best-effort — the tenant does not
+			// exist unless its spec got far enough to create it.
+			cmd = exec.Command("kubectl", "logs", "-n", scaleSetTenantNS,
+				"deployment/"+scaleSetAGCDeploy, "--tail=300")
+			if out, err := utils.Run(cmd); err == nil {
+				_, _ = fmt.Fprintln(GinkgoWriter, "--- scale-set tenant AGC ---")
+				_, _ = fmt.Fprintln(GinkgoWriter, out)
+			}
 		}
 		// The scale-set tenant is created inside its own spec rather than here, so this
 		// has to cope with it never having existed — a spec that failed earlier in the
@@ -510,19 +522,10 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		By("asserting the accepted re-run is the one the retry loop landed, not the first call")
 		// The distinction Q503 is actually about. An accepted re-run alone does not
 		// separate "the loop outlasted GitHub's refusal" from "GitHub accepted
-		// immediately", and only the first is the behaviour that shipped — a
-		// fire-once recovery would also reach the assertion above on a run GitHub
-		// happened to have concluded. rerunUntilAccepted reports how many calls it
-		// took; the first goes out evictionRetryDelay (5s) after the eviction, and the
-		// conclusion measured above is minutes later, so at least one refusal must
-		// precede the acceptance.
-		rerunCalls := rerunCallsOnAcceptance(agcEvictionLog(tenantNS))
-		AddReportEntry("Q503 rerun-failed-jobs calls before GitHub accepted", strconv.Itoa(rerunCalls))
-		Expect(rerunCalls).To(BeNumerically(">=", 2),
-			"the re-run was accepted on call %d, so no refusal was ever absorbed and the retry "+
-				"loop is untested by this run. Either the recovery no longer waits, or GitHub now "+
-				"concludes an ungraceful eviction inside evictionRetryDelay — in which case the "+
-				"eviction→conclusion latency recorded above is the finding", rerunCalls)
+		// immediately", and only the first is the behaviour that shipped. The check is
+		// conditional on the latency measured above, because whether there was a refusal
+		// to absorb is decided by whether the runner reported — see assertRerunLanded.
+		assertRerunLanded(agcEvictionLog(tenantNS), concludedAt.Sub(evictedAt), "Q503")
 
 		By("asserting GitHub actually started a second attempt")
 		// Accepted is necessary but not the deliverable: the deliverable is a second
@@ -1277,12 +1280,8 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
 		By("asserting the accepted re-run is the one the retry loop landed, not the first call")
-		rerunCalls := rerunCallsOnAcceptance(agcEvictionLogFor(scaleSetTenantNS, scaleSetAGCDeploy))
-		AddReportEntry("Q396 scale-set rerun-failed-jobs calls before GitHub accepted", strconv.Itoa(rerunCalls))
-		Expect(rerunCalls).To(BeNumerically(">=", 2),
-			"the re-run was accepted on call %d, so this tier absorbed no refusal and the "+
-				"403 the classic half measured did not reproduce here — which is the finding, "+
-				"not a passing run", rerunCalls)
+		assertRerunLanded(agcEvictionLogFor(scaleSetTenantNS, scaleSetAGCDeploy),
+			concludedAt.Sub(evictedAt), "Q396 scale-set")
 
 		By("asserting GitHub actually started a second attempt")
 		Eventually(func(g Gomega) {
@@ -1901,6 +1900,51 @@ func agcEvictionLogFor(ns, deployment string) string {
 		}
 	}
 	return strings.Join(kept, "\n")
+}
+
+// reportedItsOwnLoss is the eviction→conclusion latency below which the runner must have
+// got its own report out: GitHub concluded far too quickly to have been waiting out the
+// job lock.
+//
+// The two populations sit either side of a wide gap — 15–26s when a disrupted runner
+// does report (Q459), 9m36–9m38s when it does not (Q396) — so any threshold between them
+// separates the cases, and 60s is comfortably inside it.
+const reportedItsOwnLoss = 60 * time.Second
+
+// assertRerunLanded checks the re-run the AGC's recovery made, and requires it to have
+// absorbed at least one refusal only when the eviction was actually ungraceful.
+//
+// The refusal is not a property of eviction, it is a property of GitHub not yet knowing
+// the job is over. A kubelet ephemeral-storage eviction is not reliably ungraceful:
+// measured 2026-08-03, two runs of one spec on one build saw 9m38s-to-conclusion with 20
+// paced calls, and 17s-to-conclusion with the re-run accepted on the first call. Both are
+// correct behaviour — in the second the runner reported, so there was never a refusal to
+// out-wait — and an unconditional "at least two calls" fails the healthy case.
+//
+// What must hold either way is that the re-run landed at all. The Q503 negative assertion
+// is kept exactly where it means something: on the ungraceful path, where a fire-once
+// recovery would have been refused and given up.
+func assertRerunLanded(agcLog string, evictionToConclusion time.Duration, entryPrefix string) {
+	GinkgoHelper()
+	calls := rerunCallsOnAcceptance(agcLog)
+	AddReportEntry(entryPrefix+" rerun-failed-jobs calls before GitHub accepted", strconv.Itoa(calls))
+	Expect(calls).To(BeNumerically(">=", 1),
+		"the AGC logged an accepted re-run with no call count; the acceptance line has changed shape")
+
+	if evictionToConclusion < reportedItsOwnLoss {
+		AddReportEntry(entryPrefix+" eviction was graceful enough for the runner to report",
+			fmt.Sprintf("GitHub concluded %s after the kill — far inside the job lock's ~10-minute TTL — so "+
+				"the runner got its own report out and the re-run faced no refusal to absorb. Q503's retry "+
+				"loop is untested by this run, and that is a property of the disruption, not a fault",
+				evictionToConclusion.Round(time.Second)))
+		return
+	}
+
+	Expect(calls).To(BeNumerically(">=", 2),
+		"GitHub took %s to conclude — the ungraceful path, where it refuses re-runs until it does — "+
+			"yet the re-run was accepted on call %d. Either the recovery no longer waits out the refusal, "+
+			"or the refusal window has changed shape (Q503)",
+		evictionToConclusion.Round(time.Second), calls)
 }
 
 // rerunCallsAttr matches the rerunCalls attribute in either encoding the AGC may ship:
