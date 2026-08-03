@@ -68,6 +68,23 @@
         "refresh": 2,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(actions_gateway_runnerset_worker_quota_pressure{namespace=~\"$namespace\"}, runner_set)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Runner set",
+        "multi": true,
+        "name": "runner_set",
+        "query": {
+          "query": "label_values(actions_gateway_runnerset_worker_quota_pressure{namespace=~\"$namespace\"}, runner_set)",
+          "refId": "runner_set"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
       }
     ]
   },
@@ -458,13 +475,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (namespace, runner_set) (rate(actions_gateway_scaleset_jobs_assigned_total{namespace=~\"$namespace\"}[5m])) * 60",
+          "expr": "sum by (namespace, runner_set) (rate(actions_gateway_scaleset_jobs_assigned_total{namespace=~\"$namespace\", runner_set=~\"$runner_set\"}[5m])) * 60",
           "legendFormat": "assigned {{namespace}}/{{runner_set}}",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (namespace, runner_set) (rate(actions_gateway_scaleset_jobs_provisioned_total{namespace=~\"$namespace\"}[5m])) * 60",
+          "expr": "sum by (namespace, runner_set) (rate(actions_gateway_scaleset_jobs_provisioned_total{namespace=~\"$namespace\", runner_set=~\"$runner_set\"}[5m])) * 60",
           "legendFormat": "provisioned {{namespace}}/{{runner_set}}",
           "refId": "B"
         }
@@ -522,7 +539,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (namespace, runner_set) (rate(actions_gateway_scaleset_provision_errors_total{namespace=~\"$namespace\"}[5m]))",
+          "expr": "sum by (namespace, runner_set) (rate(actions_gateway_scaleset_provision_errors_total{namespace=~\"$namespace\", runner_set=~\"$runner_set\"}[5m]))",
           "legendFormat": "{{namespace}}/{{runner_set}}",
           "refId": "A"
         }
@@ -556,7 +573,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (namespace, runner_set, reason) (rate(actions_gateway_worker_pods_reaped_total{namespace=~\"$namespace\", runner_set!=\"\"}[5m]))",
+          "expr": "sum by (namespace, runner_set, reason) (rate(actions_gateway_worker_pods_reaped_total{namespace=~\"$namespace\", runner_set!=\"\", runner_set=~\"$runner_set\"}[5m]))",
           "legendFormat": "{{namespace}}/{{runner_set}} {{reason}}",
           "refId": "A"
         }
@@ -592,7 +609,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "max(actions_gateway_worker_quota_exceeded{namespace=~\"$namespace\", runner_group=~\"$runner_group\"})",
+          "expr": "max(actions_gateway_worker_quota_exceeded{namespace=~\"$namespace\", runner_group=~\"$runner_group\"} or actions_gateway_runnerset_worker_quota_exceeded{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
           "legendFormat": "worker quota exceeded",
           "refId": "A"
         }
@@ -620,7 +637,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "max(actions_gateway_workers_unschedulable{namespace=~\"$namespace\", runner_group=~\"$runner_group\"})",
+          "expr": "max(actions_gateway_workers_unschedulable{namespace=~\"$namespace\", runner_group=~\"$runner_group\"} or actions_gateway_runnerset_workers_unschedulable{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
           "legendFormat": "workers unschedulable",
           "refId": "A"
         }
@@ -648,7 +665,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "max(actions_gateway_worker_quota_pressure{namespace=~\"$namespace\", runner_group=~\"$runner_group\"})",
+          "expr": "max(actions_gateway_worker_quota_pressure{namespace=~\"$namespace\", runner_group=~\"$runner_group\"} or actions_gateway_runnerset_worker_quota_pressure{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
           "legendFormat": "worker quota pressure",
           "refId": "A"
         }
