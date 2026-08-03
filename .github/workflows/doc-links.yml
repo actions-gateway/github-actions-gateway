@@ -1,9 +1,10 @@
-# Markdown link + anchor integrity gate (Q52). Kept as its own workflow rather
-# than a job in unit-test.yml: that workflow deliberately path-ignores docs, so
-# a docs-only change must trigger *this* lightweight check and nothing else —
-# the Go suite never runs on a pure-docs PR. Mirrors how e2e-test.yml is its own
-# workflow. The `paths` below scope it to Markdown plus the checker and this
-# workflow file, so a code-only change doesn't trigger it.
+# The docs-content gates: Markdown link + anchor integrity (Q52) and release-pin
+# freshness (Q638). Kept as their own workflow rather than jobs in unit-test.yml:
+# that workflow deliberately path-ignores docs, so a docs-only change must
+# trigger *these* lightweight checks and nothing else — the Go suite never runs
+# on a pure-docs PR. Mirrors how e2e-test.yml is its own workflow. The `paths`
+# below scope it to Markdown plus the checkers and this workflow file, so a
+# code-only change doesn't trigger it.
 name: doc-links
 
 on:
@@ -11,6 +12,7 @@ on:
     paths:
       - '**.md'
       - 'scripts/docs/check-doc-links.sh'
+      - 'scripts/docs/check-release-pins.sh'
       - 'Makefile'
       - '.github/workflows/doc-links.yml'
   push:
@@ -18,6 +20,7 @@ on:
     paths:
       - '**.md'
       - 'scripts/docs/check-doc-links.sh'
+      - 'scripts/docs/check-release-pins.sh'
       - 'Makefile'
       - '.github/workflows/doc-links.yml'
 
@@ -42,3 +45,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: markdown links + anchors (make doc-links)
         run: make doc-links
+
+  # Assert the install/upgrade pages name the newest stable tag. fetch-depth: 0
+  # is load-bearing: the gate derives the current release from the tags, and a
+  # shallow checkout has none — it would fall back to the remote, or skip.
+  release-pins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: release pins are current (make release-pins-check)
+        run: make release-pins-check

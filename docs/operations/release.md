@@ -1065,7 +1065,41 @@ per-release steps:
   that fail-closed posture and immediately go stale. The published digests belong
   in the **release notes** (step 5), which is where the operator copies them from.
 
-### 7. Hand off to operators
+### 7. Bump the pinned release in the docs
+
+The adopter-facing pages transcribe the chart version, the image tag, and the
+release-notes URL by hand. Nothing in the pipeline rewrites them, so after the
+tag they still advertise the *previous* release — and a reader following one
+installs a release behind, digests and all. A gate runs the bump instead of
+remembering it:
+
+```bash
+make release-pins-check
+```
+
+It resolves the newest stable `vX.Y.Z` tag and fails with the file and line of
+every pin that still names an older one, across the five pages that tell a
+reader which version to install — `README.md`, `docs/index.md`, and
+`docs/operations/`'s `install.md`, `upgrade.md`, and `gitops.md`. Bump each site
+it reports (charts drop the leading `v`; `gitops.md` carries the Argo
+`targetRevision` and both Flux forms) and re-run until it is green.
+
+Two things it deliberately leaves alone, both documented in
+[`scripts/docs/check-release-pins.sh`](../../scripts/docs/check-release-pins.sh):
+a line beginning `Measured on kind`, whose version records what was actually
+installed for a measurement — bumping it would falsify the record — and
+`v2.0.0`, the announced `v1alpha1`/`v2alpha1` removal release. A page that
+yields *no* pin at all is a failure rather than a pass, so a pin that moves out
+of the scan's reach is reported instead of silently going unchecked.
+
+Landing the bump is a normal PR; the gate is part of `make check` and of the
+`doc-links` CI workflow, so a stale pin reddens every subsequent PR until it is
+fixed. This step exists because `v1.3.0` shipped without it: `README.md`,
+`docs/index.md`, and `install.md` were fixed by hand while `upgrade.md` and
+`gitops.md` kept pointing at `1.2.0`, and `install.md`'s own patch-line hint
+still read `1.2.z` (Q638).
+
+### 8. Hand off to operators
 
 Operators install/upgrade straight from the **published OCI chart** with the
 digests pinned via `--set`, exactly as
