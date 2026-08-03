@@ -33,6 +33,7 @@ Environment:
 Outputs (all under claude-usage/data/):
     token_metrics.csv   daily input/output/cache tokens + message counts (merge-preserved)
     model_daily.csv     daily per-model headline tokens (merge-preserved)
+    session_metrics.csv daily session concurrency (merge-preserved, never estimated)
     git_metrics.csv     daily commits, test count, Go/Markdown/YAML LOC (recomputed)
     summary.json        headline totals, per-model split, HEAD snapshot, provenance
 """
@@ -77,6 +78,11 @@ PRO_TO_MAX = "2026-05-23"
 # Date the plan upgraded Max 5x -> Max 20x. Annotation-only (no computational
 # role) — recorded in provenance and drawn on the by-model chart.
 MAX_5X_TO_20X = "2026-07-05"
+
+# Bucket width for session concurrency. Wide enough that a session waiting on a
+# build or a test run still counts as in flight, narrow enough that two sessions
+# worked on hours apart never collide.
+SESSION_BUCKET_MIN = 10
 
 # Token usage is deduped on (message.id, requestId): resumed/compacted sessions
 # replay earlier assistant records verbatim, and counting them twice would inflate
@@ -432,6 +438,87 @@ def is_estimated(row):
     return str(row.get("estimated", "0")) in ("1", "true", "True")
 
 
+def session_series(host):
+    """Per-day session concurrency for this machine, keyed ``(date, host)``.
+
+    A session is *active* in a bucket if it produced a record there; concurrency
+    is how many were active in the same bucket. Resumed sessions replay earlier
+    records verbatim, which would credit the resuming session with work it only
+    re-read, so each record is attributed to the earliest-starting session
+    holding it. Only records carrying a ``uuid`` count, since those are the ones
+    a replay can be recognised by.
+
+    Every measure is a count that can only rise as more transcripts become
+    visible, so the upward-only merge is right for all of them. This series has
+    no estimated rows: concurrency cannot be modelled from commit counts the way
+    token volume can, so it begins at the first day with surviving transcripts.
+    """
+    files = []
+    for d in glob.glob(PROJECTS_GLOB):
+        files += glob.glob(os.path.join(d, "*.jsonl"))
+
+    recs = []    # (session, uuid, bucket)
+    start = {}   # session -> its earliest bucket
+    for f in files:
+        sess = os.path.basename(f)[: -len(".jsonl")]
+        try:
+            fh = open(f, errors="replace")
+        except OSError:
+            continue
+        with fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                uuid, ts = rec.get("uuid"), rec.get("timestamp")
+                if not uuid or not ts:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                b = dt.replace(minute=(dt.minute // SESSION_BUCKET_MIN) * SESSION_BUCKET_MIN,
+                               second=0, microsecond=0)
+                recs.append((sess, uuid, b))
+                if sess not in start or b < start[sess]:
+                    start[sess] = b
+
+    owner = {}
+    for sess, uuid, _ in recs:
+        cur = owner.get(uuid)
+        if cur is None or start[sess] < start[cur]:
+            owner[uuid] = sess
+
+    active = defaultdict(set)  # bucket -> sessions that did work in it
+    for sess, uuid, b in recs:
+        if owner[uuid] == sess:
+            active[b].add(sess)
+
+    day = defaultdict(lambda: {"sessions": set(), "peak": 0, "active": 0, "parallel": 0})
+    for b, sessions in active.items():
+        row = day[b.date().isoformat()]
+        row["sessions"] |= sessions
+        row["peak"] = max(row["peak"], len(sessions))
+        row["active"] += 1
+        if len(sessions) > 1:
+            row["parallel"] += 1
+
+    return {
+        (dk, host): {
+            "date": dk, "host": host,
+            "sessions": len(v["sessions"]),
+            "peak_concurrent": v["peak"],
+            "active_buckets": v["active"],
+            "parallel_buckets": v["parallel"],
+        }
+        for dk, v in day.items()
+    }
+
+
 def load_measured(path, key_cols, num_cols, defaults=None):
     """Load existing rows, keeping only the *measured* ones (drops old estimates)."""
     merged = {}
@@ -497,6 +584,7 @@ def main():
     token_csv = os.path.join(DATA, "token_metrics.csv")
     model_csv = os.path.join(DATA, "model_daily.csv")
     git_csv = os.path.join(DATA, "git_metrics.csv")
+    sess_csv = os.path.join(DATA, "session_metrics.csv")
 
     git_rows = git_series()
     write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts"],
@@ -548,6 +636,14 @@ def main():
     m_out = est_model + [{**m_measured[k], "estimated": 0} for k in sorted(m_measured)]
     m_out.sort(key=lambda r: (r["date"], r["model"], r["host"]))
     write_csv(model_csv, mkey + mnum + ["estimated"], m_out)
+
+    # --- sessions: measured only, no backfill (see session_series) ---
+    snum = ["sessions", "peak_concurrent", "active_buckets", "parallel_buckets"]
+    skey = ["date", "host"]
+    s_measured = load_measured(sess_csv, skey, snum)
+    merge_max_into(s_measured, session_series(host), skey, snum)
+    s_out = [s_measured[k] for k in sorted(s_measured)]
+    write_csv(sess_csv, skey + snum, s_out)
 
     # --- totals: measured vs estimated, summed from the persisted rows ---
     def total(rows, cols):
@@ -619,6 +715,18 @@ def main():
             h: {**dict(v), "headline_input_output_cachecreation": headline(v)}
             for h, v in sorted(host_tot.items())
         },
+        "sessions": {
+            "bucket_minutes": SESSION_BUCKET_MIN,
+            "first_date": min((r["date"] for r in s_out), default=None),
+            "last_date": max((r["date"] for r in s_out), default=None),
+            # Per-day counts summed: a session spanning midnight counts in both days,
+            # so this is session-days, not a distinct-session total.
+            "session_days": sum(r["sessions"] for r in s_out),
+            "peak_concurrent": max((r["peak_concurrent"] for r in s_out), default=0),
+            "note": ("Concurrency needs session-level transcripts, which no earlier CSV "
+                     "preserved, so the series starts at the first day whose transcripts "
+                     "survive rather than at the first project day. It is never estimated."),
+        },
         "head_snapshot": head_snapshot(),
     }
     with open(os.path.join(DATA, "summary.json"), "w") as fh:
@@ -630,12 +738,15 @@ def main():
     print(f"machines on record : {', '.join(summary['provenance']['hosts']) or '(none)'}")
     print(f"measured span      : {first_measured} -> {summary['provenance']['last_measured_date']}")
     print(f"backfilled (est.)  : {archived} ({summary['estimation']['archived_commits']} commits)")
+    print(f"sessions           : {summary['sessions']['session_days']} session-days over "
+          f"{summary['sessions']['first_date']} -> {summary['sessions']['last_date']}, "
+          f"peak {summary['sessions']['peak_concurrent']} concurrent")
     print(f"headline measured  : {headline(meas):,}")
     print(f"headline estimated : +{headline(est):,}")
     print(f"headline combined  : {headline(comb):,}")
     print(f"  + cache_read     : {headline(comb) + comb['cache_read']:,}")
     print(f"cache reuse        : {summary['totals']['combined']['cache_reuse_ratio']}x")
-    print(f"wrote {token_csv}, {model_csv}, {git_csv}, summary.json")
+    print(f"wrote {token_csv}, {model_csv}, {git_csv}, {sess_csv}, summary.json")
 
 
 if __name__ == "__main__":

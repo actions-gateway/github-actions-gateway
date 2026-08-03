@@ -11,6 +11,7 @@ never collapse two machines' shares of the same day into the larger of the two.
 
 import csv
 import importlib.util
+import json
 import os
 import tempfile
 import unittest
@@ -147,6 +148,69 @@ class ModelFamilies(unittest.TestCase):
         self.assertEqual(cm.model_family("<synthetic>"), "Other")
         self.assertEqual(cm.model_family(""), "Unknown")
         self.assertEqual(cm.model_family(None), "Unknown")
+
+
+class SessionConcurrency(unittest.TestCase):
+    """Concurrency is counted from timestamps rather than summed, so the ways it
+    can go wrong are its own: mis-bucketing, and crediting a resumed session with
+    work it only replayed."""
+
+    def setUp(self):
+        self._glob = cm.PROJECTS_GLOB
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        proj = os.path.join(self._dir.name, "proj")
+        os.makedirs(proj)
+        cm.PROJECTS_GLOB = os.path.join(self._dir.name, "*")
+        self.proj = proj
+
+    def tearDown(self):
+        cm.PROJECTS_GLOB = self._glob
+
+    def write(self, session, records):
+        """records: (uuid, "HH:MM") on 2026-07-26."""
+        with open(os.path.join(self.proj, f"{session}.jsonl"), "w") as fh:
+            for uuid, hhmm in records:
+                fh.write(json.dumps(
+                    {"uuid": uuid, "timestamp": f"2026-07-26T{hhmm}:00.000Z"}) + "\n")
+
+    def rows(self):
+        return cm.session_series("mac-x")[("2026-07-26", "mac-x")]
+
+    def test_sessions_in_one_bucket_are_concurrent(self):
+        self.write("a", [("a1", "09:00")])
+        self.write("b", [("b1", "09:07")])   # same 10-min bucket as a1
+        r = self.rows()
+        self.assertEqual(r["peak_concurrent"], 2)
+        self.assertEqual(r["sessions"], 2)
+        self.assertEqual(r["parallel_buckets"], 1)
+
+    def test_sessions_in_different_buckets_are_not(self):
+        """Two sessions the same day are not two sessions at the same time."""
+        self.write("a", [("a1", "09:00")])
+        self.write("b", [("b1", "11:30")])
+        r = self.rows()
+        self.assertEqual(r["peak_concurrent"], 1)
+        self.assertEqual(r["sessions"], 2)
+        self.assertEqual(r["parallel_buckets"], 0)
+        self.assertEqual(r["active_buckets"], 2)
+
+    def test_a_replayed_record_does_not_invent_concurrency(self):
+        """A resume replays the earlier session's records verbatim. Counting them
+        as the resuming session's own work would show two sessions running at a
+        time only one existed."""
+        self.write("a", [("a1", "09:00")])
+        self.write("b", [("a1", "09:00"), ("b1", "14:00")])  # b resumes a
+        r = self.rows()
+        self.assertEqual(r["peak_concurrent"], 1)
+        self.assertEqual(r["parallel_buckets"], 0)
+
+    def test_records_without_a_uuid_are_skipped(self):
+        """Only uuid-bearing records can be recognised as replays, so they are the
+        only ones counted — an untracked record would evade the dedup above."""
+        with open(os.path.join(self.proj, "c.jsonl"), "w") as fh:
+            fh.write(json.dumps({"timestamp": "2026-07-26T09:00:00.000Z"}) + "\n")
+        self.assertEqual(cm.session_series("mac-x"), {})
 
 
 if __name__ == "__main__":

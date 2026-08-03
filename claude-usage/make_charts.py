@@ -21,9 +21,11 @@ Outputs PNGs (1x + @2x) to claude-usage/charts/:
     tokens_overview      all three tokens/lines views stacked on one timeline
     token_anatomy        daily input/output/cache tokens on a log scale
     cumulative_cache     cumulative cache reads vs writes (stacked area)
+    parallel_sessions    peak concurrency + the parallel share (own shorter timeline)
 """
 
 import csv
+import json
 import os
 from datetime import date, timedelta
 
@@ -35,6 +37,7 @@ import matplotlib.patches as mpatches
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
@@ -82,6 +85,12 @@ EST_NOTE = "shaded / hatched = pre-transcript days estimated from the Pro-era pe
 def load(name):
     with open(os.path.join(DATA, name)) as fh:
         return list(csv.DictReader(fh))
+
+
+def summary():
+    """The committed summary.json — provenance the CSVs don't carry."""
+    with open(os.path.join(DATA, "summary.json")) as fh:
+        return json.load(fh)
 
 
 def is_est(r):
@@ -632,6 +641,92 @@ def chart_cumulative_cache():
     save(fig, "cumulative_cache")
 
 
+def chart_parallel_sessions():
+    """Daily peak concurrency, over the share of the working day that was parallel.
+
+    Its own timeline: concurrency needs session-level transcripts, so the series
+    starts where those survive rather than at the first project day. Drawing it
+    on the project timeline would show 71 empty days and read as idleness.
+    """
+    rows = load("session_metrics.csv")
+    if not rows:
+        return
+    bucket = summary().get("sessions", {}).get("bucket_minutes", 10)
+    by_day = {}
+    for r in rows:  # sum/max each day across machines
+        d = by_day.setdefault(r["date"], {"peak": 0, "sessions": 0, "active": 0, "parallel": 0})
+        # Peak is a max, not a sum: two machines' peaks need not coincide in time.
+        d["peak"] = max(d["peak"], int(r["peak_concurrent"]))
+        d["sessions"] += int(r["sessions"])
+        d["active"] += int(r["active_buckets"])
+        d["parallel"] += int(r["parallel_buckets"])
+    days = sorted(by_day)
+    xs = list(range(len(days)))
+    peak = [by_day[d]["peak"] for d in days]
+    sess = [by_day[d]["sessions"] for d in days]
+    share = [100 * by_day[d]["parallel"] / by_day[d]["active"] if by_day[d]["active"] else 0
+             for d in days]
+
+    fig, (a1, a2) = plt.subplots(2, 1, figsize=(11, 7.8), sharex=True,
+                                 gridspec_kw=dict(height_ratios=[1.35, 1], hspace=0.30))
+    halo = [pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()]
+
+    # Twin axes: the two counts differ by ~4x, and one shared scale flattens the bars.
+    a1.bar(xs, peak, color=OI["green"], width=0.62, edgecolor="white", linewidth=0.5, zorder=2)
+    a1.set_title("Parallel Claude Code sessions", fontsize=14, fontweight="bold", loc="left")
+    a1.set_ylabel("peak concurrent", fontsize=11, color=darken(OI["green"]))
+    a1.tick_params(axis="y", colors=darken(OI["green"]))
+    peak_top, sess_top = max(peak) * 1.30, max(sess) * 1.30
+    a1.set_ylim(0, peak_top)
+
+    a1b = a1.twinx()
+    a1b.plot(xs, sess, color=OI["vermillion"], lw=2.2, ls=(0, (5, 2)), marker="o", ms=4,
+             zorder=4, path_effects=halo)
+    # Bar labels live on the twin, which paints over a1 wholesale — mapped into its
+    # scale so they can sit above the line rather than under it.
+    for x, v in zip(xs, peak):
+        a1b.annotate(str(v), (x, v * sess_top / peak_top), xytext=(0, 4),
+                     textcoords="offset points", ha="center", fontsize=9.5, fontweight="bold",
+                     color=darken(OI["green"]), zorder=6, path_effects=halo)
+    a1b.set_ylabel("sessions run that day", fontsize=11, color=darken(OI["vermillion"]))
+    a1b.tick_params(axis="y", colors=darken(OI["vermillion"]))
+    a1b.set_ylim(0, sess_top)
+    a1b.spines["top"].set_visible(False)
+    a1.legend(handles=[mpatches.Patch(facecolor=OI["green"], edgecolor="white",
+                                      label=f"peak concurrent  ({bucket}-min buckets)"),
+                       Line2D([], [], color=OI["vermillion"], lw=2.2, ls=(0, (5, 2)), marker="o",
+                              ms=4, label="sessions run that day")],
+              frameon=False, fontsize=10, loc="upper left", ncol=2)
+
+    a2.fill_between(xs, 0, share, color=OI["skyblue"], alpha=0.35, zorder=1)
+    a2.plot(xs, share, color=OI["blue"], lw=2.4, marker="s", ms=4, zorder=3, path_effects=halo)
+    a2.set_ylabel("% of active time", fontsize=11)
+    a2.set_title("Share of the working day with two or more sessions running",
+                 fontsize=12, fontweight="bold", loc="left")
+    a2.set_ylim(0, 100)
+    a2.set_yticks([0, 25, 50, 75, 100])
+    a2.axhline(sum(share) / len(share), color=darken(OI["blue"]), ls=(0, (2, 2)), lw=1.2, zorder=2)
+    a2.annotate(f"mean {sum(share) / len(share):.0f}%", (xs[-1], sum(share) / len(share)),
+                xytext=(-4, 6), textcoords="offset points", ha="right", fontsize=9.5,
+                fontweight="bold", color=darken(OI["blue"]), path_effects=halo)
+
+    for a in (a1, a2):
+        a.set_xlim(-0.6, len(days) - 0.4)
+        a.grid(axis="y", alpha=0.22)
+        for s in ("top", "right"):
+            a.spines[s].set_visible(False)
+    a2.set_xticks(xs)
+    a2.set_xticklabels([dparse(d).strftime("%b %-d") for d in days], rotation=45, ha="right",
+                       fontsize=9)
+    fig.text(0.012, 0.01,
+             "session-level data survives only from " + days[0] +
+             " — earlier transcripts were not retained, so this series cannot be backfilled",
+             fontsize=7.5, color="#999")
+    # No tight_layout: it can't measure a twin axis and warns. save() trims with
+    # bbox_inches="tight", and hspace above already separates the panels.
+    save(fig, "parallel_sessions")
+
+
 def main():
     chart_tokens_by_model()
     chart_tokens_per_line()
@@ -639,6 +734,7 @@ def main():
     chart_overview()
     chart_token_anatomy()
     chart_cumulative_cache()
+    chart_parallel_sessions()
     print(f"wrote charts to {CHARTS}")
 
 

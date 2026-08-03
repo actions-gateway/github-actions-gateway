@@ -118,12 +118,12 @@ one): [day 7][post1] → [day 22][post2] → [day 35][post3] → [day 48][post4]
 
 | Metric | Day 7 | Day 22 | Day 80 | Source |
 |---|--:|--:|--:|---|
-| Tokens (input + output + cache-creation) | ~10M | 56.2M | **423.2M** | transcripts + est. |
-| └ measured only | — | 53.7M | 420.7M | transcripts |
+| Tokens (input + output + cache-creation) | ~10M | 56.2M | **423.7M** | transcripts + est. |
+| └ measured only | — | 53.7M | 421.2M | transcripts |
 | └ estimated backfill (May 16–18) | — | +2.5M | +2.5M | per-commit estimate |
-| └ incl. cache reads | — | 2.02B | **18.2B** | transcripts + est. |
+| └ incl. cache reads | — | 2.02B | **18.3B** | transcripts + est. |
 | Cache reuse ratio (reads ÷ writes) | — | ~44× | **~52×** | transcripts |
-| Git commits | 232 | 617 | **1,650** | git |
+| Git commits | 232 | 617 | **1,653** | git |
 | Tests (`func Test*`) | 269 | 393 | **1,876** | git |
 | Lines of Go (code) | 15.5k | 20.9k | **96.0k** | git |
 | Lines of Go (comments) | 2.3k | 4.2k | **34.8k** | git |
@@ -131,9 +131,10 @@ one): [day 7][post1] → [day 22][post2] → [day 35][post3] → [day 48][post4]
 | YAML (hand-written) | 1.5k | 2.3k | **11.4k** | git |
 | Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **30.6k** | git |
 | Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 4.8 52% / Opus 5 29% / Fable 9% / Sonnet 6% / Opus 4.7 4%** | transcripts |
+| Peak concurrent sessions | — | — | **13** (since Jul 26) | transcripts |
 
 The headline tokens figure **includes the ~2.5M estimated backfill** for the
-archived first three days; the measured-only floor is 420.7M. Live totals (with
+archived first three days; the measured-only floor is 421.2M. Live totals (with
 the measured / estimated split) are always in
 [`data/summary.json`](data/summary.json).
 
@@ -213,9 +214,25 @@ order of magnitude above everything else, every day.
 
 ### Cumulative cache traffic
 ![Cumulative cache traffic](charts/cumulative_cache.png)
-Cumulative cache reads (17.8B) vs writes (345M). Write once, replay ~52×. Both
+Cumulative cache reads (17.9B) vs writes (345M). Write once, replay ~52×. Both
 plan upgrades and the `mac-1`→`mac-2` handover are marked; the curve visibly
 steepens at the last of them.
+
+### Parallel sessions
+![Peak concurrent sessions per day, over the share of the day that was parallel](charts/parallel_sessions.png)
+How much of the work runs concurrently. **Top:** the day's peak concurrent
+sessions (bars, left axis) against how many sessions ran at all (line, right
+axis) — the two are on separate scales because they differ by roughly 4×.
+**Bottom:** the share of active time with two or more sessions going, which has
+averaged **71%**. Peak concurrency has run 8–13, on 11–48 sessions a day.
+
+**This chart has its own timeline, and starts at 2026-07-26.** Concurrency needs
+session-level transcripts, and no CSV before this one preserved them, so the
+mac-1 era cannot be reconstructed — daily token totals can't say how many
+sessions overlapped. Drawing it against the project timeline would show 71 empty
+days and read as idleness rather than missing data. The series is never
+estimated, for the same reason: unlike token volume, concurrency has no
+per-commit rate to model it from.
 
 ## Data files
 
@@ -246,10 +263,29 @@ Per-day (last commit of each day) cumulative `commits`, `tests` (count of
 and `scripts` (non-blank shell, Python, CSS/JS/HTML, Makefile, Dockerfile).
 All exclude `vendor/`.
 
+### `session_metrics.csv` — merge-preserved
+Per-day, per-`host` session concurrency, in 10-minute buckets: `sessions`
+(distinct sessions that did work that day), `peak_concurrent` (most sessions
+active in any one bucket), `active_buckets` (buckets with any session), and
+`parallel_buckets` (buckets with two or more). Every column is a count that can
+only rise as more transcripts become visible, so the upward-only merge is right
+for all of them.
+
+There is no `estimated` column — this series is measured or absent. Summing
+across machines works for the bucket counts and `sessions`, but `peak_concurrent`
+is combined with a **max, not a sum**: two machines' peaks need not fall in the
+same bucket, so adding them would invent a burst that never happened.
+
+A resumed session replays earlier records verbatim, which would credit the
+resuming session with work it only re-read, so each record is attributed to the
+earliest-starting session holding it. Replays are ~3% of records here and shift
+one day's peak by one.
+
 ### `summary.json`
 Totals split into `measured` / `estimated` / `combined` (summed from the
 persisted rows, so archival-safe), an `estimation` block documenting the
-per-commit method, per-model and per-machine (`by_host`) splits, an accurate HEAD
+per-commit method, a `sessions` block (bucket width, span, session-days, peak
+concurrency), per-model and per-machine (`by_host`) splits, an accurate HEAD
 working-tree snapshot, and full provenance — including which machine took the
 snapshot and which machines are on record.
 
@@ -271,8 +307,15 @@ snapshot and which machines are on record.
   (2026-05-19), so their token usage is gone from the logs. Those days are
   **backfilled** from the Pro-era per-commit rate and flagged `estimated=1`
   (see "Backfilled (estimated) days" above). The ~2.5M backfill is a modeled
-  figure, not a measurement — the defensible measured-only floor is 420.7M. The
+  figure, not a measurement — the defensible measured-only floor is 421.2M. The
   git series is fully measured from 2026-05-16.
+- **"Concurrent" is a bucket width, not a fact.** A session counts as active in
+  a 10-minute bucket if it produced a record there, so two sessions are
+  "concurrent" when both worked within the same 10 minutes — not necessarily in
+  the same second. The width is a judgement: wide enough that a session waiting
+  on a build still counts as in flight, narrow enough that work hours apart never
+  collides. At 1-minute buckets the daily peaks come out 8–12 rather than 8–13,
+  so the headline is not sensitive to it, but the parallel-share figure is.
 - **Tokens-per-line is a proxy.** The denominator is all hand-authored output —
   Go (code + tests), Markdown, hand-written YAML, and scripts & web (shell,
   Python, Make/Docker, CSS/JS) — but tokens also go into review, debugging, and
