@@ -618,6 +618,86 @@ clobbers curated notes. If you want richer notes (highlights, upgrade caveats),
 --draft --notes-file …` — and the pipeline will leave your body untouched while
 still attaching the signed v2 CRD manifest asset.
 
+#### Writing the curated notes
+
+A minor release accumulates more than a generated changelog can convey, and the
+two inputs that feed it, `operator-caveats-since.sh` and the commit log, both
+mislead in specific ways. What follows is the method, written after `v1.3.0`.
+
+**Notes answer "what is in it" and "what must I do". The docs answer "how" and
+"why".** Every explanation that can live in `upgrade.md` or an `operations/` page
+should, behind a link. `v1.3.0`'s first draft ran ~1000 words of prose. The
+shipped version ran ~525 with nine links and lost nothing. Link a Highlight from
+its bold lead, and link group headings rather than every line.
+
+**The caveats script reports headings that *changed*, not headings that are
+*new*.** A section edited in this window is listed exactly like one added in it.
+Test each before repeating it:
+
+```bash
+git show <prev-tag>:docs/operations/upgrade.md | grep -qF "### <heading>" \
+  && echo "pre-existing" || echo "new in this window"
+```
+
+`v1.3.0` listed two `BREAKING` headings and **neither** was a caveat for an
+upgrading operator: `priorityTiers` was already in `v1.2.0` (a pre-1.0 change),
+and `capacityGate.mode`'s removed values had only ever existed on `main`.
+Repeating them unexamined would have sent operators after migrations they did not
+need.
+
+**Promote by danger, not by label.** The most hazardous item in `v1.3.0` carried
+no `BREAKING` heading at all: the PriorityClass allowlist CRD apply, which affects
+every install and whose rollback re-arms a cluster-wide outage. Read for
+consequence, not for keywords.
+
+**Distinguish "breaking" from "guarded migration".** If skipping a step stops the
+upgrade with a message naming the fix, it is a required migration and saying
+"breaking change" overstates it. If a wrong path fails silently, say so loudly.
+State which of the two you mean.
+
+**Enumerate from the commit log, filtered to what ships.** Conventional Commit
+subjects are already terse diagnoses, so they need only the prefix and Q-ID
+removed:
+
+```bash
+git log --format='%s' <prev-tag>..HEAD \
+  | grep -E '^(feat|fix)\((agc|gmc|proxy|worker|api|scaleset|chart|broker|wrapper|admission|provisioner|metrics)\)'
+```
+
+Exclude the `ci`, `dogfood`, `test`, `docs`, and `build` scopes, which ship in no
+image or chart. Say in the notes that you excluded them, so a reader does not read 461
+commits as 57 user-visible changes. Keep the trailing `(#NNNN)`: GitHub auto-links
+a bare `#NNNN` in a release body, so every line becomes traceable for free.
+
+**Fold long lists.** `<details><summary>` renders on the Releases page and keeps
+the top scannable.
+
+**Count what you list.** State a count in a `<summary>` and it will be wrong the
+moment you curate the list. `v1.3.0`'s draft claimed 25 features and listed 23.
+
+**Caveat anything a validation run did not exercise.** The dogfood gate runs
+against github.com, so it says nothing about GHES. A feature list that reads as
+finished support overclaims. Check `docs/plan/archive/` for the feature's own
+"what this will not verify" section before describing it.
+
+**Verify every link and anchor by hand.** `make doc-links` covers the repo, not a
+notes file living outside it. Anchors are the usual failure:
+
+```bash
+grep -E '^#{1,6} ' docs/operations/upgrade.md \
+  | sed -E 's/^#+ //; s/[^a-zA-Z0-9 -]//g; s/ /-/g' | tr 'A-Z' 'a-z'
+```
+
+Pin doc links at `blob/vX.Y.Z/` so a reader of these notes gets that release's
+instructions. They 404 until the tag is pushed, which is expected while the
+Release is still a draft.
+
+**Watch the chart-version form.** Images are tagged `vX.Y.Z`, charts `X.Y.Z`.
+A copy-pasteable `helm` command with a `v` in it fails.
+
+**Run the `deslop` skill over the draft before publishing.** Release notes are the
+most-read prose the project ships.
+
 ### 6. Chart version & metadata
 
 The `chart-publish` job sets the published chart's `version` and `appVersion` to
