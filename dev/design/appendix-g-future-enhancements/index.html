@@ -3566,12 +3566,13 @@ runner-platform layer for GitHub Actions:</p>
 </table>
 <p><strong>Sketch — detection before actuation, two phases.</strong></p>
 <ol>
-<li><strong>Flaky-job detection (no behavior change).</strong> GAG already sees every job
-   outcome per <code>RunnerSet</code>. Record re-run-then-pass transitions per job name
-   (the Azure/Buildkite detector) and surface them: a per-set flaky-jobs
-   metric, K8s events, and an advisory condition. This is pure observability,
-   zero masking risk, and no CI product offers it per <em>tenant</em> on shared
-   runners. It also builds the history an only-known-flakes mode needs.</li>
+<li><strong>Flaky-job detection (no behavior change).</strong> Record re-run-then-pass
+   transitions per job name (the Azure/Buildkite detector) and surface them: a
+   per-set flaky-jobs metric, K8s events, and an advisory condition. This is
+   pure observability, zero masking risk, and no CI product offers it per
+   <em>tenant</em> on shared runners. It also builds the history an only-known-flakes
+   mode needs. Its prerequisite is a real per-job outcome, which the AGC does
+   not read today — see the signal note below.</li>
 <li><strong>Opt-in retry (<code>spec.flakyRetry</code> on the <code>RunnerSet</code>).</strong> Bounded per-run
    budget separate from <code>maxEvictionRetries</code>, its own <code>cause</code> value on the
    existing counters, driven by the same paced <code>rerun-failed-jobs</code> loop.
@@ -3595,11 +3596,101 @@ runner-platform layer for GitHub Actions:</p>
    compute; per-set counters must make the spend visible (the
    <a href="../../operations/cost-attribution/">cost-attribution doc</a> would gain a
    flake-spend line).</li>
-<li><strong>Failure classification is thin at the platform layer.</strong> GAG sees job
-   conclusions and step outcomes via the jobs API, not exit codes; a
-   GitLab-style failure taxonomy would need log/annotation heuristics.
-   Phase 2 ships without matchers first — budget + scope knobs only.</li>
+<li><strong>Failure classification is thin at the platform layer, but less thin than
+   it looks.</strong> The AGC polls no jobs API; its only outcome signal is the pod
+   phase, used as a proxy (<code>PodFailed</code>→failed, else succeeded). One layer
+   down there is more: <code>Runner.Worker</code> encodes the job's real <code>TaskResult</code> as
+   exit code <code>100 + result</code>, and the wrapper flattens only 100/101 (the two
+   GitHub concludes as <code>success</code>) to 0, passing 102 failed / 103 canceled /
+   104 skipped through verbatim
+   (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go"><code>translateWorkerExitCode</code></a>). Nothing in the
+   AGC reads <code>ContainerStatuses[].State.Terminated.ExitCode</code>. Reading it is
+   the cheap prerequisite for phase 1's detector; a GitLab-style taxonomy
+   past that still needs log or annotation heuristics. Phase 2 ships without
+   matchers first: budget and scope knobs only.</li>
 </ol>
+<p><strong>Signals, and why an explicit one from the job is a separate question.</strong></p>
+<p>The three retry arms all decide from Kubernetes pod facts alone: phase,
+<code>reason: Evicted</code>, the <code>DisruptionTarget</code> condition, a <code>deletionTimestamp</code>.
+Nothing from inside the job reaches the decision. A tenant-supplied "this
+failure was flaky, retry it" verdict is a different signal class from the
+static per-set opt-in phase 2 sketches, and needs its own channel. Four
+candidates, and only one is both expressive and safe:</p>
+<table>
+<thead>
+<tr>
+<th>Channel</th>
+<th>Carries</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container exit code</td>
+<td>The runner's real <code>TaskResult</code></td>
+<td>Free (already propagated, unread), but the runner owns it and no step can set it. Fidelity, not intent.</td>
+</tr>
+<tr>
+<td>Termination message (<code>/dev/termination-log</code> → <code>State.Terminated.Message</code>)</td>
+<td>Anything the job writes, 4 KiB</td>
+<td>The workable one, with one hole: the log is per-container, so a step running in a workflow <code>container:</code> job writes to a different filesystem than the kubelet reads. The wrapper must also make the path writable by the job's user.</td>
+</tr>
+<tr>
+<td>A <code>runs-on</code> label (e.g. <code>gag-flaky-retry</code>)</td>
+<td>Per-job opt-in</td>
+<td>Free, since the listener sees job labels at acquisition, but static policy rather than a per-failure verdict.</td>
+</tr>
+<tr>
+<td>Pod self-annotation</td>
+<td>Anything</td>
+<td>Rejected. Grants tenant-controlled workflow code patch permission on its own pod.</td>
+</tr>
+</tbody>
+</table>
+<p>Two objections bound the value. First, the moment a tenant writes a signal
+into their workflow, the "nothing in your workflows changes" property this
+enhancement is sold on is gone, and a job that can emit "retry me" can
+equally wrap the step in a retry loop. What survives: an in-workflow wrapper
+retries steps <em>on the same worker</em>, while a platform signal re-runs the whole
+job on a fresh pod — new node, new network, clean runner — which is a flake
+class a step wrapper structurally cannot fix. Second, <code>rerun-failed-jobs</code> is
+run-granular and fires only after the run concludes, so a signal from one job
+re-runs its siblings too; the waiting machinery exists (<code>rerunUntilAccepted</code>
+already holds through <code>errRunNotConcluded</code>), the fan-out is the cost.</p>
+<p>Whichever channel wins, the writer is tenant-controlled code, often an
+untrusted PR's workflow. Gating is not optional: an operator-set <code>RunnerSet</code>
+opt-in (a workflow author's signal must never enable retry on its own), the
+existing per-run budget plus a per-window cap, and its own <code>cause</code> label so
+the spend is attributable.</p>
+<p><strong>What the isolation shapes do and do not change.</strong> Neither Docker-in-Docker
+nor Kata interposes on the exit code. In both shipped shapes <code>dockerd</code> is a
+nested process of the runner container or a native sidecar reachable over
+localhost (<a href="../../operations/kata-dind-workloads/">Kata + DinD</a>), so the
+wrapper is still PID 1 of the runner container and still owns its exit code;
+what DinD changes is reaping (Q249), which is phase <em>timing</em>, not outcome
+fidelity. Kata reports exit status through the ordinary <code>kata-agent</code> → shim →
+containerd → kubelet path.</p>
+<p>Two things are worth stating plainly before anything is built on this:</p>
+<ul>
+<li><strong>Nothing has measured that a runner-produced non-zero exit reaches
+  <code>PodFailed</code>.</strong> <code>translateWorkerExitCode</code>'s 102 passthrough is unit-tested;
+  the e2e sites that assert <code>PodFailed</code> are all external-kill shapes (evicted,
+  deleted), not a job that failed on its own merits. A green e2e run cannot
+  settle it either, because a <em>successful</em> job exits 0 whether or not the
+  runtime propagates codes faithfully. The measurement is a single dogfood
+  turn-up on the Kata overlay: fail a step deliberately, then read
+  <code>.status.containerStatuses[0].state.terminated.exitCode</code> and <code>.status.phase</code>.</li>
+<li><strong>A workflow <code>container:</code> job is the real boundary</strong>, and it splits the two
+  channels. The exit code survives it, because the runner execs into the job
+  container, reads the step status, and computes <code>TaskResult</code> itself. A signal
+  <em>file</em> does not: the workspace is bind-mounted across that boundary and
+  <code>/dev/termination-log</code> is not, so the obvious implementation vanishes
+  silently for exactly the tenants most likely to want it.</li>
+</ul>
+<p>That argues for the wrapper as the translator rather than the job writing a
+pod-visible file directly. It sits on the runner-container side of every one
+of these boundaries, already owns the exit code, and can read a
+workspace-relative marker the job wrote from wherever it ran.</p>
 <p><strong>Trigger.</strong> Q555 tracks the design decision. Promote when a design session
 commits the CRD shape, or an operator asks for it (the demand signal that
 reorders everything else on the roadmap).</p>
