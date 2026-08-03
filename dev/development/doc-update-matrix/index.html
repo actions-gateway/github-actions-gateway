@@ -2382,6 +2382,10 @@
 <td>The relevant <code>docs/operations/</code> usage docs: <a href="../../operations/tenant-onboarding/">tenant-onboarding.md</a>, <a href="../../operations/runbook/">runbook.md</a>, <a href="../../operations/upgrade/">upgrade.md</a>, <a href="../../operations/observability/">observability.md</a>, <a href="../../operations/security-operations/">security-operations.md</a>.</td>
 </tr>
 <tr>
+<td>New, renamed, or re-labelled <strong>metric family</strong></td>
+<td>The docs above, <strong>and the shipped monitoring artifacts under <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/monitoring"><code>deploy/monitoring/</code></a></strong> — these are appliable/importable files, not prose, so updating only the docs ships a half-fix: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml"><code>prometheusrule.yaml</code></a> (the alert rules <code>observability-alerting.md</code> reproduces), <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a> (the panels <code>observability-dashboards.md</code> tabulates), and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/exporter.py"><code>preview/exporter.py</code></a> so the preview harness populates the new series. Re-render the screenshots per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md"><code>preview/README.md</code></a> when a dashboard changes. Q319 updated every doc and the <code>PrometheusRule</code> but missed the dashboard JSON, which cost a follow-up PR.</td>
+</tr>
+<tr>
 <td>Security-relevant change</td>
 <td><a href="../../design/05-security/">design/05-security.md</a>, plus the operator-facing docs above when the control is something an operator configures or can trip.</td>
 </tr>
