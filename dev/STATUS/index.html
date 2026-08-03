@@ -2737,14 +2737,6 @@
 <td><code>--allowed-infra-priority-classes</code> is flag-only, so growing it needs a GMC restart. The worker allowlist takes an additive, fail-safe watched <code>PriorityClassAllowlist</code> CR (Q188, moved off a ConfigMap by Q492).</td>
 </tr>
 <tr>
-<td><a id="Q579"></a>Q579</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml">Nothing lints <code>.github/workflows/**</code>, and three docs claim <code>actionlint</code> does</a></td>
-<td><code>ci</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Three docs credit <code>actionlint</code>: <code>release.md:540</code> with keeping SHA-pinned <code>uses:</code> clean, <code>Makefile:446</code> and <code>testing.md:183</code> with inline <code>run:</code> blocks. No workflow runs it — the <code>lint</code> job is golangci-lint, so a workflow-only PR ships unlinted.</td>
-</tr>
-<tr>
 <td><a id="Q641"></a>Q641</td>
 <td><a href="../development/testing/#a-tests-environment-assumptions-must-be-probed-not-inferred"><code>cmd/worker</code> permission tests infer the capability from uid instead of probing it</a></td>
 <td><code>tests</code> <code>debt</code></td>
@@ -2767,6 +2759,14 @@
 <td>🚫</td>
 <td>M</td>
 <td>Blocked by <a href="#Q612">Q612</a>. One escaped pipe shifts every field, so <code>St</code> reads the label cell and <code>Notes</code> the size and the rules pass on the wrong ones. Separately <code>awk</code>'s <code>length()</code> is bytes here, runes under gawk; Q594 sits at 250/248.</td>
+</tr>
+<tr>
+<td><a id="Q644"></a>Q644</td>
+<td><a href="../operations/release/#supply-chain-integrity-of-the-pipeline-itself">Nothing enforces that a <code>uses:</code> ref is a SHA rather than a tag</a></td>
+<td><code>security</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured under Q579: actionlint accepts <code>actions/checkout@v7.0.1</code> at exit 0 — it checks a ref is present and well-formed, not that it is 40-hex. Every ref is a SHA today, so the gap is latent; Dependabot cannot stop a tag being written.</td>
 </tr>
 <tr>
 <td><a id="Q614"></a>Q614</td>

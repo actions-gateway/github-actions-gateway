@@ -2733,7 +2733,9 @@ SHA-pinned, but syft is a runtime download). Dependabot already declared the
 bumps SHA pins and their <code># vX.Y.Z</code> comments, so the pins don't rot. Policy
 + bump procedure documented in
 <a href="../../operations/release/#supply-chain-integrity-of-the-pipeline-itself">release.md § Supply-chain integrity of the pipeline</a>;
-<code>actionlint</code> (CI <code>lint</code>) keeps SHA-pinned <code>uses:</code> lint-clean.</p>
+This writeup credited <code>actionlint</code> (CI <code>lint</code>) with keeping SHA-pinned <code>uses:</code>
+lint-clean; no job ran it until Q579 added the <code>actionlint</code> job, which checks that
+every <code>uses:</code> carries a well-formed ref but not that the ref is a SHA.</p>
 <h3 id="q124--make-verify-release-accepts-branch-identities-medium--resolved">Q124 — <code>make verify-release</code> accepts branch identities (Medium) — RESOLVED<a class="headerlink" href="#q124--make-verify-release-accepts-branch-identities-medium--resolved" title="Permanent link">&para;</a></h3>
 <p><code>scripts/release/verify-release.sh</code> (post-#209 home of the recipe; was <code>Makefile:511</code>)
 matched <code>publish\.yml@refs/(tags|heads)/.*$</code>; the documented identity

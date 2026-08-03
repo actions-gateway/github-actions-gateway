@@ -4242,7 +4242,9 @@ commit SHA and keep the comment in sync:</p>
 </code></pre></div>
 <p><code>syft-version</code> is <strong>not</strong> Dependabot-managed (it's a tool download, not an action
 ref) — bump it by hand in <code>publish.yml</code> when you bump the <code>anchore/sbom-action</code>
-SHA. <code>actionlint</code> (CI <code>lint</code> job) keeps SHA-pinned <code>uses:</code> lint-clean.</p>
+SHA. The CI <code>actionlint</code> job (<code>unit-test.yml</code>) checks that every <code>uses:</code> carries a
+well-formed ref, so a pin edited down to a bare <code>owner/repo</code> fails the PR; it does
+not check that the ref is a SHA rather than a tag — that stays a review call.</p>
 <h3 id="signing-identity-is-tags-only">Signing identity is tags-only<a class="headerlink" href="#signing-identity-is-tags-only" title="Permanent link">&para;</a></h3>
 <p>Releases are cut by pushing a <code>v*</code> tag, so a legitimate keyless signature's Fulcio
 certificate records <code>publish.yml</code> running from <code>refs/tags/vX.Y.Z</code>. Two layers
