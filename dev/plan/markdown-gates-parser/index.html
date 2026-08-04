@@ -2578,6 +2578,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#phase-1-result-q612" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 result (Q612)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sequencing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2610,7 +2621,11 @@
 
 <h1 id="markdown-gates-on-a-real-parser">Markdown gates on a real parser<a class="headerlink" href="#markdown-gates-on-a-real-parser" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> open, filed 2026-08-02. Three phases:
-<a href="../../STATUS/#Q612">Q612</a> → <a href="../../STATUS/#Q613">Q613</a> → <a href="../../STATUS/#Q614">Q614</a>.</p>
+Q612 ✅ → <a href="../../STATUS/#Q613">Q613</a> → <a href="../../STATUS/#Q614">Q614</a>.</p>
+<p>Phase 1 shipped: <code>devtools/docs/markdown</code> (the shared parse layer over goldmark)
+and <code>devtools/docs/doclinks</code> (the checker), with <code>check-doc-links.sh</code> kept as the
+entry point that selects the files. What the build measured, and what it changed
+about the plan below, is in <a href="#phase-1-result-q612">Phase 1 result</a>.</p>
 <p>Four gates read Markdown with hand-rolled <code>awk</code>: the link/anchor checker, the backlog
 linter, the roadmap coherence check, and the backlog metrics replay. Each re-implements
 some slice of Markdown with regular expressions, and regular expressions cannot count
@@ -2769,8 +2784,9 @@ the rule outlives this plan's archival. No decision left for Q612.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <p>In scope, one phase each:</p>
 <ol>
-<li><strong><a href="../../STATUS/#Q612">Q612</a> — <code>check-doc-links.sh</code>.</strong> Lands <code>devtools/docs/markdown</code>
-   (the shared parse layer) plus goldmark, and closes the proven defects.</li>
+<li><strong>Q612 — <code>check-doc-links.sh</code>.</strong> ✅ Lands <code>devtools/docs/markdown</code>
+   (the shared parse layer) plus goldmark, and closes the proven defects.
+   Result: <a href="#phase-1-result-q612">Phase 1 result</a>.</li>
 <li><strong><a href="../../STATUS/#Q613">Q613</a> — <code>lint-backlog.sh</code>.</strong> Table rows via the GFM AST; the
    character cap via <code>utf8.RuneCountInString</code>.</li>
 <li><strong><a href="../../STATUS/#Q614">Q614</a> — <code>check-roadmap.sh</code> + <code>backlog-metrics.sh</code>.</strong> The
@@ -2806,6 +2822,79 @@ each phase reconciles rather than greps:</p>
    assertion that names it
    (<a href="../../development/testing/#verify-a-causation-claim-by-deleting-the-mechanism">testing.md</a>).</li>
 </ol>
+<h2 id="phase-1-result-q612">Phase 1 result (Q612)<a class="headerlink" href="#phase-1-result-q612" title="Permanent link">&para;</a></h2>
+<p>The differential run is the evidence, over the whole tree: 249 files, <strong>5521</strong>
+links collected by the <code>awk</code> and <strong>5558</strong> by the parser. Every difference
+resolved to a fix, and <strong>nothing</strong> the <code>awk</code> collected was lost:</p>
+<table>
+<thead>
+<tr>
+<th>Difference</th>
+<th>Count</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Badge-wrapped outer targets</td>
+<td>3</td>
+<td>The filed defect. <code>README.md</code> lines 7–9; <code>LICENSE</code> is the relative one, and it resolves — the shape was unchecked, not broken.</td>
+</tr>
+<tr>
+<td>Link text spanning a line break</td>
+<td>25</td>
+<td>The <code>awk</code> matched per line, so a link whose text wrapped was collected by neither half. The largest class, and unfiled.</td>
+</tr>
+<tr>
+<td>Reference-link <em>uses</em></td>
+<td>9</td>
+<td><code>[text][label]</code> resolved to its destination. The <code>awk</code> collected only the definition.</td>
+</tr>
+<tr>
+<td>Heading inside a blockquote</td>
+<td>1 anchor</td>
+<td><code>^#{1,6}</code> never matched it, so links to it read as dead.</td>
+</tr>
+<tr>
+<td>Inline HTML in a heading</td>
+<td>1 anchor</td>
+<td>Slugged from the rendered text, as GitHub does, instead of from the tag source.</td>
+</tr>
+<tr>
+<td><code>&lt;a id="QN"&gt;</code> inside a code span</td>
+<td>−3 anchors</td>
+<td>Prose <em>about</em> an anchor published one. A fixed false positive, not a loss.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Two dialect gaps the survey missed.</strong> MkDocs is not CommonMark, and both gaps
+would have been silent coverage losses:</p>
+<ul>
+<li><strong>Admonitions.</strong> A <code>!!! note</code> body is four-space-indented, so a stock parser
+  reads it as an indented code block — 15 links across three pages, all
+  checked before.</li>
+<li><strong><code>md_in_html</code>.</strong> A <code>&lt;p markdown="span"&gt;…&lt;/p&gt;</code> element is raw HTML to
+  CommonMark — 4 more links.</li>
+</ul>
+<p>Both are now parsed by <code>MkDocsDialect</code>, a goldmark extension in the parse layer,
+which is where they belong: the other three gates read the same docs.</p>
+<p><strong>The hand-written slugger stayed</strong>, ported to Go and unit-tested, rather than
+being replaced by goldmark's <code>WithAutoHeadingID</code>. The gate's contract is
+GitHub's anchors, and goldmark keeps Unicode letters GitHub drops. Cost of
+keeping it: ~30 lines. Slug reconciliation over the corpus is above — 3333
+headings, the only two differences being fixes.</p>
+<p><strong>Cost, corrected.</strong> <code>devtools/vendor</code> grew 364 KB → 956 KB, not the "smaller
+than 265 KB" the module-zip figure predicted: <code>go mod vendor</code> keeps the GFM
+extension and the renderer packages. Runtime 0.67 s → 0.96 s, both sub-second,
+which is still not the argument. The checker is built to <code>.build/</code> and exec'd
+rather than <code>go run</code>, because its exit status is the verdict and <code>go run</code> prints
+an <code>exit status 1</code> line of its own on top of the findings.</p>
+<p><strong>The blind spot was measured, not predicted</strong> (<a href="../../development/testing/#verify-a-causation-claim-by-deleting-the-mechanism">Q622's
+method</a>):
+repointing README line 7's badge link at a nonexistent target left the <code>awk</code>
+gate green (exit 0, no finding) and failed the new one at <code>README.md:7</code>. The
+control — the same dead target as a plain link — failed both, so the difference
+is the shape and not the target.</p>
 <h2 id="sequencing">Sequencing<a class="headerlink" href="#sequencing" title="Permanent link">&para;</a></h2>
 <p>Q612 lands the shared package, so Q613 and Q614 are blocked on it — recorded as <code>🚫</code> in
 the Queue with the <code>Blocked by</code> prefix <code>make queue-unblock</code> reads. The ordering is also

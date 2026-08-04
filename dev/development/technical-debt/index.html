@@ -2837,9 +2837,9 @@ have drifted since.</p>
 <tbody>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh"><code>scripts/docs/check-doc-links.sh</code></a></td>
-<td>252</td>
-<td>178 of them (lines 75–252) are one <code>awk</code> program implementing a Markdown parser plus the github-slugger algorithm</td>
-<td><strong>Rewrite</strong> (<a href="../../STATUS/">Q612</a>)</td>
+<td>252, now 76</td>
+<td>178 of them were one <code>awk</code> program implementing a Markdown parser plus the github-slugger algorithm</td>
+<td><strong>Rewritten</strong> (Q612) — the checker is <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/doclinks"><code>devtools/docs/doclinks</code></a> over a shared goldmark parse layer; the script keeps the file selection</td>
 </tr>
 <tr>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a></td>

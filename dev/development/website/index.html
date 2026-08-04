@@ -3159,6 +3159,9 @@ cannot cover both</strong> (Q560):</p>
 </tr>
 </tbody>
 </table>
+<p>The first gate reads the MkDocs dialect even though it answers for GitHub: its
+parser handles <code>!!!</code> admonition bodies and <code>markdown="1"</code> HTML, so a link inside
+one is checked rather than silently skipped as an indented code block (Q612).</p>
 <p>Two engines, two gates. <code>docs/releases/</code> is the exception that needs a third:
 those files publish to neither, and their links are all absolute into the
 versioned site, so <code>make release-links-check</code> resolves them against a local

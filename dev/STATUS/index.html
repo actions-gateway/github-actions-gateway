@@ -2831,14 +2831,6 @@
 <td>Q643 shipped the <code>{reason}</code>-labelled gauge. The tenant condition row is full (4×w6): a 5th tile shifts every <code>gridPos</code> below y=52 and needs a <code>render.sh</code> re-shoot. Should <code>AwaitingProbe</code> alert?</td>
 </tr>
 <tr>
-<td><a id="Q612"></a>Q612</td>
-<td><a href="../plan/markdown-gates-parser/"><code>check-doc-links</code> never checks a badge-wrapped link's target</a></td>
-<td><code>bug</code> <code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Measured: the collect regex matches the inner image, so <code>[![x](img)](target)</code> leaves <code>target</code> unchecked — 3 live in README, one relative (<code>LICENSE</code>). Lands <code>devtools/docs/markdown</code> + goldmark; the 190-line awk parser has no test file.</td>
-</tr>
-<tr>
 <td><a id="Q663"></a>Q663</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh"><code>check-doc-links</code> counts a deleted-but-tracked file as existing</a></td>
 <td><code>bug</code> <code>ci</code></td>
@@ -2850,9 +2842,9 @@
 <td><a id="Q613"></a>Q613</td>
 <td><a href="../plan/markdown-gates-parser/"><code>lint-backlog</code> splits Queue rows positionally</a></td>
 <td><code>ci</code> <code>debt</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>M</td>
-<td>Blocked by <a href="#Q612">Q612</a>. One escaped pipe shifts every field, so <code>St</code> reads the label cell and <code>Notes</code> the size and the rules pass on the wrong ones. Separately <code>awk</code>'s <code>length()</code> is bytes here, runes under gawk; Q555 sits at 249/249.</td>
+<td>One escaped pipe shifts every field, so <code>St</code> reads the label cell and <code>Notes</code> the size and the rules pass on the wrong ones. Separately <code>awk</code>'s <code>length()</code> is bytes here, runes under gawk; Q555 sits at 249/249.</td>
 </tr>
 <tr>
 <td><a id="Q644"></a>Q644</td>
@@ -2866,9 +2858,9 @@
 <td><a id="Q614"></a>Q614</td>
 <td><a href="../plan/markdown-gates-parser/"><code>check-roadmap</code> and <code>backlog-metrics</code> parse markdown by regex</a></td>
 <td><code>ci</code> <code>debt</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>S</td>
-<td>Blocked by <a href="#Q612">Q612</a>. The last two consumers move onto the shared parse layer: roadmap bullets with their <code>&lt;!-- q:QN --&gt;</code> annotations, and the metrics replay's table rows. No new dependency and no new gate wiring.</td>
+<td>The last two consumers move onto the shared parse layer: roadmap bullets with their <code>&lt;!-- q:QN --&gt;</code> annotations, and the metrics replay's table rows. No new dependency and no new gate wiring.</td>
 </tr>
 <tr>
 <td><a id="Q625"></a>Q625</td>
@@ -2893,6 +2885,22 @@
 <td>🔲</td>
 <td>S</td>
 <td>The hook scans the whole Bash string, so a <code>git commit -F -</code> heredoc quoting <code>go test -race</code> reads as a second go invocation and is denied. Skip heredoc bodies and <code>git commit -m</code>/<code>-F</code> arguments; <code>claude-go-throttle-hook-test.sh</code> takes the case.</td>
+</tr>
+<tr>
+<td><a id="Q667"></a>Q667</td>
+<td><a href="../development/go-workspaces/#wiring-a-new-first-party-module"><code>tidy-check</code> never tidies the non-workspace Go modules</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>go-work-tidy.sh</code> draws its module list from <code>go.work</code>, so the flow never tidies <code>devtools/</code> or <code>tools/</code>; the check then diffs a tree nothing rewrote. Derived from the flow's source, not injected — a working-tree edit masks it locally.</td>
+</tr>
+<tr>
+<td><a id="Q670"></a>Q670</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh"><code>go-lint</code> change scoping skips the non-workspace <code>devtools</code> module</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured: a branch adding six Go files under <code>devtools/</code> printed "no module changes" and skipped golangci-lint; CI's full sweep then found 12. <code>compute_scope</code> maps changes to <code>go.work</code> dirs only. Separate from <a href="#Q667">Q667</a> — different gate.</td>
 </tr>
 <tr>
 <td><a id="Q659"></a>Q659</td>
@@ -3202,9 +3210,9 @@
 <td><a id="Q654"></a>Q654</td>
 <td><a href="../plan/markdown-gates-parser/">Nothing enforces the em-dash density rule, so it can drift as its predecessor did</a></td>
 <td><code>docs</code> <code>ci</code> <code>retro</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>S</td>
-<td>Blocked by <a href="#Q612">Q612</a>. The rule that produced 3,918 dashes was prose-only too. A counter must skip code fences and title separators (<code>Appendix A — Capacity…</code>), which regex cannot do. Makes <a href="#Q650">Q650</a> measurable.</td>
+<td>The rule that produced 3,918 dashes was prose-only too. A counter must skip code fences and title separators (<code>Appendix A — Capacity…</code>), which regex cannot do. Makes <a href="#Q650">Q650</a> measurable.</td>
 </tr>
 </tbody>
 </table>
