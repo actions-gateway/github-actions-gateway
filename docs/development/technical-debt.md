@@ -132,6 +132,73 @@ ceiling is a GitHub protocol) or an architecture change that removes the depende
 not another patch. This complements the standing rule that source-reading is unverified
 until exercised end-to-end.
 
+### A shell gate becomes a Go devtool on parsing density, not length
+
+A long shell script is not debt. A shell script standing in for a parser is. The two
+look alike from the outside, so the decision needs a test that reads the script rather
+than its line count.
+
+Ask what the script does with **text it did not produce**:
+
+- **It parses a structured format into fields and reasons over them** (Markdown, a
+  GitHub Flavored Markdown table, YAML, JSON), so it has to track nesting, escaping,
+  and matched delimiters. Regular expressions cannot count brackets. Rewrite it in Go
+  against a real parser.
+- **It sequences external command-line interfaces** (`kubectl`, `helm`, `gcloud`,
+  `docker`) and branches on their exit codes. Length here comes from the number of
+  steps, not from the difficulty of any one of them. Shell is the right language, and
+  Go would be `exec.Command` soup.
+
+Two corroborating signals when the first read is ambiguous:
+
+- **How does it fail?** A parser-dense gate fails *silently wrong*: a link never
+  collected, a table cell read from the wrong index, and the gate stays green by not
+  seeing. An orchestrator fails loudly, because the CLI it called exits non-zero.
+- **What would a test look like?** A parse routine takes a string and returns fields,
+  which is a table test. An orchestrator needs a live cluster, and moving it to Go buys
+  no testability it did not already have.
+
+Parsing structured text is necessary but not sufficient. A script that must reproduce
+its input **byte for byte** is worse off with an abstract syntax tree, which discards
+exactly the fidelity it depends on. [`git-merge-status.sh`](../../scripts/docs/git-merge-status.sh)
+and [`merge-status-rows.awk`](../../scripts/lib/merge-status-rows.awk) parse Markdown
+tables and stay in `awk` for that reason: a merge driver reconstructs the file line for
+line, conflict-marker fallback included.
+
+#### Worked examples
+
+Line counts measured 2026-08-03 with `wc -l`. The [Q612 survey](../plan/markdown-gates-parser.md)
+and the Queue row that asked for this section cited 235, 601, and 790; all three scripts
+have drifted since.
+
+| Script | Lines | Reads | Verdict |
+|---|---|---|---|
+| [`scripts/docs/check-doc-links.sh`](../../scripts/docs/check-doc-links.sh) | 252 | 178 of them (lines 75–252) are one `awk` program implementing a Markdown parser plus the github-slugger algorithm | **Rewrite** ([Q612](../STATUS.md)) |
+| [`scripts/docs/lint-backlog.sh`](../../scripts/docs/lint-backlog.sh) | 518 | Queue rows split on a literal `\|` field separator at fixed indices; one escaped pipe in a cell shifts every field and the row's rules then evaluate the wrong ones | **Rewrite** ([Q613](../STATUS.md)) |
+| [`scripts/dev/validate-egress-ip.sh`](../../scripts/dev/validate-egress-ip.sh) | 603 | Zero `awk`/`jq`/`sed` invocations. Field extraction is delegated to `kubectl -o jsonpath`; the body is `kubectl`, `helm`, `gcloud`, `curl`, and `docker` calls | **Stays shell** |
+| [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh) | 791 | One line invoking `awk`/`jq`/`sed`. The longest script under `scripts/`, and the least parsing of the four | **Stays shell** |
+
+Sorted by length, the verdicts run backwards: the two shortest are the rewrites and the
+two longest stay shell. That is why length is not the signal.
+
+#### What the rewrite costs
+
+Moving a gate to Go buys a parser that handles nesting and escaping correctly, rune
+counting that does not vary with the host `awk`, and a test suite over functions with
+inputs and outputs. It costs a module in the Go workspace, a vendored dependency to
+sync and check ([`vendor-sync.sh`](../../scripts/go/vendor-sync.sh),
+[`vendor-check.sh`](../../scripts/go/vendor-check.sh)), a compile before the gate runs,
+and a continuous integration (CI) path filter that has to include the new tree.
+
+Most of that is a one-time cost per module, not per gate: `devtools/` already exists
+with its vendor tree and CI wiring, so the second and third gates onto the same parse
+layer are cheap where the first was not. The gate keeps its `scripts/` entry point
+either way, so the [script map](../../scripts/README.md) stays in one place.
+
+None of this argues for rewriting shell in general. Almost every script under
+`scripts/` sits on the orchestration side of the line and should stay there; the
+criterion exists to find the few that do not.
+
 ## Strategy: the debt lifecycle
 
 Policy decides what to do with one item. Strategy is the loop that keeps the
@@ -209,6 +276,7 @@ absolute bar, so it raises quality without manufacturing low-value work.
 | Concern | Doc |
 |---|---|
 | Deciding fix / flag / defer / decline | this doc |
+| Deciding whether a shell gate should become a Go devtool | this doc ([the criterion](#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length)), pointed to from [bash-style.md](bash-style.md) |
 | Recording and prioritizing an item | [maintaining-backlog.md](maintaining-backlog.md) → [docs/STATUS.md](../STATUS.md) |
 | The automated prevention loops | [backpressure.md](backpressure.md) |
 | Release-blocking gates | [release-1.0.md](../plan/release-1.0.md) (bucket F) |
