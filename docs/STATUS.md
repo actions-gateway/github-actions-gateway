@@ -153,6 +153,7 @@ Each trigger is tagged by source: **Demand:** an outside operator/user ask · **
 | <a id="Q275"></a>Q275 | [Reconcile AGC capacity/density docs with the ScaleSet default](design/appendix-a-capacity-slos.md) | `docs` | S | **Decision:** classic removal proceeds on the deprecation-window schedule ([Q264](#Q264)) — reconcile alongside it. appendix-a's ≤1,000-session ceiling and README Tier 2's "thousands per AGC" are classic framing; keep the density evidence. |
 | <a id="Q310"></a>Q310 | Operator diagnostic aggregator (`gag status` / kubectl plugin) | `feature` | L | **Demand:** operators ask for gateway diagnostics beyond raw kubectl + the runbook. Add a `gag status <gateway>` / kubectl plugin aggregating session, pool, and runner state per gateway. |
 | <a id="Q344"></a>Q344 | First-class `scaleset` list/prune for orphan scale sets | `feature` | S | **Event:** orphan scale sets recur or an operator wants a prune path. Q334 fixed runner-*record* orphans, not stale *scale sets*; a throwaway deleted `gag-scaleset3`. Add a `scaleset` prune command. |
+| <a id="Q678"></a>Q678 | [Re-assess the script entry point once most gate cores are Go](../scripts/README.md) | `debt` `ci` | S | **Decision:** enough gate cores have moved to Go to judge the seam on more than one instance. Every devtools program is fronted by a `scripts/<group>/` script doing file selection plus the build; whether that still earns its keep is unmeasured. |
 
 ### Flake watch
 
