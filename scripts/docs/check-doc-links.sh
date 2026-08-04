@@ -54,13 +54,15 @@ if (( ${#scan_files[@]} == 0 )); then
     exit 0
 fi
 
-# Existence oracle for relative-link resolution: the same candidate set the scan
-# list is drawn from, so a link to a brand-new file added in the same change
-# resolves before it is staged. The checker derives ancestor directories from
+# Existence oracle for relative-link resolution: the same present-file set the
+# scan list is drawn from, so a link to a brand-new file resolves before it is
+# staged (Q619) and a link to one deleted from the worktree does not (Q663);
+# `--cached` keeps listing a deleted-but-tracked path, which unfiltered answers
+# "exists" for every link to it. The checker derives ancestor directories from
 # these so directory links resolve too.
 exist_file="$(mktemp "${TMPDIR:-/tmp}/check-doc-links.XXXXXX")"
 trap 'rm -f "$exist_file"' EXIT
-git_candidates > "$exist_file"
+git_candidates | select_present_files > "$exist_file"
 
 # Built and exec'd rather than `go run`: the checker's exit status IS the gate's
 # verdict, and `go run` prints its own "exit status 1" line on top of the
