@@ -3420,6 +3420,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-focused-run-is-a-path-filter-you-applied-yourself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A focused run is a path filter you applied yourself
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-e2e-workflows-kindnet-and-calico" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3962,8 +3973,10 @@
 <li><strong>A tool that exits 0 having printed nothing may have checked nothing.</strong> <code>gh attestation verify</code> writes its summary only to a TTY; captured or redirected it is silent, and silence is indistinguishable from a no-op. When a verification's whole value is that it ran, make it emit something assertable (<code>--format json</code>, then read the predicate) rather than trusting the status alone.</li>
 <li><strong>A state observed once is not a steady state.</strong> Pods wedged now may clear in ten minutes; a set that looks static may be churning underneath a stable count. Before calling a condition permanent, take a second reading far enough apart to tell the difference, and compare <em>identities</em> rather than counts.</li>
 <li><strong>A count grouped by symptom is not a measurement of cause.</strong> A tool's ranking groups records by whatever its normalizer could see, which is seldom what shares a mechanism: workspace-guard's friction report folds <code>f=$(ls -t …)</code>, <code>for f in &lt;glob&gt;</code>, and a literal <code>f=/path</code> into a single <code>$f</code> row, so one count of 31 supported four incompatible explanations — the pattern actually being claimed was 4 of them, none in the previous seven days. Re-derive the aggregate along the axis the claim needs (time, construct, actor) before naming a cause; and when the claim is causal, <strong>exercise the system that would produce the effect</strong> rather than counting records that correlate with it. Nineteen prompts whose command text contained a scratchpad path read as a guard defect until the guard was fed a payload directly, which showed it already exempts the session's own scratchpad and every one of the 19 was a correctly-flagged cross-session access.</li>
+<li><strong>A count or a superlative is a claim, not a recollection.</strong> "Six of them", "the only one without a test", "none of the workflows" — each asserts a <em>population</em> and a <em>width of scan</em>, and both go stale the moment the tree moves. A scan run earlier in the session for another purpose does not transfer: re-derive the number as you write the sentence, and say what population it is true of. The <a href="../../plan/markdown-gates-parser/">markdown-gates plan</a> first called <code>check-doc-links.sh</code> the only script here with no <code>-test.sh</code> companion, from memory of an earlier sweep; re-running it found six of the fourteen scripts in <code>scripts/docs/</code> untested, and the claim shipped rescoped to the four gates that plan covers, where it is exactly true. Re-derived while writing this line: seven of fourteen, because <code>gen-api-reference.sh</code> has landed since. The number moved in a day.</li>
+<li><strong>An instrument's total is bounded by what it can observe, and an event it never saw leaves no gap.</strong> Establish the blind spots before quoting the number, because nothing in the output will. The guard friction reports rank PreToolUse decisions, so foreground-guard's 200 prompts — quoted upstream as the largest single source of friction here — is a <strong>floor</strong>: the hook returns ahead of all analysis when the payload carries <code>run_in_background: true</code> (<code>karlkfi/claude-foreground-guard#15</code>), so every backgrounded poll is absent by construction. pr-sentinel scored near zero for a sharper reason: its defect lives in a watcher script that no PreToolUse analyzer observes at all. Quote a total with the shape it cannot see named beside it.</li>
 </ul>
-<p>The failure mode these share is reporting a conclusion from a signal that does not carry it. The fix is the same each time: name the signal the claim actually depends on, and read that one.</p>
+<p>The failure mode these share is reporting a conclusion from a signal that does not carry it. The fix is the same each time: name the signal the claim actually depends on, confirm it could have shown you the opposite, and read that one.</p>
 <h3 id="check-for-a-committed-capture-before-booking-a-live-measurement">Check for a committed capture before booking a live measurement<a class="headerlink" href="#check-for-a-committed-capture-before-booking-a-live-measurement" title="Permanent link">&para;</a></h3>
 <p>"Measure it" does not always mean "run it". Before scheduling a Tier C run, a dogfood
 dispatch, or anything else that costs a credential and a wall-clock hour, check whether
@@ -3983,6 +3996,27 @@ to pin down, and it ages into a file everyone assumes someone else is checking. 
 commit a capture, commit the test that reads it in the same change — and when a capture
 already exists for an interface you are changing, assert against it rather than a payload
 you wrote yourself.</p>
+<p><strong>Live observations are filed by when they were taken, not by what they answer.</strong> <code>cmd/probe</code>
+and <code>testdata/</code> are the two shelves anyone would think to check, and they are not the only
+ones a live answer lands on. A probe's <em>findings</em> are written up in the plan doc that commissioned
+it, which is archived the moment that plan closes, and the durable residue of a live run is
+often one corrected constant in a fake. Search all four shelves before booking the run:</p>
+<ul>
+<li><code>testdata/</code> and its <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/testdata/README.md">README</a> — the committed payload captures.</li>
+<li><code>cmd/probe</code> and <a href="#the-credential-gated-probe-scenarios">the credential-gated probe scenarios</a> — what each investigation was built to settle.</li>
+<li><code>docs/plan/</code> <strong>and <code>docs/plan/archive/</code></strong> — the results tables. Grep the archive; a closed plan's measurements do not expire with it.</li>
+<li>The doubles. A constant a live run corrected is a recorded observation wearing a code comment.</li>
+</ul>
+<p>Q501's Phase 0 is the worked example, and the second recurrence after Q495. It asked whether
+a cancelled run is signalled at all on the ScaleSet tier, and budgeted a live run to find
+out. Q468's retention probe had already cancelled a real run and recorded the answer — the
+job's <code>JobCompleted</code> with <code>result: canceled</code> on the queue ~0.2 s later — in the results table
+of <a href="../../plan/archive/q468-jobcompleted-retention/">an archived plan</a>, and that same run's
+one-L spelling correction was sitting in a comment in <code>scaleset/scalesetstub/stub.go</code>. Both
+were findable only by someone who already knew they existed.</p>
+<p>So when you take a live measurement, <strong>file it where the next reader will look for the
+interface</strong>, not only in the doc that commissioned it: name the question in the capture's or
+constant's own comment, and cite the results table from the code its answer constrains.</p>
 <h3 id="a-goroutine-stack-in-the-output-is-not-always-a-failure">A goroutine stack in the output is not always a failure<a class="headerlink" href="#a-goroutine-stack-in-the-output-is-not-always-a-failure" title="Permanent link">&para;</a></h3>
 <p>Read the <code>--- FAIL</code> line and the exit code before attributing a stack trace to the test it appears under. One stack in particular is printed by a <strong>passing</strong> run:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>[controller-runtime] log.SetLogger(...) was never called; logs will not be displayed.
@@ -4157,6 +4191,20 @@ to 38 body words — 45 counted with the spans stripped, 47 without — deleting
 turned it red, which is what made it a test. Whenever the behaviour under test is a
 limit, a cap, a timeout, or a retry count, put the fixture <em>at</em> the edge and confirm one
 step past it fails.</p>
+<p><strong>The mirror, for a gate: inject the defect it is supposed to catch.</strong> "This gate would
+catch that" is the same causation claim pointed at a green, and reading the matcher only
+<em>predicts</em> the answer — a regex is exactly the kind of thing that looks like it covers a
+case it does not. Injecting measures it: break one real input the way the gate should
+notice, require red, restore. Pair the injection with a <strong>control that must fail</strong>, for the
+<a href="#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything">reason a throwaway probe needs one</a>
+— an injection that produces no red proves the gate blind only if a near-identical one does
+produce red; otherwise you have measured your own harness.</p>
+<p>Q612's blind spot was settled that way in a single pass. Repointing the README's live
+license badge at <code>THIS-FILE-DOES-NOT-EXIST.md</code> left <code>check-doc-links</code> green —
+<code>ok (242 files, 5134 links checked)</code>, exit 0 — while the identical target written as a plain
+link failed it on the same file. That is the whole finding: the collection regex matches the
+inner image first, so a badge-wrapped link's outer destination is never checked, and a
+total of 5,134 checked links says nothing about the shape the gate cannot see.</p>
 <h3 id="a-measurement-that-reproduces-a-call-is-not-a-test-of-the-code-that-makes-it">A measurement that reproduces a call is not a test of the code that makes it<a class="headerlink" href="#a-measurement-that-reproduces-a-call-is-not-a-test-of-the-code-that-makes-it" title="Permanent link">&para;</a></h3>
 <p>The sibling of the rule above, and the one that survives a green <strong>positive</strong>. A
 measurement that issues an API call from the harness — <code>gh api</code>, <code>curl</code>, a scratch
@@ -4805,6 +4853,11 @@ recorded alongside the verdict as the evidence it rests on.</p>
 <li><strong>No workflow runs attached at all</strong> — the push registered, but GitHub never dispatched any workflow for the head SHA. Observed on this repo for <strong>~10 minutes</strong> after a push: <code>gh run list --branch &lt;branch&gt;</code> returned nothing for that commit while the PR page showed no checks section whatsoever. Nothing is red, so the PR reads as clean at a glance; in fact nothing has run.</li>
 </ul>
 <p><strong>Fix for both:</strong> <code>gh pr close &lt;n&gt; &amp;&amp; gh pr reopen &lt;n&gt;</code>. The <code>reopened</code> event re-dispatches the workflows and re-evaluates the path filters against the full PR diff. Then re-verify with the commands above (asynchronously — see <a href="#never-foreground-poll-ci-logs-or-files">Never foreground-poll CI, logs, or files</a>) and confirm the expected gates are now present and concluded before treating the PR as tested.</p>
+<h3 id="a-focused-run-is-a-path-filter-you-applied-yourself">A focused run is a path filter you applied yourself<a class="headerlink" href="#a-focused-run-is-a-path-filter-you-applied-yourself" title="Permanent link">&para;</a></h3>
+<p>The rule above is about a gate that narrowed the work for you. <code>--focus</code> is the same green with the filter written by hand: <code>ginkgo run --focus '&lt;spec&gt;'</code> is the correct inner loop for iterating on a new spec (<a href="../kind-iteration/#tightening-the-inner-loop">kind-iteration.md § Tightening the inner loop</a>) and it is not a verification, because it reports on the specs you named and stays silent about every sibling you excluded.</p>
+<p><strong>Run a new spec's whole family once before calling it done</strong> — the family being whatever shares mutable state with it. In the e2e suite that state is the cluster, and the sharpest instance of it is the GMC's <code>AGC_EXTRA_*</code> env: it is set deployment-wide and reaches every tenant AGC, so a spec that bends it to reach a double bends it for all its siblings too. A focused run cannot observe that, and neither can the sibling's own focused run — both are green, and only a run holding both is not.</p>
+<p>Q528 is the worked example. <code>E2E_AGC_ScaleSetAcquisition</code> needed the AGC's scale-set endpoints re-pointed at the in-cluster stub, and the first form rewrote them for <strong>every</strong> gateway whenever the <code>STUB_AUTH_URL</code>/<code>STUB_BROKER_URL</code> pair was set. Its sibling <code>E2E_AGC_ScaleSetRecovery</code> depends on a listener that stays <em>down</em>: its gateway named fakegithub's plaintext port over <code>https</code> so the bootstrap would die on the TLS handshake — precisely the scheme the new rewrite swapped. The new spec was green on three consecutive focused runs against a local kind cluster; the sibling went red in CI on <code>scale-set listener active</code>. The repair was to narrow the rewrite to gateways already naming the stub's <code>host:port</code>, and to move the recovery spec onto a host that does not resolve, which no rewrite can re-point.</p>
+<p>The reviewer's tell: a PR whose "how it was tested" names only the specs it added.</p>
 <h3 id="the-e2e-workflows-kindnet-and-calico">The e2e workflows: kindnet and Calico<a class="headerlink" href="#the-e2e-workflows-kindnet-and-calico" title="Permanent link">&para;</a></h3>
 <p>The cluster/image/test plumbing for the e2e suite lives in one reusable workflow, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml"><code>.github/workflows/e2e-reusable.yml</code></a> (<code>workflow_call</code>, parameterized by a <code>kind_cni</code> input). Two callers drive it so a kind bump, image-tag change, or flake mitigation is made once and both lanes inherit it:</p>
 <ul>
