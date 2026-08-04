@@ -537,7 +537,9 @@ isolation, so prefer the upgrade.
 ## RunnerGroup Reports WorkersUnschedulable
 
 **Symptoms.** `kubectl get runnergroup` shows a `WorkersUnschedulable=True`
-condition, or the `actions_gateway_workers_unschedulable` gauge is `1`. Jobs are
+condition, or the `actions_gateway_workers_unschedulable` gauge is `1` — on a v2
+`RunnerSet`, `kubectl get runnerset` and the per-set twin
+`actions_gateway_runnerset_workers_unschedulable`. Jobs are
 acquired but never start; worker pods sit `Pending`. Each pod the reaper eventually
 gives up on also emits a `WorkersUnschedulable` Warning event and a
 `WorkerPodStuckPending` event on the RunnerGroup.
@@ -556,8 +558,12 @@ condition. The two never both fire for the same cause.
 
 > **v2 `RunnerSet`.** The same `WorkersUnschedulable` condition is set on a v2
 > `RunnerSet` (Q303) with identical semantics — swap `runnergroup` for `runnerset`
-> in the commands below. (The `actions_gateway_workers_unschedulable` gauge is still
-> emitted only for v1 `RunnerGroup`s; on a `RunnerSet`, read the condition directly.)
+> in the commands below. Its gauge is the per-set twin
+> `actions_gateway_runnerset_workers_unschedulable` (Q319), keyed on
+> `namespace`/`runner_set` rather than `namespace`/`runner_group`; the v1
+> `actions_gateway_workers_unschedulable` stays `RunnerGroup`-only, so
+> `actions_gateway_workers_unschedulable == 1 or actions_gateway_runnerset_workers_unschedulable == 1`
+> is the query that covers both while `v1alpha1` is still served.
 
 **Diagnostics.**
 
@@ -3263,7 +3269,7 @@ kubectl get pod -n <namespace> <worker-pod> \
 
 ## Jobs Failing Due to Namespace ResourceQuota Exhaustion
 
-**Symptoms.** Jobs sit queued in GitHub while the `RunnerGroup`/`RunnerSet` reports `WorkerQuotaExceeded=True` (and `actions_gateway_worker_quota_exceeded` reads `1`) — the AGC is declining to take on work it cannot place. Which metric shows it depends on the acquisition tier:
+**Symptoms.** Jobs sit queued in GitHub while the `RunnerGroup`/`RunnerSet` reports `WorkerQuotaExceeded=True` (and `actions_gateway_worker_quota_exceeded` reads `1` — on a `RunnerSet`, the per-set twin `actions_gateway_runnerset_worker_quota_exceeded`) — the AGC is declining to take on work it cannot place. Which metric shows it depends on the acquisition tier:
 
 | Tier | What climbs |
 |---|---|
@@ -3285,10 +3291,10 @@ The AGC surfaces two non-blocking conditions on each `RunnerGroup` for the names
 
 | Condition / metric | Meaning | Severity |
 |---|---|---|
-| `WorkerQuotaPressure` — `actions_gateway_worker_quota_pressure` | Workers can't scale to the configured ceiling (`maxWorkers` / max `priorityTiers` threshold) within the quota's remaining headroom. | warning (don't page) |
-| `WorkerQuotaExceeded` — `actions_gateway_worker_quota_exceeded` | The quota can't admit even one more worker pod — the next acquired job's pod will be rejected. | error (page) |
+| `WorkerQuotaPressure` — `actions_gateway_worker_quota_pressure`, v2 twin `actions_gateway_runnerset_worker_quota_pressure` | Workers can't scale to the configured ceiling (`maxWorkers` / max `priorityTiers` threshold) within the quota's remaining headroom. | warning (don't page) |
+| `WorkerQuotaExceeded` — `actions_gateway_worker_quota_exceeded`, v2 twin `actions_gateway_runnerset_worker_quota_exceeded` | The quota can't admit even one more worker pod — the next acquired job's pod will be rejected. | error (page) |
 
-> **v2 `RunnerSet`.** Both `WorkerQuotaPressure` and `WorkerQuotaExceeded` are set on a v2 `RunnerSet` (Q303) with identical semantics — swap `runnergroup` for `runnerset` in the commands below. (The `actions_gateway_worker_quota_*` gauges are still emitted only for v1 `RunnerGroup`s; on a `RunnerSet`, read the conditions directly.)
+> **v2 `RunnerSet`.** Both `WorkerQuotaPressure` and `WorkerQuotaExceeded` are set on a v2 `RunnerSet` (Q303) with identical semantics — swap `runnergroup` for `runnerset` in the commands below. Their gauges are the per-set twins `actions_gateway_runnerset_worker_quota_pressure` and `actions_gateway_runnerset_worker_quota_exceeded` (Q319), keyed on `namespace`/`runner_set` rather than `namespace`/`runner_group`; the v1 `actions_gateway_worker_quota_*` families stay `RunnerGroup`-only, so `actions_gateway_worker_quota_exceeded == 1 or actions_gateway_runnerset_worker_quota_exceeded == 1` is the query that covers both while `v1alpha1` is still served.
 
 ```sh
 kubectl get runnergroup -n <namespace> <name> \
