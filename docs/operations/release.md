@@ -829,8 +829,12 @@ is not a field: the chart installs chart-root `crds/` on a *fresh install only*,
 so a new CRD is the reason "apply the CRDs" is step 1 of Upgrading, and the two
 must cross-reference. Then fold the rest — new spec fields, new status fields, new
 condition reasons — grouped by kind, counted like any other fold. `v1.3.0` listed
-28 new condition reasons this way. Until a generated API reference exists, say
-which artifact is authoritative (`kubectl explain`, or the signed CRD asset).
+28 new condition reasons this way, and had to name `kubectl explain` and the
+signed CRD asset as the authority because no reference page existed. Link the
+[generated API reference](../reference/api.md) instead, at **this release's**
+version path (`/X.Y.Z/reference/api/`), so the fields the notes name are one
+click from their descriptions. It covers `v2beta1` only; a deprecated-version
+field still needs `kubectl explain`.
 
 **Validation is receipts, not adjectives.** "Thoroughly tested" is worth nothing.
 Link the run, quote the counts, and quote a value measured at the layer that

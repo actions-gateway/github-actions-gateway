@@ -3,6 +3,7 @@
 package tools
 
 import (
+	_ "github.com/elastic/crd-ref-docs"
 	_ "github.com/golangci/golangci-lint/v2/cmd/golangci-lint"
 	_ "github.com/rhysd/actionlint/cmd/actionlint"
 	_ "golang.org/x/vuln/cmd/govulncheck"

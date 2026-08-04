@@ -1,0 +1,21 @@
+# crd-ref-docs configuration for the generated API reference (docs/reference/api.md).
+#
+# Consumed by scripts/docs/gen-api-reference.sh (`make api-reference`); the
+# templates beside this file replace the tool's built-in markdown set. See
+# docs/development/code-generation.md § The generated API reference.
+
+processor:
+  # kubebuilder markers are prose in a Go doc comment; the processor strips the
+  # ones it understands so they don't render as field text.
+  ignoreTypes:
+    # The kinds' List wrappers carry no operator-settable fields.
+    - "(ActionsGateway|ClusterRunnerTemplate|EgressProxy|PriorityClassAllowlist|RunnerSet|RunnerTemplate)List$"
+  ignoreFields:
+    - "TypeMeta$"
+
+render:
+  # Pins the Kubernetes version the embedded core/meta types (PodTemplateSpec,
+  # Affinity, ObjectMeta, …) link to on kubernetes.io. Bump alongside the
+  # k8s.io/api minor in api/go.mod so the linked schema is the one the CRDs
+  # actually embed: k8s.io/api v0.36.x is Kubernetes 1.36.
+  kubernetesVersion: 1.36

@@ -245,3 +245,6 @@ nav:
       - "Admission policies (Kyverno / Gatekeeper)": operations/admission-policies.md
       - Release: operations/release.md
       - "Kata-on-GKE spike runbook": operations/kata-ci-spike-runbook.md
+  - Reference:
+      - Overview: reference/README.md
+      - "API reference (v2beta1)": reference/api.md

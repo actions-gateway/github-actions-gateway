@@ -12,6 +12,10 @@ on:
       - '**.md'
       - 'docs/**'
       - '!docs/STATUS.md'
+      # Generated from api/v2beta1 and gated by the `lint` job's
+      # api-reference-check (Q632), so a hand-edit landing on main must still
+      # reach that gate — a docs path that is code output, not prose.
+      - '!docs/reference/api.md'
   # Manual opt-in dispatch for GAG dogfood validation turn-ups (Q224/Q264). When
   # target_gag=true the migrated jobs route to the self-hosted GAG runner
   # (vars.GAG_RUNNER); on every other trigger — and on a dispatch with the input
@@ -110,6 +114,12 @@ jobs:
               - 'scripts/go/**'
               - 'scripts/agent/local-throttle.sh'
               - 'scripts/lib/**'
+              # The API-reference drift gate (Q632) runs in this job's `lint`
+              # step. Its source of truth is api/** above, but a hand-edit of the
+              # generated page — or of the generator itself — must re-run it too,
+              # and neither path is otherwise in `code`.
+              - 'scripts/docs/gen-api-reference.sh'
+              - 'docs/reference/api.md'
               # devtools/ is outside go.work, but go-test.sh tests it in this
               # job's own run (the firstparty_nonworkspace_modules loop) — so
               # without this a devtools-only change ships with its Go tests
@@ -259,6 +269,14 @@ jobs:
       # touched — exactly the diff this job's `code` filter sees.
       - name: controller-gen manifest drift (make codegen-check)
         run: make codegen-check
+
+      # Assert the published API reference still matches the api/v2beta1 doc
+      # comments and validation markers it is generated from (Q632). Same
+      # reasoning as codegen-check above and the same `code` filter: the drift is
+      # caused by a GO type/doc-comment change, and a doc-comment edit changes no
+      # schema, so no manifest lands in the diff to route it elsewhere.
+      - name: API reference drift (make api-reference-check)
+        run: make api-reference-check
   # Shellcheck the standalone helper scripts under scripts/. The `actionlint` job
   # below covers the inline workflow `run:` blocks, but the scripts/*.sh files
   # ship unlinted otherwise. Isolated from the `lint` job so a scripts-only
