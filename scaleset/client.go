@@ -306,13 +306,15 @@ func (c *Client) runnerRegistration(ctx context.Context, regToken string) (*Admi
 	return &conn, nil
 }
 
-// svcCall issues one Actions Service call ({adminURL}{path}?api-version=6.0-preview)
-// with the admin JWT, marshalling in (when non-nil) and decoding into out (when
-// non-nil). Status codes map to the package's typed errors.
-func (c *Client) svcCall(ctx context.Context, method, path string, in, out any) error {
+// serviceRequest issues one Actions Service call
+// ({adminURL}{path}?api-version=6.0-preview) with the admin JWT, sending body as JSON
+// when non-nil, and returns the response's raw status, headers, and body. It applies no
+// status-to-error mapping: err is non-nil only when the request could not be built or
+// sent. svcCall and RawServiceCall differ only in what they make of those three values.
+func (c *Client) serviceRequest(ctx context.Context, method, path string, body []byte) (int, http.Header, []byte, error) {
 	conn, err := c.admin(ctx)
 	if err != nil {
-		return err
+		return 0, nil, nil, err
 	}
 	u := strings.TrimSuffix(conn.URL, "/") + path
 	if strings.Contains(path, "?") {
@@ -322,33 +324,45 @@ func (c *Client) svcCall(ctx context.Context, method, path string, in, out any) 
 	}
 
 	var bodyReader io.Reader
-	if in != nil {
-		payload, err := json.Marshal(in)
-		if err != nil {
-			return err
-		}
-		bodyReader = bytes.NewReader(payload)
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
 	if err != nil {
-		return err
+		return 0, nil, nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+conn.Token)
 	req.Header.Set("Accept", "application/json")
-	if in != nil {
+	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
 	start := time.Now()
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("scaleset: %s %s: %w", method, path, err)
+		return 0, nil, nil, fmt.Errorf("scaleset: %s %s: %w", method, path, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
-	c.observe("ServiceCall", req, resp, start, len(body))
+	respBody, _ := io.ReadAll(resp.Body)
+	c.observe("ServiceCall", req, resp, start, len(respBody))
+	return resp.StatusCode, resp.Header, respBody, nil
+}
 
-	if err := statusError(resp.StatusCode, resp.Header, body); err != nil {
+// svcCall issues one Actions Service call, marshalling in (when non-nil) and decoding
+// into out (when non-nil). Status codes map to the package's typed errors.
+func (c *Client) svcCall(ctx context.Context, method, path string, in, out any) error {
+	var payload []byte
+	if in != nil {
+		var err error
+		if payload, err = json.Marshal(in); err != nil {
+			return err
+		}
+	}
+	status, header, body, err := c.serviceRequest(ctx, method, path, payload)
+	if err != nil {
+		return err
+	}
+	if err := statusError(status, header, body); err != nil {
 		return fmt.Errorf("scaleset: %s %s: %w", method, path, err)
 	}
 	if out != nil && len(body) > 0 {
@@ -375,40 +389,8 @@ func (c *Client) svcCall(ctx context.Context, method, path string, in, out any) 
 // status-to-error mapping, so a non-2xx is reported as a status, not an error; err is
 // non-nil only when the request could not be built or sent.
 func (c *Client) RawServiceCall(ctx context.Context, method, path string, body []byte) (int, []byte, error) {
-	conn, err := c.admin(ctx)
-	if err != nil {
-		return 0, nil, err
-	}
-	u := strings.TrimSuffix(conn.URL, "/") + path
-	if strings.Contains(path, "?") {
-		u += "&api-version=" + apiVersion
-	} else {
-		u += "?api-version=" + apiVersion
-	}
-
-	var bodyReader io.Reader
-	if body != nil {
-		bodyReader = bytes.NewReader(body)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
-	if err != nil {
-		return 0, nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+conn.Token)
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	start := time.Now()
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return 0, nil, fmt.Errorf("scaleset: %s %s: %w", method, path, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	respBody, _ := io.ReadAll(resp.Body)
-	c.observe("ServiceCall", req, resp, start, len(respBody))
-	return resp.StatusCode, respBody, nil
+	status, _, respBody, err := c.serviceRequest(ctx, method, path, body)
+	return status, respBody, err
 }
 
 // statusError maps a non-2xx status to the package's typed error, or nil for 2xx.
