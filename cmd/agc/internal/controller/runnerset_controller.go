@@ -28,6 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -200,6 +201,9 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	b := ctrl.NewControllerManagedBy(mgr).
+		// Bounded retry backoff so a reconcile error cannot strand the worker-pod
+		// reaper's deadline (retryBackoffCap).
+		WithOptions(controller.Options{RateLimiter: reconcileRateLimiter()}).
 		For(&v2alpha1.RunnerSet{}).
 		// Worker pods carry LabelRunnerSet; re-reconcile on their lifecycle events
 		// so status.activeSessions and the reaper track pod phase transitions.

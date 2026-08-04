@@ -31,6 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -205,6 +206,9 @@ func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
+		// Bounded retry backoff so a reconcile error cannot strand the worker-pod
+		// reaper's deadline (retryBackoffCap).
+		WithOptions(controller.Options{RateLimiter: reconcileRateLimiter()}).
 		For(&v1alpha1.RunnerGroup{}).
 		// Reconcile when an admin changes a namespace ResourceQuota's .spec.hard so
 		// the WorkerQuota{Pressure,Exceeded} conditions refresh promptly (Q82). The
