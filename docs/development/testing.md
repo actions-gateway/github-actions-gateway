@@ -1342,6 +1342,15 @@ Pick by what the suite is waiting on:
 | A broker session, a worker pod, a job | `DumpAGCSessionDiagnostics` | RunnerGroup status, AGC log tail, ReplicaSet templates, fakegithub |
 | Provisioning, a CR condition, RBAC, a NetworkPolicy verdict | `DumpProvisioningDiagnostics` | Namespace labels, ActionsGateway status, NetworkPolicies, per-pod log tails, the manager's policies and log tail |
 
+**Watch the volume when you extend one.** A dump nobody can read is a dump that
+did not happen. `DumpProvisioningDiagnostics` samples the NetworkPolicy `ipBlock`
+lists for exactly this reason: measured on a forced-failure run of
+`E2E_GMC_Teardown`, the tenant workload policy's GitHub meta ranges were 7352
+entries filling 14704 of that section's 14901 lines, and the whole dump was
+15450 lines. Sampling five and printing the elided count brought it to 758 with
+every section intact. Before adding a `-o yaml` of anything, check what it looks
+like on a real tenant rather than what it looks like in the type definition.
+
 Both are best-effort — a failed command prints one line and the dump continues,
 so it can never mask the real failure — and neither reads a Secret. Keep it that
 way when extending them: these dumps run against live tenant namespaces, and

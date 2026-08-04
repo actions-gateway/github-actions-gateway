@@ -122,8 +122,7 @@ func DumpProvisioningDiagnostics(managerNS, managerDeployment string, namespaces
 			"kubectl", "get", "all", "-n", ns)
 		dumpCommand("actionsgateway status in "+ns,
 			"kubectl", "get", "actionsgateways.actions-gateway.github.com", "-n", ns, "-o", "yaml")
-		dumpCommand("networkpolicies in "+ns,
-			"kubectl", "get", "networkpolicy", "-n", ns, "-o", "yaml")
+		dumpNetworkPolicies("networkpolicies in "+ns, ns)
 		// describe over `-o yaml`: it renders the scheduling and probe events
 		// without the status bulk, and prints a Secret-backed volume or env var
 		// as a reference rather than its value.
@@ -134,8 +133,7 @@ func DumpProvisioningDiagnostics(managerNS, managerDeployment string, namespaces
 			"kubectl", "get", "events", "-n", ns, "--sort-by=.lastTimestamp")
 	}
 
-	dumpCommand("manager networkpolicies in "+managerNS,
-		"kubectl", "get", "networkpolicy", "-n", managerNS, "-o", "yaml")
+	dumpNetworkPolicies("manager networkpolicies in "+managerNS, managerNS)
 	// No --previous counterpart: a restarted manager re-reconciles, so the
 	// current tail already carries the retry.
 	dumpCommand("manager logs in "+managerNS,
@@ -143,6 +141,63 @@ func DumpProvisioningDiagnostics(managerNS, managerDeployment string, namespaces
 
 	_, _ = fmt.Fprintf(GinkgoWriter,
 		"===== end GMC provisioning diagnostics (namespaces=%s) =====\n\n", scope)
+}
+
+// networkPolicyCIDRSample is how many ipBlock entries survive a dump. The
+// tenant workload policy carries GitHub's full meta range set: measured on a
+// forced-failure run of E2E_GMC_Teardown, 7352 entries filled 14704 of the
+// section's 14901 lines, leaving 197 for the selectors, ports and policyTypes
+// the specs actually assert on. The sample keeps the shape visible; the count
+// keeps the elision honest.
+const networkPolicyCIDRSample = 5
+
+// dumpNetworkPolicies writes the namespace's NetworkPolicies with the ipBlock
+// CIDR lists sampled rather than reproduced in full.
+func dumpNetworkPolicies(label, ns string) {
+	out, err := Run(exec.Command("kubectl", "get", "networkpolicy", "-n", ns, "-o", "yaml"))
+	if err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "--- %s: unavailable (%v) ---\n", label, err)
+		return
+	}
+	_, _ = fmt.Fprintf(GinkgoWriter, "--- %s ---\n%s\n", label, sampleCIDRs(out))
+}
+
+// sampleCIDRs keeps the first networkPolicyCIDRSample ipBlock entries of a
+// NetworkPolicy YAML document and replaces the remainder with a count. An
+// ipBlock entry is the `- ipBlock:` line and the `cidr:` line under it, so both
+// are held back together and neither is emitted without the other.
+func sampleCIDRs(doc string) string {
+	var out []string
+	var pending string
+	kept, elided := 0, 0
+	for _, line := range strings.Split(doc, "\n") {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "- ipBlock:"):
+			pending = line
+		case pending != "" && strings.HasPrefix(trimmed, "cidr:"):
+			if kept < networkPolicyCIDRSample {
+				out = append(out, pending, line)
+				kept++
+			} else {
+				elided++
+			}
+			pending = ""
+		default:
+			if pending != "" {
+				out = append(out, pending)
+				pending = ""
+			}
+			out = append(out, line)
+		}
+	}
+	if pending != "" {
+		out = append(out, pending)
+	}
+	if elided > 0 {
+		out = append(out, fmt.Sprintf("# %d further ipBlock cidr entries elided (GitHub meta ranges)", elided))
+	}
+	return strings.Join(out, "\n")
 }
 
 // dumpPodLogs writes a bounded log tail for every pod in ns. The probe pods the

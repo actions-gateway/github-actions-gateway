@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,6 +138,55 @@ func TestDumpProvisioningDiagnosticsSkipsAbsentNamespaces(t *testing.T) {
 	}
 	if !strings.Contains(dumped, "--- pod descriptions in gmc-np-webhook ---") {
 		t.Errorf("the namespace that exists was not dumped:\n%s", dumped)
+	}
+}
+
+// The workload policy's GitHub meta ranges are 98.7% of its YAML, so the dump
+// samples them. What survives must still answer the questions the NetworkPolicy
+// specs ask: which policy, matching which pods, on which ports.
+func TestSampleCIDRsKeepsPolicyShapeAndCountsTheRest(t *testing.T) {
+	var doc strings.Builder
+	doc.WriteString("- apiVersion: networking.k8s.io/v1\n  kind: NetworkPolicy\n" +
+		"  metadata:\n    name: actions-gateway-workload\n  spec:\n" +
+		"    podSelector:\n      matchLabels:\n        actions-gateway/role: workload\n" +
+		"    policyTypes:\n    - Egress\n    egress:\n    - to:\n")
+	for i := 0; i < 300; i++ {
+		fmt.Fprintf(&doc, "      - ipBlock:\n          cidr: 10.%d.0.0/16\n", i)
+	}
+	doc.WriteString("      ports:\n      - port: 443\n        protocol: TCP\n")
+
+	got := sampleCIDRs(doc.String())
+
+	if n := strings.Count(got, "cidr:"); n != networkPolicyCIDRSample {
+		t.Errorf("kept %d cidr entries, want %d", n, networkPolicyCIDRSample)
+	}
+	if n := strings.Count(got, "- ipBlock:"); n != networkPolicyCIDRSample {
+		t.Errorf("kept %d ipBlock lines, want %d — an ipBlock must never outlive its cidr", n, networkPolicyCIDRSample)
+	}
+	if !strings.Contains(got, "# 295 further ipBlock cidr entries elided") {
+		t.Errorf("elision is not accounted for:\n%s", got)
+	}
+	for _, want := range []string{
+		"name: actions-gateway-workload",
+		"actions-gateway/role: workload",
+		"- Egress",
+		"- port: 443",
+		"cidr: 10.0.0.0/16",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("sampling dropped %q, which the NetworkPolicy specs assert on:\n%s", want, got)
+		}
+	}
+}
+
+// A policy with few ranges is reproduced whole — no count line, nothing dropped.
+func TestSampleCIDRsLeavesASmallPolicyIntact(t *testing.T) {
+	doc := "  spec:\n    egress:\n    - to:\n      - ipBlock:\n          cidr: 10.0.0.0/8\n"
+
+	got := sampleCIDRs(doc)
+
+	if got != doc {
+		t.Errorf("a policy under the sample size was rewritten:\ngot:\n%s\nwant:\n%s", got, doc)
 	}
 }
 
