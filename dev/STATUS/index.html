@@ -2884,14 +2884,6 @@
 <td>Adding a suite edits <code>SCRIPTS_TESTS</code> and a 1350-char <code>##</code> line naming all of them, so two such PRs conflict by construction (#1243 vs #1239). Q649 derived the gate list this way; same fix shape.</td>
 </tr>
 <tr>
-<td><a id="Q659"></a>Q659</td>
-<td><a href="../development/testing/#where-a-globstar-works-in-a-filter-glob">Nothing rejects a mid-pattern <code>**</code> in a filter glob</a></td>
-<td><code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>picomatch degrades <code>cmd/**.go</code> to a <code>*</code> that cannot cross <code>/</code>, so it gates on nothing while reading as every Go file under <code>cmd/</code>. Assertion 3 passes — the literal prefix exists. No instance today (measured); wants a check-path-filters assertion.</td>
-</tr>
-<tr>
 <td><a id="Q569"></a>Q569</td>
 <td><a href="../plan/docs-page-boundaries/#phase-2-splitting-the-parked-register-q569">Split Deferred + Flake watch off <code>STATUS.md</code></a></td>
 <td><code>docs</code></td>
@@ -3082,14 +3074,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>Every plan adds one long row near the same neighbours, so concurrent branches collide: #1138's rebase hit three conflicts, all in this file, while STATUS.md merged clean via its driver. Give it the driver, or restructure the rows.</td>
-</tr>
-<tr>
-<td><a id="Q592"></a>Q592</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/Makefile">No way to run one integration test without hand-assembling <code>KUBEBUILDER_ASSETS</code></a></td>
-<td><code>ci</code> <code>tests</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>make test-integration</code> runs a whole module; a targeted run means resolving setup-envtest by hand — three attempts in Q582 (wrong version, then a relative <code>--bin-dir</code> the test binary resolves from its own package dir). Add a <code>RUN=</code> passthrough.</td>
 </tr>
 <tr>
 <td><a id="Q650"></a>Q650</td>
