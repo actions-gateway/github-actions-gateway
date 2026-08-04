@@ -2977,12 +2977,28 @@
 <td>The other three §3.2 deliverables shipped (21 alert rules, SLO recording rules, runbook links). Panel JSON can be written against documented metric names; only validating that it renders needs a live Grafana, which dogfood can supply.</td>
 </tr>
 <tr>
-<td><a id="Q657"></a>Q657</td>
-<td><a href="../plan/eviction-oversubscription-validation/#scale-set-result-measured-2026-08-03">A kubelet eviction is not reliably ungraceful, so the ~10-minute figure is conditional</a></td>
-<td><code>tests</code> <code>docs</code></td>
+<td><a id="Q661"></a>Q661</td>
+<td><a href="../plan/eviction-oversubscription-validation/#the-17s-outlier-is-unattributable-q657-2026-08-03">The scale-set listener provisioned a second worker for a run that already had one</a></td>
+<td><code>bug</code> <code>tests</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Two runs of one spec on one build: 9m38s to conclusion with 20 paced re-run calls, and 17s with the re-run accepted first call — the graceful signature. Undiagnosed: the AGC log was not captured. Quantify the split, then qualify the design claim.</td>
+<td>Measured 2026-08-03: a worker for jobID <code>22463488</code> created 4s before the dispatch, Secret reclaimed and completion stamped the same second, then a second for <code>cec0e443</code>. GitHub ran the job on the first. Replayed queue message suspected, unverified.</td>
+</tr>
+<tr>
+<td><a id="Q657"></a>Q657</td>
+<td><a href="../plan/eviction-oversubscription-validation/#the-17s-outlier-is-unattributable-q657-2026-08-03">Repeat the eviction measurement now that the spec proves which worker it disrupted</a></td>
+<td><code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Three clean runs say lock TTL (9m36–9m45s); the lone 17s run predates the <code>runner_name</code> identity check, so "not reliably ungraceful" is unsupported, not refuted. Repeat with the check to see whether a fast conclusion recurs.</td>
+</tr>
+<tr>
+<td><a id="Q662"></a>Q662</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/foreground-guard.json">foreground-guard's <code>make .*\be2e</code> blocks the fast e2e targets too</a></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>It demands a 30-min timeout for <code>e2e-github-cleanup</code> (seconds), <code>e2e-cluster</code>, and <code>e2e-registry-delete</code> alike — only <code>make e2e</code> itself is slow. Narrow it, and assert both directions in <code>scripts/agent/foreground-guard-patterns-test.sh</code>.</td>
 </tr>
 <tr>
 <td><a id="Q448"></a>Q448</td>
@@ -3187,7 +3203,7 @@
 <td><a href="../plan/scaleset-eviction-recovery/#phase-3-fast-release-if-phase-1-justifies-it">Fast-release evicted jobs instead of waiting out the lock</a></td>
 <td><code>speed</code></td>
 <td>M</td>
-<td><strong>Event:</strong> a probe shows deregistering an evicted job's runner makes GitHub conclude before the lock TTL. Q396 measured 9m36-9m38s on both tiers, all of it GitHub's own detection. <code>cmd/probe</code> has the harness.</td>
+<td><strong>Event:</strong> a probe shows deregistering an evicted job's runner makes GitHub conclude before the lock TTL. Q396 measured 9m36-9m45s on both tiers, all of it GitHub's own detection. <code>cmd/probe</code> has the harness.</td>
 </tr>
 <tr>
 <td><a id="Q424"></a>Q424</td>

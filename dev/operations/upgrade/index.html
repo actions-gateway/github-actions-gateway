@@ -3858,7 +3858,7 @@ re-run again. Leftover <code>deletion-reason</code> annotations are inert on old
 <p>Previously the AGC fired <code>rerun-failed-jobs</code> exactly once, <code>evictionRetryDelay</code>
 (default 5s) after seeing a worker evicted. Against real GitHub that call always lost
 a race it could not win: an ungracefully killed runner reports nothing, GitHub
-concludes the run only when the job lock's TTL lapses (~10 minutes, measured 9m36-9m38s when the runner reports nothing),
+concludes the run only when the job lock's TTL lapses (~10 minutes, measured 9m36-9m45s when the runner reports nothing),
 and until then the API refuses re-runs with <code>403 This workflow is already running</code>.
 The retry budget was spent, <code>actions_gateway_eviction_retries_total</code> incremented, and
 the job was never re-run — every evicted job needed a manual re-run despite the
