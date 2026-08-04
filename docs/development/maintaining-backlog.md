@@ -2,7 +2,7 @@
 
 `docs/STATUS.md` is the single source of truth for project progress and priorities. It is high-contention — almost every session edits it — so keeping churn low matters as much as keeping it accurate.
 
-The format and process come from the globally-installed **backlog skill** (agents: invoke the `backlog` skill for the full playbook — grooming checklist, staleness signals, parallel dispatch, migration). The repo vendors the skill's tooling so the rules hold for every contributor, with or without the skill:
+The format and process come from the globally-installed **backlog skill** (agents: invoke the `backlog` skill for the full playbook: grooming checklist, staleness signals, parallel dispatch, migration). The repo vendors the skill's tooling so the rules hold for every contributor, with or without the skill:
 
 - [`scripts/docs/lint-backlog.sh`](../../scripts/docs/lint-backlog.sh) — enforces every format rule below. It selects the file and maps the environment interface onto flags; the rules themselves are [`devtools/docs/backloglint`](../../devtools/docs/backloglint/), whose package comment is the canonical rule list. Rows are read from the GFM table AST rather than split on a literal `|`, and cell lengths count characters rather than bytes (Q613). Runs in `make check` (`make lint-backlog`), CI ([`status-lint.yml`](../../.github/workflows/status-lint.yml) and `unit-test.yml`), and the pre-commit hook. The hook's `--staged` mode also rejects a staged set that carries `docs/STATUS.md` alongside other files — the index half of [the isolation rule](#isolated-commits-and-what-actually-enforces-them).
 - [`scripts/docs/check-status-isolation.sh`](../../scripts/docs/check-status-isolation.sh) — fails a branch whose commits mix the backlog with anything else. Backs `make status-isolation-check`; runs in `make check`, `make status-gates`, and [`status-lint.yml`](../../.github/workflows/status-lint.yml). [Why it exists next to the hook](#isolated-commits-and-what-actually-enforces-them).
@@ -10,7 +10,7 @@ The format and process come from the globally-installed **backlog skill** (agent
 - [`scripts/docs/find-duplicate-rows.sh`](../../scripts/docs/find-duplicate-rows.sh) — the near-duplicate search that allocation runs before it claims an ID. Advisory: it never blocks a filing. [How it is calibrated](#search-before-you-file).
 - [`scripts/docs/git-merge-status.sh`](../../scripts/docs/git-merge-status.sh) — a git merge driver that resolves Queue-table conflicts by row ID rather than by line position, and falls back to ordinary conflict markers for anything ambiguous. One-time `make merge-driver` per clone; a no-op until then. [Details below](#the-merge-driver-resolve-queue-rows-by-id-not-by-line-position).
 - [`scripts/docs/next-task.sh`](../../scripts/docs/next-task.sh) — prints a kickoff prompt (or `--title`) for the top ready 🔲 Queue row, for starting a fresh session on the next task.
-- [`scripts/docs/backlog-metrics.sh`](../../scripts/docs/backlog-metrics.sh) — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP). Read-only.
+- [`scripts/docs/backlog-metrics.sh`](../../scripts/docs/backlog-metrics.sh) — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP). Read-only. The replay reads each diff line's cells through the shared Markdown parse layer, so an escaped pipe in a cell cannot shift a row's fields (Q614).
 
 ## The shared process, in brief
 

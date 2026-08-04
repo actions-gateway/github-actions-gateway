@@ -123,3 +123,93 @@ func TestTablesAreOrderedForSectionLookup(t *testing.T) {
 		t.Errorf("second table section = %q, want Queue", got)
 	}
 }
+
+// A rule about a cell's *value* — an ID, a size letter, a title — reads Text
+// rather than Cells, so the markup a length budget must count is the same walk
+// away rather than a second parse.
+func TestTableCellText(t *testing.T) {
+	src := header + `| <a id="Q1"></a>Q1 | [Item](plan/x.md) | ` + "`ci`" +
+		` | 🔲 | S | note with a \| pipe |` + "\n"
+	tables := Parse([]byte(src)).Tables()
+	if len(tables) != 1 {
+		t.Fatalf("want 1 table, got %d", len(tables))
+	}
+	got := strings.Join(tables[0].Rows[0].Text, "\x1f")
+	want := "Q1\x1fItem\x1fci\x1f🔲\x1fS\x1fnote with a | pipe"
+	if got != want {
+		t.Errorf("text:\n got %q\nwant %q", got, want)
+	}
+}
+
+// ParseRow reads a row the replay pulls out of a diff hunk, where there is no
+// table around it to give the cells their width.
+func TestParseRow(t *testing.T) {
+	tests := []struct {
+		name  string
+		line  string
+		cells []string
+		text  []string
+		ok    bool
+	}{{
+		name:  "plain row",
+		line:  "| Q1 | Item | infra |",
+		cells: []string{"Q1", "Item", "infra"},
+		text:  []string{"Q1", "Item", "infra"},
+		ok:    true,
+	}, {
+		// The whole reason a lone row needs a parser: the naive split reports
+		// four cells here, shifting every field after the escape.
+		name:  "escaped pipe does not split the cell",
+		line:  `| Q1 | a \| b | infra |`,
+		cells: []string{"Q1", `a \| b`, "infra"},
+		text:  []string{"Q1", "a | b", "infra"},
+		ok:    true,
+	}, {
+		name:  "two escaped pipes",
+		line:  `| Q1 | a \| b \| c |`,
+		cells: []string{"Q1", `a \| b \| c`},
+		text:  []string{"Q1", "a | b | c"},
+		ok:    true,
+	}, {
+		name:  "anchor and link cells read as their values",
+		line:  `| <a id="Q1"></a>Q1 | [Item](plan/p.md) | S |`,
+		cells: []string{`<a id="Q1"></a>Q1`, "[Item](plan/p.md)", "S"},
+		text:  []string{"Q1", "Item", "S"},
+		ok:    true,
+	}, {
+		name:  "row without a trailing pipe",
+		line:  "| Q1 | Item",
+		cells: []string{"Q1", "Item"},
+		text:  []string{"Q1", "Item"},
+		ok:    true,
+	}, {
+		name: "prose is not a row",
+		line: "Just a sentence.",
+		ok:   false,
+	}, {
+		// A delimiter line is textually a row and reads as one out of context.
+		// Nothing here can tell it apart; the caller's own ID check is what
+		// rejects it, which is why the replay looks for a cell holding a Q-ID
+		// rather than trusting a row's shape.
+		name:  "a delimiter line reads as an ordinary row",
+		line:  "|---|---|",
+		cells: []string{"---", "---"},
+		text:  []string{"---", "---"},
+		ok:    true,
+	}}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := ParseRow(tc.line)
+			if ok != tc.ok {
+				t.Fatalf("ok = %t, want %t", ok, tc.ok)
+			}
+			if strings.Join(got.Cells, "\x1f") != strings.Join(tc.cells, "\x1f") {
+				t.Errorf("cells: got %q, want %q", got.Cells, tc.cells)
+			}
+			if strings.Join(got.Text, "\x1f") != strings.Join(tc.text, "\x1f") {
+				t.Errorf("text: got %q, want %q", got.Text, tc.text)
+			}
+		})
+	}
+}

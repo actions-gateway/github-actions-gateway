@@ -124,6 +124,50 @@ expect_eq 'deferred row is parked, not aging' \
 	'  parked in Deferred: 1 (excluded from aging WIP)' \
 	"$(grep 'parked in Deferred' <<<"$SUMMARY")"
 
+# --- shapes a positional `|` split gets wrong ---------------------------------
+
+REPO2="$WORKDIR/repo2"
+mkdir -p "$REPO2"
+git -C "$REPO2" init -q -b trunk
+
+# An escaped pipe inside a cell. Splitting the row on every `|` truncates the
+# title at the escape and shifts every field after it, so the row's size is read
+# out of the wrong cell.
+PIPE_ROW='| <a id="Q7"></a>Q7 | [Item A \| B](plan/p.md) | infra | 🔲 | S | notes |'
+
+{
+	printf '# Project Status\n\n## Queue\n\n'
+	printf '| ID | Item | Labels | St | Sz | Notes |\n|---|---|---|---|---|---|\n'
+	printf '%s\n' "$PIPE_ROW"
+	printf '\n## Deferred\n\n'
+	printf '| ID | Item | Labels | Sz | Trigger to revive |\n|---|---|---|---|---|\n'
+	printf '%s\n' "$(drow Q8)"
+	# A fenced row is documentation about the format, not a parked item.
+	# shellcheck disable=SC2016  # backticks are a Markdown fence, not a substitution
+	printf '\nHow a Deferred row looks:\n\n```\n%s\n```\n' "$(drow Q9)"
+} >"$REPO2/STATUS.md"
+git -C "$REPO2" add STATUS.md
+git -C "$REPO2" "${GIT_ID[@]}" commit -qm 'docs(status): add Q7, Q8'
+
+EVENTS2="$("$METRICS" --events "$REPO2/STATUS.md")"
+SUMMARY2="$("$METRICS" "$REPO2/STATUS.md")"
+
+field() {
+	awk -F'\t' -v id="$1" -v col="$2" '$1 == id { print $col; found = 1 }
+		END { if (!found) print "-" }' <<<"$EVENTS2"
+}
+
+expect_eq 'escaped pipe keeps the title whole' 'Item A | B' "$(field Q7 7)"
+expect_eq 'escaped pipe does not shift the size cell' S "$(field Q7 6)"
+expect_eq 'a fenced example row is not parked in Deferred' \
+	'  parked in Deferred: 1 (excluded from aging WIP)' \
+	"$(grep 'parked in Deferred' <<<"$SUMMARY2")"
+# The replay reads diff lines, which carry no document around them, so a fenced
+# row still registers as an arrival there. Pinned so a change to that boundary
+# is a deliberate one — every metric moves with it.
+expect_eq 'the replay itself sees the fenced row (line-based by construction)' \
+	open "$(field Q9 5)"
+
 if (( fails )); then
 	printf '%d failure(s)\n' "$fails" >&2
 	exit 1

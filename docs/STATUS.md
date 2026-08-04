@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `ci` `dogfood` `debt` `feature` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag) `1.3-gate` (blocks the [Release 1.3](plan/release-1.3.md) tag) `2.0-gate` (blocks the [`v2.0.0`](plan/v2-ga.md) tag)  
-**New IDs:** `make queue-id TITLE="…"` — it searches for near-duplicates, then claims ([why there is no counter here](development/queue-id-allocation.md))
+**New IDs:** `make queue-id TITLE="…"`: it searches for near-duplicates, then claims ([why there is no counter here](development/queue-id-allocation.md))
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/docs/lint-backlog.sh`.
 
@@ -45,7 +45,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [v1 sunset → v2-only](plan/v1-classic-sunset-review.md) | `debt` | ✅ |
 | [Worker right-sizing profiles](plan/runner-sizing-profiles.md) | `feature` | ✅ |
 | [Capacity-aware job intake](plan/capacity-aware-intake.md) | `feature` | ✅ |
-| [Markdown gates on a real parser](plan/markdown-gates-parser.md) | `milestone` `ci` `debt` | ⚠️ |
+| [Markdown gates on a real parser](plan/markdown-gates-parser.md) | `milestone` `ci` `debt` | ✅ |
 
 ---
 
@@ -73,7 +73,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q658"></a>Q658 | [`worker_capacity_declined` has no dashboard tile and no preview series](../deploy/monitoring/grafana-dashboard-tenant.json) | `docs` `debt` | 🔲 | S | Q643 shipped the `{reason}`-labelled gauge. The tenant condition row is full (4×w6): a 5th tile shifts every `gridPos` below y=52 and needs a `render.sh` re-shoot. Should `AwaitingProbe` alert? |
 | <a id="Q663"></a>Q663 | [`check-doc-links` counts a deleted-but-tracked file as existing](../scripts/docs/check-doc-links.sh) | `bug` `ci` | 🔲 | S | Measured: delete `bash-style.md` from the worktree, 5 files still link to it, gate exits 0. Q619 moved the scan list off `--cached`; the existence oracle still resolves a tracked-but-deleted path. |
 | <a id="Q644"></a>Q644 | [Nothing enforces that a `uses:` ref is a SHA rather than a tag](operations/release.md#supply-chain-integrity-of-the-pipeline-itself) | `security` `ci` | 🔲 | S | Measured under Q579: actionlint accepts `actions/checkout@v7.0.1` at exit 0 — it checks a ref is present and well-formed, not that it is 40-hex. Every ref is a SHA today, so the gap is latent; Dependabot cannot stop a tag being written. |
-| <a id="Q614"></a>Q614 | [`check-roadmap` and `backlog-metrics` parse markdown by regex](plan/markdown-gates-parser.md) | `ci` `debt` | 🔲 | S | The last two consumers move onto the shared parse layer: roadmap bullets with their `<!-- q:QN -->` annotations, and the metrics replay's table rows. No new dependency and no new gate wiring. |
 | <a id="Q625"></a>Q625 | [Nothing catches a gate's exit code read through a pipe](development/testing.md#the-status-you-report-is-a-claim-too) | `tests` `retro` | 🔲 | S | `make check \| tail` reports `tail`'s status, so a false green reads identical to a real one. The rule sits in CLAUDE.md and testing.md and a session tripped it anyway. Wants a PreToolUse warning when a gate is piped into `tail`/`head`/`grep`. |
 | <a id="Q665"></a>Q665 | [Nothing catches a force-push onto a base that went stale during the local gate](../CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open) | `debt` `retro` | 🔲 | S | Q653 wrote the rule; the slip happens at the push, in flow, not while reading CONTRIBUTING — same shape as Q625. Wants a PreToolUse warning when `HEAD..origin/main` is non-zero at `git push`. |
 | <a id="Q668"></a>Q668 | [Nothing catches an open PR that overlaps yours at `gh pr create`](../CONTRIBUTING.md#re-check-concurrent-work-before-opening-and-before-merging) | `debt` `retro` | 🔲 | S | Q543 wrote the rule; the slip happens at `gh pr create`, in flow, not while reading CONTRIBUTING — same shape as [Q625](#Q625)/[Q665](#Q665). Wants a PreToolUse warning when an open PR's files overlap `origin/main...HEAD`. |
