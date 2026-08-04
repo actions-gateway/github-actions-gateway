@@ -69,7 +69,8 @@ Second defect, latent: `awk`'s `length()` counts **bytes** on this host (BWK awk
 20200816) and **runes** under `gawk` in a UTF-8 locale. `STATUS.md` carries 52 em
 dashes, 51 🔲, 26 ✅. Measuring every cell exactly as the script extracts it, the
 longest is [Q555](../STATUS.md#Q555) at **249 bytes / 249 characters** — one byte of
-margin against the 250 cap, and [Q640](../STATUS.md#Q640) ties it on bytes at 249/245.
+margin against the 250 cap, and Q640 (measured before it shipped, so no row to link)
+tied it on bytes at 249/245.
 Nothing diverges today, but rows are routinely authored to fill the budget, and one at
 251/249 would pass in one environment and fail in the other.
 
