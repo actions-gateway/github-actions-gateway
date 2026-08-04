@@ -3187,8 +3187,11 @@ broken:</p>
 <p>Only the PR gate is strict. The deploy job builds a tag's own docs, and a release
 cut before this gate existed must stay publishable.</p>
 <p><code>mkdocs.yml</code>'s <code>validation</code> block is what makes this fail at all: MkDocs reports
-these as INFO by default, invisible under a green build. <code>absolute_links</code> and the
-<code>nav</code> keys keep their defaults deliberately.</p>
+these as INFO by default, invisible under a green build. The same block raises
+<code>nav.omitted_files</code> for the nav-coverage gate
+(<a href="#what-belongs-in-nav">§ What belongs in <code>nav</code></a>); <code>absolute_links</code> and
+<code>nav.not_found</code> keep their defaults deliberately, the latter because it already
+defaults to <code>warn</code>.</p>
 <p>Neither gate covers a link to a page the build's own scope excludes — MkDocs
 clamps that one below warning level whatever <code>validation</code> says. That is
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/source_links.py"><code>hooks/source_links.py</code></a>'s job instead; see
@@ -3270,11 +3273,25 @@ either in it or declared in <code>not_in_nav</code>. Two kinds are declared:</p>
 </ul>
 <p>Everything else in <code>nav</code>. That makes MkDocs' "pages exist in the docs directory,
 but are not included in the <code>nav</code> configuration" list the accidental omissions
-only, and <strong>the list should be empty</strong> — treat an entry as a page a reader can
-now reach only by search or URL. Q562 was three such pages (the admission-policy
-matrix, Appendix H, the protocol-dependency register) sitting unnoticed in it.
-MkDocs reports this at INFO, so it never fails the build; read the
-<code>make docs-build</code> output after adding a page.</p>
+only, and <strong>the list must be empty</strong> — an entry is a page a reader can now reach
+only by search or URL. Q562 was three such pages (the admission-policy matrix,
+Appendix H, the protocol-dependency register) sitting unnoticed in it.</p>
+<p><strong>That is a gate, not a habit</strong> (Q563). MkDocs reports the list at INFO, which
+never fails a build, so <code>mkdocs.yml</code> raises <code>validation.nav.omitted_files</code> to
+<code>warn</code> and <code>--strict</code> turns it into an error — the same INFO-to-warning move
+<a href="#the-two-link-gates">§ The two link gates</a> makes for links. Add a page and
+<code>make docs-build</code> fails until it is either in <code>nav</code> or declared in <code>not_in_nav</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>The following pages exist in the docs directory, but are not included in the &quot;nav&quot; configuration:
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  - operations/your-new-page.md
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>Aborted with 1 warnings in strict mode!
+</code></pre></div>
+<p>Both scopes are checked, because nav coverage is decided per build: a
+<code>development/</code> page is a page only on <code>dev</code>, so the release-scope build cannot
+see it. <code>not_in_nav</code> is what suppresses the report for a deliberate omission, so
+it stays populated — the empty list is MkDocs' <em>reported</em> one, never this key.
+The one inert entry is <code>/README.md</code>: MkDocs drops <code>docs/README.md</code> as an
+<code>index.md</code> conflict before nav is evaluated, so it reaches no scope's list and is
+kept only to mirror <code>exclude_docs</code>.</p>
 <h3 id="the-backlog-page">The backlog page<a class="headerlink" href="#the-backlog-page" title="Permanent link">&para;</a></h3>
 <p><code>docs/STATUS.md</code> renders at
 <a href="https://actions-gateway.com/dev/STATUS/"><code>/dev/STATUS/</code></a> with filter chips over

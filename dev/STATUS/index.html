@@ -2887,14 +2887,6 @@
 <td>picomatch degrades <code>cmd/**.go</code> to a <code>*</code> that cannot cross <code>/</code>, so it gates on nothing while reading as every Go file under <code>cmd/</code>. Assertion 3 passes — the literal prefix exists. No instance today (measured); wants a check-path-filters assertion.</td>
 </tr>
 <tr>
-<td><a id="Q563"></a>Q563</td>
-<td><a href="../development/website/#what-belongs-in-nav">Nothing gates a published page that lands in no nav section</a></td>
-<td><code>docs</code> <code>ci</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>MkDocs reports an unlisted page at INFO, invisible under a green build — that is how Q562's three operator pages hid. <code>not_in_nav</code> declares every deliberate omission, so the list should be empty; fail <code>docs-preview.sh build</code> when it is not.</td>
-</tr>
-<tr>
 <td><a id="Q590"></a>Q590</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go"><code>E2E_SKIP_TEARDOWN=true</code> leaves state that fails the next suite run</a></td>
 <td><code>tests</code> <code>retro</code></td>
