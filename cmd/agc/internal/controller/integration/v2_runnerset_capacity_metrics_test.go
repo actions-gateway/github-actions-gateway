@@ -17,7 +17,7 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// Q319: the RunnerSet worker-capacity gauges, proven against a real apiserver with
+// Q319/Q643: the RunnerSet worker-capacity gauges, proven against a real apiserver with
 // the reconciler writing the conditions the collector reads. The collector is
 // registered into a throwaway registry (the scale-set tests' pattern) rather than
 // scraped from the global controller-runtime one, so a series here belongs to this
@@ -27,6 +27,7 @@ const (
 	familyQuotaPressure = "actions_gateway_runnerset_worker_quota_pressure"
 	familyQuotaExceeded = "actions_gateway_runnerset_worker_quota_exceeded"
 	familyUnschedulable = "actions_gateway_runnerset_workers_unschedulable"
+	familyDeclined      = "actions_gateway_runnerset_worker_capacity_declined"
 )
 
 // runnerSetCapacityGauge returns the value reg currently exposes for the named gauge
@@ -65,6 +66,46 @@ func requireCapacityGauge(t *testing.T, reg *prometheus.Registry, family, ns, na
 	got, ok := runnerSetCapacityGauge(reg, family, ns, name)
 	require.True(t, ok, "%s must be emitted for %s/%s", family, ns, name)
 	require.Equal(t, want, got, "%s for %s/%s", family, ns, name)
+}
+
+// declinedGauge returns the reason label and value of the single capacity-gate series
+// at (ns, name), and whether any such series exists. The family carries one series per
+// gated set — the condition's current reason — so more than one match means the
+// collector is emitting a reason it should have replaced, which the caller fails on.
+func declinedGauge(t *testing.T, reg *prometheus.Registry, ns, name string) (string, float64, bool) {
+	t.Helper()
+	fams, err := reg.Gather()
+	require.NoError(t, err)
+
+	var reason string
+	var value float64
+	found := 0
+	for _, f := range fams {
+		if f.GetName() != familyDeclined {
+			continue
+		}
+		for _, m := range f.GetMetric() {
+			var gotNS, gotSet, gotReason string
+			for _, l := range m.GetLabel() {
+				switch l.GetName() {
+				case "namespace":
+					gotNS = l.GetValue()
+				case "runner_set":
+					gotSet = l.GetValue()
+				case "reason":
+					gotReason = l.GetValue()
+				}
+			}
+			if gotNS == ns && gotSet == name {
+				reason, value = gotReason, m.GetGauge().GetValue()
+				found++
+			}
+		}
+	}
+	require.LessOrEqual(t, found, 1,
+		"%s must carry exactly one series per gated set; a reason change replaces the series rather than adding one",
+		familyDeclined)
+	return reason, value, found == 1
 }
 
 // newCapacityGaugeRegistry registers a fresh collector reading through the direct
@@ -168,4 +209,96 @@ func TestV2_RunnerSet_CapacityGauges_WorkersUnschedulable(t *testing.T) {
 	// No ResourceQuota constrains this namespace, so the quota families stay 0 while
 	// the scheduler signal is True — the three gauges do not move together.
 	requireCapacityGauge(t, reg, familyQuotaExceeded, ns, setName, 0)
+}
+
+// TestV2_RunnerSet_CapacityGauges_DeclinedCarriesReason is Q643: the capacity-gate
+// condition's own gauge, walked through all three states an operator has to tell apart.
+//
+// The reason label is the whole point of the fourth family, and the latch is what
+// proves it. A bare 1/0 would report the same value for a live decline and for the
+// latched AwaitingProbe state, which are different situations with different remedies:
+// one has stuck pods to go look at, the other has none — its evidence was reaped — and
+// intake is throttled to one probe job per deadline window rather than gated on a
+// present verdict. The sibling gauge is the control: WorkersUnschedulable falls back to
+// 0 at the reap while this one stays 1, so an operator watching only the scheduler
+// signal sees the set as recovered while its intake is still throttled.
+//
+// A fixed-size gateway selects the scheduler-verdict signal, so the decline follows
+// from the pod alone with no autoscaler Event to stage. The 30s deadline gives a 15s
+// scheduling grace and a further 15s before the reaper deletes the pod; the live
+// decline is asserted inside that second window and the latch after it.
+func TestV2_RunnerSet_CapacityGauges_DeclinedCarriesReason(t *testing.T) {
+	const ns = "v2-rs-cap-gauge-declined"
+	const setName = "gauge-gated-set"
+	const ungatedName = "gauge-ungated-set"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newFixedSizeGatewayForSet("gw", ns)))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+
+	rs := newRunnerSet(setName, ns, "gw")
+	rs.Spec.MaxWorkers = ptr.To(int32(3))
+	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeObserve}
+	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 30 * time.Second}
+	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+
+	// The negative control, and the reason the family is emitted conditionally: a set
+	// that never opted in carries no condition at all, so it must produce no series —
+	// a 0 here would read as "gate evaluated, capacity available" on every ungated set.
+	ungated := newRunnerSet(ungatedName, ns, "gw")
+	require.NoError(t, k8sClient.Create(ctx, ungated))
+
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), ungated)
+		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconciler(t)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, ungatedName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	reg := newCapacityGaugeRegistry(t)
+
+	// An open gate publishes an explicit 0 under its own reason, so a dashboard can
+	// tell "evaluated and not gating" from "no gate here".
+	require.Eventually(t, func() bool {
+		reason, v, ok := declinedGauge(t, reg, ns, setName)
+		return ok && v == 0 && reason == v2alpha1.ReasonCapacityAvailable
+	}, 20*time.Second, 200*time.Millisecond,
+		"an opted-in set with no stuck pod must read 0 on %s under reason=%s",
+		familyDeclined, v2alpha1.ReasonCapacityAvailable)
+
+	_, _, ok := declinedGauge(t, reg, ns, ungatedName)
+	require.False(t, ok, "a set with no spec.capacityGate must emit no %s series at all", familyDeclined)
+	requireCapacityGauge(t, reg, familyUnschedulable, ns, ungatedName, 0)
+
+	// --- the live decline -----------------------------------------------------
+	pod := createV2WorkerPod(t, ns, setName, "worker-gauge-declined")
+	markUnschedulable(t, pod, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
+
+	require.Eventually(t, func() bool {
+		reason, v, ok := declinedGauge(t, reg, ns, setName)
+		return ok && v == 1 && reason == v2alpha1.ReasonPodsUnschedulable
+	}, 25*time.Second, 100*time.Millisecond,
+		"a pod the scheduler cannot place must read 1 on %s under reason=%s",
+		familyDeclined, v2alpha1.ReasonPodsUnschedulable)
+	requireCapacityGauge(t, reg, familyUnschedulable, ns, setName, 1)
+
+	// --- the latch, once the reaper deletes the gate's own evidence -----------
+	require.Eventually(t, func() bool {
+		reason, v, ok := declinedGauge(t, reg, ns, setName)
+		return ok && v == 1 && reason == v2alpha1.ReasonAwaitingProbe
+	}, 30*time.Second, 100*time.Millisecond,
+		"reaping the declined worker pod must latch %s at 1 under reason=%s, not clear it",
+		familyDeclined, v2alpha1.ReasonAwaitingProbe)
+
+	// The sibling gauge has already recovered — which is exactly what the reason label
+	// buys: without it, this state is indistinguishable from a live decline, and the
+	// scheduler signal alone reports the set as healthy while its intake is throttled.
+	requireCapacityGauge(t, reg, familyUnschedulable, ns, setName, 0)
+	_, _, ok = declinedGauge(t, reg, ns, ungatedName)
+	require.False(t, ok, "the ungated set must still emit no %s series", familyDeclined)
 }
