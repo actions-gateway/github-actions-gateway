@@ -186,6 +186,14 @@ Rows that name an unknown are honest and useful — several in the Queue say "un
 
 **The title carries a claim too, and it is the half that gets read.** A picker reads the Item cell, names the branch, commit and PR after it, and may never re-read the Notes. Q656 was filed with a sound measurement in its Notes (two rows took Q644; the loser renumbered across a commit, a PR body and a plan doc) under a title asserting a mechanism nobody had checked: "`make queue-id` reports a free ID but reserves nothing". The reservation existed and worked, an atomic ref claim with 240 live IDs, so the title named a defect the code did not have while the Notes named one it did. When the cause is unverified, title the row with the symptom: "two sessions took the same Q-ID" survives being wrong about why, and still sends the next session to the right place.
 
+### A row proposing a gate names what must stay green
+
+A row whose deliverable is a new assertion is a spec, and the hard half of an assertion is its false-positive boundary rather than the defect it catches. Name both: the shape that must go red, and a shape already in the tree that must stay green.
+
+**A rule phrased in prose can be tightened as it is restated; a named control cannot.** Q659 asked for an assertion against a "mid-pattern `**`" in a filter glob, which is right, because picomatch expands a pattern-initial `**` normally. By the time it was implemented the rule had been restated as "`**` is only meaningful as a whole path segment", which is the same rule with the exemption dropped. A gate built to it would have failed `make check` on arrival, since `plan-hygiene.yml`'s `plan` filter is `'**.go'`. The measured table the row linked did carry the exemption, so nothing was lost permanently, but re-deriving the boundary cost a survey of every filter in the tree. One control in the Notes, "`'**.go'` must stay green", would have survived the restatement intact.
+
+This is the same reason a gate's own tests assert both directions ([testing.md](testing.md#a-bulk-mechanical-change-proves-itself-by-reconciliation-not-by-an-empty-leftover-query)): a gate that cannot go red is unfalsifiable, and a gate that cannot stay green is unshippable.
+
 ## Flake fixes go first
 
 When a CI flake is observed (test passes on rerun, no code change in between), file it as a Queue item **and move it to the top of the Queue** before continuing other work. Then pick it up next. Flake cost compounds: a 1-hour fix saves cumulative CI wait + diagnosis + context-switch overhead across every future PR that hits it. This overrides default ordering even over critical security items — those are typically M/L-sized and themselves benefit from flake-free CI. Annotate the row's Notes with "**Top of queue per flakes-first rule**" linking this section.
