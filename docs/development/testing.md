@@ -1629,10 +1629,14 @@ The whole-workspace half of that is now mechanical: the [path-filter gate](#the-
 ```bash
 gh pr view <n> --json headRefOid --jq .headRefOid   # the SHA every check must be attached to
 gh pr checks <n>                                    # are the expected gates PRESENT — not merely un-red?
-gh run list --branch <branch> --limit 30            # cross-check which workflows actually ran, and on which SHA
+gh run list --commit <sha> --limit 30               # which workflows actually ran, for THAT commit only
 ```
 
 Read the output as a **checklist against the expected set above**, not as a pass/fail summary. A PR with zero rows, or with only the lightweight docs workflows listed, has not been tested — it just has nothing to fail.
+
+**Filter the runs by commit, not by branch.** `gh run list --branch <branch>` lists every run the branch has ever had, so after a rebase heal and force-push it still shows the superseded runs, and a success from the pre-rebase head reads as a success on the code you are about to merge. `--commit <sha>` is the flag that answers the question asked. Do not hand-roll the equivalent as a `--jq` filter on `headSha`: a malformed expression matches everything and exits 0, which produces a confident, wrong "the heavy gates ran".
+
+**Check at the sentinel's `ready` wake, not straight after opening the PR.** For the first minute or so every check is `pending` or `queued`, which looks identical to the gates being absent and invites a `sleep`-then-recheck loop — the thing [Never foreground-poll CI, logs, or files](#never-foreground-poll-ci-logs-or-files) forbids, and which foreground-guard blocks. The watcher's `ready` event already means checks concluded, so it is both the earliest and the cheapest moment for this verification.
 
 **A skipped job does not mean its steps did not run — resolve the step's owning job, not its file.** `gh pr checks` reports *job* names, and a `make` target's home is a job, not a workflow file: grepping `unit-test.yml` for `scripts-test` finds it, but that step lives in the same file's **`shellcheck`** job, so a skipped `unit-test` says nothing about whether the scripts tests ran. Reading the workflow source to answer "did my test run?" gives the wrong answer in exactly the case you are checking. Resolve it from the run:
 
