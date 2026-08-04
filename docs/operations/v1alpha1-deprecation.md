@@ -119,6 +119,32 @@ write that still names a deprecated value, and the warning names `v3.0.0`.
   Adopting `ScaleSet` for a migrated group is a distinct, later step (create a fresh
   single-label set), never a side effect of migrating off `v1alpha1`.
 
+### Two `v1alpha1` fields are inert
+
+Both are in the served schema, both do nothing, and neither gains a behaviour before
+`v2.0.0` removes the version. They are called out because the schema alone does not
+say so: one is rejected at admission despite reading like a supported knob, and the
+other is a status field the GMC never writes.
+
+| Field | What it actually does | Read instead |
+|---|---|---|
+| `ActionsGateway.spec.gitHubAppRef.namespace` | Nothing. Any non-empty value is **rejected by the GMC validating webhook** on create and on update. The Secret always resolves in the `ActionsGateway`'s own namespace. | Leave it unset and put the Secret in the gateway's namespace. |
+| `ActionsGateway.status.activeSessions` | Nothing. The GMC never sets it, so it is absent from every gateway. It is not a count that happens to be zero. | `status.activeSessions` on each `RunnerGroup`, or the `actions_gateway_active_sessions` metric ([observability-metrics](observability-metrics.md)). |
+
+**An alert or dashboard reading `ActionsGateway.status.activeSessions` is reading a
+field no controller populates**, so it reports absent (or zero) no matter how busy
+the gateway is. Point it at the per-`RunnerGroup` field or the metric instead.
+
+Neither field is carried into v2. `v2beta1` replaces `SecretReference` with the
+name-only `LocalSecretReference`, which has no `namespace` at all, and
+`ActionsGatewayStatus` simply omits `activeSessions`. So migrating with
+[`gag-migrate`](migration-v1-to-v2.md) needs no action for either: there is nothing
+to carry across.
+
+They stay in `v1alpha1` rather than being deleted now because [removing a field from
+a served version is a breaking change](../development/api-review.md#removal-needs-a-version-increment-not-a-promise).
+The removal is the version's own, at `v2.0.0`.
+
 ## Why v2 (what the decomposition buys)
 
 - **Reusable pod templates.** The large `PodTemplateSpec` moves to a referenced
