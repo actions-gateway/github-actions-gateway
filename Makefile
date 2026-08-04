@@ -112,7 +112,7 @@ CHECK_FAST_GATES := lint-backlog status-isolation-check roadmap-check \
                     v2-api-sync-check path-filters-check gate-lists-check shellcheck \
                     actionlint chart-crds-check chart-rbac-check chart-webhook-check \
                     codegen-check api-reference-check scripts-test claude-usage-test \
-                    doc-links release-pins-check
+                    doc-links release-pins-check em-dash-check
 CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
 .PHONY: check
@@ -174,6 +174,24 @@ status-gates: ## Every gate a docs/STATUS.md-only change can fail — the second
 .PHONY: doc-links
 doc-links: ## Fail on broken relative links / heading anchors in tracked Markdown
 	scripts/docs/check-doc-links.sh
+
+# Em-dash density gate (Q654). documentation-standards.md rations the em-dash
+# and names a threshold, and nothing enforced it. The counter reads the parsed
+# document, so code, headings, link text and raw HTML are excluded — a raw
+# `grep -o` counts all four and is why the rule stayed unmeasurable. The tree is
+# above the rule today, so the gate ratchets against per-file ceilings in
+# scripts/docs/em-dash-baseline.txt; Q650 is the cleanup that empties them.
+.PHONY: em-dash-check
+em-dash-check: ## Fail when a doc gains em-dashes above its baseline, or a new doc is over the density rule
+	scripts/docs/check-em-dash.sh
+
+.PHONY: em-dash-baseline
+em-dash-baseline: ## Re-record the per-file em-dash ceilings; the diff is what the cleanup cleared
+	scripts/docs/check-em-dash.sh --write
+
+.PHONY: em-dash-report
+em-dash-report: ## Print every doc's em-dash density, worst first — the worklist for the cleanup
+	scripts/docs/check-em-dash.sh --report
 
 # The install/upgrade pages transcribe the chart version, image tag, and
 # release-notes URL by hand, and nothing bumped them: v1.3.0 shipped with
@@ -293,7 +311,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-path-filters-test ci/dependabot-rebase-stale-test \
                  ci/gate-list-test ci/shellcheck-scripts-test \
                  docs/backlog-metrics-test docs/check-doc-links-test \
-                 docs/check-release-links-test \
+                 docs/check-em-dash-test docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
                  docs/alloc-queue-id-test docs/check-status-isolation-test \
