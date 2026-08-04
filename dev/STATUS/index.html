@@ -2703,30 +2703,6 @@
 </thead>
 <tbody>
 <tr>
-<td><a id="Q631"></a>Q631</td>
-<td><a href="../plan/gke-dogfood/#part-f--e2e-on-gke-kata-containers">The release gate starves itself: routed CI and the e2e leg draw on one global CPU budget</a></td>
-<td><code>dogfood</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Deploy routes CI to GAG, scaling <code>workers</code> to 8 (32 vCPU) out of the same <code>CPUS_ALL_REGIONS</code> the e2e pool then needs. Cost two rc.5 runs at the old limit of 32. Raised to 64, so 52 worst case now fits — but nothing caps the competition.</td>
-</tr>
-<tr>
-<td><a id="Q645"></a>Q645</td>
-<td><a href="../plan/release-1.3/#the-rc5-re-run-2026-08-02">Nothing has measured what the run service does with an <code>abandoned</code> completion</a></td>
-<td><code>dogfood</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q628 releases an unrun worker's assignment with <code>result=abandoned</code>; whether GitHub re-dispatches or concludes the run is unmeasured, and decides whether a re-run arm is also needed. Measurable on a turn-up: reap a Pending worker, watch the run.</td>
-</tr>
-<tr>
-<td><a id="Q637"></a>Q637</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">The release gate asserts nothing about the capacity gate or the namespace-quota rung</a></td>
-<td><code>dogfood</code> <code>tests</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><code>validate-release.sh</code> has zero references to <code>capacityGate</code>, <code>nodeAutoscaling</code> or quota; its legs are deploy, e2e, sizing, CRD smoke. It builds an autoscaling cluster with headroom, so the constrained path is never driven on real infra.</td>
-</tr>
-<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code></td>
@@ -2751,12 +2727,76 @@
 <td>Q603 closed the graceful half; a hard kill between <code>settle</code> and its <code>DELETE</code> remains, and no ordering can close it. Q597 bounded the guards, so persisting them is the sharper candidate; the other needs a live measurement. The plan doc states which.</td>
 </tr>
 <tr>
+<td><a id="Q661"></a>Q661</td>
+<td><a href="../plan/eviction-oversubscription-validation/#the-17s-outlier-is-unattributable-q657-2026-08-03">The scale-set listener provisioned a second worker for a run that already had one</a></td>
+<td><code>bug</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Measured 2026-08-03: a worker for jobID <code>22463488</code> created 4s before the dispatch, Secret reclaimed and completion stamped the same second, then a second for <code>cec0e443</code>. GitHub ran the job on the first. Replayed queue message suspected, unverified.</td>
+</tr>
+<tr>
 <td><a id="Q595"></a>Q595</td>
 <td><a href="../operations/troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">The cancel runbook's manual pod delete may re-run the job GitHub cancelled</a></td>
 <td><code>bug</code> <code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>A hand-deleted worker matches <code>externallyDeletedBeforeTerminal</code> (source-read, unmeasured), so Q502 calls <code>rerun-failed-jobs</code> for a run an operator deliberately stopped. Measure whether GitHub honours it for a <code>cancelled</code> conclusion.</td>
+</tr>
+<tr>
+<td><a id="Q631"></a>Q631</td>
+<td><a href="../plan/gke-dogfood/#part-f--e2e-on-gke-kata-containers">The release gate starves itself: routed CI and the e2e leg draw on one global CPU budget</a></td>
+<td><code>dogfood</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Deploy routes CI to GAG, scaling <code>workers</code> to 8 (32 vCPU) out of the same <code>CPUS_ALL_REGIONS</code> the e2e pool then needs. Cost two rc.5 runs at the old limit of 32. Raised to 64, so 52 worst case now fits — but nothing caps the competition.</td>
+</tr>
+<tr>
+<td><a id="Q645"></a>Q645</td>
+<td><a href="../plan/release-1.3/#the-rc5-re-run-2026-08-02">Nothing has measured what the run service does with an <code>abandoned</code> completion</a></td>
+<td><code>dogfood</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q628 releases an unrun worker's assignment with <code>result=abandoned</code>; whether GitHub re-dispatches or concludes the run is unmeasured, and decides whether a re-run arm is also needed. Measurable on a turn-up: reap a Pending worker, watch the run.</td>
+</tr>
+<tr>
+<td><a id="Q637"></a>Q637</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">The release gate asserts nothing about the capacity gate or the namespace-quota rung</a></td>
+<td><code>dogfood</code> <code>tests</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>validate-release.sh</code> has zero references to <code>capacityGate</code>, <code>nodeAutoscaling</code> or quota; its legs are deploy, e2e, sizing, CRD smoke. It builds an autoscaling cluster with headroom, so the constrained path is never driven on real infra.</td>
+</tr>
+<tr>
+<td><a id="Q401"></a>Q401</td>
+<td><a href="../operations/node-shutdown-budgets/">File upstream k8s issue: delete-path probe results never reach <code>Ready</code></a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q388 measured: on ordinary delete the probe fails throughout termination but <code>Ready</code> never flips; removal comes from <code>deletionTimestamp</code>. k8s#124648 covers only eviction. Head of the upstream-report batch — file all four in one session.</td>
+</tr>
+<tr>
+<td><a id="Q402"></a>Q402</td>
+<td><a href="../operations/troubleshooting/">GKE DPv2 NodeLocal DNSCache NP repro — file against Google's docs</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Google's NodeLocal DNSCache page names DPv2 as exempt from extra NP rules; Q229 measured the opposite (node-local-dns peer required). Capture a minimal repro w/ cluster version and report it — a default-on footgun on Autopilot.</td>
+</tr>
+<tr>
+<td><a id="Q426"></a>Q426</td>
+<td><a href="../development/queue-id-allocation/">File a <code>claude-skills</code> issue: backlog skill teaches the removed <code>Next ID</code> counter</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Report it against <a href="https://github.com/karlkfi/claude-skills">karlkfi/claude-skills</a>, where the skill lives. CLAUDE.md overrides it here so sessions stay correct, but the skill and its vendored lint drift until upstream updates.</td>
+</tr>
+<tr>
+<td><a id="Q531"></a>Q531</td>
+<td><a href="../plan/capacity-aware-intake/#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">File upstream: karpenter kwok chart panics on its own defaults</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>At v1.14.0 the chart renders <code>featureGates.staticCapacity</code>/<code>.capacityBuffer</code> into <code>FEATURE_GATES</code> but values.yaml omits both keys; the empty string panics the controller at startup. Q479's harness sets them explicitly as a workaround.</td>
 </tr>
 <tr>
 <td><a id="Q539"></a>Q539</td>
@@ -2895,44 +2935,12 @@
 <td>Phase 2 of the page-boundary split: the Queue is read top-down to pick work; the parked rows under it are only grepped on a trigger. Needs <code>check-roadmap.sh</code> given a second path, rule 8 spanning two files, <code>#QNNN</code> links retargeted.</td>
 </tr>
 <tr>
-<td><a id="Q401"></a>Q401</td>
-<td><a href="../operations/node-shutdown-budgets/">File upstream k8s issue: delete-path probe results never reach <code>Ready</code></a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q388 measured: on ordinary delete the probe fails throughout termination but <code>Ready</code> never flips; removal comes from <code>deletionTimestamp</code>. k8s#124648 covers only eviction. Head of the upstream-report batch — file all four in one session.</td>
-</tr>
-<tr>
-<td><a id="Q402"></a>Q402</td>
-<td><a href="../operations/troubleshooting/">GKE DPv2 NodeLocal DNSCache NP repro — file against Google's docs</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Google's NodeLocal DNSCache page names DPv2 as exempt from extra NP rules; Q229 measured the opposite (node-local-dns peer required). Capture a minimal repro w/ cluster version and report it — a default-on footgun on Autopilot.</td>
-</tr>
-<tr>
-<td><a id="Q426"></a>Q426</td>
-<td><a href="../development/queue-id-allocation/">File a <code>claude-skills</code> issue: backlog skill teaches the removed <code>Next ID</code> counter</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Report it against <a href="https://github.com/karlkfi/claude-skills">karlkfi/claude-skills</a>, where the skill lives. CLAUDE.md overrides it here so sessions stay correct, but the skill and its vendored lint drift until upstream updates.</td>
-</tr>
-<tr>
-<td><a id="Q531"></a>Q531</td>
-<td><a href="../plan/capacity-aware-intake/#9i-the-karpenter-arm-of-the-drift-gate-and-what-it-measured-q479">File upstream: karpenter kwok chart panics on its own defaults</a></td>
-<td><code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>At v1.14.0 the chart renders <code>featureGates.staticCapacity</code>/<code>.capacityBuffer</code> into <code>FEATURE_GATES</code> but values.yaml omits both keys; the empty string panics the controller at startup. Q479's harness sets them explicitly as a workaround.</td>
-</tr>
-<tr>
 <td><a id="Q660"></a>Q660</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">Three <code>scripts/</code> groups have no table, so the doc-update-matrix step that adds one is unfollowable</a></td>
-<td><code>docs</code> <code>debt</code></td>
+<td><code>docs</code> <code>debt</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>dogfood/</code>, <code>lib/</code> and <code>updatecli/</code> appear only as directory rows; row 18 of the matrix tells a contributor to add a row to a per-script table that does not exist for them. Hit while adding <code>dogfood/lib/lease.sh</code>.</td>
+<td><code>dogfood/</code>, <code>lib/</code> and <code>updatecli/</code> appear only as directory rows, so the matrix step sending a new script to its group's table points at one they lack: #1106, Q581 and <code>dogfood/lib/lease.sh</code> each added none. Give them tables, or name the exception.</td>
 </tr>
 <tr>
 <td><a id="Q599"></a>Q599</td>
@@ -2999,14 +3007,6 @@
 <td>The other three §3.2 deliverables shipped (21 alert rules, SLO recording rules, runbook links). Panel JSON can be written against documented metric names; only validating that it renders needs a live Grafana, which dogfood can supply.</td>
 </tr>
 <tr>
-<td><a id="Q661"></a>Q661</td>
-<td><a href="../plan/eviction-oversubscription-validation/#the-17s-outlier-is-unattributable-q657-2026-08-03">The scale-set listener provisioned a second worker for a run that already had one</a></td>
-<td><code>bug</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured 2026-08-03: a worker for jobID <code>22463488</code> created 4s before the dispatch, Secret reclaimed and completion stamped the same second, then a second for <code>cec0e443</code>. GitHub ran the job on the first. Replayed queue message suspected, unverified.</td>
-</tr>
-<tr>
 <td><a id="Q657"></a>Q657</td>
 <td><a href="../plan/eviction-oversubscription-validation/#the-17s-outlier-is-unattributable-q657-2026-08-03">Repeat the eviction measurement now that the spec proves which worker it disrupted</a></td>
 <td><code>tests</code></td>
@@ -3021,14 +3021,6 @@
 <td>🔲</td>
 <td>S</td>
 <td>It demands a 30-min timeout for <code>e2e-github-cleanup</code> (seconds), <code>e2e-cluster</code>, and <code>e2e-registry-delete</code> alike — only <code>make e2e</code> itself is slow. Narrow it, and assert both directions in <code>scripts/agent/foreground-guard-patterns-test.sh</code>.</td>
-</tr>
-<tr>
-<td><a id="Q448"></a>Q448</td>
-<td><a href="../plan/runner-sizing-profiles/#the-live-path-and-why-the-rc-gate-could-not-have-found-this">Tighten the e2e NodeShare envelope against a measured allocatable</a></td>
-<td><code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The declared 1500m÷1 envelope is a deliberate lower bound, so actuation can only reduce a worker's ask. Measure a live e2e node's allocatable, subtract the dind sidecar and Kata's 250m overhead, then raise it.</td>
 </tr>
 <tr>
 <td><a id="Q522"></a>Q522</td>
@@ -3127,14 +3119,6 @@
 <td>Q591 measured the <code>&lt;unknown&gt;</code> causes; the quota one needs its own repro. <code>FailedCreate ... exceeded quota</code>, <code>ReplicaFailure</code> with <code>exceeded quota</code>, and the "~30s" scrape cycle are unmeasured.</td>
 </tr>
 <tr>
-<td><a id="Q588"></a>Q588</td>
-<td><a href="../development/doc-update-matrix/">The doc-update-matrix directs a <code>scripts/README.md</code> row into a table <code>dogfood/</code> does not have</a></td>
-<td><code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Matrix row 17 says a new script gets a row in its group's table; <code>dogfood/</code> is a bare directory link with no table, so #1106 and Q581 each added a test script and silently added none. Give the group a table, or name the exception.</td>
-</tr>
-<tr>
 <td><a id="Q611"></a>Q611</td>
 <td><a href="../development/maintaining-backlog/"><code>docs/plan/README.md</code> has STATUS.md's contention and none of its merge tooling</a></td>
 <td><code>docs</code> <code>retro</code></td>
@@ -3203,6 +3187,13 @@
 <td><code>dogfood</code></td>
 <td>S</td>
 <td><strong>Event:</strong> the next dogfood recreate bootstraps from zero. The bounded retry ships and is unit-tested against faked probes; confirm the preflight prints <code>[WAIT]</code> then <code>PASS</code> inside the addon's ~2 min window, not WARN.</td>
+</tr>
+<tr>
+<td><a id="Q448"></a>Q448</td>
+<td><a href="../plan/runner-sizing-profiles/#the-live-path-and-why-the-rc-gate-could-not-have-found-this">Tighten the e2e NodeShare envelope against a measured allocatable</a></td>
+<td><code>tests</code> <code>dogfood</code></td>
+<td>S</td>
+<td><strong>Event:</strong> a dogfood turn-up stands an e2e node up — raising the envelope needs one live allocatable reading, less the dind sidecar and Kata's 250m. The 1500m÷1 lower bound sits under both static asks, so nothing is unschedulable meanwhile.</td>
 </tr>
 <tr>
 <td><a id="Q418"></a>Q418</td>
