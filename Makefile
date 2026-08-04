@@ -62,14 +62,10 @@ WRAPPER_IMG    ?= $(IMAGE_REGISTRY)/wrapper:e2e-$(GIT_SHA)
 
 .DEFAULT_GOAL := help
 
-.PHONY: all check hooks merge-driver generate manifests build build-agc build-gmc build-migrate build-probe build-proxy test test-race test-integration \
-        cover cover-update cover-check tools setup-envtest \
-        e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
-        docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo golangci-lint lint lint-backlog plan-index-check no-plan-refs-check release-pins-check release-links-check shellcheck actionlint queue-unblock queue-id \
-        api-reference api-reference-check \
-        third-party-notices third-party-notices-check vendor-check tidy-check \
-        vulncheck govulncheck trivy-scan polaris-scan manifest-validate
+# Every target declares its own `.PHONY` immediately above its rule. A bulk
+# block used to restate 53 of them here as well, which is why adding a gate meant
+# editing the list in two places and why concurrent gate-adding branches all
+# conflicted on this hunk (Q649). `gate-lists-check` fails if a name comes back.
 
 ##@ General
 
@@ -100,18 +96,26 @@ all: generate build test ## Generate, build, and test all modules
 # through scripts/ci/run-parallel.sh rather than `make -j` because macOS ships GNU
 # make 3.81, which has no `-O` output sync — `-j` would interleave two failing
 # gates' output unreadably, while run-parallel.sh labels every line with its
-# gate. The heavy phases (build-tags-check, lint, cover-check) stay sequential
-# after them: each takes a machine-wide slot of its own (serialize_heavy_build),
-# so overlapping them would just queue on the semaphore. build-tags-check runs
-# first of the three — a compile break should not wait out lint and the suite.
+# gate. The heavy phases stay sequential after them: each takes a machine-wide
+# slot of its own (serialize_heavy_build), so overlapping them would just queue
+# on the semaphore. build-tags-check runs first of the three — a compile break
+# should not wait out lint and the suite.
+#
+# These two variables are the single source of truth for what `make check` runs.
+# `make list-gates` renders them with each gate's own `##` description, so the
+# docs name that target instead of transcribing the list (Q649) — the same
+# reason STATUS_GATES exists below. `gate-lists-check` reconciles the recipe,
+# the .PHONY declarations and the doc pointer against them.
 CHECK_FAST_GATES := lint-backlog roadmap-check plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
-                    v2-api-sync-check path-filters-check shellcheck actionlint chart-crds-check \
-                    chart-rbac-check chart-webhook-check codegen-check api-reference-check \
-                    scripts-test claude-usage-test doc-links release-pins-check
+                    v2-api-sync-check path-filters-check gate-lists-check shellcheck \
+                    actionlint chart-crds-check chart-rbac-check chart-webhook-check \
+                    codegen-check api-reference-check scripts-test claude-usage-test \
+                    doc-links release-pins-check
+CHECK_HEAVY_GATES := build-tags-check lint cover-check
 
 .PHONY: check
-check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap/backlog coherence + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + no leftover conflict markers + v2 API package sync + CI path-filter coverage + build-tagged compile/vet + shellcheck + actionlint + chart-CRD/RBAC/webhook drift + controller-gen manifest/DeepCopy drift + API-reference drift + scripts-test + claude-usage tests + doc link/anchor check + release-pin freshness + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: ## Fast pre-review gate — `make list-gates` names every gate it runs and what each covers
 	scripts/ci/run-parallel.sh $(foreach gate,$(CHECK_FAST_GATES),"$(gate):$(MAKE) $(gate)")
 	$(MAKE) build-tags-check
 	$(MAKE) lint
@@ -121,6 +125,20 @@ check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap
 	@# run `make vendor-sync` when a change touches dep files. Never fails the build.
 	@scripts/ci/check-dep-advisory.sh
 
+.PHONY: list-gates
+list-gates: ## List every gate `make check` runs, in order, with what each one covers
+	@scripts/ci/gate-list.sh --list --fast '$(CHECK_FAST_GATES)' --heavy '$(CHECK_HEAVY_GATES)'
+
+# Keep the gate list from acquiring a second copy. The recipe above still names
+# the heavy phases line by line (one $(MAKE) each, so a `make -j check` cannot
+# overlap them), so this asserts those lines match CHECK_HEAVY_GATES, that the
+# fast phase runs nothing beyond the CHECK_FAST_GATES fan-out, that every gate is
+# a documented .PHONY target, that no target is declared .PHONY twice, and that
+# testing.md still points at `make list-gates` rather than re-transcribing.
+.PHONY: gate-lists-check
+gate-lists-check: ## Fail when `make check`'s gate list and its derived consumers disagree
+	scripts/ci/gate-list.sh --check --fast '$(CHECK_FAST_GATES)' --heavy '$(CHECK_HEAVY_GATES)' --status '$(STATUS_GATES)'
+
 # The complete set of gates a docs/STATUS.md-only diff can fail, so a backlog
 # edit can be verified in seconds instead of waiting out the full `make check`:
 #   lint-backlog          the format rules
@@ -129,11 +147,12 @@ check: ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + roadmap
 #   conflict-markers-check a marker survived an Edit-based conflict resolution
 #   doc-links             a #QN anchor or plan link broke while rows moved
 # Every entry is also in CHECK_FAST_GATES, so this is a strict subset of `make
-# check` and never a second opinion. It lives as a variable, and the docs point
-# at the target rather than transcribing the list, because a hand-copied list is
-# what drifted before: docs/development/maintaining-backlog.md named three of
-# these five and called that the complete set, so a `docs/STATUS.md` change that
-# parked a row shipped a PR red on roadmap-check.
+# check` and never a second opinion — `gate-lists-check` enforces the subset. It
+# lives as a variable, and the docs point at the target rather than transcribing
+# the list, because a hand-copied list is what drifted before:
+# docs/development/maintaining-backlog.md named three of these five and called
+# that the complete set, so a `docs/STATUS.md` change that parked a row shipped
+# a PR red on roadmap-check.
 STATUS_GATES := lint-backlog roadmap-check plan-index-check \
                  conflict-markers-check doc-links
 
@@ -266,7 +285,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  agent/qos-cluster-probe-test agent/validate-throttle-test \
                  ci/check-conflict-markers-test ci/check-dep-advisory-test \
                  ci/check-path-filters-test ci/dependabot-rebase-stale-test \
-                 ci/shellcheck-scripts-test \
+                 ci/gate-list-test ci/shellcheck-scripts-test \
                  docs/backlog-metrics-test docs/check-release-links-test \
                  docs/check-release-pins-test \
                  docs/check-roadmap-test docs/check-no-plan-refs-in-code-test \
@@ -288,7 +307,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  updatecli/latest-cluster-autoscaler-patch-test
 
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog near-duplicate search, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, dogfood e2e tenant teardown, dogfood cluster delete, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations, pinned cosign download path, release-verify artifact list, e2e JUnit summary rendering, e2e progress heartbeat, dogfood e2e run-watch relay, release-validation status render, release sentinel wake decisions, foreground-guard slow-command patterns, plan-path citation gate, release-pin freshness gate, release-note site-link resolution, release-gate ownership lease)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, backlog near-duplicate search, backlog metrics replay, dep-advisory, go-throttle hook, dogfood gate run resolution, dogfood pool sizing, dogfood worker-drain gate, dogfood AGC rollout wait, dogfood e2e tenant bring-up, dogfood e2e tenant teardown, dogfood cluster delete, go-lint scoping, shellcheck file selection, conflict-marker gate, v2 API sync gate, roadmap/backlog coherence gate, Dependabot bump extraction, build-tag coverage guard, pinned-download integrity, heavy-build slot sizing, announce-bar version hook, docs source-link rewrite, CI path-filter coverage, throttle instrument parsers, STATUS.md merge driver, codegen-drift recipe parsing, image-pull retry schedule, coverage profile split, cluster-autoscaler patch resolution, unreleased-delta derivations, pinned cosign download path, release-verify artifact list, e2e JUnit summary rendering, e2e progress heartbeat, dogfood e2e run-watch relay, release-validation status render, release sentinel wake decisions, foreground-guard slow-command patterns, plan-path citation gate, release-pin freshness gate, release-note site-link resolution, release-gate ownership lease, gate-list reconciliation)
 	scripts/ci/run-parallel.sh $(foreach suite,$(SCRIPTS_TESTS),"$(notdir $(suite)):scripts/$(suite).sh")
 
 # The claude-usage/ Python suite (Q437). That module is the committed record of

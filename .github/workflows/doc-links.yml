@@ -1,5 +1,7 @@
 # The docs-content gates: Markdown link + anchor integrity (Q52), release-pin
-# freshness (Q638), and release-note site-link resolution (Q636). Kept as their
+# freshness (Q638), release-note site-link resolution (Q636), and the gate-list
+# reconciliation (Q649), which is here because its two halves — the Makefile and
+# testing.md — are both covered by this workflow's triggers. Kept as their
 # own workflow rather than jobs in unit-test.yml: that workflow deliberately
 # path-ignores docs, so a docs-only change must trigger *these* lightweight
 # checks and nothing else — the Go suite never runs on a pure-docs PR. Mirrors
@@ -19,6 +21,7 @@ on:
       - 'scripts/docs/check-release-pins.sh'
       - 'scripts/docs/check-release-links.sh'
       - 'scripts/docs/docs-preview.sh'
+      - 'scripts/ci/gate-list.sh'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - 'Makefile'
@@ -31,6 +34,7 @@ on:
       - 'scripts/docs/check-release-pins.sh'
       - 'scripts/docs/check-release-links.sh'
       - 'scripts/docs/docs-preview.sh'
+      - 'scripts/ci/gate-list.sh'
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - 'Makefile'
@@ -57,6 +61,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: markdown links + anchors (make doc-links)
         run: make doc-links
+
+  # Reconcile `make check`'s gate list with everything derived from it (Q649).
+  # It lives here rather than in unit-test.yml's lint job because it spans the
+  # Makefile and a doc, and this is the only workflow whose triggers cover both:
+  # unit-test.yml path-ignores docs, so a docs-only change that dropped the
+  # `make list-gates` pointer would skip the gate that exists to catch it.
+  gate-lists:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: gate lists agree (make gate-lists-check)
+        run: make gate-lists-check
 
   # Assert the install/upgrade pages name the newest stable tag. fetch-depth: 0
   # is load-bearing: the gate derives the current release from the tags, and a
