@@ -121,6 +121,22 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 		}, 4*time.Minute, 3*time.Second).Should(Succeed())
 	})
 
+	// On failure, dump both tenants' state before AfterAll deletes their
+	// namespaces. Q664's stuck-Pending reap timeout left no evidence at all: the
+	// suite dumped nothing and the teardown below removed the namespace seconds
+	// later, so the CI log carried the timeout and nothing that could explain it.
+	// Both tenants are dumped because each spec reads a different one and the
+	// AfterEach cannot tell which failed.
+	AfterEach(func() {
+		if !CurrentSpecReport().Failed() {
+			return
+		}
+		for _, ns := range []string{stuckNS, cleanNS} {
+			dumpWorkerPodReapState(ns)
+			utils.DumpAGCSessionDiagnostics(ns, agcName, infraNamespace, fakegithubServiceName)
+		}
+	})
+
 	AfterAll(func() {
 		if lifecyclePFCmd != nil && lifecyclePFCmd.Process != nil {
 			_ = lifecyclePFCmd.Process.Kill()
@@ -202,6 +218,35 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 		}, 30*time.Second, 2*time.Second).Should(Succeed())
 	})
 })
+
+// dumpWorkerPodReapState writes the fields the reaper's decision is made from,
+// for every worker pod in ns. DumpAGCSessionDiagnostics runs `kubectl describe
+// pods`, which reports status.startTime but never metadata.creationTimestamp —
+// the field every pendingPodDeadline is measured from — so a reap timeout is
+// unreadable without this. Overdue pods say no reconcile reached the reaper; a
+// pod younger than the deadline says it was re-provisioned under the assertion;
+// and the deletion-reason stamp separates the third case, a reaper that marked
+// the pod and then failed to delete it (the stamp-then-delete order in
+// reapTarget.delete).
+func dumpWorkerPodReapState(ns string) {
+	cmd := exec.Command("kubectl", "get", "pods",
+		"-n", ns,
+		"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
+		"-o", `jsonpath={range .items[*]}{.metadata.name} phase={.status.phase}`+
+			` created={.metadata.creationTimestamp}`+
+			` deleting={.metadata.deletionTimestamp}`+
+			` reapReason={.metadata.annotations['actions-gateway\.com/deletion-reason']}`+
+			` jobCompletedAt={.metadata.annotations['actions-gateway\.com/job-completed-at']}`+
+			`{"\n"}{end}`,
+	)
+	out, err := utils.Run(cmd)
+	if err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "--- worker pod reap state in %s: unavailable (%v) ---\n", ns, err)
+		return
+	}
+	_, _ = fmt.Fprintf(GinkgoWriter, "--- worker pod reap state in %s (dumped at %s) ---\n%s\n",
+		ns, time.Now().UTC().Format(time.RFC3339), out)
+}
 
 // workerPodNames lists the worker pods (provisioner-managed) in ns.
 func workerPodNames(g Gomega, ns string) []string {
