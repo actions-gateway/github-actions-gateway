@@ -1691,6 +1691,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-v1alpha1-fields-are-inert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two v1alpha1 fields are inert
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2652,6 +2669,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-v1alpha1-fields-are-inert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two v1alpha1 fields are inert
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2853,6 +2887,43 @@ the versions that admit it are the two that warn above.
   single-label set), never a side effect of migrating off <code>v1alpha1</code>.</p>
 </li>
 </ul>
+<h3 id="two-v1alpha1-fields-are-inert">Two <code>v1alpha1</code> fields are inert<a class="headerlink" href="#two-v1alpha1-fields-are-inert" title="Permanent link">&para;</a></h3>
+<p>Both are in the served schema, both do nothing, and neither gains a behaviour before
+<code>v2.0.0</code> removes the version. They are called out because the schema alone does not
+say so: one is rejected at admission despite reading like a supported knob, and the
+other is a status field the GMC never writes.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>What it actually does</th>
+<th>Read instead</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ActionsGateway.spec.gitHubAppRef.namespace</code></td>
+<td>Nothing. Any non-empty value is <strong>rejected by the GMC validating webhook</strong> on create and on update. The Secret always resolves in the <code>ActionsGateway</code>'s own namespace.</td>
+<td>Leave it unset and put the Secret in the gateway's namespace.</td>
+</tr>
+<tr>
+<td><code>ActionsGateway.status.activeSessions</code></td>
+<td>Nothing. The GMC never sets it, so it is absent from every gateway. It is not a count that happens to be zero.</td>
+<td><code>status.activeSessions</code> on each <code>RunnerGroup</code>, or the <code>actions_gateway_active_sessions</code> metric (<a href="../observability-metrics/">observability-metrics</a>).</td>
+</tr>
+</tbody>
+</table>
+<p><strong>An alert or dashboard reading <code>ActionsGateway.status.activeSessions</code> is reading a
+field no controller populates</strong>, so it reports absent (or zero) no matter how busy
+the gateway is. Point it at the per-<code>RunnerGroup</code> field or the metric instead.</p>
+<p>Neither field is carried into v2. <code>v2beta1</code> replaces <code>SecretReference</code> with the
+name-only <code>LocalSecretReference</code>, which has no <code>namespace</code> at all, and
+<code>ActionsGatewayStatus</code> simply omits <code>activeSessions</code>. So migrating with
+<a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> needs no action for either: there is nothing
+to carry across.</p>
+<p>They stay in <code>v1alpha1</code> rather than being deleted now because <a href="../../development/api-review/#removal-needs-a-version-increment-not-a-promise">removing a field from
+a served version is a breaking change</a>.
+The removal is the version's own, at <code>v2.0.0</code>.</p>
 <h2 id="why-v2-what-the-decomposition-buys">Why v2 (what the decomposition buys)<a class="headerlink" href="#why-v2-what-the-decomposition-buys" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Reusable pod templates.</strong> The large <code>PodTemplateSpec</code> moves to a referenced

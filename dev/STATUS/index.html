@@ -2844,6 +2844,14 @@
 <td><code>make check \| tail</code> reports <code>tail</code>'s status, so a false green reads identical to a real one. The rule sits in CLAUDE.md and testing.md and a session tripped it anyway. Wants a PreToolUse warning when a gate is piped into <code>tail</code>/<code>head</code>/<code>grep</code>.</td>
 </tr>
 <tr>
+<td><a id="Q681"></a>Q681</td>
+<td><a href="../development/testing/#the-status-you-report-is-a-claim-too">A backgrounded gate's exit code never reaches the task notification</a></td>
+<td><code>tests</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Not Q625's pipe, so that hook misses it: <code>make check &gt; log; echo "EXIT=$?"</code> ends in <code>echo</code>, so a backgrounded run notifies <code>exit code 0</code> on a failed gate. Hit twice in a session. Wants a PreToolUse warn when a gate is backgrounded without <code>exit $rc</code>.</td>
+</tr>
+<tr>
 <td><a id="Q665"></a>Q665</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#pushing-to-a-pr-that-is-already-open">Nothing catches a force-push onto a base that went stale during the local gate</a></td>
 <td><code>debt</code> <code>retro</code></td>
@@ -2996,12 +3004,12 @@
 <td><code>applyNamespacePSA</code> ×2, <code>tracingEnv</code> ×2, egress-stale eval ×2, roleRef-recreate appliers ×3, pod-scheduling copies ×2, <code>agc_vpa</code> re-inlines <code>applyManagedChild</code> (return the op result to share).</td>
 </tr>
 <tr>
-<td><a id="Q538"></a>Q538</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/brokertest/server.go">Broker session <code>ownerName</code> is not kind-scoped</a></td>
-<td><code>tests</code></td>
+<td><a id="Q677"></a>Q677</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/session.go"><code>CreateSession</code> sends a kind-unscoped runner name</a></td>
+<td><code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Both kinds own a session as <code>&lt;CR name&gt;-&lt;index&gt;</code>; the Q466 kind split never reached it, so <code>ActiveSessionsForOwner</code> cannot separate a same-named RunnerGroup/RunnerSet and its doc still says owner = RunnerGroup. Found by Q535's test.</td>
+<td>It derives <code>&lt;CR name&gt;-&lt;index&gt;</code> for both kinds, but Q466 kind-scoped the <em>registered</em> name to <code>rs-&lt;set&gt;-&lt;index&gt;</code>, so a RunnerSet's <code>agent.name</code>/<code>ownerName</code> name no registered runner. Broker reaction unmeasured; it validates <code>agent.id</code>. From Q538.</td>
 </tr>
 <tr>
 <td><a id="Q525"></a>Q525</td>
@@ -3012,20 +3020,12 @@
 <td>agc: goleak ignore-list ×3, seeded-pods ×5, podwaiter startWait ×14, RG fixture preamble ×14, prefix pod-waits ×4. gmc: captureSink→logtest, webhook table-tests, e2e dispatch preamble ×3, waitForPodGone ×4.</td>
 </tr>
 <tr>
-<td><a id="Q526"></a>Q526</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go">Review dead v1 ActionsGateway API surface</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>ActiveSessions</code> is never written or read; <code>SecretReference.Namespace</code> is "reserved" but the webhook rejects non-empty. Served-API compat: decide deprecate/document vs drop at v2.</td>
-</tr>
-<tr>
 <td><a id="Q573"></a>Q573</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/api">Detect served API fields nothing reads</a></td>
 <td><code>ci</code> <code>tests</code> <code>retro</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><code>sharing.allowedNamespaces</code> shipped served-but-unenforced in v2beta1; only a manual docs sweep caught it (Q166 schedules the impl). Gate on spec fields with no reference outside generated/conversion code; complements <a href="#Q526">Q526</a>.</td>
+<td><code>sharing.allowedNamespaces</code> shipped served-but-unenforced in v2beta1; only a manual sweep caught it (Q166 fixes it). Gate fields unreferenced outside generated/conversion code; Q526 found an unwritten <em>status</em> field, which spec-only scope misses.</td>
 </tr>
 <tr>
 <td><a id="Q541"></a>Q541</td>
