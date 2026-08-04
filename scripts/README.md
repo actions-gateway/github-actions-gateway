@@ -56,7 +56,7 @@ A gate whose logic outgrows shell moves its core to Go in [`devtools/`](../devto
 | [vendor-check.sh](go/vendor-check.sh) | Fail if the committed vendor trees drift from `go.sum` — `go build -mod=vendor` only checks `vendor/modules.txt`, never the vendored source against its hashes. Backs `make vendor-check`. |
 | [vendor-sync.sh](go/vendor-sync.sh) | Re-sync the workspace module files, vendor trees, and notices in dependency order — the full "Changing dependencies" remedy flow in one shot. Backs `make vendor-sync`. |
 | [go-tidy-check.sh](go/go-tidy-check.sh) | Fail if any module's `go.mod`/`go.sum` differs from its tidy-canonical shape. Backs `make tidy-check`. |
-| [go-work-tidy.sh](go/go-work-tidy.sh) | Run `go mod tidy` across every module in the Go workspace, leaf-first. See [docs/development/go-workspaces.md](../docs/development/go-workspaces.md). |
+| [go-work-tidy.sh](go/go-work-tidy.sh) | Run `go mod tidy` across every module the repo tracks: the workspace members leaf-first, then the modules outside `go.work` with `GOWORK=off` (Q667 — deriving the list from `go.work` alone left `tidy-check` diffing files nothing rewrote; coverage asserted by `go-work-tidy-test.sh` under `make scripts-test`). See [docs/development/go-workspaces.md](../docs/development/go-workspaces.md). |
 
 ## `e2e/` — live-cluster tiers
 

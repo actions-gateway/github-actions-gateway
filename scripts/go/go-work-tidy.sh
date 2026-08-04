@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 #
-# go-work-tidy.sh - Tidy all Go modules in a workspace sequentially.
+# go-work-tidy.sh - Tidy every Go module in the repo sequentially.
 #
 # Description:
-#   Parses the local 'go.work' file to extract active Go modules, resolves 
-#   their internal dependency graph, and executes 'go mod tidy' on each 
-#   module in strict dependency order.
+#   Parses the local 'go.work' file to extract active Go modules, resolves
+#   their internal dependency graph, and executes 'go mod tidy' on each
+#   module in strict dependency order. Then tidies every module go.work does
+#   NOT list (devtools/, tools/, and whichever comes next) with GOWORK=off,
+#   discovered via nonworkspace_modules() rather than named here.
+#
+#   Deriving the whole list from go.work is what disarmed tidy-check in Q667:
+#   the gate diffs '**/go.mod' across the repo, so it covered devtools/ and
+#   tools/ already — but nothing in the flow ever rewrote them, and a real
+#   defect committed in both passed the gate. A non-workspace module resolves
+#   nothing through the workspace, so it tidies against its own module graph.
 #
 # Usage:
 #   ./go-work-tidy.sh           # Completely silent on success
@@ -52,12 +60,16 @@ if [[ ! -f "go.work" ]]; then
     exit 1
 fi
 
-for cmd in awk grep go realpath sed; do
+for cmd in awk git grep go jq realpath sed; do
     if ! command -v "$cmd" &> /dev/null; then
         log_error "Required system command '$cmd' is missing from your PATH."
         exit 1
     fi
 done
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 
 log_info "Extracting active modules from go.work..."
 
@@ -125,4 +137,21 @@ for mod in "${final_list[@]}"; do
     fi
 done
 
-log_info "Workspace tidy complete!"
+# 5. Tidy the Modules go.work Does Not List
+#
+# GOWORK=off so each resolves against its own module graph instead of the
+# workspace build list it is not a member of. They carry no replace edges into
+# the workspace, so ordering among them does not matter.
+log_info "Tidying modules outside go.work:"
+
+while IFS= read -r nonworkspace_mod; do
+    [[ -z "$nonworkspace_mod" ]] && continue
+    if [[ -d "$nonworkspace_mod" ]]; then
+        log_info "  -> $nonworkspace_mod (GOWORK=off)"
+        (cd "$nonworkspace_mod" && GOWORK=off go mod tidy > /dev/null)
+    else
+        log_warn "Module directory '$nonworkspace_mod' does not exist. Skipping."
+    fi
+done < <(nonworkspace_modules)
+
+log_info "Repo tidy complete!"
