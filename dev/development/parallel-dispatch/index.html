@@ -3102,17 +3102,14 @@ auditable and resumable.</p>
   to <code>main</code>. Keep it behind one gate because the dispatcher's merge step is where
   <strong>scope review</strong> and <strong>merge ordering</strong> happen, and it is the single
   <strong>stop/amend</strong> control point. CI-green is not the same as correct-and-in-scope.</li>
-<li><strong>GitHub-native auto-merge needs branch protection + required status checks.</strong>
-  Without them, <code>gh pr merge --auto</code> has no required-checks gate and can merge on
-  mergeability alone — including before CI attaches. So "let each session
-  auto-merge" is not a free switch; it would first require configuring branch
-  protection.</li>
-<li><strong>If you want to cut dispatcher polling</strong>, the right move is: enable branch
-  protection with required checks, then have the <strong>dispatcher</strong> run
-  <code>gh pr merge &lt;n&gt; --auto</code> <em>after its scope check</em> — GitHub merges on green while
-  the gate stays. Optionally <strong>tier by risk</strong>: let purely mechanical PRs (lint
-  gates, docs) auto-merge on green, keep feature/large/security PRs
-  dispatcher-gated.</li>
+<li><strong>The merge queue is the mechanical half of the merge gate</strong> (active on <code>main</code>
+  since 2026-08-03; see <a href="../../plan/merge-queue/">merge-queue.md</a>). <code>gh pr merge
+  --squash</code> enqueues; the queue validates the candidate merge result — including
+  the union with whatever is ahead in the queue — and kicks a failing entry back
+  to its PR, which pr-sentinel surfaces to the owning session. The dispatcher's
+  scope review stays: enqueue <em>after</em> the scope check, and the queue handles
+  green-ness, freshness, and jointly-red arbitration from there. Workers never
+  enqueue their own PRs unless the dispatch contract explicitly delegates it.</li>
 </ul>
 <h2 id="concurrency-and-contention">Concurrency and contention<a class="headerlink" href="#concurrency-and-contention" title="Permanent link">&para;</a></h2>
 <ul>

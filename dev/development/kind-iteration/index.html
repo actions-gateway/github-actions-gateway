@@ -2636,6 +2636,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Tightening the inner loop">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#re-running-the-suite-over-skipped-teardown-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Re-running the suite over skipped-teardown state
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2811,33 +2828,40 @@
 <li>Test the path with a label-matched <code>kubectl run</code> debug pod (above).</li>
 </ol>
 <p>This drops each iteration from ~10 minutes to under a minute.</p>
+<h3 id="re-running-the-suite-over-skipped-teardown-state">Re-running the suite over skipped-teardown state<a class="headerlink" href="#re-running-the-suite-over-skipped-teardown-state" title="Permanent link">&para;</a></h3>
+<p>Part of what a skipped teardown leaves behind is a GMC Deployment whose <code>.args</code> are owned by the <code>kubectl-patch</code> field manager: the suite appends <code>--allow-agc-extra-env=true</code> with <code>kubectl patch --type=json</code>, and <code>args</code> is an atomic list, so that patch claims all of it. Helm 4 applies server-side, so the next run's <code>helm upgrade</code> fails instead of overwriting:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>Apply failed with 1 conflict: conflict with &quot;kubectl-patch&quot; using apps/v1:
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>.spec.template.spec.containers[name=&quot;manager&quot;].args
+</code></pre></div>
+<p><code>setupGMC</code> deletes the leftover Deployment before <code>make deploy</code> for exactly this reason (Q590), and Helm recreates it chart-owned. Nothing else the skipped teardown left is touched, so the fakegithub, cert-manager, and tenant-namespace state of a failed run stays inspectable right up until you start the next run.</p>
+<p>An ad-hoc <code>helm upgrade</code> against a standing release hits the same conflict. <code>--force-conflicts</code> reclaims ownership (Helm 4 only: Helm 3 has no server-side apply, so there is nothing to reclaim), which is what <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-upgrade-check.sh"><code>scripts/e2e/chart-upgrade-check.sh</code></a> does in its normalize step, deliberately <em>not</em> on the upgrade its assertions rest on.</p>
 <h2 id="watching-whats-actually-happening">Watching what's actually happening<a class="headerlink" href="#watching-whats-actually-happening" title="Permanent link">&para;</a></h2>
 <p>Distroless pods log to stdout. Useful one-shots:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># GMC</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deployment/gmc-controller-manager<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
-<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># AGC in a tenant</span>
-<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>deployment/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
-<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
-<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="c1"># Worker pods (selected by the managed-by label; the canonical worker labels are</span>
-<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1"># app.kubernetes.io/managed-by=actions-gateway-controller and</span>
-<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="c1"># actions-gateway/component=workload)</span>
-<a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/managed-by<span class="o">=</span>actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
-<a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>
-<a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="c1"># Fakegithub control API (sessions, enqueued jobs, rerun calls)</span>
-<a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>-n<span class="w"> </span>e2e-infra<span class="w"> </span>svc/fakegithub<span class="w"> </span><span class="m">9090</span>:9090<span class="w"> </span><span class="p">&amp;</span>
-<a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:9090/control/sessions
-<a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="c1"># Optional ?owner=&lt;prefix&gt; filters to one RunnerGroup&#39;s sessions (ownerName is &quot;&lt;group&gt;-&lt;index&gt;&quot;)</span>
-<a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s1">&#39;http://localhost:9090/control/sessions?owner=my-ag-&#39;</span>
-<a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="c1"># Single-use JIT runner simulation (Q114): a job acquisition consumes the</span>
-<a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="c1"># delivering session&#39;s runner record; scope with owner= to avoid affecting</span>
-<a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="c1"># other suites on the shared instance</span>
-<a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a>curl<span class="w"> </span>-s<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s1">&#39;http://localhost:9090/control/singleuse?enabled=true&amp;owner=my-ag-&#39;</span>
-<a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a><span class="c1"># Eviction auto-retry calls the AGC has made (the rerun-failed-jobs POST is the</span>
-<a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a><span class="c1"># only externally visible sign that eviction recovery fired). Filter by run so</span>
-<a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a><span class="c1"># the count is one spec&#39;s own rather than the whole process&#39;s.</span>
-<a id="__codelineno-15-24" name="__codelineno-15-24" href="#__codelineno-15-24"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:9090/control/reruns
-<a id="__codelineno-15-25" name="__codelineno-15-25" href="#__codelineno-15-25"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s1">&#39;http://localhost:9090/control/reruns?run=%2Fruns%2F12345%2F&#39;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># GMC</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deployment/gmc-controller-manager<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># AGC in a tenant</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>deployment/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Worker pods (selected by the managed-by label; the canonical worker labels are</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># app.kubernetes.io/managed-by=actions-gateway-controller and</span>
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1"># actions-gateway/component=workload)</span>
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/managed-by<span class="o">=</span>actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
+<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>
+<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="c1"># Fakegithub control API (sessions, enqueued jobs, rerun calls)</span>
+<a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>-n<span class="w"> </span>e2e-infra<span class="w"> </span>svc/fakegithub<span class="w"> </span><span class="m">9090</span>:9090<span class="w"> </span><span class="p">&amp;</span>
+<a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:9090/control/sessions
+<a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="c1"># Optional ?owner=&lt;prefix&gt; filters to one RunnerGroup&#39;s sessions (ownerName is &quot;&lt;group&gt;-&lt;index&gt;&quot;)</span>
+<a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s1">&#39;http://localhost:9090/control/sessions?owner=my-ag-&#39;</span>
+<a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="c1"># Single-use JIT runner simulation (Q114): a job acquisition consumes the</span>
+<a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="c1"># delivering session&#39;s runner record; scope with owner= to avoid affecting</span>
+<a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="c1"># other suites on the shared instance</span>
+<a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>curl<span class="w"> </span>-s<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s1">&#39;http://localhost:9090/control/singleuse?enabled=true&amp;owner=my-ag-&#39;</span>
+<a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="c1"># Eviction auto-retry calls the AGC has made (the rerun-failed-jobs POST is the</span>
+<a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a><span class="c1"># only externally visible sign that eviction recovery fired). Filter by run so</span>
+<a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="c1"># the count is one spec&#39;s own rather than the whole process&#39;s.</span>
+<a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:9090/control/reruns
+<a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s1">&#39;http://localhost:9090/control/reruns?run=%2Fruns%2F12345%2F&#39;</span>
 </code></pre></div>
 <p>For the runner side, <code>gh run list --repo &lt;org&gt;/&lt;repo&gt;</code> and <code>gh run view &lt;id&gt; --json status,conclusion</code> give the GitHub-side view that <code>kubectl</code> can't.</p>
 <h2 id="cleanup">Cleanup<a class="headerlink" href="#cleanup" title="Permanent link">&para;</a></h2>
