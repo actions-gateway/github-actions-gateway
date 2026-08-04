@@ -1,7 +1,7 @@
 # Markdown gates on a real parser
 
 **Status:** filed 2026-08-02; all three phases shipped by 2026-08-04.
-Q612 ✅ → Q613 ✅ → Q614 ✅. Q654 shipped alongside them — an em-dash density
+Q612 ✅ → Q613 ✅ → Q614 ✅. Q654 shipped alongside them: an em-dash density
 gate on the same parse layer, filed after the phases were scoped. Only the
 Progress row still references this plan, so archiving it is the milestone's
 call rather than any one phase's.
@@ -30,7 +30,7 @@ missing a module made its gate pass by skipping.
 [`scripts/docs/check-doc-links.sh`](../../scripts/docs/check-doc-links.sh) is 235 lines,
 ~190 of them a single `awk` program implementing a Markdown parser *and* the
 github-slugger algorithm. Of the four gates in this plan it is the **only one with no
-`-test.sh` companion** — `lint-backlog`, `check-roadmap`, and `backlog-metrics` all
+`-test.sh` companion**: `lint-backlog`, `check-roadmap`, and `backlog-metrics` all
 have one. The most parser-dense gate is the untested one.
 
 Repointing the README's license badge at a nonexistent file left the gate green; the
@@ -46,7 +46,7 @@ identical target as a plain link failed it:
 
 The collection regex `\[[^]]*\]\([^)]*\)` matches the inner **image** first, so the
 outer destination is never collected. [`README.md`](../../README.md) line 7 points at
-`LICENSE` through exactly this shape — a relative path the gate cannot see.
+`LICENSE` through exactly this shape, a relative path the gate cannot see.
 
 Measured against the verbatim collection block:
 
@@ -64,7 +64,7 @@ and in its own [`doc-links.yml`](../../.github/workflows/doc-links.yml) workflow
 
 [`scripts/docs/lint-backlog.sh`](../../scripts/docs/lint-backlog.sh) reads the Queue
 with `awk -F'|'` and fixed field indices. One escaped pipe in any cell shifts every
-field — measured:
+field, measured:
 
 ```
 | … | Item with a \| pipe | `lbl` | 🔲 | S | short note |   → NF=9  $5=[ `lbl` ]  $7=[ S ]
@@ -73,7 +73,7 @@ field — measured:
 
 `St` then reads the label cell and `Notes` reads the size, so the row's rules evaluate
 the wrong cells and pass. This fails *silently wrong*, not loudly, which is why it is
-worth closing before it happens rather than after. Filed as latent — "zero occurrences
+worth closing before it happens rather than after. Filed as latent: "zero occurrences
 in `STATUS.md` today", which the build disproved: [Q625](../STATUS.md#Q625) carries one,
 and the gate was reading 13 characters of a 243-character cell ([Phase 2
 result](#phase-2-result-q613)).
@@ -118,7 +118,7 @@ this work.
 ### Cost, verified
 
 - **Zero external dependencies.** `go.mod` at v1.7.8, v1.7.16, and v1.8.5 has no
-  `require` block at all — the smallest possible supply-chain delta for a parser.
+  `require` block at all, the smallest possible supply-chain delta for a parser.
 - **265 KB** module zip including tests; `go mod vendor` strips tests, so the
   `devtools/vendor` delta (364 KB today) is smaller than that.
 - **Wiring already exists.** [`vendor-sync.sh`](../../scripts/go/vendor-sync.sh),
@@ -133,7 +133,7 @@ this work.
 
 `THIRD-PARTY-NOTICES` is generated from the **root** `vendor/modules.txt` only
 ([`gen-third-party-notices.sh`](../../scripts/release/gen-third-party-notices.sh)), so
-`devtools/` dependencies are not covered — and should not be. Attribution is triggered
+`devtools/` dependencies are not covered, and should not be. Attribution is triggered
 by *distributing* a binary, and these gate binaries are never shipped or signed, which
 is the same reason `tools/vendor/` is already excluded. Vendoring goldmark is therefore
 not a notices change.
@@ -158,7 +158,7 @@ In scope, one phase each:
    Result: [Phase 3 result](#phase-3-result-q614).
 
 Each keeps its `scripts/` entry point, per
-[`scripts/README.md`](../../scripts/README.md) — the gate map stays in one place.
+[`scripts/README.md`](../../scripts/README.md): the gate map stays in one place.
 
 ### Out of scope, deliberately
 
@@ -171,7 +171,7 @@ onto goldmark would be actively wrong, not merely unnecessary.
 Also out: `check-codegen-drift.sh`, the `chart-*-check.sh` family, `validate-egress-ip.sh`,
 `dogfood/setup.sh`, and the `e2e/` scripts. They are long, but they orchestrate external
 CLIs (`kubectl`, `helm`, `docker`, `controller-gen`). Shell is the right language;
-Go would be `exec.Command` soup. **Length is not the signal — parsing is.**
+Go would be `exec.Command` soup. **Length is not the signal; parsing is.**
 
 ## Validation
 
@@ -184,7 +184,7 @@ each phase reconciles rather than greps:
    explained as a fixed defect, not waved through. The corpus is real: 242 files, 5134
    links/anchors.
 2. **Red-first on each proven defect.** The four rows in the first table become test
-   cases that fail against the old behaviour and pass against the new — including the
+   cases that fail against the old behaviour and pass against the new, including the
    badge-wrapped link, which is the one with live instances.
 3. **Slug equivalence.** Every heading in every tracked `.md` slugged both ways and
    reconciled. This is what upgrades "13 probed cases agreed" into a real assertion.
@@ -211,10 +211,10 @@ resolved to a fix, and **nothing** the `awk` collected was lost:
 would have been silent coverage losses:
 
 - **Admonitions.** A `!!! note` body is four-space-indented, so a stock parser
-  reads it as an indented code block — 15 links across three pages, all
+  reads it as an indented code block: 15 links across three pages, all
   checked before.
 - **`md_in_html`.** A `<p markdown="span">…</p>` element is raw HTML to
-  CommonMark — 4 more links.
+  CommonMark: 4 more links.
 
 Both are now parsed by `MkDocsDialect`, a goldmark extension in the parse layer,
 which is where they belong: the other three gates read the same docs.
@@ -222,7 +222,7 @@ which is where they belong: the other three gates read the same docs.
 **The hand-written slugger stayed**, ported to Go and unit-tested, rather than
 being replaced by goldmark's `WithAutoHeadingID`. The gate's contract is
 GitHub's anchors, and goldmark keeps Unicode letters GitHub drops. Cost of
-keeping it: ~30 lines. Slug reconciliation over the corpus is above — 3333
+keeping it: ~30 lines. Slug reconciliation over the corpus is above: 3333
 headings, the only two differences being fixes.
 
 **Cost, corrected.** `devtools/vendor` grew 364 KB → 956 KB, not the "smaller
@@ -255,9 +255,9 @@ this plan's two filed defects, and each is paired with a control that agreed:
 | Case | `awk` | Go | Why they differ |
 |---|---|---|---|
 | Over-cap Notes holding `\|` | pass | **fail** | The cap measured the stub before the escape |
-| Control: same length, no escape | fail | fail | — |
+| Control: same length, no escape | fail | fail | n/a |
 | `\|` in the Item cell, `St` 🔲 | **fail** | pass | `St` was read from the Labels cell |
-| Control: same Item, no escape | pass | pass | — |
+| Control: same Item, no escape | pass | pass | n/a |
 | `\|` as the last two characters | pass | **fail** | The trailing `\` was the whole cell |
 | 250 em dashes (750 bytes) | **fail** | pass | Cap counted bytes |
 | Control: 251 em dashes | fail | fail | Over on either scale |
@@ -300,27 +300,30 @@ moving to characters can only relax — never break — an existing row.
 alone, which no longer holds the rules; it now also triggers on `devtools/**`,
 pins the toolchain with `setup-go`, and takes 5 minutes instead of 2 for the
 build. Runtime 0.49 s → 0.69 s, still sub-second, still not the argument.
+
 ## Phase 3 result (Q614)
 
-Both gates keep their `scripts/` entry point and gain a Go checker —
-`devtools/docs/roadmapcheck` and `devtools/docs/backlogmetrics` — over the same
+Both gates keep their `scripts/` entry point and gain a Go checker,
+`devtools/docs/roadmapcheck` and `devtools/docs/backlogmetrics`, over the same
 parse layer. No new module, no new `make` target, no new path filter: the
 `devtools/**` filters Q612 wired already cover them.
 
 **The parse layer grew three general things**, not one-caller helpers:
-`Tables()` (GFM tables as rows of rendered cells), `TopLevelListItems()` (a
-bullet's text, its lead bold run, its HTML comments, whether it links), and
-`SectionRange()` (the lines a heading's section spans). Plus `ParseRow()`, for
-the case Q612 did not have: **a table row with no table around it.** The metrics
-replay reads `git log -p` output, where every row is a lone `+`/`-` diff line.
-GFM only recognizes a table whose delimiter is at least as wide as its header,
-and pads a narrower header out — so acceptance is monotone in the width and the
-narrowest accepted width *is* the row's cell count. `ParseRow` binary-searches
-it, which leaves every escaping rule to goldmark instead of restating it.
+`Tables()` gains a `Text` reading of each cell beside Q613's source reading,
+`TopLevelListItems()` reports a bullet's text, its lead bold run, its HTML
+comments and whether it links, and `SectionRange()` gives the lines a heading's
+section spans. Plus `ParseRow()`, for the case Q612 did not have: **a table row
+with no table around it.** The metrics replay reads `git log -p` output, where
+every row is a lone `+`/`-` diff line. GFM only recognizes a table whose
+delimiter is at least as wide as its header, and pads a narrower header out, so
+acceptance is monotone in the width and the narrowest accepted width *is* the
+row's cell count. `ParseRow` binary-searches it, which leaves every escaping
+rule to goldmark instead of restating it.
 
-**`check-roadmap` — reconciled.** Same verdict, same counts (18 bullets, 57
-features), byte-identical output. Every bullet's annotation IDs and link flag
-match. Word counts all fell — 5–24 on the roadmap, exactly 1 on `features.md`:
+**`check-roadmap` reconciled** to the same verdict and the same counts (18
+bullets, 57 features), with byte-identical output. Every bullet's annotation IDs
+and link flag match. Word counts all fell, by 5 to 24 on the roadmap and by
+exactly 1 on `features.md`:
 
 | Difference | What it is |
 |---|---|
@@ -329,35 +332,35 @@ match. Word counts all fell — 5–24 on the roadmap, exactly 1 on `features.md
 | −19 on `roadmap.md:43` | The `awk` ran a bullet's span to the next bullet or heading, so the paragraph *between* two bullets was charged to the one above it. |
 
 Nothing crossed either cap under either counter, so nothing changed hands. The
-caps now mean what they say — 60 real words, not ~54 plus markup.
+caps now mean what they say: 60 real words, not ~54 plus markup.
 
-**`backlog-metrics` — reconciled over the whole history**, 2864 diff rows, 630
-items. Identical filed dates and sizes; one event differs and 155 titles do:
+**`backlog-metrics` reconciled over the whole history**, 2898 diff rows and 631
+items. Identical filed dates and sizes; one event differs and 156 titles do:
 
 | Difference | Count | What it is |
 |---|---|---|
-| Q129 `pruned` 06-18 → `completed` 06-16 | 1 | The Q509 defect, one shape further out. The commit that moved Q129 to Progress buried `<a id="Q129"></a>Q129` mid-Notes, and the `awk`'s line-wide regex read that as re-adding the row — so the removal went unrecorded and a later commit booked it as a prune. Cell-scoped, a Progress row has no cell that reads as a bare ID. |
-| Backticks, `*emphasis*`, a literal `[` | 155 | Titles are rendered text now, so `` `windowStartTime` `` reads as `windowStartTime` and Q485's `sizingRecommendation[]` survives — the `awk` stripped every `[` to undo link markup and ate that one. Widens the 60-char aging-report window. |
+| Q129 `pruned` 06-18 → `completed` 06-16 | 1 | The Q509 defect, one shape further out. The commit that moved Q129 to Progress buried `<a id="Q129"></a>Q129` mid-Notes, and the `awk`'s line-wide regex read that as re-adding the row, so the removal went unrecorded and a later commit booked it as a prune. Cell-scoped, a Progress row has no cell that reads as a bare ID. |
+| Backticks, `*emphasis*`, a literal `[` | 156 | Titles are rendered text now, so `` `windowStartTime` `` reads as `windowStartTime` and Q485's `sizingRecommendation[]` survives; the `awk` stripped every `[` to undo link markup and ate that one. Widens the 60-char aging-report window. |
 
 **One rule had to loosen, not tighten.** The ID cell is *searched for*, not
 pinned to index 0: history holds rows a botched edit prefixed with a stray
 delimiter (`|---|---|---|---|| <a id="Q166">…`). Pinning index 0 dropped that
-add, which booked a removal for a row that never left — caught by the
-reconciliation, not by review.
+add, which booked a removal for a row that never left. The reconciliation caught
+it; review would not have.
 
 **Red-first on the new shapes**, each failing against the `awk` and passing
 against the parser: a `<!-- q:QN -->` inside a code fence (old gate green on a
 bullet with no real annotation), prose after a bullet counted against it, an
 escaped pipe truncating a row's title, and a fenced example row counted as
-parked in Deferred. The line-break case is a positive **control** — it passes
+parked in Deferred. The line-break case is a positive **control**: it passes
 both, and pins that excluding the following paragraph did not also exclude the
 bullet's own continuation lines.
 
 **A boundary the port does not cross, now pinned:** the replay reads diff lines,
 which carry no document around them, so a row inside a fence still registers as
 an arrival there even though the same fence is respected when the file itself is
-parsed for Deferred IDs. Asserted so a change to it is a deliberate one — every
-metric moves with it.
+parsed for Deferred IDs. Asserted so a change to it is a deliberate one, since
+every metric moves with it.
 
 `backlog-metrics.sh` started as the backlog skill's script. It has now diverged;
 `scripts/README.md` says so rather than implying a sync obligation.

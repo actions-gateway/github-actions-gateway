@@ -6,7 +6,7 @@ and keeps it from accumulating. This is the **policy** (the rules) and the
 docs and are linked rather than repeated:
 
 - [maintaining-backlog.md](maintaining-backlog.md) — how to record and prioritize a debt item in [docs/STATUS.md](../STATUS.md).
-- [backpressure.md](backpressure.md) — the automated feedback loops that stop debt at authoring time.
+- [backpressure.md](backpressure.md): the automated feedback loops that stop debt at authoring time.
 - [release-1.0.md](../plan/release-1.0.md) — the quality gates that block the 1.0 release (bucket F).
 - [appendix-g-future-enhancements.md](../design/appendix-g-future-enhancements.md) — long-horizon non-commitments.
 
