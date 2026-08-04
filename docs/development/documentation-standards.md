@@ -208,12 +208,32 @@ nobody here touched anything.
 Two edges keep the rule from swallowing every sentence in the docset:
 
 - **Our own behavior is not upstream.** A wrong claim about this repo's code goes red
-  in a test. That is the gate; a citation adds nothing to it.
+  in a test. That is the gate; a citation adds nothing to it. The exemption is exactly
+  as strong as that red gate, which is why a restated default falls outside it (next
+  section).
 - **Specified is not observed.** Where upstream publishes normative text (an RFC
   grammar, a documented status code, a CRD field's own godoc), link that text and stop:
   the spec is its own citation. The rule bites on behavior learned by reading upstream
   source or by inference, which is most of what this system depends on, and is where
   all four claims above came from.
+
+### A restated default is a claim with no gate
+
+A flag or field default restated away from its wiring is the in-repo case the
+"our own behavior" exemption does not cover: no test reads comments, so a wrong
+one stays green forever. The measured case is Q676 (2026-08-04): `broker/types.go`,
+`listener/job.go`, and the Q645 plan doc all said the AGC's completejob release
+"stays gated off by default" while `cmd/agc/config.go` shipped
+`AGC_FANOUT_COMPLETION` on unless explicitly `"false"`. A production false-green
+defect read as contained for as long as the comments were trusted; the divergence
+surfaced only because remedy work happened to read the wiring.
+
+State a default's value only at the site that wires it. Everywhere else, say the
+switch exists and cite that site (or the operator doc that documents it), rather
+than copying the value into a sentence that can drift. When restating is genuinely
+clearer, treat the sentence like an upstream claim: name the wiring site in the
+same clause, so the reader can check it and the next editor knows what it depends
+on.
 
 ### In prose
 
