@@ -49,7 +49,8 @@ run-specific knobs. A ready-to-paste template:
 > does its docs / STATUS-row / PR-body work and re-run it over the final tree —
 > under a batch the gate is mostly heavy-build-slot queue time and must not sit on
 > the critical path. Stream tasks by shared files and land foundational changes first. Verify each PR's
-> **scope**, then merge after CI is green. **No secret may be read, printed,
+> **scope** and that its heavy gates ran, then **report it ready. I merge; you
+> never do.** **No secret may be read, printed,
 > logged, or passed to a model** — exclude any task needing real credentials and
 > tell me. Minimize asks (only genuine decisions, e.g. a license choice).
 > Document decisions in `tmp/`. I can stop or amend the rules anytime.
@@ -62,9 +63,8 @@ The knobs to set each run (everything else comes from this playbook):
   the machine you are on (see [Concurrency and contention](#concurrency-and-contention)).
 - **Exclusions** — anything needing real secrets or a live cluster; state it up
   front rather than making the dispatcher discover it mid-run.
-- **Merge gating** — default is dispatcher-gated after a scope review; say so if
-  you want risk-tiered auto-merge (and note that needs branch protection +
-  required checks first, per [the merge model](#the-merge-model)).
+- **Merge gating** — not a knob. The maintainer reviews and enqueues; the
+  dispatcher verifies and reports ([the merge model](#the-merge-model)).
 - **Model per task** — match the model to the work, not the batch (see
   [Model selection](#model-selection)). The dispatcher sets each worker's model
   in its spawn prompt; an autonomous worker cannot run `model-advisor`
@@ -86,9 +86,10 @@ Two practical notes:
 - Selects the batch, decides priority and ordering, groups by file contention.
 - Spawns one worker session per task.
 - Watches each PR, verifies its **scope** (checks-green is necessary, not
-  sufficient), merges it, and advances the next task.
+  sufficient), hands it to the maintainer, and advances the next task.
 - Owns **assignment**, merge ordering, and scope review (see
   [the dispatcher owns assignment](#the-dispatcher-owns-assignment-not-coordination-files)).
+- Does **not** merge or enqueue ([the merge model](#the-merge-model)).
 - Is the single place to **stop or amend** the run.
 
 **Worker** (one session per task, each in its own worktree):
@@ -265,11 +266,11 @@ for cases where neither the plugin nor a background task is workable.
   that opened docs-only (e.g. a `docs/STATUS.md` row) and later had code pushed can
   show all-green/`CLEAN` while build, lint, integration, e2e, and the security
   scans never tested the code. Before declaring the PR ready, verify the relevant
-  gates ran (`gh pr checks <n>`, `gh run list --branch <branch>`) and
+  gates ran (`gh pr checks <n>`, `gh run list --commit <sha>`) and
   `gh pr close <n> && gh pr reopen <n>` to force them if they were skipped. See
   [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
-- **Never self-merge.** A green + mergeable PR is handed to the dispatcher; the
-  merge stays dispatcher-gated (see [the merge model](#the-merge-model)).
+- **Never merge or enqueue.** A green + mergeable PR is handed to the dispatcher,
+  which hands it to the maintainer (see [the merge model](#the-merge-model)).
 - **Relaunch the watcher after every actionable wake** — `check_failure`,
   `conflict`/`behind`, `timeout`, `error`. An unwatched open PR heals nothing.
   `ready` and `closed` end the watch; the safety valve below does too.
@@ -360,13 +361,14 @@ For each task, in priority order and respecting the concurrency cap:
    gates actually ran** — green/`CLEAN` is not enough if a path-gated workflow was
    skipped (a PR opened docs-only then given code can show all-green while build /
    lint / integration / e2e / security-scan never tested it; `gh pr checks <n>` +
-   `gh run list --branch <branch>`, and close→reopen to force them — see
+   `gh run list --commit <sha>`, and close→reopen to force them — see
    [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran)).
    Then **review the diff for scope** — is it doing exactly the task, with no stray
    changes, no weakened gate, no security default regressed? Green CI does not
-   prove this. **Never merge a PR whose code was not actually tested by CI** — that
-   is how `main` breaks and flakes accumulate.
-3. Merge (`gh pr merge <n> --squash --delete-branch`).
+   prove this.
+3. **Report it ready. Do not merge and do not enqueue** (see
+   [the merge model](#the-merge-model)). Re-check mergeability as you report: a
+   `CLEAN` PR goes stale when a sibling lands.
 4. Advance: spawn the next task in that stream.
 
 Keep a small written tracker (a scratch file in the gitignored `tmp/`) of
@@ -383,18 +385,25 @@ This is the key design decision; get it right up front.
   background watcher wakes it for both
   (see [the worker contract](#the-worker-contract-self-healing)). (This is the
   self-healing loop.)
-- **Auto-*merge* stays dispatcher-gated.** Merge is a global, irreversible write
-  to `main`. Keep it behind one gate because the dispatcher's merge step is where
-  **scope review** and **merge ordering** happen, and it is the single
-  **stop/amend** control point. CI-green is not the same as correct-and-in-scope.
-- **The merge queue is the mechanical half of the merge gate** (active on `main`
-  since 2026-08-03; see [merge-queue.md](../plan/merge-queue.md)). `gh pr merge
-  --squash` enqueues; the queue validates the candidate merge result — including
-  the union with whatever is ahead in the queue — and kicks a failing entry back
-  to its PR, which pr-sentinel surfaces to the owning session. The dispatcher's
-  scope review stays: enqueue *after* the scope check, and the queue handles
-  green-ness, freshness, and jointly-red arbitration from there. Workers never
-  enqueue their own PRs unless the dispatch contract explicitly delegates it.
+- **Auto-*merge* is the maintainer's, and an agent never takes it.** Not the
+  worker, and **not the dispatcher** either. Merge is a global, irreversible write
+  to `main`, and it is also the moment a human loads the project's state into their
+  own head. That context is what makes it possible to groom the backlog, operate
+  the thing in production, and advocate for it to anyone else. Automating it would
+  buy throughput by spending the only context that makes the throughput worth
+  having. So the dispatcher stops at *verified and ready*, and reports. Read a
+  request to go faster as a request to shorten everything **before** this step.
+- **The merge queue is the mechanical half, not a delegation of the gate** (active
+  on `main` since 2026-08-03; see [merge-queue.md](../plan/merge-queue.md)).
+  `gh pr merge --squash` enqueues; the queue validates the candidate merge result,
+  including the union with whatever is ahead of it, and kicks a failing entry back
+  to its PR, which pr-sentinel surfaces to the owning session. It arbitrates
+  green-ness, freshness, and the jointly-red case. It does **not** decide whether a
+  change should land, so enqueueing is the maintainer's action, taken after their
+  review. Neither workers nor the dispatcher enqueue.
+- **What the dispatcher owes at handoff**, so the review is cheap rather than a
+  re-derivation: which heavy gates ran and on which head SHA, what the scope review
+  found, and the mergeability state as of *now*.
 
 ## Concurrency and contention
 
@@ -622,8 +631,8 @@ production credentials) — exclude them explicitly and hand them to a human.
 - [ ] Coordination via built-ins (spawn prompt, `list_sessions`, PR/comments,
       self-healing); `send_message` only as a rare reactive nudge — no mailbox or
       comms daemon.
-- [ ] Merge model decided (gated vs. risk-tiered; branch protection if using
-      native auto-merge).
+- [ ] Everyone clear that the **maintainer** merges and enqueues — no agent does
+      ([the merge model](#the-merge-model)).
 - [ ] PR-watcher gates on checks **and** mergeability and handles zero-check PRs.
 - [ ] Watcher launched **bare** (no inline `VAR=…` prefix, or the auto-allow
       lapses into a prompt) and relaunched after every actionable wake.
