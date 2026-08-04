@@ -25,6 +25,13 @@
 # BEFORE the stop scripts, and a broken snapshot (e.g. no cluster credentials)
 # must never block the teardown that keeps billable nodes from stranding.
 #
+# Why the reclaim is tested: it is the one path here that tears down a cluster
+# the running process never scaled up (Q640), so its trigger has to be exactly
+# an orphaned lease and nothing else — a free target and a live gate must both
+# leave the cluster alone, and the lease has to survive a reclaim that could not
+# finish, or the leak it records is lost. lease-test.sh covers the lease states
+# themselves; this covers what the gate does with each of them.
+#
 # The gate script is sourced with VALIDATE_RELEASE_LIB_ONLY=1 so main() does not
 # run; `gh` and `run_status` are stubbed, so no network and no cluster.
 set -euo pipefail
@@ -32,6 +39,10 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 VALIDATE_RELEASE_LIB_ONLY=1
 export VALIDATE_RELEASE_LIB_ONLY
+# Set before sourcing lib/lease.sh (via the gate): its default resolves under
+# $HOME at source time, and no test may write there.
+RELEASE_LEASE_DIR="${REPO_ROOT}/tmp/validate-release-test-lease.$$"
+export RELEASE_LEASE_DIR
 # The teardown assertions below drive real progress events. Disable the stream
 # before sourcing so this suite cannot leave a status file behind claiming a
 # failed gate — a sentinel started afterwards would read it and report one.
@@ -44,7 +55,11 @@ REPO="octo/repo"
 E2E_POLL_INTERVAL=1 # keep the wait loop fast
 
 WORKDIR="$(mktemp -d)"
-trap 'rm -rf "${WORKDIR}"' EXIT
+# Scratch for the sections below the teardown tests, which shadow WORKDIR inside
+# subshells (teardown deletes whatever it names) — a separate dir keeps those
+# reads out of the shadowed variable.
+SCRATCH="$(mktemp -d)"
+trap 'rm -rf "${WORKDIR}" "${SCRATCH}" "${RELEASE_LEASE_DIR}"' EXIT
 CURSOR="${WORKDIR}/cursor"
 
 fails=0
@@ -409,6 +424,147 @@ else
 	echo "ok   a green gate does not dump diagnostics"
 fi
 check_contains "a green teardown still stops" "stub stop" "${out}"
+
+# --- Q640: an orphaned run is reclaimed; nothing else is ---------------------
+#
+# The killed-gate state is a lease for this target whose owning process is gone.
+# The stop scripts are stubbed through SCRIPT_DIR and log to a file (they run as
+# child processes), so these assert both that the reclaim tears down and — the
+# direction that would cost somebody their cluster — that it does not.
+
+PROJECT=p ZONE=z CLUSTER=c
+STOP_LOG="${SCRATCH}/stop.log"
+LEASE_FILE="$(lease_path "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+export STOP_LOG LEASE_FILE
+cat >"${STUB_DIR}/e2e-stop.sh" <<'STUB'
+printf 'e2e-stop\n' >>"${STOP_LOG}"
+exit "${RECLAIM_E2E_STOP_RC:-0}"
+STUB
+# The stop stub records whether the lease was still there while it ran, which is
+# what makes "released last" observable instead of read off the source.
+cat >"${STUB_DIR}/stop.sh" <<'STUB'
+if [[ -f "${LEASE_FILE}" ]]; then
+	printf 'stop lease=held\n' >>"${STOP_LOG}"
+else
+	printf 'stop lease=released\n' >>"${STOP_LOG}"
+fi
+exit "${RECLAIM_STOP_RC:-0}"
+STUB
+SCRIPT_DIR="${STUB_DIR}"
+
+# The gate's own pid is what a real acquire records, so a stub decides whether
+# that pid still looks like a running gate.
+GATE_CMD="bash scripts/dogfood/validate-release.sh v1.3.0-rc.4"
+lease_process_command() { [[ "$1" == "$$" ]] && echo "${OWNER_ALIVE:+${GATE_CMD}}"; }
+
+# arm_lease STATE — put the target's lease into STATE and clear the call log.
+arm_lease() {
+	rm -rf "${RELEASE_LEASE_DIR}"
+	: >"${STOP_LOG}"
+	case "$1" in
+	free) OWNER_ALIVE="" ;;
+	held)
+		OWNER_ALIVE=1
+		lease_acquire "${PROJECT}" "${ZONE}" "${CLUSTER}" v1.3.0-rc.4
+		;;
+	orphaned)
+		OWNER_ALIVE=1
+		lease_acquire "${PROJECT}" "${ZONE}" "${CLUSTER}" v1.3.0-rc.4
+		OWNER_ALIVE=""
+		;;
+	esac
+}
+
+run_reclaim() {
+	set +e
+	reclaim_orphaned_gate >"${SCRATCH}/reclaim.out" 2>&1
+	RECLAIM_RC=$?
+	set -e
+	RECLAIM_OUT="$(cat "${SCRATCH}/reclaim.out")"
+}
+
+# A target no lease claims is the case that must cost nothing: an operator who
+# scaled the cluster up by hand leaves exactly this state, and a mechanism that
+# read nodes-are-up as an orphan would delete their environment.
+arm_lease free
+run_reclaim
+check "an unclaimed target reclaims nothing" 0 "${RECLAIM_RC}"
+check "an unclaimed target runs no teardown" "" "$(cat "${STOP_LOG}")"
+
+# The Q640 state itself.
+arm_lease orphaned
+run_reclaim
+check "an orphaned gate's cluster is torn back down" 0 "${RECLAIM_RC}"
+check "the reclaim runs both stop scripts, e2e first" \
+	"e2e-stop
+stop lease=held" "$(cat "${STOP_LOG}")"
+check_contains "the reclaim says what it found" "killed before it finished tearing down" "${RECLAIM_OUT}"
+check "a completed reclaim frees the target" "free" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+
+# A gate that is still running owns its cluster. Reclaiming here would delete
+# the environment out from under it — strictly worse than the leak.
+arm_lease held
+run_reclaim
+check "a live gate's cluster is not reclaimed" 1 "${RECLAIM_RC}"
+check "a live gate's cluster sees no teardown" "" "$(cat "${STOP_LOG}")"
+check_contains "the refusal names the other gate" "already owns" "${RECLAIM_OUT}"
+check "a refused reclaim leaves the live lease alone" "held" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+
+# A pid from another host cannot be checked at all, so it is reported, never
+# acted on.
+arm_lease orphaned
+awk '{ sub(/^host=.*/, "host=someone-elses-mac"); print }' \
+	"$(lease_path "${PROJECT}" "${ZONE}" "${CLUSTER}")" >"${SCRATCH}/foreign"
+cp "${SCRATCH}/foreign" "$(lease_path "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+run_reclaim
+check "another host's lease is not reclaimed" 1 "${RECLAIM_RC}"
+check "another host's lease sees no teardown" "" "$(cat "${STOP_LOG}")"
+check_contains "the refusal explains why it cannot judge" "cannot judge" "${RECLAIM_OUT}"
+
+# A reclaim that could not finish must keep the record. Discarding it would
+# leave the nodes up with nothing left that knows they are orphaned — the
+# original bug, re-created by the fix.
+arm_lease orphaned
+RECLAIM_STOP_RC=1
+export RECLAIM_STOP_RC
+run_reclaim
+unset RECLAIM_STOP_RC
+check "a failed reclaim fails the gate" 1 "${RECLAIM_RC}"
+check "a failed reclaim keeps the lease for the next attempt" "orphaned" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+check_contains "the failure says the lease is kept" "next run retries" "${RECLAIM_OUT}"
+
+# --- teardown releases the lease, and only its own ---------------------------
+
+# Released last, after the stop scripts: a teardown killed mid-drain must still
+# read as orphaned to the next run.
+arm_lease held
+(
+	set +e
+	WORKDIR=""
+	teardown
+) >/dev/null 2>&1
+check "a completed teardown releases its own lease" "free" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+check "the lease is still held while the stop scripts run" \
+	"stop lease=held" "$(grep -F 'stop lease' "${STOP_LOG}")"
+
+# The loser of a two-gate race exits through the same teardown; it must not
+# clear the winner's lease on its way out.
+arm_lease held
+awk '{ sub(/^pid=.*/, "pid=999999"); print }' \
+	"$(lease_path "${PROJECT}" "${ZONE}" "${CLUSTER}")" >"${SCRATCH}/other"
+cp "${SCRATCH}/other" "$(lease_path "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+lease_process_command() { [[ "$1" == "999999" ]] && echo "${GATE_CMD}"; }
+(
+	set +e
+	WORKDIR=""
+	teardown
+) >/dev/null 2>&1
+check "a teardown never releases another gate's lease" "held" \
+	"$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2

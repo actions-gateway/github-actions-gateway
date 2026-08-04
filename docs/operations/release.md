@@ -273,7 +273,8 @@ a git ref (for the matching CRDs) — an RC tag satisfies both by construction.
 it after the first confirmation. `validate-release.sh` bakes in all the
 env and ordering below — deploy → route CI → on-demand e2e → dispatch the e2e
 matrix (run-scoped routing) → CRD smoke → teardown — is idempotent, and
-self-cleans back to 0 nodes on exit (success or failure). On failure it first
+self-cleans back to 0 nodes on exit (success or failure — and on Ctrl-C, though
+[not on every ending](#a-killed-gate-is-reclaimed-by-the-next-one)). On failure it first
 dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the
 gate's output, because the teardown's scale-to-0 evicts every pod and destroys
 the evidence — read the `Failure diagnostics` section of a failed run's log
@@ -305,6 +306,46 @@ The gate also checks every local tool it needs up front — including the pinned
 `cosign` the final CRD-smoke leg verifies with (`make cosign` downloads it to
 `.build/cosign`; `COSIGN=<path>` overrides) — so a missing binary fails the run
 before it spends anything, not 25 minutes in.
+
+##### A killed gate is reclaimed by the next one
+
+**Self-cleaning covers most endings, not all of them.** Bash runs the teardown
+trap on Ctrl-C and on an ordinary `kill`, so those tear the cluster back down.
+`kill -9`, a killed parent process, and a teardown interrupted part-way through
+do not — each leaves billable nodes up with no process left to release them, and
+twice that was caught only by hunting for a live teardown process by hand
+(Q640).
+
+So the gate takes an ownership lease for exactly the window in which it owns
+cluster state, and reclaims an *orphaned* one — a lease for the same target
+whose owning process is gone — before it spends anything. Running the gate again
+is therefore enough to end a leak the previous run started. To do only that,
+without starting a validation run:
+
+```bash
+PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh --reclaim
+```
+
+It reports a target nothing claims and exits, or tears an orphaned run's cluster
+back down to 0 nodes (confirming first, as the gate itself does). Run it when a
+gate was killed and you are not about to start another one.
+
+**The lease is the only thing it acts on**, because the alternative is worse
+than the leak. A cluster that merely has nodes up is what a hand-run
+`setup.sh`/`start.sh` debugging session looks like, so nothing here infers an
+orphan from cluster state: no lease, no teardown. A lease whose process is still
+alive means another gate is running, and the second gate refuses to start rather
+than tearing down the first one's environment. A lease written by another host
+is reported and never acted on — a pid means nothing off the host that minted
+it. Leases live in `${XDG_STATE_HOME:-~/.local/state}/github-actions-gateway/`,
+host-wide rather than per-checkout, so a gate killed in one worktree is visible
+to a gate started from another.
+
+Two gaps remain, both by design. A cluster left up by something *other* than
+this gate is not visible to the reclaim — nothing claims it, so nothing reclaims
+it; take it down with `scripts/dogfood/stop.sh`. And a killed gate that is never
+followed by another run or a `--reclaim` still bills: the state is recorded, but
+nothing reads it until someone runs one of the two.
 
 ##### Run it detached; the sentinel reports it back
 

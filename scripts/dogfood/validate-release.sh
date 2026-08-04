@@ -26,9 +26,22 @@
 # Idempotent: every underlying script is idempotent (guarded creates,
 # apply/upsert, --ignore-not-found), so a re-run after a partial failure is
 # safe. Self-cleaning: an EXIT trap tears the environment back down to 0 nodes
-# on success AND failure. On failure the trap first dumps a cluster snapshot
-# (nodes, pods, events) — teardown's scale-to-0 evicts everything, destroying
-# the evidence (e.g. the FailedScheduling reason) a diagnosis needs (Q355).
+# on success AND failure — bash runs it on TERM, INT and HUP too, so Ctrl-C and
+# an ordinary `kill` self-clean. On failure the trap first dumps a cluster
+# snapshot (nodes, pods, events) — teardown's scale-to-0 evicts everything,
+# destroying the evidence (e.g. the FailedScheduling reason) a diagnosis needs
+# (Q355).
+#
+# Self-cleaning cannot cover every ending, though. SIGKILL is untrappable, a
+# killed parent takes the process group with it, and a teardown killed part-way
+# through stops between the two stop scripts — each leaving billable nodes up
+# with no process left to release them, found twice only by hunting for a live
+# teardown process by hand (Q640). So the gate takes a lease
+# (lib/lease.sh) for the window in which it owns cluster state, and reclaims an
+# orphaned one — a lease for THIS target whose owning process is gone — before
+# it spends anything. Cluster state is never the trigger: a cluster that merely
+# has nodes up is what an operator debugging by hand leaves behind, so reclaim
+# acts on the lease and nothing else. `--reclaim` runs that step alone.
 #
 # PROD NOTE: gag-dogfood is hard-classified prod (.claude/prod-guard.json). This
 # is a lifecycle script run as `bash validate-release.sh …`, which the prod-guard
@@ -38,6 +51,7 @@
 #
 # Usage:
 #   scripts/dogfood/validate-release.sh <rc-tag>
+#   scripts/dogfood/validate-release.sh --reclaim
 #
 # Required env vars (export before running):
 #   PROJECT          GCP project ID (e.g. actions-gateway-dogfood)
@@ -76,6 +90,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "${REPO_ROOT}/scripts/lib/common.sh"
 # shellcheck source=scripts/dogfood/lib/progress.sh
 source "${REPO_ROOT}/scripts/dogfood/lib/progress.sh"
+# shellcheck source=scripts/dogfood/lib/lease.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/lease.sh"
 
 SCRIPT_DIR="${REPO_ROOT}/scripts/dogfood"
 APP_ID_DEFAULT="3752347"
@@ -139,10 +155,16 @@ export RELEASE_PROGRESS_FILE RELEASE_STATUS_FILE
 usage() {
 	cat >&2 <<'USAGE'
 Usage: scripts/dogfood/validate-release.sh <rc-tag>
+       scripts/dogfood/validate-release.sh --reclaim
 
 Runs the full pre-GA dogfood validation gate for <rc-tag> (e.g. v1.1.0-rc.7)
 and tears the environment back down on exit. Requires PROJECT, CLUSTER, ZONE,
 and REPO to be exported. See the script header for the optional knobs.
+
+--reclaim runs only the orphaned-run check: if a previous gate against this
+target was killed before its teardown finished, its cluster is torn back down
+to 0 nodes. Spends nothing otherwise, and never acts on a cluster no lease
+claims.
 USAGE
 }
 
@@ -551,8 +573,73 @@ teardown() {
 	bash "${SCRIPT_DIR}/e2e-stop.sh" || echo "e2e-stop failed — continuing teardown" >&2
 	bash "${SCRIPT_DIR}/stop.sh" || echo "stop failed — continuing teardown" >&2
 	[[ -n "${WORKDIR}" ]] && rm -rf "${WORKDIR}"
+	# Release LAST, after the scripts that take the cluster down: the lease is
+	# the claim that this run still owns billable state, so dropping it earlier
+	# would make a teardown killed mid-drain look like a clean exit and leave
+	# the nodes for nobody to reclaim.
+	lease_release "${PROJECT}" "${ZONE}" "${CLUSTER}"
 	progress_event teardown "done"
 	echo "=== Teardown complete (exit ${rc}) ==="
+}
+
+# reclaim_orphaned_gate [CONFIRM] — tear down what a killed gate left running,
+# before this run spends anything. CONFIRM=1 asks first (the --reclaim entry;
+# the gate proper has already confirmed the same target).
+#
+# The lease is the only trigger. Nodes being up is not evidence of an orphan —
+# an operator debugging by hand leaves exactly that state, and tearing theirs
+# down would be worse than the leak this fixes — so `free` returns having
+# touched nothing, and a `foreign` record (another host's pid, or another
+# target) is reported rather than acted on.
+#
+# A live lease is the two-sessions-at-once case: refuse, and touch nothing. Both
+# gates would otherwise fight over the pool size and each other's teardown.
+reclaim_orphaned_gate() {
+	local confirm="${1:-0}" state
+	state="$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+	case "${state}" in
+	free)
+		return 0
+		;;
+	held)
+		echo "error: another release gate already owns ${PROJECT}/${ZONE}/${CLUSTER}." >&2
+		echo "  $(lease_describe "${PROJECT}" "${ZONE}" "${CLUSTER}")" >&2
+		echo "  Two gates on one cluster resize the pool under each other and tear down" >&2
+		echo "  each other's tenants. Wait for it to finish, or stop it, then re-run." >&2
+		return 1
+		;;
+	foreign)
+		echo "error: ${PROJECT}/${ZONE}/${CLUSTER} has a lease this host cannot judge." >&2
+		echo "  $(lease_describe "${PROJECT}" "${ZONE}" "${CLUSTER}")" >&2
+		echo "  A pid means nothing off the host that minted it, so this is never" >&2
+		echo "  reclaimed automatically. Confirm no gate is running, then delete it." >&2
+		return 1
+		;;
+	esac
+
+	echo "An earlier release gate against this target was killed before it finished tearing down:"
+	echo "  $(lease_describe "${PROJECT}" "${ZONE}" "${CLUSTER}")"
+	echo "  Its process is gone; the nodes it scaled up are not. Reclaiming them first."
+	if ((confirm)); then
+		confirm_or_exit "$(printf 'Tear down the cluster that orphaned gate left running?\n  Project: %s\n  Cluster: %s  (zone %s)\nThis routes e2e + CI off GAG and scales the cluster back to 0 nodes.' \
+			"${PROJECT}" "${CLUSTER}" "${ZONE}")"
+	fi
+
+	# The stop scripts pin the cluster context fail-closed themselves and drain
+	# before they delete, so a reclaim cannot scale down under live work.
+	export ASSUME_YES=1
+	local failed=0
+	bash "${SCRIPT_DIR}/e2e-stop.sh" || failed=1
+	bash "${SCRIPT_DIR}/stop.sh" || failed=1
+	if ((failed)); then
+		echo "error: the orphaned run's teardown did not complete." >&2
+		echo "  The lease is kept so the next run retries it — the usual cause is a drain" >&2
+		echo "  that will not converge, which means live work the stop scripts refuse to" >&2
+		echo "  strand. Read their output above; re-run with --reclaim once it clears." >&2
+		return 1
+	fi
+	lease_discard "${PROJECT}" "${ZONE}" "${CLUSTER}"
+	echo "  Reclaim complete — the orphaned run's cluster is back at rest."
 }
 
 # confirm_target — show the resolved target and require one confirmation before
@@ -568,11 +655,16 @@ main() {
 		usage
 		exit 0
 	fi
-	local rc_tag="${1:-}"
-	if [[ -z "${rc_tag}" ]]; then
-		echo "error: <rc-tag> is required" >&2
-		usage
-		exit 2
+	local reclaim_only=0 rc_tag=""
+	if [[ "${1:-}" == "--reclaim" ]]; then
+		reclaim_only=1
+	else
+		rc_tag="${1:-}"
+		if [[ -z "${rc_tag}" ]]; then
+			echo "error: <rc-tag> is required" >&2
+			usage
+			exit 2
+		fi
 	fi
 
 	: "${PROJECT:?PROJECT must be set}"
@@ -584,8 +676,23 @@ main() {
 	require_cmd kubectl "https://kubernetes.io/docs/tasks/tools/"
 	require_cmd gke-gcloud-auth-plugin \
 		"https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#install_plugin"
-	require_cmd helm "https://helm.sh/docs/intro/install/"
 	require_cmd gh "https://cli.github.com/"
+
+	# --reclaim stops here: it only ever tears down, so it needs neither the
+	# deploy toolchain nor an RC tag, and reporting a clean target must stay
+	# free enough that a session can run it on any suspicion.
+	if ((reclaim_only)); then
+		if [[ "$(lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}")" == "free" ]]; then
+			echo "No release gate holds ${PROJECT}/${ZONE}/${CLUSTER} — nothing to reclaim."
+			echo "  (A cluster left up by something other than this gate is not visible here:"
+			echo "  no lease, no reclaim. Check it by hand and use scripts/dogfood/stop.sh.)"
+			exit 0
+		fi
+		reclaim_orphaned_gate 1
+		exit 0
+	fi
+
+	require_cmd helm "https://helm.sh/docs/intro/install/"
 	# Not require_cmd: cosign is a repo-local pinned download, not a PATH tool.
 	preflight_cosign
 
@@ -603,9 +710,26 @@ main() {
 
 	confirm_target
 
+	# Reclaim before anything else spends: a gate killed mid-run left this
+	# cluster scaled up, and a run that deployed on top of it would inherit the
+	# leak instead of ending it. Also the point where a second concurrent gate
+	# is refused, cheaply and before the wait below.
+	reclaim_orphaned_gate
+
 	# Settle the e2e lane BEFORE the trap arms and before anything billable: a
 	# collision with an in-flight run must not cost a cluster cycle.
 	settle_e2e_lane
+
+	# Claim the target, then arm the teardown that releases it. The lease is
+	# taken here rather than at reclaim time so it spans exactly the window in
+	# which this run owns billable state — a settle wait that times out spends
+	# nothing and so leaves nothing to reclaim. Two gates that raced through the
+	# check above both arrive here; ln decides, and the loser has spent nothing.
+	if ! lease_acquire "${PROJECT}" "${ZONE}" "${CLUSTER}" "${GAG_IMAGE_TAG}"; then
+		echo "error: another release gate claimed ${PROJECT}/${ZONE}/${CLUSTER} while this one waited." >&2
+		echo "  $(lease_describe "${PROJECT}" "${ZONE}" "${CLUSTER}")" >&2
+		exit 1
+	fi
 
 	# Everything below mutates the cluster — arm the self-cleaning teardown first.
 	trap teardown EXIT
