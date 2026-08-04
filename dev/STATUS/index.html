@@ -2884,14 +2884,6 @@
 <td><code>go-work-tidy.sh</code> draws its module list from <code>go.work</code>, so the flow never tidies <code>devtools/</code> or <code>tools/</code>; the check then diffs a tree nothing rewrote. Derived from the flow's source, not injected — a working-tree edit masks it locally.</td>
 </tr>
 <tr>
-<td><a id="Q670"></a>Q670</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-lint.sh"><code>go-lint</code> change scoping skips the non-workspace <code>devtools</code> module</a></td>
-<td><code>ci</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Measured: a branch adding six Go files under <code>devtools/</code> printed "no module changes" and skipped golangci-lint; CI's full sweep then found 12. <code>compute_scope</code> maps changes to <code>go.work</code> dirs only. Separate from <a href="#Q667">Q667</a> — different gate.</td>
-</tr>
-<tr>
 <td><a id="Q671"></a>Q671</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile"><code>make scripts-test</code>'s help line lists every suite, so two PRs adding suites always conflict</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
