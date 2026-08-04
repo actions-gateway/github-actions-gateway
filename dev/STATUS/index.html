@@ -2593,14 +2593,6 @@
 <td>Deploy routes CI to GAG, scaling <code>workers</code> to 8 (32 vCPU) out of the same <code>CPUS_ALL_REGIONS</code> the e2e pool then needs. Cost two rc.5 runs at the old limit of 32. Raised to 64, so 52 worst case now fits — but nothing caps the competition.</td>
 </tr>
 <tr>
-<td><a id="Q640"></a>Q640</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Killing the release gate skips <code>trap teardown EXIT</code>, so the cluster keeps billing</a></td>
-<td><code>dogfood</code> <code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Happened twice in one session; both catches were ad-hoc, by looking for a live teardown process. Self-cleaning holds only when the gate exits on its own. Wants a mechanism — idempotent teardown at next start, or a reaper — not a fourth doc rule.</td>
-</tr>
-<tr>
 <td><a id="Q645"></a>Q645</td>
 <td><a href="../plan/release-1.3/#the-rc5-re-run-2026-08-02">Nothing has measured what the run service does with an <code>abandoned</code> completion</a></td>
 <td><code>dogfood</code> <code>bug</code></td>
@@ -2887,6 +2879,14 @@
 <td>🔲</td>
 <td>S</td>
 <td>The Q612 survey ranked on parsing density, not length: a 235-line awk parser qualified while <code>dogfood/setup.sh</code> (790) and <code>validate-egress-ip.sh</code> (601) did not — they orchestrate kubectl/helm, where shell is right. Record the criterion.</td>
+</tr>
+<tr>
+<td><a id="Q660"></a>Q660</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">Three <code>scripts/</code> groups have no table, so the doc-update-matrix step that adds one is unfollowable</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>dogfood/</code>, <code>lib/</code> and <code>updatecli/</code> appear only as directory rows; row 18 of the matrix tells a contributor to add a row to a per-script table that does not exist for them. Hit while adding <code>dogfood/lib/lease.sh</code>.</td>
 </tr>
 <tr>
 <td><a id="Q621"></a>Q621</td>
