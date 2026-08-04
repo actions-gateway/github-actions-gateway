@@ -2735,6 +2735,14 @@
 <td>It upgrades with default values only, so any preflight gated on a value being SET is dead code in CI. Q298's <code>allowedInfraPriorityClasses</code> lookup guard was verified by hand on kind, not by a gate. Add a values-set leg.</td>
 </tr>
 <tr>
+<td><a id="Q666"></a>Q666</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/diagnostics.go">Seven e2e suites tear down their tenant namespace without dumping anything on failure</a></td>
+<td><code>tests</code> <code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>isolation</code>, <code>resilience</code>, <code>provisioning</code>, <code>teardown</code>, <code>security_profile</code>, <code>manager_np</code>, <code>rbac_e2e</code> run multi-minute waits then <code>DeleteNamespace</code> with no <code>Failed()</code> dump, so a timeout leaves no AGC log — what made Q664 undiagnosable.</td>
+</tr>
+<tr>
 <td><a id="Q649"></a>Q649</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">Adding a gate means hand-editing three copies of the gate list, and concurrent PRs collide on all three</a></td>
 <td><code>ci</code> <code>debt</code> <code>retro</code></td>
