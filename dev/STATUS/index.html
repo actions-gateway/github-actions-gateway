@@ -2727,14 +2727,6 @@
 <td>Q628 releases an unrun worker's assignment with <code>result=abandoned</code>; whether GitHub re-dispatches or concludes the run is unmeasured, and decides whether a re-run arm is also needed. Measurable on a turn-up: reap a Pending worker, watch the run.</td>
 </tr>
 <tr>
-<td><a id="Q646"></a>Q646</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/chart-released-upgrade-check.sh">The released-chart upgrade gate never exercises the CRD-schema preflights</a></td>
-<td><code>tests</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>It upgrades with default values only, so any preflight gated on a value being SET is dead code in CI. Q298's <code>allowedInfraPriorityClasses</code> lookup guard was verified by hand on kind, not by a gate. Add a values-set leg.</td>
-</tr>
-<tr>
 <td><a id="Q666"></a>Q666</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/utils/diagnostics.go">Seven e2e suites tear down their tenant namespace without dumping anything on failure</a></td>
 <td><code>tests</code> <code>ci</code> <code>debt</code></td>
