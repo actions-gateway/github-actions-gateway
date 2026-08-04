@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/development/technical-debt/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/merge-queue/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Technical debt: policy and strategy - GitHub Actions Gateway</title>
+        <title>Merge queue: kill the freshness-invalidation loop - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#technical-debt-policy-and-strategy" class="md-skip">
+        <a href="#merge-queue-kill-the-freshness-invalidation-loop" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Technical debt: policy and strategy
+              Merge queue: kill the freshness-invalidation loop
             
           </span>
         </div>
@@ -2450,10 +2450,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-we-mean-by-technical-debt" class="md-nav__link">
+  <a href="#status" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What we mean by technical debt
+        Status
       
     </span>
   </a>
@@ -2461,10 +2461,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#classification" class="md-nav__link">
+  <a href="#the-measurement-2026-08-03" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Classification
+        The measurement (2026-08-03)
       
     </span>
   </a>
@@ -2472,138 +2472,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#policy" class="md-nav__link">
+  <a href="#phase-1-merge_group-triggers-this-pr" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Policy
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Policy">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#make-the-smallest-change-then-choose-fix-flag-defer-or-decline" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Make the smallest change, then choose: fix, flag, defer, or decline
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#capture-knowledge-durably-not-in-chat" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Capture knowledge durably, not in chat
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#secure-by-default-is-not-negotiable" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Secure-by-default is not negotiable
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#distinguish-a-fixable-defect-from-an-external-structural-ceiling" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Distinguish a fixable defect from an external structural ceiling
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A shell gate becomes a Go devtool on parsing density, not length
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="A shell gate becomes a Go devtool on parsing density, not length">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#worked-examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Worked examples
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#what-the-rewrite-costs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What the rewrite costs
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#strategy-the-debt-lifecycle" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Strategy: the debt lifecycle
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Strategy: the debt lifecycle">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#flake-fixes-go-first" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Flake fixes go first
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-we-measure--and-deliberately-dont" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What we measure — and deliberately don't
+        Phase 1: merge_group triggers (this PR)
       
     </span>
   </a>
@@ -2611,10 +2483,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quality-gates-as-debt-brakes" class="md-nav__link">
+  <a href="#phase-2-activation-post-merge-ordering-matters" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quality gates as debt brakes
+        Phase 2: activation (post-merge, ordering matters)
       
     </span>
   </a>
@@ -2622,10 +2494,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#where-it-all-lives" class="md-nav__link">
+  <a href="#phase-3-re-measure-then-decide" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Where it all lives
+        Phase 3: re-measure, then decide
       
     </span>
   </a>
@@ -2652,367 +2524,168 @@
   
 
 
-<h1 id="technical-debt-policy-and-strategy">Technical debt: policy and strategy<a class="headerlink" href="#technical-debt-policy-and-strategy" title="Permanent link">&para;</a></h1>
-<p>How this project classifies technical debt, decides what to do about each piece,
-and keeps it from accumulating. This is the <strong>policy</strong> (the rules) and the
-<strong>strategy</strong> (the lifecycle that enforces them). The mechanics live in adjacent
-docs and are linked rather than repeated:</p>
+<h1 id="merge-queue-kill-the-freshness-invalidation-loop">Merge queue: kill the freshness-invalidation loop<a class="headerlink" href="#merge-queue-kill-the-freshness-invalidation-loop" title="Permanent link">&para;</a></h1>
+<p><strong>Goal:</strong> stop paying a full heavy-gate re-run (e2e ~9–30 min × two CNI lanes)
+every time <code>main</code> moves under an in-flight PR, without weakening the
+nothing-red-reaches-<code>main</code> guarantee.</p>
+<p><strong>Approach:</strong> adopt GitHub's merge queue on <code>main</code>. The queue constructs each
+candidate merge result and runs the required checks on <em>that</em> (the
+<code>merge_group</code> event), so the jointly-red hazard the manual freshness rule
+guards against is checked by machine, once per batch, instead of by every
+session rebasing and re-running CI on every push. Decision approved
+2026-08-03: adopt, and keep e2e per-PR (sessions keep early signal while
+iterating; the queue run is the authoritative combined check).</p>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. <code>merge_group</code> triggers on the 9 required-check workflows</td>
+<td>🚧 this PR</td>
+</tr>
+<tr>
+<td>2. Activation: add the <code>merge_queue</code> rule to the <code>default-protect</code> ruleset</td>
+<td>❌ blocked on Phase 1 reaching <code>main</code></td>
+</tr>
+<tr>
+<td>3. Re-measure after ~1 week; decide follow-ups</td>
+<td>❌ after Phase 2</td>
+</tr>
+</tbody>
+</table>
+<h2 id="the-measurement-2026-08-03">The measurement (2026-08-03)<a class="headerlink" href="#the-measurement-2026-08-03" title="Permanent link">&para;</a></h2>
+<p>Taken from the last 30 days of CI runs, merged PRs, and <code>git log</code> contention:</p>
 <ul>
-<li><a href="../maintaining-backlog/">maintaining-backlog.md</a> — how to record and prioritize a debt item in <a href="../../STATUS/">docs/STATUS.md</a>.</li>
-<li><a href="../backpressure/">backpressure.md</a>: the automated feedback loops that stop debt at authoring time.</li>
-<li><a href="../../plan/release-1.0/">release-1.0.md</a> — the quality gates that block the 1.0 release (bucket F).</li>
-<li><a href="../../design/appendix-g-future-enhancements/">appendix-g-future-enhancements.md</a> — long-horizon non-commitments.</li>
+<li>26–34 PRs merge per day: <code>main</code> advances roughly every 25–30 min during
+  active hours.</li>
+<li>The e2e gate averages ~9 min on success (13.2 min on a representative
+  executed run, 7.6 min of it <code>make e2e</code> proper; max observed 30 min).
+  <code>e2e-gate</code> and <code>e2e-calico-gate</code> are both required checks.</li>
+<li>18 of 51 recent branches needed ≥2 e2e runs (worst: 5); 10 of the last 50
+  e2e runs were cancelled mid-flight by a superseding push. A third or more of
+  e2e compute is redo, not first-run validation.</li>
+<li>Contention is process files, not code: <code>docs/STATUS.md</code> appears in 542 of
+  702 commits (77%), <code>docs/plan/README.md</code> in 22%. No component source file is
+  in the top-20 contention list, which also answers "should we split the
+  monorepo": no, the conflict surface wouldn't move.</li>
+<li>The ruleset's <code>strict_required_status_checks_policy</code> is already <code>false</code>; the
+  freshness requirement is process (CONTRIBUTING.md's re-check rule), not
+  GitHub. The queue replaces the process rule's mechanism, not a GitHub
+  setting.</li>
 </ul>
-<h2 id="what-we-mean-by-technical-debt">What we mean by technical debt<a class="headerlink" href="#what-we-mean-by-technical-debt" title="Permanent link">&para;</a></h2>
-<p>Technical debt is work we <strong>knowingly defer</strong> that trades short-term progress for
-a long-term carrying cost — a shortcut taken on purpose, or erosion we have
-noticed but not yet paid down. It is distinct from a plain bug: a bug is
-incorrect behavior we want fixed; debt is a <em>known</em> gap between what exists and
-what we would build with unlimited time. A debt item may <em>cause</em> bugs (the
-<a href="../../STATUS/">Q76</a> agent-pool claim race is debt that can corrupt sessions), but
-the defining trait is that we are choosing — explicitly — when to pay it.</p>
-<p>The policy below exists so that choice is always <strong>explicit and recorded</strong>, never
-an accident of an unreviewed shortcut.</p>
-<h2 id="classification">Classification<a class="headerlink" href="#classification" title="Permanent link">&para;</a></h2>
-<p>We classify each item so its severity and owner are obvious. The taxonomy is the
-common one (architectural, code, infrastructure, test, documentation, security),
-mapped to where it shows up here:</p>
-<table>
-<thead>
-<tr>
-<th>Kind</th>
-<th>What it looks like in this repo</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Architectural</strong></td>
-<td>Coupling or boundary erosion across the four tiers (GMC, AGC, proxy, worker); e.g. two logging libraries emitting incompatible JSON.</td>
-</tr>
-<tr>
-<td><strong>Code</strong></td>
-<td>Duplicated logic, tangled functions, dead annotations, residual <code>interface{}</code>. Caught increasingly by lint (see <a href="../backpressure/">backpressure.md</a>).</td>
-</tr>
-<tr>
-<td><strong>Infrastructure</strong></td>
-<td>Gaps in continuous integration (CI), manifests, or observability — unvalidated YAML, missing scrape wiring, single-replica defaults.</td>
-</tr>
-<tr>
-<td><strong>Test</strong></td>
-<td>Coverage gaps, missing tiers, behaviors only a higher tier can prove (see <a href="../testing/">testing.md</a>).</td>
-</tr>
-<tr>
-<td><strong>Documentation</strong></td>
-<td>Drift between code and docs — unregistered metrics, stale runbooks.</td>
-</tr>
-<tr>
-<td><strong>Security</strong></td>
-<td>Deferred hardening, missing validation, an unscanned dependency. Subject to the <a href="#secure-by-default-is-not-negotiable">secure-by-default</a> rule below.</td>
-</tr>
-</tbody>
-</table>
-<p>There is no <strong>design / user-experience (UX)</strong> category: this is a backend
-operator system with no user interface. Its analogue — operator and Custom
-Resource Definition (CRD) ergonomics — is covered by the <code>docs/operations/</code> tree
-and CRD validation, not tracked as UX debt.</p>
-<h2 id="policy">Policy<a class="headerlink" href="#policy" title="Permanent link">&para;</a></h2>
-<h3 id="make-the-smallest-change-then-choose-fix-flag-defer-or-decline">Make the smallest change, then choose: fix, flag, defer, or decline<a class="headerlink" href="#make-the-smallest-change-then-choose-fix-flag-defer-or-decline" title="Permanent link">&para;</a></h3>
-<p>When you touch the code and notice debt outside the current task's scope, do
-<strong>not</strong> silently expand the change to fix it. Decide deliberately:</p>
-<ol>
-<li><strong>Fix now</strong> — only if it is <em>in scope</em>, <em>quick</em>, and <em>low-risk</em>. A
-   behavior-preserving cleanup that the current change naturally touches (e.g.
-   extracting a duplicated security context while editing the builder it lives
-   in) qualifies. Verify it changes no behavior.</li>
-<li><strong>Flag to the Queue</strong> — near- or long-term work that someone should do but not
-   now. Add a row to the Queue in <a href="../../STATUS/">docs/STATUS.md</a> <strong>at the
-   priority it deserves</strong>, with the <em>why</em> of any decision it depends on. Follow
-   <a href="../maintaining-backlog/">maintaining-backlog.md</a>.</li>
-<li><strong>Defer</strong> — a real commitment with no near-term intent, waiting on an explicit
-   trigger (a tool, a cluster, a dependency that does not exist yet). It goes in
-   the <strong>Deferred</strong> section of <a href="../../STATUS/">docs/STATUS.md</a>, out of the
-   priority ordering, and returns to the Queue when its trigger fires.</li>
-<li><strong>Decline</strong> — a long-horizon idea we are explicitly <em>not</em> committing to. It
-   belongs in <a href="../../design/appendix-g-future-enhancements/">appendix-g-future-enhancements.md</a>,
-   not the backlog.</li>
-</ol>
-<p>The bias is toward (2): <strong>flag rather than fix out of scope.</strong> A bundled
-"while I was here" fix inflates a diff, hides the real change from review, and
-couples unrelated risk.</p>
-<p><strong>Measure before you flag, not only before you fix.</strong> A flag is a claim: it goes
-into a Queue row or a PR description, and the next reader treats it as a finding
-someone verified. "Measure before asserting a root cause" applies to the aside as
-much as to the change in front of you — a plausible-by-analogy flag ("X probably
-has the same shape as Y") is a hypothesis, and filing one costs someone else the
-measurement you skipped. If measuring it now is out of scope, flag <em>the question</em>
-rather than the answer: "does X have Y's failure mode? unmeasured" is honest and
-still actionable, where a confident wrong flag is neither.</p>
-<p>Worked example: Q492 flagged "<code>helm rollback</code> past a chart version that added a
-values key fails the way <code>--reuse-values</code> does" in a PR description, reasoning
-from shape alone. Measuring it disproved the claim — <code>helm rollback</code> replays the
-target revision's stored manifest instead of re-rendering, so the failure cannot
-arise — while turning up a <em>different</em>, real hazard the analogy had hidden
-(<a href="../../operations/upgrade/#rolling-back-past-this-change-re-arms-the-outage-it-fixes">Q492's rollback caveat</a>).
-The wrong flag had already merged into the record by then.</p>
-<h3 id="capture-knowledge-durably-not-in-chat">Capture knowledge durably, not in chat<a class="headerlink" href="#capture-knowledge-durably-not-in-chat" title="Permanent link">&para;</a></h3>
-<p>A debt item that exists only in a conversation is lost. The moment you decide an
-item is worth doing later, it must land in the repo — a Queue row, a plan doc, or
-this policy. The same applies to the <em>reason</em> behind a decision: record the <em>why</em>
-on the item, because the next person (or session) acting on it starts cold.</p>
-<h3 id="secure-by-default-is-not-negotiable">Secure-by-default is not negotiable<a class="headerlink" href="#secure-by-default-is-not-negotiable" title="Permanent link">&para;</a></h3>
-<p>Security debt has one extra rule: <strong>a security regression may never become a
-default to buy convenience.</strong> If an option would weaken any security property —
-removing a validation, relaxing a pod profile, switching to a weaker key type —
-the secure choice stays the default. The weaker option may exist only as a
-documented, explicit opt-in. Such a trade-off is raised and signed off <em>before</em>
-shipping, never deferred silently as ordinary debt.</p>
-<h3 id="distinguish-a-fixable-defect-from-an-external-structural-ceiling">Distinguish a fixable defect from an external structural ceiling<a class="headerlink" href="#distinguish-a-fixable-defect-from-an-external-structural-ceiling" title="Permanent link">&para;</a></h3>
-<p>Not every repeatedly-failing symptom is debt you can pay down. Some failures are a
-<strong>structural ceiling in a system we do not control</strong> — a server-side behaviour, a
-protocol constraint, a third-party rate limit — where each fix on our side is motion
-without progress. Misclassifying one as ordinary debt funds an open-ended loop of
-fixes that cannot converge.</p>
-<p>The signal to stop and re-triage: after the obvious on-our-side causes are fixed and
-the symptom <strong>still reproduces on a clean setup with those causes provably quiet</strong>,
-do not fund another fix round yet. Ask whether the residual is on our side of the
-boundary at all. The cheap way to force the question is to build the minimal case
-that isolates the external actor — a probe, a clean namespace — and read what <em>it</em>
-does, rather than iterating on our code.</p>
-<p>Worked example — the fan-out saga (Q260 → Q224 → Q264). Eight live re-routes fixed
-AGC-side seam after seam (completion accounting, planID dedup, recycle churn,
-slot-stranding, capacity) before a clean-namespace run with every seam provably quiet
-<em>still</em> wedged: the residual was GitHub's server-side fan-out dispatch, structurally
-unfixable on our side — the <a href="../../plan/q224-fanout-dispatch-lever-spike/">Q224 lever spike</a>
-confirmed no AGC-side lever exists. The lesson is not "fix faster"; it is to run the
-<em>is-this-a-structural-ceiling?</em> check <strong>earlier</strong>, so the boundary is found before the
-Nth fix round, not after. When the answer is "external," the disposition is usually
-<strong>defer + a watch trigger</strong> (the external condition changing — tracked with the
-<a href="../../design/github-protocol-dependencies/">protocol dependency register</a> when the
-ceiling is a GitHub protocol) or an architecture change that removes the dependency —
-not another patch. This complements the standing rule that source-reading is unverified
-until exercised end-to-end.</p>
-<h3 id="a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length">A shell gate becomes a Go devtool on parsing density, not length<a class="headerlink" href="#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length" title="Permanent link">&para;</a></h3>
-<p>A long shell script is not debt. A shell script standing in for a parser is. The two
-look alike from the outside, so the decision needs a test that reads the script rather
-than its line count.</p>
-<p>Ask what the script does with <strong>text it did not produce</strong>:</p>
+<p>The constraint is therefore not e2e duration but the multiplier on it: every
+merge invalidates every in-flight green PR, and re-validation costs a full
+gate cycle whose duration matches the inter-merge interval, so re-runs
+cascade. Amortizing one combined run per batch removes the quadratic term.</p>
+<h2 id="phase-1-merge_group-triggers-this-pr">Phase 1: <code>merge_group</code> triggers (this PR)<a class="headerlink" href="#phase-1-merge_group-triggers-this-pr" title="Permanent link">&para;</a></h2>
+<p>All nine workflows behind required checks gain a <code>merge_group:</code> trigger:
+<code>e2e-test</code>, <code>e2e-calico</code>, <code>integration-test</code>, <code>unit-test</code>, <code>license-notices</code>,
+<code>manifest-validate</code>, <code>plan-hygiene</code>, <code>security-scan</code>, <code>status-lint</code>.</p>
+<p>Why this is the whole change:</p>
 <ul>
-<li><strong>It parses a structured format into fields and reasons over them</strong> (Markdown, a
-  GitHub Flavored Markdown table, YAML, JSON), so it has to track nesting, escaping,
-  and matched delimiters. Regular expressions cannot count brackets. Rewrite it in Go
-  against a real parser.</li>
-<li><strong>It sequences external command-line interfaces</strong> (<code>kubectl</code>, <code>helm</code>, <code>gcloud</code>,
-  <code>docker</code>) and branches on their exit codes. Length here comes from the number of
-  steps, not from the difficulty of any one of them. Shell is the right language, and
-  Go would be <code>exec.Command</code> soup.</li>
+<li>Every workflow already uses the always-trigger + internal <code>changes</code>
+  paths-filter + aggregate-gate pattern, so the gate contexts report on any
+  event the workflow triggers on.</li>
+<li>dorny/paths-filter v4 supports <code>merge_group</code> natively: <code>base</code>/<code>ref</code> default
+  to the event's commit hashes and detection runs via git against the
+  already-present checkout (verified against the v4 README). Docs-only queue
+  entries therefore stay cheap: the heavy legs skip exactly as they do on a
+  docs-only PR.</li>
+<li>Every heavy job's condition has the shape
+  <code>needs.changes.outputs.X == 'true' || push || workflow_dispatch</code>, so a
+  <code>merge_group</code> run takes the path-filtered branch, the desired behavior.</li>
+<li>Concurrency groups key on <code>github.ref</code>; merge-group refs
+  (<code>gh-readonly-queue/...</code>) are unique per queue entry, and
+  <code>cancel-in-progress</code> stays scoped to <code>pull_request</code>.</li>
+<li>status-lint's per-PR isolation check reads <code>github.event.pull_request</code>; it
+  is already gated <code>if: github.event_name == 'pull_request'</code> and simply skips
+  on the queue run (the PR event already enforced it).</li>
 </ul>
-<p>Two corroborating signals when the first read is ambiguous:</p>
+<h2 id="phase-2-activation-post-merge-ordering-matters">Phase 2: activation (post-merge, ordering matters)<a class="headerlink" href="#phase-2-activation-post-merge-ordering-matters" title="Permanent link">&para;</a></h2>
+<p>Enabling the queue before Phase 1 reaches <code>main</code> wedges every merge: the
+required checks would never report on <code>merge_group</code> refs. After Phase 1
+merges, add the rule to the existing <code>default-protect</code> ruleset (id
+17350763):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>repos/actions-gateway/github-actions-gateway/rulesets/17350763<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--input<span class="w"> </span>tmp/ruleset.json
+</code></pre></div>
+<p>where <code>tmp/ruleset.json</code> is the current ruleset body (GET it first) plus:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;merge_queue&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">&quot;parameters&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">&quot;merge_method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;SQUASH&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">&quot;grouping_strategy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ALLGREEN&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">&quot;max_entries_to_build&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">&quot;max_entries_to_merge&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">&quot;min_entries_to_merge&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nt">&quot;min_entries_to_merge_wait_minutes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="nt">&quot;check_response_timeout_minutes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">60</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="p">}</span>
+</code></pre></div>
 <ul>
-<li><strong>How does it fail?</strong> A parser-dense gate fails <em>silently wrong</em>: a link never
-  collected, a table cell read from the wrong index, and the gate stays green by not
-  seeing. An orchestrator fails loudly, because the CLI it called exits non-zero.</li>
-<li><strong>What would a test look like?</strong> A parse routine takes a string and returns fields,
-  which is a table test. An orchestrator needs a live cluster, and moving it to Go buys
-  no testability it did not already have.</li>
+<li><code>SQUASH</code> preserves the repo's squash-merge convention and satisfies the
+  ruleset's <code>required_linear_history</code>.</li>
+<li><code>min_entries_to_merge: 1</code> with a 5-minute wait lets batches form at the
+  observed merge rate (~2 PRs per 5-min window at peak) without stalling a
+  lone PR.</li>
+<li><code>check_response_timeout_minutes: 60</code> clears the worst observed e2e run
+  (30 min) with headroom for queue-time image-cache misses.</li>
 </ul>
-<p>Parsing structured text is necessary but not sufficient. A script that must reproduce
-its input <strong>byte for byte</strong> is worse off with an abstract syntax tree, which discards
-exactly the fidelity it depends on. <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-status.sh"><code>git-merge-status.sh</code></a>
-and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/merge-status-rows.awk"><code>merge-status-rows.awk</code></a> parse Markdown
-tables and stay in <code>awk</code> for that reason: a merge driver reconstructs the file line for
-line, conflict-marker fallback included.</p>
-<h4 id="worked-examples">Worked examples<a class="headerlink" href="#worked-examples" title="Permanent link">&para;</a></h4>
-<p>Line counts measured 2026-08-03 with <code>wc -l</code>. The <a href="../../plan/markdown-gates-parser/">Q612 survey</a>
-and the Queue row that asked for this section cited 235, 601, and 790; all three scripts
-have drifted since.</p>
-<table>
-<thead>
-<tr>
-<th>Script</th>
-<th>Lines</th>
-<th>Reads</th>
-<th>Verdict</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-doc-links.sh"><code>scripts/docs/check-doc-links.sh</code></a></td>
-<td>252, now 76</td>
-<td>178 of them were one <code>awk</code> program implementing a Markdown parser plus the github-slugger algorithm</td>
-<td><strong>Rewritten</strong> (Q612) — the checker is <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/doclinks"><code>devtools/docs/doclinks</code></a> over a shared goldmark parse layer; the script keeps the file selection</td>
-</tr>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/lint-backlog.sh"><code>scripts/docs/lint-backlog.sh</code></a></td>
-<td>518, now 92</td>
-<td>Queue rows split on a literal <code>\|</code> field separator at fixed indices; one escaped pipe in a cell shifted every field and the row's rules then evaluated the wrong ones</td>
-<td><strong>Rewritten</strong> (Q613): the rules are <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/devtools/docs/backloglint"><code>devtools/docs/backloglint</code></a> over the same parse layer; the script keeps the file selection and the environment interface</td>
-</tr>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dev/validate-egress-ip.sh"><code>scripts/dev/validate-egress-ip.sh</code></a></td>
-<td>603</td>
-<td>Zero <code>awk</code>/<code>jq</code>/<code>sed</code> invocations. Field extraction is delegated to <code>kubectl -o jsonpath</code>; the body is <code>kubectl</code>, <code>helm</code>, <code>gcloud</code>, <code>curl</code>, and <code>docker</code> calls</td>
-<td><strong>Stays shell</strong></td>
-</tr>
-<tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/setup.sh"><code>scripts/dogfood/setup.sh</code></a></td>
-<td>791</td>
-<td>One line invoking <code>awk</code>/<code>jq</code>/<code>sed</code>. The longest script under <code>scripts/</code>, and the least parsing of the four</td>
-<td><strong>Stays shell</strong></td>
-</tr>
-</tbody>
-</table>
-<p>Sorted by length, the verdicts run backwards: the two shortest are the rewrites and the
-two longest stay shell. That is why length is not the signal.</p>
-<h4 id="what-the-rewrite-costs">What the rewrite costs<a class="headerlink" href="#what-the-rewrite-costs" title="Permanent link">&para;</a></h4>
-<p>Moving a gate to Go buys a parser that handles nesting and escaping correctly, rune
-counting that does not vary with the host <code>awk</code>, and a test suite over functions with
-inputs and outputs. It costs a module in the Go workspace, a vendored dependency to
-sync and check (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh"><code>vendor-sync.sh</code></a>,
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-check.sh"><code>vendor-check.sh</code></a>), a compile before the gate runs,
-and a continuous integration (CI) path filter that has to include the new tree.</p>
-<p>Most of that is a one-time cost per module, not per gate: <code>devtools/</code> already exists
-with its vendor tree and CI wiring, so the second and third gates onto the same parse
-layer are cheap where the first was not. The gate keeps its <code>scripts/</code> entry point
-either way, so the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">script map</a> stays in one place.</p>
-<p>None of this argues for rewriting shell in general. Almost every script under
-<code>scripts/</code> sits on the orchestration side of the line and should stay there; the
-criterion exists to find the few that do not.</p>
-<h2 id="strategy-the-debt-lifecycle">Strategy: the debt lifecycle<a class="headerlink" href="#strategy-the-debt-lifecycle" title="Permanent link">&para;</a></h2>
-<p>Policy decides what to do with one item. Strategy is the loop that keeps the
-whole codebase from accumulating debt faster than we pay it down.</p>
-<ol>
-<li><strong>Prevent.</strong> The cheapest debt is the kind that never lands. Layered
-   <a href="../backpressure/">backpressure</a> — the pre-commit hook, <code>make check</code>, and CI —
-   rejects whole classes of debt at authoring time. The guiding habit is
-   <strong>correct it twice, then automate it</strong>: a mistake worth catching once is worth
-   a gate (this is why <code>scripts/docs/lint-backlog.sh</code> and the <a href="#quality-gates-as-debt-brakes">bucket-F gates</a> exist).</li>
-<li><strong>Detect.</strong> What prevention misses, a periodic <strong>review pass</strong> finds: read the
-   code for the taxonomy above, scan for stale markers, and check whether new
-   work re-introduced a class a gate was supposed to hold. Flaky CI is itself a
-   detection signal (see below).</li>
-<li><strong>Triage and track.</strong> Classify the item, decide its disposition with the
-   <a href="#policy">policy</a> above, and record it. Prioritize <strong>on entry</strong> — position in
-   the Queue <em>is</em> the priority, so a new row is placed where it belongs, not
-   appended to the bottom by default.</li>
-<li><strong>Pay down.</strong> Work the Queue from the top. Two ordering rules override raw
-   position: <strong>flake fixes go first</strong> (a flake's cost compounds across every
-   future pull request), and a <code>1.0-gate</code>-labeled item blocks the release
-   regardless of where it sits. Blocked items sort below their blocker with a
-   machine-readable <code>Blocked by [QN]</code> note.</li>
-<li><strong>Keep it paid.</strong> Once a class of debt is paid down, a gate keeps it from
-   returning. Paying down duplication is worth little if the next session
-   re-introduces it; the <code>dupl</code> gate is what makes the cleanup durable.</li>
-</ol>
-<h3 id="flake-fixes-go-first">Flake fixes go first<a class="headerlink" href="#flake-fixes-go-first" title="Permanent link">&para;</a></h3>
-<p>If a test passes on rerun with no code change, that flake is debt with a
-compounding cost — every future pull request can hit it, burning CI time and
-attention. File it and move it to the <strong>top</strong> of the Queue before continuing
-other work. The full rule is in
-<a href="../maintaining-backlog/#flake-fixes-go-first">maintaining-backlog.md</a>.</p>
-<h2 id="what-we-measure--and-deliberately-dont">What we measure — and deliberately don't<a class="headerlink" href="#what-we-measure--and-deliberately-dont" title="Permanent link">&para;</a></h2>
-<p>Most published technical-debt metrics assume a team, an issue tracker with
-timestamps, and a production deployment cadence. This project is a pre-1.0
-codebase with a Markdown backlog and no shipped deployments, so those metrics
-would be ceremony without signal. We track the ones that are cheap, automatable,
-and catch real regressions — and we are explicit about the rest.</p>
-<table>
-<thead>
-<tr>
-<th>Metric</th>
-<th>Decision</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>Test coverage</strong></td>
-<td>Track — measured in CI, gated by a no-regression ratchet (<a href="../../STATUS/">Q77</a>).</td>
-</tr>
-<tr>
-<td><strong>Code duplication</strong></td>
-<td>Track — <code>dupl</code> linter (<a href="../../STATUS/">Q78</a>).</td>
-</tr>
-<tr>
-<td><strong>Data-race freedom</strong></td>
-<td>Track — <code>-race</code> on unit tests, the core concern for a goroutine-multiplexing engine (<a href="../../STATUS/">Q79</a>).</td>
-</tr>
-<tr>
-<td><strong>Static security findings</strong></td>
-<td>Track — <code>gosec</code> (<a href="../../STATUS/">Q80</a>); unchecked errors via <code>errcheck</code> (<a href="../../STATUS/">Q81</a>).</td>
-</tr>
-<tr>
-<td><strong>Reachable CVEs</strong></td>
-<td>Track — <code>govulncheck</code> + <code>trivy</code>, already gating (<a href="../backpressure/">backpressure.md</a>).</td>
-</tr>
-<tr>
-<td><strong>Open-item count / age</strong></td>
-<td>Track lightly — the labeled Queue in <a href="../../STATUS/">docs/STATUS.md</a> is the register; formal aging is overkill at this scale.</td>
-</tr>
-<tr>
-<td><strong>Function length</strong></td>
-<td>Track — <code>funlen</code> as a ratcheted ceiling (<a href="../../STATUS/">Q371</a>): the threshold starts just above the worst surviving function and lowers as long functions are decomposed, the same "gates by not getting worse" pattern the coverage ratchet uses. Cyclomatic complexity proper (<code>gocyclo</code>) stays skipped — length is the cheaper proxy, and Q367 showed the god <code>main</code>/<code>run</code> functions were the real target.</td>
-</tr>
-<tr>
-<td><strong>Suppression hygiene</strong></td>
-<td>Track — <code>nolintlint</code> (<code>allow-unused: false</code>, <code>require-specific: true</code>) (<a href="../../STATUS/">Q371</a>): an inert or blanket <code>//nolint</code> directive fails the build, so a suppression cannot outlive the finding it documents (the class the dead <code>nolint:gocyclo</code> on the old <code>main()</code> was).</td>
-</tr>
-<tr>
-<td>Technical-debt ratio, defect ratio, DORA velocity (lead time, change-failure rate), debt index</td>
-<td><strong>Skip</strong>: each needs an issue tracker, a remediation-cost estimator, or a delivery cadence this project does not have. Revisit if the project grows a team and a release pipeline.</td>
-</tr>
-</tbody>
-</table>
-<p>The principle: <strong>a metric earns a place only when it changes a decision.</strong> A
-number nobody acts on is itself a small piece of debt.</p>
-<h2 id="quality-gates-as-debt-brakes">Quality gates as debt brakes<a class="headerlink" href="#quality-gates-as-debt-brakes" title="Permanent link">&para;</a></h2>
-<p>A quality gate turns "do not let this class of debt accumulate" into machine
-enforcement. The release-1.0 plan groups them as
-<a href="../../plan/release-1.0/">bucket F — engineering quality gates</a>: coverage,
-duplication, <code>-race</code>, <code>gosec</code>, <code>errcheck</code>, and install-artifact validation, on
-top of the formatting, lint, <code>govulncheck</code>, and <code>trivy</code> gates that already run
-(<a href="../backpressure/">backpressure.md</a>). Each gate is the durable form of a
-detect-and-pay-down cycle: once paid, it does not regress.</p>
-<p>Where a gate is threshold-shaped (coverage, <code>dupl</code>, <code>funlen</code>), it gates by <strong>not
-getting worse</strong> — a ratchet or tuned threshold — rather than an arbitrary
-absolute bar, so it raises quality without manufacturing low-value work.</p>
-<h2 id="where-it-all-lives">Where it all lives<a class="headerlink" href="#where-it-all-lives" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Concern</th>
-<th>Doc</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Deciding fix / flag / defer / decline</td>
-<td>this doc</td>
-</tr>
-<tr>
-<td>Deciding whether a shell gate should become a Go devtool</td>
-<td>this doc (<a href="#a-shell-gate-becomes-a-go-devtool-on-parsing-density-not-length">the criterion</a>), pointed to from <a href="../bash-style/">bash-style.md</a></td>
-</tr>
-<tr>
-<td>Recording and prioritizing an item</td>
-<td><a href="../maintaining-backlog/">maintaining-backlog.md</a> → <a href="../../STATUS/">docs/STATUS.md</a></td>
-</tr>
-<tr>
-<td>The automated prevention loops</td>
-<td><a href="../backpressure/">backpressure.md</a></td>
-</tr>
-<tr>
-<td>Release-blocking gates</td>
-<td><a href="../../plan/release-1.0/">release-1.0.md</a> (bucket F)</td>
-</tr>
-<tr>
-<td>Long-horizon non-commitments</td>
-<td><a href="../../design/appendix-g-future-enhancements/">appendix-g-future-enhancements.md</a></td>
-</tr>
-<tr>
-<td>Choosing the right test tier</td>
-<td><a href="../testing/">testing.md</a>, <a href="../../design/07-test-plan/">07-test-plan.md</a></td>
-</tr>
-</tbody>
-</table>
+<p>After activation, <code>gh pr merge --squash</code> enqueues instead of merging
+directly; a PR whose queue run fails is kicked back out with the failure on
+the PR, which is the self-heal signal pr-sentinel already reacts to.</p>
+<p>Rollback: delete the <code>merge_queue</code> rule from the ruleset; behavior reverts
+to direct merges and the process rules in CONTRIBUTING.md.</p>
+<h2 id="phase-3-re-measure-then-decide">Phase 3: re-measure, then decide<a class="headerlink" href="#phase-3-re-measure-then-decide" title="Permanent link">&para;</a></h2>
+<p>Re-run the same measurements after ~1 week of queue operation (e2e runs per
+branch, cancelled-run fraction, merge latency). Candidates <em>if</em> the numbers
+say the constraint is still CI churn, recorded here so they aren't
+re-derived, not committed to:</p>
+<ul>
+<li>Demote e2e from per-PR to merge-group-only (halves e2e volume again;
+  trade-off: sessions learn of an e2e failure only at queue time).</li>
+<li><code>docs/STATUS.md</code> contention (77% of commits) still forces manual conflict
+  resolution before a PR can enqueue; a per-item-file backlog format would
+  remove it structurally, but is a large format change touching the backlog
+  skill and lint, and only worth it if post-queue measurement shows it binding.</li>
+<li>GitHub Issues + a Projects board would also zero the conflicts, but trades
+  them for a sync problem: today a Queue row is deleted in the same PR that
+  ships the work (atomic with the code, reviewable in the diff, greppable in
+  one file, and the bare-Q-ID anchor fabric across docs and code depends on
+  it), while an issue close is a separate mutation that can drift from code
+  state. Priority ordering is also weaker through <code>gh</code> (Projects v2 positions
+  are drag-first, not CLI-first). Considered 2026-08-03; behind the same
+  re-measurement, and per-item files in-repo rank ahead of it because they
+  keep every property above.</li>
+<li>Splitting the STATUS.md edit out of a code PR into its own docs-only PR is
+  the cheap half of the same idea. The backlog merge driver is local-only
+  (<code>.gitattributes</code> maps <code>docs/STATUS.md</code> to <code>merge=backlog</code>; GitHub cannot
+  run custom drivers), so the queue builds candidates with plain 3-way and an
+  adjacent-row edit conflicts server-side even though it auto-resolves
+  locally. A combined PR kicked back that way re-runs its e2e on the fixup
+  push; a split status PR re-runs only the cheap path-filtered gates, and the
+  code PR stays queued. Cost: GitHub has no native PR dependency ordering, so
+  a completion row's deletion trails the code merge as a follow-up PR, with a
+  short window where the row is open and no PR covers it. Same re-measurement
+  decides; per-item files dominate this too, closing the conflict itself
+  rather than routing around it.</li>
+<li>The ordering gap above has a buildable fix, parked 2026-08-03 behind the
+  same re-measurement: a <code>pr-deps-gate</code> required check that reads
+  <code>Depends-on: #N</code> from the PR body, reports green when no dependency is
+  named, and red while any named PR is unmerged. The queue enforces the
+  sequencing for free, since a PR cannot enqueue until its required checks
+  pass; the one extra piece is a push-to-main workflow that re-requests the
+  check on open PRs whose dependencies just merged, because GitHub emits no
+  event to a dependent PR. This closes the no-covering-PR window (the status
+  PR is open, just unqueueable) and makes the split machine-enforced. Build
+  it only if the measured kickback rate says split PRs are worth having.</li>
+</ul>
 
 
 

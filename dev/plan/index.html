@@ -2731,6 +2731,11 @@ markers per item.</p>
 </thead>
 <tbody>
 <tr>
+<td><a href="merge-queue/">merge-queue.md</a></td>
+<td>Adopt GitHub's merge queue on <code>main</code> to kill the freshness-invalidation loop: every merge (~every 25–30 min) invalidates every in-flight green PR, and re-validation costs a full e2e cycle (a third+ of e2e compute measured as redo). Queue runs the gates once per batch on the candidate merge result; e2e stays per-PR</td>
+<td>🚧 In progress: measured + decided 2026-08-03; Phase 1 (<code>merge_group</code> triggers on the 9 required-check workflows) in flight; Phase 2 (ruleset activation) blocked on Phase 1 reaching <code>main</code></td>
+</tr>
+<tr>
 <td><a href="docker-image-speed/">docker-image-speed.md</a></td>
 <td>Image build + load-into-kind time</td>
 <td>✅ Done — every item shipped (§1/2/4/5/8/9/13) or explicitly 🚫 not pursued (§7/12); §3/6/10/11 obsoleted by vendoring + in-cluster registry</td>

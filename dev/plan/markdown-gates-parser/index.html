@@ -2691,7 +2691,7 @@ outer destination is never collected. <a href="https://github.com/actions-gatewa
 <tr>
 <td><code>[![badge](img)](target)</code></td>
 <td>the <em>image</em> target</td>
-<td>dead outer link invisible — <strong>live, 3 in README</strong></td>
+<td>dead outer link invisible; <strong>live, 3 in README</strong></td>
 </tr>
 <tr>
 <td><code>[see [inner]](target)</code></td>
@@ -2706,7 +2706,7 @@ outer destination is never collected. <a href="https://github.com/actions-gatewa
 <tr>
 <td>setext heading (<code>===</code>)</td>
 <td>never registered as an anchor</td>
-<td>false positive — latent, none in tracked docs</td>
+<td>false positive; latent, none in tracked docs</td>
 </tr>
 </tbody>
 </table>
@@ -2929,7 +2929,7 @@ is the shape and not the target.</p>
 <p>The rules moved to <code>devtools/docs/backloglint</code>; <code>Tables()</code> on the parse layer is
 the only shared-package addition. The script kept the file selection and the
 environment interface (<code>NOTES_MAX_CHARS</code>, <code>BACKLOG_ALLOW_*</code>), mapping them onto
-flags — 518 lines to 92.</p>
+flags: 518 lines to 92.</p>
 <p><strong>The reconciliation is the evidence.</strong> <code>lint-backlog-test.sh</code> grew from 53 to 67
 cases, covering all 12 rules, and <code>LINT_BACKLOG_BIN</code> points the whole suite at
 another implementation so both ran over the same corpus. The <code>awk</code> passed 62 and
@@ -3022,7 +3022,7 @@ divergence was one <code>brew install gawk</code> away from arriving on a laptop
 longest is <a href="../../STATUS/#Q555">Q555</a> at 249 bytes / 249 characters, confirming
 the filed figure, and the largest byte-vs-rune gap on any row is 9 (Q525, 215 B
 / 206 chars). Nothing is over cap on either scale, and runes ≤ bytes always, so
-moving to characters can only relax — never break — an existing row.</p>
+moving to characters can only relax, never break, an existing row.</p>
 <p><strong>One workflow gap closed.</strong> <code>status-lint.yml</code> gated on <code>scripts/docs/lint-backlog.sh</code>
 alone, which no longer holds the rules; it now also triggers on <code>devtools/**</code>,
 pins the toolchain with <code>setup-go</code>, and takes 5 minutes instead of 2 for the

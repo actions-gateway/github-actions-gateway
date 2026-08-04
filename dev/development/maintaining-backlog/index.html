@@ -3105,7 +3105,7 @@ sent the next session to re-diagnose the wrong thing.</p>
 <li><code>git mv docs/plan/&lt;docname&gt;.md docs/plan/archive/&lt;docname&gt;.md</code> — preserves history.</li>
 <li><strong>Update any in-repo links</strong> to the new path: <code>docs/plan/README.md</code> (move the row to the <strong>Archive</strong> section), other plan docs (<code>grep -rn "&lt;docname&gt;.md" docs/plan/</code>), the <code>docs/development|design|operations</code> trees, and <strong>the moved doc's own outbound links</strong> — dropping a level into <code>archive/</code> breaks every relative link in the doc itself (<code>make doc-links</code> catches all of these).</li>
 <li><strong>Bundle archival in one commit</strong> when several plans close in the same session — easier to review and revert as a unit.</li>
-<li><strong>Do not edit STATUS.md in the same commit</strong> as the archive move — STATUS.md edits are always isolated.</li>
+<li><strong>Do not edit STATUS.md in the same commit</strong> as the archive move; STATUS.md edits are always isolated.</li>
 </ol>
 <p>A plan that is partially complete stays in <code>docs/plan/</code>. Archive is for "everything in this doc has shipped," not "most of it has."</p>
 

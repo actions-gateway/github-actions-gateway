@@ -2631,6 +2631,11 @@
 <td>✅</td>
 </tr>
 <tr>
+<td><a href="../plan/merge-queue/">Merge queue</a></td>
+<td><code>speed</code> <code>ci</code></td>
+<td>⚠️</td>
+</tr>
+<tr>
 <td><a href="../plan/v2-api/">v2 API decomposition</a></td>
 <td><code>feature</code></td>
 <td>✅</td>
@@ -2703,6 +2708,14 @@
 </thead>
 <tbody>
 <tr>
+<td><a id="Q674"></a>Q674</td>
+<td><a href="../plan/merge-queue/#phase-2-activation-post-merge-ordering-matters">Activate the merge queue on <code>main</code>: ruleset rule + queue-era process docs</a></td>
+<td><code>ci</code></td>
+<td>🚫</td>
+<td>S</td>
+<td>Blocked until Phase 1's <code>merge_group</code> triggers are on <code>main</code>; activating first wedges every merge. Then add the <code>merge_queue</code> rule to ruleset 17350763 (params in plan) and rewrite CONTRIBUTING/CLAUDE re-check + push rules to queue semantics.</td>
+</tr>
+<tr>
 <td><a id="Q166"></a>Q166</td>
 <td><a href="../plan/v2-api/">v2 API M4: cross-namespace EgressProxy sharing</a></td>
 <td><code>security</code> <code>feature</code></td>
@@ -2772,7 +2785,7 @@
 <td><code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Q388 measured: on ordinary delete the probe fails throughout termination but <code>Ready</code> never flips; removal comes from <code>deletionTimestamp</code>. k8s#124648 covers only eviction. Head of the upstream-report batch — file all four in one session.</td>
+<td>Q388 measured: on ordinary delete the probe fails throughout termination but <code>Ready</code> never flips; removal comes from <code>deletionTimestamp</code>. k8s#124648 covers only eviction. Head of the upstream-report batch; file all four in one session.</td>
 </tr>
 <tr>
 <td><a id="Q402"></a>Q402</td>
