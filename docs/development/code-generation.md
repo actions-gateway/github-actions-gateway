@@ -189,7 +189,7 @@ The markers live at the top of `cmd/gmc/internal/controller/actionsgateway_contr
 
 ## CRD marker and API-file gotchas
 
-Hard-won, easy-to-reintroduce mistakes when editing the API types:
+Hard-won, easy-to-reintroduce mistakes when editing the API types. Each is a claim about how gofmt, controller-gen, or the apiserver behaves, so a new entry cites the version it was measured against per [documentation-standards.md § An upstream-behavior claim cites a measurement](documentation-standards.md#an-upstream-behavior-claim-cites-a-measurement):
 
 - **gofmt corrupts `''` inside CEL markers.** A doubled single-quote in a `+kubebuilder:validation:XValidation` marker comment gets rewritten by gofmt into a single curly quote, silently breaking the CEL rule (and `''` is not a CEL quote escape anyway — that's SQL). Never use empty-string literals in XValidation: write `size(x) == 0`, not `x == ''`.
 - **`selectableFields` on one served version only.** On a multi-version CRD, declaring `+kubebuilder:selectablefield` markers on more than one version makes controller-gen hoist them in a way the apiserver rejects at CRD apply time. Declare them on a single version.
