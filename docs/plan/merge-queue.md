@@ -138,3 +138,15 @@ re-derived, not committed to:
   are drag-first, not CLI-first). Considered 2026-08-03; behind the same
   re-measurement, and per-item files in-repo rank ahead of it because they
   keep every property above.
+- Splitting the STATUS.md edit out of a code PR into its own docs-only PR is
+  the cheap half of the same idea. The backlog merge driver is local-only
+  (`.gitattributes` maps `docs/STATUS.md` to `merge=backlog`; GitHub cannot
+  run custom drivers), so the queue builds candidates with plain 3-way and an
+  adjacent-row edit conflicts server-side even though it auto-resolves
+  locally. A combined PR kicked back that way re-runs its e2e on the fixup
+  push; a split status PR re-runs only the cheap path-filtered gates, and the
+  code PR stays queued. Cost: GitHub has no native PR dependency ordering, so
+  a completion row's deletion trails the code merge as a follow-up PR, with a
+  short window where the row is open and no PR covers it. Same re-measurement
+  decides; per-item files dominate this too, closing the conflict itself
+  rather than routing around it.
