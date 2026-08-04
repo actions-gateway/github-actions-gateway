@@ -50,10 +50,16 @@ build-migrate: ## Build the gag-migrate one-shot v1->v2 migration tool into .bui
 test: deepcopy ## Run unit tests (no envtest required)
 	go test -race -timeout 5m ./...
 
+# RUN narrows the run to matching test names (Q592). The two halves a
+# hand-assembled KUBEBUILDER_ASSETS gets wrong are already right here:
+# ENVTEST_K8S_VERSION is the pin, and --bin-dir is absolute, since `-p path`
+# echoes the shape it is given and each test binary resolves a relative one
+# against its own package dir. -v -count=1 ride along with RUN: a targeted run
+# wants the test's output, and a cached PASS prints none.
 .PHONY: test-integration
-test-integration: generate $(SETUP_ENVTEST) ## Run envtest-backed integration tests
+test-integration: generate $(SETUP_ENVTEST) ## Run envtest-backed integration tests; RUN='TestName' narrows to matching tests
 	KUBEBUILDER_ASSETS="$(shell "$(SETUP_ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" \
-		go test -race -timeout 5m -tags integration ./...
+		go test -race -timeout 5m -tags integration $(if $(RUN),-run '$(RUN)' -v -count=1) ./...
 
 .PHONY: manifests
 manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests from kubebuilder markers
